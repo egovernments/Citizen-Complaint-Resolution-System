@@ -674,14 +674,35 @@
         "default": {
           "type": "boolean",
           "default": false
-        },
-        "emailRegex": {
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.FormValidations",
+    "description": "Form field validation patterns (one row per field type, e.g. email, name)",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Form Validations",
+      "type": "object",
+      "required": [
+        "fieldType",
+        "regex"
+      ],
+      "x-unique": [
+        "fieldType"
+      ],
+      "properties": {
+        "fieldType": {
           "type": "string",
-          "description": "Optional email validation pattern; frontends fall back to a built-in strict pattern when absent."
+          "description": "Which user field this pattern validates, e.g. \"email\". Frontends fall back to their built-in pattern when a fieldType row is absent."
         },
-        "nameRegex": {
-          "type": "string",
-          "description": "Optional person-name validation pattern; frontends fall back to their built-in pattern when absent."
+        "regex": {
+          "type": "string"
         }
       },
       "x-ref-schema": [],

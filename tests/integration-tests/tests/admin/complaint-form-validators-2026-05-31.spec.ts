@@ -88,49 +88,73 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     await page.waitForTimeout(5_000);
 
     // ============ Complaint type — ComplaintHierarchyCascade ============
-    // Drive the "Complaint Type" cascade the same way complaints.spec does:
-    // open it and pick the first available option. The validator assertions
-    // below don't depend on a complaint type being chosen, but we exercise
-    // the real control that replaced the old "Select complaint type" combobox.
-    const typeSelect = page.getByLabel(/^Complaint Type/i).first();
-    if (await typeSelect.isVisible().catch(() => false)) {
-      await typeSelect.click();
-      await page.waitForTimeout(800);
-      const firstType = page.getByRole('option').first();
-      if (await firstType.isVisible().catch(() => false)) {
-        await firstType.click();
-        await page.waitForTimeout(1_000);
-      }
-    }
+    // RC5: none of the Category/Sub-Type/Hierarchy/Locality controls are
+    // htmlFor-associated to their <Label> (getByLabel resolves nothing and
+    // .click() hangs the full 120s). Mirror complaints.spec.ts's
+    // triggerNearLabel + pickComplaintType approach instead — copied locally
+    // rather than imported so the two spec files stay decoupled.
+    await pickComplaintType(page);
 
     // ============ Locality — LocalityPicker cascade (+ #496 dedup) ============
-    // LocalityPicker exposes three cascading selects (Hierarchy → Boundary
-    // Type → Locality). Hierarchy + Boundary Type are best-effort (their
-    // choices may already default); the final Locality select is the one we
-    // must open. Mirror complaints.spec's pickLocality helper.
-    const hierarchy = page.getByLabel(/Hierarchy/i).first();
-    if (await hierarchy.isVisible().catch(() => false)) {
-      await hierarchy.click();
-      await page.getByRole('option').first().click().catch(() => {});
-      await page.waitForTimeout(500);
-    }
-    const boundaryType = page.getByLabel(/Boundary type/i).first();
-    if (await boundaryType.isVisible().catch(() => false)) {
-      await boundaryType.click();
-      await page.getByRole('option').first().click().catch(() => {});
-      await page.waitForTimeout(500);
-    }
+    // LocalityPicker is three radix Selects in one grid (Hierarchy → Boundary
+    // Type → Locality); only the group's help text ("Cascades from
+    // hierarchy…") is a reliable anchor. Walk hierarchy x boundary-type
+    // combos positionally until one actually offers Locality options (the
+    // first hierarchy option, e.g. "ADMIN", can be a tree with zero usable
+    // boundaries while a later one holds the real tree) — this test doesn't
+    // need a SPECIFIC locality, just any valid one, to reach the #496 dedup
+    // check and then the postal/mobile validator assertions.
+    const localityGroup = page
+      .locator('div')
+      .filter({ has: page.getByText(/Cascades from hierarchy/i) })
+      .last();
+    await localityGroup.getByRole('combobox').first().waitFor({ state: 'visible', timeout: 15_000 });
+    const selects = localityGroup.getByRole('combobox');
+    const hierarchy = selects.nth(0);
+    const boundaryType = selects.nth(1);
+    const localityTrigger = selects.nth(2);
 
-    const locality = page.getByLabel(/^Locality$/i).first();
-    await locality.click();
-    await page.waitForTimeout(1_000);
+    const countOptions = async (trigger: import('@playwright/test').Locator): Promise<number> => {
+      if (!(await trigger.isEnabled().catch(() => false))) return 0;
+      await trigger.click();
+      const n = await page.getByRole('option').count();
+      if (n === 0) await page.keyboard.press('Escape').catch(() => {});
+      return n;
+    };
+
+    let localityOpts: string[] = [];
+    const hierN = await countOptions(hierarchy);
+    outer: for (let h = 0; h < Math.max(hierN, 1); h++) {
+      if (hierN > 0) {
+        await page.getByRole('option').nth(h).click();
+      }
+      const typeN = await countOptions(boundaryType);
+      for (let t = 0; t < typeN; t++) {
+        await page.getByRole('option').nth(t).click();
+        if (await localityTrigger.isEnabled().catch(() => false)) {
+          await localityTrigger.click();
+          const opts = (await page.getByRole('option').allInnerTexts())
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (opts.length > 0) {
+            localityOpts = opts;
+            break outer;
+          }
+          await page.keyboard.press('Escape').catch(() => {});
+        }
+        if (t + 1 < typeN && (await boundaryType.isEnabled().catch(() => false))) {
+          await boundaryType.click();
+        }
+      }
+      if (h + 1 < hierN && (await hierarchy.isEnabled().catch(() => false))) {
+        await hierarchy.click();
+      }
+    }
+    expect(localityOpts.length, 'no hierarchy/type combination yielded a selectable locality').toBeGreaterThan(0);
 
     // #496 (adapted): the locality options must be unique by code. The old
     // flat "Boundary" combobox is gone; assert dedup on the cascade's final
     // Locality options instead.
-    const localityOpts = (await page.getByRole('option').allInnerTexts())
-      .map((s) => s.trim())
-      .filter(Boolean);
     expect(
       new Set(localityOpts).size,
       `#496 — locality options must be unique (got ${localityOpts.length}, ${new Set(localityOpts).size} unique)`,
@@ -184,3 +208,45 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     ).toHaveCount(0);
   });
 });
+
+// --- Local helpers (copied from complaints.spec.ts; not imported across spec
+// files so the two buckets/specs stay decoupled — see RC5). ---
+
+/** Locate a radix Select trigger sitting in the same wrapper <div> as a given
+ *  field <Label> text. These cascade selects don't associate their label via
+ *  htmlFor, so getByLabel can't reach them — anchor on the label text and
+ *  take the combobox in the innermost enclosing div. */
+function triggerNearLabel(
+  page: import('@playwright/test').Page,
+  labelText: RegExp,
+): import('@playwright/test').Locator {
+  return page
+    .locator('div')
+    .filter({ has: page.getByText(labelText) })
+    .filter({ has: page.getByRole('combobox') })
+    .last()
+    .getByRole('combobox')
+    .first();
+}
+
+async function pickComplaintType(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  // The complaint-type control is a Category → Sub-Type cascade — one radix
+  // Select per RAINMAKER-PGR.ComplaintHierarchy level. Pick the first option
+  // at each level until the deepest (terminal) level is chosen. Deeper levels
+  // are hidden once a branch is terminal, so a missing/disabled next level
+  // just ends the walk.
+  for (const lbl of [/^Category$/i, /^Sub-?Type$/i]) {
+    const sel = triggerNearLabel(page, lbl);
+    if (!(await sel.isVisible({ timeout: 8_000 }).catch(() => false))) break;
+    if (!(await sel.isEnabled().catch(() => false))) break;
+    await sel.click();
+    const opt = page.getByRole('option').first();
+    if (!(await opt.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      await page.keyboard.press('Escape').catch(() => {});
+      break;
+    }
+    await opt.click();
+  }
+}

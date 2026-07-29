@@ -77,6 +77,13 @@ LS = ROOT / "local-setup"
 #                               requires every compose file on disk to be accounted for,
 #                               and "adds nothing today" is exactly the assumption that
 #                               went stale for the five files above.
+#   docker-compose.monitoring.yml
+#                               host-metrics overlay (#1335): adds node-exporter, always
+#                               layered by ansible alongside the migrations overlay. Its
+#                               one service is observability plumbing and is EXEMPT below
+#                               (same call as grafana/prometheus/otel-collector) -- but the
+#                               file still has to be listed here, or find_unlisted_compose_files
+#                               fails it as a compose file the guard does not scan.
 #
 # This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
 # checked against the directory listing below rather than maintained by memory.
@@ -97,6 +104,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.bomet.yml",
     LS / "docker-compose.core.yml",
     LS / "docker-compose.tilt.yml",
+    LS / "docker-compose.monitoring.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -130,6 +138,7 @@ EXEMPT = {
     "loki": "observability plumbing: log store, not a serving dependency",
     "tempo": "observability plumbing: trace store, not a serving dependency",
     "otel-collector": "observability plumbing: telemetry pipeline, not a serving dependency",
+    "node-exporter": "observability plumbing: host-metrics exporter (#1335), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.

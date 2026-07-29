@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import Reopen from "./reopen";
 //const GetTranslatedAction = (action, t) => t(`CS_COMMON_${action}`);
 
-const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime=3600000, rating, serviceRequestId, reopenDate, isCompleted, customChild }) => {
+const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, rating, serviceRequestId, reopenDate, isCompleted, customChild }) => {
   const { t } = useTranslation();
 
   // Render the rating display whenever `rating` is present, regardless of
@@ -48,9 +48,13 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime=36
     return <CheckPoint isCompleted={isCompleted} label={t(`CS_COMMON_COMPLAINT_REOPENED`)} info={reopenDate} customChild={<div>{ratingDisplay}{customChild}</div>} />;
   } else {
     const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+    // ComplainMaxIdleTime is REOPENSLA from MDMS, undefined while it loads or on a tenant
+    // without the master. Unknown window => leave REOPEN visible and let pgr-services decide;
+    // hiding it here would re-create the unconfigured deadline that #925 was about.
+    const windowKnown = typeof ComplainMaxIdleTime === "number" && ComplainMaxIdleTime > 0;
     const reopenWindowOpen = typeof lastModifiedTime === "number"
       && Number.isFinite(lastModifiedTime)
-      && (Date.now() - lastModifiedTime) < ComplainMaxIdleTime;
+      && (!windowKnown || (Date.now() - lastModifiedTime) < ComplainMaxIdleTime);
     let actions =
       nextActions &&
       nextActions.map((action, index) => {

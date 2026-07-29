@@ -27,6 +27,52 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    # ── host_vars naming preflight ─────────────────────────────────────────
+    # Ansible variables are lowercase (every key in inventory/host_vars/ is).
+    # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
+    # UPPERCASE, so it is easy to copy e.g. NOVU_API_ROOT_URL out of a rendered
+    # .env into host_vars — where nothing reads it. Ansible accepts the key
+    # silently and the deploy renders defaults instead, which is only
+    # discoverable by diffing the rendered .env afterwards (issue #1435).
+    # Fail loudly at the start of the run instead.
+    - name: "preflight — locate this host's host_vars file"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/inventory/host_vars/{{ inventory_hostname }}.yml"
+      register: host_vars_file
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: "preflight — read this host's host_vars file"
+      ansible.builtin.slurp:
+        src: "{{ host_vars_file.stat.path }}"
+      register: host_vars_raw
+      delegate_to: localhost
+      become: false
+      when: host_vars_file.stat.exists
+
+    - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
+      ansible.builtin.assert:
+        that: uppercase_host_vars_keys | length == 0
+        fail_msg: |
+          host_vars/{{ inventory_hostname }}.yml defines UPPERCASE key(s):
+            {{ uppercase_host_vars_keys | join(', ') }}
+          Ansible variables are lowercase. These keys are read by NOTHING —
+          the deploy will render template defaults instead. Rename them to
+          lowercase, e.g. NOVU_API_ROOT_URL -> novu_api_root_url.
+          To point the Novu dashboard at an origin other than `domain`, set
+          novu_public_base_url once rather than each URL individually.
+        success_msg: "host_vars key naming OK"
+      vars:
+        uppercase_host_vars_keys: >-
+          {{ (host_vars_raw.content | b64decode).splitlines()
+             | select('match', '^[A-Z][A-Za-z0-9_]*:')
+             | map('regex_replace', ':.*$', '')
+             | list }}
+      when: host_vars_file.stat.exists
+      delegate_to: localhost
+      become: false
+
     # ── Force-clean teardown ───────────────────────────────────────────────
     # Opt-in via `force_clean: true` in host_vars. Tears down all running
     # containers and removes orphaned networks before re-deploying, so a
@@ -53,6 +99,7 @@
         docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       register: clean_teardown
       changed_when: true
       when:
@@ -68,6 +115,8 @@
           echo "$orphans" | xargs docker network rm 2>/dev/null || true
           echo "pruned: $orphans"
         fi
+      args:
+        executable: /bin/bash
       register: network_prune
       changed_when: "'pruned:' in network_prune.stdout"
       failed_when: false
@@ -103,6 +152,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
@@ -274,18 +325,139 @@
             enabled: yes
 
         # ==================== Docker Configuration ====================
-        # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-        # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-        # over plain HTTP. Without this entry Docker refuses to pull with
-        # `http: server gave HTTP response to HTTPS client`. Restart the
-        # daemon when the file changes so the new config takes effect.
-        - name: Configure Docker insecure-registries for VPC registry
-          copy:
-            dest: /etc/docker/daemon.json
-            content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
-            mode: '0644'
-          register: daemon_json
-          when: insecure_registries | default([]) | length > 0
+        # Log rotation. Docker's json-file driver keeps growing a container's
+        # log forever unless max-size/max-file are set, and a chatty JVM
+        # service can fill a disk over a long-running deploy.
+        #
+        # The per-container ceiling is max-size * max-file, so the two settings
+        # cannot be chosen independently. docker_log_total_size is the
+        # invariant (1g) and docker_log_max_size is the knob; the file count is
+        # derived so raising or lowering the slice size cannot breach the cap.
+        # Set docker_log_max_file explicitly only to override that derivation.
+        #
+        # "Override" means a truthy value. `default()` without boolean=true only
+        # substitutes for an *undefined* variable, so an operator who uncomments
+        # the escape hatch in group_vars and leaves it blank (docker_log_max_file:
+        # -> YAML null) would be treated as having opted in: the cap guard below
+        # would skip, the derivation would pass None through, and daemon.json
+        # would get the literal "max-file": "None", which dockerd refuses. Both
+        # tasks therefore test the value, not its mere definedness.
+        - name: "Docker logging — reject a max-size larger than the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.fail:
+            msg: >-
+              docker_log_max_size ({{ docker_log_max_size }}) exceeds
+              docker_log_total_size ({{ docker_log_total_size }}). Docker keeps
+              at least one log file per container, so this would allow
+              {{ docker_log_max_size }} per container — above the cap.
+          when:
+            - not (docker_log_max_file | default('', true))
+            - (_sz | float) > (_tt | float)
+
+        - name: "Docker logging — derive max-file from the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          # The divisor below is floored at 1 byte — `[1, (_sz | float)] | max`
+          # — so the division can never raise. Two reasons that is not paranoia:
+          #
+          # 1. ansible-lint renders a task's Jinja using that task's `vars`
+          #    only. It never loads inventory group_vars, and this playbook has
+          #    no committed inventory (deploy.sh generates hosts.yml, and
+          #    group_vars live under inventory/). So at lint time
+          #    docker_log_max_size is undefined, `| float` yields 0.0, and an
+          #    unfloored division aborts the whole run with "jinja[invalid]:
+          #    Error rendering template: float division by zero" — a CI failure
+          #    with no runtime counterpart.
+          #
+          # 2. `default()` evaluates its argument eagerly, so this division runs
+          #    even when docker_log_max_file IS set. The guard task above is
+          #    skipped in exactly that case, so a host combining the escape
+          #    hatch with docker_log_max_size: "0m" would hit a real
+          #    ZeroDivisionError at runtime.
+          #
+          # Keep the floor INLINE. Hoisting it into a helper var does not work:
+          # ansible-lint resolves a task var only when it is self-contained, so
+          # a var defined in terms of _sz reads back as undefined, collapses to
+          # 0.0, and reintroduces the very error this avoids.
+          #
+          # A zero max-size reaching this point is still caught downstream —
+          # dockerd rejects a "max-size": "0m" log-opt itself.
+          ansible.builtin.set_fact:
+            docker_log_max_file_effective: >-
+              {{ docker_log_max_file
+                 | default([1, ((_tt | float) / ([1, (_sz | float)] | max)) | int] | max, true) }}
+
+        # daemon.json is written unconditionally now. It used to be gated on
+        # insecure_registries being non-empty, which meant hosts on a TLS
+        # registry never got a daemon.json at all — and would therefore never
+        # get log rotation either.
+        #
+        # NOTE: daemon-level log-opts apply to containers CREATED after the
+        # daemon restart. Containers already running keep the settings they
+        # were created with until they are recreated.
+        # Read any existing daemon.json so operator-set keys survive. This task
+        # used to be gated on insecure_registries being non-empty, so hosts on
+        # a TLS registry were never touched at all. Now that it always runs, a
+        # blind overwrite would silently discard whatever else is in the file —
+        # storage-driver, data-root, live-restore, registry-mirrors,
+        # default-address-pools. Merge instead: our keys win, everything else
+        # is preserved.
+        - name: "Docker daemon — read existing daemon.json (if any)"
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: daemon_json_existing
+          failed_when: false
+          changed_when: false
+
+        # An unparseable existing file makes from_json raise inside the
+        # template, which surfaces as a bare traceback. block/rescue turns it
+        # into something an operator can act on. The file is left untouched
+        # either way — we refuse to overwrite what we could not read.
+        - name: "Docker daemon — write merged daemon.json"
+          block:
+            - name: "Docker daemon — merge log rotation + insecure registries"
+              vars:
+                _existing: >-
+                  {{ (daemon_json_existing.content | default('') | b64decode | from_json)
+                     if (daemon_json_existing.content is defined
+                         and (daemon_json_existing.content | b64decode | trim | length) > 0)
+                     else {} }}
+                # insecure-registries is always present, never conditionally
+                # omitted. combine() only adds and overwrites — a key that
+                # exists solely in _existing survives untouched. Omitting the
+                # key when the list is empty would therefore leave a stale
+                # entry on disk forever for exactly the host that needs it
+                # gone: one that deployed with the default non-empty list and
+                # later migrated to a TLS registry (insecure_registries: []).
+                # Writing [] clears it, because combine's list_merge defaults
+                # to replace.
+                _ours: >-
+                  {{ {'log-driver': 'json-file',
+                      'log-opts': {'max-size': docker_log_max_size,
+                                   'max-file': docker_log_max_file_effective | string},
+                      'insecure-registries': insecure_registries | default([])} }}
+              ansible.builtin.copy:
+                dest: /etc/docker/daemon.json
+                content: "{{ _existing | combine(_ours, recursive=True) | to_nice_json }}\n"
+                mode: '0644'
+              register: daemon_json
+          rescue:
+            - name: "Docker daemon — existing daemon.json is unreadable"
+              ansible.builtin.fail:
+                msg: >-
+                  /etc/docker/daemon.json exists but could not be parsed as
+                  JSON, so the log-rotation settings were not merged in. Fix or
+                  remove that file and re-run — it has been left untouched
+                  rather than overwritten.
 
         - name: Restart docker if daemon.json changed
           service:
@@ -362,6 +534,16 @@
       copy:
         src: ../docker-compose.migrations.ansible.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+
+    # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
+    # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
+    # (see "Compute compose -f flags"): node metrics are wanted on every box,
+    # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
+    # ships in otel/prometheus.yml (synced via digit_config_dirs below).
+    - name: Copy monitoring overlay
+      copy:
+        src: ../docker-compose.monitoring.yml
+        dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
 
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
@@ -685,7 +867,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -693,6 +875,7 @@
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.migrations.ansible.yml' +
+            ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -987,6 +1170,8 @@
         tar -C "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}/build" \
             --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
           | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
+      args:
+        executable: /bin/bash
       register: digit_ui_tar
       changed_when: true
       when:
@@ -1007,6 +1192,8 @@
             echo "swept $c"
           fi
         done
+      args:
+        executable: /bin/bash
       register: search_sweep
       changed_when: search_sweep.stdout | length > 0
       when: not (enable_search_stack | default(false))
@@ -1037,6 +1224,25 @@
       until: hrms_health.stdout == 'healthy'
       changed_when: false
 
+    # ==================== Reload Prometheus config (issue #1335) ====================
+    # `up -d` recreates a container only when its service SPEC changes — a
+    # content-only change to the bind-mounted otel/prometheus.yml does not
+    # trigger a recreate. So on a REDEPLOY of an already-running tenant, the
+    # live Prometheus keeps its old in-memory config and never picks up a newly
+    # added scrape job (e.g. the `node` job for node-exporter) until it happens
+    # to restart. A fresh deploy is unaffected — Prometheus boots with the new
+    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
+    # rereads the file in place. Best-effort: on a first deploy Prometheus may
+    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19090/-/reload
+        method: POST
+        status_code: [200]
+      register: prometheus_reload
+      changed_when: prometheus_reload.status == 200
+      failed_when: false
+
     # ==================== digit-ui mode convergence ====================
     # Three runtime models, picked by host_vars `digit_ui_mode`:
     #
@@ -1060,6 +1266,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui_static
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
@@ -1171,6 +1379,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: post_up_stop_digit_ui
       changed_when: post_up_stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
@@ -1184,6 +1394,8 @@
             "PORT=18080 GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.dev.js 2>&1 | tee /var/log/esbuild.log"
           echo started
         fi
+      args:
+        executable: /bin/bash
       register: start_esbuild
       changed_when: start_esbuild.stdout == "started"
       when: digit_ui_mode == "hmr"
@@ -1513,6 +1725,8 @@
         set -o pipefail
         printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" \
           | docker exec -i docker-postgres psql -U egov -d egov
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
@@ -1529,6 +1743,8 @@
         set -o pipefail
         printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" \
           | docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
       no_log: true
@@ -2068,6 +2284,7 @@
         fi
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
 
     # ── Service health through Kong ───────────────────────────────────────
@@ -2194,11 +2411,12 @@
     # tenant BEFORE MCP bootstrap creates the ADMIN user. egov-enc-service
     # discovers tenants via MDMS search under STATE_LEVEL_TENANT_ID — at this
     # point that's still `pg.citya`, so `mz` (a different root) is unknown and
-    # user encrypt/decrypt for `mz` throws "Tenant Id not found". The custom
-    # `:generatekey-endpoint` image exposes POST /crypto/v1/_generatekey which
-    # inserts the key row directly, bypassing MDMS discovery — solving the
-    # chicken-and-egg between bootstrap needing encryption and enc-service not
-    # yet knowing the new tenant. Idempotent (created: false when key exists).
+    # user encrypt/decrypt for `mz` throws "Tenant Id not found". egov-enc-service
+    # 2.12-87e13fe (formerly the custom `:generatekey-endpoint` preview build)
+    # exposes POST /crypto/v1/_generatekey which inserts the key row directly,
+    # bypassing MDMS discovery — solving the chicken-and-egg between bootstrap
+    # needing encryption and enc-service not yet knowing the new tenant.
+    # Idempotent (created: false when key exists).
     - name: "pre-bootstrap — generate enc-service key for state root ({{ state_root }})"
       ansible.builtin.uri:
         url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
@@ -2959,6 +3177,8 @@
           -s providerId=google \
           -s 'config.clientId={{ keycloak_google_client_id }}' \
           -s 'config.clientSecret={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}' 2>&1 | grep -v "Conflict" || true
+      args:
+        executable: /bin/bash
       when:
         - enable_keycloak | default(false)
         - (keycloak_google_client_id | default('')) | length > 0
@@ -3211,6 +3431,8 @@
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
         fi
+      args:
+        executable: /bin/bash
       register: nodejs_install
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
       when:

@@ -70,6 +70,15 @@ services:
   postgres-db:
     image: registry.preview.egov.theflywheel.in/postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query. Docker's default pad is 64 MB, so the 9th concurrent parallel
+    # query fails with "could not resize shared memory segment ... No space
+    # left on device". pgbouncer runs transaction pooling, so its
+    # DEFAULT_POOL_SIZE (60 below) is what bounds concurrency at the database:
+    # 60 x 8 MB = 480 MB worst case. A tmpfs is a ceiling, not a reservation —
+    # unused pages cost no memory.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
@@ -233,7 +242,7 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:maven-jdk21-9f83afb
     container_name: egov-indexer
     depends_on:
       pgbouncer:
@@ -360,7 +369,7 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -413,7 +422,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -479,7 +488,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -543,7 +552,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:master-e22c7c5
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -747,7 +756,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:jdk21-cds
+    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -829,7 +838,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:jdk21-cds
+    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -877,7 +886,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-delete
+    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -935,7 +944,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -1006,7 +1015,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -1054,7 +1063,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -1148,7 +1157,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:default-pwd
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1460,7 +1469,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1540,7 +1549,7 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
@@ -1572,9 +1581,11 @@ services:
   # DIGIT UI (React Frontend)
   # Image built by Tilt from CCRS repo, or manually with:
   # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
+  # Defaults to the remote pgr-fixes tag; set DIGIT_UI_IMAGE=digit-ui-dev to use
+  # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes
+    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"

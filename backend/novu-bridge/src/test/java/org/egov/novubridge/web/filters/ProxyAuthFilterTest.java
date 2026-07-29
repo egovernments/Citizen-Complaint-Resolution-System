@@ -69,6 +69,14 @@ class ProxyAuthFilterTest {
         return req;
     }
 
+    private MockHttpServletRequest dispatchTestTriggerRequest() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod("POST");
+        req.setServletPath("/novu-adapter/v1/dispatch/_test-trigger");
+        req.setRequestURI("/novu-bridge/novu-adapter/v1/dispatch/_test-trigger");
+        return req;
+    }
+
     @Test
     void noAuthHeader_returns401_chainNotInvoked() throws Exception {
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -101,6 +109,21 @@ class ProxyAuthFilterTest {
         MockFilterChain chain = new MockFilterChain();
 
         filter.doFilter(providersCreateRequest(), res, chain);
+
+        assertEquals(401, res.getStatus());
+        assertNull(chain.getRequest());
+    }
+
+    @Test
+    void dispatchTestTriggerWithoutToken_isGated_returns401() throws Exception {
+        // Regression: the POST /dispatch diagnostics (_validate/_dry-run/_test-trigger)
+        // must be auth-gated like the other /novu-adapter/v1 endpoints. _test-trigger
+        // sends a real Novu SMS/WhatsApp/Email, so it must never run unauthenticated.
+        // (shouldNotFilter previously excluded /dispatch, serving it unauthenticated.)
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(dispatchTestTriggerRequest(), res, chain);
 
         assertEquals(401, res.getStatus());
         assertNull(chain.getRequest());

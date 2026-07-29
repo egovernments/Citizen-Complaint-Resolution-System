@@ -15,7 +15,7 @@ initContainers:
     schemaTable: "mdms_v2_schema"
     image:
       repository: "mdms-v2-db"
-      tag: "v2.9.2-4a60f20"
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
 # PARITY / IMAGE NOTE — why this is NOT the chart-default v2.9.2 tag:

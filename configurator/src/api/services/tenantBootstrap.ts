@@ -156,19 +156,47 @@ async function createData(record: MdmsRecordRaw): Promise<void> {
 
 // --- Step 3.5: register the tenant with egov-enc-service -----------------
 
-// egov-enc-service discovers tenants via an MDMS search scoped to its own
-// STATE_LEVEL_TENANT_ID env var — a brand-new state root is invisible to it
-// until this is called, so provisionAdmin()'s _createnovalidate (which
-// encrypts the user's PII) would otherwise fail with "Tenant Id not found"
-// even though every step above succeeded. Idempotent (created:false when a
-// key already exists). Non-fatal: swallow failures here and let Step 4
-// surface the real error if enc-service is genuinely unreachable.
+export interface EncKeyResult {
+  tenantId: string;
+  /** true when this call inserted a new key; false when one already existed. */
+  created: boolean;
+  keyId?: number;
+}
+
+// egov-enc-service holds ONE symmetric key per tenant, and every PII column it
+// wrote is sealed with that key. Without a key row the tenant cannot accept any
+// encrypted write: egov-user's _create / HRMS employee create fail with
+// "Unknown error occurred in encryption process" (or "Tenant Id not found" for a
+// brand-new state root, because enc-service discovers tenants via an MDMS search
+// scoped to its own STATE_LEVEL_TENANT_ID env var and doesn't know the new root).
+//
+// POST /crypto/v1/_generatekey is CREATE-IF-MISSING, never a rotation:
+// re-calling it for a tenant that already has a key returns `created:false` with
+// the SAME keyId and leaves the stored secret untouched (verified against a
+// throwaway tenant — one row, unchanged key_id/secret_key across three calls).
+// That property is what makes it safe to call from the wizard: it can never
+// strand already-encrypted data. It is nonetheless only ever called on the
+// tenant-creation path, and the UI exposes no "regenerate key" affordance —
+// rotating a live tenant's key is a deliberate ops action, not a button.
+//
+// Throws on transport/API failure; callers decide how fatal that is.
+export async function ensureEncKey(tenantId: string): Promise<EncKeyResult> {
+  const response = await apiClient.post(ENDPOINTS.ENC_GENERATE_KEY, {
+    RequestInfo: apiClient.buildRequestInfo(),
+    tenantId,
+  });
+  return {
+    tenantId,
+    created: (response as { created?: boolean } | undefined)?.created === true,
+    keyId: (response as { keyId?: number } | undefined)?.keyId,
+  };
+}
+
+/** Bootstrap-path wrapper: non-fatal: swallow failures here and let Step 4
+ *  surface the real error if enc-service is genuinely unreachable. */
 async function registerEncKey(target: string): Promise<void> {
   try {
-    await apiClient.post(ENDPOINTS.ENC_GENERATE_KEY, {
-      RequestInfo: apiClient.buildRequestInfo(),
-      tenantId: target,
-    });
+    await ensureEncKey(target);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[bootstrap] enc-service key generation for ${target} failed: ${msg}`);

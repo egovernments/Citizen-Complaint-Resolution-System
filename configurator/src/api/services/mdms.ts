@@ -17,12 +17,43 @@ import type {
 const MAP_CONFIG_KEY = 'DEFAULT';
 
 export const mdmsService = {
-  // Generic MDMS search
+  /**
+   * Generic MDMS search. **Returns ACTIVE records only** unless
+   * `options.includeInactive` is set.
+   *
+   * mdms-v2 soft-deletes: a "removed" record keeps its row and its `data`
+   * verbatim (including `data.active: true`, which is a *business* flag owned by
+   * the schema and has nothing to do with deletion) and only flips the
+   * record-level `isActive` to false. This function used to send no `isActive`
+   * criterion AND then throw the flag away by mapping straight down to
+   * `record.data`, so every caller silently received deleted records with no way
+   * to tell — the complaint-type cascade offered four soft-deleted
+   * `*_CTPARITY` sub-types, and picking one got the operator an opaque
+   * `400 INVALID_SERVICECODE: … not present in MDMS` from pgr-services, which
+   * resolves the hierarchy with `isActive = true`.
+   *
+   * The filter is pushed to the SERVER (verified: 263 active of 267 rows on
+   * mz/RAINMAKER-PGR.ComplaintHierarchy) so paging stays honest, and re-applied
+   * client-side as a defensive fallback for any MDMS build that ignores the
+   * criterion. The record-level flag is also preserved on each result as
+   * `_isActive` (the `_`-prefixed metadata convention the data-provider already
+   * uses) so a caller that opts into inactive rows can still tell them apart.
+   *
+   * Need the raw records (uniqueIdentifier / id / auditDetails / isActive)?
+   * Use `searchRecords()` — it is deliberately unfiltered.
+   */
   async search<T>(
     tenantId: string,
     schemaCode: string,
-    options?: { limit?: number; offset?: number; uniqueIdentifiers?: string[] }
+    options?: {
+      limit?: number;
+      offset?: number;
+      uniqueIdentifiers?: string[];
+      /** Opt in to soft-deleted records (e.g. an admin list with a "show removed" toggle). */
+      includeInactive?: boolean;
+    }
   ): Promise<T[]> {
+    const includeInactive = options?.includeInactive === true;
     const response = await apiClient.post(ENDPOINTS.MDMS_SEARCH, {
       RequestInfo: apiClient.buildRequestInfo(),
       MdmsCriteria: {
@@ -31,11 +62,18 @@ export const mdmsService = {
         limit: options?.limit || 100,
         offset: options?.offset || 0,
         uniqueIdentifiers: options?.uniqueIdentifiers,
+        ...(includeInactive ? {} : { isActive: true }),
       },
     });
 
     const mdmsRecords = (response.mdms || []) as MdmsRecord[];
-    return mdmsRecords.map((record) => record.data as T);
+    const kept = includeInactive
+      ? mdmsRecords
+      : mdmsRecords.filter((record) => record.isActive !== false);
+    return kept.map(
+      (record) =>
+        ({ ...(record.data as Record<string, unknown>), _isActive: record.isActive !== false }) as T
+    );
   },
 
   // Generic MDMS create
@@ -59,9 +97,11 @@ export const mdmsService = {
     return response.Mdms as MdmsRecord;
   },
 
-  // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails`, which the
-  // generic search() drops when it maps records down to their `data`. An update
-  // has to round-trip all three.
+  // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails` / `isActive`,
+  // which the generic search() drops when it maps records down to their `data`.
+  // An update has to round-trip the first three. Deliberately UNFILTERED — this
+  // is the escape hatch for the flows that must see soft-deleted rows
+  // (upsertMapConfig has to know a uid is occupied before it mints a new one).
   async searchRecords(
     tenantId: string,
     schemaCode: string,
