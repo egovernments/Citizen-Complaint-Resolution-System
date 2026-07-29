@@ -9,10 +9,12 @@
 ansible_host: localhost
 ansible_connection: local
 
-# Fresh box: nothing to preserve. If image pulls fail with
-# "x509: certificate has expired" (registry.preview.egov.theflywheel.in),
-# set this to ["registry.preview.egov.theflywheel.in"] and re-run.
-insecure_registries: []
+# WORKAROUND, remove once the registry cert is renewed: the Let's Encrypt
+# wildcard for *.preview.egov.theflywheel.in expired 2026-07-25 and image
+# pulls fail with "x509: certificate has expired". Fresh box, so no
+# existing entries to preserve (on shared boxes, ALWAYS carry the box's
+# existing entries forward — this list REPLACES, it does not merge).
+insecure_registries: ["registry.preview.egov.theflywheel.in"]
 
 domain: localhost
 tls_enabled: false
