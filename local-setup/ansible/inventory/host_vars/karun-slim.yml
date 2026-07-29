@@ -1,14 +1,12 @@
-# Slimmed variant of karun.yml for a 16 GB host (WSL2 with ~12 GB for the
-# VM). The full karun.yml stack (Novu + MCP + UI-v2 + configurator on top
-# of the ~15 core JVMs) thrashes a 16 GB machine into a frozen WSL VM.
+# karun.yml minus Novu — for a 16 GB host (WSL2 with ~12 GB for the VM).
 #
-# Kept:    core DIGIT services, PGR, employee UI (built from source),
-#          Kong, Gatus, Jupyter, seeded pg / pg.citya tenants.
-# Dropped: Novu notifications stack (~1.5-2 GB), MCP + mcp-postgres
-#          (~0.5 GB), otp-publisher, digit-ui-v2 citizen SPA build,
-#          configurator SPA build (both are deploy-time RAM spikes).
-#          Disabling enable_mcp + enable_novu also removes the
-#          `mcp,notifications` compose profiles entirely.
+# The ONLY functional delta from karun.yml is the Novu notifications
+# stack (novu-mongo/api/worker/ws/dashboard/bridge + otp-publisher,
+# ~1.5-2 GB resident): that is the one piece that risks re-freezing a
+# 12 GB VM. Everything else matches karun.yml: core services, PGR,
+# employee UI (same esbuild branch), citizen SPA (/citizen/),
+# configurator (/configurator/), MCP (wizard tenant bootstrap works),
+# Kong, Gatus, Jupyter, seeded pg / pg.citya tenants.
 #
 # Deploy: ./deploy.sh karun-slim
 # Login:  http://localhost/digit-ui/  ADMIN / eGov@123
@@ -58,17 +56,22 @@ footer_logo_url: ""
 footer_bw_logo_url: ""
 
 digit_ui_mode: container
-enable_digit_ui_v2: false          # slim: no citizen SPA (Vite build spike)
+enable_digit_ui_v2: true
+digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+digit_ui_v2_branch: "fix/citizen-ui-v2-mobile-config"
 
 enable_integration_tests: false
+integration_tests_dashboard_base: "/tests-v2/"
+integration_tests_basic_auth_user: "digit-tests"
 enable_integration_tests_runner: false
 
 enable_otp_services: false
 enable_search_stack: false
-enable_mcp: false                  # slim: no MCP + mcp-postgres
-build_mcp: false
-build_digit_ui: true               # employee UI stays — it's the point
+enable_mcp: true
+build_mcp: true
+build_digit_ui: true
 build_otp_publisher: false         # slim: notifications path is off
+digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
 tolerate_bootstrap_failures: true
 enable_turbopass: false
 enable_overpass: false
@@ -106,9 +109,9 @@ nginx_features:
   configurator_caching: false
   status: true
   api_pgr: false
-  mcp: false                       # slim: MCP is off
-  keycloak: false
-  digit_ui_v2: false               # slim: citizen SPA not built
+  mcp: true
+  keycloak: true
+  digit_ui_v2: true
   integration_tests: false
   integration_tests_runner: false
 nginx_preserve_vhost: false
