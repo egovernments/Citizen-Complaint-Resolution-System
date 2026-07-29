@@ -95,11 +95,14 @@ db_fast_path_ack_data_wipe: true
 run_ci_tests: false
 force_clean: false
 install_claude_code: false
-build_configurator: false          # slim: no configurator dist build
+# Configurator is back in even on slim: runtime cost is nil (static SPA
+# served by host nginx, no container) — only the one-time vite build at
+# deploy costs RAM, and swap absorbs it.
+build_configurator: true
 
 nginx_features:
   brand_assets: false
-  configurator: false              # slim: not built, so not rendered
+  configurator: true
   configurator_caching: false
   status: true
   api_pgr: false
