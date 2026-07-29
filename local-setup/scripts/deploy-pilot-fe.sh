@@ -121,11 +121,20 @@ deploy_ui() {
   tar -C build --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
     | sudo docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
 
-  log "verify: Last-Modified of /digit-ui/index.js (expect today)"
-  local LM; LM="$(curl -sI http://localhost/digit-ui/index.js | tr -d '\r' | grep -i '^last-modified' || true)"
-  echo "  $LM"
-  echo "$LM" | grep -q "$(date -u '+%d %b %Y')" \
-    || { echo "ERROR: index.js Last-Modified is not today — deploy did not land" >&2; exit 1; }
+  # Authoritative verify: stat the file we just wrote inside the container.
+  # (An HTTP HEAD against localhost can 301 to HTTPS and lose Last-Modified,
+  # which false-failed the old check even though the deploy landed.)
+  log "verify: index.js mtime inside the container (expect just now)"
+  local MT NOW AGE
+  MT="$(sudo docker exec digit-ui stat -c '%Y' /var/web/digit-ui/index.js)"
+  NOW="$(date +%s)"; AGE=$(( NOW - MT ))
+  echo "  index.js: $(sudo docker exec digit-ui stat -c '%y' /var/web/digit-ui/index.js) (age ${AGE}s)"
+  { [ "$AGE" -lt 600 ] && [ "$AGE" -gt -600 ]; } \
+    || { echo "ERROR: index.js in the container is ${AGE}s old — deploy did not land" >&2; exit 1; }
+
+  # Advisory HTTP check only — path may redirect/proxy on some hosts
+  local LM; LM="$(curl -skIL http://localhost/digit-ui/index.js | tr -d '\r' | grep -i '^last-modified' | tail -1 || true)"
+  if [ -n "$LM" ]; then echo "  HTTP: $LM"; else log "note: no Last-Modified over HTTP (redirect/proxy in the path) — container check above is authoritative"; fi
   log "digit-ui OK (no restart needed; note: reverts if the container is recreated)"
 }
 
@@ -149,8 +158,8 @@ deploy_configurator() {
   log "publishing dist/ → $CONF_WWW"
   sudo rsync -a --delete "$REPO/configurator/dist/" "$CONF_WWW/"
 
-  local CODE; CODE="$(curl -s -o /dev/null -w '%{http_code}' http://localhost/configurator/)"
-  log "verify: /configurator/ → HTTP $CODE"
+  local CODE; CODE="$(curl -skL -o /dev/null -w '%{http_code}' http://localhost/configurator/)"
+  log "verify: /configurator/ → HTTP $CODE (redirects followed)"
   [ "$CODE" = 200 ] || { echo "ERROR: configurator returned HTTP $CODE" >&2; exit 1; }
   log "configurator OK (static behind host nginx, served immediately)"
 }
