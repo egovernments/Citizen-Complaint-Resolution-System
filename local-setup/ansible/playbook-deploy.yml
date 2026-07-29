@@ -213,6 +213,76 @@
         - core_mobile_configs
         - _mobile_missing_keys | length > 0
 
+    # ==================== WSL2 resource config (.wslconfig) ====================
+    # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
+    # thrashes the VM into a freeze (deploy hangs, new WSL sessions won't
+    # even open). The Windows-side %UserProfile%\.wslconfig governs the
+    # caps, and it's reachable from inside WSL via /mnt/c — so the deploy
+    # manages the [wsl2] keys itself (ini_file edits just our keys; any
+    # other settings in the file are preserved).
+    #
+    # What ansible CANNOT do is apply the file: that takes `wsl --shutdown`
+    # from Windows, which would kill the VM this play runs inside. So after
+    # writing, compare the running VM's memory to the target and fail fast
+    # with instructions instead of deploying into a doomed memory budget.
+    # Skipped entirely on non-WSL hosts.
+    - name: "WSL — manage Windows-side .wslconfig + verify it is applied"
+      when:
+        - ansible_system != "Darwin"
+        - "'microsoft' in (ansible_kernel | lower)"
+      block:
+        # Windows interop gives us %UserProfile% without guessing the
+        # username; chdir avoids cmd.exe's UNC-working-dir warning noise.
+        - name: "WSL — locate the Windows user profile"
+          ansible.builtin.command: /mnt/c/Windows/System32/cmd.exe /c "echo %UserProfile%"
+          args:
+            chdir: /mnt/c
+          register: wsl_userprofile
+          changed_when: false
+          failed_when: false
+
+        - name: "WSL — interop unavailable, cannot manage .wslconfig"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: Windows interop is disabled in this WSL distro, so
+              the deploy cannot write .wslconfig. Set [wsl2] memory={{ wsl_memory_gb }}GB
+              swap={{ wsl_swap_gb }}GB processors={{ wsl_processors }} in
+              %UserProfile%\.wslconfig yourself.
+          when: wsl_userprofile.rc != 0 or (wsl_userprofile.stdout | trim | length == 0)
+
+        - name: "WSL — translate the profile path to a WSL path"
+          ansible.builtin.command: wslpath "{{ wsl_userprofile.stdout | trim }}"
+          register: wsl_userprofile_linux
+          changed_when: false
+          when: wsl_userprofile.rc == 0 and (wsl_userprofile.stdout | trim | length > 0)
+
+        - name: "WSL — write [wsl2] caps into .wslconfig"
+          community.general.ini_file:
+            path: "{{ wsl_userprofile_linux.stdout | trim }}/.wslconfig"
+            section: wsl2
+            option: "{{ item.option }}"
+            value: "{{ item.value }}"
+            no_extra_spaces: true
+          loop:
+            - { option: memory, value: "{{ wsl_memory_gb }}GB" }
+            - { option: swap, value: "{{ wsl_swap_gb }}GB" }
+            - { option: processors, value: "{{ wsl_processors }}" }
+          when: wsl_userprofile_linux is not skipped
+
+        # 85% tolerance: the VM reports slightly less than the configured
+        # cap (kernel reservations), and we only care about catching the
+        # ~50%-default / stale-cap case, not rounding.
+        - name: "WSL — fail fast until the new caps are actually applied"
+          ansible.builtin.fail:
+            msg: >-
+              This WSL VM is running with
+              {{ (ansible_memtotal_mb / 1024) | round(1) }} GB but .wslconfig
+              now requests {{ wsl_memory_gb }} GB. Ansible cannot restart the
+              VM it is running inside. From Windows PowerShell run:
+              `wsl --shutdown`, reopen this distro, and re-run
+              ./deploy.sh — the deploy will then proceed.
+          when: (ansible_memtotal_mb | int) < (wsl_memory_gb | int) * 1024 * 0.85
+
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
     # Desktop / OrbStack, so apt + docker.service + /etc/docker/daemon.json

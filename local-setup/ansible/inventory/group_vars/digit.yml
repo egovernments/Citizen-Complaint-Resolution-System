@@ -170,6 +170,19 @@ docker_log_total_size: "1g"
 # Same idea as the Mac path's /tmp/mac-stack-up.progress.
 compose_progress_file: /tmp/digit-stack-up.progress
 
+# WSL2-only (ignored everywhere else): the [wsl2] resource caps the deploy
+# writes into the Windows-side .wslconfig. WSL defaults to ~50% of host
+# RAM, which starves the JVM stack and freezes the whole VM; these are
+# sized for a 16 GB host (12 GB VM + big swap for JVM startup spikes).
+# Hosts with 32 GB should override wsl_memory_gb: 20 in host_vars.
+# NOTE: ansible can WRITE the config but cannot APPLY it — that takes
+# `wsl --shutdown` from Windows, which would kill the VM ansible runs in.
+# The deploy fails fast with instructions when the running VM doesn't
+# match these values yet.
+wsl_memory_gb: 12
+wsl_swap_gb: 16
+wsl_processors: 6
+
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys
 # rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
 mcp_repo: "{{ digit_dir }}/digit-mcp"
