@@ -12,9 +12,15 @@ const EmployeeForgotPassword = ({stateCode}) => {
   const params = useMemo(() =>
     loginConfig.map(
       (step) => {
+        // Pass the raw loc KEYS through — forgotPassword.js resolves them via
+        // its own tr(key, fallback) at render. Pre-resolving with t() here and
+        // letting tr() run again double-resolves: tr sees an already-translated
+        // message, trans(message) === message, and returns the English fallback
+        // — so the header/description/submit texts ignored the locale. Keeping
+        // raw keys makes tr() resolve them once.
         const texts = {};
         for (const key in step.texts) {
-          texts[key] = t(step.texts[key]);
+          texts[key] = step.texts[key];
         }
         return { ...step, texts };
       },
