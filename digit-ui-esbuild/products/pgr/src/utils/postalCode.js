@@ -2,11 +2,21 @@
 // (employee form, legacy citizen FormExplorer, citizen v2 flow) so the
 // three don't drift the way they used to (CCRS#722).
 //
-// `CORE_POSTAL_CONFIGS.postalCodePattern` (set per-tenant in the ansible
-// inventory, see local-setup/ansible/inventory/host_vars/_example.yml) is
-// the SINGLE source of truth: a regex already expresses length,
-// starting-digit constraints, and alnum shapes in one place, so there's
-// no separate length/message field that can go stale relative to it.
+// The pattern is the SINGLE source of truth: a regex already expresses
+// length, starting-digit constraints, and alnum shapes in one place, so
+// there's no separate length/message field that can go stale relative
+// to it. Resolution order matches `resolvePostalRule()` in
+// configurator/src/admin/validation.ts — one precedence for one rule,
+// so a tenant can't see a different pattern in DIGIT Studio than in the
+// PGR create-complaint flows:
+//   1. `window.__DIGIT_USER_VALIDATION.postalCode.pattern` — the MDMS
+//      channel (common-masters.FormValidations) mirrored on `window` for
+//      synchronous consumers, same as the mobile/name/email rules.
+//   2. `CORE_POSTAL_CONFIGS.postalCodePattern` from globalConfigs (set
+//      per-tenant in the ansible inventory, see
+//      local-setup/ansible/inventory/host_vars/_example.yml), with the
+//      legacy `CORE_POSTAL_CODE_CONFIGS` key honoured too.
+//   3. The legacy 5-digit default.
 //
 // The error message is always derived from this pattern rather than read
 // from a config override: when the pattern is a plain `^[0-9]{N}$` shape
@@ -19,8 +29,17 @@
 // count.
 
 export function getPostalCodePattern() {
-  const getConfig = typeof window !== "undefined" ? window.globalConfigs?.getConfig : undefined;
-  const cfg = getConfig?.("CORE_POSTAL_CONFIGS") || getConfig?.("CORE_POSTAL_CODE_CONFIGS") || {};
+  if (typeof window === "undefined") return "^[0-9]{5}$";
+  const mdmsPattern = window.__DIGIT_USER_VALIDATION?.postalCode?.pattern;
+  if (mdmsPattern) return mdmsPattern;
+  const getConfig = window.globalConfigs?.getConfig;
+  // Select on the field, not the config object: the ansible template
+  // (globalConfigs.js.j2) renders CORE_POSTAL_CONFIGS as at least `{}`,
+  // which is truthy — an `||` on the object would never reach the legacy
+  // key on any ansible-rendered globalConfigs.
+  const cfg =
+    [getConfig?.("CORE_POSTAL_CONFIGS"), getConfig?.("CORE_POSTAL_CODE_CONFIGS")]
+      .find((c) => c?.postalCodePattern) || {};
   return cfg.postalCodePattern || "^[0-9]{5}$";
 }
 
@@ -33,6 +52,16 @@ export function getPostalCodePattern() {
 function getPostalCodeDigitLength() {
   const m = String(getPostalCodePattern()).match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/);
   return m ? m[1] : null;
+}
+
+/**
+ * True when the configured pattern is a plain digits-only shape. Used by
+ * inputs to decide whether to hint a numeric mobile keyboard
+ * (`inputMode="numeric"`) — digit-only tenants (KE 5, MZ 4, IN 6) keep the
+ * number pad, while alnum/dash tenants get the full keyboard they need.
+ */
+export function isPostalCodeNumeric() {
+  return getPostalCodeDigitLength() != null;
 }
 
 /** Optional field — only the format is enforced, and only when a value is present. */

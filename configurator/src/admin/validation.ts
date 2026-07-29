@@ -96,8 +96,13 @@ function resolvePostalRule(): { pattern: RegExp; message: string } {
       : undefined;
   // Ansible templates this as CORE_POSTAL_CONFIGS (from host_vars
   // `core_postal_configs`); fall back to the legacy CORE_POSTAL_CODE_CONFIGS key.
-  const globalRule =
-    getConfig?.('CORE_POSTAL_CONFIGS') ?? getConfig?.('CORE_POSTAL_CODE_CONFIGS');
+  // Select on the field, not the object: globalConfigs.js.j2 renders
+  // CORE_POSTAL_CONFIGS as at least `{}` (not nullish), so `??` on the
+  // object would never reach the legacy key.
+  const globalRule = [
+    getConfig?.('CORE_POSTAL_CONFIGS'),
+    getConfig?.('CORE_POSTAL_CODE_CONFIGS'),
+  ].find((c) => c?.postalCodePattern);
 
   const patternStr =
     (mdmsRule?.pattern as string | undefined) ||

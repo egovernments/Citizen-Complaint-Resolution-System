@@ -21,7 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
-import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
+import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -672,6 +672,14 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <Input
             id="postal-code"
             type="text"
+            // Numeric keyboard hint only when the configured pattern is
+            // digit-only (KE 5, MZ 4, IN 6 — every real deployment today);
+            // alnum/dash tenants (UK / US 5+4 examples in _example.yml) get
+            // the full keyboard their pattern needs. No keystroke filtering
+            // either way — the shared validator is the sole gate, so input
+            // is never mangled before it reaches isPostalCodeValid().
+            inputMode={isPostalCodeNumeric() ? "numeric" : "text"}
+            pattern={isPostalCodeNumeric() ? "[0-9]*" : undefined}
             maxLength={16}
             invalid={showPostalError}
             value={effectivePincode}
@@ -882,7 +890,14 @@ const CreatePGRFlowV2: React.FC = () => {
       !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
     if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
     if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
-    const norm = (v: unknown) => String(v ?? "").trim().replace(/^0+/, "") || "0";
+    // Case-fold (postal codes may be alnum now, e.g. "sw1a 1aa" vs the
+    // seeded "SW1A 1AA") and strip leading zeros only for purely numeric
+    // values — "0100" ≡ "100" for a numeric pincode, but a leading zero in
+    // an alnum code is significant.
+    const norm = (v: unknown) => {
+      const s = String(v ?? "").trim().toUpperCase();
+      return /^[0-9]+$/.test(s) ? s.replace(/^0+/, "") || "0" : s;
+    };
     const list = norm(formData.postalCode);
     const configured =
       Array.isArray(tenants) &&

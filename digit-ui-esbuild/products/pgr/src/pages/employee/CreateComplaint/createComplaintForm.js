@@ -421,8 +421,9 @@ const CreateComplaintForm = ({
       return;
     }
     // Postal pattern check. Optional field; only enforce format when filled.
-    // The config-level `validation.pattern` on a `type:"number"` field
-    // doesn't reliably fire, so do it explicitly here. Closes
+    // Kept as an explicit submit-time check (in addition to the config-level
+    // `validation.pattern`) so a mangled or programmatically-set value can
+    // never slip past field-level validation. Closes
     // egovernments/CCRS#478 — postal validation message, CSR path.
     // Pattern + message are both config-driven per tenant (CCRS#722) — see
     // utils/postalCode.js.

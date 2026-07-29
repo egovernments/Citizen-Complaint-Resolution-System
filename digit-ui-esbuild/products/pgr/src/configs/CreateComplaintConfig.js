@@ -206,7 +206,14 @@ export const CreateComplaintConfig = {
             {
               inline: true,
               label: "CS_COMPLAINT_POSTALCODE__DETAILS",
-              type: "number",
+              // "text", not "number": the configured postalCodePattern may be
+              // alnum or dash-suffixed (UK / US 5+4 examples in
+              // _example.yml), and a number input physically can't hold those
+              // shapes — the shared validator would then reject every value
+              // the widget allows, making the field unfillable. The native
+              // maxLength cap (TextInput passes populators.validation.maxlength
+              // through) still applies to text inputs.
+              type: "text",
               disable: false,
               populators: {
                 name: "postalCode",

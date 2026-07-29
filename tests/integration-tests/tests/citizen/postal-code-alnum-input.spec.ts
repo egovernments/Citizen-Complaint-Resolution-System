@@ -128,4 +128,64 @@ Catches a regression where the field silently mangles input before the shared is
     await postalInput.pressSequentially(usProbe, { delay: 50 });
     await expect(postalInput).toHaveValue(usProbe);
   });
+
+  test('invalid postal code renders the length-interpolated localized error', {
+    annotation: {
+      type: 'description',
+      description: `Proves the actual #722 deliverable end-to-end: the visible error message states the digit count derived from the tenant's configured postalCodePattern, rendered through the real i18next pipeline (CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN with a {{length}} interpolation — the first interpolated key in rainmaker-pgr, so this path has no other coverage in the repo).
+
+Steps:
+1. OTP-login as the provisioned citizen and walk to Step 3 (Location Details).
+2. Read the tenant's effective postalCodePattern from the page (same resolution order as utils/postalCode.js).
+3. Skip unless the pattern is a plain ^[0-9]{N}$ shape (the interpolated-length message only applies to digit-only tenants).
+4. Type N+1 digits into #postal-code — guaranteed invalid for a ^[0-9]{N}$ pattern.
+5. Assert the visible error text reads "…valid N-digit postal code" with the tenant's actual N.
+
+Catches: a broken i18next interpolation (post-processors mangling the {{length}} placeholder), a missing/mis-seeded localization key surfacing as a raw key, or a digit count derived from the wrong part of the pattern.`,
+    },
+    tag: ['@area:pgr', '@ccrs:722', '@kind:regression', '@layer:ui', '@persona:citizen', '@pr:1315'] }, async ({ page }) => {
+    test.setTimeout(120_000);
+
+    await citizenOtpLogin(page);
+
+    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(5000);
+
+    await reachLocationDetailsStep(page);
+
+    const postalInput = page.locator('#postal-code');
+    await expect(postalInput).toBeVisible({ timeout: 15_000 });
+
+    // Resolve the tenant's effective pattern exactly the way the app does
+    // (utils/postalCode.js): MDMS window channel first, then
+    // CORE_POSTAL_CONFIGS / legacy CORE_POSTAL_CODE_CONFIGS by field,
+    // then the 5-digit default.
+    const pattern = await page.evaluate(() => {
+      const w = window as any;
+      const mdms = w.__DIGIT_USER_VALIDATION?.postalCode?.pattern;
+      if (mdms) return String(mdms);
+      const getConfig = w.globalConfigs?.getConfig;
+      const cfg = [getConfig?.('CORE_POSTAL_CONFIGS'), getConfig?.('CORE_POSTAL_CODE_CONFIGS')]
+        .find((c: any) => c?.postalCodePattern);
+      return String(cfg?.postalCodePattern || '^[0-9]{5}$');
+    });
+
+    const lenMatch = pattern.match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/);
+    test.skip(!lenMatch, `tenant pattern "${pattern}" is not ^[0-9]{N}$-shaped — length-interpolated message doesn't apply`);
+    const n = Number(lenMatch![1]);
+
+    // N+1 digits can never satisfy ^[0-9]{N}$, so the field must flag it.
+    await postalInput.click();
+    await postalInput.fill('');
+    await postalInput.pressSequentially('1'.repeat(n + 1), { delay: 50 });
+
+    // The visible error must carry the tenant's real digit count — not a raw
+    // localization key, not a mangled "{{length}}" placeholder, and not a
+    // hardcoded count from some other tenant's pattern.
+    const errorText = page.getByText(new RegExp(`valid\\s+${n}[\\s-]?digit postal code`, 'i'));
+    await expect(errorText).toBeVisible({ timeout: 10_000 });
+  });
 });
