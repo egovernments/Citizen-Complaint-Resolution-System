@@ -6283,3 +6283,21 @@ header.digit-header .digit-dropdown-master {
     linear-gradient(rgba(11, 75, 102, 0.55), rgba(11, 75, 102, 0.55)),
     var(--banner-url) no-repeat center center / cover !important;
 }
+
+/* CCSD-1983 follow-up — the brand emblem shrank (24px) on the citizen
+   Edit-Profile page. That page renders the same citizen-style topbar
+   (.navbar > .hambuger-back-wrapper > img.city) but wrapped in the
+   `.employee`-classed shell, so every `.citizen`-scoped 32px rule missed it
+   and the emblem fell to the vendor `.navbar img { height:24px }`.
+   Target img.city directly (it is the brand-emblem class, used only in this
+   topbar) so the emblem is a consistent 32px on every page regardless of the
+   shell wrapper; object-fit:contain keeps the original anti-stretch fix. */
+.navbar img.city,
+.hambuger-back-wrapper img.city {
+  height: 32px !important;
+  min-height: 32px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 160px !important;
+  object-fit: contain !important;
+}
