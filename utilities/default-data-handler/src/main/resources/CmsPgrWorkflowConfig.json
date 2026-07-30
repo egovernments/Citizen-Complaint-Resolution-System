@@ -186,7 +186,7 @@
           "sla": 300000,
           "state": "INFOFROMCITIZEN",
           "applicationStatus": "AWAITINGINFORMATION",
-          "docUploadRequired": true,
+          "docUploadRequired": false,
           "isStartState": false,
           "isTerminateState": false,
           "isStateUpdatable": false,
