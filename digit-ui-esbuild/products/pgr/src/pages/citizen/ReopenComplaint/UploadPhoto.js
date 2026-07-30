@@ -23,6 +23,11 @@ const toDocument = (fileStoreId) => ({
   additionalDetails: {},
 });
 
+// CCSD-2082 Issue 2 asks for images AND documents only (PDF/DOC/DOCX) — NOT
+// audio/video. PgrFileUpload's default accept includes audio/video (that's for
+// the create wizard / action modals per CCSD-1971), so scope it down here.
+const REOPEN_ACCEPT = "image/*,.pdf,.doc,.docx";
+
 const UploadPhoto = (props) => {
   const { t } = useTranslation();
   const history = useHistory();
@@ -52,12 +57,25 @@ const UploadPhoto = (props) => {
     t("CS_REOPEN_UPLOAD_HEADER") === "CS_REOPEN_UPLOAD_HEADER"
       ? "Attach documents or photos (optional)"
       : t("CS_REOPEN_UPLOAD_HEADER");
+  // Hint mirrors the restricted accept (images + PDF/DOC/DOCX, no audio/video).
+  const uploadHint =
+    t("CS_REOPEN_UPLOAD_HINT") === "CS_REOPEN_UPLOAD_HINT"
+      ? "Images, PDF, DOC or DOCX up to 5 MB each. You can upload up to 5 files."
+      : t("CS_REOPEN_UPLOAD_HINT");
 
   return (
     <React.Fragment>
       <Card>
         <CardHeader>{header}</CardHeader>
-        <PgrFileUpload t={t} tenantId={tenantId} fieldKey="ReopenDocuments" value={value} onSelect={onSelect} />
+        <PgrFileUpload
+          t={t}
+          tenantId={tenantId}
+          fieldKey="ReopenDocuments"
+          value={value}
+          onSelect={onSelect}
+          accept={REOPEN_ACCEPT}
+          hint={uploadHint}
+        />
         <SubmitBar label={t(`${LOCALIZATION_KEY.PT_COMMONS}_NEXT`)} onSubmit={next} />
       </Card>
     </React.Fragment>

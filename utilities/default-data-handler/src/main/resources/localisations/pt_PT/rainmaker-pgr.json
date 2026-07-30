@@ -1678,5 +1678,11 @@
         "message": "Por favor, forneça os detalhes do motivo da reabertura da reclamação.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_UPLOAD_HINT",
+        "message": "Imagens, PDF, DOC ou DOCX até 5 MB cada. Pode carregar até 5 ficheiros.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

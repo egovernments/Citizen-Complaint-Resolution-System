@@ -8230,5 +8230,11 @@
         "message": "Please provide the reason details for reopening the complaint.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_REOPEN_UPLOAD_HINT",
+        "message": "Images, PDF, DOC or DOCX up to 5 MB each. You can upload up to 5 files.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
