@@ -2803,25 +2803,25 @@
     },
     {
         "code": "CS_REOPEN_OPTION_FOUR",
-        "message": "No permanent solution",
+        "message": "Other reason. Specify in the window below.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "CS_REOPEN_OPTION_ONE",
-        "message": "No work was done",
+        "message": "I have new facts or evidence that may change the decision made.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "CS_REOPEN_OPTION_THREE",
-        "message": "Employee did not turn up",
+        "message": "The response received does not match the facts or the situation reported.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "CS_REOPEN_OPTION_TWO",
-        "message": "Only partial work was done",
+        "message": "The solution provided did not adequately resolve the complaint.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -8210,6 +8210,24 @@
     {
         "code": "PGR_CHANNEL_LINHA_VERDE",
         "message": "Green Line",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REOPEN_UPLOAD_HEADER",
+        "message": "Attach documents or photos (optional)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REOPEN_DETAILS_LABEL",
+        "message": "Provide the details of the reason for reopening the complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_DETAILS",
+        "message": "Please provide the reason details for reopening the complaint.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }
