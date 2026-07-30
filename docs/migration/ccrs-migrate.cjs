@@ -32,11 +32,16 @@
  *         [--user ADMIN] [--pass 'eGov@123'] [--token <authToken>] \
  *         [--phases schemas,landing] [--only gzip] [--dry-run] [--cms] \
  *         [--update-wf] [--locale en_IN] [--hierarchy PGR] [--report out.json] \
- *         [--banner-url https://.../logo.png] [--gzip] [--nginx-conf /etc/nginx/...]
+ *         [--banner-url https://.../logo.png] [--gzip] [--nginx-conf /etc/nginx/...] \
+ *         [--nginx-container digit-ui]
  *
  *    Env-var equivalents (CLI wins): BASE_URL TENANT OAUTH_USER OAUTH_PASS
  *    OAUTH_BASIC TOKEN PHASES DRY_RUN CMS UPDATE_WF LOCALE HIERARCHY REPORT
- *    BANNER_URL GZIP NGINX_CONF
+ *    BANNER_URL GZIP NGINX_CONF NGINX_CONTAINER
+ *    · --nginx-container <name>: nginx runs in a docker container (the CCRS
+ *      compose stacks — host /opt/digit/nginx/digit-ui.conf is mounted into
+ *      the `digit-ui` container). Validate/reload happen via `docker exec`;
+ *      the host conf file is still edited via --nginx-conf/auto-discovery.
  *    · --only <phases>: run EXACTLY those phases, nothing else (e.g.
  *      `--only gzip`). Implies the listed phases' opt-in flags (--gzip/--cms)
  *      and auto-prepends auth only when a listed phase needs it — gzip is
@@ -115,7 +120,12 @@ const CFG = {
   bannerUrl: ARGS['banner-url'] || process.env.BANNER_URL || '',
   gzip: !!ARGS.gzip || truthy(process.env.GZIP),
   nginxConf: ARGS['nginx-conf'] || process.env.NGINX_CONF || '',
+  nginxContainer: ARGS['nginx-container'] || process.env.NGINX_CONTAINER || '',
 };
+if (CFG.nginxContainer && !/^[A-Za-z0-9_.-]+$/.test(CFG.nginxContainer)) {
+  console.error(`--nginx-container must be a plain container name (got: ${CFG.nginxContainer})`);
+  process.exit(2);
+}
 // --tenant accepts a comma-separated list (e.g. mz,mz.ige,mz.igsae): the
 // state-level phases run ONCE against the shared state root; only the
 // city-scoped cms phase repeats for each additional tenant in the list.
@@ -994,6 +1004,19 @@ async function phaseGzip() {
   // 2) apply — only possible when this process runs ON the serving box.
   const { execSync } = require('child_process');
   const sh = (cmd, opts) => execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], ...opts });
+  // Containerized nginx (the CCRS compose stacks: host file /opt/digit/nginx/
+  // digit-ui.conf single-file-mounted into the `digit-ui` container): validate
+  // and reload INSIDE the container. The `sudo tee` below writes in place
+  // (same inode), so the bind mount sees the edit — a container `nginx -s
+  // reload` suffices; no `docker restart` needed (that gotcha is for
+  // inode-replacing editors).
+  const inCtr = CFG.nginxContainer;
+  const nginxTest = () => sh(inCtr ? `sudo docker exec '${inCtr}' nginx -t` : 'sudo nginx -t');
+  const nginxReload = () => {
+    if (inCtr) return sh(`sudo docker exec '${inCtr}' nginx -s reload`);
+    try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); }
+  };
+  const reloadHint = inCtr ? `sudo docker exec ${inCtr} nginx -t && sudo docker exec ${inCtr} nginx -s reload` : 'sudo nginx -t && sudo systemctl reload nginx';
   let conf = CFG.nginxConf;
   if (!conf) {
     try { conf = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null | head -1").trim(); } catch { conf = ''; }
@@ -1007,7 +1030,7 @@ async function phaseGzip() {
   catch (e) { return record('gzip', OUTCOME.PARTIAL, `cannot read ${conf}: ${truncate(e.message, 80)}`, 'GZIP_CONF_UNREADABLE', `Apply manually per ${RUNBOOK}.`); }
   if (cur.includes('# ccrs-gzip')) {
     return record('gzip', OUTCOME.PARTIAL, `${conf} already carries the ccrs-gzip block but the probe shows no gzip`, 'GZIP_CONFIGURED_NOT_ACTIVE',
-      'Run: sudo nginx -t && sudo systemctl reload nginx (or the container equivalent), then re-run --phases gzip.');
+      `Run: ${reloadHint}, then re-run --only gzip.`);
   }
   // Pick the location block that actually SERVES /digit-ui — the repo's own
   // nginx template starts with a `location = /digit-ui { return 302 ... }`
@@ -1041,12 +1064,12 @@ async function phaseGzip() {
   try {
     sh(`sudo cp ${qconf} '${bak.replace(/'/g, "'\\''")}'`);
     sh(`sudo tee ${qconf} > /dev/null`, { input: cur.slice(0, at) + block + cur.slice(at) });
-    try { sh('sudo nginx -t'); }
+    try { nginxTest(); }
     catch (e) {
       sh(`sudo cp '${bak.replace(/'/g, "'\\''")}' ${qconf}`); // auto-rollback
       return record('gzip', OUTCOME.FAILED, `nginx -t rejected the change — restored ${bak}`, 'GZIP_NGINX_T_FAILED', truncate(e.message, 200));
     }
-    try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); }
+    nginxReload();
   } catch (e) {
     return record('gzip', OUTCOME.FAILED, `apply failed: ${truncate(e.message, 120)}`, 'GZIP_APPLY_FAILED', `Backup (if created): ${bak}. Apply manually per ${RUNBOOK}.`);
   }
@@ -1055,7 +1078,7 @@ async function phaseGzip() {
   const after = await probe();
   if (/gzip/i.test(after.enc)) return record('gzip', OUTCOME.OK, `enabled (cache-control: ${after.cc || '—'}) · backup ${bak}`);
   return record('gzip', OUTCOME.PARTIAL, 'config applied but the probe still shows no gzip', 'GZIP_VERIFY_FAILED',
-    `Another nginx layer may front this host — verify per ${RUNBOOK}. Rollback: sudo cp ${bak} ${conf} && sudo nginx -t && sudo systemctl reload nginx.`);
+    `Another nginx layer may front this host — verify per ${RUNBOOK}. Rollback: sudo cp ${bak} ${conf} && ${reloadHint}.`);
 }
 
 /* ════════════════════════════ PHASE: verify ═══════════════════════════ */
