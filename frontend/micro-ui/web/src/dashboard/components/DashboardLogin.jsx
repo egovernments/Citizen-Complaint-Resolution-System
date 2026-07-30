@@ -10,6 +10,7 @@ import {
   getOAuthBasic,
   hasAuth,
   persistSession,
+  withSignificantRoleFirst,
 } from "../services/authService";
 
 /**
@@ -34,15 +35,6 @@ const DEMO_USERS = [
   { label: "Supervisor", username: "DEMO_SUPERVISOR", hint: "sees officer-level KPIs" },
   { label: "GRO", username: "DEMO_GRO", hint: "officer-level KPIs hidden" },
 ];
-
-/** Order roles so the first non-EMPLOYEE role leads (drives the scoping badge). */
-function withSignificantRoleFirst(userInfo) {
-  if (!userInfo || !Array.isArray(userInfo.roles)) return userInfo;
-  const roles = [...userInfo.roles].sort(
-    (a, b) => (a.code === "EMPLOYEE" ? 1 : 0) - (b.code === "EMPLOYEE" ? 1 : 0)
-  );
-  return { ...userInfo, roles };
-}
 
 // Session storage lives in authService (single source of truth); these thin
 // re-exports keep the existing AdminDashboard import sites unchanged.

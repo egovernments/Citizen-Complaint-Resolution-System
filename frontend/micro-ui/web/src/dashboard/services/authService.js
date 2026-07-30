@@ -85,17 +85,59 @@ export function hasAuth() {
   return Boolean(getEmployeeToken());
 }
 
+/** Order roles so the first non-EMPLOYEE role leads (drives the scoping badge). */
+export function withSignificantRoleFirst(userInfo) {
+  if (!userInfo || !Array.isArray(userInfo.roles)) return userInfo;
+  const roles = [...userInfo.roles].sort(
+    (a, b) => (a.code === "EMPLOYEE" ? 1 : 0) - (b.code === "EMPLOYEE" ? 1 : 0)
+  );
+  return { ...userInfo, roles };
+}
+
+/**
+ * The dashboard is NOT a standalone app: App.js routes /employee/dashboard to
+ * AdminDashboard inside the same SPA that renders DigitUI, and index.js copies
+ * Employee.token into Digit.SessionStorage's "User" at boot. That cache is what
+ * the rest of the employee UI authenticates from, and it is never re-read.
+ *
+ * Since refreshing invalidates the previous access token server-side, a silent
+ * refresh would otherwise kill the token the surrounding app is still holding —
+ * every main-UI call would 401 until a full reload. Push the new token into
+ * that cache so both surfaces stay on the same session.
+ */
+function syncDigitSession(accessToken, userInfo) {
+  const session = window.Digit?.SessionStorage;
+  if (!session?.set || !session?.get) return; // standalone build — nothing to sync
+  try {
+    const existing = session.get("User") || {};
+    session.set("User", {
+      ...existing,
+      token: accessToken,
+      access_token: accessToken,
+      ...(userInfo != null && { info: userInfo }),
+    });
+  } catch {
+    /* best-effort — localStorage remains the source of truth */
+  }
+}
+
 export function persistSession({ accessToken, refreshToken, userInfo, tenantId }) {
+  // Normalise here rather than at the call site so a refresh cannot silently
+  // revert the role order that login established.
+  const normalisedUser = userInfo != null ? withSignificantRoleFirst(userInfo) : null;
+
   if (accessToken != null) {
     writeStorage(TOKEN_KEY, accessToken);
     writeStorage("token", accessToken);
   }
   if (refreshToken != null) writeStorage(REFRESH_KEY, refreshToken);
-  if (userInfo != null) {
-    writeStorage(USER_INFO_KEY, userInfo);
-    writeStorage("user-info", userInfo);
+  if (normalisedUser != null) {
+    writeStorage(USER_INFO_KEY, normalisedUser);
+    writeStorage("user-info", normalisedUser);
   }
   if (tenantId != null) writeStorage(TENANT_KEY, tenantId);
+
+  if (accessToken != null) syncDigitSession(accessToken, normalisedUser);
 }
 
 export function clearSession() {
@@ -108,9 +150,19 @@ export function clearSession() {
   });
 }
 
-/** Notifies the app that the session is unrecoverable and login must be shown. */
-function announceSessionExpired() {
-  clearSession();
+/**
+ * Show the login gate.
+ *
+ * `clearStorage` is deliberately opt-in. Employee.token / user-info / token are
+ * SHARED with the co-hosted digit-ui app, so wiping them signs the user out of
+ * the whole product — appropriate when the server has positively rejected our
+ * refresh token, but not when we merely lack one. Notably the only writer of
+ * Employee.refresh-token is this dashboard's own login form; a session seeded by
+ * the main digit-ui login has none, and that is the common path. Clearing
+ * unconditionally would turn one dashboard 401 into a full-product logout.
+ */
+function announceSessionExpired({ clearStorage } = { clearStorage: false }) {
+  if (clearStorage) clearSession();
   try {
     window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
   } catch {
@@ -166,9 +218,26 @@ let tokenGeneration = 0;
 /** Refresh must not hang the whole dashboard: every 401'd caller waits on it. */
 const REFRESH_TIMEOUT_MS = 15000;
 
+/**
+ * Refresh outcomes are three-valued, not boolean. Collapsing them loses the
+ * distinction that decides whether the shared session may be destroyed:
+ *   REFRESHED   — new token in hand, replay the request.
+ *   REJECTED    — the server positively refused the refresh token (400
+ *                 invalid_grant). The session really is dead; clearing is right.
+ *   NO_TOKEN    — we never had a refresh token. The 401 is authoritative, but
+ *                 the keys belong to the co-hosted app; flip the gate, keep them.
+ *   UNAVAILABLE — the refresh call itself never got an answer (offline, DNS,
+ *                 gateway reset, timeout). We cannot conclude anything, so the
+ *                 session must survive. Waking a laptop from sleep hits this.
+ */
+export const REFRESH_REFRESHED = "refreshed";
+export const REFRESH_REJECTED = "rejected";
+export const REFRESH_NO_TOKEN = "no_token";
+export const REFRESH_UNAVAILABLE = "unavailable";
+
 async function requestRefresh() {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
+  if (!refreshToken) return REFRESH_NO_TOKEN;
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -192,16 +261,26 @@ async function requestRefresh() {
       body,
       ...(controller && { signal: controller.signal }),
     });
+  } catch {
+    // Network failure or the 15s abort — NOT a verdict on the refresh token.
+    // Treating this as rejection would delete a still-valid session over a
+    // transient blip.
+    return REFRESH_UNAVAILABLE;
   } finally {
     if (timer) clearTimeout(timer);
   }
 
-  // A dead/blacklisted refresh token answers 400 invalid_grant. Anything
-  // non-2xx here means the session cannot be recovered.
-  if (!res.ok) return false;
+  // A dead/blacklisted refresh token answers 400 invalid_grant. Any HTTP answer
+  // in the non-2xx range is the server refusing us.
+  if (!res.ok) return REFRESH_REJECTED;
 
-  const data = await res.json();
-  if (!data?.access_token) return false;
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return REFRESH_UNAVAILABLE;
+  }
+  if (!data?.access_token) return REFRESH_REJECTED;
 
   persistSession({
     accessToken: data.access_token,
@@ -210,14 +289,14 @@ async function requestRefresh() {
     userInfo: data.UserRequest || undefined,
   });
   tokenGeneration += 1;
-  return true;
+  return REFRESH_REFRESHED;
 }
 
-/** Single-flight wrapper around requestRefresh. Resolves to a boolean. */
+/** Single-flight wrapper around requestRefresh. Resolves to a REFRESH_* value. */
 function refreshSession() {
   if (!refreshInFlight) {
     refreshInFlight = requestRefresh()
-      .catch(() => false)
+      .catch(() => REFRESH_UNAVAILABLE)
       .finally(() => {
         refreshInFlight = null;
       });
@@ -251,6 +330,7 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
   // replay still 401s would mint a token only to invalidate the one another
   // caller may be mid-retry with, for a session we are about to declare dead.
   let didRefresh = false;
+  let outcome = null;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const generationAtSend = tokenGeneration;
@@ -265,10 +345,23 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
 
     if (didRefresh) break;
     didRefresh = true;
-    if (!(await refreshSession())) break;
+    outcome = await refreshSession();
+    if (outcome !== REFRESH_REFRESHED) break;
   }
 
-  announceSessionExpired();
+  // Could not reach the auth server: say nothing about the session. Leaving it
+  // intact lets the next attempt succeed once connectivity returns, instead of
+  // signing the user out of the whole product over a dropped packet.
+  if (outcome === REFRESH_UNAVAILABLE) {
+    const error = new Error("Could not reach the sign-in service. Please retry.");
+    error.status = 401;
+    error.refreshUnavailable = true;
+    throw error;
+  }
+
+  // Only a positive rejection justifies destroying storage the co-hosted
+  // digit-ui app shares with us.
+  announceSessionExpired({ clearStorage: outcome === REFRESH_REJECTED });
   const error = new Error("Your session has expired. Please sign in again.");
   error.status = 401;
   error.sessionExpired = true;
