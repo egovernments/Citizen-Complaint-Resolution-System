@@ -1681,7 +1681,7 @@
     },
     {
         "code": "CS_REOPEN_UPLOAD_HINT",
-        "message": "Imagens, PDF, DOC ou DOCX até 5 MB cada. Pode carregar até 5 ficheiros.",
+        "message": "Imagens, PDF, DOC, áudio ou vídeo até 5 MB cada. Pode carregar até 5 ficheiros.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     }

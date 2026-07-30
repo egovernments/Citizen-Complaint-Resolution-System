@@ -23,10 +23,10 @@ const toDocument = (fileStoreId) => ({
   additionalDetails: {},
 });
 
-// CCSD-2082 Issue 2 asks for images AND documents only (PDF/DOC/DOCX) — NOT
-// audio/video. PgrFileUpload's default accept includes audio/video (that's for
-// the create wizard / action modals per CCSD-1971), so scope it down here.
-const REOPEN_ACCEPT = "image/*,.pdf,.doc,.docx";
+// CCSD-2082 Issue 2: accept images AND documents (PDF/DOC/DOCX) — and, per the
+// follow-up, audio/video too (same set as the create wizard / action modals,
+// CCSD-1971). Matches PgrFileUpload's default; kept explicit for clarity.
+const REOPEN_ACCEPT = "image/*,.pdf,.doc,.docx,.mp3,.wav,.m4a,.aac,.mp4,.mov,.avi,.mkv";
 
 const UploadPhoto = (props) => {
   const { t } = useTranslation();
@@ -57,10 +57,10 @@ const UploadPhoto = (props) => {
     t("CS_REOPEN_UPLOAD_HEADER") === "CS_REOPEN_UPLOAD_HEADER"
       ? "Attach documents or photos (optional)"
       : t("CS_REOPEN_UPLOAD_HEADER");
-  // Hint mirrors the restricted accept (images + PDF/DOC/DOCX, no audio/video).
+  // Hint mirrors the accepted types (images, PDF/DOC/DOCX, audio, video).
   const uploadHint =
     t("CS_REOPEN_UPLOAD_HINT") === "CS_REOPEN_UPLOAD_HINT"
-      ? "Images, PDF, DOC or DOCX up to 5 MB each. You can upload up to 5 files."
+      ? "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files."
       : t("CS_REOPEN_UPLOAD_HINT");
 
   return (

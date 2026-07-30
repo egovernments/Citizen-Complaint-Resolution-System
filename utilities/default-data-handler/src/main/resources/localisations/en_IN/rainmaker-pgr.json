@@ -8233,7 +8233,7 @@
     },
     {
         "code": "CS_REOPEN_UPLOAD_HINT",
-        "message": "Images, PDF, DOC or DOCX up to 5 MB each. You can upload up to 5 files.",
+        "message": "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }
