@@ -70,9 +70,16 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
   // docUploadRequired on the BusinessService (previously that flag also gated
   // visibility, so most actions had no way to attach evidence). The backend
   // persists workflow.verificationDocuments per transition unconditionally.
+  //
+  // CCSD-2081: AWAITINGINFORMATION ("Aguardar informação") targets the
+  // INFOFROMCITIZEN state, which is docUploadRequired — meant for the CITIZEN's
+  // later response, not the officer REQUESTING info. Requiring the officer to
+  // attach a file just to ask a question is wrong, so the attachment is
+  // optional for this action regardless of the target state's flag.
+  const ATTACHMENT_OPTIONAL_ACTIONS = ["AWAITINGINFORMATION"];
   body.push({
     type: "component",
-    isMandatory: !!docUploadRequired,
+    isMandatory: !!docUploadRequired && !ATTACHMENT_OPTIONAL_ACTIONS.includes(action),
     component: "PGRActionUploadComponent",
     key: "SelectedDocuments",
     label: "CS_COMMON_ATTACHMENTS",
