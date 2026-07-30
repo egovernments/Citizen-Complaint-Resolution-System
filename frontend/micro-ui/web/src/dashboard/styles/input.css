@@ -312,32 +312,6 @@
     @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2;
   }
 
-  .dashboard-header-search {
-    @apply tw-relative tw-m-0 tw-inline-flex tw-h-8 tw-shrink-0 tw-items-center;
-  }
-
-  .dashboard-header-search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    color: var(--dashboard-muted-foreground, #6b6860);
-    pointer-events: none;
-    transform: translateY(-50%);
-  }
-
-  .dashboard-header-search-input {
-    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-foreground focus:tw-outline-none;
-  }
-
-  .dashboard-header-search-input:focus {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
-  }
-
   .dashboard-header-controls .dashboard-header-btn {
     @apply tw-box-border tw-m-0 tw-inline-flex tw-h-8 tw-min-h-8 tw-max-h-8 tw-shrink-0 tw-items-center tw-justify-center tw-gap-1.5 tw-rounded-sm tw-border tw-border-solid tw-border-border tw-bg-surface tw-px-2.5 tw-py-0 tw-text-[12px] tw-font-medium tw-leading-none tw-text-foreground;
     font-family: inherit;
@@ -618,10 +592,6 @@
     min-width: 0;
   }
 
-  .dashboard-header-mobile-search {
-    display: none;
-  }
-
   .dashboard-sidebar-backdrop {
     display: none;
   }
@@ -759,23 +729,6 @@
       @apply tw-px-2;
     }
 
-    .dashboard-header-mobile-search {
-      display: block;
-      border-bottom: 1px solid var(--border);
-      background-color: var(--surface);
-      padding: 0.5rem 0.75rem;
-    }
-
-    .dashboard-header-search--mobile {
-      display: flex !important;
-      width: 100%;
-    }
-
-    .dashboard-header-search--mobile .dashboard-header-search-input {
-      width: 100%;
-      min-width: 0;
-    }
-
     .dashboard-filters-card {
       align-items: stretch;
       @apply tw-px-2.5 tw-py-2.5;
@@ -825,11 +778,6 @@
   }
 
   @media (min-width: 640px) and (max-width: 1023px) {
-    .dashboard-header-search-input {
-      @apply tw-w-44;
-      max-width: 100%;
-    }
-
     .dashboard-filters-row {
       row-gap: 0.5rem;
     }
@@ -1961,11 +1909,6 @@
   .dashboard-sla-overdue {
     color: var(--status-breach);
     font-weight: 500;
-  }
-
-  .dashboard-search-dimmed {
-    opacity: 0.12;
-    pointer-events: none;
   }
 
   .dashboard-sla-status-select {
