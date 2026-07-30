@@ -20,6 +20,8 @@ interface HierNode {
   levelCode?: string;
   order?: number;
   active?: boolean;
+  /** Record-level mdms-v2 soft-delete flag, stamped by mdmsService.search(). */
+  _isActive?: boolean;
   hierarchyType?: string;
   department?: string;
   slaHours?: number;
@@ -37,8 +39,17 @@ interface Level {
  * (MAIN_CATEGORY → SECTOR → SUB_TYPE …). The form field (`source`, e.g.
  * serviceCode) is set to the DEEPEST node the operator selects. A branch that
  * has no children at the next level is terminal — its own code becomes the
- * serviceCode (pgr-services accepts any ComplaintHierarchy code). Levels deeper
- * than a terminal selection are hidden.
+ * serviceCode. Levels deeper than a terminal selection are hidden.
+ *
+ * Only rows pgr-services will actually accept may be offered. It resolves a
+ * complaint's serviceCode against ComplaintHierarchy with `isActive = true` and
+ * rejects anything else with `400 INVALID_SERVICECODE: The service code: X is
+ * not present in MDMS`, so BOTH gates apply here:
+ *   - `_isActive` — the mdms-v2 record-level soft-delete flag (a "removed" row
+ *     keeps `data.active: true`, so this is the only thing that reveals it).
+ *     `mdmsService.search()` already filters these out server-side; the check
+ *     below is the local restatement of the contract.
+ *   - `active` — the schema's own business flag, set by the operator.
  */
 export function ComplaintHierarchyCascade(props: InputProps & { label?: string }) {
   const { label } = props;
@@ -61,7 +72,9 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
         ),
         mdmsService.search<HierNode>(tenant, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 2000 }),
       ]);
-      const allRows = (nodes || []).filter((n) => n.active !== false && n.code);
+      const allRows = (nodes || []).filter(
+        (n) => n._isActive !== false && n.active !== false && n.code,
+      );
       const def =
         (defs || []).find(
           (d) => Array.isArray(d.levels) && d.levels!.length && allRows.some((n) => n.hierarchyType === d.hierarchyType),
@@ -113,14 +126,19 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
   };
 
   const handleChange = (i: number, value: string) => {
+    // Radix's hidden form-bubble <select> echoes an EMPTY onValueChange whenever
+    // the controlled `value` changes while the dropdown is closed: its options
+    // are only mounted with the (portalled) content, so assigning a value it has
+    // no <option> for leaves the native select at "" and the synthetic `change`
+    // it dispatches reports "". Rehydrating the cascade from an existing
+    // serviceCode does exactly that, so an unguarded handler wiped the very
+    // value it had just restored. A real pick is never empty — Radix forbids an
+    // empty SelectItem value — so an empty payload is always the echo. Ignore it.
+    if (!value) return;
     const next = sel.slice();
-    next[i] = value || null;
+    next[i] = value;
     for (let j = i + 1; j < next.length; j++) next[j] = null;
     setSel(next);
-    if (!value) {
-      field.onChange('');
-      return;
-    }
     // Terminal when this is the declared leaf level OR the next level has no
     // options for this selection → its code is the serviceCode. Otherwise clear
     // (force the operator to drill deeper).

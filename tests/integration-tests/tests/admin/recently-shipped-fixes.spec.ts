@@ -21,7 +21,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { getDigitToken, loginViaApi } from '../utils/auth';
-import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
 
 const HRMS_SEARCH = `${BASE_URL}/egov-hrms/employees/_search`;
 const PGR_SEARCH = `${BASE_URL}/pgr-services/v2/request/_search`;
@@ -59,6 +59,55 @@ async function swKeSeeded(): Promise<boolean> {
     return (json.messages ?? []).length > 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The `COMPLAINT_HIERARCHY.<code>` localization keys this deployment should carry
+ * — derived from its own hierarchy rather than pinned to one rollout's codes.
+ *
+ * RAINMAKER-PGR.ComplaintHierarchy is a single adjacency list holding both the
+ * interior CATEGORY nodes and the leaf complaint types. A leaf carries
+ * `department`/`slaHours`; an interior node carries neither. It's the interior
+ * nodes that render as the dropdown's group headings, which is exactly what
+ * CCRS#42 saw come out blank.
+ */
+async function categoryCodes(): Promise<string[]> {
+  try {
+    const token = await adminToken();
+    const r = await fetch(
+      `${BASE_URL}/mdms-v2/v2/_search?tenantId=${ROOT_TENANT}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: { authToken: token },
+          MdmsCriteria: {
+            tenantId: ROOT_TENANT,
+            schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+            limit: 500,
+            isActive: true,
+          },
+        }),
+      },
+    );
+    const json = await r.json();
+    const rows: Array<{ data?: Record<string, unknown> }> = json.mdms ?? [];
+    const interior = rows
+      .map((row) => row.data ?? {})
+      .filter((d) => d.department === undefined && d.slaHours === undefined)
+      .map((d) => String(d.code ?? ''))
+      // Exclude the suite's OWN leftovers. complaint-types.spec.ts creates
+      // `PWAUTHORITYTYPE…` / `PWMAINCATEGORY…` / `PWSECTOR…` nodes and they are
+      // never torn down, so on a long-lived box they outnumber the real tree by
+      // 150:1. They have no localization and never will — asserting on them would
+      // fail this test forever, and the sheer count also blew the localization
+      // query past nginx's URL limit (10 kB of codes → a 414 HTML page).
+      .filter((c) => c && !/(^|_)PW[A-Z_]/i.test(c));
+    // Codes are seeded upper-cased into the localization key namespace.
+    return Array.from(new Set(interior.map((c) => `COMPLAINT_HIERARCHY.${c.toUpperCase()}`)));
+  } catch {
+    return [];
   }
 }
 
@@ -302,41 +351,60 @@ If this row goes missing or its copy changes, several PGR UI tests in this suite
 // /localization/messages with module=rainmaker-common,locale=sw_KE and
 // short-circuit if rows === 0) instead of asserting unconditionally.
 test.describe('CCRS#42 — Complaint Type category labels', () => {
-  test('API: 19 SERVICEDEFS.<categoryCode> rows exist in en_IN AND sw_KE', {
+  test('API: every COMPLAINT_HIERARCHY.<categoryCode> row is labelled in every advertised locale', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<CATEGORYCODE> localization rows must exist in BOTH en_IN and sw_KE locales. These category codes are the parentCode values of the leaf complaint types (interior category nodes of RAINMAKER-PGR.ComplaintHierarchy) — they replaced the legacy menuPath grouping key, but the localization key form SERVICEDEFS.<code> is unchanged. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank group options.
+      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). Every category node of RAINMAKER-PGR.ComplaintHierarchy must have a COMPLAINT_HIERARCHY.<CODE> localization row in every locale the deployment advertises. These category codes are the parentCode values of the leaf complaint types — they replaced the legacy menuPath grouping key (and the legacy SERVICEDEFS.<code> namespace). Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered blank group options.
 
 Steps:
-1. For each locale in [en_IN, sw_KE]:
-   - POST /localization/messages/v1/_search with codes for ADMINISTRATION, WATERRELATED, LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE.
-   - For each requested code, find the matching message in response.
-   - Assert message exists with non-empty text.
+1. Read RAINMAKER-PGR.ComplaintHierarchy from MDMS and keep the INTERIOR nodes — those carrying neither department nor slaHours. Leaves are complaint types, not categories.
+2. Drop the suite's own PW* leftovers (complaint-types.spec.ts creates and never removes them).
+3. Skip if the deployment has no category nodes at all.
+4. For each locale in LOCALES, POST /localization/messages/v1/_search in chunks of 40 codes and assert each code resolves to a non-empty message.
 
-Tests 5 representative codes across the 19 category (parentCode) values — fewer assertions but covers the full breadth via locale × multiple codes.`,
+Deployment-agnostic by construction: it asserts on whatever hierarchy the tenant
+actually has, in whatever locales it actually advertises. The previous version
+pinned Kenya's five rollout codes (ADMINISTRATION, WATERRELATED, LANDRATES,
+MOBILITYANDWORKS, FINANCEANDREVENUE) and the sw_KE locale, so it failed on the
+first locale of any non-Kenya tenant — and its skip-guard probed sw_KE row counts,
+which is unrelated to whether those codes exist.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
     // Complaint-type labels moved off the legacy SERVICEDEFS.* namespace to
     // key-based COMPLAINT_HIERARCHY.<categoryCode> (seeded for every node).
-    const codes = [
-      'COMPLAINT_HIERARCHY.ADMINISTRATION',
-      'COMPLAINT_HIERARCHY.WATERRELATED',
-      'COMPLAINT_HIERARCHY.LANDRATES',
-      'COMPLAINT_HIERARCHY.MOBILITYANDWORKS',
-      'COMPLAINT_HIERARCHY.FINANCEANDREVENUE',
-    ];
-    for (const locale of ['en_IN', 'sw_KE']) {
-      const r = await fetch(
-        `${LOC_SEARCH}?codes=${codes.join(',')}&tenantId=${ROOT_TENANT}&locale=${locale}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-        },
-      );
-      const json = await r.json();
-      const messages: Array<{ code: string; message: string }> = json.messages ?? [];
+    //
+    // The category codes are read from THIS deployment's own hierarchy, not
+    // pinned to Kenya's rollout. The previous list (ADMINISTRATION, WATERRELATED,
+    // LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE) exists only on ke, so on any
+    // other tenant this failed on the very first locale — and the old
+    // `swKeSeeded()` guard could not save it, because it probes whether the sw_KE
+    // LOCALE has rows, which is unrelated to whether the Kenya HIERARCHY exists.
+    const codes = await categoryCodes();
+    test.skip(
+      codes.length === 0,
+      'deployment has no interior ComplaintHierarchy nodes to label',
+    );
+    // Only assert locales this deployment actually advertises — asserting sw_KE
+    // on a non-Kenya tenant is the same pinning mistake in a different field.
+    for (const locale of LOCALES) {
+      // Codes go in the query string, so request them in chunks — a deployment
+      // with a broad hierarchy would otherwise exceed nginx's request-line limit
+      // and get back an HTML 414 that fails as an opaque JSON parse error.
+      const messages: Array<{ code: string; message: string }> = [];
+      for (let i = 0; i < codes.length; i += 40) {
+        const chunk = codes.slice(i, i + 40);
+        const r = await fetch(
+          `${LOC_SEARCH}?codes=${chunk.join(',')}&tenantId=${ROOT_TENANT}&locale=${locale}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+          },
+        );
+        expect(r.ok, `localization _search failed for ${locale} (HTTP ${r.status})`).toBeTruthy();
+        const json = await r.json();
+        messages.push(...((json.messages ?? []) as Array<{ code: string; message: string }>));
+      }
       for (const code of codes) {
         const row = messages.find((m) => m.code === code);
         expect(row, `${code} missing in ${locale}`).toBeTruthy();

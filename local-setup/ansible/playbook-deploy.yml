@@ -27,6 +27,52 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    # ── host_vars naming preflight ─────────────────────────────────────────
+    # Ansible variables are lowercase (every key in inventory/host_vars/ is).
+    # The env-var names on the LEFT of `=` in templates/digit.env.j2 are
+    # UPPERCASE, so it is easy to copy e.g. NOVU_API_ROOT_URL out of a rendered
+    # .env into host_vars — where nothing reads it. Ansible accepts the key
+    # silently and the deploy renders defaults instead, which is only
+    # discoverable by diffing the rendered .env afterwards (issue #1435).
+    # Fail loudly at the start of the run instead.
+    - name: "preflight — locate this host's host_vars file"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/inventory/host_vars/{{ inventory_hostname }}.yml"
+      register: host_vars_file
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: "preflight — read this host's host_vars file"
+      ansible.builtin.slurp:
+        src: "{{ host_vars_file.stat.path }}"
+      register: host_vars_raw
+      delegate_to: localhost
+      become: false
+      when: host_vars_file.stat.exists
+
+    - name: "preflight — reject UPPERCASE host_vars keys (nothing reads them)"
+      ansible.builtin.assert:
+        that: uppercase_host_vars_keys | length == 0
+        fail_msg: |
+          host_vars/{{ inventory_hostname }}.yml defines UPPERCASE key(s):
+            {{ uppercase_host_vars_keys | join(', ') }}
+          Ansible variables are lowercase. These keys are read by NOTHING —
+          the deploy will render template defaults instead. Rename them to
+          lowercase, e.g. NOVU_API_ROOT_URL -> novu_api_root_url.
+          To point the Novu dashboard at an origin other than `domain`, set
+          novu_public_base_url once rather than each URL individually.
+        success_msg: "host_vars key naming OK"
+      vars:
+        uppercase_host_vars_keys: >-
+          {{ (host_vars_raw.content | b64decode).splitlines()
+             | select('match', '^[A-Z][A-Za-z0-9_]*:')
+             | map('regex_replace', ':.*$', '')
+             | list }}
+      when: host_vars_file.stat.exists
+      delegate_to: localhost
+      become: false
+
     # ── Force-clean teardown ───────────────────────────────────────────────
     # Opt-in via `force_clean: true` in host_vars. Tears down all running
     # containers and removes orphaned networks before re-deploying, so a
