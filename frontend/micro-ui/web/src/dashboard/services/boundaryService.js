@@ -1,36 +1,10 @@
-import { getTenantId, hasAuth } from "./analyticsService";
+import {
+  authFetch,
+  buildRequestInfo,
+  getTenantId,
+  hasAuth,
+} from "./authService";
 
-function parseJson(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function getEmployeeToken() {
-  const raw = window.localStorage?.getItem("Employee.token");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function getEmployeeInfo() {
-  const raw = window.localStorage?.getItem("Employee.user-info");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function buildRequestInfo() {
-  const authToken = getEmployeeToken();
-  const userInfo = getEmployeeInfo();
-  return {
-    apiId: "Rainmaker",
-    ver: ".01",
-    ts: Date.now(),
-    action: "_search",
-    msgId: `dashboard-boundary-${Date.now()}`,
-    ...(authToken && { authToken }),
-    ...(userInfo && { userInfo }),
-  };
-}
 
 /**
  * Fetch boundary entities with GeoJSON geometry.
@@ -53,11 +27,8 @@ export async function fetchBoundariesByCodes(codes = []) {
       limit: String(chunk.length),
     });
 
-    const response = await fetch(`/boundary-service/boundary/_search?${params}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "omit",
-      body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
+    const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
+      buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
     });
 
     if (!response.ok) {
@@ -153,14 +124,9 @@ export async function fetchBoundaryRelationshipsByCodes(
       limit: "500",
     });
 
-    const response = await fetch(
+    const response = await authFetch(
       `/boundary-service/boundary-relationships/_search?${params}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "omit",
-        body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
-      }
+      { buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }) }
     );
 
     if (!response.ok) {

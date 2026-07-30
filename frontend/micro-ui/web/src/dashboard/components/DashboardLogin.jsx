@@ -5,6 +5,12 @@ import {
   getStateLabel,
   getBrandTheme,
 } from "../config/dashboardConfig";
+import {
+  clearSession,
+  getOAuthBasic,
+  hasAuth,
+  persistSession,
+} from "../services/authService";
 
 /**
  * Self-contained employee login for the standalone dashboard build.
@@ -24,9 +30,6 @@ import {
  * they do not bypass authentication.
  */
 
-// Basic egov-user-client: (empty secret), base64 of "egov-user-client:"
-const OAUTH_BASIC = "Basic ZWdvdi11c2VyLWNsaWVudDo=";
-
 const DEMO_USERS = [
   { label: "Supervisor", username: "DEMO_SUPERVISOR", hint: "sees officer-level KPIs" },
   { label: "GRO", username: "DEMO_GRO", hint: "officer-level KPIs hidden" },
@@ -41,26 +44,10 @@ function withSignificantRoleFirst(userInfo) {
   return { ...userInfo, roles };
 }
 
-export function hasDashboardSession() {
-  try {
-    const raw = window.localStorage?.getItem("Employee.token");
-    return Boolean(raw && raw !== "undefined" && raw !== "null");
-  } catch {
-    return false;
-  }
-}
-
-export function clearDashboardSession() {
-  ["Employee.token", "Employee.user-info", "Employee.tenant-id", "user-info", "token"].forEach(
-    (k) => {
-      try {
-        window.localStorage?.removeItem(k);
-      } catch {
-        /* ignore */
-      }
-    }
-  );
-}
+// Session storage lives in authService (single source of truth); these thin
+// re-exports keep the existing AdminDashboard import sites unchanged.
+export const hasDashboardSession = hasAuth;
+export const clearDashboardSession = clearSession;
 
 const inputStyle = {
   borderRadius: "0.375rem",
@@ -72,11 +59,15 @@ const inputStyle = {
   outline: "none",
 };
 
-const DashboardLogin = ({ onLogin }) => {
+const DashboardLogin = ({ onLogin, expired = false }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(
+    // Distinguish "your session ended" from "you got the password wrong": the
+    // user did nothing wrong and reloading will not help them (#1466).
+    expired ? "Your session has expired. Please sign in again." : null
+  );
 
   const tenantId = getTenantId();
   const productLabel = useMemo(() => getProductLabel(), []);
@@ -111,7 +102,7 @@ const DashboardLogin = ({ onLogin }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: OAUTH_BASIC,
+          Authorization: getOAuthBasic(),
         },
         body,
       });
@@ -127,11 +118,14 @@ const DashboardLogin = ({ onLogin }) => {
       }
       const data = await res.json();
       const userInfo = withSignificantRoleFirst(data.UserRequest);
-      window.localStorage.setItem("Employee.token", JSON.stringify(data.access_token));
-      window.localStorage.setItem("Employee.user-info", JSON.stringify(userInfo));
-      window.localStorage.setItem("Employee.tenant-id", JSON.stringify(tenantId));
-      window.localStorage.setItem("user-info", JSON.stringify(userInfo));
-      window.localStorage.setItem("token", JSON.stringify(data.access_token));
+      // refresh_token is persisted so authService can silently renew the access
+      // token on a 401 instead of forcing a re-login (#1466).
+      persistSession({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        userInfo,
+        tenantId,
+      });
       if (onLogin) onLogin(userInfo);
     } catch (err) {
       setError(err.message || "Sign-in failed.");

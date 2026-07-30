@@ -26,6 +26,7 @@ import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
+import { SESSION_EXPIRED_EVENT } from "./services/authService";
 import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
@@ -106,7 +107,22 @@ const GRID_MARGIN = [16, 16];
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboard = () => {
-  const [authed] = useState(() => hasDashboardSession());
+  const [authed, setAuthed] = useState(() => hasDashboardSession());
+  const [expired, setExpired] = useState(false);
+
+  // The gate used to be evaluated once at mount, so a session that died while
+  // the tab was open could never flip it — the 401 just rendered as a raw error
+  // banner and a reload re-passed the gate on the stale token (#1466).
+  // authService announces an unrecoverable session (refresh absent or rejected)
+  // and we drop to the login screen with an explanation.
+  useEffect(() => {
+    const onExpired = () => {
+      setExpired(true);
+      setAuthed(false);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
 
   const handleLogin = useCallback(() => {
     window.location.reload();
@@ -117,7 +133,7 @@ const AdminDashboard = () => {
     window.location.reload();
   }, []);
 
-  if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  if (!authed) return <DashboardLogin onLogin={handleLogin} expired={expired} />;
   return <AdminDashboardInner onSignOut={handleSignOut} />;
 };
 
