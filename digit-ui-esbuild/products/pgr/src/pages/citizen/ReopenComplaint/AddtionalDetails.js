@@ -1,23 +1,29 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useHistory, Redirect } from "react-router-dom";
 
-import { BackButton, Card, CardHeader, CardText, TextArea, SubmitBar } from "@egovernments/digit-ui-react-components";
+import { BackButton, Card, CardHeader, CardText, CardLabelError, TextArea, SubmitBar } from "@egovernments/digit-ui-react-components";
 
 import { updateComplaints } from "../../../redux/actions/index";
 import { LOCALIZATION_KEY } from "../../../constants/Localization";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
 
 const AddtionalDetails = (props) => {
-  // const [details, setDetails] = useState(null);
   const history = useHistory();
   let { id } = useParams();
   const dispatch = useDispatch();
   const appState = useSelector((state) => state)["common"];
   let { t } = useTranslation();
-  
-  const {complaintDetails} = props
+
+  const { complaintDetails } = props;
+
+  // CCSD-2082 Issue 3: reason details are now MANDATORY (reverses CCSD-1955,
+  // which had made them optional). Track the value locally so we can block the
+  // reopen and surface an error until the citizen provides an explanation.
+  const [details, setDetails] = useState(() => Digit.SessionStorage.get(`reopen.${id}`)?.addtionalDetail || "");
+  const [error, setError] = useState(false);
+
   useEffect(() => {
     if (appState.complaints) {
       const { response } = appState.complaints;
@@ -50,6 +56,11 @@ const AddtionalDetails = (props) => {
   };
 
   function reopenComplaint() {
+    // CCSD-2082 Issue 3: require a non-empty explanation before reopening.
+    if (!details || !details.trim()) {
+      setError(true);
+      return;
+    }
     let reopenDetails = Digit.SessionStorage.get(`reopen.${id}`);
     if (complaintDetails) {
       complaintDetails.workflow = getUpdatedWorkflow(
@@ -84,24 +95,32 @@ const AddtionalDetails = (props) => {
   }
 
   function textInput(e) {
-    // setDetails(e.target.value);
+    const value = e.target.value;
+    setDetails(value);
+    if (error && value && value.trim()) setError(false);
     let reopenDetails = Digit.SessionStorage.get(`reopen.${id}`);
     Digit.SessionStorage.set(`reopen.${id}`, {
       ...reopenDetails,
-      addtionalDetail: e.target.value,
+      addtionalDetail: value,
     });
   }
+
+  // CCSD-2082 Issue 3: mandatory label. Falls back to the required PT copy when
+  // the localisation key is not yet present, so it reads correctly pre-seed.
+  const detailsLabel =
+    t("CS_REOPEN_DETAILS_LABEL") === "CS_REOPEN_DETAILS_LABEL"
+      ? "Forneça os detalhes do motivo da re-abertura da reclamação"
+      : t("CS_REOPEN_DETAILS_LABEL");
 
   return (
     <React.Fragment>
       <Card>
         <CardHeader>
-          {t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_PROVIDE_ADDITIONAL_DETAILS`) +
-            // Free-text details are not required to reopen (CCSD-1955)
-            " " + (t("CS_OPTIONAL_SUFFIX") === "CS_OPTIONAL_SUFFIX" ? "(Optional)" : t("CS_OPTIONAL_SUFFIX"))}
+          {detailsLabel} <span style={{ color: "#d4351c" }}>*</span>
         </CardHeader>
         <CardText>{t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_ADDITIONAL_DETAILS_TEXT`)}</CardText>
-        <TextArea name={"AdditionalDetails"} onChange={textInput}></TextArea>
+        <TextArea name={"AdditionalDetails"} value={details} onChange={textInput}></TextArea>
+        {error ? <CardLabelError>{t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_ERROR_REOPEN_DETAILS`)}</CardLabelError> : null}
         <div onClick={reopenComplaint}>
           <SubmitBar label={t(`${LOCALIZATION_KEY.CS_HEADER}_REOPEN_COMPLAINT`)} />
         </div>

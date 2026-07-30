@@ -1636,5 +1636,53 @@
         "message": "Linha Verde",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_ONE",
+        "message": "Possuo novos factos ou provas que podem alterar a decisão tomada.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_TWO",
+        "message": "A solução apresentada não resolveu adequadamente a reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_THREE",
+        "message": "A resposta recebida não corresponde aos factos ou à situação reportada.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_OPTION_FOUR",
+        "message": "Outro motivo. Especifique na janela a seguir.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_UPLOAD_HEADER",
+        "message": "Anexar documentos ou fotografias (opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_DETAILS_LABEL",
+        "message": "Forneça os detalhes do motivo da re-abertura da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_ERROR_REOPEN_DETAILS",
+        "message": "Por favor, forneça os detalhes do motivo da reabertura da reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REOPEN_UPLOAD_HINT",
+        "message": "Imagens, PDF, DOC, áudio ou vídeo até 5 MB cada. Pode carregar até 5 ficheiros.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]
