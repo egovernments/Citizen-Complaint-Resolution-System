@@ -22,20 +22,26 @@
  *    7. banner        tenant.citymodule schema/rows + PGR bannerImage
  *                     (rows create-missing-only; value set only with
  *                     --banner-url and only when currently empty)
- *    8. gzip          (opt-in: --gzip) verify /digit-ui gzip+Cache-Control;
- *                     applies the nginx block when run ON the serving box
+ *    8. gzip          (opt-in: --gzip, or `--only gzip` to run JUST this
+ *                     phase) verify /digit-ui gzip+Cache-Control; applies
+ *                     the nginx block when run ON the serving box
  *    9. verify        consolidated read-back across everything
  *
  *  USAGE
  *    node ccrs-migrate.cjs --host http://<gateway> --tenant mz \
  *         [--user ADMIN] [--pass 'eGov@123'] [--token <authToken>] \
- *         [--phases schemas,landing] [--dry-run] [--cms] [--update-wf] \
- *         [--locale en_IN] [--hierarchy PGR] [--report out.json] \
+ *         [--phases schemas,landing] [--only gzip] [--dry-run] [--cms] \
+ *         [--update-wf] [--locale en_IN] [--hierarchy PGR] [--report out.json] \
  *         [--banner-url https://.../logo.png] [--gzip] [--nginx-conf /etc/nginx/...]
  *
  *    Env-var equivalents (CLI wins): BASE_URL TENANT OAUTH_USER OAUTH_PASS
  *    OAUTH_BASIC TOKEN PHASES DRY_RUN CMS UPDATE_WF LOCALE HIERARCHY REPORT
  *    BANNER_URL GZIP NGINX_CONF
+ *    · --only <phases>: run EXACTLY those phases, nothing else (e.g.
+ *      `--only gzip`). Implies the listed phases' opt-in flags (--gzip/--cms)
+ *      and auto-prepends auth only when a listed phase needs it — gzip is
+ *      auth-free (HEAD probe + local nginx edit), so `--only gzip` runs with
+ *      no credentials and performs no other change.
  *    · OAUTH_BASIC accepts EITHER plaintext "client:secret" or base64 —
  *      normalised automatically (the legacy scripts disagreed on this).
  *    · TENANT may be a state root ("mz") or a city ("mz.igsae"); state-level
@@ -128,6 +134,24 @@ if (!CFG.base || !CFG.tenant) {
 if (CFG.tenants.some((t) => (t.includes('.') ? t.split('.')[0] : t) !== CFG.state)) {
   console.error(`All --tenant entries must share one state root (got: ${CFG.tenants.join(', ')})`);
   process.exit(2);
+}
+// Phases that never touch the API with credentials — they may run without a
+// successful auth phase (the driver skips everything else when RI is null).
+const AUTH_FREE_PHASES = new Set(['gzip']);
+const ALL_PHASES = ['auth', 'schemas', 'hierarchy', 'pgr-masters', 'landing', 'cms', 'banner', 'gzip', 'verify'];
+// --only <list>: run EXACTLY these phases and nothing else. Two conveniences
+// over --phases: (1) the listed phases' opt-in flags are implied (--only gzip
+// used to still SKIP without --gzip; same for cms), (2) auth is auto-prepended
+// only when some listed phase needs it, so `--only gzip` needs no credentials.
+if ('only' in ARGS) {
+  const only = String(ARGS.only || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!only.length) { console.error('--only requires a phase list, e.g. --only gzip'); process.exit(2); }
+  const unknown = only.filter((p) => !ALL_PHASES.includes(p));
+  if (unknown.length) { console.error(`--only: unknown phase(s): ${unknown.join(', ')} (valid: ${ALL_PHASES.join(', ')})`); process.exit(2); }
+  const needsAuth = only.some((p) => p !== 'auth' && !AUTH_FREE_PHASES.has(p));
+  CFG.phases = needsAuth && !only.includes('auth') ? ['auth', ...only] : only;
+  if (only.includes('gzip')) CFG.gzip = true;
+  if (only.includes('cms')) CFG.cms = true;
 }
 // Fallback banner: with no --banner-url, an EMPTY bannerImage is filled with
 // the standard hero image. Overwriting an existing, different image still
@@ -1090,7 +1114,7 @@ async function phaseVerify() {
   const total = enabled.length + extraCmsTenants.length;
   for (const [id, fn] of enabled) {
     section(++n, total, id);
-    if (id !== 'auth' && !RI) { record(id, OUTCOME.SKIPPED, 'skipped: no authentication', 'NO_AUTH'); warn('skipped (auth failed)'); continue; }
+    if (id !== 'auth' && !RI && !AUTH_FREE_PHASES.has(id)) { record(id, OUTCOME.SKIPPED, 'skipped: no authentication', 'NO_AUTH'); warn('skipped (auth failed)'); continue; }
     try {
       await fn();
     } catch (e) {
