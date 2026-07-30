@@ -7,6 +7,7 @@ import { BackButton, Card, CardHeader, CardText, TextArea, SubmitBar } from "@eg
 
 import { updateComplaints } from "../../../redux/actions/index";
 import { LOCALIZATION_KEY } from "../../../constants/Localization";
+import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
 
 const AddtionalDetails = (props) => {
   // const [details, setDetails] = useState(null);
@@ -56,9 +57,20 @@ const AddtionalDetails = (props) => {
         // complaintDetails,
         "REOPEN"
       );
-      complaintDetails.service.additionalDetail = {
-        REOPEN_REASON: reopenDetails.reason,
-      };
+      // CCSD-2012: MERGE the reopen reason into additionalDetail instead of
+      // replacing the object. Replacing dropped the `department` stamped at
+      // create/ASSIGN, so the backend re-derived it from the serviceCode —
+      // "NA" for unmapped codes — and department-scoped supervisors could no
+      // longer see the reopened complaint (inbox empty + details "No Results
+      // Found" while the workflow's Take Action still rendered).
+      // resetEscalation: a reopen starts a fresh lifecycle — carrying the
+      // escalation bookkeeping over would freeze auto-escalation at the old
+      // level (the pre-fix replace reset it by accident; we do it on purpose).
+      complaintDetails.service.additionalDetail = mergeAdditionalDetail(
+        complaintDetails.service.additionalDetail,
+        { REOPEN_REASON: reopenDetails.reason },
+        { resetEscalation: true }
+      );
       updateComplaint({ service: complaintDetails.service, workflow: complaintDetails.workflow });
     }
     return (

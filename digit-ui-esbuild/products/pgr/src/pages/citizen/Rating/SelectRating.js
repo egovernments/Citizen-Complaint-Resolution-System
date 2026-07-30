@@ -14,6 +14,7 @@ import {
 } from "@egovernments/digit-ui-components-v2";
 
 import { updateComplaints } from "../../../redux/actions/index";
+import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
 
 // i18n fallback — when a translation key is unavailable, surface the
 // English copy instead of leaving a raw constant on screen.
@@ -167,7 +168,18 @@ const SelectRating = ({ parentRoute }) => {
     const selections = FEEDBACK_OPTIONS.filter((o) => picks[o.key]).map((o) => tr(t, o.key, o.fallback));
 
     complaintDetails.service.rating = rating;
-    complaintDetails.service.additionalDetail = selections.join(",");
+    // CCSD-2012 (sibling of the reopen clobber): this used to REPLACE the
+    // whole additionalDetail object with the bare CSV string. The backend
+    // can't read a string there (extractAdditionalDetails → {}), so it (a)
+    // silently discarded the feedback AND (b) re-derived `department` from
+    // the serviceCode — "NA" for unmapped codes — hiding the complaint from
+    // department-scoped supervisors, and poisoning a later REOPEN with the
+    // wrong department. Merge the CSV under its own key instead: routing
+    // data survives and the feedback actually persists for the first time.
+    complaintDetails.service.additionalDetail = mergeAdditionalDetail(
+      complaintDetails.service.additionalDetail,
+      { ratingFeedback: selections.join(",") }
+    );
     complaintDetails.workflow = {
       action: "RATE",
       comments,
