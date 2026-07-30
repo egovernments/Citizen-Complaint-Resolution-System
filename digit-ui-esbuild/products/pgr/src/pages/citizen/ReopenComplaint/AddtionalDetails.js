@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
+import { useQueryClient } from "react-query";
 import { useParams, useHistory, Redirect } from "react-router-dom";
 
 import { BackButton, Card, CardHeader, CardText, CardLabelError, TextArea, SubmitBar } from "@egovernments/digit-ui-react-components";
@@ -17,6 +18,7 @@ const AddtionalDetails = (props) => {
   let { t } = useTranslation();
 
   const { complaintDetails } = props;
+  const queryClient = useQueryClient();
 
   // CCSD-2082 Issue 3: reason details are now MANDATORY (reverses CCSD-1955,
   // which had made them optional). Track the value locally so we can block the
@@ -36,9 +38,17 @@ const AddtionalDetails = (props) => {
   const updateComplaint = useCallback(
     async (complaintDetails) => {
       await dispatch(updateComplaints(complaintDetails));
+      // CCSD-2119: the reopen goes through the redux updateComplaints path, which
+      // does NOT touch react-query. The citizen status pill (useComplaintDetails
+      // -> ["complaintDetails", tenantId, id]) and My Complaints list
+      // (useComplaintsListByMobile -> ["complaintsList", …]) therefore kept
+      // serving the pre-reopen status until a manual browser refresh. Invalidate
+      // both so they refetch — active views update live, others on next mount.
+      queryClient.invalidateQueries(["complaintDetails"]);
+      queryClient.invalidateQueries(["complaintsList"]);
       history.push(`${props.match.path}/response/${id}`);
     },
-    [dispatch]
+    [dispatch, queryClient]
   );
 
   const getUpdatedWorkflow = (reopenDetails, type) => {
