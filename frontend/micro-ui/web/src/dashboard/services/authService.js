@@ -151,6 +151,21 @@ export function getOAuthBasic() {
  */
 let refreshInFlight = null;
 
+/**
+ * Bumped on every successful refresh. Single-flight alone is NOT sufficient:
+ * it only merges 401s that overlap the refresh window. A request whose 401
+ * lands just AFTER a refresh settled would see refreshInFlight === null and
+ * start a SECOND refresh, which immediately invalidates the token the first
+ * caller is already retrying with — turning a recovered session into a false
+ * logout. The generation lets a caller tell "my token is stale because someone
+ * else already refreshed" (just retry) apart from "the current token is dead"
+ * (refresh).
+ */
+let tokenGeneration = 0;
+
+/** Refresh must not hang the whole dashboard: every 401'd caller waits on it. */
+const REFRESH_TIMEOUT_MS = 15000;
+
 async function requestRefresh() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
@@ -161,14 +176,25 @@ async function requestRefresh() {
     tenantId: getTenantId(),
   });
 
-  const res = await fetch("/user/oauth/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: getOAuthBasic(),
-    },
-    body,
-  });
+  // Without this, a stalled /user/oauth/token leaves every waiting caller
+  // pending forever and the dashboard sits on a permanent loading state.
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS) : null;
+
+  let res;
+  try {
+    res = await fetch("/user/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: getOAuthBasic(),
+      },
+      body,
+      ...(controller && { signal: controller.signal }),
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   // A dead/blacklisted refresh token answers 400 invalid_grant. Anything
   // non-2xx here means the session cannot be recovered.
@@ -183,6 +209,7 @@ async function requestRefresh() {
     refreshToken: data.refresh_token || refreshToken,
     userInfo: data.UserRequest || undefined,
   });
+  tokenGeneration += 1;
   return true;
 }
 
@@ -205,9 +232,11 @@ function refreshSession() {
  * rebuilt so the request carries the NEW token. Passing a pre-serialised body
  * would replay the dead one and 401 again.
  *
- * On a 401 it refreshes once (shared across callers) and replays the request.
- * If refresh fails, or the replay 401s again, the session is announced dead and
- * the error is thrown with `status` and `sessionExpired` set for callers.
+ * On a 401 it either refreshes (shared across callers) or, when another caller
+ * has already refreshed since this request was sent, simply replays with the
+ * newer token. At most two sends happen, so this cannot loop. If refresh fails,
+ * or the replay 401s again, the session is announced dead and the error is
+ * thrown with `status` and `sessionExpired` set for callers.
  */
 export async function authFetch(url, { buildBody, method = "POST", headers } = {}) {
   const send = () =>
@@ -218,22 +247,32 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
       body: buildBody ? JSON.stringify(buildBody()) : undefined,
     });
 
-  let response = await send();
+  // Two sends max, and at most ONE refresh per call. Refreshing again after a
+  // replay still 401s would mint a token only to invalidate the one another
+  // caller may be mid-retry with, for a session we are about to declare dead.
+  let didRefresh = false;
 
-  if (response.status === 401) {
-    const refreshed = await refreshSession();
-    if (refreshed) response = await send();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const generationAtSend = tokenGeneration;
+    const response = await send();
+    if (response.status !== 401) return response;
 
-    if (!refreshed || response.status === 401) {
-      announceSessionExpired();
-      const error = new Error("Your session has expired. Please sign in again.");
-      error.status = 401;
-      error.sessionExpired = true;
-      throw error;
-    }
+    // If the generation has already moved, another caller refreshed while this
+    // request was in flight — our token was merely stale, so replay with the
+    // new one instead of refreshing again (a second refresh would invalidate
+    // the token that caller is using).
+    if (tokenGeneration !== generationAtSend) continue;
+
+    if (didRefresh) break;
+    didRefresh = true;
+    if (!(await refreshSession())) break;
   }
 
-  return response;
+  announceSessionExpired();
+  const error = new Error("Your session has expired. Please sign in again.");
+  error.status = 401;
+  error.sessionExpired = true;
+  throw error;
 }
 
 /** Shared non-401 error shape so every service reports failures identically. */
