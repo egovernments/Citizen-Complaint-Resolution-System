@@ -10,7 +10,12 @@
  *                     terminal filter like REJECTED proves the narrowing).
  *   • complaintType — pick a Complaint Subtype → every visible row shares that
  *                     one serviceCode (verified out-of-band via PGR _search,
- *                     since the inbox has no serviceCode column).
+ *                     since the inbox has no serviceCode column). The subtype
+ *                     is chosen from the types the LIVE inbox actually holds
+ *                     complaints for, never from the dropdown's first few
+ *                     entries: that dropdown lists every ComplaintHierarchy
+ *                     leaf, and a stack carrying types other test runs created
+ *                     offers dozens with no complaint ever filed against them.
  *   • locality      — drill the boundary cascade to a leaf ward → every visible
  *                     row is in that locality.
  *
@@ -37,7 +42,7 @@
  * It passes on mz.maputo only because that build never adds the param.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
 import { getPersona, resolveSeedPlan, serviceCodesFor, type ResolvedPersona } from '../utils/personas';
 import { seedComplaintAsCitizen } from '../utils/seed';
 import {
@@ -61,6 +66,38 @@ let rejectedSrid = '';
 let serviceCodeA = '';
 let serviceCodeB = '';
 let secondTypeAvailable = true;
+
+/**
+ * The label the "Complaint Subtype" dropdown renders for a serviceCode.
+ *
+ * useServiceDefs (products/pgr/src/hooks/pgr/useServiceDefs.js) builds each
+ * option's visible text as `t("COMPLAINT_HIERARCHY.<CODE>")`, falling back to
+ * the ComplaintHierarchy node's `name` and then to the bare code. So ask MDMS
+ * for the same node and hand back every form the option could legitimately be
+ * showing; the caller matches an option against the set rather than guessing a
+ * single string. Empty array when the node can't be read — the caller then
+ * falls back to probing options by request URL.
+ */
+async function labelCandidates(token: string, codes: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (const c of codes) out.set(c, [c, `COMPLAINT_HIERARCHY.${c.toUpperCase()}`]);
+  try {
+    const j: any = await fetch(`${BASE_URL}/mdms-v2/v2/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { apiId: 'Rainmaker', authToken: token },
+        MdmsCriteria: { tenantId: TENANT, schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', uniqueIdentifiers: codes, limit: codes.length + 10 },
+      }),
+    }).then((r) => r.json());
+    for (const row of j.mdms || []) {
+      const code = row?.data?.code || row?.uniqueIdentifier;
+      const name = row?.data?.name;
+      if (code && name && out.has(code)) out.get(code)!.unshift(String(name));
+    }
+  } catch { /* MDMS unreachable — code/raw-key candidates still stand */ }
+  return out;
+}
 
 async function seedOpen(serviceCode: string, localityCode: string): Promise<string> {
   const { srid } = await seedComplaintAsCitizen({
@@ -216,37 +253,85 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     test.skip(!secondTypeAvailable, 'deployment has only one complaint type — nothing to narrow between');
     await openInbox(page);
 
+    // Show the whole unfiltered set first, then learn which complaint types this
+    // deployment ACTUALLY has complaints for. The dropdown lists every leaf in
+    // ComplaintHierarchy — on a stack that has accumulated types from other test
+    // runs that is dozens of options, nearly all with zero complaints filed
+    // against them, and filtering by one of those can only ever return an empty
+    // list. Picking blind (the first N options) therefore proves nothing; the
+    // filter has to be pointed at a type the data can narrow TO.
+    await showAllRows(page);
     const before = await readInboxRows(page);
     expect(before.length).toBeGreaterThan(0);
+    const countByCode = new Map<string, number>();
+    for (const r of before) {
+      const c = await apiServiceCode(admin!, r.srid);
+      if (c) countByCode.set(c, (countByCode.get(c) || 0) + 1);
+    }
+    // Most-populated first: the likeliest to still be on-page after filtering.
+    const targets = [...countByCode.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    expect(targets.length, 'the default inbox contains at least one resolvable complaint type').toBeGreaterThan(0);
+    test.skip(
+      countByCode.size < 2,
+      `only one complaint type (${targets[0]}) has complaints in this inbox — a type filter cannot be shown to narrow anything`,
+    );
+    const labels = await labelCandidates(admin!.token, targets);
 
-    // Open the "Complaint Subtype" dropdown and count its options.
+    // Open the "Complaint Subtype" dropdown and read its option labels.
     const ddInput = page.locator('.digit-dropdown-employee-select-wrap input[type="text"]').first();
     const optionItems = page.locator('.digit-dropdown-options-card .digit-dropdown-item');
     await ddInput.click();
     await page.waitForTimeout(800);
     const optionCount = await optionItems.count();
     expect(optionCount, 'subtype dropdown lists options').toBeGreaterThan(0);
+    const optionTexts: string[] = (await optionItems.allInnerTexts()).map((s) => s.trim());
 
-    // Try options until one returns a non-empty, single-serviceCode row set.
+    /** Option indices to try, best-first: the ones whose label matches a type we
+     *  know has rows, then (only if none matched) every remaining option, whose
+     *  serviceCode we can still learn from the request URL after applying. */
+    const preferred: number[] = [];
+    for (const code of targets) {
+      const wanted = labels.get(code) || [code];
+      const i = optionTexts.findIndex((txt) => wanted.some((w) => txt === w || txt.toLowerCase() === w.toLowerCase()));
+      if (i >= 0 && !preferred.includes(i)) preferred.push(i);
+    }
+    const order = preferred.length
+      ? preferred
+      : [...Array(optionCount).keys()];
+
+    // Apply each candidate until one returns a non-empty, single-serviceCode row
+    // set. With a label match this is a single pass; the unmatched fallback
+    // learns each option's code from `serviceCode=` in the search URL and skips
+    // any type the data has no rows for.
     let matched = false;
     let matchedCode = '';
-    for (let i = 0; i < Math.min(optionCount, 8); i++) {
+    const tried: string[] = [];
+    for (const i of order) {
       await ddInput.click();
       await page.waitForTimeout(500);
       await optionItems.nth(i).click();
       await page.waitForTimeout(400);
       const url = await applyFilter(page);
       expect(url).toContain('serviceCode=');
+      const requested = url.match(/[?&]serviceCode=([^&]+)/)?.[1] || '';
+      tried.push(requested || optionTexts[i]);
+      if (!preferred.length && !targets.includes(requested)) continue; // no rows possible
+      await showAllRows(page);
       const rows = await readInboxRows(page);
       if (rows.length === 0) continue;
       const codes = new Set<string>();
       for (const r of rows) codes.add((await apiServiceCode(admin!, r.srid)) || '?');
       expect(codes.size, `all visible rows share one serviceCode (got ${[...codes].join(',')})`).toBe(1);
       matchedCode = [...codes][0];
+      expect(matchedCode, 'the narrowed rows are of the type the filter asked for').toBe(requested);
       matched = true;
       break;
     }
-    expect(matched, 'at least one complaint type yielded a narrowed, single-type row set').toBeTruthy();
+    expect(
+      matched,
+      `at least one complaint type yielded a narrowed, single-type row set `
+      + `(types with rows: ${targets.join(',')}; tried: ${tried.join(',')})`,
+    ).toBeTruthy();
 
     // Clearing restores the multi-type default view.
     await clearFilters(page);

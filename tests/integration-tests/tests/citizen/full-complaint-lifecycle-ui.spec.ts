@@ -18,7 +18,7 @@ import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD,
+  DEFAULT_PASSWORD, PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
 
@@ -406,7 +406,10 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       serviceRequestId = capturedId;
     } else {
       const bodyText = await page.locator('body').innerText();
-      const match = bodyText.match(/PG-PGR-\d{4}-\d{2}-\d{2}-\d{6}/);
+      // Build the SRID regex from the deployment's own idgen prefix (PG on
+      // maputo, NCCG on nairobi, …) — a hardcoded `PG-PGR` matched nothing on
+      // any other deployment, leaving serviceRequestId undefined.
+      const match = bodyText.match(new RegExp(`${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d{6}`));
       if (match) serviceRequestId = match[0];
     }
 

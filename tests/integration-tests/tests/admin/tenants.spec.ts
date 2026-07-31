@@ -93,36 +93,67 @@ Catches a regression where TenantList.tsx loses a column or the data provider re
   test('2. search filter narrows to a known tenant code', {
     annotation: {
       type: 'description',
-      description: `End-to-end search-filter test on the tenants list: typing the configured CITY_TENANT code must narrow the grid to a row containing that code; typing a nonsense code must drop the grid to zero data rows. Drives the actual placeholder-matching search input the operator uses.
+      description: `End-to-end search-filter test on the tenants list: typing a REAL tenant code (discovered live over MDMS) must drop every non-matching row from the grid while keeping the matching one; typing a nonsense code must drop the grid to zero data rows.
 
 Steps:
-1. Navigate to /configurator/manage/tenants.
-2. Locate getByPlaceholder(/search/i); assert visible.
-3. Fill CITY_TENANT; wait for networkidle.
-4. Assert at least one row matching CITY_TENANT is visible.
-5. Clear and type "zzz_no_such_tenant_xyz"; wait for networkidle.
-6. Assert getByRole('row').filter({ hasText: 'zzz_no_such_tenant_xyz' }) has count === 0.
+1. mdmsSearch tenant.tenants; pick an active, non-suite-artifact code (prefer CITY_TENANT).
+2. Navigate to /configurator/manage/tenants; wait for the grid to render data rows.
+3. Record how many rendered rows do NOT contain the target code (the narrowing we are about to observe). Skip only if the deployment has a single tenant, where narrowing is unobservable.
+4. Fill the search input with the target code.
+5. Poll (the grid debounces) until zero rendered rows lack the target code.
+6. Assert at least one row containing the target code is still rendered — so an empty grid can't pass step 5.
+7. Clear and type a nonsense code; poll until the grid holds zero data rows.
 
-Confirms the search input feeds into the data provider's filter and the grid re-renders accordingly.`,
+Previously this asserted \`rows.filter({hasText:'zzz_no_such_tenant_xyz'}).count() === 0\` — a literal no tenant row could ever contain, so the assertion held whether or not the search input did anything at all (deleting the fill left it green). Both halves are now mutation-sensitive.`,
     },
     tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    // Discover a real code live rather than pinning a deployment literal.
+    // Prefer the configured CITY_TENANT; otherwise any active city-level code.
+    // The ROOT code is deliberately excluded as a target: it is a prefix of
+    // every city code, so searching for it matches every row and could never
+    // demonstrate narrowing.
+    const auth = loadAuth();
+    const active = (await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 }))
+      .filter((r) => r.isActive !== false)
+      .map((r) => r.uniqueIdentifier)
+      .filter((c) => c !== TENANT_CODE);
+    const target = active.includes(CITY_TENANT) ? CITY_TENANT : active[0];
+    expect(target, 'deployment must expose at least one active city tenant').toBeTruthy();
+
     await page.goto(LIST_PATH);
+
+    // Header rows carry role=columnheader, data rows carry role=cell.
+    const dataRows = page.getByRole('row').filter({ has: page.getByRole('cell') });
+    await expect.poll(() => dataRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+
+    const nonMatching = dataRows.filter({ hasNotText: target });
+    const nonMatchingBefore = await nonMatching.count();
+    test.skip(
+      nonMatchingBefore === 0,
+      `every rendered tenant row already matches ${target} — narrowing is unobservable on a single-tenant deployment`,
+    );
 
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill(CITY_TENANT);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await search.fill(target);
 
-    await expect(
-      page.getByRole('row').filter({ hasText: CITY_TENANT }).first(),
-    ).toBeVisible();
+    // DigitList.handleSearchChange calls setFilters(..., undefined, true) —
+    // a DEBOUNCED refetch. Typing fires no navigation either, so the page's
+    // load state is already 'networkidle' and waitForLoadState() returns in
+    // ~0.2 ms, long before React has dispatched the new query. Poll instead.
+    await expect
+      .poll(() => nonMatching.count(), { timeout: 30_000 })
+      .toBe(0);
+    // ...and the grid must not have simply emptied itself.
+    expect(
+      await dataRows.filter({ hasText: target }).count(),
+      `searching for ${target} should keep its own row`,
+    ).toBeGreaterThan(0);
 
     // A nonsense code should drop us to empty-state (zero data rows).
     await search.fill('');
     await search.fill('zzz_no_such_tenant_xyz');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const rows = page.getByRole('row').filter({ hasText: 'zzz_no_such_tenant_xyz' });
-    expect(await rows.count()).toBe(0);
+    await expect.poll(() => dataRows.count(), { timeout: 30_000 }).toBe(0);
   });
 
   test('3. show page renders Code / Name / City / District for a known tenant', {
@@ -273,12 +304,10 @@ Teardown is API-only — no UI delete for tenants. Soft-delete via cleanupMdms w
     tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
-    // Onboarding-data gap: tenant.tenants _create now requires emailId + imageId
-    // (city-setup enriches these). This minimal MDMS payload omits them, so the
-    // create is rejected on a stock deployment. Left skipped rather than faked —
-    // re-enable once the create helper seeds emailId/imageId (or drive the
-    // city-setup wizard) so the row lands.
-    test.skip(true, 'tenant.tenants create requires emailId/imageId not provided by this minimal payload');
+    // (Previously skipped with "tenant.tenants create requires emailId/imageId".
+    // That was wrong: the live schema declares required: ['code','name'] and
+    // emailId / imageId as optional nullable strings, and a minimal _create
+    // returns "status":"successful". Re-enabled 2026-07-27.)
     const auth = loadAuth();
     const code = `${TENANT_CODE}.${testCode(testInfo, 'TNT').toLowerCase().replace(/^pw_/, 'pw')}`;
     createdCodes.add(code);

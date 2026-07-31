@@ -273,7 +273,7 @@
               "tenantId": "{tenantid}",
               "currentState": "PENDINGATLME",
               "action": "FORWARD",
-              "nextState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "nextState": "PENDINGATSUPERVISOR",
               "roles": [
                 "AUTO_ESCALATE"
               ],
@@ -420,9 +420,9 @@
           "actions": [
             {
               "tenantId": "{tenantid}",
-              "currentState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "currentState": "PENDINGATSUPERVISOR",
               "action": "RESOLVEBYSUPERVISOR",
-              "nextState": "e80e3dd6-8336-4586-b84a-c191dcd80c98",
+              "nextState": "RESOLVED",
               "roles": [
                 "SUPERVISOR"
               ],
