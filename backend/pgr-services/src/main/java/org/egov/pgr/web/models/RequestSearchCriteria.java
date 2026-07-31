@@ -114,6 +114,14 @@ public class RequestSearchCriteria {
     @JsonProperty("department")
     private String department;
 
+    // Filters on the complaint's audit creator (eg_pgr_service_v2.createdby).
+    // Drives the reception-officer inbox: a CMS_RECEPTION_OFFICER files
+    // complaints on citizens' behalf and needs to track the ones THEY created
+    // (they are neither the accountId — that's the citizen — nor an assignee).
+    @SafeHtml
+    @JsonProperty("createdBy")
+    private String createdBy;
+
     @JsonIgnore
     private Set<String> serviceRequestIds;
 
