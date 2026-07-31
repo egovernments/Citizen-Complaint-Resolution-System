@@ -8866,5 +8866,11 @@
         "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
+    },
+    {
+        "code": "CS_CITIZEN_SIDEBAR_PGR",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "default"
     }
 ]

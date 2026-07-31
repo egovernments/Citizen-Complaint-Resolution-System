@@ -328,5 +328,11 @@
         "message": "Português",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_CITIZEN_SIDEBAR_PGR",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]

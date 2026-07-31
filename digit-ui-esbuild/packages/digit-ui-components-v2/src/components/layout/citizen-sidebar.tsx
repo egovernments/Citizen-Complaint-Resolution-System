@@ -9,7 +9,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useHistory } from "react-router-dom";
-import { Home, Pencil, LogOut, Phone, AlertOctagon, LogIn } from "lucide-react";
+import { Pencil, LogOut, Phone, AlertOctagon, LogIn } from "lucide-react";
 import { cn } from "../../lib/cn";
 
 declare const Digit: any;
@@ -550,13 +550,24 @@ export function CitizenSidebar({
         // suffix so the row stays highlighted on any /<module>/* route
         // (file a complaint, complaints list, complaint detail, …).
         const prefix = entry.sidebarURL?.replace(/-home$/, "");
+        const moduleKey =
+          Digit?.Utils?.locale?.getTransformedLocale?.(key) ?? key;
+        // Label: prefer a CITIZEN-specific override, fall back to the shared
+        // ACTION_TEST_<MODULE> key. The employee sidebar renders that same
+        // ACTION_TEST_<MODULE> key, so relabelling the citizen row via
+        // localisation alone would also rename the module for staff (e.g.
+        // "Fala Cidadão" → "Início" over the employee's Create/Search
+        // Complaint group). The override keeps the two surfaces independent.
+        const overrideKey = `CS_CITIZEN_SIDEBAR_${moduleKey}`;
+        const overridden = t(overrideKey);
         return [
           {
             kind: isInternal ? ("link" as ItemKind) : ("external" as ItemKind),
             Icon: AlertOctagon,
-            text: t(
-              `ACTION_TEST_${Digit?.Utils?.locale?.getTransformedLocale?.(key) ?? key}`
-            ),
+            text:
+              overridden && overridden !== overrideKey
+                ? overridden
+                : t(`ACTION_TEST_${moduleKey}`),
             link: entry.sidebarURL,
             matchPrefixes: prefix ? [prefix] : undefined,
           },
@@ -569,17 +580,12 @@ export function CitizenSidebar({
   const items: NavItem[] = React.useMemo(() => {
     if (isLoggedInCitizen) {
       return [
-        {
-          kind: "link",
-          Icon: Home,
-          text: t("COMMON_BOTTOM_NAVIGATION_HOME"),
-          link: `/${contextPath}/citizen/all-services`,
-          // Only match the all-services surface itself; using the bare
-          // `/citizen` prefix would steal the active state from every
-          // module surface (e.g. /citizen/pgr-home would light Home up
-          // instead of Citizen Complaint).
-          matchPrefixes: [`/${contextPath}/citizen/all-services`],
-        },
+        // CCSD-2126 follow-up: the dedicated "Home" row (→ /citizen/all-services)
+        // is gone. With a single module the All Services page is just a page
+        // holding one card, so the row duplicated the module link and was the
+        // surface where two entries could appear highlighted at once. The
+        // /citizen/all-services route now redirects to the module home (see
+        // pages/citizen/index.js), so nothing is unreachable.
         ...moduleLinks,
         {
           kind: "link",
