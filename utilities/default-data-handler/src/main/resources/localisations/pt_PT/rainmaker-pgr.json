@@ -1690,5 +1690,11 @@
         "message": "Nenhum funcionário elegível encontrado para este departamento. É necessário cadastrar um funcionário com a função adequada antes de atribuir esta reclamação.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINANT_DETAILS",
+        "message": "Dados do Reclamante",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]
