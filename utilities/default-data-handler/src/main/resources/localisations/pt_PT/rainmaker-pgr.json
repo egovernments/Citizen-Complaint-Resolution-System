@@ -1684,5 +1684,11 @@
         "message": "Imagens, PDF, DOC, áudio ou vídeo até 5 MB cada. Pode carregar até 5 ficheiros.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_NO_ASSIGNABLE_EMPLOYEES",
+        "message": "Nenhum funcionário elegível encontrado para este departamento. É necessário cadastrar um funcionário com a função adequada antes de atribuir esta reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

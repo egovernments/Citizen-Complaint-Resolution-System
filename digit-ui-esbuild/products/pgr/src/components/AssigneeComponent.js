@@ -98,6 +98,24 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   if (error) return <div>{t("CS_COMMON_EMPLOYEE_FETCH_ERROR")}</div>;
   if (isEmployeeDataLoading) return <Loader />;
 
+  // CCSD-2124: the assignee is mandatory on ASSIGN, so an EMPTY list would
+  // leave the operator stuck behind a generic "required field" toast with no
+  // way to see why. Say it plainly: nobody with the required role exists in
+  // the scoped department (or tenant) — a staffing/onboarding gap, not a UI
+  // failure. The submit stays blocked (mandatory + no value).
+  if (!assignees || assignees.length === 0) {
+    const K = "CS_COMMON_NO_ASSIGNABLE_EMPLOYEES";
+    const msg =
+      t(K) === K
+        ? "No eligible employee found for this department. An employee with the required role must be onboarded before this complaint can be assigned."
+        : t(K);
+    return (
+      <div className="assignee-dropdown-container">
+        <div style={{ color: "var(--color-error, #d4351c)", fontSize: "0.875rem", fontWeight: 500 }}>{msg}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="assignee-dropdown-container">
       <Dropdown

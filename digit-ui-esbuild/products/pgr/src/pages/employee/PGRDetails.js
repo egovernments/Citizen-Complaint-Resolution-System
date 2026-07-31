@@ -263,20 +263,16 @@ const PGRDetails = () => {
     setToast({ show: false, label: "", type: "" });
   };
 
-  // Assignee requirement on ASSIGN:
-  // - complaint type mapped to a department  -> mandatory (scoped routing; a person must be picked)
-  // - unmapped type ("NA"/absent department) -> OPTIONAL — the complaint may move forward
-  //   unassigned (pgr skips department validation and the workflow accepts empty assignes)
-  // - EXCEPT a CMS_SCREENING_OFFICER (incl. multi-role users): routing IS their job,
-  //   so the assignee stays mandatory for them even on unmapped types.
-  const isAssigneeMandatory = (action) => {
-    if (action?.action !== "ASSIGN") return false;
-    const roles = userInfo?.info?.roles?.map((r) => r.code) || [];
-    if (roles.includes("CMS_SCREENING_OFFICER")) return true;
-    const def = serviceDefs?.find((d) => d.serviceCode === pgrData?.ServiceWrappers?.[0]?.service?.serviceCode);
-    const department = def?.department;
-    return !!department && department !== "NA";
-  };
+  // CCSD-2124: the assignee is ALWAYS mandatory on ASSIGN. The previous
+  // carve-out (optional when the complaint type had no department mapping and
+  // the actor wasn't a screening officer) let a supervisor submit with no
+  // Case Manager — the complaint advanced with no responsible owner, and the
+  // backend accepts empty assignes for every action (workflow has no
+  // assignee-required rule), so the FE gate is the only gate.
+  // When the scoped department has no eligible employee, AssigneeComponent now
+  // says so explicitly instead of rendering an empty dropdown — staffing gaps
+  // surface as a clear message, not as an ownerless complaint.
+  const isAssigneeMandatory = (action) => action?.action === "ASSIGN";
 
   // Prepare and submit the update complaint request
   const handleActionSubmit = (_data) => {
