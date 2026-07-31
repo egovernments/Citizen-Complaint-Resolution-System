@@ -446,6 +446,32 @@ export const mdmsService = {
   },
 
   // ============================================
+  // Postal-code rule (common-masters.FormValidations, fieldType: postalCode)
+  // ============================================
+
+  /**
+   * The MDMS-authored postal-code pattern — the PRIMARY per-tenant rule.
+   * DDH seeds a default 5-digit `fieldType: "postalCode"` row at tenant
+   * creation; editing it (Studio's FormValidations editor) changes the
+   * tenant's rule, outranking the host_vars pattern with the same
+   * precedence in the PGR create-complaint flows (see digit-ui-esbuild
+   * utils/postalCode.js). Returns null when no row exists (dump-booted
+   * stacks, pre-FormValidations tenants) — the effective rule then comes
+   * from globalConfigs CORE_POSTAL_CONFIGS (host_vars
+   * `core_postal_configs`).
+   */
+  async getPostalValidation(tenantId: string): Promise<{ pattern: string } | null> {
+    const results = await this.search<Record<string, unknown>>(
+      tenantId,
+      'common-masters.FormValidations'
+    );
+    const row = results.find(
+      (r) => r.fieldType === 'postalCode' && r.isActive !== false && typeof r.regex === 'string'
+    );
+    return row ? { pattern: row.regex as string } : null;
+  },
+
+  // ============================================
   // Configured UI locales (common-masters.StateInfo.languages)
   // ============================================
 
