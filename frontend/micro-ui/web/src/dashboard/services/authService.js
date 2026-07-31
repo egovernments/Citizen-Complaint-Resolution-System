@@ -19,15 +19,68 @@
  *     refresh call's own failure must never be fed back into this retry path.
  *   - Tokens are opaque UUIDs, not JWTs, so expiry cannot be inspected client
  *     side. Refresh is necessarily reactive (on 401), never pre-emptive.
+ *
+ * ---------------------------------------------------------------------------
+ * CONTRACT — what authFetch() does with a 401, and what callers should expect.
+ *
+ * A 401 has four distinct causes and they are NOT interchangeable. Collapsing
+ * them is what made the first cut of this module dangerous: it treated every
+ * one as "session dead" and wiped storage shared with the co-hosted digit-ui
+ * app. Each outcome now throws a differently-flagged error:
+ *
+ *   another caller already refreshed  -> replay with the new token, no error
+ *   token dead, refresh succeeded     -> replay, no error
+ *   token dead, server refused        -> err.sessionExpired, storage CLEARED
+ *   token dead, no refresh token held -> err.sessionExpired, storage KEPT
+ *   auth server unreachable           -> err.refreshUnavailable, session KEPT
+ *   fresh token but endpoint 401s     -> err.endpointUnauthorized, session KEPT
+ *
+ * Only the two sessionExpired cases dispatch SESSION_EXPIRED_EVENT and drop the
+ * user to the login gate. The rule of thumb: never destroy a session we have
+ * not PROVEN is dead, because the keys are not ours alone.
+ *
+ * Guarantees: at most two sends and at most one refresh per call (cannot loop);
+ * concurrent 401s share a single refresh; a refresh never re-enters this path.
+ *
+ * Caller error contract, deliberately uniform across the services:
+ *   analyticsService        — propagates (the dashboard shows the failure)
+ *   boundaryService         — swallows, returns partial data (map is optional)
+ *   complaintHierarchyService — swallows, returns null (labels fall back)
+ * Services that swallow still get the gate flip, because the event is
+ * dispatched before the throw.
+ * ---------------------------------------------------------------------------
  */
 
-const TOKEN_KEY = "Employee.token";
-const REFRESH_KEY = "Employee.refresh-token";
-const USER_INFO_KEY = "Employee.user-info";
-const TENANT_KEY = "Employee.tenant-id";
+/**
+ * Every localStorage key this module owns, in one table.
+ *
+ * `shared: true` marks keys the co-hosted digit-ui app also reads — index.js
+ * copies them into Digit.SessionStorage at boot to seed the employee session.
+ * Writing them affects the whole product, not just the dashboard, which is why
+ * clearing is gated (see announceSessionExpired).
+ *
+ * The previous code kept "keys login writes" and "keys signout clears" as two
+ * hand-maintained lists and they had already drifted apart once — the refresh
+ * token was written but never cleared. Deriving both from this table makes that
+ * class of bug structurally impossible.
+ */
+const KEYS = {
+  token: { key: "Employee.token", shared: true },
+  refreshToken: { key: "Employee.refresh-token", shared: false },
+  userInfo: { key: "Employee.user-info", shared: true },
+  tenantId: { key: "Employee.tenant-id", shared: true },
+  // Unprefixed aliases the main UI's boot path reads for login detection.
+  tokenAlias: { key: "token", shared: true },
+  userInfoAlias: { key: "user-info", shared: true },
+};
 
-/** Keys cleared on sign-out / dead session. Mirrors what login writes. */
-const SESSION_KEYS = [TOKEN_KEY, REFRESH_KEY, USER_INFO_KEY, TENANT_KEY, "user-info", "token"];
+const TOKEN_KEY = KEYS.token.key;
+const REFRESH_KEY = KEYS.refreshToken.key;
+const USER_INFO_KEY = KEYS.userInfo.key;
+const TENANT_KEY = KEYS.tenantId.key;
+
+/** Every key this module writes — so signout can never fall behind login. */
+const SESSION_KEYS = Object.values(KEYS).map((k) => k.key);
 
 export const SESSION_EXPIRED_EVENT = "dashboard:session-expired";
 
@@ -359,8 +412,22 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
     throw error;
   }
 
-  // Only a positive rejection justifies destroying storage the co-hosted
-  // digit-ui app shares with us.
+  // We refreshed successfully and the replay STILL 401'd. The token is provably
+  // fresh, so this endpoint is rejecting us for its own reason (an auth gap, a
+  // misrouted service, a role check answering 401 instead of 403) — not because
+  // the session died. Reporting expiry here would sign the user out on every
+  // load and re-login would change nothing: a loop. Surface it as an ordinary
+  // request failure and leave the session alone.
+  if (outcome === REFRESH_REFRESHED) {
+    const error = new Error(`Request failed (401) with a valid session: ${url}`);
+    error.status = 401;
+    error.endpointUnauthorized = true;
+    throw error;
+  }
+
+  // Session is genuinely unusable: either the server rejected our refresh token
+  // (REJECTED) or we never had one to try (NO_TOKEN). Only a positive rejection
+  // justifies destroying storage the co-hosted digit-ui app shares with us.
   announceSessionExpired({ clearStorage: outcome === REFRESH_REJECTED });
   const error = new Error("Your session has expired. Please sign in again.");
   error.status = 401;
