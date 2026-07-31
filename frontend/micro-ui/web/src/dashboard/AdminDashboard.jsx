@@ -359,22 +359,9 @@ const AdminDashboardInner = ({ onSignOut }) => {
     visibleLayoutIds,
   } = useCatalogLayout(kpis, pack?.layout);
 
-  const [searchQuery, setSearchQuery] = useState("");
-
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
     [layout]
-  );
-
-  // Title-based tile search: dim tiles whose title doesn't match the query.
-  const matchesSearch = useCallback(
-    (kpiId) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return true;
-      const title = (kpis[kpiId]?.viz?.title || kpiId).toLowerCase();
-      return title.includes(q);
-    },
-    [searchQuery, kpis]
   );
 
   // Add-KPI picker source: every role-visible catalog tile (already filtered
@@ -511,8 +498,6 @@ const AdminDashboardInner = ({ onSignOut }) => {
       onResetLayout={resetLayout}
       onDragWidgetStart={() => {}}
       onDragWidgetEnd={() => {}}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
       onFilterChange={setFilter}
@@ -562,7 +547,6 @@ const AdminDashboardInner = ({ onSignOut }) => {
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
-            const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const removeBtn = (
               <WidgetRemoveButton
                 label={`Remove ${kpis[item.i]?.viz?.title || item.i}`}
@@ -577,7 +561,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
               return (
                 <div
                   key={item.i}
-                  className={`dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col${dimClass}`}
+                  className="dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col"
                 >
                   {removeBtn}
                   {renderTile(item.i)}
@@ -597,7 +581,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
             return (
               <section
                 key={item.i}
-                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
+                className="dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
               >
                 {removeBtn}
                 {!selfHeaders && (
