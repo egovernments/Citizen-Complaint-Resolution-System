@@ -168,7 +168,10 @@ docker_log_total_size: "1g"
 # stack up). Their output streams here as they run, so the operator can
 # `tail -f` it from another terminal instead of waiting for the task to end.
 # Same idea as the Mac path's /tmp/mac-stack-up.progress.
-compose_progress_file: /tmp/digit-stack-up.progress
+# Per-tenant filename: concurrent deploys of two tenants on one box must
+# not interleave into one file, and a stale file left by a different unix
+# user (sticky /tmp) must not block this tenant's tee.
+compose_progress_file: "/tmp/digit-stack-up.{{ inventory_hostname }}.progress"
 
 # WSL2-only (ignored everywhere else): the [wsl2] resource caps the deploy
 # writes into the Windows-side .wslconfig. WSL defaults to ~50% of host

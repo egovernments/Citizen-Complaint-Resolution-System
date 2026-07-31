@@ -77,10 +77,14 @@ if [[ "${SKIP_LINT:-0}" != "1" ]]; then
   run_static_validation
 fi
 
-# ansible buffers a task's stdout until the task ENDS, so the macOS Rosetta
-# converge (10-40min) looks like a dead hang with zero feedback. Tell the
-# operator the live escape hatches UP FRONT, before ansible swallows output.
-cat >&2 <<'BANNER'
+# ansible buffers a task's stdout until the task ENDS, so the long compose
+# steps (macOS Rosetta converge 10-40min; Linux pull + up ~10min cold) look
+# like a dead hang with zero feedback. Tell the operator the live escape
+# hatches UP FRONT, before ansible swallows output. The progress file
+# differs per platform: mac-stack-up.sh owns its own sink; the Linux path
+# tees to a per-tenant file (compose_progress_file in group_vars).
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  cat >&2 <<'BANNER'
 ────────────────────────────────────────────────────────────────────────
  DIGIT deploy starting. The macOS converge step is long and ansible shows
  NO output until it finishes. For LIVE progress, in another terminal run:
@@ -92,6 +96,20 @@ cat >&2 <<'BANNER'
  NETWORK ENDPOINT' = stop, restart the engine, re-run PLAIN (no SKIP_DOWN).
 ────────────────────────────────────────────────────────────────────────
 BANNER
+else
+  cat >&2 <<BANNER
+────────────────────────────────────────────────────────────────────────
+ DIGIT deploy starting. The image pull + stack-up steps are long and
+ ansible shows NO output until each finishes. For LIVE progress, in
+ another terminal run:
+
+     tail -f /tmp/digit-stack-up.${1:-<tenant>}.progress
+     watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exited|Restart'"
+
+ (The tail target is announced again by the 'Progress sink' task.)
+────────────────────────────────────────────────────────────────────────
+BANNER
+fi
 
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.

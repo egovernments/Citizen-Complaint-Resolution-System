@@ -1,10 +1,20 @@
-# Self-targeting local deploy (localhost, no TLS) on the dump-seeded
-# pg / pg.citya tenants. Derived from the pg.citya config validated on
-# the eGov dev box 2026-07-27; domain generalized to localhost so it
-# works on any box (WSL2 Ubuntu included).
+# localhost-full minus Novu — self-targeting deploy for a 16 GB host
+# (e.g. Windows/WSL2 with ~12 GB for the VM). Validated end-to-end on
+# WSL2 Ubuntu 24.04, 2026-07-29.
 #
-# Deploy: ./deploy.sh karun
-# Login:  http://localhost/digit-ui/  ADMIN / eGov@123
+# The ONLY functional delta from localhost-full.yml.example is the Novu
+# notifications stack (novu-mongo/api/worker/ws/dashboard/bridge +
+# otp-publisher, ~1.5-2 GB resident): that is the one piece that risks
+# freezing a 12 GB VM. Everything else matches: core services, PGR,
+# employee UI (same esbuild branch), citizen SPA (/citizen/),
+# configurator (/configurator/), MCP (wizard tenant bootstrap works),
+# Kong, Gatus, Jupyter, seeded pg / pg.citya tenants.
+#
+# Usage:
+#   cp inventory/host_vars/localhost-slim.yml.example \
+#      inventory/host_vars/mybox.yml
+#   ./deploy.sh mybox
+# Login: http://localhost/digit-ui/  ADMIN / eGov@123
 
 ansible_host: localhost
 ansible_connection: local
@@ -65,19 +75,19 @@ enable_search_stack: false
 enable_mcp: true
 build_mcp: true
 build_digit_ui: true
-build_otp_publisher: true
+build_otp_publisher: false         # slim: notifications path is off
 digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
 tolerate_bootstrap_failures: true
 enable_turbopass: false
 enable_overpass: false
 
-enable_novu: true
+enable_novu: false                 # slim: drops the whole notifications profile
 build_novu_dashboard: false
 novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
-pgr_notification_config_driven: true
+pgr_notification_config_driven: false
 build_novu_bridge: false
 build_pgr_services: false
 novu_bridge_channel: "sms"
@@ -93,6 +103,9 @@ db_fast_path_ack_data_wipe: true
 run_ci_tests: false
 force_clean: false
 install_claude_code: false
+# Configurator is back in even on slim: runtime cost is nil (static SPA
+# served by host nginx, no container) — only the one-time vite build at
+# deploy costs RAM, and swap absorbs it.
 build_configurator: true
 
 nginx_features:

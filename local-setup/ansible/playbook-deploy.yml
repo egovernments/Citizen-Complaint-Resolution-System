@@ -348,29 +348,24 @@
             state: started
             enabled: yes
 
-        # ==================== Root mount propagation ====================
+        # ==================== Root mount propagation (WSL2 only) ====================
         # The monitoring overlay's node-exporter binds /:/rootfs:ro,rslave
         # (docker-compose.monitoring.yml). rslave requires the host's / to be
         # a shared mount. systemd makes it so on standard Ubuntu, but WSL2's
         # init leaves / private, and `docker compose up` then dies with
         # "path / is mounted on / but it is not a shared or slave mount".
-        # On WSL (or any host whose / isn't shared) install a boot-time
-        # oneshot that re-shares / before docker.service, and apply it now.
-        # No-op on hosts where / is already shared: probe shows shared, both
-        # tasks skip.
-        - name: "Root mount — probe / propagation"
-          ansible.builtin.command: findmnt -no PROPAGATION /
-          register: root_propagation
-          changed_when: false
-
-        - name: "Root mount — persist make-rshared for private / (e.g. WSL2)"
-          when: >-
-            ('microsoft' in (ansible_kernel | lower))
-            or ('shared' not in root_propagation.stdout)
+        # On WSL install a boot-time oneshot that re-shares / before
+        # docker.service, and apply it now.
+        #
+        # Deliberately gated on the WSL kernel string ONLY — not on the
+        # current propagation of /. A non-WSL host with a private / (LXC,
+        # hardened MountFlags) made that choice on purpose; a deploy must
+        # not override it. Matching the kernel (not the live state) also
+        # means a WSL box where the operator ran `mount --make-rshared /`
+        # by hand still gets the boot persistence.
+        - name: "Root mount — persist make-rshared for WSL2's private /"
+          when: "'microsoft' in (ansible_kernel | lower)"
           block:
-            # WSL is matched by kernel string, not just current propagation,
-            # so a box where the operator ran `mount --make-rshared /` by
-            # hand (probe would show shared) still gets the boot persistence.
             - name: "Root mount — install make-rshared oneshot unit"
               ansible.builtin.copy:
                 dest: /etc/systemd/system/make-rshared-root.service
