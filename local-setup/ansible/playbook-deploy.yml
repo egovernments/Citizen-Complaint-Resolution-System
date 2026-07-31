@@ -1190,6 +1190,22 @@
           LONG STEPS AHEAD (image pull, then stack up). Follow live progress
           from another terminal with:  tail -f {{ compose_progress_file }}
 
+    # Defense-in-depth against symlink attacks: tee below runs as root,
+    # and if an operator overrides compose_progress_file back into a
+    # world-writable dir (/tmp), a local user could pre-plant a symlink
+    # there for root's tee to follow. Recreate the path as a fresh
+    # regular file first, 0644 so a non-root operator can still tail it.
+    - name: "Progress sink — drop any pre-existing file/symlink at the path"
+      ansible.builtin.file:
+        path: "{{ compose_progress_file }}"
+        state: absent
+
+    - name: "Progress sink — create the progress file fresh (regular file, 0644)"
+      ansible.builtin.file:
+        path: "{{ compose_progress_file }}"
+        state: touch
+        mode: "0644"
+
     - name: Pull all images from VPC registry
       shell: |
         set -o pipefail

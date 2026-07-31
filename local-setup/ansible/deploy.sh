@@ -103,7 +103,7 @@ else
  ansible shows NO output until each finishes. For LIVE progress, in
  another terminal run:
 
-     tail -f /tmp/digit-stack-up.${1:-<tenant>}.progress
+     tail -f /opt/digit/digit-stack-up.${1:-<tenant>}.progress
      watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exited|Restart'"
 
  (The tail target is announced again by the 'Progress sink' task.)

@@ -169,9 +169,14 @@ docker_log_total_size: "1g"
 # `tail -f` it from another terminal instead of waiting for the task to end.
 # Same idea as the Mac path's /tmp/mac-stack-up.progress.
 # Per-tenant filename: concurrent deploys of two tenants on one box must
-# not interleave into one file, and a stale file left by a different unix
-# user (sticky /tmp) must not block this tenant's tee.
-compose_progress_file: "/tmp/digit-stack-up.{{ inventory_hostname }}.progress"
+# not interleave into one file.
+# Lives under digit_dir, NOT /tmp: the deploy writes here with tee as
+# root, and a predictable root-written path in world-writable /tmp is a
+# symlink-attack target (a local user pre-creates a symlink, root's tee
+# follows it and overwrites the target). digit_dir is root-owned on
+# Linux, so only root can place anything at this path; the file itself
+# is created 0644 so a non-root operator can still tail it.
+compose_progress_file: "{{ digit_dir }}/digit-stack-up.{{ inventory_hostname }}.progress"
 
 # WSL2-only (ignored everywhere else): the [wsl2] resource caps the deploy
 # writes into the Windows-side .wslconfig. WSL defaults to ~50% of host

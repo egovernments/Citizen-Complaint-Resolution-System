@@ -115,7 +115,7 @@ Docker Engine install, WSL mount-propagation fix (automatic), image pull
 **Watch it live** from a second WSL terminal (the deploy banner prints this):
 
 ```bash
-tail -f /tmp/digit-stack-up.mybox.progress
+tail -f /opt/digit/digit-stack-up.mybox.progress
 ```
 
 First run from a blank machine: expect 30–60 min depending on bandwidth.
