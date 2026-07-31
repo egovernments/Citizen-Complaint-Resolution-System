@@ -18,6 +18,7 @@ export async function fetchBoundariesByCodes(codes = []) {
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
   const chunkSize = 100;
   const all = [];
+  let lastError = null;
 
   for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
     const chunk = uniqueCodes.slice(i, i + chunkSize);
@@ -27,19 +28,20 @@ export async function fetchBoundariesByCodes(codes = []) {
       limit: String(chunk.length),
     });
 
-    // authFetch throws on an unrecoverable session or an unreachable auth
-    // server, where the previous raw fetch only ever returned a non-ok response.
-    // Without this catch one bad chunk would reject the whole call and discard
-    // the boundaries already collected — the map is best-effort and its sibling
-    // fetchBoundaryRelationshipsByCodes already swallows the same way. The auth
-    // gate still flips: authService dispatches the expiry event before throwing.
+    // A failing chunk must not discard the boundaries already collected, so each
+    // one is caught individually. But swallowing unconditionally would mean the
+    // map's only error state ("Could not load ward boundaries") could never
+    // fire, leaving a silently blank choropleth — so the failure is remembered
+    // and rethrown below if NOTHING was loaded.
     try {
       const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
         buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+        sessionCritical: false,
       });
 
       if (!response.ok) {
         console.warn(`boundary/_search failed (${response.status})`);
+        lastError = new Error(`boundary/_search failed (${response.status})`);
         continue;
       }
 
@@ -48,8 +50,13 @@ export async function fetchBoundariesByCodes(codes = []) {
       all.push(...boundaries);
     } catch (error) {
       console.warn("boundary/_search error", error);
+      lastError = error;
     }
   }
+
+  // Partial data is usable; a total failure is not, and the caller needs to be
+  // able to tell the user rather than render an empty map.
+  if (!all.length && lastError) throw lastError;
 
   return all;
 }
@@ -136,7 +143,7 @@ export async function fetchBoundaryRelationshipsByCodes(
 
     const response = await authFetch(
       `/boundary-service/boundary-relationships/_search?${params}`,
-      { buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }) }
+      { buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }), sessionCritical: false }
     );
 
     if (!response.ok) {

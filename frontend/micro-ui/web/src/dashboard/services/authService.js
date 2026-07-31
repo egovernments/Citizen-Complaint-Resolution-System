@@ -1,3 +1,5 @@
+import { getTenantId } from "../config/dashboardConfig";
+
 /**
  * Single source of truth for dashboard auth: token storage, RequestInfo
  * construction, and the 401 -> refresh -> retry cycle.
@@ -30,24 +32,39 @@
  *
  *   another caller already refreshed  -> replay with the new token, no error
  *   token dead, refresh succeeded     -> replay, no error
- *   token dead, server refused        -> err.sessionExpired, storage CLEARED
- *   token dead, no refresh token held -> err.sessionExpired, storage KEPT
+ *   raced a refresh on every attempt  -> err.refreshRaced, session KEPT
  *   auth server unreachable           -> err.refreshUnavailable, session KEPT
  *   fresh token but endpoint 401s     -> err.endpointUnauthorized, session KEPT
+ *   non-critical call, token refused  -> err.endpointUnauthorized, session KEPT
+ *   CRITICAL call, token refused      -> err.sessionExpired, storage CLEARED
  *
- * Only the two sessionExpired cases dispatch SESSION_EXPIRED_EVENT and drop the
- * user to the login gate. The rule of thumb: never destroy a session we have
- * not PROVEN is dead, because the keys are not ours alone.
+ * Only the last row dispatches SESSION_EXPIRED_EVENT and drops the user to the
+ * login gate. Two rules govern it:
  *
- * Guarantees: at most two sends and at most one refresh per call (cannot loop);
- * concurrent 401s share a single refresh; a refresh never re-enters this path.
+ *   1. Never destroy a session we have not PROVEN is dead — the keys are shared
+ *      with the co-hosted digit-ui app, so a wrong guess signs the user out of
+ *      the whole product.
+ *   2. Only a SESSION-CRITICAL call may form that verdict. Pass
+ *      `sessionCritical: false` for auxiliary data (boundary geometry,
+ *      hierarchy labels): those endpoints can 401 for their own reasons (an ACL
+ *      gap, a gateway answering 401 instead of 403) and must not be able to tear
+ *      the dashboard down to a login screen that falsely blames expiry.
  *
- * Caller error contract, deliberately uniform across the services:
- *   analyticsService        — propagates (the dashboard shows the failure)
- *   boundaryService         — swallows, returns partial data (map is optional)
- *   complaintHierarchyService — swallows, returns null (labels fall back)
- * Services that swallow still get the gate flip, because the event is
- * dispatched before the throw.
+ * When a critical call IS refused, storage is cleared even if we held no refresh
+ * token: the server has proven the token dead, and leaving it behind is what
+ * made a reload re-pass the auth gate and re-render a broken dashboard (#1466's
+ * "reloading did not help" symptom).
+ *
+ * Guarantees: at most three sends and at most one refresh per call (cannot
+ * loop); concurrent 401s share a single refresh; a refresh never re-enters this
+ * path; the refresh token is owner-stamped so a previous user's token on the
+ * same browser is never used.
+ *
+ * Caller error contract:
+ *   analyticsService        — critical; propagates (the dashboard shows it)
+ *   boundaryService         — non-critical; partial data, throws only if NOTHING
+ *                             loaded so the map can show its error state
+ *   complaintHierarchyService — non-critical; returns null (labels fall back)
  * ---------------------------------------------------------------------------
  */
 
@@ -113,21 +130,33 @@ export function getEmployeeToken() {
   return readStorage(TOKEN_KEY);
 }
 
+/**
+ * The refresh token, but only if it belongs to the user currently signed in.
+ * A token stamped for a different uuid is a leftover from a previous session on
+ * this browser; using it would swap the whole product to that user's identity.
+ */
 export function getRefreshToken() {
-  return readStorage(REFRESH_KEY);
+  const stored = readStorage(REFRESH_KEY);
+  if (!stored) return null;
+  // Legacy shape: a bare string written before owner-stamping existed. It has no
+  // provable owner, so it is not trusted.
+  if (typeof stored === "string") return null;
+  const currentUuid = getEmployeeInfo()?.uuid ?? null;
+  if (stored.userUuid && currentUuid && stored.userUuid !== currentUuid) return null;
+  return stored.token || null;
 }
 
 export function getEmployeeInfo() {
   return readStorage(USER_INFO_KEY);
 }
 
-export function getTenantId() {
-  return (
-    window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
-    process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
-    "ke"
-  );
-}
+// Re-exported, NOT re-implemented. A second copy here had a different fallback
+// ("ke" vs dashboardConfig's "default"); DashboardLogin uses dashboardConfig's,
+// so on a deployment with neither config set, login would authenticate as
+// "default" while refresh posted "ke" — egov-user rejects that, which this
+// module classifies as a positive rejection and answers by clearing storage
+// shared with the co-hosted app. One definition, one fallback.
+export { getTenantId };
 
 /**
  * True when a token is PRESENT. Deliberately not a validity check — tokens are
@@ -183,7 +212,16 @@ export function persistSession({ accessToken, refreshToken, userInfo, tenantId }
     writeStorage(TOKEN_KEY, accessToken);
     writeStorage("token", accessToken);
   }
-  if (refreshToken != null) writeStorage(REFRESH_KEY, refreshToken);
+  if (refreshToken != null) {
+    // Stored WITH its owner. Only this dashboard writes the refresh token, and
+    // the main digit-ui login neither knows nor clears it — so without an owner
+    // stamp, user A's refresh token can survive user B signing in on the same
+    // browser and silently re-authenticate the whole product as A.
+    writeStorage(REFRESH_KEY, {
+      token: refreshToken,
+      userUuid: normalisedUser?.uuid ?? getEmployeeInfo()?.uuid ?? null,
+    });
+  }
   if (normalisedUser != null) {
     writeStorage(USER_INFO_KEY, normalisedUser);
     writeStorage("user-info", normalisedUser);
@@ -201,6 +239,19 @@ export function clearSession() {
       /* ignore */
     }
   });
+  // Symmetric with syncDigitSession. Clearing only localStorage would leave the
+  // co-hosted UI authenticating from a cached dead token — and index.js boots
+  // from SessionStorage FIRST, skipping the localStorage re-seed when "User"
+  // exists, so even a reload would re-enter the employee UI "logged in" on a
+  // token that no longer works.
+  const session = window.Digit?.SessionStorage;
+  if (session?.set) {
+    try {
+      session.set("User", null);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /**
@@ -378,7 +429,10 @@ function refreshSession() {
  * or the replay 401s again, the session is announced dead and the error is
  * thrown with `status` and `sessionExpired` set for callers.
  */
-export async function authFetch(url, { buildBody, method = "POST", headers } = {}) {
+export async function authFetch(
+  url,
+  { buildBody, method = "POST", headers, sessionCritical = true } = {}
+) {
   const send = () =>
     fetch(url, {
       method,
@@ -424,12 +478,22 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
     throw error;
   }
 
+  // Every attempt exited on a generation mismatch — a concurrent refresh landed
+  // during each send — so we never formed a verdict of our own. The session was
+  // just refreshed by somebody else and is alive; treat this as transient rather
+  // than falling through to the expiry branch on a healthy session.
+  if (outcome === null) {
+    const error = new Error("Request raced a token refresh. Please retry.");
+    error.status = 401;
+    error.refreshRaced = true;
+    throw error;
+  }
+
   // We refreshed successfully and the replay STILL 401'd. The token is provably
   // fresh, so this endpoint is rejecting us for its own reason (an auth gap, a
   // misrouted service, a role check answering 401 instead of 403) — not because
   // the session died. Reporting expiry here would sign the user out on every
-  // load and re-login would change nothing: a loop. Surface it as an ordinary
-  // request failure and leave the session alone.
+  // load and re-login would change nothing: a loop.
   if (outcome === REFRESH_REFRESHED) {
     const error = new Error(`Request failed (401) with a valid session: ${url}`);
     error.status = 401;
@@ -437,10 +501,28 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
     throw error;
   }
 
-  // Session is genuinely unusable: either the server rejected our refresh token
-  // (REJECTED) or we never had one to try (NO_TOKEN). Only a positive rejection
-  // justifies destroying storage the co-hosted digit-ui app shares with us.
-  announceSessionExpired({ clearStorage: outcome === REFRESH_REJECTED });
+  // Reaching here means REJECTED or NO_TOKEN: the server refused this token and
+  // we could not renew it.
+  //
+  // Only a SESSION-CRITICAL call may conclude the session is dead. Auxiliary
+  // layers (boundary geometry, hierarchy labels) can 401 for their own reasons —
+  // an ACL gap, a gateway answering 401 instead of 403 — and previously that was
+  // a per-widget banner. Letting them tear the whole dashboard down to a login
+  // screen that falsely blames session expiry is a worse regression than the bug
+  // being fixed.
+  if (!sessionCritical) {
+    const error = new Error(`Request failed (401): ${url}`);
+    error.status = 401;
+    error.endpointUnauthorized = true;
+    throw error;
+  }
+
+  // The primary API refused this token, so it IS dead — regardless of whether we
+  // held a refresh token. Clearing is therefore proven-correct, and it is what
+  // stops a reload from re-passing the auth gate on the same dead token and
+  // re-rendering a broken dashboard before flipping back to login (#1466's
+  // original "reload didn't help" symptom).
+  announceSessionExpired({ clearStorage: true });
   const error = new Error("Your session has expired. Please sign in again.");
   error.status = 401;
   error.sessionExpired = true;

@@ -89,6 +89,7 @@ export async function fetchComplaintTypeIndex() {
 
   try {
     const response = await authFetch(getMdmsSearchUrl(), {
+      sessionCritical: false,
       buildBody: () => ({
         RequestInfo: buildRequestInfo("dashboard-complaint-hierarchy"),
         MdmsCriteria: {
