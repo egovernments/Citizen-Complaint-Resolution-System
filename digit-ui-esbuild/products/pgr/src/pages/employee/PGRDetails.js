@@ -10,7 +10,7 @@ import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
-import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
+import { buildExtendedAttributeRows, useExtendedAttributeOrder } from "../../components/PgrExtendedAttributesView";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
@@ -181,6 +181,9 @@ const PGRDetails = () => {
 
   // Fetch complaint details
   const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+  // CCSD-2123: schema x-order for the Additional Details rows (complainantName
+  // pinned first inside buildExtendedAttributeRows regardless).
+  const extAttrOrder = useExtendedAttributeOrder(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes);
 
   // Use the complaint's tenantId for workflow queries (complaints live at city level,
   // but getCurrentTenantId() may return root tenant for root-level ADMIN users)
@@ -622,11 +625,11 @@ const PGRDetails = () => {
               // Read-only "Additional Details" — fetch service.extendedAttributes
               // and show it as label:value rows; backend returns masked ("****")
               // values. Renders nothing when there are no extended attributes.
-              ...(buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t).length > 0
+              ...(buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t, extAttrOrder).length > 0
                 ? [{
                   cardType: "primary",
                   header: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"),
-                  fieldPairs: buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t).map((r) => ({
+                  fieldPairs: buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t, extAttrOrder).map((r) => ({
                     inline: true,
                     label: r.label,
                     type: "text",
