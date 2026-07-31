@@ -142,15 +142,29 @@ with no range it fell back to a rolling 24h rather than the calendar day.
 
 For a pinned window:
 
-- the `window` param and `dateFrom`/`dateTo` do **not** rewrite the time predicate;
-- if the selected range cannot contain the pinned interval, the entry is **suppressed** — no SQL is
-  run and the result is `{ rows: [], rowCount: 0, suppressed: "filter_excludes_window" }`, so the
-  tile renders "no data for the applied filters" rather than a number for the wrong period;
+- the `window` param and `dateFrom`/`dateTo` do **not** rewrite the time predicate; a supplied
+  `window` param comes back as `paramsIgnored: ["window"]` rather than being silently swallowed;
+- if the selected range does not **cover** the pinned interval, the entry is **suppressed** — no SQL
+  is run and the result is `{ rows: [], rowCount: 0, suppressed: "filter_excludes_window" }`.
+  Coverage, not mere overlap: a partial intersection would report the tile's full pinned total under
+  a filter that excludes part of that period;
 - `compare: "prior"` means the preceding window of equal span (yesterday, for `dtd`) rather than the
   prior-equal-duration of the selected range;
-- `series: "daily"` is unaffected — the sparkline is trend context over the selected range and stays
+- `series: "daily"` gets an axis **wider** than the pin — the selected range, else the `window` param,
+  else a rolling `last_30d` — so the sparkline is a trend rather than a single bucket, and it stays
   answerable even when the headline value is suppressed;
-- `ward` / `serviceCode` / `complaintPath` / `hierLevel` still apply: pinning fixes **time**, not filters.
+- `ward` / `serviceCode` / `complaintPath` / `hierLevel` still apply: pinning fixes **time**, not filters;
+- pinning a boundless window (`all` / `live`) is meaningless — there is no interval to cover and no
+  preceding period — and is ignored: such a def takes the ordinary path.
+
+The pinned window is resolved **once** per request and baked into explicit `gte`/`lt` bounds, so the
+suppression verdict and the executed SQL are always judged against the same instant.
+
+`suppressed` is a machine-readable reason code on the response, not a rendering: the dashboard
+currently falls back to its existing unavailable state for such a tile. Wording the empty state
+("No data available with applied filters") and distinguishing it from an ordinary zero is
+[#1456](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1456), which this
+reason code exists to give the frontend something to key off.
 
 Unpinned defs — every other tile — are completely unchanged.
 
