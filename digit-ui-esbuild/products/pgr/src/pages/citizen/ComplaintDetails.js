@@ -22,7 +22,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
-import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
+import { buildExtendedAttributeRows, useExtendedAttributeOrder } from "../../components/PgrExtendedAttributesView";
 import StarRated from "../../components/timelineInstances/StarRated";
 
 // Terminal (non-active) states across standard PGR *and* the mz.igsae CMS workflow.
@@ -234,6 +234,9 @@ const ComplaintDetailsPage = () => {
     tenantId,
     id,
   });
+  // CCSD-2123: schema x-order for the Additional Details card (complainantName
+  // is pinned first inside buildExtendedAttributeRows regardless).
+  const extAttrOrder = useExtendedAttributeOrder(complaintDetails?.service?.extendedAttributes);
 
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the legacy flat
@@ -456,7 +459,7 @@ const ComplaintDetailsPage = () => {
             {(() => {
               // Read-only "Additional Details" — just fetch service.extendedAttributes
               // and show it; the backend already returns masked ("****") values.
-              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t);
+              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t, extAttrOrder);
               return extAttrRows.length > 0 ? (
                 <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
                   <SectionTitle>{tr("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", "Additional Details")}</SectionTitle>
