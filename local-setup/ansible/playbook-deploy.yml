@@ -185,25 +185,23 @@
 
   tasks:
     # ==================== Preflight: target OS ====================
-    # The playbook installs Docker + nginx + node + python via apt and
-    # manages docker.service via systemd. Both assume an Ubuntu-family
-    # target. Fail fast on Mac/RHEL/etc with a clear message rather than
-    # halfway through with `apt: command not found` or systemd errors.
+    # The playbook installs Docker + nginx + node + python and manages
+    # docker.service via systemd. Every apt/dnf-package task below is
+    # branched on ansible_facts['os_family'] — Debian (apt) or RedHat
+    # (dnf: Rocky/Alma/CentOS Stream/RHEL). Fail fast on anything else
+    # (Alpine, etc) with a clear message rather than halfway through with
+    # a "module not found" or systemd error.
     #
-    # Mac operators: spin up an Ubuntu 24.04 VM (UTM, OrbStack, Multipass,
-    # Lima, or a remote VPS) and point `ansible_host` in your host_vars
-    # at that VM. The Mac itself runs only ansible-playbook + ssh.
-    # Supported targets: Debian-family (Ubuntu) for full host provisioning,
-    # and macOS (Darwin) via the thin Mac path — Docker Desktop/OrbStack
+    # Mac operators: see the thin Mac path below — Docker Desktop/OrbStack
     # already provides Docker, nginx runs as a container, and the
-    # apt/systemd/host-nginx tasks are skipped (when: ansible_system != 'Darwin').
-    # Anything else (RHEL, Alpine, …) is genuinely unsupported.
-    - name: "preflight — target OS must be Debian-family or macOS"
+    # apt/dnf/systemd/host-nginx tasks are skipped (when: ansible_system != 'Darwin').
+    - name: "preflight — target OS must be Debian-family, RHEL-family, or macOS"
       ansible.builtin.fail:
         msg: |
           Target host {{ inventory_hostname }} is {{ ansible_facts['os_family'] }}
           ({{ ansible_facts['distribution'] | default('?') }} {{ ansible_facts['distribution_version'] | default('?') }}).
-          This playbook supports Ubuntu/Debian (full host provisioning) and
+          This playbook supports Ubuntu/Debian (apt), RHEL-family (dnf: Rocky
+          Linux/AlmaLinux/CentOS Stream/RHEL) for full host provisioning, and
           macOS (thin Mac path — containerized nginx, Docker Desktop/OrbStack).
 
           On macOS, in inventory/host_vars/<tenant>.yml set:
@@ -212,7 +210,7 @@
           and ensure Docker Desktop or OrbStack is running, then run
           `./deploy.sh <tenant>` from the Mac terminal.
       when:
-        - ansible_facts['os_family'] != 'Debian'
+        - ansible_facts['os_family'] not in ['Debian', 'RedHat']
         - ansible_system != 'Darwin'
 
     # common-masters.MobileNumberValidation (utilities/default-data-handler)
@@ -256,43 +254,47 @@
           See inventory/host_vars/_example.yml for a worked example.
       when:
         - core_mobile_configs is defined
-        - core_mobile_configs
+        - core_mobile_configs | length > 0
         - _mobile_missing_keys | length > 0
 
     # ==================== Docker host install + config ====================
-    # Linux/Debian targets only. On macOS the operator already runs Docker
-    # Desktop / OrbStack, so apt + docker.service + /etc/docker/daemon.json
-    # don't apply — this whole block is skipped on Darwin.
-    - name: "Docker host install + config (Linux/Debian targets only)"
+    # Linux targets only (Debian or RHEL family). On macOS the operator
+    # already runs Docker Desktop / OrbStack, so apt/dnf + docker.service +
+    # /etc/docker/daemon.json don't apply — this whole block is skipped on
+    # Darwin.
+    - name: "Docker host install + config (Linux targets only)"
       when: ansible_system != "Darwin"
       block:
-        # ==================== Docker Installation ====================
-        - name: Install Docker prerequisites
+        # ==================== Docker Installation (Debian/Ubuntu) ====================
+        - name: Install Docker prerequisites (Debian/Ubuntu)
           apt:
             name: [ca-certificates, curl, gnupg]
             state: present
             update_cache: yes
+          when: ansible_facts['os_family'] == 'Debian'
 
-        - name: Add Docker GPG key
+        - name: Add Docker GPG key (Debian/Ubuntu)
           shell: |
             install -m 0755 -d /etc/apt/keyrings
             curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
             chmod a+r /etc/apt/keyrings/docker.asc
           args:
             creates: /etc/apt/keyrings/docker.asc
+          when: ansible_facts['os_family'] == 'Debian'
 
-        - name: Add Docker repository
+        - name: Add Docker repository (Debian/Ubuntu)
           shell: |
             echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
           args:
             creates: /etc/apt/sources.list.d/docker.list
+          when: ansible_facts['os_family'] == 'Debian'
 
         # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
         # archive. Both conflict with Docker's upstream packages — they own
         # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
         # so dpkg refuses to install the upstream packages until the archive
         # ones are removed. Idempotent: no-op if they're not installed.
-        - name: Remove conflicting Ubuntu-archive Docker packages
+        - name: Remove conflicting Ubuntu-archive Docker packages (Debian/Ubuntu)
           apt:
             name:
               - docker.io
@@ -304,8 +306,9 @@
               - runc
             state: absent
             purge: yes
+          when: ansible_facts['os_family'] == 'Debian'
 
-        - name: Install Docker Engine
+        - name: Install Docker Engine (Debian/Ubuntu)
           apt:
             name:
               - docker-ce
@@ -315,14 +318,139 @@
               - docker-compose-plugin
             state: present
             update_cache: yes
+          when: ansible_facts['os_family'] == 'Debian'
 
-        # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+        # ==================== Docker Installation (RHEL family) ====================
+        # Rocky Linux / AlmaLinux / CentOS Stream / RHEL. Docker publishes no
+        # separate "rocky"/"alma" repo — the upstream linux/rhel repo is the
+        # documented path for every RHEL rebuild, BUT the stock
+        # docker-ce.repo uses $releasever, which resolves to the host's
+        # actual major version — and Docker has never published EL10
+        # packages (download.docker.com/linux/rhel/10/.../repodata/repomd.xml
+        # 404s; confirmed on Rocky Linux 10 as of 2026, see
+        # github.com/docker/roadmap#847 and the Rocky Linux forum thread on
+        # this exact failure). The documented workaround is pinning to the
+        # EL9 package set, which installs and runs fine on EL10 (same glibc
+        # ABI family). We write the repo file ourselves with releasever
+        # hardcoded instead of using the get_url'd stock file, so this
+        # self-heals if/when Docker ships real EL10 packages (bump
+        # docker_rhel_releasever_override in group_vars once they do).
+        - name: "Docker repo (RHEL family) — resolve releasever to use"
+          ansible.builtin.set_fact:
+            _docker_rhel_releasever: >-
+              {{ docker_rhel_releasever_override
+                 | default('9' if (ansible_distribution_major_version | int) >= 10
+                            else ansible_distribution_major_version, true) }}
+          when: ansible_facts['os_family'] == 'RedHat'
+
+        - name: "Docker repo (RHEL family) — write docker-ce.repo pinned to a published releasever"
+          ansible.builtin.copy:
+            dest: /etc/yum.repos.d/docker-ce.repo
+            mode: '0644'
+            content: |
+              [docker-ce-stable]
+              name=Docker CE Stable - $basearch
+              baseurl=https://download.docker.com/linux/rhel/{{ _docker_rhel_releasever }}/$basearch/stable
+              enabled=1
+              gpgcheck=1
+              gpgkey=https://download.docker.com/linux/rhel/gpg
+          when: ansible_facts['os_family'] == 'RedHat'
+
+        # podman/podman-docker ship on RHEL-family cloud images and own the
+        # same `docker` CLI shim path as Docker CE's packages — same
+        # conflict as Ubuntu's docker.io above. Idempotent: no-op if absent.
+        - name: Remove conflicting RHEL-family container packages
+          dnf:
+            name: [podman, podman-docker, runc]
+            state: absent
+          when: ansible_facts['os_family'] == 'RedHat'
+
+        - name: Install Docker Engine (RHEL family)
+          dnf:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
+          when: ansible_facts['os_family'] == 'RedHat'
+
+        # apt/dnf both install docker.service disabled by default — enable +
         # start it explicitly so subsequent tasks can talk to the daemon.
         - name: Ensure docker daemon is enabled + running
           service:
             name: docker
             state: started
             enabled: yes
+
+        # ==================== firewalld (RHEL family only) ====================
+        # Ubuntu's ufw ships inactive by default on cloud images, so this
+        # playbook never needed firewall tasks. Rocky/RHEL-family images
+        # ship firewalld ACTIVE with only ssh/dhcpv6-client open in the
+        # default zone — without this, host nginx comes up fine but every
+        # external request just times out. Docker's own iptables/nftables
+        # rules for published container ports are unaffected by firewalld
+        # zones, so only the host-nginx-facing ports need opening here.
+        - name: "firewalld — ensure installed + running (RHEL family)"
+          block:
+            - name: Install firewalld
+              dnf:
+                name: firewalld
+                state: present
+
+            - name: Ensure firewalld is enabled + running
+              service:
+                name: firewalld
+                state: started
+                enabled: yes
+
+            - name: Open http/https in the default zone
+              ansible.posix.firewalld:
+                service: "{{ item }}"
+                permanent: true
+                immediate: true
+                state: enabled
+              loop: [http, https]
+
+            # Only relevant when nginx is configured to listen on a
+            # non-standard port (host_vars `nginx_host_port`); http/https
+            # above cover the default 80/443.
+            - name: "Open nginx_host_port if it isn't 80/443"
+              ansible.posix.firewalld:
+                port: "{{ nginx_host_port }}/tcp"
+                permanent: true
+                immediate: true
+                state: enabled
+              when:
+                - nginx_host_port is defined
+                - nginx_host_port | int not in [80, 443]
+          when: ansible_facts['os_family'] == 'RedHat'
+
+        # ==================== SELinux (RHEL family only) ====================
+        # Rocky/RHEL-family images ship SELinux Enforcing by default. Host
+        # nginx reverse-proxying to the Dockerized backend (Kong, esbuild,
+        # MCP, Grafana, Gatus, Novu, …) needs httpd_can_network_connect —
+        # without it every proxy_pass 502s with an AVC denial
+        # (avc: denied { name_connect } for ... scontext=...httpd_t). This
+        # is the single most common "deploy finished green but the site
+        # 502s" gap on a fresh RHEL-family box.
+        - name: "SELinux — allow nginx to proxy to backend services (RHEL family)"
+          block:
+            - name: Ensure libselinux-python bindings + policy tools are present
+              dnf:
+                name: [policycoreutils-python-utils]
+                state: present
+
+            - name: "setsebool httpd_can_network_connect=on (persistent)"
+              ansible.posix.seboolean:
+                name: httpd_can_network_connect
+                state: true
+                persistent: true
+          when:
+            - ansible_facts['os_family'] == 'RedHat'
+            - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
 
         # ==================== Docker Configuration ====================
         # Log rotation. Docker's json-file driver keeps growing a container's
@@ -521,6 +649,18 @@
     # contexts under docker/ (the existing build-context convention) and repoint
     # them with an Ansible-only overlay. docker-compose.migrations.yml itself
     # stays valid for anyone running compose straight from the repo.
+    # synchronize (rsync) only creates the final leaf directory of `dest`,
+    # unlike copy/template which auto-create the whole parent chain — on a
+    # box that's never been deployed before, {{ digit_dir }}/docker doesn't
+    # exist yet at this point in the play and rsync fails with
+    # "mkdir ... failed: No such file or directory". Existing redeployed
+    # boxes never hit this because some earlier copy task already created
+    # docker/ for them.
+    - name: Ensure docker/ build-context parent directory exists
+      file:
+        path: "{{ digit_dir }}/docker"
+        state: directory
+
     - name: Synchronize in-repo migrator build contexts
       synchronize:
         src: "../../backend/{{ item }}/src/main/resources/db/"
@@ -2177,14 +2317,23 @@
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
 
-    - name: "integration-tests — ensure htpasswd tooling for basic-auth"
+    - name: "integration-tests — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
       ansible.builtin.apt:
         name: apache2-utils
         state: present
       when:
         - enable_integration_tests | default(false)
         - integration_tests_basic_auth_password is defined
-        - ansible_system != "Darwin"
+        - ansible_facts['os_family'] == 'Debian'
+
+    - name: "integration-tests — ensure htpasswd tooling for basic-auth (RHEL family)"
+      ansible.builtin.dnf:
+        name: httpd-tools
+        state: present
+      when:
+        - enable_integration_tests | default(false)
+        - integration_tests_basic_auth_password is defined
+        - ansible_facts['os_family'] == 'RedHat'
 
     # Idempotent via `creates`: rotate the password by deleting the file and
     # re-running. Password comes from vault/host_vars; the task skips entirely
@@ -2253,12 +2402,23 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
-    # Host nginx (Linux/Debian) — apt nginx + /etc/nginx site. Skipped on
+    # Host nginx (Linux) — package install + /etc/nginx site. Skipped on
     # macOS, where nginx runs as a container instead (next block).
-    - name: "Host nginx — Linux/Debian only"
-      when: ansible_system != "Darwin"
+    #
+    # Debian's nginx package auto-includes /etc/nginx/sites-enabled/* from
+    # nginx.conf, so the site lives in sites-available + a sites-enabled
+    # symlink. RHEL-family's nginx RPM has NO sites-available/sites-enabled
+    # convention at all — its stock nginx.conf only includes
+    # /etc/nginx/conf.d/*.conf. Writing to sites-available on Rocky/RHEL
+    # would render a file nginx never reads. So on RedHat the site is
+    # rendered straight into conf.d, replacing the RPM's own
+    # conf.d/default.conf (the RHEL equivalent of Debian's sites-enabled/default).
+    - name: "Host nginx — Linux, Debian/Ubuntu"
+      when:
+        - ansible_system != "Darwin"
+        - ansible_facts['os_family'] == 'Debian'
       block:
-        - name: "Host nginx — install if missing"
+        - name: "Host nginx — install if missing (Debian/Ubuntu)"
           ansible.builtin.apt:
             name: nginx
             state: present
@@ -2271,7 +2431,7 @@
       # install task above still runs (idempotent), so the package is
       # always present; only the site file is left alone.
 
-        - name: "Host nginx — render site config from template"
+        - name: "Host nginx — render site config from template (Debian/Ubuntu)"
           ansible.builtin.template:
             src: templates/nginx-site.conf.j2
             dest: "/etc/nginx/sites-available/{{ domain }}"
@@ -2279,7 +2439,7 @@
           notify: Reload nginx
           when: not (nginx_preserve_vhost | default(false))
 
-        - name: "Host nginx — enable site"
+        - name: "Host nginx — enable site (Debian/Ubuntu)"
           ansible.builtin.file:
             src: "/etc/nginx/sites-available/{{ domain }}"
             dest: "/etc/nginx/sites-enabled/{{ domain }}"
@@ -2288,15 +2448,43 @@
           notify: Reload nginx
           when: not (nginx_preserve_vhost | default(false))
 
-        - name: "Host nginx — remove default site"
+        - name: "Host nginx — remove default site (Debian/Ubuntu)"
           ansible.builtin.file:
             path: /etc/nginx/sites-enabled/default
             state: absent
           notify: Reload nginx
           when: not (nginx_preserve_vhost | default(false))
 
-        - name: "Host nginx — flush handlers so reload happens before validation"
-          ansible.builtin.meta: flush_handlers
+    - name: "Host nginx — Linux, RHEL family"
+      when:
+        - ansible_system != "Darwin"
+        - ansible_facts['os_family'] == 'RedHat'
+      block:
+        - name: "Host nginx — install if missing (RHEL family)"
+          ansible.builtin.dnf:
+            name: nginx
+            state: present
+
+        - name: "Host nginx — render site config from template (RHEL family, conf.d)"
+          ansible.builtin.template:
+            src: templates/nginx-site.conf.j2
+            dest: "/etc/nginx/conf.d/{{ domain }}.conf"
+            mode: '0644'
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
+
+        - name: "Host nginx — remove RPM's stock default site (RHEL family)"
+          ansible.builtin.file:
+            path: /etc/nginx/conf.d/default.conf
+            state: absent
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
+
+    # meta tasks don't reliably honor `when:`, but flush_handlers is a no-op
+    # if nothing notified above (e.g. on Darwin, where neither nginx block
+    # ran) so it's safe to leave unconditional.
+    - name: "Host nginx — flush handlers so reload happens before validation"
+      ansible.builtin.meta: flush_handlers
 
     # macOS thin path: run nginx as a container instead of host nginx.
     # Renders the same template (upstream host -> host.docker.internal so
@@ -2329,6 +2517,26 @@
               nginx:1.27-alpine
           register: mac_nginx
           changed_when: true
+
+    # ==================== SELinux content labeling (RHEL family only) ====================
+    # Files copied/synced into /var/www/* (configurator, citizen SPA,
+    # integration-tests dashboards, brand assets, …) by the copy/synchronize
+    # tasks above don't automatically get the httpd_sys_content_t SELinux
+    # label — copy/synchronize aren't SELinux-aware the way package-managed
+    # files are, so new files can land with the wrong context (or none) even
+    # though /var/www itself has a correct default fcontext mapping. Result:
+    # nginx (confined to the httpd_t domain) gets an AVC denial reading them
+    # and every static path 403s even though Unix permissions are fine — this
+    # is exactly what "validate — configurator returns 200" catches. Re-apply
+    # the default context recursively; idempotent and cheap.
+    - name: "SELinux — restore httpd_sys_content_t on /var/www (RHEL family)"
+      ansible.builtin.command: restorecon -Rv /var/www
+      register: _restorecon_varwww
+      changed_when: "'Relabeled' in (_restorecon_varwww.stdout | default(''))"
+      failed_when: false
+      when:
+        - ansible_facts['os_family'] == 'RedHat'
+        - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
 
     # ============================================================
     # Infrastructure validation — runs before the heavy CI tests
@@ -3496,7 +3704,7 @@
         msg: "Claude Code install disabled. Set install_claude_code: true in host_vars to enable."
       when: not (install_claude_code | default(false))
 
-    - name: Install Node.js 20 LTS (needed for CC and tests)
+    - name: Install Node.js 20 LTS (needed for CC and tests, Debian/Ubuntu)
       shell: |
         set -o pipefail
         if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
@@ -3509,7 +3717,22 @@
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
       when:
         - install_claude_code | default(false)
-        - ansible_system != "Darwin"
+        - ansible_facts['os_family'] == 'Debian'
+
+    - name: Install Node.js 20 LTS (needed for CC and tests, RHEL family)
+      shell: |
+        set -o pipefail
+        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
+          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+          dnf install -y nodejs
+        fi
+      args:
+        executable: /bin/bash
+      register: nodejs_install_rhel
+      changed_when: "'nodejs is already' not in nodejs_install_rhel.stdout"
+      when:
+        - install_claude_code | default(false)
+        - ansible_facts['os_family'] == 'RedHat'
 
     - name: Install Claude Code CLI
       shell: npm install -g @anthropic-ai/claude-code
@@ -3800,13 +4023,21 @@
     # ==================================================================
     # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
     # ==================================================================
-    - name: Install Python3 and pip
+    - name: Install Python3 and pip (Debian/Ubuntu)
       apt:
         name: [python3, python3-pip]
         state: present
       when:
         - run_ci_tests | default(false)
-        - ansible_system != "Darwin"
+        - ansible_facts['os_family'] == 'Debian'
+
+    - name: Install Python3 and pip (RHEL family)
+      dnf:
+        name: [python3, python3-pip]
+        state: present
+      when:
+        - run_ci_tests | default(false)
+        - ansible_facts['os_family'] == 'RedHat'
 
     - name: Install Python dependencies for DataLoader
       pip:
@@ -3932,8 +4163,40 @@
       changed_when: false
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
+    # Playwright's `--with-deps` OS-dependency installer only knows how to
+    # drive apt (Ubuntu/Debian) — on RHEL family it no-ops with a warning
+    # and leaves Chromium's shared libs missing, so the browser fails to
+    # launch later with a cryptic "error while loading shared libraries".
+    # Install the equivalent RPM packages ourselves first, then run
+    # `playwright install chromium` WITHOUT --with-deps on that family.
+    - name: "Install Chromium runtime dependencies (RHEL family, Playwright has no dnf support)"
+      dnf:
+        name:
+          - nss
+          - atk
+          - at-spi2-atk
+          - cups-libs
+          - libdrm
+          - libxkbcommon
+          - libXcomposite
+          - libXdamage
+          - libXfixes
+          - libXrandr
+          - mesa-libgbm
+          - alsa-lib
+          - pango
+          - cairo
+        state: present
+      when:
+        - run_ci_tests | default(false)
+        - run_playwright_tests | default(false)
+        - ansible_facts['os_family'] == 'RedHat'
+
     - name: Install Playwright Chromium with system dependencies
-      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium'
+      shell: >-
+        npx playwright install
+        {{ " --with-deps" if (ansible_system != "Darwin" and ansible_facts['os_family'] != 'RedHat') else "" }}
+        chromium
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
       changed_when: false
