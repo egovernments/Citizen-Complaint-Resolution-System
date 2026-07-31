@@ -9862,5 +9862,11 @@
         "message": "Português",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_CITIZEN_SIDEBAR_PGR",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]
