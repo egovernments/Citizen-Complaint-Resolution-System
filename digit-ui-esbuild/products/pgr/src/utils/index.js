@@ -203,7 +203,17 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
         "locality": {
           "code": formData?.SelectedBoundary?.code || formData?.SelectLocality?.code,
         },
-        "geoLocation": {}
+        // CCSD-2131: the employee form's map pin (GeoLocationsPoint, added with
+        // the PGRComplaintLocationMap field) was silently DISCARDED here — this
+        // was hardcoded {} — so every technician-created complaint persisted
+        // with no coordinates and the details pages hid the location map.
+        // Citizen-parity semantics: send {latitude, longitude} when a pin
+        // exists, else keep the EMPTY OBJECT — the persister needs the object
+        // to be present even when the coords are not (see CCSD-1949/#1094).
+        "geoLocation":
+          typeof formData?.GeoLocationsPoint?.lat === "number" && typeof formData?.GeoLocationsPoint?.lng === "number"
+            ? { "latitude": formData.GeoLocationsPoint.lat, "longitude": formData.GeoLocationsPoint.lng }
+            : {}
       },
       "additionalDetail": JSON.stringify(additionalDetail),
       "auditDetails": {
