@@ -36,6 +36,7 @@ function bundle(entry) {
 
 const {
   LEGACY_STORAGE_KEY,
+  LAYOUT_PAYLOAD_VERSION,
   storageKeyFor,
   sizeConstraintsForKpi,
   defaultSizeForKpi,
@@ -99,18 +100,26 @@ test("persist/read round-trips a layout under the scoped key", () => {
   const layout = [item("card_a", 0, 0, 2, 2)];
   persistLayout(storage, key, layout);
   assert.deepEqual(readSavedLayout(storage, key), layout);
+  // Persisted as a versioned envelope — never a bare array, never the legacy key.
+  const raw = JSON.parse(storage.getItem(key));
+  assert.equal(raw.v, LAYOUT_PAYLOAD_VERSION);
+  assert.deepEqual(raw.items, layout);
 });
 
 test("readSavedLayout returns null for absent key and for garbage, [] for an intentional empty layout", () => {
   const storage = fakeStorage({
     garbage: "{not json",
     notarray: JSON.stringify({ i: "x" }),
-    empty: "[]",
+    emptyLegacy: "[]",
+    emptyVersioned: JSON.stringify({ v: LAYOUT_PAYLOAD_VERSION, items: [] }),
   });
   assert.equal(readSavedLayout(storage, "missing"), null);
   assert.equal(readSavedLayout(storage, "garbage"), null);
   assert.equal(readSavedLayout(storage, "notarray"), null);
-  assert.deepEqual(readSavedLayout(storage, "empty"), []);
+  // Unversioned [] is the empty-defaultLayout bug → treat as never saved.
+  assert.equal(readSavedLayout(storage, "emptyLegacy"), null);
+  // Versioned empty is an intentional clear.
+  assert.deepEqual(readSavedLayout(storage, "emptyVersioned"), []);
 });
 
 test("readSavedLayout falls back to the legacy global key exactly once (read-only migration)", () => {
@@ -121,11 +130,23 @@ test("readSavedLayout falls back to the legacy global key exactly once (read-onl
   const key = storageKeyFor("ke", "u1");
   // Scoped slot empty -> legacy layout surfaces.
   assert.deepEqual(readSavedLayout(storage, key, LEGACY_STORAGE_KEY), legacyLayout);
-  // After the user persists, the scoped slot wins and legacy stays untouched.
+  // After the user persists, the scoped slot wins and legacy stays untouched
+  // (persist must NOT dual-write the legacy key — #1276).
   const own = [item("card_a", 0, 0, 2, 2)];
   persistLayout(storage, key, own);
   assert.deepEqual(readSavedLayout(storage, key, LEGACY_STORAGE_KEY), own);
   assert.equal(storage.getItem(LEGACY_STORAGE_KEY), JSON.stringify(legacyLayout));
+});
+
+test("unversioned empty recovers via seed; versioned empty does not", () => {
+  const seed = buildSeedLayout([{ kpiId: "card_a", x: 0, y: 0, w: 2, h: 2 }], KPIS);
+  // Legacy bare [] → null from read → seed applies.
+  assert.deepEqual(
+    resolveInitialLayout(null, seed, KPIS).map((l) => l.i),
+    ["card_a"]
+  );
+  // Intentional empty (versioned) stays empty.
+  assert.deepEqual(resolveInitialLayout([], seed, KPIS), []);
 });
 
 test("readSavedLayout still falls back when the scoped key holds malformed JSON", () => {
@@ -309,8 +330,8 @@ test("click add is UNCHANGED by drop-placement parity: appends at the first open
 test("defaultSizeForKpi sizes cards/charts/maps/tables distinctly", () => {
   assert.deepEqual(defaultSizeForKpi("card_a", KPIS), { w: 2, h: 2 });
   assert.deepEqual(defaultSizeForKpi("map_a", KPIS), { w: 8, h: 6 }); // incl. choropleth-map
-  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 5 });
-  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 6, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 4, h: 6 });
 });
 
 /* ------------------------------------------------------------------ */

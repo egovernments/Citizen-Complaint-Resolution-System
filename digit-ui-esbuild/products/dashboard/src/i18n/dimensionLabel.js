@@ -101,7 +101,7 @@ function usableFallbackText(kind, text, code) {
   if (text == null || text === "") return false;
   if (String(text) === String(code)) return false;
   if (kind === "complaintType") return usableMessage(kind, text, code);
-  // boundary-service often echoes the code as localname — treat as missing
+  // Code-echo already rejected above; any other data-owned name is usable.
   return true;
 }
 
@@ -110,6 +110,10 @@ function usableFallbackText(kind, text, code) {
  * @param kind one of the CANDIDATES keys; unknown kinds surface the raw code
  * @param fallbackText DATA-OWNED display name (API localname / MDMS name)
  *   only — omit everywhere else so unlocalized codes surface verbatim
+ *
+ * Caveat: the literal codes "Unknown" / "null" / "undefined" (any kind) map to
+ * DASHBOARD_COMMON_UNKNOWN — analytics null-buckets. A real department/boundary
+ * whose code is exactly "Unknown" would also hit that chrome key.
  */
 export function dimensionLabel(code, kind, fallbackText) {
   if (code == null || code === "") return fallbackText !== undefined ? fallbackText : "";
@@ -138,6 +142,8 @@ export function dimensionLabel(code, kind, fallbackText) {
   }
   // Analytics ward codes sometimes drop underscores vs the pack
   // (BOMET_CHEPALUNGU_KONGASIS vs …KONG_ASIS → Kong'asis).
+  // Place names deliberately fall back to en_IN when pt_PT is empty — QA may
+  // still see English labels under PORTUGUÊS until a pt pack is seeded.
   if (kind === "boundary") {
     const loose =
       findMessageLoose(code, getLanguage()) || findMessageLoose(code, FALLBACK_LOCALE);

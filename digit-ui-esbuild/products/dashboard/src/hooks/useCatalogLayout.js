@@ -1,78 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  GRID_COLS,
-  UNIFORM_CHART_SIZE_CONSTRAINTS,
-  MAP_SIZE_CONSTRAINTS,
-  FULL_WIDTH_TABLE_GRID,
-  DEFAULT_CHART_GRID,
-  DROPPING_ITEM_ID,
-  findFirstOpenPosition,
-} from "../constants/layoutConfig";
+import { GRID_COLS, DROPPING_ITEM_ID } from "../constants/layoutConfig";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
 import { getTenantId, getUserUuid } from "../services/analyticsService";
 import {
   LEGACY_STORAGE_KEY,
   storageKeyFor,
   readSavedLayout,
+  persistLayout,
+  buildSeedLayout,
+  normalizeItem,
+  resolveInitialLayout,
+  sizeConstraintsForKpi,
+  defaultSizeForKpi,
 } from "../utils/layoutStore";
 
 /**
  * useCatalogLayout — catalog-world layout hook (kpiId-keyed).
  *
- * Drag/resize behaviour ported from useDashboardLayout.js @ 482143e34:
- * allowOverlap=false during drag, hover-target tracking in AdminDashboard,
- * swap + column-aware compaction on stop, RGL re-sync via moved flag.
+ * Geometry/seed/persist live in layoutStore (the tested module). This hook
+ * owns React state + drag/resize behaviour only.
  */
 
-const STORAGE_KEY = LEGACY_STORAGE_KEY;
-
-const CARD_KINDS = new Set([
-  "number-tile-delta",
-  "number-tile",
-  "scalar",
-  "number-tile-sparkline",
-  "sparkline-card",
-]);
-
-const KPI_CARD_CONSTRAINTS = { minW: 2, minH: 2, maxW: 6, maxH: 3 };
-const LIST_CONSTRAINTS = { minW: 3, minH: 4, maxW: 12, maxH: 12 };
-
-export function sizeConstraintsForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
-  if (CARD_KINDS.has(kind)) return KPI_CARD_CONSTRAINTS;
-  switch (kind) {
-    case "map":
-    case "choropleth-map":
-      return MAP_SIZE_CONSTRAINTS;
-    case "sla-risk-table":
-    case "table":
-    case "data-table":
-      return {
-        minW: FULL_WIDTH_TABLE_GRID.minW,
-        minH: FULL_WIDTH_TABLE_GRID.minH,
-        maxW: FULL_WIDTH_TABLE_GRID.maxW,
-        maxH: FULL_WIDTH_TABLE_GRID.maxH,
-      };
-    case "rankedList":
-    case "dow":
-      return LIST_CONSTRAINTS;
-    default:
-      return UNIFORM_CHART_SIZE_CONSTRAINTS;
-  }
-}
-
-export function defaultSizeForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
-  if (CARD_KINDS.has(kind)) return { w: 2, h: 2 };
-  if (kind === "map" || kind === "choropleth-map") return { w: 8, h: 6 };
-  if (kind === "sla-risk-table" || kind === "table" || kind === "data-table") {
-    return { w: FULL_WIDTH_TABLE_GRID.w, h: FULL_WIDTH_TABLE_GRID.h };
-  }
-  if (kind === "rankedList" || kind === "dow") {
-    return { w: 6, h: 6 };
-  }
-  return { ...DEFAULT_CHART_GRID };
-}
+export { sizeConstraintsForKpi, defaultSizeForKpi };
 
 export function getDroppingItemForKpi(kpiId, kpis) {
   const c = sizeConstraintsForKpi(kpiId, kpis);
@@ -80,63 +29,24 @@ export function getDroppingItemForKpi(kpiId, kpis) {
   return { i: DROPPING_ITEM_ID, w, h, x: 0, y: 0, ...c };
 }
 
-function clampNum(v, min, max, fallback) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
-}
-
-function normalizeItem(item, kpis) {
-  const c = sizeConstraintsForKpi(item.i, kpis);
-  const w = clampNum(item.w, c.minW, c.maxW, c.minW);
-  const h = clampNum(item.h, c.minH, c.maxH, c.minH);
-  const x = Math.min(clampNum(item.x, 0, GRID_COLS - 1, 0), GRID_COLS - w);
-  const y = clampNum(item.y, 0, Number.MAX_SAFE_INTEGER, 0);
-  return { i: item.i, x, y, w, h, ...c };
-}
-
-function buildSeedLayout(packLayout, kpis) {
-  const items = (packLayout || []).filter((item) => kpis[item.kpiId]);
-  const out = [];
-  for (const item of items) {
-    const defaults = defaultSizeForKpi(item.kpiId, kpis);
-    const w = Number.isFinite(Number(item.w)) ? Number(item.w) : defaults.w;
-    const h = Number.isFinite(Number(item.h)) ? Number(item.h) : defaults.h;
-    const hasPos = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
-    const pos = hasPos
-      ? { x: Number(item.x), y: Number(item.y) }
-      : findFirstOpenPosition(out, w, h, GRID_COLS);
-    out.push(
-      normalizeItem({ i: item.kpiId, x: pos.x, y: pos.y, w, h }, kpis)
-    );
-  }
-  return out;
+function scopedStorageKey() {
+  return storageKeyFor(getTenantId(), getUserUuid());
 }
 
 function readSaved() {
-  const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
-  // Prefer the per-user key (#1276); fall back to the legacy global slot.
-  // readSavedLayout parses each key in its own try/catch so a corrupt scoped
-  // value still falls through to the legacy slot.
+  const scopedKey = scopedStorageKey();
+  // Prefer the per-user key (#1276); fall back to the legacy global slot
+  // read-only. Never write the legacy slot — that reintroduces cross-user
+  // clobber when user B's scoped key is empty.
   return readSavedLayout(
     window.localStorage,
     scopedKey,
-    scopedKey === STORAGE_KEY ? undefined : STORAGE_KEY
+    scopedKey === LEGACY_STORAGE_KEY ? undefined : LEGACY_STORAGE_KEY
   );
 }
 
-function persistPositions(layout) {
-  try {
-    const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
-    const payload = JSON.stringify(layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })));
-    window.localStorage?.setItem(scopedKey, payload);
-    // Keep the legacy slot in sync so older builds still see the layout.
-    if (scopedKey !== STORAGE_KEY) {
-      window.localStorage?.setItem(STORAGE_KEY, payload);
-    }
-  } catch {
-    /* ignore */
-  }
+function persist(layout) {
+  persistLayout(window.localStorage, scopedStorageKey(), layout);
 }
 
 /** Re-attach min/max constraints after geometry helpers strip them to positions only. */
@@ -149,10 +59,6 @@ function canonicalizeLayout(layout, kpis) {
         kpis
       )
     );
-}
-
-function persist(layout) {
-  persistPositions(layout);
 }
 
 export function useCatalogLayout(kpis, packLayout) {
@@ -176,27 +82,15 @@ export function useCatalogLayout(kpis, packLayout) {
   useEffect(() => {
     if (!catalogReady) return;
     const saved = readSaved();
-    // saved === null → first visit, use pack seed (may be empty).
-    // saved === [] with a non-empty seed → recover from the empty-defaultLayout
-    // era / failed hydrate that persisted an empty array and blocked the pack.
-    // saved with items → user's arrangement wins.
-    let source;
-    if (saved !== null && saved.length > 0) {
-      source = saved;
-    } else if (seed.length > 0) {
-      source = seed;
-    } else {
-      source = saved !== null ? saved : [];
-    }
-    const reconciled = source
-      .filter((item) => kpis[item.i])
-      .map((item) => normalizeItem(item, kpis));
+    // resolveInitialLayout: versioned empty [] wins; unversioned [] / null → seed.
+    const reconciled = resolveInitialLayout(saved, seed, kpis);
     const repaired = geom.hasOverlaps(reconciled)
       ? geom.resolveRemainingOverlaps(reconciled, [])
       : reconciled;
     setLayout(repaired);
-    // Always persist a recovered seed so the next reload does not re-hit [].
-    if (saved !== null && saved.length === 0 && repaired.length > 0) {
+    // Persist when we recovered from an unversioned empty / repaired overlaps,
+    // so the next reload sees a versioned envelope.
+    if (saved === null && repaired.length > 0) {
       persist(repaired);
     } else if (repaired !== reconciled) {
       persist(repaired);
@@ -214,7 +108,7 @@ export function useCatalogLayout(kpis, packLayout) {
   const applyLayout = useCallback(
     (next) => {
       const normalized = canonicalizeLayout(next, kpis);
-      persistPositions(normalized);
+      persist(normalized);
       setLayout(stampSync(normalized));
     },
     [stampSync, kpis]

@@ -1,6 +1,12 @@
 import React from "react";
 import useDashboardT from "../i18n/useDashboardT";
 
+/**
+ * Deploy dependency: `DASHBOARD_COMMON_UPDATED` must be upserted + cache-busted
+ * (en_IN / pt_PT rainmaker-dashboard) before or with this FE — `t()` echoes the
+ * raw KEY on a miss, so unseeded tenants would show "DASHBOARD_COMMON_UPDATED …".
+ * Packs: local-setup/db/dss-mdms-seed/l10n/{en_IN,pt_PT}.json via export-l10n.mjs.
+ */
 const CardUpdatedStamp = ({ label }) => {
   const { t } = useDashboardT();
   return (

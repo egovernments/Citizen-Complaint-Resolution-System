@@ -1,44 +1,57 @@
 #!/usr/bin/env node
 /**
- * Seed pt_PT labels for dashboard filter/table dimension codes (#1108).
- *
- * Bomet today:
- *   rainmaker-dashboard pt_PT  → ~316 (chrome OK)
- *   rainmaker-pgr pt_PT        → 0     (complaint types stay English via MDMS)
- *   rainmaker-boundary-admin   → 0     (wards fall back to en_IN in FE, or raw)
+ * Seed locale labels for dashboard filter/table dimension codes (#1108).
  *
  * Usage (from digit-ui-esbuild/, tunnel on :18080):
  *
  *   EMPLOYEE_TOKEN='…' node products/dashboard/scripts/seed-pt-filter-l10n.mjs
  *   EMPLOYEE_TOKEN='…' node products/dashboard/scripts/seed-pt-filter-l10n.mjs --translate
  *
- * Without --translate: boundary messages are copied en→pt (place names); pgr
- * complaint keys are skipped (would still be English).
- * With --translate: unique English pgr strings are machine-translated to
- * Portuguese via MyMemory (api.mymemory.translated.net; ~120ms between calls
- * to stay under the free-tier rate limit) then upserted.
+ * Env / flags:
+ *   DIGIT_BASE          API base (default http://127.0.0.1:18080)
+ *   TENANT_ID           tenant (default ke)
+ *   TARGET_LOCALE       destination locale (default pt_PT)
+ *   SOURCE_LOCALE       source locale (default en_IN)
+ *   BOUNDARY_MODULE     rainmaker-boundary-<hierarchy> (default rainmaker-boundary-admin;
+ *                       mirrors runtime HIERARCHY_TYPE → rainmaker-boundary-${lower})
+ *   --translate         machine-translate pgr COMPLAINT_HIERARCHY / SERVICEDEFS
+ *   --dry-run           no upsert
+ *   --skip-ward-gaps    skip analytics ward-gap pass
+ *   --with-ke-admin-alias  also upsert KE_ADMIN_<code> aliases (Bomet pack dual-key;
+ *                       off by default — doubles the boundary namespace)
+ *   --out=<path>        write intended TARGET_LOCALE payload JSON
  *
- * Ward-gap pass (default on, `--skip-ward-gaps` to disable): analytics
- * distinct ward_code values that are missing from rainmaker-boundary-admin
- * get operator-authored display names upserted to en_IN (and copied to pt_PT
- * with the rest of the boundary pack). This is the supported fix for raw
- * codes like ETOEROLES_WARD_1 in the filter dropdown — not a runtime humaniser.
+ * Without --translate: boundary messages are copied source→target (place names);
+ * pgr complaint keys are skipped.
+ * With --translate: unique English pgr strings go through MyMemory; failures
+ * SKIP the key (never bake English into the target pack).
  *
- * Token: DevTools → Application → Local Storage → Employee.token (JSON string
- * without quotes, or the raw JWT).
+ * Ward-gap pass (default on): analytics ward_code distincts missing from the
+ * boundary pack get operator-authored display names upserted to SOURCE_LOCALE
+ * then copied with the pack — not a runtime humaniser.
+ *
+ * Token: DevTools → Application → Local Storage → Employee.token
  */
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+function argValue(prefix) {
+  const hit = process.argv.find((a) => a.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : undefined;
+}
+
 const BASE = process.env.DIGIT_BASE || "http://127.0.0.1:18080";
 const TENANT = process.env.TENANT_ID || "ke";
-const LOCALE = "pt_PT";
-const SOURCE = "en_IN";
-const BOUNDARY_MODULE = "rainmaker-boundary-admin";
+const LOCALE = process.env.TARGET_LOCALE || argValue("--locale=") || "pt_PT";
+const SOURCE = process.env.SOURCE_LOCALE || "en_IN";
+const BOUNDARY_MODULE =
+  process.env.BOUNDARY_MODULE ||
+  `rainmaker-boundary-${(process.env.HIERARCHY_TYPE || "admin").toString().toLowerCase()}`;
 const TRANSLATE = process.argv.includes("--translate");
 const DRY = process.argv.includes("--dry-run");
 const SKIP_WARD_GAPS = process.argv.includes("--skip-ward-gaps");
-const OUT = process.argv.find((a) => a.startsWith("--out="))?.slice(6);
+const WITH_KE_ADMIN_ALIAS = process.argv.includes("--with-ke-admin-alias");
+const OUT = argValue("--out=");
 
 function authToken() {
   const raw = process.env.EMPLOYEE_TOKEN;
@@ -83,7 +96,7 @@ async function upsertLocale(locale, messages) {
         RequestInfo: {
           ...requestInfo(),
           action: "_upsert",
-          msgId: `seed-pt-${locale}-${Date.now()}`,
+          msgId: `seed-l10n-${locale}-${Date.now()}`,
         },
         tenantId: TENANT,
         messages: batch,
@@ -99,23 +112,33 @@ async function upsertLocale(locale, messages) {
   return upserted;
 }
 
-/** Machine-translate unique English strings → Portuguese (MyMemory, rate-limited). */
-async function translateMap(uniqueEnglish) {
+/**
+ * Machine-translate unique English strings → target language (MyMemory).
+ * On failure the key is OMITTED from the map (never falls back to English).
+ */
+async function translateMap(uniqueEnglish, langpair) {
   const cache = {};
+  let skipped = 0;
   for (let i = 0; i < uniqueEnglish.length; i++) {
     const text = uniqueEnglish[i];
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt`;
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
     try {
       const res = await fetch(url);
       const data = await res.json();
-      cache[text] = data?.responseData?.translatedText || text;
+      const translated = data?.responseData?.translatedText;
+      if (translated && translated !== text) {
+        cache[text] = translated;
+      } else {
+        skipped += 1;
+      }
     } catch {
-      cache[text] = text;
+      skipped += 1;
     }
-    if (i % 25 === 0) console.log(`  translated ${i}/${uniqueEnglish.length}`);
+    if (i % 25 === 0) console.log(`  translated ${i}/${uniqueEnglish.length} (skipped ${skipped})`);
     await new Promise((r) => setTimeout(r, 120));
   }
-  return cache;
+  console.log(`  translate done: ${Object.keys(cache).length} ok, ${skipped} skipped`);
+  return { cache, skipped };
 }
 
 function normalizeKey(code) {
@@ -163,17 +186,18 @@ function buildBoundaryPackIndex(messages) {
 function resolvePackMessage(code, index) {
   if (index.byCode.has(code)) return index.byCode.get(code);
   const want = normalizeKey(code);
-  for (const [k, message] of index.byNormalized) {
-    if (k === want) return message;
-  }
-  return null;
+  return index.byNormalized.has(want) ? index.byNormalized.get(want) : null;
 }
 
+/**
+ * Boundary message rows for a code. KE_ADMIN_<code> is optional — some tenants
+ * (Bomet) seeded both bare and prefixed keys; default off to avoid doubling.
+ */
 function boundaryMessageRows(code, message) {
-  const rows = [
-    { code, message, module: BOUNDARY_MODULE },
-    { code: `KE_ADMIN_${code}`, message, module: BOUNDARY_MODULE },
-  ];
+  const rows = [{ code, message, module: BOUNDARY_MODULE }];
+  if (WITH_KE_ADMIN_ALIAS && !code.startsWith("KE_ADMIN_")) {
+    rows.push({ code: `KE_ADMIN_${code}`, message, module: BOUNDARY_MODULE });
+  }
   return rows;
 }
 
@@ -204,11 +228,6 @@ async function fetchAnalyticsWardCodes() {
   return [...new Set(rows.map((r) => String(r?.ward_code ?? "").trim()).filter(Boolean))];
 }
 
-/**
- * Ward codes present in analytics but absent from the boundary pack (incl.
- * underscore-insensitive match). Upsert en_IN aliases so dimensionLabel can
- * resolve them without a runtime humaniser.
- */
 function buildWardGapMessages(wardCodes, boundaryPack) {
   const index = buildBoundaryPackIndex(boundaryPack);
   const gaps = [];
@@ -218,19 +237,10 @@ function buildWardGapMessages(wardCodes, boundaryPack) {
     if (resolvePackMessage(code, index)) continue;
 
     const want = normalizeKey(code);
-    let message = null;
-    for (const m of boundaryPack) {
-      if (
-        m?.code &&
-        normalizeKey(m.code) === want &&
-        m.message &&
-        String(m.message) !== code
-      ) {
-        message = m.message;
-        break;
-      }
+    let message = index.byNormalized.get(want) || null;
+    if (!message || String(message) === code) {
+      message = seedDisplayNameForWardCode(code);
     }
-    if (!message) message = seedDisplayNameForWardCode(code);
     if (!message || message === code) continue;
 
     for (const row of boundaryMessageRows(code, message)) {
@@ -256,14 +266,18 @@ async function cacheBust() {
 }
 
 async function main() {
-  console.log(`Fetching ${SOURCE} packs from ${BASE} (tenant ${TENANT})…`);
+  console.log(
+    `Fetching ${SOURCE} packs from ${BASE} (tenant ${TENANT}, module ${BOUNDARY_MODULE}, target ${LOCALE})…`
+  );
   let boundary = await search(BOUNDARY_MODULE, SOURCE);
   const pgr = await search("rainmaker-pgr", SOURCE);
 
   if (!SKIP_WARD_GAPS) {
     const wardCodes = await fetchAnalyticsWardCodes();
     const gapMessages = buildWardGapMessages(wardCodes, boundary);
-    const gapCount = new Set(gapMessages.map((m) => m.code.replace(/^KE_ADMIN_/, ""))).size;
+    const gapCount = new Set(
+      gapMessages.map((m) => m.code.replace(/^KE_ADMIN_/, ""))
+    ).size;
     console.log(
       `ward gaps: ${wardCodes.length} analytics wards, ${gapCount} missing codes to upsert into ${SOURCE}`
     );
@@ -289,7 +303,7 @@ async function main() {
       module: BOUNDARY_MODULE,
     });
   }
-  console.log(`boundary copy en→${LOCALE}: ${messages.length}`);
+  console.log(`boundary copy ${SOURCE}→${LOCALE}: ${messages.length}`);
 
   const pgrKeys = pgr.filter(
     (m) =>
@@ -297,20 +311,28 @@ async function main() {
       (m.code.startsWith("COMPLAINT_HIERARCHY.") || m.code.startsWith("SERVICEDEFS."))
   );
 
+  let translateSkipped = 0;
   if (TRANSLATE) {
     const unique = [...new Set(pgrKeys.map((m) => m.message).filter(Boolean))];
-    console.log(`translating ${unique.length} unique pgr strings…`);
-    const cache = await translateMap(unique);
+    const langpair = `${SOURCE.split("_")[0].toLowerCase()}|${LOCALE.split("_")[0].toLowerCase()}`;
+    console.log(`translating ${unique.length} unique pgr strings (${langpair})…`);
+    const { cache, skipped } = await translateMap(unique, langpair);
+    translateSkipped = skipped;
+    let upsertedPgr = 0;
     for (const m of pgrKeys) {
+      const translated = cache[m.message];
+      if (!translated) continue; // skip — do not bake English into target
       messages.push({
         code: m.code,
-        message: cache[m.message] || m.message,
+        message: translated,
         module: "rainmaker-pgr",
       });
+      upsertedPgr += 1;
     }
+    console.log(`pgr keys with translation: ${upsertedPgr}/${pgrKeys.length}`);
   } else {
     console.log(
-      `skipping ${pgrKeys.length} pgr keys (pass --translate for Portuguese complaint types)`
+      `skipping ${pgrKeys.length} pgr keys (pass --translate for machine-translated complaint types)`
     );
   }
 
@@ -321,6 +343,7 @@ async function main() {
 
   if (DRY) {
     console.log(`dry-run: would upsert ${messages.length} messages → ${LOCALE}`);
+    if (translateSkipped) console.log(`dry-run: would skip ${translateSkipped} failed translations`);
     return;
   }
 
@@ -328,6 +351,9 @@ async function main() {
   await upsertLocale(LOCALE, messages);
   await cacheBust();
 
+  if (translateSkipped) {
+    console.log(`note: ${translateSkipped} pgr strings skipped (translate failure — gaps stay visible)`);
+  }
   console.log(
     "done. Hard-refresh the dashboard (clear Digit.Locale.* from localStorage if labels stay stale)."
   );

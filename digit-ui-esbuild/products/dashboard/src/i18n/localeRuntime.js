@@ -15,6 +15,7 @@ import { getTenantId } from "../config/dashboardConfig";
 
 const FALLBACK_LOCALE = "en_IN";
 const I18N_NS = "translations";
+const FETCH_COOLDOWN_MS = 15_000;
 const STANDALONE_MODULES = [
   "rainmaker-dashboard",
   "rainmaker-pgr",
@@ -30,8 +31,15 @@ const STANDALONE_MODULES = [
 const standalone = {
   messages: {}, // { [locale]: { [code]: message } }
   pending: {}, // { [locale]: Promise }
+  failedAt: {}, // { [locale]: timestamp } — cooldown after failed fetch
   listeners: new Set(),
 };
+
+/** Cached language; refreshed on subscribe signals (languageChanged / bundle). */
+let cachedLanguage = null;
+
+/** Normalized-key indexes: `${source}:${lng}` → Map(normalizedKey → message). */
+const looseIndexCache = new Map();
 
 const hostI18next = () => (typeof window !== "undefined" ? window.i18next : undefined);
 
@@ -43,16 +51,27 @@ const readStoredLocale = () => {
   }
 };
 
+function resolveLanguage() {
+  // Host i18next is the authority when set (embedded). Employee.locale is only
+  // a bridge while the host language is still unset — LocalizationService
+  // writes it sync before the async bundle fetch finishes (#1108).
+  const host = hostI18next();
+  if (host?.language) return host.language;
+  return readStoredLocale();
+}
+
 export function getLanguage() {
-  // Prefer Employee.locale — LocalizationService.changeLanguage writes it
-  // synchronously before the async bundle fetch finishes.
-  try {
-    const stored = window.localStorage.getItem("Employee.locale");
-    if (stored) return stored;
-  } catch (e) {
-    /* ignore */
-  }
-  return hostI18next()?.language || readStoredLocale();
+  if (cachedLanguage != null) return cachedLanguage;
+  cachedLanguage = resolveLanguage();
+  return cachedLanguage;
+}
+
+function invalidateLanguageCache() {
+  cachedLanguage = null;
+}
+
+function invalidateLooseIndexes() {
+  looseIndexCache.clear();
 }
 
 /** True locale-strict lookup — does NOT follow i18next fallbackLng. */
@@ -78,31 +97,46 @@ function normalizeKey(code) {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+function buildLooseIndex(map) {
+  const index = new Map();
+  if (!map) return index;
+  for (const [k, v] of Object.entries(map)) {
+    if (v == null || v === "") continue;
+    const nk = normalizeKey(k);
+    if (nk && !index.has(nk)) index.set(nk, String(v));
+  }
+  return index;
+}
+
+function looseIndexFor(source, lng, map) {
+  const cacheKey = `${source}:${lng}`;
+  let index = looseIndexCache.get(cacheKey);
+  if (!index) {
+    index = buildLooseIndex(map);
+    looseIndexCache.set(cacheKey, index);
+  }
+  return index;
+}
+
 /**
  * Underscore/punctuation-insensitive lookup — analytics sometimes emits
  * BOMET_CHEPALUNGU_KONGASIS while the pack keys BOMET_CHEPALUNGU_KONG_ASIS.
+ * Uses a per-(source, locale) normalized index so table renders stay O(1)
+ * per cell instead of a full-bundle scan.
  */
 export function findMessageLoose(code, lng) {
   if (code == null || code === "" || !lng) return undefined;
   const want = normalizeKey(code);
   if (!want) return undefined;
 
-  const tryMap = (map) => {
-    if (!map) return undefined;
-    for (const [k, v] of Object.entries(map)) {
-      if (normalizeKey(k) === want && v != null && v !== "") return String(v);
-    }
-    return undefined;
-  };
-
   const host = hostI18next();
   if (host?.getResourceBundle) {
     const ns = host.options?.defaultNS;
     const nsName = Array.isArray(ns) ? ns[0] : ns || I18N_NS;
-    const found = tryMap(host.getResourceBundle(lng, nsName));
+    const found = looseIndexFor("host", lng, host.getResourceBundle(lng, nsName)).get(want);
     if (found !== undefined) return found;
   }
-  return tryMap(standalone.messages[lng]);
+  return looseIndexFor("side", lng, standalone.messages[lng]).get(want);
 }
 
 /**
@@ -149,6 +183,9 @@ const notifyStandalone = () => standalone.listeners.forEach((cb) => cb());
 
 function fetchStandaloneLocale(locale) {
   if (standalone.messages[locale] || standalone.pending[locale]) return;
+  const failedAt = standalone.failedAt[locale];
+  if (failedAt && Date.now() - failedAt < FETCH_COOLDOWN_MS) return;
+
   let authToken = null;
   try {
     authToken = window.localStorage.getItem("Employee.token");
@@ -178,11 +215,15 @@ function fetchStandaloneLocale(locale) {
       });
       standalone.messages[locale] = map;
       delete standalone.pending[locale];
+      delete standalone.failedAt[locale];
+      looseIndexCache.delete(`side:${locale}`);
       notifyStandalone();
     })
     .catch(() => {
-      // Leave messages[locale] unset so a later ensureMessages() can retry.
+      // Leave messages[locale] unset so a later ensureMessages() can retry,
+      // but cooldown so a flapping service cannot hammer _search.
       delete standalone.pending[locale];
+      standalone.failedAt[locale] = Date.now();
     });
 }
 
@@ -204,18 +245,25 @@ export function ensureMessages() {
 export function subscribe(cb) {
   const host = hostI18next();
   const unsubs = [];
+  const onSignal = () => {
+    invalidateLanguageCache();
+    invalidateLooseIndexes();
+    cb();
+  };
   if (host) {
-    host.on("languageChanged", cb);
-    unsubs.push(() => host.off("languageChanged", cb));
-    // addResources notifies the store, not i18n.on('added')
+    host.on("languageChanged", onSignal);
+    unsubs.push(() => host.off("languageChanged", onSignal));
+    // addResources notifies the store; prefer store over i18n.on('added')
+    // so we only fire once per bundle arrival.
     if (host.store?.on) {
-      host.store.on("added", cb);
-      unsubs.push(() => host.store.off?.("added", cb));
+      host.store.on("added", onSignal);
+      unsubs.push(() => host.store.off?.("added", onSignal));
+    } else {
+      host.on?.("added", onSignal);
+      unsubs.push(() => host.off?.("added", onSignal));
     }
-    host.on?.("added", cb);
-    unsubs.push(() => host.off?.("added", cb));
   }
-  standalone.listeners.add(cb);
-  unsubs.push(() => standalone.listeners.delete(cb));
+  standalone.listeners.add(onSignal);
+  unsubs.push(() => standalone.listeners.delete(onSignal));
   return () => unsubs.forEach((fn) => fn());
 }
