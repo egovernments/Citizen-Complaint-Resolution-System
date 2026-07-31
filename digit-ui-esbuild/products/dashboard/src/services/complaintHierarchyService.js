@@ -1,4 +1,9 @@
-import { getTenantId, hasAuth } from "./analyticsService";
+import {
+  authFetch,
+  buildRequestInfo,
+  getTenantId,
+  hasAuth,
+} from "./authService";
 import { selectHierarchyDefinition, orderedLevels } from "../utils/hierLevelGrouping";
 import { withTraceHeaders } from "./dashboardMetrics";
 
@@ -17,37 +22,6 @@ function getMdmsSearchUrl() {
   return `/${String(contextPath).replace(/^\/+|\/+$/g, "")}/v1/_search`;
 }
 
-function parseJson(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function getEmployeeToken() {
-  const raw = window.localStorage?.getItem("Employee.token");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function getEmployeeInfo() {
-  const raw = window.localStorage?.getItem("Employee.user-info");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function buildRequestInfo() {
-  const authToken = getEmployeeToken();
-  const userInfo = getEmployeeInfo();
-  return {
-    apiId: "Rainmaker",
-    ver: ".01",
-    ts: Date.now(),
-    action: "_search",
-    msgId: `dashboard-complaint-hierarchy-${Date.now()}`,
-    ...(authToken && { authToken }),
-    ...(userInfo && { userInfo }),
-  };
-}
 
 /**
  * Display name for a hierarchy node. Live masters carry real display names on
@@ -117,12 +91,11 @@ export async function fetchComplaintHierarchyRecords() {
   if (!hasAuth()) return null;
 
   try {
-    const response = await fetch(getMdmsSearchUrl(), {
-      method: "POST",
-      headers: withTraceHeaders({ "Content-Type": "application/json" }),
-      credentials: "omit",
-      body: JSON.stringify({
-        RequestInfo: buildRequestInfo(),
+    const response = await authFetch(getMdmsSearchUrl(), {
+      headers: withTraceHeaders({}),
+      sessionCritical: false,
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard-complaint-hierarchy"),
         MdmsCriteria: {
           tenantId: getTenantId(),
           moduleDetails: [
@@ -191,12 +164,11 @@ export async function fetchComplaintHierarchyLevels() {
   if (!hasAuth()) return NO_HIERARCHY;
 
   try {
-    const response = await fetch(getMdmsSearchUrl(), {
-      method: "POST",
-      headers: withTraceHeaders({ "Content-Type": "application/json" }),
-      credentials: "omit",
-      body: JSON.stringify({
-        RequestInfo: buildRequestInfo(),
+    const response = await authFetch(getMdmsSearchUrl(), {
+      headers: withTraceHeaders({}),
+      sessionCritical: false,
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard-complaint-hierarchy"),
         MdmsCriteria: {
           tenantId: getTenantId(),
           moduleDetails: [
