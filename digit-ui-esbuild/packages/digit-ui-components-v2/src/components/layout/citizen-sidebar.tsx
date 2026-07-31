@@ -307,11 +307,37 @@ function Profile({ info }: { info: ProfileInfo }) {
       cancelled = true;
     };
   }, [rawPhoto]);
+  // Publish this block's measured height as --v2-citizen-profile-height so
+  // page content can line up with the divider underneath it (the pgr-home
+  // banner does). It CANNOT be a constant: the block grows a line per
+  // optional field (name / mobile / email) and with locale text wrapping —
+  // a citizen with an email is ~20px taller than one without. Kept live via
+  // ResizeObserver so a profile edit (photo, added email) re-aligns without
+  // a reload.
+  const profileRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const el = profileRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const publish = () => {
+      document.documentElement.style.setProperty("--v2-citizen-profile-height", `${Math.round(el.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      // Clear on unmount (logout / employee shell) so stale values can't
+      // size a banner on a page that has no sidebar — consumers fall back.
+      document.documentElement.style.removeProperty("--v2-citizen-profile-height");
+    };
+  }, []);
+
   // Mirror the legacy StaticCitizenSideBar exactly: show the name line
   // only when info.name is present and isn't a duplicate of the mobile
   // number (some tenants store the phone in both fields).
   return (
     <div
+      ref={profileRef}
       style={{
         display: "flex",
         flexDirection: "column",

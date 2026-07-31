@@ -93,7 +93,20 @@ function V2ModuleHomePage({ code, bannerImage, mdmsDataObj, stateInfoBannerUrl, 
                 // responsive height cap, cover-cropped toward the UPPER band
                 // (30%) where banner assets carry their emblem + title, so the
                 // key content always stays in frame at a sane strip height.
-                height: "clamp(180px, 24vw, 360px)",
+                // Trimmed after review on mctd: the banner is sized to line up
+                // with the sidebar's profile divider, so both columns start
+                // their content on the same line.
+                //
+                // The sidebar publishes its measured height as
+                // --v2-citizen-profile-height (see citizen-sidebar Profile).
+                // It has to be measured, not assumed: the block grows a line
+                // per optional field, so a citizen WITH an email is ~20px
+                // taller than one without — a constant aligned for one and
+                // visibly missed the other.
+                // Both start at the topbar; this card sits 11px lower, hence
+                // the offset. Fallback covers the no-sidebar cases (mobile
+                // drawer, logged out), where nothing is there to align to.
+                height: "calc(var(--v2-citizen-profile-height, 176px) - 11px)",
                 objectFit: "cover",
                 objectPosition: "center 30%",
               }}
