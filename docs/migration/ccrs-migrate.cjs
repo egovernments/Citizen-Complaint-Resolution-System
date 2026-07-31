@@ -999,7 +999,15 @@ async function phaseGzip() {
     ok(`already enabled (content-encoding: gzip · cache-control: ${before.cc || '—'})`);
     return record('gzip', OUTCOME.OK, `already enabled (cache-control: ${before.cc || '—'})`);
   }
-  warn(`gzip NOT active on ${CFG.base}/digit-ui/index.js (HTTP ${before.code}, content-encoding: ${before.enc || 'none'})`);
+  // HTTP 0 = the request itself failed (DNS/hairpin/proxy) — common when the
+  // serving box cannot reach its own public hostname. That is "cannot
+  // verify", NOT "not enabled"; say so, and remember it for the final verify.
+  const probeUnreachable = !before.code;
+  if (probeUnreachable) {
+    warn(`cannot reach ${CFG.base}/digit-ui/index.js from THIS machine (HTTP 0) — will apply the config but the result must be verified from a machine that can reach the host`);
+  } else {
+    warn(`gzip NOT active on ${CFG.base}/digit-ui/index.js (HTTP ${before.code}, content-encoding: ${before.enc || 'none'})`);
+  }
 
   // 2) apply — only possible when this process runs ON the serving box.
   const { execSync } = require('child_process');
@@ -1019,7 +1027,22 @@ async function phaseGzip() {
   const reloadHint = inCtr ? `sudo docker exec ${inCtr} nginx -t && sudo docker exec ${inCtr} nginx -s reload` : 'sudo nginx -t && sudo systemctl reload nginx';
   let conf = CFG.nginxConf;
   if (!conf) {
-    try { conf = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null | head -1").trim(); } catch { conf = ''; }
+    // Auto-discovery. Two hard-earned rules (mctd 2026-07-31):
+    //  - NEVER pick backup/disabled files — a previous run "successfully"
+    //    patched sites-available/localhost.<date>.ccrs-gzip.bak, a file nginx
+    //    never loads, and reported success.
+    //  - Prefer files nginx actually includes: conf.d/ and sites-enabled/
+    //    outrank sites-available/ (which is only active via symlink — and
+    //    then it's already matched via its sites-enabled path).
+    try {
+      const hits = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null")
+        .split('\n').map((s) => s.trim()).filter(Boolean)
+        .filter((f) => !/\.(bak|backup|old|orig|save|dpkg-(old|new|dist)|rpm(save|new))(\.|$)/i.test(f) && !/~$/.test(f) && !/backup/i.test(f));
+      const rank = (f) => (/\/(conf\.d|sites-enabled)\//.test(f) ? 0 : /\/sites-available\//.test(f) ? 2 : 1);
+      hits.sort((a, b) => rank(a) - rank(b));
+      conf = hits[0] || '';
+      if (hits.length > 1) info(`multiple candidate configs: ${hits.join(', ')} — using ${conf}`);
+    } catch { conf = ''; }
   }
   if (!conf) {
     return record('gzip', OUTCOME.PARTIAL, 'not enabled, and no nginx config serving /digit-ui found on THIS machine', 'GZIP_NOT_ENABLED',
@@ -1077,8 +1100,12 @@ async function phaseGzip() {
   await sleep(1500);
   const after = await probe();
   if (/gzip/i.test(after.enc)) return record('gzip', OUTCOME.OK, `enabled (cache-control: ${after.cc || '—'}) · backup ${bak}`);
+  if (!after.code || probeUnreachable) {
+    return record('gzip', OUTCOME.PARTIAL, `config applied + reloaded, but ${CFG.base} is unreachable from THIS machine (HTTP 0) — result unverified`, 'GZIP_UNVERIFIED',
+      `Verify from a machine that can reach the host: curl -sI -H 'Accept-Encoding: gzip' ${CFG.base}/digit-ui/index.js | grep -i content-encoding. Rollback: sudo cp ${bak} ${conf} && ${reloadHint}.`);
+  }
   return record('gzip', OUTCOME.PARTIAL, 'config applied but the probe still shows no gzip', 'GZIP_VERIFY_FAILED',
-    `Another nginx layer may front this host — verify per ${RUNBOOK}. Rollback: sudo cp ${bak} ${conf} && ${reloadHint}.`);
+    `Another nginx layer may front this host (a host nginx proxying a container: fix at the OUTER layer, e.g. a /etc/nginx/conf.d/ccrs-gzip.conf drop-in widening gzip_types — the Ubuntu default compresses only text/html, and proxied upstreams see HTTP/1.0 so they skip gzip). See ${RUNBOOK}. Rollback: sudo cp ${bak} ${conf} && ${reloadHint}.`);
 }
 
 /* ════════════════════════════ PHASE: verify ═══════════════════════════ */
