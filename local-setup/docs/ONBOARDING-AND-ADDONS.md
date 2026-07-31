@@ -437,13 +437,14 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   four notification MDMS masters at the state root, take provider credentials,
   bootstrap the per-channel workflows (`complaints-sms`/`-email`/`-whatsapp`),
   then drive-and-verify a real dispatch (`SENT` in `nb_dispatch_log` = trigger
-  accepted; confirm actual delivery against the provider). The **only manual
-  input** is the three `TWILIO_*` env vars:
+  accepted; confirm actual delivery against the provider). The **only
+  credential input** is the three `TWILIO_*` env vars; the default run pauses
+  at the showcase step (5), so add `--yes` for a fully non-interactive run:
 
   ```bash
   TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… \
     TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 \
-    ./local-setup/scripts/enable-notifications.sh
+    ./local-setup/scripts/enable-notifications.sh --yes
   ```
 
   WhatsApp specifics: Content templates must be authored and approved at the
