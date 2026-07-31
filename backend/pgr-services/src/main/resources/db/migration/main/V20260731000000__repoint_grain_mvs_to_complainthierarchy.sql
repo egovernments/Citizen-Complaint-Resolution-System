@@ -12,7 +12,7 @@
 -- #917 runbook flagged as missing (operator-runbook.md, gotcha G8).
 --
 -- ONLY the two `mdms` CTEs change (one per MV). Everything else is
--- byte-identical to V20260717000000, which is already applied on live
+-- otherwise identical to V20260717000000, which is already applied on live
 -- deployments, hence this NEW migration (flyway migrations are append-only).
 --
 -- OPERATOR PRECONDITION — this is a query fix, not a data fix. It is correct
@@ -127,20 +127,23 @@ mdms AS (   -- #1494: ComplaintHierarchy LEAF rows (was RAINMAKER-PGR.ServiceDef
             -- department (the configurator writes 'NA' for a blank onboarding cell), and
             -- filtering on department would drop those complaint types out of the grain
             -- entirely rather than merely leaving department_code NULL.
-            -- 'NA' is normalised to NULL so it never reaches a dashboard as a label.
+            -- The "no department" sentinels are normalised to NULL so they never reach a
+            -- dashboard as a label. Match ServiceRequestValidator:185-186, which treats
+            -- NULL, blank/whitespace and any case of 'NA' as "no department constraint".
+            -- The surviving value keeps its ORIGINAL case: department codes are mixed-case
+            -- in practice (e.g. 'zambezia_csrep' alongside 'CENTER') and are compared
+            -- verbatim against the department master and the HRMS codes in RBAC scoping,
+            -- so folding case here would break both.
   SELECT DISTINCT ON (data->>'code')
          data->>'code' AS service_code,
-         NULLIF(coalesce(data->>'department', data->'departments'->>0), 'NA') AS department_code
+         CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')
+              THEN NULL
+              ELSE btrim(coalesce(data->>'department', data->'departments'->>0))
+         END AS department_code
   FROM eg_mdms_data
   WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
-    AND data->>'levelCode' IN (
-          SELECT DISTINCT lvl->>'levelCode'
-          FROM eg_mdms_data d
-          CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
-          WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
-            AND (lvl->>'isLeafServiceCode')::boolean
-        )
-  ORDER BY data->>'code', length(tenantid)
+    AND data->>'levelCode' IN (SELECT level_code FROM chlvl)   -- WITH RECURSIVE: forward ref is legal
+  ORDER BY data->>'code', length(tenantid), tenantid
 ),
 chlvl AS (   -- #1079: levelCodes flagged isLeafServiceCode in ComplaintHierarchyDefinition
   SELECT DISTINCT lvl->>'levelCode' AS level_code
@@ -324,17 +327,14 @@ mdms AS (   -- #1494: ComplaintHierarchy LEAF rows (was RAINMAKER-PGR.ServiceDef
          (data->>'slaHours')::int        AS mdms_sla_hours,
          NULL::text                      AS legacy_service_group,   -- #1494: retired with menuPath
          (data->>'order')::smallint      AS service_order,
-         NULLIF(coalesce(data->>'department', data->'departments'->>0), 'NA') AS department_code
+         CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')
+              THEN NULL
+              ELSE btrim(coalesce(data->>'department', data->'departments'->>0))
+         END AS department_code
   FROM eg_mdms_data
   WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
-    AND data->>'levelCode' IN (
-          SELECT DISTINCT lvl->>'levelCode'
-          FROM eg_mdms_data d
-          CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
-          WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
-            AND (lvl->>'isLeafServiceCode')::boolean
-        )
-  ORDER BY data->>'code', length(tenantid)
+    AND data->>'levelCode' IN (SELECT level_code FROM chlvl)   -- WITH RECURSIVE: forward ref is legal
+  ORDER BY data->>'code', length(tenantid), tenantid
 ),
 chlvl AS (   -- #1079: levelCodes flagged isLeafServiceCode in ComplaintHierarchyDefinition
   SELECT DISTINCT lvl->>'levelCode' AS level_code
@@ -505,3 +505,7 @@ CREATE INDEX ix_cf_status  ON complaint_facts(application_status);
 CREATE INDEX ix_cf_created ON complaint_facts(created_week_start);
 CREATE INDEX ix_cf_open    ON complaint_facts(is_open) WHERE is_open;
 CREATE INDEX ix_cf_ward    ON complaint_facts(ward_code);
+-- #1494: department is an RBAC scope axis — applyScope adds `department_code IN (...)`
+-- to EVERY facts query for a department-scoped principal, and it is a grouping
+-- dimension for the department tiles. The events grain already has ix_ce_dept.
+CREATE INDEX ix_cf_dept    ON complaint_facts(department_code);

@@ -81,20 +81,38 @@ old default seed with zero complaints against them — dead configuration, not a
 
 ### Check 2 — leaves carry real departments
 
+This counts the same rows the materialized view counts: LEAF rows only, with the same
+`department` / `departments[0]` fallback and the same blank/`NA` normalisation.
+
 ```sql
+WITH leaf_levels AS (
+  SELECT DISTINCT lvl->>'levelCode' AS level_code
+  FROM eg_mdms_data d
+  CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
+  WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
+    AND (lvl->>'isLeafServiceCode')::boolean
+),
+leaves AS (
+  SELECT tenantid,
+         btrim(coalesce(data->>'department', data->'departments'->>0)) AS dept
+  FROM eg_mdms_data
+  WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+    AND data->>'levelCode' IN (SELECT level_code FROM leaf_levels)
+)
 SELECT tenantid,
-       count(*) FILTER (WHERE data->>'department' IS NOT NULL
-                          AND data->>'department' <> 'NA') AS real_dept,
-       count(*) FILTER (WHERE data->>'department' = 'NA')  AS na_dept,
-       count(*) FILTER (WHERE data->>'department' IS NULL) AS no_dept,
-       count(*) AS total_rows
-FROM eg_mdms_data
-WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+       count(*) FILTER (WHERE upper(coalesce(dept,'')) NOT IN ('NA','')) AS real_dept,
+       count(*) FILTER (WHERE upper(coalesce(dept,'')) IN ('NA',''))     AS unusable,
+       count(*) AS leaves
+FROM leaves
 GROUP BY 1 ORDER BY 1;
 ```
 
-`total_rows` includes interior nodes, which correctly have no department — so `no_dept` is never
-expected to be zero. What matters is **`real_dept` relative to the number of leaves**.
+Every row counted is a leaf, so **`real_dept` should equal `leaves`**. `unusable` is the number of
+complaint types that will show no department — whether from `NA`, a blank, or an absent field.
+
+If the tenant has no `ComplaintHierarchyDefinition`, `leaf_levels` is empty and this returns nothing
+— which is itself a finding: the MV's leaf filter would match nothing either, so no complaint type
+would carry a department. Install the definition before going further.
 
 - **`real_dept` covers your leaves** → deploy the repoint; department tiles will populate.
 - **`na_dept` is most or all of your leaves** → the repoint is safe but will show no department
@@ -112,9 +130,19 @@ FROM complaint_facts f
 LEFT JOIN (
   SELECT DISTINCT ON (data->>'code')
          data->>'code' AS code,
-         nullif(coalesce(data->>'department', data->'departments'->>0), 'NA') AS dept
+         CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')
+              THEN NULL
+              ELSE btrim(coalesce(data->>'department', data->'departments'->>0))
+         END AS dept
   FROM eg_mdms_data
   WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+    AND data->>'levelCode' IN (
+          SELECT DISTINCT lvl->>'levelCode'
+          FROM eg_mdms_data d
+          CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
+          WHERE d.schemacode = 'RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
+            AND (lvl->>'isLeafServiceCode')::boolean
+        )
   ORDER BY 1, length(tenantid)
 ) ch ON ch.code = f.service_code
 GROUP BY 1, 2 ORDER BY 3 DESC;
@@ -136,7 +164,7 @@ Needed when Check 2 shows `NA` leaves and you want department tiles for that ten
    ```sql
    SELECT data->>'code', data->>'name'
    FROM eg_mdms_data
-   WHERE schemacode LIKE '%Department%' AND isactive AND tenantid = '<tenant>';
+   WHERE schemacode = 'common-masters.Department' AND isactive AND tenantid = '<tenant>';
    ```
 2. Map each `NA` leaf to one of those codes. This is a decision for the city, not a mechanical
    transform — nothing in the data implies the right answer.
