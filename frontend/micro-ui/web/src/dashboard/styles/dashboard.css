@@ -475,6 +475,12 @@
   gap: 0.5rem;
 }
 
+.dashboard-footer-img {
+  height: 1.1em;
+  width: auto;
+  cursor: pointer;
+}
+
 .dashboard-header-controls .dashboard-header-btn{
   margin: 0px;
   box-sizing: border-box;
