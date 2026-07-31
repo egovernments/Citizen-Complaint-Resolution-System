@@ -323,9 +323,15 @@ async function requestRefresh() {
     if (timer) clearTimeout(timer);
   }
 
-  // A dead/blacklisted refresh token answers 400 invalid_grant. Any HTTP answer
-  // in the non-2xx range is the server refusing us.
-  if (!res.ok) return REFRESH_REJECTED;
+  // Only a client-error answer is the server REFUSING the token (a dead one
+  // gives 400 invalid_grant). A 5xx, a 429, or a gateway error page is the auth
+  // server failing — not a verdict on our credentials — and must not be allowed
+  // to wipe storage shared with the co-hosted digit-ui app. Getting this wrong
+  // would sign every user out of the product on a deploy blip.
+  if (!res.ok) {
+    const refused = res.status === 400 || res.status === 401 || res.status === 403;
+    return refused ? REFRESH_REJECTED : REFRESH_UNAVAILABLE;
+  }
 
   let data;
   try {
@@ -333,7 +339,9 @@ async function requestRefresh() {
   } catch {
     return REFRESH_UNAVAILABLE;
   }
-  if (!data?.access_token) return REFRESH_REJECTED;
+  // A 2xx with no token is a malformed/intercepted response (proxy login page,
+  // truncated body), not a rejection. Same reasoning as above: do not destroy.
+  if (!data?.access_token) return REFRESH_UNAVAILABLE;
 
   persistSession({
     accessToken: data.access_token,
@@ -379,13 +387,17 @@ export async function authFetch(url, { buildBody, method = "POST", headers } = {
       body: buildBody ? JSON.stringify(buildBody()) : undefined,
     });
 
-  // Two sends max, and at most ONE refresh per call. Refreshing again after a
-  // replay still 401s would mint a token only to invalidate the one another
-  // caller may be mid-retry with, for a session we are about to declare dead.
+  // Three sends max, still at most ONE refresh per call. Three because there are
+  // two independent reasons to replay and a caller can need both: a
+  // generation-mismatch replay (someone else refreshed mid-flight) and the
+  // guaranteed retry after this caller's OWN refresh. With a cap of two, a
+  // mismatch replay could consume the budget and the loop would exit having
+  // never sent the token it just minted — reporting failure on a session it had
+  // successfully repaired. The refresh itself stays capped, so this cannot loop.
   let didRefresh = false;
   let outcome = null;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     const generationAtSend = tokenGeneration;
     const response = await send();
     if (response.status !== 401) return response;
