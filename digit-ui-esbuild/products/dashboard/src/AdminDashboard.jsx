@@ -17,6 +17,7 @@ import {
   buildWidgetHeaderClassName,
   getWidgetBodyClassName,
 } from "./config/visualizationStyles";
+import { SESSION_EXPIRED_EVENT } from "./services/authService";
 import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
@@ -145,7 +146,28 @@ function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, 
 const AdminDashboard = ({ embedded = false }) => {
   // Embedded (inside the DigitUI employee chrome) the host guarantees the
   // session and owns sign-out, so the standalone login gate is skipped.
-  const [authed] = useState(() => embedded || hasDashboardSession());
+  const [authed, setAuthed] = useState(() => embedded || hasDashboardSession());
+  const [expired, setExpired] = useState(false);
+
+  // The gate used to be evaluated once at mount, so a session that died while
+  // the tab was open could never flip it — the 401 just rendered as a raw error
+  // banner and a reload re-passed the gate on the stale token (#1466).
+  // authService announces an unrecoverable session and we drop to the login
+  // screen with an explanation.
+  //
+  // Not when embedded: there the surrounding DigitUI chrome owns the session and
+  // its own expiry handling, and rendering our standalone login form inside it
+  // would be wrong. authService has already cleared the dead token, so the host
+  // sees the same state on its next call.
+  useEffect(() => {
+    if (embedded) return undefined;
+    const onExpired = () => {
+      setExpired(true);
+      setAuthed(false);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [embedded]);
 
   // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
   // #1272). Primed synchronously so the first painted frame is already masked.
@@ -163,7 +185,7 @@ const AdminDashboard = ({ embedded = false }) => {
     window.location.reload();
   }, []);
 
-  if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  if (!authed) return <DashboardLogin onLogin={handleLogin} expired={expired} />;
   if (dashboardConfigLoading) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
