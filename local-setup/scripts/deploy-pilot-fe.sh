@@ -93,7 +93,11 @@ deploy_ui() {
   log "node $(node -v)"
 
   [ -f "$GLOBAL_CONFIGS" ] || { echo "ERROR: $GLOBAL_CONFIGS not found" >&2; exit 1; }
-  docker ps --format '{{.Names}}' | grep -qx digit-ui \
+  # sudo like every other docker call in this script: on boxes where the
+  # operator is NOT in the docker group (mctd), bare `docker ps` fails with
+  # "permission denied ... docker.sock" and this check misread that as
+  # "container is not running".
+  sudo docker ps --format '{{.Names}}' | grep -qx digit-ui \
     || { echo "ERROR: digit-ui container is not running" >&2; exit 1; }
 
   log "syncing source into $UI_BUILD_DIR (no --delete, keeps node_modules)"
