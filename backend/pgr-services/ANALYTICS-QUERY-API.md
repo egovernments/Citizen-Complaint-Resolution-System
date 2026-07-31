@@ -119,10 +119,54 @@ distinct-countable but not filterable** — arbitrary UUID probing is rejected.
 "window": { "name": "last_30d", "timeBucket": "month", "timeRole": "filed_at" }
 ```
 
-- `name`: `all` | `live` | `last_<N>d` | `wtd` | `mtd` | `qtd` | `ytd` (computed in EAT/UTC+3).
+- `name`: `all` | `live` | `last_<N>d` | `dtd` | `wtd` | `mtd` | `qtd` | `ytd` (computed in EAT/UTC+3).
+  `dtd` is the **calendar** day ("today"); `last_1d` is a rolling 24h and drifts across midnight.
+- `pinned`: `true` marks the window as the tile's own time axis — the `window` param and
+  `dateFrom`/`dateTo` no longer rewrite it (see **Pinned windows** below). Default `false`,
+  i.e. every existing def keeps letting the dashboard's range govern its time axis.
 - `timeBucket`: `day` | `week` | `month` | `quarter` | `year` — adds a `bucket` group-by column.
 - `timeRole`: a named time column for the grain (e.g. facts: `filed_at`, `resolved_at`;
   events: `event_at`; daily: `snapshot_date`). Defaults per grain.
+
+### Pinned windows
+
+A def that means a fixed period regardless of the dashboard's filters declares it on the window:
+
+```json
+"window": { "name": "dtd", "timeRole": "filed_at", "pinned": true }
+```
+
+"Complaints created today" is the motivating case (#1462): with the range filter applied it was
+counting the **selected range**, so a month filter made it identical to "New complaints created";
+with no range it fell back to a rolling 24h rather than the calendar day.
+
+For a pinned window:
+
+- the `window` param and `dateFrom`/`dateTo` do **not** rewrite the time predicate; a supplied
+  `window` param comes back as `paramsIgnored: ["window"]` rather than being silently swallowed;
+- if the selected range does not **cover** the pinned interval, the entry is **suppressed** — no SQL
+  is run and the result is `{ rows: [], rowCount: 0, suppressed: "filter_excludes_window" }`.
+  Coverage, not mere overlap: a partial intersection would report the tile's full pinned total under
+  a filter that excludes part of that period;
+- `compare: "prior"` means the preceding window of equal span (yesterday, for `dtd`) rather than the
+  prior-equal-duration of the selected range;
+- `series: "daily"` gets an axis **wider** than the pin — the selected range, else the `window` param,
+  else a rolling `last_30d` — so the sparkline is a trend rather than a single bucket, and it stays
+  answerable even when the headline value is suppressed;
+- `ward` / `serviceCode` / `complaintPath` / `hierLevel` still apply: pinning fixes **time**, not filters;
+- pinning a boundless window (`all` / `live`) is meaningless — there is no interval to cover and no
+  preceding period — and is ignored: such a def takes the ordinary path.
+
+The pinned window is resolved **once** per request and baked into explicit `gte`/`lt` bounds, so the
+suppression verdict and the executed SQL are always judged against the same instant.
+
+`suppressed` is a machine-readable reason code on the response, not a rendering: the dashboard
+currently falls back to its existing unavailable state for such a tile. Wording the empty state
+("No data available with applied filters") and distinguishing it from an ordinary zero is
+[#1456](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1456), which this
+reason code exists to give the frontend something to key off.
+
+Unpinned defs — every other tile — are completely unchanged.
 
 ### `params` — kpiId-by-reference tuning knobs
 
@@ -134,8 +178,8 @@ ignored) and every declared param with an `allowed` list is enforced server-side
 
 | param | effect |
 |---|---|
-| `window` | overrides `query.window.name`, preserving `timeRole`/`timeBucket` |
-| `dateFrom` + `dateTo` | inclusive ISO dates → half-open range on the grain's time column; removes the base window |
+| `window` | overrides `query.window.name`, preserving `timeRole`/`timeBucket` — **ignored on a pinned window** |
+| `dateFrom` + `dateTo` | inclusive ISO dates → half-open range on the grain's time column; removes the base window. **On a pinned window it does not rewrite the predicate** — it only decides whether the tile is answerable |
 | `ward` | narrows `ward_code = ?` iff filterable on the grain |
 | `serviceCode` | narrows `service_code = ?` iff filterable — the param for complaint-type **leaf** selections (exact match; works on every grain incl. daily) |
 | `complaintPath` | narrows to a complaint-hierarchy **interior** node's whole subtree: a delimiter-guarded `subtree` predicate on `complaint_node_path` (`= ? OR LIKE ?\|\|'.%'`) iff the grain carries the path column (facts/events). Value = the node's dot-path (`SANITATION.SEWAGE`); validated against `[A-Za-z0-9._/-]` (max 256 chars) — anything else is `invalid_param`. On the daily grain (no path column) the filter cannot apply and the result envelope reports `paramsIgnored:["complaintPath"]` instead of silently serving unfiltered numbers. Leaf selections keep using `serviceCode`; NULL-path rows (node codes containing `.`, flat tenants) never match a subtree |

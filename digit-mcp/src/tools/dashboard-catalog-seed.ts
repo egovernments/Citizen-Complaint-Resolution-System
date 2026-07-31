@@ -436,7 +436,12 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "total",
           "agg": "count"
         }
-      ]
+      ],
+      "window": {
+        "name": "dtd",
+        "timeRole": "filed_at",
+        "pinned": true
+      }
     },
     "supportsSeries": true,
     "viz": {
@@ -457,19 +462,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "dateKey": "created_date",
       "sparklineMeasureKey": "total"
     },
-    "params": [
-      {
-        "name": "window",
-        "default": "last_1d",
-        "allowed": [
-          "last_1d",
-          "last_7d",
-          "last_30d",
-          "wtd",
-          "mtd"
-        ]
-      }
-    ],
+    "params": [],
     "rbac": {
       "visibleTo": []
     }
