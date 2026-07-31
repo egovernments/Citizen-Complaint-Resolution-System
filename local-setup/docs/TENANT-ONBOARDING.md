@@ -479,11 +479,6 @@ seeded from the repo automatically and warn when a `dss.*` master would land
 empty — but tenants created before that, or via the paths above, need
 `enable-dashboard.sh` run once.
 
-<<<<<<< Updated upstream
-Both installers — plus every other opt-in add-on the deployer supports
-(search stack, Keycloak SSO, citizen UI v2, Turbopass/Overpass, real OTP, …) —
-are catalogued in [`POST-DEPLOY-ADDONS.md`](POST-DEPLOY-ADDONS.md).
-=======
 ### Other opt-in add-ons (deploy-time flags)
 
 Beyond the two installers above, everything else the deployer supports is a
@@ -510,7 +505,6 @@ reachable.
 Full inline documentation for every flag lives in
 [`../ansible/inventory/host_vars/_example.yml`](../ansible/inventory/host_vars/_example.yml) —
 each key carries its own comment block, defaults, and pairing requirements.
->>>>>>> Stashed changes
 
 ## After onboarding — verify
 
