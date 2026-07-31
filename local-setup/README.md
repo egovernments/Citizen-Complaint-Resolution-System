@@ -15,6 +15,11 @@ There are **two independent ways** to run this stack. Pick one:
 
 Options A and B run locally. Option C deploys to a remote server, pulling pre-built images from a public registry. **Pick one.**
 
+> **On Windows?** The full Ansible stack also runs locally via WSL2 — see
+> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a
+> 16 GB machine; the playbook self-heals the WSL-specific quirks). The macOS
+> equivalent is [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+
 ---
 
 ## Prerequisites
