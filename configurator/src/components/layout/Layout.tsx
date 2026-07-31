@@ -58,15 +58,20 @@ export default function Layout() {
         <div className="h-1 bg-primary" />
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            {/* Logo with orange accent */}
+            {/* Logo with orange accent.
+                CCSD-2125: brand is a button back to the onboarding home
+                (phase 1) — same logo-goes-home affordance as the admin shell. */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex items-center">
+              <button
+                onClick={() => navigate('/')}
+                className="flex items-center text-left rounded-md hover:opacity-80 transition-opacity"
+              >
                 <div className="w-1 h-8 sm:h-10 bg-primary mr-2 sm:mr-3" />
                 <div>
                   <span className="font-condensed font-bold text-foreground text-base sm:text-lg">DIGIT</span>
                   <span className="font-condensed font-medium text-muted-foreground text-base sm:text-lg ml-1">Admin Console</span>
                 </div>
-              </div>
+              </button>
             </div>
 
             {/* Right side */}

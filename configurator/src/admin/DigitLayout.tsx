@@ -5,6 +5,7 @@ import { useApp } from '../App';
 import {
   HelpCircle,
   LogOut,
+  ExternalLink,
   User,
   Building2,
   MapPin,
@@ -184,17 +185,26 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           sidebarCollapsed ? 'w-16' : 'w-64'
         } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
       >
-        {/* Sidebar Header — DIGIT Admin Console branding */}
+        {/* Sidebar Header — DIGIT Admin Console branding.
+            CCSD-2125: the brand is a BUTTON back to the admin home — QA
+            reported "no way back to the home page"; a logo-click-goes-home is
+            the affordance they asked for (and the convention everywhere else). */}
         <div className="h-16 border-b border-border flex items-center px-4 gap-2">
-          <div className="w-1 h-8 bg-primary" />
-          {!sidebarCollapsed && (
-            <div>
-              <span className="font-condensed font-bold text-foreground">DIGIT</span>
-              <span className="font-condensed font-medium text-muted-foreground ml-1">
-                {translate('app.header.brand', { _: 'Complaints Management' })}
-              </span>
-            </div>
-          )}
+          <button
+            onClick={() => navigate('/manage')}
+            className="flex items-center gap-2 text-left rounded-md hover:opacity-80 transition-opacity"
+            title={translate('app.nav.dashboard')}
+          >
+            <div className="w-1 h-8 bg-primary" />
+            {!sidebarCollapsed && (
+              <div>
+                <span className="font-condensed font-bold text-foreground">DIGIT</span>
+                <span className="font-condensed font-medium text-muted-foreground ml-1">
+                  {translate('app.header.brand', { _: 'Complaints Management' })}
+                </span>
+              </div>
+            )}
+          </button>
           <Button
             variant="ghost"
             size="icon"
@@ -381,6 +391,20 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{state.tenant}</p>
                 </div>
+                {/* CCSD-2125: the configurator had NO link to the portal at
+                    all — leaving it meant hand-editing the URL. Same-origin
+                    /digit-ui/ is how every CCRS box serves the portal next to
+                    /configurator (host nginx), so a relative link needs no new
+                    config. Opens a new tab: admins keep their editing session. */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => window.open('/digit-ui/', '_blank', 'noopener')}
+                  title={translate('app.nav.open_portal', { _: 'Open citizen portal' })}
+                  className="text-muted-foreground hover:text-foreground h-8 w-8 flex-shrink-0"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

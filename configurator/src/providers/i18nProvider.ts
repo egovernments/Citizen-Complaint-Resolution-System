@@ -40,6 +40,7 @@ const customEnglishMessages: TranslationMessages = {
   app: {
     nav: {
       dashboard: 'Dashboard',
+      open_portal: 'Open citizen portal',
       notifications: 'Notifications',
       notification_configure: 'Configure',
       notification_routing: 'Notification Routing',
