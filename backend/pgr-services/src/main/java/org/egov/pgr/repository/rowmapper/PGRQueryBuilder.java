@@ -114,6 +114,13 @@ public class PGRQueryBuilder {
             preparedStmtList.add(criteria.getDepartment());
         }
 
+        // Audit creator (reception-officer inbox: "complaints I filed").
+        if (StringUtils.hasText(criteria.getCreatedBy())) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.createdby = ? ");
+            preparedStmtList.add(criteria.getCreatedBy());
+        }
+
         //When UI tries to fetch "escalated" complaints count.
         if(criteria.getSlaDeltaMaxLimit() != null && criteria.getSlaDeltaMinLimit() == null){
             addClauseIfRequired(preparedStmtList, builder);

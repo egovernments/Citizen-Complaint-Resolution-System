@@ -1605,6 +1605,22 @@ export const UICustomizations = {
         sortOrder: (clonedData?.state?.tableForm?.sortOrder || "ASC").toUpperCase(),
       };
 
+      // Reception-officer inbox: a CMS_RECEPTION_OFFICER files complaints on
+      // citizens' behalf but is neither the accountId (that's the citizen) nor
+      // ever an assignee — so the inbox showed them nothing of their own work.
+      // Scope their inbox to the complaints THEY created (audit createdby;
+      // pgr-services filters on it server-side, so pagination/count stay
+      // correct). Applied only when reception is the user's SOLE CMS role —
+      // a multi-role user (e.g. reception + supervisor) keeps the wider view
+      // their other role is entitled to.
+      const cmsRoles = (Digit.UserService.getUser()?.info?.roles || [])
+        .map((r) => r?.code)
+        .filter((c) => c && (c.startsWith("CMS_") || c === "SUPERUSER" || c === "ADMIN"));
+      if (cmsRoles.includes("CMS_RECEPTION_OFFICER") && cmsRoles.every((c) => c === "CMS_RECEPTION_OFFICER")) {
+        const ownUuid = Digit.UserService.getUser()?.info?.uuid;
+        if (ownUuid) params.createdBy = ownUuid;
+      }
+
       // Search form fields
       if (searchForm.complaintNumber) {
         params.serviceRequestId = searchForm.complaintNumber;
