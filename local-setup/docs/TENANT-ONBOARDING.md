@@ -435,8 +435,10 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   Nine steps: switch PGR to the config-driven notification path, bring up the
   Novu stack + bridge, mint the Novu API key, open the channel gate, seed the
   four notification MDMS masters at the state root, take provider credentials,
-  bootstrap the per-channel workflows, then drive-and-verify a real dispatch.
-  The **only manual input** is the three `TWILIO_*` env vars:
+  bootstrap the per-channel workflows (`complaints-sms`/`-email`/`-whatsapp`),
+  then drive-and-verify a real dispatch (`SENT` in `nb_dispatch_log` = trigger
+  accepted; confirm actual delivery against the provider). The **only manual
+  input** is the three `TWILIO_*` env vars:
 
   ```bash
   TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… \
@@ -444,8 +446,13 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
     ./local-setup/scripts/enable-notifications.sh
   ```
 
-  Full walkthrough: [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
-  (plus `TUTORIAL.md` alongside it).
+  WhatsApp specifics: Content templates must be authored and approved at the
+  provider **first**, then synced to Content-SIDs (configurator UI or headless
+  CLI). Full walkthrough:
+  [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  (§5 covers templates → SIDs → test-send → drive a real complaint), with
+  `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
+  provider-onboarding runbook alongside it.
 
 - **Supervisor dashboard (KPI catalog + packs)** — `enable-dashboard.sh`.
   Seven steps: register the `dss.*` schemas, seed the KPI definitions +
@@ -472,9 +479,38 @@ seeded from the repo automatically and warn when a `dss.*` master would land
 empty — but tenants created before that, or via the paths above, need
 `enable-dashboard.sh` run once.
 
+<<<<<<< Updated upstream
 Both installers — plus every other opt-in add-on the deployer supports
 (search stack, Keycloak SSO, citizen UI v2, Turbopass/Overpass, real OTP, …) —
 are catalogued in [`POST-DEPLOY-ADDONS.md`](POST-DEPLOY-ADDONS.md).
+=======
+### Other opt-in add-ons (deploy-time flags)
+
+Beyond the two installers above, everything else the deployer supports is a
+**host_vars flag**: set it in `host_vars/<tenant>.yml` and re-run
+`./deploy.sh <tenant>` (idempotent). Where a `nginx_features.*` twin exists,
+**both** flags are needed — the service flag runs it, the nginx flag makes it
+reachable.
+
+| Add-on | Flag(s) | What you get | Notes |
+|---|---|---|---|
+| **Configurator (DIGIT Studio)** | `nginx_features.configurator` + `build_configurator` | Browser onboarding wizard at `/configurator/` | See [§A](#a-configurator-wizard-browser) |
+| **MCP server + REST shim** | `enable_mcp` (+ `nginx_features.mcp` for `/mcp` + `/v1/*`) | Automation/REST onboarding API, headless `city_setup_from_xlsx` | `build_mcp: true` builds from in-tree source; default is a pinned public image |
+| **Search stack (employee inbox)** | `enable_search_stack` | Elasticsearch + egov-indexer + inbox-v2 | Heavy (~3 GB RAM extra); without it the employee inbox 503s |
+| **Novu notification stack** | `enable_novu` (+ `build_novu_bridge`, `build_novu_dashboard`) | Notification infra only (no config) | `enable-notifications.sh` above is the full turn-key path |
+| **Keycloak SSO** | `enable_keycloak` + `nginx_features.keycloak` | Keycloak at `/auth/` + token exchange; optional Google IdP via `keycloak_google_client_*` | SPA switch to OIDC is a separate `auth_provider` step |
+| **Citizen UI v2** | `enable_digit_ui_v2` + `nginx_features.digit_ui_v2` | Vite + React 19 citizen SPA at `/citizen/` | Both flags, or the bundle sits on disk unreachable |
+| **Turbopass (OSM autocomplete)** | `enable_turbopass` | Self-hosted location search from a prepared OSM extract | Prepare the data dir on the controller first |
+| **Overpass (OSM queries)** | `enable_overpass` | Self-hosted Overpass API | Prepare the country extract first — see `overpass/README.md` |
+| **Real OTP (production SMS)** | `enable_otp_services` | Real OTP delivery instead of the console mock | ALSO remove the Kong mock plugin + set a real `SMS_PROVIDER_CLASS` — see `kong/kong.yml` notes |
+| **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
+| **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |
+| **CI test suites on deploy** | `run_ci_tests` | Newman + regression suites at the end of every deploy | Adds ~5–10 min per deploy |
+
+Full inline documentation for every flag lives in
+[`../ansible/inventory/host_vars/_example.yml`](../ansible/inventory/host_vars/_example.yml) —
+each key carries its own comment block, defaults, and pairing requirements.
+>>>>>>> Stashed changes
 
 ## After onboarding — verify
 
