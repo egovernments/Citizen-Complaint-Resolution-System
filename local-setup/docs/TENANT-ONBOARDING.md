@@ -10,7 +10,7 @@ that matches how your stack is deployed:
 
 | Path | Interface | Best for | Where it's available |
 |------|-----------|----------|----------------------|
-| **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` |
+| **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` + `build_configurator: true` |
 | **[Jupyter DataLoader](#b-jupyter-dataloader-scripted)** | Jupyter notebook (Python) | Developers, scripted/local setups | Any stack (Docker Compose, Tilt, Ansible) |
 | **[MCP `city_setup_from_xlsx`](#c-mcp-automation)** | REST / MCP tool | CI, fully-automated onboarding | Deploys with `enable_mcp: true` + `nginx_features.mcp: true` |
 
@@ -138,6 +138,8 @@ In `host_vars/<tenant>.yml`:
 ui_state_tenant_id: <root>.<city>   # SPA boots on the wizard-created city
 boot_tenant: <root>.<city>          #   e.g. ke.bomet
 hierarchy_type: <hierarchy-name>    # MUST match the Phase 2 hierarchy name
+login_tenant_allowlist: [<root>, <root>.<city>]   # every tenant that must appear
+                                                  # in the login City dropdown
 ```
 
 Leave `state_root` / `state_tenant_id` / `tenant_id` at the **root** (`<root>`,
@@ -282,10 +284,9 @@ fails the whole `docker compose up`, not just MCP. Either:
 If your `host_vars` pins `mcp_image` to the Hetzner VPC registry
 (`10.0.0.4:5000`), the target must be VPC-internal.
 
-> ⚠️ The `enable_mcp` comment in `_example.yml` still describes that VPC
-> registry as the source. That is **out of date** relative to the playbook's
-> current default (above). Check what your deploy will actually pull with:
-> `grep -A4 'Resolve MCP image tag' ansible/playbook-deploy.yml`
+> If in doubt, check what your checkout will actually pull:
+> `grep -A4 'Resolve MCP image tag' local-setup/ansible/playbook-deploy.yml`
+> (run from the repo root).
 
 Confirm it's reachable: `curl -s $BASE/v1/healthz` → `{"status":"ok",…}`.
 
@@ -423,12 +424,66 @@ citizens (easy to miss, and not created by the headless path):
   city, globalConfigs `MAP_TENANT` (from `city_tenant`) can point at a tenant
   that has geometry.
 
+## After onboarding — notifications & the supervisor dashboard
+
+Two more features ship disabled/unseeded on a fresh tenant. Each has a
+**resumable, idempotent installer** in `local-setup/scripts/` that flips it on
+against a *running* stack (neither redeploys anything). Both support `--list`,
+`--from stepN` / `--to stepN` / `--only stepN` for partial runs.
+
+- **PGR notifications (SMS / Email / WhatsApp)** — `enable-notifications.sh`.
+  Nine steps: switch PGR to the config-driven notification path, bring up the
+  Novu stack + bridge, mint the Novu API key, open the channel gate, seed the
+  four notification MDMS masters at the state root, take provider credentials,
+  bootstrap the per-channel workflows, then drive-and-verify a real dispatch.
+  The **only manual input** is the three `TWILIO_*` env vars:
+
+  ```bash
+  TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… \
+    TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 \
+    ./local-setup/scripts/enable-notifications.sh
+  ```
+
+  Full walkthrough: [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  (plus `TUTORIAL.md` alongside it).
+
+- **Supervisor dashboard (KPI catalog + packs)** — `enable-dashboard.sh`.
+  Seven steps: register the `dss.*` schemas, seed the KPI definitions +
+  dashboard pack **from the repo's own files** (not by copying another tenant),
+  write `dss.DashboardConfig`, add the sidebar action, seed the localization
+  packs, and verify end-to-end. Its preflight is read-only and **refuses to
+  write** when it finds problems seeding can't fix (schema-as-data rows,
+  role ceilings nobody holds) — use `--repair` where it tells you to. If your
+  deployment uses its own role taxonomy, remap the canonical roles:
+
+  ```bash
+  ROLE_MAP="PGR_SUPERVISOR=CMS_SUPERVISOR,PGR_LME=CMS_CASE_MANAGER" \
+    ./local-setup/scripts/enable-dashboard.sh
+  ```
+
+  The dashboard's nav gate reads `dss.DashboardConfig.allowedRoles` (falling
+  back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
+  onboarded employee must hold one of those roles to see it. Reference:
+  [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
+  (KPI catalog, packs & RBAC, operations).
+
+New state roots bootstrapped via `tenant_bootstrap` get the dashboard catalog
+seeded from the repo automatically and warn when a `dss.*` master would land
+empty — but tenants created before that, or via the paths above, need
+`enable-dashboard.sh` run once.
+
 ## After onboarding — verify
 
 A successful onboarding should leave you able to:
 
-1. Open the employee login page and see the new tenant in the **City** dropdown.
-2. Log in as `ADMIN` / `eGov@123` against the new tenant.
+1. Open the employee login page and see the new tenant in the **City** dropdown
+   (the dropdown is gated by `login_tenant_allowlist` in `host_vars` — if the
+   new tenant is missing there, add it and re-run the deploy before concluding
+   onboarding failed).
+2. Log in as `ADMIN` / `eGov@123` against the new tenant. *(Guaranteed on the
+   wizard and DataLoader paths, which create that user. The headless XLSX path
+   does not create a city ADMIN by itself — log in with an onboarded employee's
+   `employeeCode` instead, or as `ADMIN` against the root.)*
 3. See the tenant in the HRMS / PGR / Workbench module switchers after login.
 4. See departments, designations, and complaint types populated for the tenant.
 5. See boundaries populate the location dropdowns in the complaint form.
