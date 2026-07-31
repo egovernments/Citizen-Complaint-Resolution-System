@@ -93,7 +93,19 @@ function V2ModuleHomePage({ code, bannerImage, mdmsDataObj, stateInfoBannerUrl, 
                 // responsive height cap, cover-cropped toward the UPPER band
                 // (30%) where banner assets carry their emblem + title, so the
                 // key content always stays in frame at a sane strip height.
-                height: "clamp(180px, 24vw, 360px)",
+                // Trimmed again after review on mctd: the banner is now sized to
+                // line up with the sidebar's profile divider, so the two columns
+                // start their content on the same line.
+                //   sidebar profile block = 176px tall (20+16 padding, avatar,
+                //   name + mobile lines) and starts at the topbar (56px), so the
+                //   divider lands at 232px; this card starts 11px below the
+                //   topbar -> 232 - 67 = 165px.
+                // Fixed rather than vw-based on purpose: the thing it aligns to
+                // is a fixed-height element, so a responsive height could never
+                // stay aligned. Users WITH an email line have a ~196px profile
+                // block, where the banner sits ~20px short of the divider —
+                // short reads fine; overshooting would not.
+                height: "165px",
                 objectFit: "cover",
                 objectPosition: "center 30%",
               }}
