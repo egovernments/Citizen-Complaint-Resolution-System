@@ -27,18 +27,28 @@ export async function fetchBoundariesByCodes(codes = []) {
       limit: String(chunk.length),
     });
 
-    const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
-      buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
-    });
+    // authFetch throws on an unrecoverable session or an unreachable auth
+    // server, where the previous raw fetch only ever returned a non-ok response.
+    // Without this catch one bad chunk would reject the whole call and discard
+    // the boundaries already collected — the map is best-effort and its sibling
+    // fetchBoundaryRelationshipsByCodes already swallows the same way. The auth
+    // gate still flips: authService dispatches the expiry event before throwing.
+    try {
+      const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
+        buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+      });
 
-    if (!response.ok) {
-      console.warn(`boundary/_search failed (${response.status})`);
-      continue;
+      if (!response.ok) {
+        console.warn(`boundary/_search failed (${response.status})`);
+        continue;
+      }
+
+      const payload = await response.json();
+      const boundaries = payload?.Boundary || [];
+      all.push(...boundaries);
+    } catch (error) {
+      console.warn("boundary/_search error", error);
     }
-
-    const payload = await response.json();
-    const boundaries = payload?.Boundary || [];
-    all.push(...boundaries);
   }
 
   return all;
