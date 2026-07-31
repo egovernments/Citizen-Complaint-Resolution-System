@@ -751,6 +751,7 @@ local-setup/
 ├── gatus/                          # Health monitoring dashboard config
 └── docs/
     ├── TENANT-ONBOARDING.md        # Enable a tenant + load master data (configurator / DataLoader)
+    ├── POST-DEPLOY-ADDONS.md       # Opt-in add-ons: notifications, dashboard, SSO, search, …
     └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)
