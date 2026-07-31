@@ -24,13 +24,24 @@ async function postAnalytics(path, body) {
   // The analytics API is the dashboard's primary data path, so it is the one
   // surface allowed to conclude the session is dead (sessionCritical defaults
   // to true). Trace headers are preserved through the wrapper.
-  const response = await authFetch(`${ANALYTICS_BASE}${path}`, {
-    headers: withTraceHeaders({}),
-    buildBody: () => ({
-      RequestInfo: buildRequestInfo("dashboard"),
-      ...body,
-    }),
-  });
+  // authFetch THROWS on every terminal 401 verdict, which would skip the
+  // recordApiCall below — so during an auth incident the metrics would show zero
+  // failed analytics calls while users stared at error banners, hiding exactly
+  // the outage this module is meant to surface. Record, then rethrow.
+  let response;
+  try {
+    response = await authFetch(`${ANALYTICS_BASE}${path}`, {
+      headers: withTraceHeaders({}),
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard"),
+        ...body,
+      }),
+    });
+  } catch (error) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
+    throw error;
+  }
 
   if (!response.ok) {
     const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();

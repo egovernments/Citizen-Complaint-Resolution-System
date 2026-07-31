@@ -36,7 +36,9 @@ import { getTenantId } from "../config/dashboardConfig";
  *   auth server unreachable           -> err.refreshUnavailable, session KEPT
  *   fresh token but endpoint 401s     -> err.endpointUnauthorized, session KEPT
  *   non-critical call, token refused  -> err.endpointUnauthorized, session KEPT
- *   CRITICAL call, token refused      -> err.sessionExpired, storage CLEARED
+ *   CRITICAL call, refresh REJECTED   -> err.sessionExpired, storage CLEARED
+ *   CRITICAL call, no refresh token   -> err.sessionExpired, storage KEPT,
+ *                                        token marked dead for this tab
  *
  * Only the last row dispatches SESSION_EXPIRED_EVENT and drops the user to the
  * login gate. Two rules govern it:
@@ -50,10 +52,15 @@ import { getTenantId } from "../config/dashboardConfig";
  *      gap, a gateway answering 401 instead of 403) and must not be able to tear
  *      the dashboard down to a login screen that falsely blames expiry.
  *
- * When a critical call IS refused, storage is cleared even if we held no refresh
- * token: the server has proven the token dead, and leaving it behind is what
- * made a reload re-pass the auth gate and re-render a broken dashboard (#1466's
- * "reloading did not help" symptom).
+ * Storage is destroyed only on a positive auth-server verdict. Without a refresh
+ * token there is no verdict — only one endpoint's 401 — so the refused token is
+ * instead marked dead for THIS TAB (sessionStorage). That keeps the gate closed
+ * across a reload, which was #1466's "reloading did not help" symptom, without
+ * deleting keys the co-hosted app may still be using.
+ *
+ * Likewise clearSession only drops the unprefixed aliases and the
+ * Digit.SessionStorage cache when they actually hold the employee token being
+ * torn down — on a shared browser they may belong to a live citizen session.
  *
  * Guarantees: at most three sends and at most one refresh per call (cannot
  * loop); concurrent 401s share a single refresh; a refresh never re-enters this
@@ -141,8 +148,12 @@ export function getRefreshToken() {
   // Legacy shape: a bare string written before owner-stamping existed. It has no
   // provable owner, so it is not trusted.
   if (typeof stored === "string") return null;
+  // Fail CLOSED: a missing uuid on either side is not proof of ownership. The
+  // open form trusted the token whenever user-info was absent (partial clear,
+  // storage eviction, or a stamp written before any UserRequest was seen) —
+  // which is exactly the identity swap the stamp exists to prevent.
   const currentUuid = getEmployeeInfo()?.uuid ?? null;
-  if (stored.userUuid && currentUuid && stored.userUuid !== currentUuid) return null;
+  if (!stored.userUuid || !currentUuid || stored.userUuid !== currentUuid) return null;
   return stored.token || null;
 }
 
@@ -163,8 +174,37 @@ export { getTenantId };
  * opaque, so validity is only knowable by calling the API. Session death is
  * detected reactively via SESSION_EXPIRED_EVENT.
  */
+/**
+ * Tab-scoped record of a token the server has already refused. Lets the auth
+ * gate stay closed across a reload WITHOUT deleting keys the co-hosted digit-ui
+ * app is using — the alternative (clearing shared storage on a 401 we could not
+ * corroborate with an auth-server verdict) signs the user out of the whole
+ * product on the strength of one endpoint's answer.
+ */
+const DEAD_TOKEN_KEY = "dashboard:dead-token";
+
+function markTokenDead(token) {
+  if (!token) return;
+  try {
+    window.sessionStorage?.setItem(DEAD_TOKEN_KEY, JSON.stringify(token));
+  } catch {
+    /* private mode — the in-memory gate flip still applies for this view */
+  }
+}
+
+function isTokenKnownDead(token) {
+  if (!token) return false;
+  try {
+    const raw = window.sessionStorage?.getItem(DEAD_TOKEN_KEY);
+    return Boolean(raw) && parseJson(raw) === token;
+  } catch {
+    return false;
+  }
+}
+
 export function hasAuth() {
-  return Boolean(getEmployeeToken());
+  const token = getEmployeeToken();
+  return Boolean(token) && !isTokenKnownDead(token);
 }
 
 /** Order roles so the first non-EMPLOYEE role leads (drives the scoping badge). */
@@ -228,11 +268,29 @@ export function persistSession({ accessToken, refreshToken, userInfo, tenantId }
   }
   if (tenantId != null) writeStorage(TENANT_KEY, tenantId);
 
-  if (accessToken != null) syncDigitSession(accessToken, normalisedUser);
+  if (accessToken != null) {
+    // A newly issued token is by definition not the dead one.
+    try {
+      window.sessionStorage?.removeItem(DEAD_TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    syncDigitSession(accessToken, normalisedUser);
+  }
 }
 
 export function clearSession() {
+  // The unprefixed aliases and the single Digit.SessionStorage "User" slot are
+  // not necessarily OURS: on a shared browser a citizen may be signed into the
+  // co-hosted portal while a stale Employee.token lingers. Only drop them when
+  // they actually hold the employee token we are tearing down, or we would sign
+  // an unrelated user out of a session they are actively using.
+  const employeeToken = getEmployeeToken();
+  const ownsAliases =
+    employeeToken != null && readStorage(KEYS.tokenAlias.key) === employeeToken;
+
   SESSION_KEYS.forEach((k) => {
+    if (!ownsAliases && (k === KEYS.tokenAlias.key || k === KEYS.userInfoAlias.key)) return;
     try {
       window.localStorage?.removeItem(k);
     } catch {
@@ -245,9 +303,12 @@ export function clearSession() {
   // exists, so even a reload would re-enter the employee UI "logged in" on a
   // token that no longer works.
   const session = window.Digit?.SessionStorage;
-  if (session?.set) {
+  if (session?.set && ownsAliases) {
     try {
-      session.set("User", null);
+      const cached = session.get?.("User");
+      const cachedToken = cached?.token ?? cached?.access_token ?? null;
+      // Same ownership test: never null a cache holding a different session.
+      if (cachedToken == null || cachedToken === employeeToken) session.set("User", null);
     } catch {
       /* ignore */
     }
@@ -257,13 +318,13 @@ export function clearSession() {
 /**
  * Show the login gate.
  *
- * `clearStorage` is deliberately opt-in. Employee.token / user-info / token are
- * SHARED with the co-hosted digit-ui app, so wiping them signs the user out of
- * the whole product — appropriate when the server has positively rejected our
- * refresh token, but not when we merely lack one. Notably the only writer of
+ * `clearStorage` is deliberately opt-in and, per the single call site, is true
+ * ONLY for REFRESH_REJECTED — a positive verdict from the auth server.
+ * Employee.token / user-info / token are SHARED with the co-hosted digit-ui app,
+ * so wiping them signs the user out of the whole product. The only writer of
  * Employee.refresh-token is this dashboard's own login form; a session seeded by
- * the main digit-ui login has none, and that is the common path. Clearing
- * unconditionally would turn one dashboard 401 into a full-product logout.
+ * the main digit-ui login has none, so NO_TOKEN is the common path and carries
+ * no server verdict — it marks the token dead for this tab instead.
  */
 function announceSessionExpired({ clearStorage } = { clearStorage: false }) {
   if (clearStorage) clearSession();
@@ -466,6 +527,15 @@ export async function authFetch(
     didRefresh = true;
     outcome = await refreshSession();
     if (outcome !== REFRESH_REFRESHED) break;
+
+    // Replay HERE rather than looping, so the retry after our own refresh is
+    // guaranteed and not contingent on an attempt remaining. Relying on the
+    // loop meant a refresh that succeeded on the final iteration exited without
+    // ever sending the token it had just minted — the same defect the attempt
+    // cap was raised to fix, merely moved to the last iteration.
+    const replayed = await send();
+    if (replayed.status !== 401) return replayed;
+    break; // fresh token still refused: an endpoint problem, not a dead session
   }
 
   // Could not reach the auth server: say nothing about the session. Leaving it
@@ -517,12 +587,14 @@ export async function authFetch(
     throw error;
   }
 
-  // The primary API refused this token, so it IS dead — regardless of whether we
-  // held a refresh token. Clearing is therefore proven-correct, and it is what
-  // stops a reload from re-passing the auth gate on the same dead token and
-  // re-rendering a broken dashboard before flipping back to login (#1466's
-  // original "reload didn't help" symptom).
-  announceSessionExpired({ clearStorage: true });
+  // Storage is destroyed ONLY on a positive auth-server verdict (REJECTED). With
+  // NO_TOKEN there is no verdict — just one endpoint's 401 — and the keys belong
+  // to the co-hosted app, so wiping them would sign the user out of the whole
+  // product on evidence we do not have. Instead the refused token is marked dead
+  // for this tab, which keeps the gate closed across a reload (the original
+  // "reloading did not help" symptom) without touching anyone else's session.
+  if (outcome === REFRESH_NO_TOKEN) markTokenDead(getEmployeeToken());
+  announceSessionExpired({ clearStorage: outcome === REFRESH_REJECTED });
   const error = new Error("Your session has expired. Please sign in again.");
   error.status = 401;
   error.sessionExpired = true;
@@ -533,14 +605,18 @@ export async function authFetch(
 export async function toRequestError(response, label) {
   const error = new Error(`${label} failed (${response.status})`);
   error.status = response.status;
+  // Read the body ONCE. Calling .text() after a failed .json() throws "body
+  // already read", so the old fallback could never succeed and every non-JSON
+  // error body (e.g. an HTML gateway page on a 502) was silently lost.
   try {
-    error.payload = await response.json();
-  } catch {
+    const raw = await response.text();
     try {
-      error.payload = await response.text();
+      error.payload = JSON.parse(raw);
     } catch {
-      error.payload = null;
+      error.payload = raw;
     }
+  } catch {
+    error.payload = null;
   }
   return error;
 }

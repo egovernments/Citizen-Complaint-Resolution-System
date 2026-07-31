@@ -76,7 +76,12 @@ const DashboardLogin = ({ onLogin, expired = false }) => {
   const [error, setError] = useState(
     // Distinguish "your session ended" from "you got the password wrong": the
     // user did nothing wrong and reloading will not help them (#1466).
-    expired ? "Your session has expired. Please sign in again." : null
+    // Localised like every sibling string on this screen — this is the one
+    // message shown to a user who did nothing wrong, so it should not be the
+    // only English text on an otherwise translated form.
+    expired
+      ? t("DASHBOARD_LOGIN_SESSION_EXPIRED", "Your session has expired. Please sign in again.")
+      : null
   );
 
   const tenantId = getTenantId();
