@@ -101,6 +101,10 @@ Three sheets in one workbook.
   - Rows sharing a **Complaint Type** collapse into one citizen-menu entry.
   - Punctuation (`& / ' ( ) . ,`) is stripped from generated codes.
   - `department` **must match** a `code` in the Department sheet.
+  - Leaving `department` blank is accepted and creates the type with
+    `department: "NA"` — any department may handle it, but **department
+    dashboard tiles stay empty for that type**. Fill it in unless the type is
+    deliberately unassigned.
 
 ### Phase 4 — Employees
 
@@ -471,7 +475,31 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
 
   The dashboard's nav gate reads `dss.DashboardConfig.allowedRoles` (falling
   back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
-  onboarded employee must hold one of those roles to see it. Reference:
+  onboarded employee must hold one of those roles to see it.
+
+  **Department tiles also need department data**, which `enable-dashboard.sh`
+  does not seed. Tiles group on each complaint type's `department` in
+  `RAINMAKER-PGR.ComplaintHierarchy`; types onboarded with a blank Department
+  column carry `NA` and produce no breakdown. Check before reporting the
+  dashboard as working:
+
+  ```bash
+  docker exec docker-postgres psql -U egov -d egov -tAc \
+  "SELECT tenantid,
+          count(*) FILTER (WHERE data->>'department' NOT IN ('NA')) AS usable,
+          count(*) FILTER (WHERE data->>'department' = 'NA')        AS unassigned
+     FROM eg_mdms_data
+    WHERE schemacode='RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+    GROUP BY 1;"
+  ```
+
+  `unassigned` rows show no department. Fix by setting the department on those
+  complaint types in the configurator, or re-run Phase 3 with the column filled.
+
+  Leave `dss.DashboardConfig.departmentScoping` unset or `disabled` while any
+  type is `NA`. Enforced scoping filters on `department_code IN (...)`, which
+  never matches an unassigned type, so scoped employees get **zero rows on every
+  tile** — not just the department ones. Reference:
   [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
   (KPI catalog, packs & RBAC, operations).
 
