@@ -618,6 +618,36 @@ const PGRDetails = () => {
                   },
                 ],
               },
+              // CCSD-2130: "Complainant Details" — service.citizen was captured
+              // (mandatory on the Reception form), persisted to the user
+              // service, and returned on every search, but NEVER rendered: the
+              // timeline deliberately masks the citizen actor for everyone,
+              // assuming a complainant card that had not been built. This is
+              // that card. Values arrive from the backend post-policy (it
+              // returns "****" when masking applies), so this stays a dumb
+              // value→row mapper like Additional Details.
+              ...((pgrData?.ServiceWrappers?.[0]?.service?.citizen?.name ||
+                   pgrData?.ServiceWrappers?.[0]?.service?.citizen?.mobileNumber)
+                ? [{
+                  cardType: "primary",
+                  header: t("CS_COMPLAINT_DETAILS_COMPLAINANT_DETAILS"),
+                  fieldPairs: [
+                    {
+                      inline: true,
+                      label: t("COMPLAINTS_COMPLAINANT_NAME"),
+                      type: "text",
+                      value: pgrData?.ServiceWrappers[0].service?.citizen?.name || "NA",
+                    },
+                    {
+                      inline: true,
+                      label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
+                      type: "text",
+                      value: pgrData?.ServiceWrappers[0].service?.citizen?.mobileNumber || "NA",
+                    },
+                  ],
+                }]
+                : []
+              ),
               // Read-only "Additional Details" — fetch service.extendedAttributes
               // and show it as label:value rows; backend returns masked ("****")
               // values. Renders nothing when there are no extended attributes.

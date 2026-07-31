@@ -8242,5 +8242,11 @@
         "message": "No eligible employee found for this department. An employee with the required role must be onboarded before this complaint can be assigned.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINANT_DETAILS",
+        "message": "Complainant Details",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
