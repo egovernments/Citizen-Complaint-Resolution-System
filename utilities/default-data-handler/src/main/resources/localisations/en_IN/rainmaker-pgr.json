@@ -8236,5 +8236,11 @@
         "message": "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_NO_ASSIGNABLE_EMPLOYEES",
+        "message": "No eligible employee found for this department. An employee with the required role must be onboarded before this complaint can be assigned.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]

@@ -7468,5 +7468,11 @@
         "message": "All Complaints",
         "module": "rainmaker-pgr",
         "locale": "default"
+    },
+    {
+        "code": "CS_COMMON_NO_ASSIGNABLE_EMPLOYEES",
+        "message": "No eligible employee found for this department. An employee with the required role must be onboarded before this complaint can be assigned.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
     }
 ]
