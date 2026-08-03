@@ -10,7 +10,7 @@ that matches how your stack is deployed:
 
 | Path | Interface | Best for | Where it's available |
 |------|-----------|----------|----------------------|
-| **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` |
+| **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` + `build_configurator: true` |
 | **[Jupyter DataLoader](#b-jupyter-dataloader-scripted)** | Jupyter notebook (Python) | Developers, scripted/local setups | Any stack (Docker Compose, Tilt, Ansible) |
 | **[MCP `city_setup_from_xlsx`](#c-mcp-automation)** | REST / MCP tool | CI, fully-automated onboarding | Deploys with `enable_mcp: true` + `nginx_features.mcp: true` |
 
@@ -101,6 +101,10 @@ Three sheets in one workbook.
   - Rows sharing a **Complaint Type** collapse into one citizen-menu entry.
   - Punctuation (`& / ' ( ) . ,`) is stripped from generated codes.
   - `department` **must match** a `code` in the Department sheet.
+  - Leaving `department` blank is accepted and creates the type with
+    `department: "NA"` — any department may handle it, but **department
+    dashboard tiles stay empty for that type**. Fill it in unless the type is
+    deliberately unassigned.
 
 ### Phase 4 — Employees
 
@@ -138,6 +142,8 @@ In `host_vars/<tenant>.yml`:
 ui_state_tenant_id: <root>.<city>   # SPA boots on the wizard-created city
 boot_tenant: <root>.<city>          #   e.g. ke.bomet
 hierarchy_type: <hierarchy-name>    # MUST match the Phase 2 hierarchy name
+login_tenant_allowlist: [<root>, <root>.<city>]   # every tenant that must appear
+                                                  # in the login City dropdown
 ```
 
 Leave `state_root` / `state_tenant_id` / `tenant_id` at the **root** (`<root>`,
@@ -282,10 +288,9 @@ fails the whole `docker compose up`, not just MCP. Either:
 If your `host_vars` pins `mcp_image` to the Hetzner VPC registry
 (`10.0.0.4:5000`), the target must be VPC-internal.
 
-> ⚠️ The `enable_mcp` comment in `_example.yml` still describes that VPC
-> registry as the source. That is **out of date** relative to the playbook's
-> current default (above). Check what your deploy will actually pull with:
-> `grep -A4 'Resolve MCP image tag' ansible/playbook-deploy.yml`
+> If in doubt, check what your checkout will actually pull:
+> `grep -A4 'Resolve MCP image tag' local-setup/ansible/playbook-deploy.yml`
+> (run from the repo root).
 
 Confirm it's reachable: `curl -s $BASE/v1/healthz` → `{"status":"ok",…}`.
 
@@ -423,12 +428,148 @@ citizens (easy to miss, and not created by the headless path):
   city, globalConfigs `MAP_TENANT` (from `city_tenant`) can point at a tenant
   that has geometry.
 
+## After onboarding — notifications & the supervisor dashboard
+
+Two more features ship disabled/unseeded on a fresh tenant. Each has a
+**resumable, idempotent installer** in `local-setup/scripts/` that flips it on
+against a *running* stack (neither redeploys anything). Both support `--list`,
+`--from stepN` / `--to stepN` / `--only stepN` for partial runs.
+
+- **PGR notifications (SMS / Email / WhatsApp)** — `enable-notifications.sh`.
+  Nine steps: switch PGR to the config-driven notification path, bring up the
+  Novu stack + bridge, mint the Novu API key, open the channel gate, seed the
+  four notification MDMS masters at the state root, take provider credentials,
+  bootstrap the per-channel workflows (`complaints-sms`/`-email`/`-whatsapp`),
+  then drive-and-verify a real dispatch (`SENT` in `nb_dispatch_log` = trigger
+  accepted; confirm actual delivery against the provider). The **only
+  credential input** is the three `TWILIO_*` env vars; the default run pauses
+  at the showcase step (5), so add `--yes` for a fully non-interactive run:
+
+  ```bash
+  TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… \
+    TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 \
+    ./local-setup/scripts/enable-notifications.sh --yes
+  ```
+
+  WhatsApp specifics: Content templates must be authored and approved at the
+  provider **first**, then synced to Content-SIDs (configurator UI or headless
+  CLI). Full walkthrough:
+  [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  (§5 covers templates → SIDs → test-send → drive a real complaint), with
+  `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
+  provider-onboarding runbook alongside it.
+
+- **Supervisor dashboard (KPI catalog + packs)** — `enable-dashboard.sh`.
+  Seven steps: register the `dss.*` schemas, seed the KPI definitions +
+  dashboard pack **from the repo's own files** (not by copying another tenant),
+  write `dss.DashboardConfig`, add the sidebar action, seed the localization
+  packs, and verify end-to-end. Its preflight is read-only and **refuses to
+  write** when it finds problems seeding can't fix (schema-as-data rows,
+  role ceilings nobody holds) — use `--repair` where it tells you to. Seeding
+  is `_create`-only, so re-runs skip records that already exist and never pick
+  up an edited `KpiDefinition.json` / `DashboardPack.json` — use `--update`
+  after a release changes them. If your deployment uses its own role taxonomy,
+  remap the canonical roles:
+
+  ```bash
+  ROLE_MAP="PGR_SUPERVISOR=CMS_SUPERVISOR,PGR_LME=CMS_CASE_MANAGER" \
+    ./local-setup/scripts/enable-dashboard.sh
+  ```
+
+  The dashboard's nav gate reads `dss.DashboardConfig.allowedRoles` (falling
+  back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
+  onboarded employee must hold one of those roles to see it.
+
+  "Today" tiles resolve the calendar day in EAT (`Africa/Nairobi`), fixed in the
+  analytics service rather than read from tenant config.
+
+  **Department tiles also need department data**, which `enable-dashboard.sh`
+  does not seed. Tiles group on each complaint type's `department` in
+  `RAINMAKER-PGR.ComplaintHierarchy`; a type onboarded with the Department
+  column blank carries `NA` — or no `department` key at all, on types brought
+  over by the hierarchy migration — and produces no breakdown. Count leaf types
+  only, the rows the tiles read:
+
+  ```bash
+  docker exec docker-postgres psql -U egov -d egov -tAc \
+  "WITH leaf_levels AS (
+     SELECT DISTINCT lvl->>'levelCode' AS level_code
+       FROM eg_mdms_data d
+       CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
+      WHERE d.schemacode='RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
+        AND (lvl->>'isLeafServiceCode')::boolean
+   ), leaves AS (
+     SELECT tenantid,
+            btrim(coalesce(data->>'department', data->'departments'->>0)) AS dept
+       FROM eg_mdms_data
+      WHERE schemacode='RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+        AND data->>'levelCode' IN (SELECT level_code FROM leaf_levels)
+   )
+   SELECT tenantid,
+          count(*) FILTER (WHERE upper(coalesce(dept,'')) NOT IN ('NA','')) AS usable,
+          count(*) FILTER (WHERE upper(coalesce(dept,'')) IN ('NA',''))     AS unassigned,
+          count(*) AS leaves
+     FROM leaves GROUP BY 1;"
+  ```
+
+  `usable` should equal `leaves`. Fix `unassigned` types in the configurator, or
+  re-run Phase 3 with the column filled. No rows at all means the tenant has no
+  `ComplaintHierarchyDefinition`; install it first.
+
+  Leave `dss.DashboardConfig.departmentScoping` unset or `disabled` while
+  `unassigned` is above zero. Enforced scoping filters on
+  `department_code IN (...)`, which never matches an unassigned type, so scoped
+  employees get **zero rows on every tile** — not just the department ones.
+  References:
+  [`../../docs/migration/tenant-department-migration-guide.md`](../../docs/migration/tenant-department-migration-guide.md)
+  (department preflight and back-fill) and
+  [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
+  (KPI catalog, packs & RBAC, operations).
+
+New state roots bootstrapped via `tenant_bootstrap` get the dashboard catalog
+seeded from the repo automatically and warn when a `dss.*` master would land
+empty — but tenants created before that, or via the paths above, need
+`enable-dashboard.sh` run once.
+
+### Other opt-in add-ons (deploy-time flags)
+
+Beyond the two installers above, everything else the deployer supports is a
+**host_vars flag**: set it in `host_vars/<tenant>.yml` and re-run
+`./deploy.sh <tenant>` (idempotent). Where a `nginx_features.*` twin exists,
+**both** flags are needed — the service flag runs it, the nginx flag makes it
+reachable.
+
+| Add-on | Flag(s) | What you get | Notes |
+|---|---|---|---|
+| **Configurator (DIGIT Studio)** | `nginx_features.configurator` + `build_configurator` | Browser onboarding wizard at `/configurator/` | See [§A](#a-configurator-wizard-browser) |
+| **MCP server + REST shim** | `enable_mcp` (+ `nginx_features.mcp` for `/mcp` + `/v1/*`) | Automation/REST onboarding API, headless `city_setup_from_xlsx` | `build_mcp: true` builds from in-tree source; default is a pinned public image |
+| **Search stack (employee inbox)** | `enable_search_stack` | Elasticsearch + egov-indexer + inbox-v2 | Heavy (~3 GB RAM extra); without it the employee inbox 503s |
+| **Novu notification stack** | `enable_novu` (+ `build_novu_bridge`, `build_novu_dashboard`) | Notification infra only (no config) | `enable-notifications.sh` above is the full turn-key path |
+| **Keycloak SSO** | `enable_keycloak` + `nginx_features.keycloak` | Keycloak at `/auth/` + token exchange; optional Google IdP via `keycloak_google_client_*` | SPA switch to OIDC is a separate `auth_provider` step |
+| **Citizen UI v2** | `enable_digit_ui_v2` + `nginx_features.digit_ui_v2` | Vite + React 19 citizen SPA at `/citizen/` | Both flags, or the bundle sits on disk unreachable |
+| **Turbopass (OSM autocomplete)** | `enable_turbopass` | Self-hosted location search from a prepared OSM extract | Prepare the data dir on the controller first |
+| **Overpass (OSM queries)** | `enable_overpass` | Self-hosted Overpass API | Prepare the country extract first — see `overpass/README.md` |
+| **Real OTP (production SMS)** | `enable_otp_services` | Real OTP delivery instead of the console mock | ALSO remove the Kong mock plugin + set a real `SMS_PROVIDER_CLASS` — see `kong/kong.yml` notes |
+| **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
+| **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |
+| **CI test suites on deploy** | `run_ci_tests` | Newman + regression suites at the end of every deploy | Adds ~5–10 min per deploy |
+
+Full inline documentation for every flag lives in
+[`../ansible/inventory/host_vars/_example.yml`](../ansible/inventory/host_vars/_example.yml) —
+each key carries its own comment block, defaults, and pairing requirements.
+
 ## After onboarding — verify
 
 A successful onboarding should leave you able to:
 
-1. Open the employee login page and see the new tenant in the **City** dropdown.
-2. Log in as `ADMIN` / `eGov@123` against the new tenant.
+1. Open the employee login page and see the new tenant in the **City** dropdown
+   (the dropdown is gated by `login_tenant_allowlist` in `host_vars` — if the
+   new tenant is missing there, add it and re-run the deploy before concluding
+   onboarding failed).
+2. Log in as `ADMIN` / `eGov@123` against the new tenant. *(Guaranteed on the
+   wizard and DataLoader paths, which create that user. The headless XLSX path
+   does not create a city ADMIN by itself — log in with an onboarded employee's
+   `employeeCode` instead, or as `ADMIN` against the root.)*
 3. See the tenant in the HRMS / PGR / Workbench module switchers after login.
 4. See departments, designations, and complaint types populated for the tenant.
 5. See boundaries populate the location dropdowns in the complaint form.
