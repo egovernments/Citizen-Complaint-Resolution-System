@@ -18,23 +18,34 @@ add it to `build-config.yml` (which you do anyway to get it built in CI).
 
 ## Drivers
 
-The manifest above is consumed by **two** independent nightly drivers, plus the
-local helper. All three read the same `build/build-config.yml`.
+The manifest above is consumed by the **GitHub Actions build pipeline**
+(develop-daily + on-release), the **on-box script**, and the **local helper** —
+all reading the same `build/build-config.yml`. The two GitHub Actions triggers
+share one reusable workflow
+([`.github/workflows/build-images.yml`](../.github/workflows/build-images.yml))
+that enumerates the manifest, builds each service **multi-arch (amd64 + arm64)**
+on native runners, and stitches the manifests; the trigger files below just call
+it with different refs/tags.
 
-1. **GitHub Actions nightly — the canonical public build.**
+1. **GitHub Actions — `develop`, daily (the canonical public build).**
    [`.github/workflows/nightly-build-develop.yml`](../.github/workflows/nightly-build-develop.yml).
-   Runs on a cron of `30 13 * * *` — **19:00 IST / 13:30 UTC** — plus
-   `workflow_dispatch`. Scheduled workflows fire only from the **default branch**,
-   so the file must live there; every job then checks out `ref: develop`, so the
-   nightly always builds `develop` regardless. It enumerates **every** entry in
-   `build-config.yml` and builds each one **multi-arch (amd64 + arm64)** on native
-   runners (`ubuntu-latest` + `ubuntu-24.04-arm`), then pushes to **Docker Hub**
-   as `egovio/<image-name>` under both `nightly-develop` (rolling) and
-   `develop-YYYYMMDD` (immutable). A final prune step retains the **newest 5**
-   dated tags per image. This is the public source the compose defaults and
-   `local-setup/local-deploy.sh` pull from.
+   Cron `30 13 * * *` — **19:00 IST / 13:30 UTC** — plus `workflow_dispatch`.
+   Scheduled workflows fire only from the **default branch**, so the file must
+   live there; the reusable build checks out `ref: develop` regardless, so it
+   always builds `develop`. Pushes `egovio/<image-name>` under both
+   `nightly-develop` (rolling) and `develop-YYYYMMDD` (immutable), then prunes to
+   the **newest 5** dated tags per image. This is the public source the compose
+   defaults and `local-setup/local-deploy.sh` pull from.
 
-2. **On-box `nightly-build-push.sh` — the pre-existing VPC-registry driver.**
+2. **GitHub Actions — on release published.**
+   [`.github/workflows/release-build.yml`](../.github/workflows/release-build.yml).
+   Fires on `release: [published]` (also a default-branch workflow). Builds the
+   exact commit the release tag points at and publishes
+   `egovio/<image-name>:<release-tag>` — the **same tag as the GitHub release**
+   (e.g. a `v2.13.0` release → `egovio/pgr-services:v2.13.0`). No rolling tag and
+   no prune: release tags are immutable and retained indefinitely.
+
+3. **On-box `nightly-build-push.sh` — the pre-existing VPC-registry driver.**
    [`local-setup/ansible/files/nightly-build-push.sh`](../local-setup/ansible/files/nightly-build-push.sh).
    Unchanged. Runs on the build host, pushes to `$NIGHTLY_PUSH_REGISTRY` (the
    internal VPC registry, never hard-coded in the repo), and is **amd64-only**

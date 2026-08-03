@@ -1,0 +1,25 @@
+name: Release Build
+run-name: Release build ${{ github.event.release.tag_name }}
+
+on:
+  release:
+    types: [published]
+
+# NOTE: `release` events run the workflow file from the DEFAULT branch (master),
+# so this file must exist there. It builds the exact commit the release tag
+# points at and publishes egovio/<name>:<release-tag> (the same tag as the
+# GitHub release). No rolling tag, no prune — release tags are immutable and kept.
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-images.yml
+    with:
+      ref: ${{ github.event.release.tag_name }}
+      version_tag: ${{ github.event.release.tag_name }}
+      staging_prefix: release
+      prune_develop: false
+    secrets: inherit
