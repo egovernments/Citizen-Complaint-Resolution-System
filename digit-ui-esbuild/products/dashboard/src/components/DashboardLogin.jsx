@@ -56,7 +56,14 @@ const DEMO_USERS = [
 // Session storage lives in authService (single source of truth); these thin
 // re-exports keep the existing AdminDashboard import sites unchanged.
 export const hasDashboardSession = hasAuth;
-export const clearDashboardSession = clearSession;
+// Sign-out must ALWAYS leave this browser with no employee session. Aliasing
+// the ownership-gated clearSession directly (as this did) meant that when the
+// unprefixed `token` alias had been rewritten by the co-hosted UI or stored in
+// a different encoding, Sign out + reload left the aliases and the
+// Digit.SessionStorage "User" cache holding a live employee token — the next
+// person on a shared kiosk landed in the employee UI still authenticated as
+// the employee who had just signed out (#1536).
+export const clearDashboardSession = () => clearSession({ force: true });
 
 const inputStyle = {
   borderRadius: "0.375rem",
@@ -140,6 +147,9 @@ const DashboardLogin = ({ onLogin, expired = false }) => {
         refreshToken: data.refresh_token,
         userInfo,
         tenantId,
+        // Explicit sign-in: taking over the shared aliases IS the intent here.
+        // Every other caller (the silent refresh) leaves this false (#1535).
+        claimAliases: true,
       });
       if (onLogin) onLogin(userInfo);
     } catch (err) {
