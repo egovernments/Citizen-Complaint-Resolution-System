@@ -256,8 +256,83 @@
           See inventory/host_vars/_example.yml for a worked example.
       when:
         - core_mobile_configs is defined
-        - core_mobile_configs
+        # Boolean-safe truthiness: ansible-core >= 2.19 rejects a bare dict
+        # as a conditional ("conditional statements must be boolean"), which
+        # aborted every deploy at this task. `default({}, true)` also maps an
+        # explicit null (`core_mobile_configs:` with no value) to {} so the
+        # skip short-circuits before _mobile_missing_keys would dict2items it.
+        - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
+
+    # ==================== WSL2 resource config (.wslconfig) ====================
+    # WSL2 defaults to ~50% of host RAM for the VM; the JVM stack then
+    # thrashes the VM into a freeze (deploy hangs, new WSL sessions won't
+    # even open). The Windows-side %UserProfile%\.wslconfig governs the
+    # caps, and it's reachable from inside WSL via /mnt/c — so the deploy
+    # manages the [wsl2] keys itself (ini_file edits just our keys; any
+    # other settings in the file are preserved).
+    #
+    # What ansible CANNOT do is apply the file: that takes `wsl --shutdown`
+    # from Windows, which would kill the VM this play runs inside. So after
+    # writing, compare the running VM's memory to the target and fail fast
+    # with instructions instead of deploying into a doomed memory budget.
+    # Skipped entirely on non-WSL hosts.
+    - name: "WSL — manage Windows-side .wslconfig + verify it is applied"
+      when:
+        - ansible_system != "Darwin"
+        - "'microsoft' in (ansible_kernel | lower)"
+      block:
+        # Windows interop gives us %UserProfile% without guessing the
+        # username; chdir avoids cmd.exe's UNC-working-dir warning noise.
+        - name: "WSL — locate the Windows user profile"
+          ansible.builtin.command: /mnt/c/Windows/System32/cmd.exe /c "echo %UserProfile%"
+          args:
+            chdir: /mnt/c
+          register: wsl_userprofile
+          changed_when: false
+          failed_when: false
+
+        - name: "WSL — interop unavailable, cannot manage .wslconfig"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: Windows interop is disabled in this WSL distro, so
+              the deploy cannot write .wslconfig. Set [wsl2] memory={{ wsl_memory_gb }}GB
+              swap={{ wsl_swap_gb }}GB processors={{ wsl_processors }} in
+              %UserProfile%\.wslconfig yourself.
+          when: wsl_userprofile.rc != 0 or (wsl_userprofile.stdout | trim | length == 0)
+
+        - name: "WSL — translate the profile path to a WSL path"
+          ansible.builtin.command: wslpath "{{ wsl_userprofile.stdout | trim }}"
+          register: wsl_userprofile_linux
+          changed_when: false
+          when: wsl_userprofile.rc == 0 and (wsl_userprofile.stdout | trim | length > 0)
+
+        - name: "WSL — write [wsl2] caps into .wslconfig"
+          community.general.ini_file:
+            path: "{{ wsl_userprofile_linux.stdout | trim }}/.wslconfig"
+            section: wsl2
+            option: "{{ item.option }}"
+            value: "{{ item.value }}"
+            no_extra_spaces: true
+          loop:
+            - { option: memory, value: "{{ wsl_memory_gb }}GB" }
+            - { option: swap, value: "{{ wsl_swap_gb }}GB" }
+            - { option: processors, value: "{{ wsl_processors }}" }
+          when: wsl_userprofile_linux is not skipped
+
+        # 85% tolerance: the VM reports slightly less than the configured
+        # cap (kernel reservations), and we only care about catching the
+        # ~50%-default / stale-cap case, not rounding.
+        - name: "WSL — fail fast until the new caps are actually applied"
+          ansible.builtin.fail:
+            msg: >-
+              This WSL VM is running with
+              {{ (ansible_memtotal_mb / 1024) | round(1) }} GB but .wslconfig
+              now requests {{ wsl_memory_gb }} GB. Ansible cannot restart the
+              VM it is running inside. From Windows PowerShell run:
+              `wsl --shutdown`, reopen this distro, and re-run
+              ./deploy.sh — the deploy will then proceed.
+          when: (ansible_memtotal_mb | int) < (wsl_memory_gb | int) * 1024 * 0.85
 
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
@@ -323,6 +398,54 @@
             name: docker
             state: started
             enabled: yes
+
+        # ==================== Root mount propagation (WSL2 only) ====================
+        # The monitoring overlay's node-exporter binds /:/rootfs:ro,rslave
+        # (docker-compose.monitoring.yml). rslave requires the host's / to be
+        # a shared mount. systemd makes it so on standard Ubuntu, but WSL2's
+        # init leaves / private, and `docker compose up` then dies with
+        # "path / is mounted on / but it is not a shared or slave mount".
+        # On WSL install a boot-time oneshot that re-shares / before
+        # docker.service, and apply it now.
+        #
+        # Deliberately gated on the WSL kernel string ONLY — not on the
+        # current propagation of /. A non-WSL host with a private / (LXC,
+        # hardened MountFlags) made that choice on purpose; a deploy must
+        # not override it. Matching the kernel (not the live state) also
+        # means a WSL box where the operator ran `mount --make-rshared /`
+        # by hand still gets the boot persistence.
+        - name: "Root mount — persist make-rshared for WSL2's private /"
+          when: "'microsoft' in (ansible_kernel | lower)"
+          block:
+            - name: "Root mount — install make-rshared oneshot unit"
+              ansible.builtin.copy:
+                dest: /etc/systemd/system/make-rshared-root.service
+                mode: "0644"
+                content: |
+                  # Installed by the DIGIT ansible deploy: hosts whose init
+                  # leaves / private (WSL2) break container rslave bind
+                  # mounts (node-exporter's /:/rootfs:ro,rslave) unless /
+                  # is re-shared before docker starts.
+                  [Unit]
+                  Description=Make / a shared mount for container rslave binds
+                  DefaultDependencies=no
+                  After=local-fs.target
+                  Before=docker.service
+
+                  [Service]
+                  Type=oneshot
+                  ExecStart=/usr/bin/mount --make-rshared /
+                  RemainAfterExit=yes
+
+                  [Install]
+                  WantedBy=multi-user.target
+
+            - name: "Root mount — enable unit + make / rshared now"
+              ansible.builtin.systemd:
+                name: make-rshared-root.service
+                enabled: true
+                state: started
+                daemon_reload: true
 
         # ==================== Docker Configuration ====================
         # Log rotation. Docker's json-file driver keeps growing a container's
@@ -977,6 +1100,19 @@
     # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
     # mounts intact, sidesteps that. No registry/pinned-image dependency.
     # Default off → no Linux behaviour change.
+    #
+    # files/digit-ui-build.sh hard-fails without node on PATH — the same
+    # Ubuntu gap the static/v2 paths already guard (apt nodejs = Node 18,
+    # no npm; see tasks/ensure-node20.yml). Darwin excluded per the helper
+    # contract (node comes from brew there).
+    - name: "digit-ui build — ensure Node 20 + npm (NodeSource) for on-host build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui build"
+      when:
+        - build_digit_ui | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
@@ -1091,16 +1227,52 @@
         - enable_keycloak | default(false)
         - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
+    # The next two steps are the deploy's long, silent stretch — the image
+    # pull (tens of GB on a first run) and the ~40-container up (~10 min on
+    # a cold box). Ansible buffers a task's output until it finishes, so
+    # without a side channel the operator stares at nothing. Stream the
+    # live compose output (docker compose emits per-container Created/
+    # Started/Healthy transitions on the fly) to compose_progress_file via
+    # tee; ansible still captures the full output for the task result, and
+    # pipefail keeps the compose exit code authoritative.
+    - name: "Progress sink — where to watch the long compose steps"
+      ansible.builtin.debug:
+        msg: >-
+          LONG STEPS AHEAD (image pull, then stack up). Follow live progress
+          from another terminal with:  tail -f {{ compose_progress_file }}
+
+    # Defense-in-depth against symlink attacks: tee below runs as root,
+    # and if an operator overrides compose_progress_file back into a
+    # world-writable dir (/tmp), a local user could pre-plant a symlink
+    # there for root's tee to follow. Recreate the path as a fresh
+    # regular file first, 0644 so a non-root operator can still tail it.
+    - name: "Progress sink — drop any pre-existing file/symlink at the path"
+      ansible.builtin.file:
+        path: "{{ compose_progress_file }}"
+        state: absent
+
+    - name: "Progress sink — create the progress file fresh (regular file, 0644)"
+      ansible.builtin.file:
+        path: "{{ compose_progress_file }}"
+        state: touch
+        mode: "0644"
+
     - name: Pull all images from VPC registry
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures 2>&1 | tee {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
 
     - name: Start DIGIT stack (Linux/Debian)
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d 2>&1 | tee -a {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
       when: ansible_system != "Darwin"
 
@@ -1812,6 +1984,19 @@
     # script prints the dist path on its last line; captured into the
     # `configurator_build` var the sync task below consumes. (A real
     # configurator_repo_url still clones, for transitional/standalone use.)
+    #
+    # files/configurator-build.sh hard-fails without node >= 20.19 on PATH —
+    # same Ubuntu gap as the digit-ui build (see tasks/ensure-node20.yml).
+    # Darwin excluded per the helper contract (node comes from brew there).
+    - name: "Configurator SPA — ensure Node 20 + npm (NodeSource) for dist build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "configurator build"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/configurator-build.sh
