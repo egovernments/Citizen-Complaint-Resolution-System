@@ -20,7 +20,15 @@ export default function useDashboardT() {
   const [tick, bump] = useReducer((x) => x + 1, 0);
   useEffect(() => {
     ensureMessages();
-    return subscribe(bump);
+    return subscribe(() => {
+      // Language switch writes Employee.locale sync, then bundles arrive later.
+      // Re-fetch the active locale into the side-cache on every signal.
+      // Loop-safe: fetchStandaloneLocale no-ops when messages[locale] or
+      // pending[locale] is already set (and cooldown after failures), so
+      // notifyStandalone → this callback cannot re-enter an unbounded fetch.
+      ensureMessages();
+      bump();
+    });
   }, []);
   return { t: translate, exists, language: getLanguage(), i18nTick: tick };
 }

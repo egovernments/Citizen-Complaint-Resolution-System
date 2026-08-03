@@ -137,13 +137,19 @@ const DashboardHeader = ({
 
   return (
     <header className="dashboard-header tw-flex-shrink-0 tw-bg-background">
-      <div className="dashboard-header-top tw-flex tw-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-4 tw-border-b tw-border-border tw-bg-surface tw-px-4 lg:tw-px-6">
-        <div className="tw-min-w-0">
-          <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-x-3 tw-gap-y-0.5">
-            <h1 className="tw-text-[15px] tw-font-semibold tw-leading-tight tw-text-foreground">
+      {/* min-h (not fixed h) so long PT titles can wrap without clipping (#1108) */}
+      <div className="dashboard-header-top tw-flex tw-min-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-border-b tw-border-border tw-bg-surface tw-px-4 tw-py-2 lg:tw-gap-4 lg:tw-px-6">
+        <div className="dashboard-header-title-block tw-min-w-0 tw-flex-1">
+          <div className="tw-flex tw-min-w-0 tw-flex-wrap tw-items-baseline tw-gap-x-3 tw-gap-y-0.5">
+            <h1
+              className="dashboard-header-title tw-m-0 tw-min-w-0 tw-max-w-full tw-text-[15px] tw-font-semibold tw-leading-snug tw-text-foreground"
+              title={title}
+            >
               {title}
             </h1>
-            <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
+            <p className="dashboard-header-subtitle tw-m-0 tw-min-w-0 tw-text-[11px] tw-leading-snug tw-text-muted-foreground">
+              {subtitle}
+            </p>
             {scopedRole ? (
               <span
                 title={t(
@@ -212,7 +218,7 @@ const DashboardHeader = ({
           </div>
         </div>
 
-        <div className="dashboard-header-controls">
+        <div className="dashboard-header-controls tw-shrink-0">
           <label className="dashboard-header-search tw-hidden sm:tw-inline-flex">
             <span className="dashboard-header-search-icon" aria-hidden>
               <SearchIcon />

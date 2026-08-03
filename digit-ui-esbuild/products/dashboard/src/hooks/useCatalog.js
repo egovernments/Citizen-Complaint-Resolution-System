@@ -64,9 +64,15 @@ export function useCatalog(tenantId) {
           ((catalogRes && catalogRes.tiles) || []).map(k => [k.kpiId, k])
         );
         const packTiles = (packRes && packRes.tiles) || [];
-        const packLayout = (packRes && packRes.defaultLayout) || [];
+        const packLayoutRaw = (packRes && packRes.defaultLayout) || [];
         // Gate: only tiles present in the catalog (visibleTo already applied server-side)
         const filteredTiles = packTiles.filter(t => allKpis[t.kpiId]);
+        // Bomet (and other tenants) may return role-visible tiles with an empty
+        // defaultLayout when no DashboardPack MDMS entry matches. Seed from the
+        // tile list so the grid is not blank on first load (#1276 / empty pack).
+        const packLayout = packLayoutRaw.length
+          ? packLayoutRaw
+          : filteredTiles.map((t) => ({ kpiId: t.kpiId }));
         // Metric tags (layout_id / record_count_tier / persona): absent until
         // the #1110 PR2 backend adds them to /packs — tags read "unknown" then.
         const packMeta = {

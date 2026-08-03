@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { runBatchQueries } from "../services/analyticsService";
+import { fetchBoundariesByCodes } from "../services/boundaryService";
 import {
   buildComplaintTypeIndex,
   fetchComplaintHierarchyRecords,
@@ -23,10 +24,12 @@ import {
  *
  * The analytics distinct decides WHICH codes appear; the MDMS complaint
  * hierarchy (RAINMAKER-PGR.ComplaintHierarchy, fetched in parallel) supplies
- * the complaint-type display names and root-category grouping. All labels
- * resolve through dimensionLabel: localized message first, then the master's
- * display name, then the shared humanizer (stray/QA codes, failed hierarchy
- * fetch). Labels re-derive from the cached rows on a language switch.
+ * the complaint-type display names and root-category grouping. Ward labels
+ * also pull boundary-service localname when present; on Bomet that field is
+ * null, so dimensionLabel falls through to en_IN rainmaker-boundary-* place
+ * names (and a pt_PT seed when operators have upserted one) (#1108). All
+ * labels resolve through dimensionLabel: localized message first, then the
+ * master's display name, then the raw code.
  *
  * Returns: { options, loading }
  * - options: { geography: [{id,label}], complaintType: [{id,label,group?}] } —
@@ -96,11 +99,32 @@ function toComplaintTypeDecorator(hierarchyIndex) {
   };
 }
 
+/** Map boundary-service entities → code → data-owned display name. */
+function toBoundaryDecorator(boundaries) {
+  if (!boundaries?.length) return null;
+  const names = new Map();
+  for (const boundary of boundaries) {
+    const code = String(boundary?.code ?? "").trim();
+    const name = boundary?.localname || boundary?.name || boundary?.label;
+    if (code && name) names.set(code, String(name));
+  }
+  if (!names.size) return null;
+  return (code) => {
+    const name = names.get(code);
+    return name ? { label: name } : null;
+  };
+}
+
 export function useFilterOptions() {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
-  const [raw, setRaw] = useState({ results: null, hierarchyRecords: null, loading: true });
-  const { language } = useDashboardT();
+  const [raw, setRaw] = useState({
+    results: null,
+    hierarchyRecords: null,
+    boundaries: null,
+    loading: true,
+  });
+  const { language, i18nTick } = useDashboardT();
 
   useEffect(() => {
     let cancelled = false;
@@ -110,13 +134,35 @@ export function useFilterOptions() {
       // to the humanizer and the list stays flat, exactly the old behavior.
       fetchComplaintHierarchyRecords(),
     ])
-      .then(([res, hierarchyRecords]) => {
+      .then(async ([res, hierarchyRecords]) => {
         if (cancelled) return;
-        setRaw({ results: res?.results || {}, hierarchyRecords, loading: false });
+        const results = res?.results || {};
+        const wardCodes = (results.wards?.rows || [])
+          .map((row) => String(row?.ward_code ?? "").trim())
+          .filter(Boolean);
+        // Parity with the map: localname is the data-owned fallback when
+        // rainmaker-boundary-* has no message for the active locale (#1108).
+        let boundaries = [];
+        try {
+          boundaries = wardCodes.length
+            ? await fetchBoundariesByCodes(wardCodes)
+            : [];
+        } catch {
+          boundaries = [];
+        }
+        if (cancelled) return;
+        setRaw({ results, hierarchyRecords, boundaries, loading: false });
       })
       .catch(() => {
         // Never block the dashboard — the selects keep their placeholder lists.
-        if (!cancelled) setRaw({ results: null, hierarchyRecords: null, loading: false });
+        if (!cancelled) {
+          setRaw({
+            results: null,
+            hierarchyRecords: null,
+            boundaries: null,
+            loading: false,
+          });
+        }
       });
     return () => {
       cancelled = true;
@@ -140,7 +186,8 @@ export function useFilterOptions() {
       raw.results.wards?.rows,
       "ward_code",
       GEOGRAPHY_OPTIONS,
-      "boundary"
+      "boundary",
+      toBoundaryDecorator(raw.boundaries)
     );
     // Tree-traversal complaint-type filter: the MDMS tree intersected with the
     // ABAC-scoped DISTINCT service_code list above (pruneComplaintTree). Both
@@ -162,6 +209,8 @@ export function useFilterOptions() {
       options: Object.keys(options).length ? options : null,
       loading: raw.loading,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- language re-labels cached rows
-  }, [raw, language]);
+    // language + i18nTick: re-label when locale switches OR when the en_IN
+    // boundary side-cache (ensureMessages) arrives after first paint (#1108).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick covers late bundles
+  }, [raw, language, i18nTick]);
 }

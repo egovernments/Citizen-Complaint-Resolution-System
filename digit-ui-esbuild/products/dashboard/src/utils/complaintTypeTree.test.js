@@ -50,6 +50,8 @@ const {
   repairSelection,
   normalizeComplaintTypeValue,
   humanizeTypeCode,
+  humanizeDimensionCode,
+  looksLikeTaxonomyCodePath,
   browseBaseCode,
   truncateTrail,
   TRAIL_ELLIPSIS,
@@ -594,5 +596,23 @@ test("humanizeTypeCode: never surfaces a raw dotted code", () => {
   assert.equal(humanizeTypeCode("MedicalServices"), "Medical Services");
   assert.equal(humanizeTypeCode("GARBAGE_NEEDS_ATTENTION"), "GARBAGE NEEDS ATTENTION");
   assert.equal(humanizeTypeCode("streetLight-broken"), "Street Light Broken");
+  assert.equal(
+    humanizeTypeCode("complaints.categories.Defibrillator/Suction"),
+    "Defibrillator / Suction"
+  );
   assert.equal(humanizeTypeCode(""), "");
+});
+
+test("humanizeDimensionCode: ward/dept codes become readable titles", () => {
+  assert.equal(humanizeDimensionCode("ETOEROLES_WARD_1"), "Etoeroles Ward 1");
+  assert.equal(humanizeDimensionCode("BOMET_CHEPALUNGU_CHEBUNYO"), "Chepalungu Chebunyo");
+  assert.equal(humanizeDimensionCode("MEDICAL_SVC"), "Medical Svc");
+  assert.equal(humanizeDimensionCode("PMC_Z1_B1_L1"), "Pmc Z1 B1 L1");
+});
+
+test("looksLikeTaxonomyCodePath: catches EN and PT path-shaped labels", () => {
+  assert.equal(looksLikeTaxonomyCodePath("complaints.categories.DamagedRoad"), true);
+  assert.equal(looksLikeTaxonomyCodePath("reclamações.categories.DamagedRoad"), true);
+  assert.equal(looksLikeTaxonomyCodePath("Street Light Not Working"), false);
+  assert.equal(looksLikeTaxonomyCodePath("Lixo"), false);
 });

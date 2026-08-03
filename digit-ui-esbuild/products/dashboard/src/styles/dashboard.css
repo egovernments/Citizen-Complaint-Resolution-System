@@ -240,21 +240,8 @@
   content: none !important;
 }
 
-@media (max-width: 1023px) {
-  .dashboard-kpi-list-item .dashboard-drag-handle-title,
-    .dashboard-kpi-card .dashboard-drag-handle-title {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-}
-
 .dashboard-drag-handle-title{
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0px;
   font-weight: 600;
   color: var(--foreground);
   font-size: 18px;
@@ -262,27 +249,24 @@
   letter-spacing: normal;
   text-transform: none;
   margin: 0;
-}
-
-@media (max-width: 1023px) {
-  .dashboard-kpi-list-item .dashboard-drag-handle-subtitle,
-    .dashboard-kpi-card .dashboard-drag-handle-subtitle {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
+  /* 2-line clamp + word wrap so PT titles stay readable instead of
+       truncating mid-phrase ("…Fase do Fl…") (#1108). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .dashboard-drag-handle-subtitle{
   margin: 0px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0px;
   font-size: 11px;
   line-height: 1.25;
   color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .dashboard-external-drag .react-grid-item {
@@ -527,7 +511,23 @@
   min-width: 0px;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* Long locales (pt_PT "Operações de Resolução de Reclamações") must wrap
+     rather than clip inside the old fixed h-12 header bar (#1108). */
+
+.dashboard-header-title {
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.dashboard-header-subtitle {
+  overflow-wrap: anywhere;
 }
 
 .dashboard-header-search{
@@ -1574,7 +1574,6 @@
     text-overflow: unset;
     white-space: normal;
     overflow-wrap: anywhere;
-    word-break: break-word;
   }
 
   .dashboard-kpi-card--metric .dashboard-kpi-title,
@@ -1618,12 +1617,23 @@
   }
 }
 
-@media (max-width: 639px) {
+/* Stack title above controls on tablet+phone so long PT titles don't
+     fight the search + button cluster (was mobile-only; mid-widths clipped
+     "Operações de Resolução de Reclamações") (#1108). */
+
+@media (max-width: 1023px) {
   .dashboard-header-top {
     flex-wrap: wrap;
     align-items: flex-start;
+    height: auto;
+    min-height: 3rem;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+  }
+
+  .dashboard-header-title-block {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
 
   .dashboard-header-controls {
@@ -1634,9 +1644,10 @@
   .dashboard-header-subtitle {
     width: 100%;
     overflow-wrap: anywhere;
-    word-break: break-word;
   }
+}
 
+@media (max-width: 639px) {
   .dashboard-header-controls .dashboard-header-export span {
     display: none;
   }
@@ -1727,7 +1738,6 @@
 
   .dashboard-header-subtitle {
     overflow-wrap: anywhere;
-    word-break: break-word;
   }
 }
 
@@ -3258,10 +3268,6 @@
   height: 0.375rem;
 }
 
-.tw-h-12{
-  height: 3rem;
-}
-
 .tw-h-3\.5{
   height: 0.875rem;
 }
@@ -3284,6 +3290,10 @@
 
 .tw-min-h-0{
   min-height: 0px;
+}
+
+.tw-min-h-12{
+  min-height: 3rem;
 }
 
 .tw-min-h-\[12rem\]{
@@ -3398,10 +3408,6 @@
 
 .tw-gap-3{
   gap: 0.75rem;
-}
-
-.tw-gap-4{
-  gap: 1rem;
 }
 
 .tw-gap-x-3{
@@ -4132,6 +4138,21 @@
   line-height: 1 !important;
 }
 
+/* Screen-reader-only header row inside the scrollable body table — restores
+   column semantics lost by the pinned-header split (DashboardTableFrame). */
+
+.dashboard-table-sr-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
   background-color: color-mix(in srgb,var(--chrome-foreground) 12%,transparent);
 }
@@ -4151,6 +4172,10 @@
 }
 
 @media (min-width: 1024px){
+  .lg\:tw-gap-4{
+    gap: 1rem;
+  }
+
   .lg\:tw-p-6{
     padding: 1.5rem;
   }
@@ -4159,18 +4184,4 @@
     padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
-}
-
-/* Screen-reader-only header row inside the scrollable body table — restores
-   column semantics lost by the pinned-header split (DashboardTableFrame). */
-.dashboard-table-sr-head {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }

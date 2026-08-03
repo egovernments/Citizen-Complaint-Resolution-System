@@ -84,11 +84,6 @@ const formatInteger = (value) => {
   return formatNumber(value, { decimals: 0 }) ?? String(Math.round(value));
 };
 
-// Legacy humaniser — retained verbatim as the dimensionLabel fallback so
-// unseeded environments render exactly what they render today.
-const humanizeCellCode = (value) =>
-  String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
-
 const CELL_RENDERERS = {
   text: (value) => value ?? "—",
   integer: (value) => formatInteger(value),
@@ -102,13 +97,16 @@ const CELL_RENDERERS = {
   department: (value) =>
     !value || value === "null" || value === "undefined"
       ? "—"
-      : dimensionLabel(String(value), "department", humanizeCellCode(value)),
+      : dimensionLabel(String(value), "department"),
   dimension: (value, col) => {
     if (!value || value === "null" || value === "undefined") return "—";
     const kind = dimensionKindForName(col?.dimension ?? col?.id);
+    // No code-owned humaniser fallback — missing locale messages surface the
+    // raw code (or data-owned names via dimensionLabel) so gaps stay visible
+    // instead of silent English title-case (#1108).
     return kind
-      ? dimensionLabel(String(value), kind, humanizeCellCode(value))
-      : humanizeCellCode(value);
+      ? dimensionLabel(String(value), kind)
+      : String(value);
   },
 };
 
