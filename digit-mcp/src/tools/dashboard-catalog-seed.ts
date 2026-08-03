@@ -480,6 +480,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           },
@@ -746,6 +747,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true,
               "sla_breached": false
             }
@@ -1254,6 +1256,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           },
@@ -1725,6 +1728,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "resolved",
           "agg": "count",
           "filter": {
+            "is_open": false,
             "is_resolved": true
           }
         }
@@ -2088,6 +2092,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "resolved",
           "agg": "count",
           "filter": {
+            "is_open": false,
             "is_resolved": true
           }
         },
@@ -2095,6 +2100,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "on_time",
           "agg": "count",
           "filter": {
+            "is_open": false,
             "is_resolved": true,
             "sla_breached": false
           }
@@ -2206,6 +2212,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "resolved",
           "agg": "count",
           "filter": {
+            "is_open": false,
             "is_resolved": true
           }
         },
@@ -2541,6 +2548,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "resolved",
           "agg": "count",
           "filter": {
+            "is_open": false,
             "is_resolved": true
           }
         }
@@ -2750,6 +2758,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             },
             "window": {
@@ -3419,6 +3428,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "agg": "count",
           "name": "resolved",
           "filter": {
+            "is_open": false,
             "is_resolved": true
           },
           "window": {
