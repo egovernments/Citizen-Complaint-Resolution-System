@@ -465,8 +465,11 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   write `dss.DashboardConfig`, add the sidebar action, seed the localization
   packs, and verify end-to-end. Its preflight is read-only and **refuses to
   write** when it finds problems seeding can't fix (schema-as-data rows,
-  role ceilings nobody holds) — use `--repair` where it tells you to. If your
-  deployment uses its own role taxonomy, remap the canonical roles:
+  role ceilings nobody holds) — use `--repair` where it tells you to. Seeding
+  is `_create`-only, so re-runs skip records that already exist and never pick
+  up an edited `KpiDefinition.json` / `DashboardPack.json` — use `--update`
+  after a release changes them. If your deployment uses its own role taxonomy,
+  remap the canonical roles:
 
   ```bash
   ROLE_MAP="PGR_SUPERVISOR=CMS_SUPERVISOR,PGR_LME=CMS_CASE_MANAGER" \
@@ -477,29 +480,49 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
   onboarded employee must hold one of those roles to see it.
 
+  "Today" tiles resolve the calendar day in EAT (`Africa/Nairobi`), fixed in the
+  analytics service rather than read from tenant config.
+
   **Department tiles also need department data**, which `enable-dashboard.sh`
   does not seed. Tiles group on each complaint type's `department` in
-  `RAINMAKER-PGR.ComplaintHierarchy`; types onboarded with a blank Department
-  column carry `NA` and produce no breakdown. Check before reporting the
-  dashboard as working:
+  `RAINMAKER-PGR.ComplaintHierarchy`; a type onboarded with the Department
+  column blank carries `NA` — or no `department` key at all, on types brought
+  over by the hierarchy migration — and produces no breakdown. Count leaf types
+  only, the rows the tiles read:
 
   ```bash
   docker exec docker-postgres psql -U egov -d egov -tAc \
-  "SELECT tenantid,
-          count(*) FILTER (WHERE data->>'department' NOT IN ('NA')) AS usable,
-          count(*) FILTER (WHERE data->>'department' = 'NA')        AS unassigned
-     FROM eg_mdms_data
-    WHERE schemacode='RAINMAKER-PGR.ComplaintHierarchy' AND isactive
-    GROUP BY 1;"
+  "WITH leaf_levels AS (
+     SELECT DISTINCT lvl->>'levelCode' AS level_code
+       FROM eg_mdms_data d
+       CROSS JOIN LATERAL jsonb_array_elements(d.data->'levels') lvl
+      WHERE d.schemacode='RAINMAKER-PGR.ComplaintHierarchyDefinition' AND d.isactive
+        AND (lvl->>'isLeafServiceCode')::boolean
+   ), leaves AS (
+     SELECT tenantid,
+            btrim(coalesce(data->>'department', data->'departments'->>0)) AS dept
+       FROM eg_mdms_data
+      WHERE schemacode='RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+        AND data->>'levelCode' IN (SELECT level_code FROM leaf_levels)
+   )
+   SELECT tenantid,
+          count(*) FILTER (WHERE upper(coalesce(dept,'')) NOT IN ('NA','')) AS usable,
+          count(*) FILTER (WHERE upper(coalesce(dept,'')) IN ('NA',''))     AS unassigned,
+          count(*) AS leaves
+     FROM leaves GROUP BY 1;"
   ```
 
-  `unassigned` rows show no department. Fix by setting the department on those
-  complaint types in the configurator, or re-run Phase 3 with the column filled.
+  `usable` should equal `leaves`. Fix `unassigned` types in the configurator, or
+  re-run Phase 3 with the column filled. No rows at all means the tenant has no
+  `ComplaintHierarchyDefinition`; install it first.
 
-  Leave `dss.DashboardConfig.departmentScoping` unset or `disabled` while any
-  type is `NA`. Enforced scoping filters on `department_code IN (...)`, which
-  never matches an unassigned type, so scoped employees get **zero rows on every
-  tile** — not just the department ones. Reference:
+  Leave `dss.DashboardConfig.departmentScoping` unset or `disabled` while
+  `unassigned` is above zero. Enforced scoping filters on
+  `department_code IN (...)`, which never matches an unassigned type, so scoped
+  employees get **zero rows on every tile** — not just the department ones.
+  References:
+  [`../../docs/migration/tenant-department-migration-guide.md`](../../docs/migration/tenant-department-migration-guide.md)
+  (department preflight and back-fill) and
   [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
   (KPI catalog, packs & RBAC, operations).
 
