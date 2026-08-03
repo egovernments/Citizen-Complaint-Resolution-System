@@ -256,7 +256,12 @@
           See inventory/host_vars/_example.yml for a worked example.
       when:
         - core_mobile_configs is defined
-        - core_mobile_configs
+        # Boolean-safe truthiness: ansible-core >= 2.19 rejects a bare dict
+        # as a conditional ("conditional statements must be boolean"), which
+        # aborted every deploy at this task. `default({}, true)` also maps an
+        # explicit null (`core_mobile_configs:` with no value) to {} so the
+        # skip short-circuits before _mobile_missing_keys would dict2items it.
+        - core_mobile_configs | default({}, true) | length > 0
         - _mobile_missing_keys | length > 0
 
     # ==================== WSL2 resource config (.wslconfig) ====================
