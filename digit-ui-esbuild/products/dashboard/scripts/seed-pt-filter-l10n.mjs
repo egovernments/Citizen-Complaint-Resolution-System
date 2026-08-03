@@ -114,7 +114,8 @@ async function upsertLocale(locale, messages) {
 
 /**
  * Machine-translate unique English strings → target language (MyMemory).
- * On failure the key is OMITTED from the map (never falls back to English).
+ * On failure / quota warning / echo-of-English the key is OMITTED from the map
+ * (never falls back to English — that would hide gaps in the target pack).
  */
 async function translateMap(uniqueEnglish, langpair) {
   const cache = {};
@@ -124,9 +125,22 @@ async function translateMap(uniqueEnglish, langpair) {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
     try {
       const res = await fetch(url);
+      if (!res.ok) {
+        skipped += 1;
+        continue;
+      }
       const data = await res.json();
+      // MyMemory uses string "200" on success; quota exhaustion still returns
+      // HTTP 200 with translatedText = "MYMEMORY WARNING: …".
+      const status = String(data?.responseStatus ?? "");
       const translated = data?.responseData?.translatedText;
-      if (translated && translated !== text) {
+      const usable =
+        status === "200" &&
+        typeof translated === "string" &&
+        translated.trim() !== "" &&
+        translated !== text &&
+        !/^MYMEMORY WARNING/i.test(translated);
+      if (usable) {
         cache[text] = translated;
       } else {
         skipped += 1;
@@ -202,6 +216,7 @@ function boundaryMessageRows(code, message) {
 }
 
 async function fetchAnalyticsWardCodes() {
+  const WARD_LIMIT = 300;
   const res = await fetch(`${BASE}/pgr-services/v2/analytics/_query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -214,7 +229,7 @@ async function fetchAnalyticsWardCodes() {
           window: { name: "all" },
           dimensions: ["ward_code"],
           measures: [{ name: "n", agg: "count" }],
-          limit: 300,
+          limit: WARD_LIMIT,
         },
       },
     }),
@@ -225,6 +240,12 @@ async function fetchAnalyticsWardCodes() {
   }
   const data = await res.json();
   const rows = data?.results?.wards?.rows || [];
+  if (rows.length >= WARD_LIMIT) {
+    console.warn(
+      `ward distinct hit limit=${WARD_LIMIT} — some ward_codes may be missing from the gap pass; ` +
+        `raise the limit or re-run with a narrower analytics window`
+    );
+  }
   return [...new Set(rows.map((r) => String(r?.ward_code ?? "").trim()).filter(Boolean))];
 }
 
