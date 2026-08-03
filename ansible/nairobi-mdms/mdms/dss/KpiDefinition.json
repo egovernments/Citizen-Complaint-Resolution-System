@@ -113,6 +113,7 @@
             "numerator": {
               "agg": "count",
               "filter": {
+                "is_open": false,
                 "is_resolved": true
               }
             },
@@ -391,6 +392,7 @@
             "numerator": {
               "agg": "count",
               "filter": {
+                "is_open": false,
                 "is_resolved": true,
                 "sla_breached": false
               }
@@ -923,6 +925,7 @@
             "numerator": {
               "agg": "count",
               "filter": {
+                "is_open": false,
                 "is_resolved": true
               }
             },
@@ -1409,6 +1412,7 @@
             "name": "resolved",
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           }
@@ -1781,6 +1785,7 @@
             "name": "resolved",
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           },
@@ -1788,6 +1793,7 @@
             "name": "on_time",
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true,
               "sla_breached": false
             }
@@ -1902,6 +1908,7 @@
             "name": "resolved",
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           },
@@ -2246,6 +2253,7 @@
             "name": "resolved",
             "agg": "count",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             }
           }
@@ -2464,6 +2472,7 @@
             "numerator": {
               "agg": "count",
               "filter": {
+                "is_open": false,
                 "is_resolved": true
               },
               "window": {
@@ -3154,6 +3163,7 @@
             "agg": "count",
             "name": "resolved",
             "filter": {
+              "is_open": false,
               "is_resolved": true
             },
             "window": {
