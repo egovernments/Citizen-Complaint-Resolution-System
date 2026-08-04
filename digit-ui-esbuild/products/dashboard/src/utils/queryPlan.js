@@ -26,6 +26,37 @@ export const MAP_KINDS = new Set(["map", "choropleth-map"]);
 // to overlay per-complaint pins (the FE map widget has the pin layer; this feeds it).
 export const PIN_KPI_ID = "cl_map_complaint_pins";
 
+/**
+ * The per-layer pin source. The legacy def hard-filters `is_open`, so its pins
+ * can only ever mean "still open" — the Resolved layer shaded "0 resolved"
+ * underneath open-complaint pins. Worse, `filters.is_open` with no
+ * `window.timeRole` trips the backend's live-open-snapshot exemption
+ * (KpiQueryComposer.isLiveOpenSnapshot), which skips BOTH the base window and
+ * the global dateFrom/dateTo — so the legacy pins were "all open complaints,
+ * all time" against a last_7d choropleth, wrong on every layer.
+ *
+ * The replacement def drops `is_open` from filters (no exemption -> pins obey
+ * the same window/range as the wards) and projects is_open/is_resolved as
+ * dimensions so the FE can partition pins per layer.
+ */
+export const PIN_KPI_ID_ALL = "cl_map_complaint_pins_all";
+
+/**
+ * Server-side row cap. AnalyticsPlanner clamps every query at MAX_LIMIT = 1000
+ * regardless of the def's `limit`, so a full result set is indistinguishable
+ * from a truncated one at exactly this size — the UI says "most recent 1,000".
+ */
+export const PIN_ROW_CAP = 1000;
+
+/**
+ * Prefer the per-layer pin def, fall back to the legacy one. A tenant whose
+ * catalog predates the new record keeps working (pins stay open-only, and the
+ * UI says so) instead of losing its pin layer entirely.
+ */
+export function resolvePinKpiId(kpis) {
+  return kpis && kpis[PIN_KPI_ID_ALL] ? PIN_KPI_ID_ALL : PIN_KPI_ID;
+}
+
 export function isCardKind(kind) {
   return CARD_KINDS.has(kind);
 }
@@ -91,6 +122,7 @@ export function tileParams(def, filters, hierOverrides) {
  */
 export function buildRefs(tiles, kpis, filters, hierOverrides) {
   const refs = {};
+  const pinKpiId = resolvePinKpiId(kpis);
   for (const tile of tiles) {
     const kpiId = tile.kpiId;
     const def = kpis[kpiId];
@@ -108,7 +140,9 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
     }
     if (isMapKind(kind)) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
-      refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...base } };
+      // The ref KEY stays `${kpiId}__pins` whichever source resolves, so nothing
+      // downstream (assembleResult, countErrorWidgets) has to know.
+      refs[`${kpiId}__pins`] = { kpiId: pinKpiId, params: { ...base } };
     }
   }
   return refs;
@@ -127,5 +161,9 @@ export function buildRefsKey(tiles, kpis, filters, hierOverrides) {
     kinds: tiles.map((t) => kpis[t.kpiId]?.viz?.kind),
     gp: globalParams(filters),
     hier: tiles.map((t) => appliedHierLevel(kpis[t.kpiId], hierOverrides)),
+    // A tenant whose catalog gains the per-layer pin def must refire the batch:
+    // the ref key is unchanged, so this is the only signal that the __pins ref
+    // now points at a different source.
+    pin: resolvePinKpiId(kpis),
   });
 }
