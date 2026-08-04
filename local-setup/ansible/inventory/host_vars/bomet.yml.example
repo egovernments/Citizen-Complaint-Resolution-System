@@ -41,6 +41,12 @@ docker_default_platform: ''
 domain: localhost
 tls_enabled: false
 insecure_registries: []
+# Empty = Docker's default (/var/lib/docker on the root filesystem) — fine
+# here since this is a single-partition local box. Set to e.g. "/opt/docker"
+# on a target where `/` is small and a larger partition (commonly /opt) is
+# available; see the docker_data_root comment in inventory/host_vars/_example.yml
+# for what it does (also relocates containerd's root, relabels for SELinux).
+docker_data_root: ""
 
 # ── identity / tenancy ──
 # Kit shape was bare `ke` everywhere, but the configurator wizard created the
@@ -55,6 +61,11 @@ tenant_id: ke
 ui_state_tenant_id: ke.bomet
 nginx_preserve_vhost: false        # kit: true — local box has no hand-managed vhost to preserve
 login_tenant_allowlist: []
+
+# Hide these modules in the employee UI. IM (inbox-v2) needs the search
+# stack, which is off on this box (enable_search_stack: false below).
+employee_module_denylist:
+  - IM
 
 # ── geography / boundary model (Bomet County) ──
 map_center: { lat: -0.7817, lng: 35.3428 }
@@ -74,6 +85,20 @@ core_mobile_configs:
   countryCode: '+254'
   mobileNumberRegex: ^[17][0-9]{8}$
 
+# Postal-code validation (SPA globalConfigs CORE_POSTAL_CONFIGS). Kenya: 5
+# digits. Empty/absent falls back to this same pattern anyway, but set it
+# explicitly so it's not relying on the hardcoded legacy default.
+core_postal_configs:
+  postalCodePattern: "^[0-9]{5}$"
+  postalCodeLength: 5
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+# ── Branding ──
+# Footer logos shown in citizen + employee UI. Use absolute URLs; copied to
+# /var/www/brand/ when nginx_features.brand_assets: true (off below).
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
 # ── feature toggles (exact Bomet shape, except MCP — see header) ──
 asset_s3_bucket: pg-egov-assets
 digit_ui_mode: container
@@ -82,11 +107,26 @@ enable_mcp: true                   # kit: false — needed locally to bootstrap 
 build_mcp: true                    # kit: false — build digit-mcp:local like the mz bring-up did
 enable_novu: true                  # config-driven notifications target: Novu
 db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
+# New in _example.yml: scripts/preflight.py refuses db_fast_path: true without this
+# explicit ack (deploy.sh would fail preflight otherwise). Set only after confirming
+# this box has no anonymous-volume postgres data worth keeping.
+db_fast_path_ack_data_wipe: true
 build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
                                    # the notifications profile needs it, so build it here
 build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
+
+# Build the pass-through novu-bridge / config-driven pgr-services from source
+# on the box instead of pulling a published/preview image. Off by default,
+# same as _example.yml — this tenant currently uses the published images
+# (pgr_services_image / novu_bridge_image below).
+build_novu_bridge: false
+build_pgr_services: false
+
+# Init the nairobi-mdms git submodule on the controller. Only needed if this
+# tenant's onboarding uses those JSONs — not the case here.
+requires_nairobi_mdms: false
 
 # ── Config-driven notifications (design D1/D4/D6/D7/D8) ──
 # Bomet is the FIRST tenant cut over. PGR reads PGR.NotificationRouting +
@@ -95,6 +135,11 @@ tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see 
 # docker-compose.bomet.yml ALSO hard-sets PGR_NOTIFICATION_CONFIG_DRIVEN=true.
 pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
+
+# Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
+# under /novu. Not required here (enable_keycloak is false below, so no
+# domain-sharing conflict yet) — matches _example.yml's off-by-default.
+build_novu_dashboard: false
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the
@@ -109,6 +154,27 @@ twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
 
+# ── Optional services (opt-in via flags; all off, matching _example.yml) ──
+# Real OTP stack (egov-otp/user-otp/egov-notification-sms). Off keeps the
+# local kong.yml mock (fixed OTP 123456) — fine for this local box.
+enable_otp_services: false
+# Turbopass (OSM location autocomplete) — standalone on-box container.
+enable_turbopass: false
+# Self-hosted Overpass (boundary-polygon fetch) — falls back to public
+# overpass-api.de when off.
+enable_overpass: false
+
+# ── digit-integration-tests dashboards (off — not used on this box) ──
+enable_integration_tests: false
+integration_tests_dashboard_base: "/tests-v2/"
+integration_tests_basic_auth_user: "digit-tests"
+enable_integration_tests_runner: false
+
+# ── CI / lifecycle ──
+run_ci_tests: false                # post-deploy XLSX dataloader + Playwright suite
+force_clean: false                 # tear down + redeploy from scratch (NEVER on live data)
+install_claude_code: false         # installs Claude Code CLI on the target
+
 nginx_features:
   brand_assets: false
   configurator: true
@@ -118,6 +184,8 @@ nginx_features:
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
   digit_ui_v2: true
+  integration_tests: false         # pair with enable_integration_tests above
+  integration_tests_runner: false  # pair with enable_integration_tests_runner above
 
 # ── auth (Keycloak) ──
 enable_keycloak: false
@@ -129,6 +197,7 @@ auth_provider: ""
 keycloak_client_id: digit-ui
 enable_digit_ui_v2: true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
+digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
 digit_ui_v2_branch: feat/digit-ui-v2-keycloak
 keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP wiring
 
