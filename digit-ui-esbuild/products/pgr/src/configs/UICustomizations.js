@@ -1,4 +1,5 @@
 import _ from "lodash";
+import Urls from "../utils/urls";
 import { complaintLabel } from "../utils/complaintLabel";
 import { useLocation, useHistory, Link, useParams } from "react-router-dom";
 import React, { useState, Fragment } from "react";
@@ -1652,12 +1653,14 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      // Status scope: an explicit filter wins; otherwise both tabs default to
-      // every open/actionable state. The tabs differ on the ASSIGNEE axis, not
-      // the status axis (PO decision 2026-07-15).
+      // CCRS#1367: an exact complaint-number lookup (not mobile number or
+      // date range — those are broad, multi-result searches) must ignore
+      // every inbox default, not just status: it needs to find that one
+      // complaint no matter who it's assigned to or what state it's in.
+      const isComplaintLookup = Boolean(params.serviceRequestId);
       if (statuses.length > 0) {
         params.applicationStatus = statuses;
-      } else {
+      } else if (!isComplaintLookup) {
         params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
       }
 
@@ -1671,23 +1674,36 @@ export const UICustomizations = {
       // visibility from the `scope` filter param — MINE = assignee-me, TEAM =
       // reportee subtree + unassigned queues — so the client sends no
       // assignee. MY/ALL stay UI tab ids; MINE/TEAM are the API semantics.
-      if (additionalDetails?.serverSide) {
-        if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
-      } else if (activeTab === "MY") {
-        const userInfo = Digit.UserService.getUser()?.info;
-        if (userInfo?.uuid) {
-          params.assignee = [userInfo.uuid];
+      //
+      // A complaint-number lookup skips assignee/scope too — same reasoning
+      // as the status default above.
+      if (!isComplaintLookup) {
+        if (additionalDetails?.serverSide) {
+          if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
+        } else if (activeTab === "MY") {
+          const userInfo = Digit.UserService.getUser()?.info;
+          if (userInfo?.uuid) {
+            params.assignee = [userInfo.uuid];
+          }
         }
-      }
 
-      // Legacy assigned-to-me radio (only present in the filter form when the
-      // visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
-      const assignedFilter = filterForm.assignedToMe;
-      if (assignedFilter?.code === "ASSIGNED_TO_ME") {
-        const userInfo = Digit.UserService.getUser()?.info;
-        if (userInfo?.uuid) {
-          params.assignee = [userInfo.uuid];
+        // Legacy assigned-to-me radio (only present in the filter form when
+        // the visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
+        const assignedFilter = filterForm.assignedToMe;
+        if (assignedFilter?.code === "ASSIGNED_TO_ME") {
+          const userInfo = Digit.UserService.getUser()?.info;
+          if (userInfo?.uuid) {
+            params.assignee = [userInfo.uuid];
+          }
         }
+      } else if (additionalDetails?.serverSide) {
+        // The visibility-aware endpoint (Urls.pgr.visibilitySearch) requires
+        // `scope` server-side (RequestsApiController defaults it to MINE) and
+        // TEAM only matches team-assigned/unassigned-queue rows — there's no
+        // scope value that returns an arbitrary known complaint (checked
+        // VisibilityService.resolve directly). Route the lookup through the
+        // plain, unscoped search/count endpoints instead.
+        clonedData.url = Urls.pgr.search;
       }
 
       clonedData.params = params;
