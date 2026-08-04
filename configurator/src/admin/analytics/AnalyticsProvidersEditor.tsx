@@ -70,6 +70,17 @@ const NUMBER_KEYS = new Set(['order', 'sampleRate']);
 const BOOLEAN_KEYS = new Set(['enabled', 'disablePageViews', 'trackClicks', 'trackErrors']);
 const JSON_KEYS = new Set(['settings', 'adapter']);
 
+/** Vendor credentials. Masked for read-only viewers: the route is reachable by
+ *  any logged-in employee, and while these keys are write-only at the vendor,
+ *  there is no reason to hand them to people who cannot edit the record. */
+const SECRET_KEYS = new Set(['apiKey', 'dsn']);
+
+function maskSecret(v: unknown): string {
+  const s = String(v ?? '');
+  if (!s) return '';
+  return s.length <= 6 ? '••••••' : `${s.slice(0, 4)}…${'•'.repeat(6)}`;
+}
+
 interface MdmsRow {
   id?: string;
   tenantId: string;
@@ -439,6 +450,17 @@ export function AnalyticsProvidersEditor() {
             }}
           />
           {help(key) && <p className="text-xs text-muted-foreground">{help(key)}</p>}
+        </div>
+      );
+    }
+
+    // Read-only viewers get vendor credentials masked, not rendered.
+    if (SECRET_KEYS.has(key) && !canWrite) {
+      return (
+        <div key={key} className="space-y-1.5">
+          <Label htmlFor={`ap-${key}`}>{label(key, key)}</Label>
+          <Input id={`ap-${key}`} value={maskSecret(value)} disabled />
+          <p className="text-xs text-muted-foreground">Hidden — editing needs the {WRITE_ROLES.join(' or ')} role.</p>
         </div>
       );
     }
