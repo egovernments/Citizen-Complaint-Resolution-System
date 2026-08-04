@@ -1227,6 +1227,27 @@
         - enable_keycloak | default(false)
         - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
+    # Same ordering trap as the KEYCLOAK SECRETS block above, for Novu (CCRS#1551).
+    # .env is regenerated earlier in this play WITHOUT a NOVU_API_KEY line, and the
+    # novu-bootstrap block that writes one lives AFTER the stack is up — because
+    # MINTING a key requires a healthy novu-api. But a deployment that PINS
+    # novu_api_key in host_vars (Bomet/Nairobi) needs nothing running: the value is
+    # already known here. Without this task the compose-up below resolves
+    # ${NOVU_API_KEY:-changeme} and novu-bridge comes up unauthenticated — and any
+    # play that aborts at "Start DIGIT stack" (the user-preferences healthcheck is
+    # flaky) never reaches the late block, so notifications stay broken silently.
+    - name: "novu prep — write pinned NOVU_API_KEY into .env BEFORE compose-up"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^NOVU_API_KEY='
+        line: "NOVU_API_KEY={{ novu_api_key }}"
+        create: true
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length > 0
+
     # The next two steps are the deploy's long, silent stretch — the image
     # pull (tens of GB on a first run) and the ~40-container up (~10 min on
     # a cold box). Ansible buffers a task's output until it finishes, so
