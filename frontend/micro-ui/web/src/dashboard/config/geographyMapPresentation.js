@@ -186,6 +186,54 @@ export function getGeographyMapLegend(layerId, createdBuckets = CREATED_COUNT_LE
   return createdBuckets;
 }
 
+/**
+ * Pin colours, one per layer. DELIBERATELY not part of any legend array:
+ * getGeographyMapLegend returns a colour SCALE that getCreatedCountBucket scans
+ * by range, so an extra entry there would corrupt bucket classification. The pin
+ * row renders as a separate <li> below the scale.
+ */
+export const GEOGRAPHY_MAP_PIN_STYLES = {
+  created: { fill: "#475569", stroke: "#334155" },
+  open: { fill: "#f59e0b", stroke: "#b45309" },
+  resolved: { fill: "#16a34a", stroke: "#15803d" },
+};
+
+export function getGeographyMapPinStyle(layerId) {
+  return GEOGRAPHY_MAP_PIN_STYLES[layerId] || GEOGRAPHY_MAP_PIN_STYLES.created;
+}
+
+/**
+ * The pin legend row: what the pins on the CURRENT layer mean, plus the honesty
+ * notes (pin coverage for this layer, whether the row cap truncated them, and
+ * how many complaints have no ward and are therefore not on the map at all).
+ *
+ * `semantics: 'open-only'` means the tenant still serves the legacy pin def,
+ * whose rows are open complaints regardless of the selected layer.
+ */
+export function getGeographyMapPinLegendEntry(layerId, pins = {}) {
+  const semantics = pins.semantics === "open-only" ? "open-only" : "per-layer";
+  const label =
+    semantics === "open-only"
+      ? "Pins: complaints still open — pins do not follow this layer"
+      : layerId === "open"
+        ? "Pins: complaints still open"
+        : layerId === "resolved"
+          ? "Pins: complaints resolved"
+          : "Pins: complaints filed";
+
+  const notes = [];
+  const total = Number(pins.total) || 0;
+  if (total > 0) {
+    notes.push(`${Number(pins.shown) || 0} of ${total} shown on the map (rest have no location)`);
+  }
+  if (pins.truncated) notes.push("Showing the most recent 1000 only");
+  if (Number(pins.unmapped) > 0) {
+    notes.push(`${Number(pins.unmapped)} complaints have no ward and are not mapped`);
+  }
+
+  return { swatch: getGeographyMapPinStyle(layerId), label, note: notes.join(" · ") };
+}
+
 export function getGeographyMapLegendTitle(layerId) {
   return getGeographyMapLayerMeta(layerId)?.legendTitle ?? "Map legend";
 }
@@ -215,7 +263,14 @@ export function getCreatedCountBucket(count, buckets = CREATED_COUNT_LEGEND) {
   return scale[scale.length - 1];
 }
 
-export function getSharePctBucket(pct, legend) {
+/**
+ * `filed` is passed so a ward with NO complaints gets the white "No complaints"
+ * swatch. Both share layers compute pct as 0 when filed is 0, and pct 0 maps to
+ * legend[1] ("0%") — so the white swatch was unreachable and an empty ward
+ * painted identically to one with complaints but none resolved.
+ */
+export function getSharePctBucket(pct, legend, filed) {
+  if (filed !== undefined && !(Number(filed) > 0)) return legend[0];
   const value = Number(pct);
   if (!Number.isFinite(value) || value < 0) return legend[0];
   if (value === 0) return legend[1];
@@ -230,12 +285,12 @@ export function getCreatedCountFillStyle(count, buckets = CREATED_COUNT_LEGEND) 
   return bucketToFillStyle(getCreatedCountBucket(count, buckets));
 }
 
-export function getOpenShareFillStyle(openPct) {
-  return bucketToFillStyle(getSharePctBucket(openPct, OPEN_SHARE_LEGEND));
+export function getOpenShareFillStyle(openPct, filed) {
+  return bucketToFillStyle(getSharePctBucket(openPct, OPEN_SHARE_LEGEND, filed));
 }
 
-export function getResolvedShareFillStyle(resolvedPct) {
-  return bucketToFillStyle(getSharePctBucket(resolvedPct, RESOLVED_SHARE_LEGEND));
+export function getResolvedShareFillStyle(resolvedPct, filed) {
+  return bucketToFillStyle(getSharePctBucket(resolvedPct, RESOLVED_SHARE_LEGEND, filed));
 }
 
 /** @deprecated Legacy WoW styling — map uses created/open/resolved layers only. */

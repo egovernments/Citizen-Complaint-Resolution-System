@@ -2227,6 +2227,79 @@
   {
     "tenantId": "ke",
     "data": {
+      "id": "cl_map_complaint_pins_all",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": {
+          "has_geo_pin": true
+        },
+        "dimensions": [
+          "service_request_id",
+          "latitude",
+          "longitude",
+          "ward_code",
+          "service_code",
+          "application_status",
+          "created_date",
+          "source",
+          "sla_status_bucket",
+          "is_open",
+          "is_resolved"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "created_date",
+            "dir": "desc"
+          }
+        ],
+        "limit": 1000
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "table",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "slate",
+        "group": "complaint-landscape",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+        "dimensionKey": "service_request_id",
+        "measureKeys": [
+          "total"
+        ],
+        "compose": null,
+        "pii": false,
+        "title": "Complaint locations",
+        "internal": true
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
       "id": "cl_chart_department_flow_ratio",
       "version": "1.0.0",
       "status": "published",

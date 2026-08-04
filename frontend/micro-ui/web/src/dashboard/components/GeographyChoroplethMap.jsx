@@ -5,6 +5,8 @@ import {
   getGeographyMapLegend,
   getGeographyMapLegendFooter,
   getGeographyMapLegendTitle,
+  getGeographyMapPinLegendEntry,
+  getGeographyMapPinStyle,
   getCreatedCountFillStyle,
   buildCreatedCountScale,
   getOpenShareFillStyle,
@@ -93,15 +95,16 @@ const MAP_SUBCOUNTY_MAX_ZOOM = 12; // below -> sub-counties; at/above -> wards
 function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11, createdBuckets) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
+  // `filed` gates the share layers on the white "No complaints" swatch: a ward
+  // with nothing filed has a 0% share, which would otherwise paint like a ward
+  // that has complaints but none open/resolved.
+  const filed = Number(props.count) || Number(props.created) || 0;
   const base =
     layerMode === "open"
-      ? getOpenShareFillStyle(props.openPct)
+      ? getOpenShareFillStyle(props.openPct, filed)
       : layerMode === "resolved"
-        ? getResolvedShareFillStyle(props.resolvedPct)
-        : getCreatedCountFillStyle(
-            Number(props.count) || Number(props.created) || 0,
-            createdBuckets
-          );
+        ? getResolvedShareFillStyle(props.resolvedPct, filed)
+        : getCreatedCountFillStyle(filed, createdBuckets);
 
   const weight = isFocused ? 2.5 : zoom < 11 ? 0.75 : zoom < 14 ? 1.1 : 1.5;
 
@@ -162,6 +165,12 @@ const GeographyChoroplethMap = ({
   onLayerModeChange,
   layerOptions = [],
   cityLabel = getMapCityLabel(),
+  // Pin provenance for the legend row: 'per-layer' when the pin source projects
+  // is_open/is_resolved, 'open-only' on a tenant still serving the legacy def.
+  pinSemantics = "open-only",
+  pinsTruncated = false,
+  layerTotal = 0,
+  unmappedTotal = 0,
 }) => {
   const shellRef = useRef(null);
   const frameRef = useRef(null);
@@ -337,6 +346,19 @@ const GeographyChoroplethMap = ({
     () => getGeographyMapLegend(layerMode, createdBuckets),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [layerMode, createdScaleKey]
+  );
+  // Kept OUT of legendItems on purpose: that array is a colour scale scanned by
+  // range (getCreatedCountBucket), so the pin row renders as its own <li> below.
+  const pinLegendEntry = useMemo(
+    () =>
+      getGeographyMapPinLegendEntry(layerMode, {
+        shown: complaintPins.length,
+        total: layerTotal,
+        semantics: pinSemantics,
+        truncated: pinsTruncated,
+        unmapped: unmappedTotal,
+      }),
+    [layerMode, complaintPins.length, layerTotal, pinSemantics, pinsTruncated, unmappedTotal]
   );
   const legendTitle = getGeographyMapLegendTitle(layerMode);
   const legendFooter = getGeographyMapLegendFooter(drillTrail.length);
@@ -661,6 +683,9 @@ const GeographyChoroplethMap = ({
     }
 
     const currentZoom = zoomLevelRef.current;
+    // Pins carry the LAYER's colour (slate filed / amber open / green resolved),
+    // so a pin can never read as "open" while sitting on the Resolved layer.
+    const pinStyle = getGeographyMapPinStyle(layerMode);
 
     visibleComplaintPins.forEach((pin) => {
       if (pin.lat == null || pin.lng == null) return;
@@ -673,9 +698,9 @@ const GeographyChoroplethMap = ({
         renderer: pinRendererRef.current ?? undefined,
         pane: "complaintPins",
         radius: baseRadius,
-        color: "#b45309",
+        color: pinStyle.stroke,
         weight: 1.5,
-        fillColor: "#f59e0b",
+        fillColor: pinStyle.fill,
         fillOpacity: 0.92,
       });
 
@@ -734,7 +759,9 @@ const GeographyChoroplethMap = ({
     } else {
       selectedPinKeyRef.current = null;
     }
-  }, [visibleComplaintPins]);
+    // `layerMode`: pin colour follows the layer. (The pin ARRAY also changes per
+    // layer, but not on an 'open-only' catalog where all three are identical.)
+  }, [visibleComplaintPins, layerMode]);
 
   // ── initial fit ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -931,6 +958,26 @@ const GeographyChoroplethMap = ({
                     </span>
                   </li>
                 ))}
+                <li className="dashboard-map-legend-pin-row tw-flex tw-items-start tw-gap-2 tw-border-t tw-border-border tw-pt-1.5">
+                  <span
+                    className="dashboard-map-legend-swatch dashboard-map-legend-swatch--pin"
+                    style={{
+                      backgroundColor: pinLegendEntry.swatch.fill,
+                      borderColor: pinLegendEntry.swatch.stroke,
+                      borderRadius: "9999px",
+                    }}
+                  />
+                  <span className="tw-flex tw-flex-col tw-gap-0.5">
+                    <span className="tw-text-[10px] tw-leading-tight tw-text-foreground">
+                      {pinLegendEntry.label}
+                    </span>
+                    {pinLegendEntry.note ? (
+                      <span className="tw-text-[9px] tw-leading-tight tw-text-muted-foreground">
+                        {pinLegendEntry.note}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
               </ul>
               <p className="tw-border-t tw-border-border tw-px-2.5 tw-py-2 tw-text-[9px] tw-leading-snug tw-text-muted-foreground">
                 {legendFooter}

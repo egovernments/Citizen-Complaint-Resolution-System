@@ -25,6 +25,19 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
     }));
   }, [layers, resolvedLayer]);
 
+  const pinSemantics = layers?.pinSemantics ?? "open-only";
+  // In 'open-only' mode the pins mean "open" on every layer, so the denominator
+  // must stay the open count or the coverage line would compare open pins
+  // against filed complaints.
+  const pinLayerKey = pinSemantics === "open-only" ? "open" : resolvedLayer;
+  const totals = layers?.layerTotals ?? {};
+  const pinLayerTotal =
+    (pinLayerKey === "open"
+      ? totals.open
+      : pinLayerKey === "resolved"
+        ? totals.resolved
+        : totals.filed) ?? 0;
+
   if (loading && !wardCounts.length) {
     return (
       <div className="tw-flex tw-h-full tw-min-h-[220px] tw-items-center tw-justify-center tw-p-4 tw-text-[12px] tw-text-muted-foreground">
@@ -44,6 +57,10 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
         wardCounts={wardCounts}
         complaintPins={layers?.complaintPinsByLayer?.[resolvedLayer] ?? []}
         complaintPinsError={layers?.complaintPinsError ?? null}
+        pinSemantics={pinSemantics}
+        pinsTruncated={layers?.pinsTruncated ?? false}
+        layerTotal={pinLayerTotal}
+        unmappedTotal={layers?.unmapped?.filed ?? 0}
         layerMode={resolvedLayer}
         onLayerModeChange={setActiveLayer}
         layerOptions={GEOGRAPHY_MAP_LAYERS}
