@@ -60,7 +60,12 @@ import { getTenantId } from "../config/dashboardConfig";
  *
  * Likewise clearSession only drops the unprefixed aliases and the
  * Digit.SessionStorage cache when they actually hold the employee token being
- * torn down — on a shared browser they may belong to a live citizen session.
+ * torn down — on a shared browser they may belong to a live citizen session. An
+ * explicit sign-out overrides that (it must leave no employee session behind on
+ * a kiosk) with one exception: aliases carrying a DIFFERENT identity are proven
+ * to be someone else's and are still spared. The mirror-image rule governs
+ * writes: persistSession seizes the aliases only on a deliberate sign-in, never
+ * on a silent background refresh (#1535, #1536).
  *
  * Guarantees: at most three sends and at most one refresh per call (cannot
  * loop); concurrent 401s share a single refresh; a refresh never re-enters this
@@ -135,6 +140,38 @@ function writeStorage(key, value) {
 
 export function getEmployeeToken() {
   return readStorage(TOKEN_KEY);
+}
+
+/**
+ * The ownership predicates, defined ONCE.
+ *
+ * These rules were hand-copied into persistSession and clearSession, and the
+ * copies drifting apart is precisely what produced #1535 (the write side never
+ * got the clear side's ownership check) and #1536. Two mirrored files times two
+ * functions gave eight sites that had to change in lockstep; now there is one
+ * definition per rule.
+ */
+function readAliasToken() {
+  return readStorage(KEYS.tokenAlias.key);
+}
+
+/**
+ * True when the shared unprefixed aliases still hold `token`.
+ *
+ * Encoding is NOT a hazard here despite the two writers disagreeing about it:
+ * the main digit-ui login stores the token raw while this module JSON-stringifies
+ * it, but readStorage -> parseJson falls back to the raw string when JSON.parse
+ * throws, and an opaque UUID is never valid JSON. So the comparison holds across
+ * both encodings, and a mismatch always means a DIFFERENT VALUE — someone else's
+ * token, or a leftover.
+ */
+function ownsSharedAliases(token, aliasToken = readAliasToken()) {
+  return token != null && aliasToken === token;
+}
+
+/** The token a Digit.SessionStorage "User" entry authenticates with, if any. */
+function getCachedSessionToken(cached) {
+  return cached?.token ?? cached?.access_token ?? null;
 }
 
 /**
@@ -227,11 +264,33 @@ export function withSignificantRoleFirst(userInfo) {
  * every main-UI call would 401 until a full reload. Push the new token into
  * that cache so both surfaces stay on the same session.
  */
-function syncDigitSession(accessToken, userInfo) {
+function syncDigitSession(accessToken, userInfo, { claim = false, previousToken = null } = {}) {
   const session = window.Digit?.SessionStorage;
   if (!session?.set || !session?.get) return; // standalone build — nothing to sync
   try {
     const existing = session.get("User") || {};
+    // The "User" slot is a SINGLE shared cache — the co-hosted citizen portal
+    // authenticates from it too. Overwriting it on a background refresh would
+    // swap an actively-signed-in citizen to the employee identity without any
+    // user action (#1535). Only write when this is a deliberate sign-in, or
+    // when the cache is provably ours.
+    //
+    // Token equality alone does NOT prove that: the cache is sessionStorage
+    // (per-tab) while previousToken comes from localStorage (shared), so a
+    // sibling tab that refreshed first leaves THIS tab's cache one vintage
+    // behind — indistinguishable, by token, from a stranger's. Refusing to
+    // write there strands the tab on a token the earlier refresh already
+    // invalidated, and a reload does not heal it because index.js boots from
+    // this cache and skips the localStorage re-seed while it looks populated.
+    // Identity is the tab-independent proof; a citizen's cache still fails it.
+    const cachedToken = getCachedSessionToken(existing);
+    const cachedUuid = existing?.info?.uuid ?? null;
+    // A refresh usually carries no UserRequest, so fall back to stored identity.
+    const ourUuid = userInfo?.uuid ?? getEmployeeInfo()?.uuid ?? null;
+    const ownsCache =
+      cachedToken === previousToken ||
+      (cachedUuid != null && ourUuid != null && cachedUuid === ourUuid);
+    if (!claim && !ownsCache) return;
     session.set("User", {
       ...existing,
       token: accessToken,
@@ -243,14 +302,33 @@ function syncDigitSession(accessToken, userInfo) {
   }
 }
 
-export function persistSession({ accessToken, refreshToken, userInfo, tenantId }) {
+/**
+ * @param claimAliases  true only for an explicit sign-in through the dashboard
+ *   login form, where taking ownership of the shared unprefixed aliases IS the
+ *   intent. A silent background refresh passes false: it may refresh OUR
+ *   session, but it must never seize aliases that now belong to someone else.
+ */
+export function persistSession({ accessToken, refreshToken, userInfo, tenantId, claimAliases = false }) {
   // Normalise here rather than at the call site so a refresh cannot silently
   // revert the role order that login established.
   const normalisedUser = userInfo != null ? withSignificantRoleFirst(userInfo) : null;
 
+  // Read BEFORE writing: the token the aliases must currently hold for us to
+  // still own them. This is the write-side counterpart of clearSession's
+  // ownsAliases check — without it, a stale tab that 401s and silently
+  // refreshes clobbers a citizen's live session on the co-hosted portal with
+  // the employee identity, an identity swap with no user action (#1535).
+  const previousToken = getEmployeeToken();
+  // Read the alias ONCE: two reads of a value that cannot change between them
+  // are a wasted parse, and they let a later edit make the two expressions
+  // disagree — silently splitting one ownership decision into two.
+  const aliasToken = readAliasToken();
+  const mayWriteAliases =
+    claimAliases || ownsSharedAliases(previousToken, aliasToken) || aliasToken == null;
+
   if (accessToken != null) {
     writeStorage(TOKEN_KEY, accessToken);
-    writeStorage("token", accessToken);
+    if (mayWriteAliases) writeStorage("token", accessToken);
   }
   if (refreshToken != null) {
     // Stored WITH its owner. Only this dashboard writes the refresh token, and
@@ -264,7 +342,9 @@ export function persistSession({ accessToken, refreshToken, userInfo, tenantId }
   }
   if (normalisedUser != null) {
     writeStorage(USER_INFO_KEY, normalisedUser);
-    writeStorage("user-info", normalisedUser);
+    // The two aliases move as a pair — a `token` from one identity beside a
+    // `user-info` from another is worse than either alone.
+    if (mayWriteAliases) writeStorage("user-info", normalisedUser);
   }
   if (tenantId != null) writeStorage(TENANT_KEY, tenantId);
 
@@ -275,22 +355,49 @@ export function persistSession({ accessToken, refreshToken, userInfo, tenantId }
     } catch {
       /* ignore */
     }
-    syncDigitSession(accessToken, normalisedUser);
+    // Pass mayWriteAliases, not claimAliases: an EMPTY "User" cache is not ours
+    // to take while the aliases belong to someone else. Digit's storage expires
+    // entries after 24h, so a kiosk left overnight nulls a citizen's cache while
+    // their aliases stay live — and writing the employee identity into it would
+    // re-enter #1535 through the cache door, since index.js boots from the cache
+    // first and would then serve the employee session under the citizen's aliases.
+    syncDigitSession(accessToken, normalisedUser, { claim: mayWriteAliases, previousToken });
   }
 }
 
-export function clearSession() {
+/**
+ * @param force  true for an explicit user-initiated sign-out, which must ALWAYS
+ *   leave this browser with no employee session — see clearDashboardSession.
+ *   Left false for an automatic teardown (a server-rejected refresh), where the
+ *   aliases may since have been taken over by a citizen on the co-hosted portal
+ *   and silently signing them out would be the greater harm.
+ */
+export function clearSession({ force = false } = {}) {
   // The unprefixed aliases and the single Digit.SessionStorage "User" slot are
   // not necessarily OURS: on a shared browser a citizen may be signed into the
-  // co-hosted portal while a stale Employee.token lingers. Only drop them when
-  // they actually hold the employee token we are tearing down, or we would sign
-  // an unrelated user out of a session they are actively using.
+  // co-hosted portal while a stale Employee.token lingers. Outside an explicit
+  // sign-out, only drop them when they actually hold the employee token we are
+  // tearing down, or we would sign an unrelated user out of a session they are
+  // actively using.
   const employeeToken = getEmployeeToken();
-  const ownsAliases =
-    employeeToken != null && readStorage(KEYS.tokenAlias.key) === employeeToken;
+  const ownsAliases = ownsSharedAliases(employeeToken);
+
+  // A forced sign-out must leave no employee session behind, so it drops the
+  // aliases even when they no longer match our token — that mismatch is usually
+  // a leftover, and leaving it stranded is what #1536 was about. But "not
+  // provably ours" is not "provably someone else's": when the `user-info` alias
+  // carries a DIFFERENT uuid, the aliases are positively identified as another
+  // live session, and deleting them would sign a citizen out of the co-hosted
+  // portal mid-flow — breaking rule 1 above to fix a leftover. A missing uuid on
+  // either side proves nothing, so those still clear.
+  const employeeUuid = getEmployeeInfo()?.uuid ?? null;
+  const aliasUuid = readStorage(KEYS.userInfoAlias.key)?.uuid ?? null;
+  const aliasesAreForeign =
+    !ownsAliases && aliasUuid != null && employeeUuid != null && aliasUuid !== employeeUuid;
+  const mayDropAliases = ownsAliases || (force && !aliasesAreForeign);
 
   SESSION_KEYS.forEach((k) => {
-    if (!ownsAliases && (k === KEYS.tokenAlias.key || k === KEYS.userInfoAlias.key)) return;
+    if (!mayDropAliases && (k === KEYS.tokenAlias.key || k === KEYS.userInfoAlias.key)) return;
     try {
       window.localStorage?.removeItem(k);
     } catch {
@@ -302,13 +409,22 @@ export function clearSession() {
   // from SessionStorage FIRST, skipping the localStorage re-seed when "User"
   // exists, so even a reload would re-enter the employee UI "logged in" on a
   // token that no longer works.
+  //
+  // Gated on what the cache actually HOLDS, not on alias ownership (#1536): if
+  // a citizen rewrote the unprefixed alias, ownsAliases is false while the
+  // cache still holds the employee's dead token, and keying off ownership would
+  // strand exactly the token this teardown exists to remove.
   const session = window.Digit?.SessionStorage;
-  if (session?.set && ownsAliases) {
+  if (session?.set) {
     try {
       const cached = session.get?.("User");
-      const cachedToken = cached?.token ?? cached?.access_token ?? null;
-      // Same ownership test: never null a cache holding a different session.
-      if (cachedToken == null || cachedToken === employeeToken) session.set("User", null);
+      const cachedToken = getCachedSessionToken(cached);
+      // Never null a cache holding a DIFFERENT live session — but on an
+      // explicit sign-out an empty cache is the required end state. A cache with
+      // no token authenticates nobody, so it is safe to drop UNLESS it still
+      // carries a foreign identity payload the co-hosted UI is rendering from.
+      if (force || cachedToken === employeeToken || (cachedToken == null && !cached?.info))
+        session.set("User", null);
     } catch {
       /* ignore */
     }
@@ -454,6 +570,16 @@ async function requestRefresh() {
   // A 2xx with no token is a malformed/intercepted response (proxy login page,
   // truncated body), not a rejection. Same reasoning as above: do not destroy.
   if (!data?.access_token) return REFRESH_UNAVAILABLE;
+
+  // The refresh token was read up to 15s ago. A sign-out — in this tab or, since
+  // localStorage is shared and nothing broadcasts the event, in another one —
+  // may have wiped the session in the meantime. Persisting now would write a
+  // freshly issued employee token back into keys the user just cleared, and
+  // because the wipe leaves the aliases vacant, mayWriteAliases would let it
+  // take those too: the next person at a shared kiosk boots straight into the
+  // signed-out employee's session. clearSession always drops REFRESH_KEY, so its
+  // absence is the marker. Nothing to clean up — we wrote nothing.
+  if (readStorage(REFRESH_KEY) == null) return REFRESH_UNAVAILABLE;
 
   persistSession({
     accessToken: data.access_token,
