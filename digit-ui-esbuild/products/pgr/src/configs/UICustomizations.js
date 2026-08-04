@@ -1732,11 +1732,16 @@ export const UICustomizations = {
           return (
             <div style={{ display: "grid" }}>
               <span className="link" style={{ display: "grid" }}>
-                <Link
-                  to={`/${window.contextPath}/employee/pgr/complaint-details/${value}`}
-                >
-                  {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
-                </Link>
+                {(() => {
+                  const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
+                  const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy;
+                  const query = creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
+                  return (
+                    <Link to={`/${window.contextPath}/employee/pgr/complaint-details/${value}${query}`}>
+                      {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
+                    </Link>
+                  );
+                })()}
               </span>
               {(() => {
                 // Complaint Type label = the parent group's NODE NAME, straight
@@ -1787,7 +1792,10 @@ export const UICustomizations = {
     MobileDetailsOnClick: (row, tenantId) => {
       const complaintNo = row?.["CS_COMMON_COMPLAINT_NO"];
       if (!complaintNo) return `/${window.contextPath}/employee/pgr/inbox-v2`;
-      return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}`;
+      const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
+      const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy || row?.businessObject?.service?.createdBy;
+      const query = creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
+      return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}${query}`;
     },
   },
   CampaignsInboxConfig: {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { complaintLabel } from "../../utils/complaintLabel";
 import { useTranslation } from "react-i18next";
-import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
+import { useHistory, useLocation, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
 import { ActionBar, Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
 import { convertEpochFormateToDate } from "../../utils";
@@ -180,7 +180,13 @@ const PGRDetails = () => {
   }
 
   // Fetch complaint details
-  const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch({ serviceRequestId: id }, tenantId);
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const searchCreatedBy = queryParams.get("createdBy");
+  const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch(
+    { serviceRequestId: id, ...(searchCreatedBy ? { createdBy: searchCreatedBy } : {}) },
+    tenantId
+  );
   // CCSD-2123: schema x-order for the Additional Details rows (complainantName
   // pinned first inside buildExtendedAttributeRows regardless).
   const extAttrOrder = useExtendedAttributeOrder(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes);
@@ -504,6 +510,15 @@ const PGRDetails = () => {
     t,
   });
 
+  // CCSD-2130: only show the complainant details card when the complaint was
+  // filed on behalf of a citizen by an employee. If the createdBy uuid matches
+  // the citizen/accountId uuid, it means the citizen filed it themself and the
+  // card would otherwise echo the masked actor.
+  const complaintService = pgrData?.ServiceWrappers?.[0]?.service;
+  const complainantUuid = complaintService?.citizen?.uuid || complaintService?.accountId;
+  const filedByUuid = complaintService?.auditDetails?.createdBy;
+  const filedOnBehalfOfCitizen = Boolean(complainantUuid && filedByUuid && complainantUuid !== filedByUuid);
+
   return (
     <div className="v2-pgr-details v2-scope">
       {/* Header */}
@@ -618,36 +633,26 @@ const PGRDetails = () => {
                   },
                 ],
               },
-              // CCSD-2130: "Complainant Details" — service.citizen was captured
-              // (mandatory on the Reception form), persisted to the user
-              // service, and returned on every search, but NEVER rendered: the
-              // timeline deliberately masks the citizen actor for everyone,
-              // assuming a complainant card that had not been built. This is
-              // that card. Values arrive from the backend post-policy (it
-              // returns "****" when masking applies), so this stays a dumb
-              // value→row mapper like Additional Details.
-              ...((pgrData?.ServiceWrappers?.[0]?.service?.citizen?.name ||
-                   pgrData?.ServiceWrappers?.[0]?.service?.citizen?.mobileNumber)
+              ...(filedOnBehalfOfCitizen
                 ? [{
-                  cardType: "primary",
-                  header: t("CS_COMPLAINT_DETAILS_COMPLAINANT_DETAILS"),
-                  fieldPairs: [
-                    {
-                      inline: true,
-                      label: t("COMPLAINTS_COMPLAINANT_NAME"),
-                      type: "text",
-                      value: pgrData?.ServiceWrappers[0].service?.citizen?.name || "NA",
-                    },
-                    {
-                      inline: true,
-                      label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
-                      type: "text",
-                      value: pgrData?.ServiceWrappers[0].service?.citizen?.mobileNumber || "NA",
-                    },
-                  ],
-                }]
-                : []
-              ),
+                    cardType: "primary",
+                    header: t("ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS"),
+                    fieldPairs: [
+                      {
+                        inline: true,
+                        label: t("COMPLAINTS_COMPLAINANT_NAME"),
+                        type: "text",
+                        value: complaintService?.citizen?.name || "NA",
+                      },
+                      {
+                        inline: true,
+                        label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
+                        type: "text",
+                        value: complaintService?.citizen?.mobileNumber || "NA",
+                      },
+                    ],
+                  }]
+                : []),
               // Read-only "Additional Details" — fetch service.extendedAttributes
               // and show it as label:value rows; backend returns masked ("****")
               // values. Renders nothing when there are no extended attributes.
