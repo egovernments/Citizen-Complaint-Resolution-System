@@ -37,6 +37,19 @@ domain: digit.example.com
 # 127.0.0.1 with `Host:` header.
 tls_enabled: true
 
+# Optional. Default empty (Docker's own default: /var/lib/docker, on the
+# root filesystem). Set to a path on a larger/dedicated partition, e.g.
+# "/opt/docker", when `/` is small — a fresh box pulling the ~30 images in
+# this stack onto a small `/` reliably fills it mid-deploy with "no space
+# left on device". Setting this ALSO relocates containerd's own image-layer
+# store (a separate config that Docker's data-root does not control) to a
+# sibling directory, e.g. "/opt/containerd" — both are relabeled for SELinux
+# automatically on RHEL-family targets. Only takes effect on a box where
+# Docker/containerd have never been started before; an already-populated
+# /var/lib/docker needs a manual stop+rsync+relabel migration first (see
+# local-setup/ansible/README.md).
+docker_data_root: ""
+
 # ────────── DIGIT tenancy ──────────
 
 # REQUIRED. Four-tier tenant slug:
