@@ -384,7 +384,7 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -569,7 +569,7 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -948,7 +948,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1019,7 +1019,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui:pgr-fixes}
     container_name: digit-ui
     restart: on-failure
     ports:

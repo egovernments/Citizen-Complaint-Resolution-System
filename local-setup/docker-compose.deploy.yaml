@@ -761,7 +761,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -830,7 +830,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"
