@@ -107,7 +107,10 @@ const navGroups = [
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
       { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
-      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3 },
+      // Only useful to people who can change destinations; requiredRoles keeps it
+      // out of everyone else's sidebar (the route itself renders read-only for
+      // them, so this is a tidiness gate, not the security boundary).
+      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN'] },
     ],
   },
 ];
@@ -121,6 +124,19 @@ const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => (
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();
+
+  // Hide nav items that declare requiredRoles from users who hold none of them.
+  // navGroups is a module-level constant, so the filter runs here where the
+  // session's roles are known.
+  const userRoles = state.user?.roles ?? [];
+  const visibleNavGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !('requiredRoles' in item) || (item as { requiredRoles?: string[] }).requiredRoles?.some((r) => userRoles.includes(r))
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
@@ -267,7 +283,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           </div>
 
           {/* Grouped navigation */}
-          {navGroups.map((group) => {
+          {visibleNavGroups.map((group) => {
             const isCollapsed = collapsedGroups[group.labelKey];
             return (
               <div key={group.labelKey} className="mt-3">
