@@ -892,7 +892,7 @@
     - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: mz$'
+        regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
         replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
 
     - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose

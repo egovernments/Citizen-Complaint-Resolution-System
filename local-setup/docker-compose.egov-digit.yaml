@@ -367,8 +367,8 @@ services:
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: mz
-      PARENT_LEVEL_TENANT_ID: mz
+      STATE_LEVEL_TENANT_ID: pg
+      PARENT_LEVEL_TENANT_ID: pg
       WORKFLOW_PROCESS_SEARCH_PATH: egov-workflow-v2/egov-wf/process/_search
       WORKFLOW_BUSINESSSERVICE_SEARCH_PATH: egov-workflow-v2/egov-wf/businessservice/_search
       WORKFLOW_PROCESS_COUNT_PATH: egov-workflow-v2/egov-wf/process/_count
