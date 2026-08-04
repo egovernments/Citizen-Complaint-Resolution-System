@@ -491,3 +491,55 @@ test("v3 backfill: no primary in record → nothing invented", () => {
     assert.equal(props["--color-primary-2"], undefined);
   } finally { restore(); }
 });
+
+// ── OOTB presets (issue #1035) ──────────────────────────────────────────────
+
+test("preset: Bomet Blue applies its real production colors to key brand surfaces", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    const bometBlue = require("./presets/bomet-blue.json");
+    applyTheme(bometBlue);
+    // Regression guard: decorative/brand surfaces MUST stay pinned to the
+    // tenant's real, live production color — the whole point of "Bomet
+    // Blue" is formalizing what's already deployed, not a fresh invented
+    // palette. button-primary-bg-default and link-normal are the exception:
+    // white-on-#1B85D2 and #1B85D2-on-white both fail WCAG AA (~3.9:1), so
+    // those two roles use #1565A8 instead — still Bomet's own darker brand
+    // tone (already used for header/sidebar below), not an outside color.
+    assert.equal(props["--color-button-primary-bg-default"], "#1565A8");
+    assert.equal(props["--color-primary-main"], "#1B85D2");
+    assert.equal(props["--color-error"], "#E02D3A");
+    assert.equal(props["--color-digitv2-chart-2"], "#E5202A");
+    assert.equal(props["--color-header-bg"], "#1565A8");
+    assert.equal(props["--color-link-normal"], "#1565A8");
+    assert.equal(props["--color-sidebar-bg"], "#1565A8");
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
+  } finally { restore(); }
+});
+
+test("preset: Maputo Green applies its Mozambique-flag-inspired colors to key brand surfaces", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    const maputoGreen = require("./presets/maputo-green.json");
+    applyTheme(maputoGreen);
+    assert.equal(props["--color-header-bg"], "#046A38");
+    assert.equal(props["--color-sidebar-bg"], "#046A38");
+    assert.equal(props["--color-button-primary-bg-default"], "#FFCE00");
+    assert.equal(props["--color-button-primary-text"], "#046A38");
+    assert.equal(props["--color-error"], "#CE1126");
+    assert.equal(props["--color-digitv2-chart-2"], "#FFCE00");
+    assert.equal(props["--color-link-normal"], "#046A38");
+  } finally { restore(); }
+});
+
+test("preset catalog: both OOTB themes are enumerable and schema-shaped", () => {
+  const { presets } = require("./presets/index.js");
+  assert.ok(presets["bomet-blue"], "bomet-blue should be in the catalog");
+  assert.ok(presets["maputo-green"], "maputo-green should be in the catalog");
+  assert.equal(presets["bomet-blue"].name, "Bomet Blue");
+  assert.equal(presets["maputo-green"].name, "Maputo Green");
+  assert.equal(presets["bomet-blue"].version, "3");
+  assert.equal(presets["maputo-green"].version, "3");
+});
