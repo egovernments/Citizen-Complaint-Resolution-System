@@ -377,6 +377,85 @@
             update_cache: yes
           when: ansible_facts['os_family'] == 'RedHat'
 
+        # ==================== Relocate Docker + containerd storage (optional) ====================
+        # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
+        # Docker's data-root (images/volumes metadata) AND containerd's own
+        # root (the actual image-layer store — a separate config file that
+        # Docker's data-root does NOT control) off a small root filesystem.
+        # Without this, a fresh box with a small `/` and a larger `/opt`
+        # fills `/` mid-deploy pulling the ~30 images in this stack and dies
+        # with "no space left on device". Must run before containerd/docker
+        # are ever started — relocating an already-populated /var/lib/docker
+        # or /var/lib/containerd needs a stop+rsync+relabel migration instead
+        # (not handled here; do that by hand first if Docker's already run).
+        - name: "Docker/containerd storage relocation (when docker_data_root is set)"
+          when: (docker_data_root | default('') | length) > 0
+          vars:
+            _containerd_root: "{{ docker_data_root | dirname }}/containerd"
+          block:
+            - name: "Ensure Docker data-root directory exists"
+              ansible.builtin.file:
+                path: "{{ docker_data_root }}"
+                state: directory
+                mode: '0711'
+
+            - name: "Ensure containerd root directory exists"
+              ansible.builtin.file:
+                path: "{{ _containerd_root }}"
+                state: directory
+                mode: '0711'
+
+            - name: "containerd — ensure a default config.toml exists"
+              ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+              args:
+                creates: /etc/containerd/config.toml
+
+            - name: "containerd — point root at the relocated directory"
+              ansible.builtin.lineinfile:
+                path: /etc/containerd/config.toml
+                regexp: '^\s*root\s*='
+                line: 'root = "{{ _containerd_root }}"'
+              register: containerd_root_config
+
+            # semanage errors if the exact equivalence already exists (e.g. a
+            # re-run) — that's not a real failure, just already-done.
+            - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
+              ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
+              loop:
+                - { orig: /var/lib/docker, new: "{{ docker_data_root }}" }
+                - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
+              register: _semanage_fcontext
+              failed_when: >-
+                _semanage_fcontext.rc != 0
+                and 'already defined' not in (_semanage_fcontext.stderr | default(''))
+              changed_when: _semanage_fcontext.rc == 0
+              when:
+                - ansible_facts['os_family'] == 'RedHat'
+                - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+
+            - name: "SELinux — restorecon the relocated storage dirs (RHEL family)"
+              ansible.builtin.command: "restorecon -RF {{ item }}"
+              loop:
+                - "{{ docker_data_root }}"
+                - "{{ _containerd_root }}"
+              changed_when: false
+              when:
+                - ansible_facts['os_family'] == 'RedHat'
+                - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+
+            - name: "Restart containerd if its config changed"
+              ansible.builtin.service:
+                name: containerd
+                state: restarted
+                enabled: true
+              when: containerd_root_config.changed | default(false)
+
+            - name: "Ensure containerd is enabled + running"
+              ansible.builtin.service:
+                name: containerd
+                state: started
+                enabled: true
+
         # apt/dnf both install docker.service disabled by default — enable +
         # start it explicitly so subsequent tasks can talk to the daemon.
         - name: Ensure docker daemon is enabled + running
@@ -572,7 +651,9 @@
                   {{ {'log-driver': 'json-file',
                       'log-opts': {'max-size': docker_log_max_size,
                                    'max-file': docker_log_max_file_effective | string},
-                      'insecure-registries': insecure_registries | default([])} }}
+                      'insecure-registries': insecure_registries | default([])}
+                     | combine({'data-root': docker_data_root}
+                               if (docker_data_root | default('') | length > 0) else {}) }}
               ansible.builtin.copy:
                 dest: /etc/docker/daemon.json
                 content: "{{ _existing | combine(_ours, recursive=True) | to_nice_json }}\n"
