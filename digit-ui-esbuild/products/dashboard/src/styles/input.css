@@ -381,48 +381,6 @@
   .dashboard-header-controls {
     @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2;
   }
-
-  .dashboard-header-search {
-    @apply tw-relative tw-m-0 tw-inline-flex tw-h-8 tw-shrink-0 tw-items-center;
-  }
-
-  .dashboard-header-search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    color: var(--dashboard-muted-foreground, #6b6860);
-    pointer-events: none;
-    transform: translateY(-50%);
-  }
-
-  .dashboard-header-search-input {
-    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-appearance-none tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-foreground focus:tw-outline-none;
-    -webkit-appearance: none;
-  }
-
-  /* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
-     long :not(.class) chain outranks this class, forcing the left padding to
-     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
-     the ID-specificity column and, with !important, wins. */
-  .dashboard-header-search-input:not(#dashboard-search-noop) {
-    padding-left: 2rem !important;
-  }
-
-  .dashboard-header-search-input::-webkit-search-decoration,
-  .dashboard-header-search-input::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  .dashboard-header-search-input:focus {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
-  }
-
   .dashboard-header-controls .dashboard-header-btn {
     @apply tw-box-border tw-m-0 tw-inline-flex tw-h-8 tw-min-h-8 tw-max-h-8 tw-shrink-0 tw-items-center tw-justify-center tw-gap-1.5 tw-rounded-sm tw-border tw-border-solid tw-border-border tw-bg-surface tw-px-2.5 tw-py-0 tw-text-[12px] tw-font-medium tw-leading-none tw-text-foreground;
     font-family: inherit;
@@ -954,11 +912,6 @@
     width: 100% !important;
     min-width: 0;
   }
-
-  .dashboard-header-mobile-search {
-    display: none;
-  }
-
   .dashboard-sidebar-backdrop {
     display: none;
   }
@@ -1094,26 +1047,7 @@
 
     .dashboard-header-controls .dashboard-header-btn {
       @apply tw-px-2;
-    }
-
-    .dashboard-header-mobile-search {
-      display: block;
-      border-bottom: 1px solid var(--border);
-      background-color: var(--surface);
-      padding: 0.5rem 0.75rem;
-    }
-
-    .dashboard-header-search--mobile {
-      display: flex !important;
-      width: 100%;
-    }
-
-    .dashboard-header-search--mobile .dashboard-header-search-input {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .dashboard-filters-card {
+    }    .dashboard-filters-card {
       align-items: stretch;
       @apply tw-px-2 tw-py-1.5;
     }
@@ -1163,11 +1097,6 @@
   }
 
   @media (min-width: 640px) and (max-width: 1023px) {
-    .dashboard-header-search-input {
-      @apply tw-w-44;
-      max-width: 100%;
-    }
-
     .dashboard-filters-row {
       row-gap: 0.5rem;
     }
@@ -2336,12 +2265,6 @@
     color: var(--status-breach);
     font-weight: 500;
   }
-
-  .dashboard-search-dimmed {
-    opacity: 0.12;
-    pointer-events: none;
-  }
-
   .dashboard-sla-status-select {
     appearance: none;
     -webkit-appearance: none;
@@ -2655,25 +2578,6 @@
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
 }
-
-/* Header search — same height as Add KPI / Reset / Export (vendor forces 44px). */
-.dashboard-root .dashboard-header-search,
-.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
-  height: 2rem !important;
-  min-height: 2rem !important;
-  max-height: 2rem !important;
-}
-
-.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
-  font-size: 12px !important;
-  line-height: 1.25 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  padding-left: 2rem !important;
-  border-radius: 4px !important;
-  box-sizing: border-box !important;
-}
-
 .dashboard-root .dashboard-header-controls .dashboard-header-btn {
   height: 2rem !important;
   min-height: 2rem !important;

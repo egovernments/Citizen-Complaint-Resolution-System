@@ -427,8 +427,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     findDragHoverTarget,
   } = useCatalogLayout(kpis, pack?.layout);
 
-  const [searchQuery, setSearchQuery] = useState("");
-
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
   const draggingWidgetIdRef = useRef(null);
   const gridWrapRef = useRef(null);
@@ -645,19 +643,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     [layout]
   );
 
-  // Title-based tile search: dim tiles whose title doesn't match the query.
-  // Matches against the LOCALIZED title (what the user sees on the tile).
-  const matchesSearch = useCallback(
-    (kpiId) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return true;
-      const title = (resolveTitle(kpis[kpiId]) || kpiId).toLowerCase();
-      return title.includes(q);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
-    [searchQuery, kpis, i18nTick]
-  );
-
   // Add-KPI picker source: every role-visible catalog tile (already filtered
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
   // `language` re-localizes the resolved names on a language switch; `i18nTick`
@@ -846,8 +831,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       onResetLayout={resetLayout}
       onDragWidgetStart={handleDragWidgetStart}
       onDragWidgetEnd={handleDragWidgetEnd}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
       onFilterChange={handleFilterChange}
@@ -918,7 +901,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
-            const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
               <TypeFilterIgnoredNote />
             ) : null;
@@ -936,7 +918,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
               return (
                 <div
                   key={item.i}
-                  className={`dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col${dimClass}`}
+                  className="dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col"
                 >
                   {removeBtn}
                   {renderTile(item.i)}
@@ -968,7 +950,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             return (
               <section
                 key={item.i}
-                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
+                className="dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
               >
                 {removeBtn}
                 {!selfHeaders && (
