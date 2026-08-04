@@ -519,6 +519,27 @@ const PGRDetails = () => {
   const filedByUuid = complaintService?.auditDetails?.createdBy;
   const filedOnBehalfOfCitizen = Boolean(complainantUuid && filedByUuid && complainantUuid !== filedByUuid);
 
+  // CCSD-2130: confidential complaints must not expose the complainant.
+  //
+  // The backend ALREADY masks service.extendedAttributes on these — verified
+  // against a live confidential complaint: complainantName / witnessName /
+  // witnessAddress / witnessNote all come back "****". What it does NOT mask is
+  // the service.citizen block, which pgr-services enriches from egov-user on
+  // every search and where every attribute is defaultVisibility PLAIN — so
+  // name, mobileNumber and correspondenceAddress arrive in clear.
+  //
+  // This masks exactly those citizen-derived rows, matching the backend's own
+  // "****" convention so the two sources read consistently. It is a DISPLAY
+  // control only: the values are still present in the API response, so the
+  // durable fix is backend masking gated on CONFIDENTIAL_COMPLAINT_VIEWER (the
+  // role ComplaintTemplateType.allowedViewerRoles already names but which does
+  // not yet exist). Tracked separately — do not treat this as enforcement.
+  const isConfidentialComplaint = complaintService?.extendedAttributes?.isConfidential === true;
+  // Same sentinel the backend emits, so masked rows look identical whichever
+  // side did the masking.
+  const CONFIDENTIAL_MASK = "****";
+  const maskIfConfidential = (value) => (isConfidentialComplaint ? CONFIDENTIAL_MASK : value);
+
   return (
     <div className="v2-pgr-details v2-scope">
       {/* Header */}
@@ -601,17 +622,23 @@ const PGRDetails = () => {
                   },
                   // Typed address (product call, sheet-v4 review): the backend
                   // persists the complainant-entered address into the User
-                  // Service and returns it as citizen.correspondenceAddress —
-                  // masked/absent per backend policy on confidential complaints.
+                  // Service and returns it as citizen.correspondenceAddress.
+                  // CCSD-2130: that field is NOT masked server-side on
+                  // confidential complaints (verified live — it came back in
+                  // clear while extendedAttributes were "****"), so mask it here
+                  // alongside the complainant name/mobile. The
+                  // extendedAttributes.complainantAddress fallback already
+                  // arrives masked, so the mask is idempotent for that branch.
                   ...((pgrData?.ServiceWrappers?.[0]?.service?.citizen?.correspondenceAddress ||
                       pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.complainantAddress)
                     ? [
                         {
                           inline: true,
                           label: t("ES_CREATECOMPLAINT_ADDRESS"),
-                          value:
+                          value: maskIfConfidential(
                             pgrData.ServiceWrappers[0].service.citizen?.correspondenceAddress ||
-                            pgrData.ServiceWrappers[0].service.extendedAttributes?.complainantAddress,
+                            pgrData.ServiceWrappers[0].service.extendedAttributes?.complainantAddress
+                          ),
                         },
                       ]
                     : []),
@@ -642,13 +669,13 @@ const PGRDetails = () => {
                         inline: true,
                         label: t("COMPLAINTS_COMPLAINANT_NAME"),
                         type: "text",
-                        value: complaintService?.citizen?.name || "NA",
+                        value: maskIfConfidential(complaintService?.citizen?.name || "NA"),
                       },
                       {
                         inline: true,
                         label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
                         type: "text",
-                        value: complaintService?.citizen?.mobileNumber || "NA",
+                        value: maskIfConfidential(complaintService?.citizen?.mobileNumber || "NA"),
                       },
                     ],
                   }]
