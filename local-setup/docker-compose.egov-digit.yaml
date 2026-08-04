@@ -1576,10 +1576,10 @@ services:
   # ===========================================================================
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # DIGIT_UI_IMAGE; default keeps the prior pinned tag. NOTE: this is the
-    # legacy micro-ui container — the modern esbuild bundle is laid in via
-    # build_digit_ui or served by host nginx (see build/NIGHTLY-BUILDS.md).
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui:pgr-fixes}
+    # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
+    # the SPA Build Pipeline, multi-arch); the bundle lives at
+    # /var/web/digit-ui, matching the mounted digit-ui.conf root.
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-cae07a3}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1598,6 +1598,27 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    networks:
+      - egov-network
+
+  # ===========================================================================
+  # Configurator (DIGIT Studio) — tenant onboarding admin console
+  # Static Vite SPA served by the image's nginx under /configurator/.
+  # Tenant-neutral (no VITE_* baked); CI-built by the SPA Build Pipeline.
+  # Ansible deploys may instead serve a host-built dist via host nginx
+  # (build_configurator: true) — this container is the pull-based default.
+  # ===========================================================================
+  configurator:
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-cae07a3}
+    container_name: configurator
+    ports:
+      - "18890:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - egov-network
 

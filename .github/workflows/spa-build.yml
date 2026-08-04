@@ -35,7 +35,7 @@ jobs:
       tag:        ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install yq
         run: |
@@ -102,18 +102,15 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    outputs:
-      amd64_digest: ${{ steps.digest_amd64.outputs.digest }}
-      arm64_digest: ${{ steps.digest_arm64.outputs.digest }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker Layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name }}-${{ github.ref_name }}
@@ -121,7 +118,7 @@ jobs:
             ${{ runner.os }}-${{ matrix.arch }}-buildx-${{ github.event.inputs.pipeline_name }}-
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -143,41 +140,29 @@ jobs:
         run: |
           docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }}
 
-      - name: Export Digest (amd64)
-        if: matrix.arch == 'amd64'
-        id: digest_amd64
-        run: |
-          digest=$(docker buildx imagetools inspect \
-            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
-            --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')
-          echo "digest=$digest" >> $GITHUB_OUTPUT
-
-      - name: Export Digest (arm64)
-        if: matrix.arch == 'arm64'
-        id: digest_arm64
-        run: |
-          digest=$(docker buildx imagetools inspect \
-            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-${{ matrix.arch }} \
-            --format '{{json .}}' | jq -r '.manifest.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')
-          echo "digest=$digest" >> $GITHUB_OUTPUT
-
   create-manifest:
     name: Create and Push Manifest
     needs: [build-matrix, resolve-config]
     runs-on: ubuntu-latest
     steps:
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
+      # Stitch the multi-arch manifest from the per-arch TAGS the build
+      # matrix pushed. No digest plumbing through matrix job outputs —
+      # matrix children share one output namespace, so the last finisher
+      # would overwrite the other's digest (and conditional steps leave
+      # one of them empty).
       - name: Create and push manifest
         run: |
-          docker manifest create egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }} \
-            --amend egovio/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.amd64_digest }} \
-            --amend egovio/${{ needs.resolve-config.outputs.image_name }}@${{ needs.build-matrix.outputs.arm64_digest }}
-          docker manifest push egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}
+          docker buildx imagetools create \
+            --tag egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }} \
+            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-amd64 \
+            egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}-arm64
+          docker buildx imagetools inspect egovio/${{ needs.resolve-config.outputs.image_name }}:${{ needs.resolve-config.outputs.tag }}
 
       - name: Add summary to GitHub Actions
         run: |
