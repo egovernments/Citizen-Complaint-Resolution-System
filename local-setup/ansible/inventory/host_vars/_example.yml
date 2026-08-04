@@ -20,7 +20,8 @@
 
 # REQUIRED. IP or hostname Ansible SSHes into. Can be a Tailscale IP
 # (100.x.x.x), a Hetzner VPC IP (10.0.0.x), or a public address.
-ansible_host: 10.0.0.10
+ansible_host: localhost
+ansible_connection: local
 
 # REQUIRED. Public hostname for the deployment. Used in:
 #   - nginx `server_name`
