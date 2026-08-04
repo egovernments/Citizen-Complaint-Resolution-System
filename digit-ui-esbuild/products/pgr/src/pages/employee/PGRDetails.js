@@ -498,6 +498,15 @@ const PGRDetails = () => {
     t,
   });
 
+  // CCSD-2130: only show the complainant details card when the complaint was
+  // filed on behalf of a citizen by an employee. If the createdBy uuid matches
+  // the citizen/accountId uuid, it means the citizen filed it themself and the
+  // card would otherwise echo the masked actor.
+  const complaintService = pgrData?.ServiceWrappers?.[0]?.service;
+  const complainantUuid = complaintService?.citizen?.uuid || complaintService?.accountId;
+  const filedByUuid = complaintService?.auditDetails?.createdBy;
+  const filedOnBehalfOfCitizen = Boolean(complainantUuid && filedByUuid && complainantUuid !== filedByUuid);
+
   return (
     <div className="v2-pgr-details v2-scope">
       {/* Header */}
@@ -612,6 +621,26 @@ const PGRDetails = () => {
                   },
                 ],
               },
+              ...(filedOnBehalfOfCitizen
+                ? [{
+                    cardType: "primary",
+                    header: t("ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS"),
+                    fieldPairs: [
+                      {
+                        inline: true,
+                        label: t("COMPLAINTS_COMPLAINANT_NAME"),
+                        type: "text",
+                        value: complaintService?.citizen?.name || "NA",
+                      },
+                      {
+                        inline: true,
+                        label: t("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER"),
+                        type: "text",
+                        value: complaintService?.citizen?.mobileNumber || "NA",
+                      },
+                    ],
+                  }]
+                : []),
               // Read-only "Additional Details" — fetch service.extendedAttributes
               // and show it as label:value rows; backend returns masked ("****")
               // values. Renders nothing when there are no extended attributes.
