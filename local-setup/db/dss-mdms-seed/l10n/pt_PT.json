@@ -855,6 +855,46 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF",
+    "message": " de ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+    "message": " apresentados no mapa (os restantes não têm localização)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_CREATED",
+    "message": "Marcadores: reclamações registadas",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN",
+    "message": "Marcadores: reclamações ainda em aberto",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+    "message": "Marcadores: reclamações ainda em aberto — os marcadores não acompanham esta camada",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_RESOLVED",
+    "message": "Marcadores: reclamações resolvidas",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
+    "message": "A mostrar apenas as 1000 mais recentes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "message": " reclamações não têm bairro e não são mapeadas",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_MAP_LEGEND_TITLE",
     "message": "Legenda do mapa",
     "module": "rainmaker-dashboard"

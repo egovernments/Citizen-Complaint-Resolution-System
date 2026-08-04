@@ -41,6 +41,7 @@ import {
   isMapKind,
   buildRefs,
   buildRefsKey,
+  PIN_ROW_CAP,
 } from "./utils/queryPlan";
 import {
   hierLevelParam,
@@ -297,10 +298,23 @@ function assembleResult(kpiId, def, results) {
   if (isMapKind(viz.kind)) {
     const pinRes = results?.[`${kpiId}__pins`];
     if (pinRes?.rows?.length) {
+      // Whether the pin source projects the open/resolved state at all. The
+      // legacy def (cl_map_complaint_pins) does not — its rows are open-only —
+      // so the UI must fall back to "pins do not follow this layer" rather than
+      // silently classing every pin as neither open nor resolved.
+      assembled.pinsStatusKnown = (pinRes.columns || []).some(
+        (c) => (typeof c === "string" ? c : c?.name) === "is_open"
+      );
+      // The server clamps every query at AnalyticsPlanner.MAX_LIMIT, so a
+      // result exactly at the cap is indistinguishable from a truncated one.
+      assembled.pinsTruncated = pinRes.rows.length >= PIN_ROW_CAP;
       assembled.pins = pinRes.rows
         .map((r) => ({
           id: r.service_request_id,
           serviceRequestId: r.service_request_id,
+          // Booleans arrive as true/"true" depending on the JDBC/JSON path.
+          isOpen: r.is_open === true || r.is_open === "true",
+          isResolved: r.is_resolved === true || r.is_resolved === "true",
           // Kajal's resolveComplaintPinPositions needs wardCode to place a pin
           // (snaps/jitters around the ward centroid when the geo-pin is unusable).
           wardCode: String(r.ward_code ?? ""),

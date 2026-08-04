@@ -155,6 +155,26 @@ const MAP_KINDS = new Set(["map", "choropleth-map"]);
 // to overlay per-complaint pins (the FE map widget has the pin layer; this feeds it).
 const PIN_KPI_ID = "cl_map_complaint_pins";
 
+// The per-layer pin source. The legacy def hard-filters `is_open`, so its pins
+// can only ever mean "still open" — the Resolved layer shaded "0 resolved"
+// underneath open-complaint pins. Worse, `filters.is_open` with no
+// `window.timeRole` trips the backend's live-open-snapshot exemption
+// (KpiQueryComposer.isLiveOpenSnapshot), which skips BOTH the base window and
+// the global dateFrom/dateTo — so the legacy pins were "all open complaints,
+// all time" against a last_7d choropleth. The replacement def drops that filter
+// and projects is_open/is_resolved so the FE can partition pins per layer.
+const PIN_KPI_ID_ALL = "cl_map_complaint_pins_all";
+
+// AnalyticsPlanner clamps every query at MAX_LIMIT = 1000, so a result at
+// exactly this size is indistinguishable from a truncated one.
+const PIN_ROW_CAP = 1000;
+
+// Prefer the per-layer def; a tenant whose catalog predates it keeps working
+// (pins stay open-only, and the map legend says so).
+function resolvePinKpiId(kpis) {
+  return kpis && kpis[PIN_KPI_ID_ALL] ? PIN_KPI_ID_ALL : PIN_KPI_ID;
+}
+
 function isCardKind(kind) {
   return CARD_KINDS.has(kind);
 }
@@ -202,6 +222,7 @@ function globalParams(filters) {
 function buildRefs(tiles, kpis, filters) {
   const gp = globalParams(filters);
   const refs = {};
+  const pinKpiId = resolvePinKpiId(kpis);
   for (const tile of tiles) {
     const kpiId = tile.kpiId;
     const def = kpis[kpiId];
@@ -218,7 +239,8 @@ function buildRefs(tiles, kpis, filters) {
     }
     if (isMapKind(kind)) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
-      refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...gp } };
+      // The ref KEY stays `${kpiId}__pins` whichever source resolves.
+      refs[`${kpiId}__pins`] = { kpiId: pinKpiId, params: { ...gp } };
     }
   }
   return refs;
@@ -280,10 +302,21 @@ function assembleResult(kpiId, def, results) {
   if (isMapKind(viz.kind)) {
     const pinRes = results?.[`${kpiId}__pins`];
     if (pinRes?.rows?.length) {
+      // Whether the pin source projects the open/resolved state at all. The
+      // legacy def does not — its rows are open-only — so the UI falls back to
+      // "pins do not follow this layer" rather than classing every pin as
+      // neither open nor resolved.
+      assembled.pinsStatusKnown = (pinRes.columns || []).some(
+        (c) => (typeof c === "string" ? c : c?.name) === "is_open"
+      );
+      assembled.pinsTruncated = pinRes.rows.length >= PIN_ROW_CAP;
       assembled.pins = pinRes.rows
         .map((r) => ({
           id: r.service_request_id,
           serviceRequestId: r.service_request_id,
+          // Booleans arrive as true/"true" depending on the JDBC/JSON path.
+          isOpen: r.is_open === true || r.is_open === "true",
+          isResolved: r.is_resolved === true || r.is_resolved === "true",
           // Kajal's resolveComplaintPinPositions needs wardCode to place a pin
           // (snaps/jitters around the ward centroid when the geo-pin is unusable).
           wardCode: String(r.ward_code ?? ""),
@@ -405,6 +438,9 @@ const AdminDashboardInner = ({ onSignOut }) => {
         ids: tiles.map((t) => t.kpiId),
         kinds: tiles.map((t) => kpis[t.kpiId]?.viz?.kind),
         gp: globalParams(filters),
+        // A tenant gaining the per-layer pin def must refire the batch: the ref
+        // key is unchanged, so this is the only signal the source moved.
+        pin: resolvePinKpiId(kpis),
       }),
     [tiles, filters, kpis]
   );

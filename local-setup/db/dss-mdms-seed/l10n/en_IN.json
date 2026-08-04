@@ -855,6 +855,46 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF",
+    "message": " of ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+    "message": " shown on the map (rest have no location)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_CREATED",
+    "message": "Pins: complaints filed",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN",
+    "message": "Pins: complaints still open",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+    "message": "Pins: complaints still open — pins do not follow this layer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_RESOLVED",
+    "message": "Pins: complaints resolved",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
+    "message": "Showing the most recent 1,000 only",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "message": " complaints have no ward and are not mapped",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_MAP_LEGEND_TITLE",
     "message": "Map legend",
     "module": "rainmaker-dashboard"
