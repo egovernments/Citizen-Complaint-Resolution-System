@@ -103,9 +103,11 @@ db_fast_path_ack_data_wipe: true
 run_ci_tests: false
 force_clean: false
 install_claude_code: false
-# Configurator is back in even on slim: runtime cost is nil (static SPA
-# served by host nginx, no container) — only the one-time vite build at
-# deploy costs RAM, and swap absorbs it.
+# Configurator stays in even on slim: with build_configurator false the
+# deploy pulls the CI-built egovio/configurator image and host nginx
+# proxies /configurator/ to that container (a tiny static-file nginx,
+# negligible RAM) — no on-box vite build. Set true to build the dist on
+# the host and serve it from host nginx instead (costs RAM at deploy).
 build_configurator: false
 
 nginx_features:

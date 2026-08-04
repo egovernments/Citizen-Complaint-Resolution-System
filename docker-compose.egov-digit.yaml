@@ -1444,7 +1444,7 @@ services:
   # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
   # ===========================================================================
   digit-ui:
-    image: egovio/digit-ui-esbuild:master-c96345c
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-c96345c}
     container_name: digit-ui
     ports:
       - "18080:80"
