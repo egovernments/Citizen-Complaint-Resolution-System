@@ -107,6 +107,7 @@ const navGroups = [
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
       { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
+      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3 },
     ],
   },
 ];

@@ -125,6 +125,20 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'mdms', label: 'Complaint Hierarchies', schema: 'RAINMAKER-PGR.ComplaintHierarchyDefinition',
     idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
   },
+  // Analytics destinations for the citizen/employee SPA (one row per destination).
+  //
+  // `dedicated: true` is load-bearing here, not cosmetic. The generic MDMS CRUD
+  // would be actively unsafe for this master: dataProvider's update and delete
+  // both re-resolve the record with a mdmsSearch that is NOT scoped to the
+  // session tenant, so a city admin editing a row INHERITED from the state
+  // tenant would rewrite the state row for every city that inherits it, and one
+  // delete click would deactivate analytics everywhere. The dedicated editor
+  // writes only rows the current tenant owns and never deletes — turning a
+  // destination off is `enabled: false` on a permanent record.
+  'analytics-providers': {
+    type: 'mdms', label: 'Analytics Providers', schema: 'common-masters.AnalyticsProvider',
+    idField: 'code', nameField: 'code', descriptionField: 'type', dedicated: true,
+  },
 
   // Config-driven public landing (CCSD-2008). P3 = generic CRUD through the
   // standard MdmsResource pages; the P4 Landing Page Builder will swap only the

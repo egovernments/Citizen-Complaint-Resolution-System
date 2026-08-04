@@ -88,6 +88,7 @@ const customEnglishMessages: TranslationMessages = {
       designations: 'Designations',
       hierarchies: 'Hierarchies',
       map_config: 'Map Configuration',
+      analytics_providers: 'Analytics Providers',
       complaint_management: 'Complaint Management',
       complaint_hierarchies: 'Complaint Hierarchies',
       complaint_types: 'Complaint Types',
