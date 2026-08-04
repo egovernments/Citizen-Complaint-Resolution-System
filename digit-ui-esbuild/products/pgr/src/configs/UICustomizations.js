@@ -1652,12 +1652,22 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      // Status scope: an explicit filter wins; otherwise both tabs default to
-      // every open/actionable state. The tabs differ on the ASSIGNEE axis, not
-      // the status axis (PO decision 2026-07-15).
+      // A targeted lookup (complaint number / mobile number / date range —
+      // the "search" section, as opposed to the "filter" section) must not be
+      // narrowed to open states: CCRS#1367 — once GRO rejects a complaint it
+      // moves to the terminal REJECTED state, which isn't in OPEN_STATES/
+      // allStates, so a CSR searching that exact complaint number got zero
+      // results back even though the complaint still needs to be reopened.
+      const hasExplicitSearch = Boolean(
+        searchForm.complaintNumber || searchForm.mobileNumber || (requestDate?.startDate && requestDate?.endDate)
+      );
+      // Status scope: an explicit filter wins; a targeted search leaves the
+      // status scope open; otherwise both tabs default to every open/
+      // actionable state. The tabs differ on the ASSIGNEE axis, not the
+      // status axis (PO decision 2026-07-15).
       if (statuses.length > 0) {
         params.applicationStatus = statuses;
-      } else {
+      } else if (!hasExplicitSearch) {
         params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
       }
 
