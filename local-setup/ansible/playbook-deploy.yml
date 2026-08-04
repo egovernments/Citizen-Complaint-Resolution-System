@@ -665,7 +665,21 @@
                 - ansible_facts['os_family'] == 'RedHat'
                 - _selinux_enforced
 
-            - name: "SELinux — restorecon the relocated storage dirs (RHEL family)"
+            # Expensive: walks every file individually (read + possibly
+            # rewrite its security.selinux xattr). Only needed the FIRST time
+            # the relocation happens — the semanage equivalence above makes
+            # new files Docker/containerd create afterward inherit the
+            # correct label automatically (default SELinux file-creation
+            # behavior: a new file/dir inherits its parent's context absent
+            # an explicit type-transition rule, and the parent here is
+            # already correctly labeled after this one pass). Re-running
+            # restorecon on every subsequent deploy against an
+            # already-relocated, already-populated data-root just re-walks
+            # a now-large Docker/containerd tree for nothing — on a
+            # multi-GB overlay2 store this has been observed to take
+            # 15-20+ minutes on IOPS-limited cloud block storage, blocking
+            # every redeploy for no benefit.
+            - name: "SELinux — restorecon the relocated storage dirs (RHEL family, first relocation only)"
               ansible.builtin.command: "restorecon -RF {{ item }}"
               loop:
                 - "{{ _docker_data_root }}"
@@ -674,6 +688,7 @@
               when:
                 - ansible_facts['os_family'] == 'RedHat'
                 - _selinux_enforced
+                - not (_relocation_already_applied | bool)
 
             - name: "Restart containerd if its config changed"
               ansible.builtin.service:
