@@ -928,6 +928,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "query": {
       "grain": "facts",
       "filters": {
+        "is_open": false,
         "is_resolved": true
       },
       "measures": [
@@ -1119,7 +1120,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "dir": "desc"
         }
       ],
-      "limit": 8
+      "limit": 500
     },
     "supportsSeries": false,
     "viz": {
@@ -1140,7 +1141,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "measureKey": "total",
       "seriesLabel": "Filed",
       "seriesLabelKey": "DASHBOARD_SERIES_FILED",
-      "limit": 8,
+      "limit": 500,
       "subtitle": "Complaints filed, by type",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
       "labelFormat": "dimension"
@@ -1363,7 +1364,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         }
       ],
       "sortBySegment": "breached",
-      "limit": 8,
+      "limit": 120,
       "labelFormat": "officer",
       "compose": null,
       "pii": {
@@ -1460,7 +1461,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "color": "var(--chart-4)"
         }
       ],
-      "limit": 8,
+      "limit": 300,
       "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
       "labelFormat": "dimension"
@@ -1803,7 +1804,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
-              "is_reopened": true
+              "is_reopened": true,
+              "is_resolved": true
             }
           },
           "denominator": {
@@ -2027,7 +2029,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "column": "sla_target_ms"
         }
       ],
-      "limit": 50
+      "limit": 1000
     },
     "supportsSeries": false,
     "viz": {
@@ -2561,7 +2563,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "filed",
         "resolved"
       ],
-      "limit": 12,
+      "limit": 500,
       "labelFormat": "department",
       "compose": null,
       "pii": false,
