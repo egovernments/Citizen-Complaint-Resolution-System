@@ -6,10 +6,12 @@ import {
   getGeographyMapLegendFooter,
   getGeographyMapLegendTitle,
   getCreatedCountFillStyle,
+  buildCreatedCountScale,
   getOpenShareFillStyle,
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
+import { getNumberFormatStamp } from "../utils/numberFormat";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
@@ -90,7 +92,7 @@ function createComplaintPinPopup(pin, radius) {
 const MAP_COUNTY_MAX_ZOOM = 10; // below -> county outline only
 const MAP_SUBCOUNTY_MAX_ZOOM = 12; // below -> sub-counties; at/above -> wards
 
-function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
+function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11, createdBuckets) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
   const base =
@@ -98,7 +100,10 @@ function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
       ? getOpenShareFillStyle(props.openPct)
       : layerMode === "resolved"
         ? getResolvedShareFillStyle(props.resolvedPct)
-        : getCreatedCountFillStyle(Number(props.count) || Number(props.created) || 0);
+        : getCreatedCountFillStyle(
+            Number(props.count) || Number(props.created) || 0,
+            createdBuckets
+          );
 
   const weight = isFocused ? 2.5 : zoom < 11 ? 0.75 : zoom < 14 ? 1.1 : 1.5;
 
@@ -321,7 +326,26 @@ const GeographyChoroplethMap = ({
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
-  const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode, language]);
+  // Scale the Created layer to the data actually on the map (#1461). Derived from
+  // the WARD series, never from the rendered features: zoom rolls counts up by
+  // summing children, so a per-level scale would rewrite the legend on every
+  // scroll step. Not keyed on layerMode either — toggling layers must not move it.
+  const createdBuckets = useMemo(
+    () => buildCreatedCountScale((wardCounts || []).map((w) => w?.count)).buckets,
+    [wardCounts]
+  );
+  // wardCounts is rebuilt by identity on every layer toggle, so depend on the
+  // EDGES rather than the array — an identical scale must not force Leaflet to
+  // tear down and rebuild every polygon.
+  const createdScaleKey = useMemo(
+    () => createdBuckets.map((b) => `${b.min ?? 0}:${b.max ?? 0}`).join("|"),
+    [createdBuckets]
+  );
+  const legendItems = useMemo(
+    () => getGeographyMapLegend(layerMode, createdBuckets),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layerMode, language, createdScaleKey, getNumberFormatStamp()]
+  );
   const legendTitle = getGeographyMapLegendTitle(layerMode);
   const legendFooter = getGeographyMapLegendFooter(drillTrail.length);
 
@@ -530,7 +554,7 @@ const GeographyChoroplethMap = ({
 
     L.geoJSON(geoFeatures, {
       style: (feature) =>
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current),
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets),
       onEachFeature: (feature, layer) => {
         layer.feature = feature;
         const code = feature?.properties?.code;
@@ -548,7 +572,8 @@ const GeographyChoroplethMap = ({
             feature,
             layerMode,
             focusedCode,
-            zoomLevelRef.current
+            zoomLevelRef.current,
+            createdBuckets
           );
           layer.setStyle({ ...s, weight: 2.5, fillOpacity: Math.min(s.fillOpacity + 0.1, 0.75) });
           layer.bringToFront?.();
@@ -556,7 +581,7 @@ const GeographyChoroplethMap = ({
 
         layer.on("mouseout", () => {
           layer.setStyle(
-            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current)
+            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets)
           );
         });
 
@@ -615,6 +640,7 @@ const GeographyChoroplethMap = ({
     // (#882 ward-tooltip precedent) so bound tooltip text picks up the new locale.
     language,
     layerMode,
+    createdScaleKey,
   ]);
 
   // ── update choropleth border weights when zoom / focus / mode changes ─────
@@ -623,10 +649,13 @@ const GeographyChoroplethMap = ({
       const feature = layer.feature;
       if (!feature) return;
       layer.setStyle(
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel)
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel, createdBuckets)
       );
     });
-  }, [focusedCode, layerMode, zoomLevel]);
+    // createdScaleKey, not createdBuckets: the array is rebuilt on every layer
+    // toggle but the scale itself rarely changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedCode, layerMode, zoomLevel, createdScaleKey]);
 
   // ── draw complaint pins — redraw on data change; resize on zoom without closing popup
   useEffect(() => {

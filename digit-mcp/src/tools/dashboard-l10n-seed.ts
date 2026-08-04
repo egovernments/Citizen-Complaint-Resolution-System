@@ -820,36 +820,6 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_1_3",
-    "message": "1–3",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_11_13",
-    "message": "11–13",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_14_15",
-    "message": "14–15",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_4_5",
-    "message": "4–5",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_6_8",
-    "message": "6–8",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_9_10",
-    "message": "9–10",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_MAP_LEGEND_EXPAND",
     "message": "Expand legend",
     "module": "rainmaker-dashboard"
@@ -2401,36 +2371,6 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_MAP_LEGEND_COLLAPSE",
     "message": "Recolher legenda",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_1_3",
-    "message": "1–3",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_11_13",
-    "message": "11–13",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_14_15",
-    "message": "14–15",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_4_5",
-    "message": "4–5",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_6_8",
-    "message": "6–8",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_9_10",
-    "message": "9–10",
     "module": "rainmaker-dashboard"
   },
   {

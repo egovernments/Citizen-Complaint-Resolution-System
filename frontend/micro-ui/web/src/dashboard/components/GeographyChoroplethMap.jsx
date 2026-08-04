@@ -6,6 +6,7 @@ import {
   getGeographyMapLegendFooter,
   getGeographyMapLegendTitle,
   getCreatedCountFillStyle,
+  buildCreatedCountScale,
   getOpenShareFillStyle,
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
@@ -89,7 +90,7 @@ function createComplaintPinPopup(pin, radius) {
 const MAP_COUNTY_MAX_ZOOM = 10; // below -> county outline only
 const MAP_SUBCOUNTY_MAX_ZOOM = 12; // below -> sub-counties; at/above -> wards
 
-function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
+function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11, createdBuckets) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
   const base =
@@ -97,7 +98,10 @@ function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
       ? getOpenShareFillStyle(props.openPct)
       : layerMode === "resolved"
         ? getResolvedShareFillStyle(props.resolvedPct)
-        : getCreatedCountFillStyle(Number(props.count) || Number(props.created) || 0);
+        : getCreatedCountFillStyle(
+            Number(props.count) || Number(props.created) || 0,
+            createdBuckets
+          );
 
   const weight = isFocused ? 2.5 : zoom < 11 ? 0.75 : zoom < 14 ? 1.1 : 1.5;
 
@@ -319,7 +323,21 @@ const GeographyChoroplethMap = ({
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
-  const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode]);
+  // Scale the Created layer to the data on the map (#1461) — see the esbuild
+  // copy for why the domain is the ward series and not the rendered features.
+  const createdBuckets = useMemo(
+    () => buildCreatedCountScale((wardCounts || []).map((w) => w?.count)).buckets,
+    [wardCounts]
+  );
+  const createdScaleKey = useMemo(
+    () => createdBuckets.map((b) => `${b.min ?? 0}:${b.max ?? 0}`).join("|"),
+    [createdBuckets]
+  );
+  const legendItems = useMemo(
+    () => getGeographyMapLegend(layerMode, createdBuckets),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layerMode, createdScaleKey]
+  );
   const legendTitle = getGeographyMapLegendTitle(layerMode);
   const legendFooter = getGeographyMapLegendFooter(drillTrail.length);
 
@@ -528,7 +546,7 @@ const GeographyChoroplethMap = ({
 
     L.geoJSON(geoFeatures, {
       style: (feature) =>
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current),
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets),
       onEachFeature: (feature, layer) => {
         layer.feature = feature;
         const code = feature?.properties?.code;
@@ -554,7 +572,7 @@ const GeographyChoroplethMap = ({
 
         layer.on("mouseout", () => {
           layer.setStyle(
-            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current)
+            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets)
           );
         });
 
@@ -610,6 +628,7 @@ const GeographyChoroplethMap = ({
     drillTrail,
     joined.geoFeatures?.features,
     layerMode,
+    createdScaleKey,
   ]);
 
   // ── update choropleth border weights when zoom / focus / mode changes ─────
@@ -618,10 +637,11 @@ const GeographyChoroplethMap = ({
       const feature = layer.feature;
       if (!feature) return;
       layer.setStyle(
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel)
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel, createdBuckets)
       );
     });
-  }, [focusedCode, layerMode, zoomLevel]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedCode, layerMode, zoomLevel, createdScaleKey]);
 
   // ── draw complaint pins — redraw on data change; resize on zoom without closing popup
   useEffect(() => {
