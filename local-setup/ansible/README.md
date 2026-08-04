@@ -534,7 +534,11 @@ playbook take over:
 
 ```bash
 # On the target host, as root:
-systemctl stop docker containerd
+# Stop docker.socket too — leaving it active means any client that touches
+# /var/run/docker.sock during the copy (a stray `docker ps`, a monitoring
+# agent, a cron job) socket-activates dockerd again, which then writes into
+# /var/lib/docker while rsync is still reading it.
+systemctl stop docker.socket docker.service containerd
 
 mkdir -p /opt/docker /opt/containerd
 rsync -aHAX --info=progress2 /var/lib/docker/  /opt/docker/
@@ -547,8 +551,11 @@ semanage fcontext -a -e /var/lib/containerd /opt/containerd
 restorecon -RF /opt/docker /opt/containerd
 
 # Once you've verified the copies (diff -rq old vs new, or just trust rsync),
-# reclaim the space:
-rm -rf /var/lib/docker/* /var/lib/containerd/*
+# reclaim the space. Remove the directories themselves rather than `rm -rf
+# .../*` — a bare `*` glob skips dotfiles (e.g. dockerd's own
+# .buildNodeID), which would otherwise survive and make the playbook's
+# emptiness guard see the "cleaned" path as still populated on the next run:
+rm -rf /var/lib/docker /var/lib/containerd
 ```
 
 Then set `docker_data_root: "/opt/docker"` in the tenant's host_vars and
