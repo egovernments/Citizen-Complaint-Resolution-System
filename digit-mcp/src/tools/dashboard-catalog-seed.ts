@@ -2301,13 +2301,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "type": "officer"
         },
         {
-          "id": "role",
-          "label": "Role",
-          "labelKey": "DASHBOARD_COL_ROLE",
-          "align": "left",
-          "type": "text"
-        },
-        {
           "id": "department_code",
           "label": "Dept",
           "labelKey": "DASHBOARD_COL_DEPT",
@@ -3473,39 +3466,39 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "id": "cl_table_subtype_performance",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Complaint sub-type performance",
       "accent": "teal",
       "format": "hoursDays",
       "columns": [
         {
-          "id": "subtypeLabel",
+          "id": "service_code",
           "type": "text",
           "align": "left",
           "label": "Subtype",
-          "width": "30%"
+          "width": "40%"
         },
         {
-          "id": "share_pct",
-          "type": "percent",
-          "align": "left",
-          "label": "% of complaints",
-          "width": "18%"
+          "id": "total",
+          "type": "integer",
+          "align": "right",
+          "label": "Complaints",
+          "width": "20%"
         },
         {
-          "id": "avgResolutionMs",
+          "id": "avg_resolution_ms",
           "type": "hoursDays",
-          "align": "left",
+          "align": "right",
           "label": "Avg resolution",
-          "width": "22%"
+          "width": "20%"
         },
         {
-          "id": "idealSlaMs",
+          "id": "ideal_sla_ms",
           "type": "hoursDays",
-          "align": "left",
+          "align": "right",
           "label": "SLA",
-          "width": "18%"
+          "width": "20%"
         }
       ],
       "compose": null,
@@ -3518,8 +3511,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "avg_resolution_ms",
         "ideal_sla_ms"
       ],
-      "dimensionKey": "service_code",
-      "tableProfile": "subtypePerformance"
+      "dimensionKey": "service_code"
     },
     "rbac": {
       "visibleTo": [
