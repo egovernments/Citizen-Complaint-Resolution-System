@@ -134,6 +134,46 @@ test("aliases are claimed when absent", () => {
   assert.equal(JSON.parse(localStorage._dump().token), "employee-new");
 });
 
+test("a refresh re-syncs our OWN cache even when it is a vintage behind", () => {
+  // Two tabs, one employee. Tab A refreshed first (Employee.token is already
+  // T1) while this tab's per-tab "User" cache still holds T0. Token equality
+  // cannot tell that apart from a stranger's cache; identity can. Refusing to
+  // write here strands the surrounding employee UI on T0, which tab A's refresh
+  // already invalidated server-side — and a reload does not heal it, because
+  // index.js boots from this cache and skips the localStorage re-seed.
+  const { mod, readUser } = load({
+    local: {
+      "Employee.token": enc("employee-t1"),
+      "Employee.user-info": enc({ uuid: "employee" }),
+      token: enc("employee-t1"),
+    },
+    user: { token: "employee-t0", info: { uuid: "employee" } },
+  });
+
+  mod.persistSession({ accessToken: "employee-t2" });
+
+  assert.equal(readUser().token, "employee-t2", "our own stale cache is repaired");
+});
+
+test("a silent refresh does not claim an EXPIRED cache while aliases are foreign", () => {
+  // Digit's storage expires "User" after 24h, so a kiosk left overnight has a
+  // null cache beside a citizen's still-live aliases. Emptiness alone must not
+  // license the write, or #1535's identity swap returns through the cache.
+  const { mod, readUser } = load({
+    local: {
+      "Employee.token": enc("employee-old"),
+      "Employee.user-info": enc({ uuid: "employee" }),
+      token: enc("citizen-token"),
+      "user-info": enc({ uuid: "citizen" }),
+    },
+    user: undefined,
+  });
+
+  mod.persistSession({ accessToken: "employee-new", userInfo: { uuid: "employee", roles: [] } });
+
+  assert.equal(readUser(), undefined, "the shared cache is left for the citizen");
+});
+
 /* ------------------------------------------------------------------ */
 /* #1536 — sign-out is unconditional; teardown keys off the cache      */
 /* ------------------------------------------------------------------ */
@@ -159,6 +199,29 @@ test("forced sign-out clears aliases even when the alias was rewritten", () => {
   assert.equal(readUser(), null, "Digit session cache emptied");
 });
 
+test("forced sign-out spares aliases that are provably a DIFFERENT user's", () => {
+  // The kiosk rule ("always leave no employee session behind") must not reach
+  // as far as deleting a session we can positively identify as someone else's:
+  // the user-info alias carries a different uuid, so a citizen is signed into
+  // the co-hosted portal right now and would lose their half-filed complaint.
+  const { mod, localStorage } = load({
+    local: {
+      "Employee.token": enc("employee-live"),
+      "Employee.user-info": enc({ uuid: "employee" }),
+      token: enc("citizen-token"),
+      "user-info": enc({ uuid: "citizen" }),
+    },
+    user: { token: "citizen-token", info: { uuid: "citizen" } },
+  });
+
+  mod.clearSession({ force: true });
+
+  const dump = localStorage._dump();
+  assert.equal(JSON.parse(dump.token), "citizen-token", "the citizen stays signed in");
+  assert.deepEqual(JSON.parse(dump["user-info"]), { uuid: "citizen" }, "their identity survives");
+  assert.equal(dump["Employee.token"], undefined, "our own session is gone regardless");
+});
+
 test("automatic teardown still spares a citizen's live aliases", () => {
   const { mod, localStorage } = load({
     local: { "Employee.token": enc("employee-dead"), token: enc("citizen-token") },
@@ -170,6 +233,42 @@ test("automatic teardown still spares a citizen's live aliases", () => {
   const dump = localStorage._dump();
   assert.equal(JSON.parse(dump.token), "citizen-token", "citizen stays signed in");
   assert.equal(dump["Employee.token"], undefined, "the dead employee token is dropped");
+});
+
+test("a refresh in flight when the user signs out does not resurrect the session", async () => {
+  // Nothing broadcasts a sign-out, and localStorage is shared across tabs, so a
+  // refresh started before the wipe can land after it. Writing the freshly
+  // issued token then would restore Employee.* AND — the aliases now being
+  // vacant, hence "claimable" — the shared aliases too, handing the next person
+  // at the kiosk the session the employee just signed out of (#1536).
+  const { mod, localStorage } = load({
+    local: {
+      "Employee.token": enc("employee-live"),
+      "Employee.user-info": enc({ uuid: "employee" }),
+      "Employee.refresh-token": enc({ token: "refresh-1", userUuid: "employee" }),
+      token: enc("employee-live"),
+    },
+    user: { token: "employee-live", info: { uuid: "employee" } },
+  });
+
+  const realFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("/user/oauth/token")) {
+      mod.clearSession({ force: true }); // the employee clicks Sign out mid-flight
+      return { ok: true, status: 200, json: async () => ({ access_token: "employee-new" }) };
+    }
+    return { ok: false, status: 401, json: async () => ({}) };
+  };
+
+  try {
+    await assert.rejects(() => mod.authFetch("/analytics", { buildBody: () => ({}) }));
+  } finally {
+    global.fetch = realFetch;
+  }
+
+  const dump = localStorage._dump();
+  assert.equal(dump["Employee.token"], undefined, "the signed-out session stays gone");
+  assert.equal(dump.token, undefined, "and it does not re-claim the shared aliases");
 });
 
 test("automatic teardown drops a dead token cached under a foreign alias", () => {

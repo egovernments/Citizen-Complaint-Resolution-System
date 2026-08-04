@@ -58,11 +58,13 @@ const DEMO_USERS = [
 export const hasDashboardSession = hasAuth;
 // Sign-out must ALWAYS leave this browser with no employee session. Aliasing
 // the ownership-gated clearSession directly (as this did) meant that when the
-// unprefixed `token` alias had been rewritten by the co-hosted UI or stored in
-// a different encoding, Sign out + reload left the aliases and the
-// Digit.SessionStorage "User" cache holding a live employee token — the next
-// person on a shared kiosk landed in the employee UI still authenticated as
-// the employee who had just signed out (#1536).
+// unprefixed `token` alias held a value other than Employee.token — rewritten
+// by the co-hosted UI, or a leftover from an earlier session — Sign out +
+// reload left the aliases and the Digit.SessionStorage "User" cache holding a
+// live employee token, and the next person on a shared kiosk landed in the
+// employee UI still authenticated as the employee who had just signed out
+// (#1536). The force flag still refuses to delete aliases that are provably a
+// DIFFERENT live user's — see clearSession.
 export const clearDashboardSession = () => clearSession({ force: true });
 
 const inputStyle = {
