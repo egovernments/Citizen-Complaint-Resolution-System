@@ -158,6 +158,18 @@
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
 
+    # Ubuntu cloud images ship rsync/git/tmux; Rocky/Alma *minimal* cloud
+    # images do not. The always-on config sync (ansible.posix.synchronize →
+    # rsync on the target), the /opt/digit-ui-esbuild git clone below, and
+    # hmr's tmux session all hard-require them — install up front so a fresh
+    # minimal box doesn't die halfway through provisioning, after Docker/
+    # firewalld/SELinux have already mutated it.
+    - name: "Baseline CLI tooling (RHEL family: rsync, git, tmux)"
+      ansible.builtin.dnf:
+        name: [rsync, git, tmux]
+        state: present
+      when: ansible_facts['os_family'] == 'RedHat'
+
     # `static` and `hmr` modes need the digit-ui-esbuild source on disk —
     # HMR runs `node esbuild.dev.js` from it, static builds via
     # `node esbuild.build.js`. `container` mode skips this entirely:
@@ -212,6 +224,18 @@
       when:
         - ansible_facts['os_family'] not in ['Debian', 'RedHat']
         - ansible_system != 'Darwin'
+
+    # Playwright's `--with-deps` only knows apt: it must be dropped on the
+    # RHEL family (RPM equivalents come from tasks/ensure-chromium-deps.yml)
+    # and on Darwin (no apt). One fact, referenced by every
+    # `playwright install` call site, keeps that policy in a single place —
+    # a third OS family only ever needs this one expression updated.
+    - name: "Playwright — resolve the --with-deps flag once for all call sites"
+      ansible.builtin.set_fact:
+        _playwright_with_deps_flag: >-
+          {{ '--with-deps' if (ansible_system != 'Darwin'
+                               and ansible_facts['os_family'] != 'RedHat')
+             else '' }}
 
     # ansible_facts['selinux'] is the boolean `false` (not a dict) when the
     # libselinux Python bindings are absent, and a dict like {"status": "..."}
@@ -396,6 +420,33 @@
             purge: yes
           when: ansible_facts['os_family'] == 'Debian'
 
+        # The docker-ce/containerd.io deb postinst auto-starts docker.service
+        # and containerd.service DURING package install — before the storage
+        # relocation below can run — which populates /var/lib/docker and
+        # /var/lib/containerd on the default root and trips the relocation
+        # guard on a genuinely fresh box. policy-rc.d exit 101 is the
+        # Debian-documented switch deb-systemd-invoke consults: it holds the
+        # postinst auto-start until the relocated data-root is configured,
+        # and is removed again below (before "Ensure docker daemon is
+        # enabled + running"). force: false → an operator-managed
+        # policy-rc.d is left alone (and never removed by us either: the
+        # release task below only fires when this one created the file).
+        - name: "Docker install — hold package auto-start until data-root is configured (Debian/Ubuntu)"
+          ansible.builtin.copy:
+            dest: /usr/sbin/policy-rc.d
+            mode: '0755'
+            force: false
+            content: |
+              #!/bin/sh
+              # Temporary: installed by the DIGIT ansible deploy while
+              # docker-ce is installed with a relocated data-root; removed
+              # again in the same run.
+              exit 101
+          register: _docker_autostart_hold
+          when:
+            - ansible_facts['os_family'] == 'Debian'
+            - (docker_data_root | default('') | length) > 0
+
         - name: Install Docker Engine (Debian/Ubuntu)
           apt:
             name:
@@ -465,6 +516,19 @@
             update_cache: yes
           when: ansible_facts['os_family'] == 'RedHat'
 
+        # semanage (and the libselinux python bindings the seboolean module
+        # needs) live in policycoreutils-python-utils, which minimal
+        # RHEL-family cloud images do not preinstall. One early install
+        # serves both the storage-relocation labeling below and the nginx
+        # SELinux block further down.
+        - name: "SELinux — ensure policy tooling is present (RHEL family)"
+          dnf:
+            name: policycoreutils-python-utils
+            state: present
+          when:
+            - ansible_facts['os_family'] == 'RedHat'
+            - _selinux_enforced
+
         # ==================== Relocate Docker + containerd storage (optional) ====================
         # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
         # Docker's data-root (images/volumes metadata) AND containerd's own
@@ -481,11 +545,33 @@
           vars:
             # Strip any trailing slash before deriving the sibling containerd
             # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
-            # INSIDE Docker's own data-root instead of beside it), and
-            # dirname('/docker') is '/' (yields the bogus '//containerd').
+            # INSIDE Docker's own data-root instead of beside it). A top-level
+            # value like '/docker' has dirname '/', which would yield the
+            # bogus '//containerd' — collapse that to '/containerd'.
             _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
-            _containerd_root: "{{ _docker_data_root | dirname }}/containerd"
+            _containerd_root: "{{ (_docker_data_root | dirname | regex_replace('^/$', '')) ~ '/containerd' }}"
           block:
+            # If daemon.json already points at the relocated data-root, the
+            # relocation was applied by an earlier run and anything left in
+            # /var/lib/docker (or /var/lib/containerd) is a harmless
+            # first-start skeleton, not live data — skip the populated-guard
+            # so routine re-deploys don't hard-fail. String-match rather than
+            # from_json so an unparseable daemon.json can't blow up the guard
+            # itself (the daemon.json merge task later fails with a clear
+            # message in that case).
+            - name: "Guard — read daemon.json to detect an already-applied relocation"
+              ansible.builtin.slurp:
+                src: /etc/docker/daemon.json
+              register: _daemon_json_pre
+              failed_when: false
+
+            - name: "Guard — note whether the relocation is already in effect"
+              ansible.builtin.set_fact:
+                _relocation_already_applied: >-
+                  {{ _daemon_json_pre.content is defined
+                     and (_daemon_json_pre.content | b64decode)
+                         is search('"data-root"\s*:\s*"' ~ (_docker_data_root | regex_escape) ~ '/?"') }}
+
             # Relocating a data-root that Docker/containerd have already
             # written to would point daemon.json/config.toml at an empty
             # directory: every existing image and named volume (including the
@@ -502,6 +588,7 @@
               register: _live_dataroot_check
               changed_when: false
               failed_when: false
+              when: not (_relocation_already_applied | bool)
 
             - name: "Guard — refuse to relocate an already-populated data-root"
               ansible.builtin.fail:
@@ -513,10 +600,12 @@
                   volume (including the Postgres complaint database) — stop
                   docker/containerd, rsync {{ item.item }} to its new home by
                   hand (relabeling under SELinux if applicable), then re-run.
-              loop: "{{ _live_dataroot_check.results }}"
+              loop: "{{ _live_dataroot_check.results | default([]) }}"
               loop_control:
-                label: "{{ item.item }}"
-              when: (item.stdout_lines | default([]) | length) > 0
+                label: "{{ item.item | default('') }}"
+              when:
+                - not (_relocation_already_applied | bool)
+                - (item.stdout_lines | default([]) | length) > 0
 
             - name: "Ensure Docker data-root directory exists"
               ansible.builtin.file:
@@ -553,19 +642,9 @@
                 insertbefore: BOF
               register: containerd_root_config
 
-            # semanage lives in policycoreutils-python-utils, which is not
-            # preinstalled on minimal RHEL-family cloud images and is
-            # otherwise only installed later by the nginx SELinux block below
-            # — install it here first so labeling doesn't rc=127 before that
-            # block ever runs.
-            - name: "SELinux — ensure semanage is available (RHEL family)"
-              dnf:
-                name: policycoreutils-python-utils
-                state: present
-              when:
-                - ansible_facts['os_family'] == 'RedHat'
-                - _selinux_enforced
-
+            # semanage is provided by the "SELinux — ensure policy tooling is
+            # present" task above (before this relocation block).
+            #
             # semanage errors if the exact equivalence already exists (e.g. a
             # re-run) — that's not a real failure, just already-done. Fresh
             # adds say "already defined"; re-adding after equivalences already
@@ -609,6 +688,63 @@
                 state: started
                 enabled: true
 
+            # Seed the data-root into daemon.json BEFORE dockerd's first
+            # start. The full merged daemon.json (log rotation, insecure
+            # registries) is written much later in this play — but "Ensure
+            # docker daemon is enabled + running" below starts dockerd first,
+            # and without the seed that first start populates the default
+            # /var/lib/docker, tripping the relocation guard above on every
+            # subsequent re-deploy. Merge, don't overwrite: operator-set keys
+            # in an existing daemon.json survive (the later merge task keeps
+            # them too).
+            - name: "Docker — seed data-root into daemon.json before first start"
+              block:
+                - name: "Docker — write daemon.json with the relocated data-root"
+                  vars:
+                    _existing: >-
+                      {{ (_daemon_json_pre.content | default('') | b64decode | from_json)
+                         if (_daemon_json_pre.content is defined
+                             and (_daemon_json_pre.content | b64decode | trim | length) > 0)
+                         else {} }}
+                  ansible.builtin.copy:
+                    dest: /etc/docker/daemon.json
+                    content: "{{ _existing | combine({'data-root': _docker_data_root}) | to_nice_json }}\n"
+                    mode: '0644'
+                  register: _daemon_json_seed
+              rescue:
+                - name: "Docker — existing daemon.json is unreadable"
+                  ansible.builtin.fail:
+                    msg: >-
+                      /etc/docker/daemon.json exists but could not be parsed
+                      as JSON, so the relocated data-root could not be seeded
+                      into it. Fix or remove that file and re-run — it has
+                      been left untouched rather than overwritten.
+
+            - name: "Docker — check whether dockerd is already running"
+              ansible.builtin.command: systemctl is-active docker
+              register: _dockerd_active
+              changed_when: false
+              failed_when: false
+
+            - name: "Docker — restart a running dockerd to apply the relocated data-root"
+              ansible.builtin.service:
+                name: docker
+                state: restarted
+              when:
+                - _daemon_json_seed.changed | default(false)
+                - (_dockerd_active.stdout | default('')) == 'active'
+
+        # Release the Debian package auto-start hold now that the data-root
+        # is configured — only if this run created it (an operator-managed
+        # policy-rc.d is never touched).
+        - name: "Docker install — release the package auto-start hold (Debian/Ubuntu)"
+          ansible.builtin.file:
+            path: /usr/sbin/policy-rc.d
+            state: absent
+          when:
+            - ansible_facts['os_family'] == 'Debian'
+            - _docker_autostart_hold.changed | default(false)
+
         # apt/dnf both install docker.service disabled by default — enable +
         # start it explicitly so subsequent tasks can talk to the daemon.
         - name: Ensure docker daemon is enabled + running
@@ -638,6 +774,11 @@
                 state: started
                 enabled: yes
 
+            # http/https cover everything host nginx binds on Linux
+            # (nginx-site.conf.j2 listens only on 80/443). nginx_host_port is
+            # a macOS-container-only knob and is deliberately NOT opened here
+            # — doing so would punch a permanent hole for a port nothing
+            # listens on when host_vars are copied from a Mac tenant.
             - name: Open http/https in the default zone
               ansible.posix.firewalld:
                 service: "{{ item }}"
@@ -645,19 +786,6 @@
                 immediate: true
                 state: enabled
               loop: [http, https]
-
-            # Only relevant when nginx is configured to listen on a
-            # non-standard port (host_vars `nginx_host_port`); http/https
-            # above cover the default 80/443.
-            - name: "Open nginx_host_port if it isn't 80/443"
-              ansible.posix.firewalld:
-                port: "{{ nginx_host_port }}/tcp"
-                permanent: true
-                immediate: true
-                state: enabled
-              when:
-                - nginx_host_port is defined
-                - nginx_host_port | int not in [80, 443]
           when: ansible_facts['os_family'] == 'RedHat'
 
         # ==================== SELinux (RHEL family only) ====================
@@ -670,11 +798,9 @@
         # 502s" gap on a fresh RHEL-family box.
         - name: "SELinux — allow nginx to proxy to backend services (RHEL family)"
           block:
-            - name: Ensure libselinux-python bindings + policy tools are present
-              dnf:
-                name: [policycoreutils-python-utils]
-                state: present
-
+            # policycoreutils-python-utils (semanage + the libselinux python
+            # bindings seboolean needs) is installed once, early, by the
+            # "SELinux — ensure policy tooling is present" task above.
             - name: "setsebool httpd_can_network_connect=on (persistent)"
               ansible.posix.seboolean:
                 name: httpd_can_network_connect
@@ -2612,7 +2738,7 @@
     - name: "integration-tests runner — install Playwright browsers (repo-local binary, matched version)"
       ansible.builtin.command: >-
         node_modules/.bin/playwright install
-        {{ "" if ansible_facts['os_family'] == 'RedHat' else "--with-deps" }}
+        {{ _playwright_with_deps_flag }}
         chromium
       args:
         chdir: "{{ integration_tests_dir }}"
@@ -4417,11 +4543,12 @@
       when:
         - run_ci_tests | default(false)
         - run_playwright_tests | default(false)
+        - ansible_system != "Darwin"
 
     - name: Install Playwright Chromium with system dependencies
       shell: >-
         npx playwright install
-        {{ " --with-deps" if (ansible_system != "Darwin" and ansible_facts['os_family'] != 'RedHat') else "" }}
+        {{ _playwright_with_deps_flag }}
         chromium
       args:
         chdir: "{{ digit_dir }}/e2e-tests"

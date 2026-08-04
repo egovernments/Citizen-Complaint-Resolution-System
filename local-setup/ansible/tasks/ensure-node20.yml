@@ -25,28 +25,23 @@
   changed_when: false
   failed_when: false
 
-- name: "{{ node_ensure_label }} — install NodeSource Node 20 (Debian/Ubuntu; node <20 or npm absent)"
-  ansible.builtin.shell: |
-    set -euo pipefail
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-  args:
-    executable: /bin/bash
-  when: >-
-    ansible_facts['os_family'] == 'Debian'
-    and (_ensure_node_ver.rc != 0
-    or _ensure_npm_ver.rc != 0
-    or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')))
+# One decision, one install task. The version floor/probe logic lives only
+# here — the Debian and RHEL paths differ solely in the NodeSource repo host
+# and the package manager, so those two strings are templated rather than
+# duplicating the whole task per OS family (which previously let the version
+# regexps drift apart).
+- name: "{{ node_ensure_label }} — decide whether NodeSource Node 20 is needed"
+  ansible.builtin.set_fact:
+    _node_needs_install: >-
+      {{ _ensure_node_ver.rc != 0
+         or _ensure_npm_ver.rc != 0
+         or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')) }}
 
-- name: "{{ node_ensure_label }} — install NodeSource Node 20 (RHEL family; node <20 or npm absent)"
+- name: "{{ node_ensure_label }} — install NodeSource Node 20 (node <20 or npm absent)"
   ansible.builtin.shell: |
     set -euo pipefail
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-    dnf install -y nodejs
+    curl -fsSL https://{{ 'deb' if ansible_facts['os_family'] == 'Debian' else 'rpm' }}.nodesource.com/setup_20.x | bash -
+    {{ 'apt-get' if ansible_facts['os_family'] == 'Debian' else 'dnf' }} install -y nodejs
   args:
     executable: /bin/bash
-  when: >-
-    ansible_facts['os_family'] == 'RedHat'
-    and (_ensure_node_ver.rc != 0
-    or _ensure_npm_ver.rc != 0
-    or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')))
+  when: _node_needs_install | bool

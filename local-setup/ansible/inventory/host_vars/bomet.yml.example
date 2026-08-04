@@ -86,12 +86,13 @@ core_mobile_configs:
   mobileNumberRegex: ^[17][0-9]{8}$
 
 # Postal-code validation (SPA globalConfigs CORE_POSTAL_CONFIGS). Kenya: 5
-# digits. Empty/absent falls back to this same pattern anyway, but set it
-# explicitly so it's not relying on the hardcoded legacy default.
+# digits. The pattern is the single knob — length and the localized error
+# message are derived from it (postalCodeLength / postalCodeErrorMessage
+# were removed in v2.12). Empty/absent falls back to this same pattern
+# anyway, but set it explicitly so it's not relying on the hardcoded
+# legacy default.
 core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
-  postalCodeLength: 5
-  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
 # ── Branding ──
 # Footer logos shown in citizen + employee UI. Use absolute URLs; copied to
