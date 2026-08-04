@@ -69,8 +69,8 @@ enable_otp_services: false
 enable_search_stack: false
 enable_mcp: true
 build_mcp: true
-build_digit_ui: true
-build_otp_publisher: true
+build_digit_ui: false
+build_otp_publisher: false
 digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
 tolerate_bootstrap_failures: true
 enable_turbopass: false
@@ -98,7 +98,7 @@ db_fast_path_ack_data_wipe: true
 run_ci_tests: false
 force_clean: false
 install_claude_code: false
-build_configurator: true
+build_configurator: false
 
 nginx_features:
   brand_assets: false

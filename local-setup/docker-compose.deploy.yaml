@@ -830,7 +830,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-c96345c}
     container_name: digit-ui
     ports:
       - "18080:80"

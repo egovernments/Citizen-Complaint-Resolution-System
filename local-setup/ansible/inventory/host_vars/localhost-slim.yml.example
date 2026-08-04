@@ -74,7 +74,7 @@ enable_otp_services: false
 enable_search_stack: false
 enable_mcp: true
 build_mcp: true
-build_digit_ui: true
+build_digit_ui: false
 build_otp_publisher: false         # slim: notifications path is off
 digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
 tolerate_bootstrap_failures: true
@@ -106,7 +106,7 @@ install_claude_code: false
 # Configurator is back in even on slim: runtime cost is nil (static SPA
 # served by host nginx, no container) — only the one-time vite build at
 # deploy costs RAM, and swap absorbs it.
-build_configurator: true
+build_configurator: false
 
 nginx_features:
   brand_assets: false
