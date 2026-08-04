@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { ThemeConfigEditor } from './ThemeConfigEditor';
 import { StateInfoEditor } from './StateInfoEditor';
 import { MapConfigEditor } from './MapConfigEditor';
+import { AnalyticsProvidersEditor } from '../analytics/AnalyticsProvidersEditor';
 
 /**
  * Registry of custom editors keyed by the `customEditor` field on
@@ -24,6 +25,13 @@ export const customEditors: Record<string, ComponentType> = {
   // Grouped sections + a live map preview + a basemap dropdown; the generic
   // form rendered 12 stacked full-width inputs with paragraph help.
   'map-config': MapConfigEditor,
+  // A destination LIST, not a single record, and the generic CRUD is unsafe for
+  // it: at a city tenant the list contains rows owned by the state tenant, and
+  // the generic update/delete resolve records without scoping to the session
+  // tenant — so editing an inherited row would rewrite the state row for every
+  // city, and one delete would switch analytics off everywhere. This editor
+  // writes only rows the tenant owns and never deletes.
+  'analytics-provider': AnalyticsProvidersEditor,
 };
 
-export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor };
+export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor, AnalyticsProvidersEditor };

@@ -1,4 +1,4 @@
-[  
+[
   {
     "id": 2634,
     "url": "/config-service/config/v1/_search",
@@ -1102,19 +1102,54 @@
     "resource": {
       "masters": {
         "ACCESSCONTROL-ROLES.roles": {
-          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+          "condition": {
+            "in": [
+              "MDMS_ADMIN",
+              {
+                "var": "user.roles"
+              }
+            ]
+          }
         },
         "ACCESSCONTROL-ACTIONS-TEST.actions-test": {
-          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+          "condition": {
+            "in": [
+              "MDMS_ADMIN",
+              {
+                "var": "user.roles"
+              }
+            ]
+          }
         },
         "ACCESSCONTROL-ROLEACTIONS.roleactions": {
-          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+          "condition": {
+            "in": [
+              "MDMS_ADMIN",
+              {
+                "var": "user.roles"
+              }
+            ]
+          }
         },
         "common-masters.Department": {
           "condition": {
             "or": [
-              { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] },
-              { "in": [ "SUPERVISOR", { "var": "user.roles" } ] }
+              {
+                "in": [
+                  "MDMS_ADMIN",
+                  {
+                    "var": "user.roles"
+                  }
+                ]
+              },
+              {
+                "in": [
+                  "SUPERVISOR",
+                  {
+                    "var": "user.roles"
+                  }
+                ]
+              }
             ]
           }
         }
@@ -1432,41 +1467,110 @@
     "resource": {
       "complaint": {
         "scope": {
-          "axes": ["department", "jurisdiction"],
+          "axes": [
+            "department",
+            "jurisdiction"
+          ],
           "roleScopes": {
-            "GRO": { "department": "OWN", "jurisdiction": "OWN" },
-            "PGR_LME": { "department": "OWN", "jurisdiction": "OWN" },
-            "SUPERVISOR": { "department": "OWN", "jurisdiction": "ALL" }
+            "GRO": {
+              "department": "OWN",
+              "jurisdiction": "OWN"
+            },
+            "PGR_LME": {
+              "department": "OWN",
+              "jurisdiction": "OWN"
+            },
+            "SUPERVISOR": {
+              "department": "OWN",
+              "jurisdiction": "ALL"
+            }
           },
-          "default": { "department": "OWN", "jurisdiction": "OWN" }
+          "default": {
+            "department": "OWN",
+            "jurisdiction": "OWN"
+          }
         },
         "attributes": {
           "citizen.mobileNumber": {
             "condition": {
               "or": [
-                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
-                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+                {
+                  "==": [
+                    {
+                      "var": "user.attributes.tenantWide"
+                    },
+                    true
+                  ]
+                },
+                {
+                  "==": [
+                    {
+                      "var": "resource.complaint.accountId"
+                    },
+                    {
+                      "var": "user.uuid"
+                    }
+                  ]
+                }
               ]
             },
-            "onDeny": { "strategy": "REDACT" }
+            "onDeny": {
+              "strategy": "REDACT"
+            }
           },
           "citizen.name": {
             "condition": {
               "or": [
-                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
-                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+                {
+                  "==": [
+                    {
+                      "var": "user.attributes.tenantWide"
+                    },
+                    true
+                  ]
+                },
+                {
+                  "==": [
+                    {
+                      "var": "resource.complaint.accountId"
+                    },
+                    {
+                      "var": "user.uuid"
+                    }
+                  ]
+                }
               ]
             },
-            "onDeny": { "strategy": "REDACT" }
+            "onDeny": {
+              "strategy": "REDACT"
+            }
           },
           "citizen.userName": {
             "condition": {
               "or": [
-                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
-                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+                {
+                  "==": [
+                    {
+                      "var": "user.attributes.tenantWide"
+                    },
+                    true
+                  ]
+                },
+                {
+                  "==": [
+                    {
+                      "var": "resource.complaint.accountId"
+                    },
+                    {
+                      "var": "user.uuid"
+                    }
+                  ]
+                }
               ]
             },
-            "onDeny": { "strategy": "REDACT" }
+            "onDeny": {
+              "strategy": "REDACT"
+            }
           }
         }
       }
@@ -2453,7 +2557,7 @@
     "code": "null",
     "path": ""
   },
-   {
+  {
     "id": 22,
     "name": "egov-bnd-mgmt",
     "url": "/egov-bndry-mgmnt/v1/_process",
@@ -2465,7 +2569,7 @@
     "code": "null",
     "path": ""
   },
-   {
+  {
     "id": 23,
     "name": "egov-bnd-mgmt",
     "url": "/egov-bndry-mgmnt/v1/_generate",
@@ -2477,7 +2581,7 @@
     "code": "null",
     "path": ""
   },
-   {
+  {
     "id": 24,
     "name": "egov-bnd-mgmt",
     "url": "/egov-bndry-mgmnt/v1/_generate-search",
@@ -2489,7 +2593,7 @@
     "code": "null",
     "path": ""
   },
-   {
+  {
     "id": 25,
     "name": "egov-bnd-mgmt",
     "url": "/egov-bndry-mgmnt/v1/_process-search",
@@ -2665,5 +2769,29 @@
     "code": "null",
     "path": "",
     "method": "POST"
+  },
+  {
+    "id": 30,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.AnalyticsProvider",
+    "displayName": "Create Analytics Provider",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS v2",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 31,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_update/common-masters.AnalyticsProvider",
+    "displayName": "Update Analytics Provider",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
   }
 ]
