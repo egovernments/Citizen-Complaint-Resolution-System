@@ -693,8 +693,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-    ports:
-    - 18095:8090
+    # no host port: internal-only, matching docker-compose.egov-digit.yaml
+    # (18095 is taken by egov-indexer in this file)
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8090/user-otp/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s

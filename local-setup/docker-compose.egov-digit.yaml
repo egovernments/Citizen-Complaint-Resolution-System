@@ -2187,8 +2187,8 @@ services:
   novu-bridge:
     # Overridable so Bomet can pull the pass-through build (PGR pre-renders
     # + localizes; the bridge only identifies the Novu subscriber and
-    # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
-    # registry; default keeps the prior preview tag.
+    # delivers renderedBody — design D4/D6). Default is the multi-arch
+    # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
     image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-8116812}
     container_name: novu-bridge
     restart: unless-stopped
@@ -2411,13 +2411,12 @@ services:
   # token-exchange-svc — bridges a Keycloak access_token to a DIGIT
   # access_token (and resolves / provisions the matching eg_user).
   # Source: /root/DIGIT-keycloak-overlay (Dockerfile, TypeScript).
-  # The image is pre-built and pushed to the preview registry; if you
+  # The image is pre-built and pushed to the egovio Docker Hub org; if you
   # need to rebuild locally, switch from `image:` to a `build:` block
   # pointing at the overlay repo path.
   token-exchange-svc:
-    # Published unscoped (not under egovio/) at registry.preview because
-    # it predates the namespace standardisation. Pin to :dev for now;
-    # bump when a versioned tag is published.
+    # Pinned to the keycloak-deploy tag on egovio; bump when a versioned
+    # tag is published.
     image: egovio/token-exchange-svc:keycloak-deploy
     container_name: token-exchange-svc
     restart: unless-stopped
