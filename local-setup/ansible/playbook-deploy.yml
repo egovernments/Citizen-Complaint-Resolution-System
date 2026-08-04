@@ -213,6 +213,19 @@
         - ansible_facts['os_family'] not in ['Debian', 'RedHat']
         - ansible_system != 'Darwin'
 
+    # ansible_facts['selinux'] is the boolean `false` (not a dict) when the
+    # libselinux Python bindings are absent, and a dict like {"status": "..."}
+    # when they are present. Subscripting `['status']` straight into a bare
+    # `false` raises a type error — `| default(...)` only catches Undefined,
+    # not a valid-but-wrong-shape value — so every RHEL-only SELinux gate
+    # below reads this single fact instead of re-deriving the unsafe
+    # subscript.
+    - name: "Resolve whether SELinux is enforcing (RHEL family)"
+      ansible.builtin.set_fact:
+        _selinux_enforced: >-
+          {{ (ansible_facts['selinux'] is mapping)
+             and (ansible_facts['selinux'].get('status', 'disabled') == 'enabled') }}
+
     # common-masters.MobileNumberValidation (utilities/default-data-handler)
     # only accepts countryCode + mobileNumberRegex — the old UserValidation-era
     # fields (mobilePrefix, mobileNumberPattern, mobileNumberLength,
@@ -466,11 +479,48 @@
         - name: "Docker/containerd storage relocation (when docker_data_root is set)"
           when: (docker_data_root | default('') | length) > 0
           vars:
-            _containerd_root: "{{ docker_data_root | dirname }}/containerd"
+            # Strip any trailing slash before deriving the sibling containerd
+            # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
+            # INSIDE Docker's own data-root instead of beside it), and
+            # dirname('/docker') is '/' (yields the bogus '//containerd').
+            _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
+            _containerd_root: "{{ _docker_data_root | dirname }}/containerd"
           block:
+            # Relocating a data-root that Docker/containerd have already
+            # written to would point daemon.json/config.toml at an empty
+            # directory: every existing image and named volume (including the
+            # Postgres complaint database) becomes invisible and the stack
+            # silently re-initializes from scratch. Only a fresh/never-started
+            # box may set docker_data_root; an already-populated /var/lib/docker
+            # or /var/lib/containerd needs a stop+rsync+relabel migration done
+            # by hand first.
+            - name: "Guard — check /var/lib/docker and /var/lib/containerd are still empty"
+              ansible.builtin.command: "find {{ item }} -mindepth 1 -maxdepth 1"
+              loop:
+                - /var/lib/docker
+                - /var/lib/containerd
+              register: _live_dataroot_check
+              changed_when: false
+              failed_when: false
+
+            - name: "Guard — refuse to relocate an already-populated data-root"
+              ansible.builtin.fail:
+                msg: >-
+                  docker_data_root is set to "{{ _docker_data_root }}" but
+                  {{ item.item }} already contains data, meaning Docker/containerd
+                  have already run against the default location on this box.
+                  Relocating now would orphan every existing image and named
+                  volume (including the Postgres complaint database) — stop
+                  docker/containerd, rsync {{ item.item }} to its new home by
+                  hand (relabeling under SELinux if applicable), then re-run.
+              loop: "{{ _live_dataroot_check.results }}"
+              loop_control:
+                label: "{{ item.item }}"
+              when: (item.stdout_lines | default([]) | length) > 0
+
             - name: "Ensure Docker data-root directory exists"
               ansible.builtin.file:
-                path: "{{ docker_data_root }}"
+                path: "{{ _docker_data_root }}"
                 state: directory
                 mode: '0711'
 
@@ -481,42 +531,70 @@
                 mode: '0711'
 
             - name: "containerd — ensure a default config.toml exists"
-              ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+              ansible.builtin.shell: |
+                set -eo pipefail
+                mkdir -p /etc/containerd
+                containerd config default > /etc/containerd/config.toml
               args:
+                executable: /bin/bash
                 creates: /etc/containerd/config.toml
 
+            # The containerd.io package's shipped config.toml stub has no
+            # top-level `root =` key, so the regexp below matches nothing and
+            # lineinfile appends the line at EOF — landing it inside whatever
+            # `[table]` last preceded it in TOML instead of at the document
+            # root, where containerd silently ignores it. insertbefore: BOF
+            # guarantees the key lands above any table header when absent.
             - name: "containerd — point root at the relocated directory"
               ansible.builtin.lineinfile:
                 path: /etc/containerd/config.toml
                 regexp: '^\s*root\s*='
                 line: 'root = "{{ _containerd_root }}"'
+                insertbefore: BOF
               register: containerd_root_config
 
+            # semanage lives in policycoreutils-python-utils, which is not
+            # preinstalled on minimal RHEL-family cloud images and is
+            # otherwise only installed later by the nginx SELinux block below
+            # — install it here first so labeling doesn't rc=127 before that
+            # block ever runs.
+            - name: "SELinux — ensure semanage is available (RHEL family)"
+              dnf:
+                name: policycoreutils-python-utils
+                state: present
+              when:
+                - ansible_facts['os_family'] == 'RedHat'
+                - _selinux_enforced
+
             # semanage errors if the exact equivalence already exists (e.g. a
-            # re-run) — that's not a real failure, just already-done.
+            # re-run) — that's not a real failure, just already-done. Fresh
+            # adds say "already defined"; re-adding after equivalences already
+            # exist for both paths says "already exists" instead — tolerate
+            # both.
             - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
               ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
               loop:
-                - { orig: /var/lib/docker, new: "{{ docker_data_root }}" }
+                - { orig: /var/lib/docker, new: "{{ _docker_data_root }}" }
                 - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
               register: _semanage_fcontext
               failed_when: >-
                 _semanage_fcontext.rc != 0
                 and 'already defined' not in (_semanage_fcontext.stderr | default(''))
+                and 'already exists' not in (_semanage_fcontext.stderr | default(''))
               changed_when: _semanage_fcontext.rc == 0
               when:
                 - ansible_facts['os_family'] == 'RedHat'
-                - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+                - _selinux_enforced
 
             - name: "SELinux — restorecon the relocated storage dirs (RHEL family)"
               ansible.builtin.command: "restorecon -RF {{ item }}"
               loop:
-                - "{{ docker_data_root }}"
+                - "{{ _docker_data_root }}"
                 - "{{ _containerd_root }}"
               changed_when: false
               when:
                 - ansible_facts['os_family'] == 'RedHat'
-                - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+                - _selinux_enforced
 
             - name: "Restart containerd if its config changed"
               ansible.builtin.service:
@@ -604,7 +682,7 @@
                 persistent: true
           when:
             - ansible_facts['os_family'] == 'RedHat'
-            - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+            - _selinux_enforced
 
         # ==================== Root mount propagation (WSL2 only) ====================
         # The monitoring overlay's node-exporter binds /:/rootfs:ro,rslave
@@ -775,7 +853,7 @@
                       'log-opts': {'max-size': docker_log_max_size,
                                    'max-file': docker_log_max_file_effective | string},
                       'insecure-registries': insecure_registries | default([])}
-                     | combine({'data-root': docker_data_root}
+                     | combine({'data-root': docker_data_root | regex_replace('/+$', '')}
                                if (docker_data_root | default('') | length > 0) else {}) }}
               ansible.builtin.copy:
                 dest: /etc/docker/daemon.json
@@ -2521,9 +2599,21 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
+    # `--with-deps` only knows apt (Ubuntu/Debian); on RHEL family it no-ops
+    # and leaves Chromium's shared libs missing, so install the RPM
+    # equivalents first and drop --with-deps on that family below.
+    - name: "integration-tests runner — install Chromium runtime dependencies (RHEL family)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-chromium-deps.yml"
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
     - name: "integration-tests runner — install Playwright browsers (repo-local binary, matched version)"
       ansible.builtin.command: >-
-        node_modules/.bin/playwright install --with-deps chromium
+        node_modules/.bin/playwright install
+        {{ "" if ansible_facts['os_family'] == 'RedHat' else "--with-deps" }}
+        chromium
       args:
         chdir: "{{ integration_tests_dir }}"
       changed_when: true
@@ -2616,6 +2706,18 @@
             name: nginx
             state: present
 
+        # Debian's nginx package starts the service via its maintainer
+        # scripts; the RHEL RPM leaves the unit stopped and disabled after
+        # install. The "Reload nginx" handler (flushed a few tasks below)
+        # runs `systemctl reload nginx`, which fails against an inactive unit
+        # on a first Rocky/Alma/RHEL deploy — and even if that were ignored,
+        # nginx would never come back after a reboot.
+        - name: "Host nginx — ensure enabled + running (RHEL family)"
+          ansible.builtin.service:
+            name: nginx
+            state: started
+            enabled: true
+
         - name: "Host nginx — render site config from template (RHEL family, conf.d)"
           ansible.builtin.template:
             src: templates/nginx-site.conf.j2
@@ -2628,6 +2730,21 @@
           ansible.builtin.file:
             path: /etc/nginx/conf.d/default.conf
             state: absent
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
+
+        # The AppStream package's catch-all default_server block is not in
+        # conf.d/default.conf — it's embedded directly in /etc/nginx/nginx.conf
+        # itself, so removing default.conf above doesn't touch it; bare/
+        # non-matching Host headers would still land there instead of our
+        # vhost. Stock nginx.conf's `include /etc/nginx/conf.d/*.conf;` is
+        # parsed before that embedded block, so stripping its default_server
+        # flag lets our conf.d vhost win as the implicit default instead.
+        - name: "Host nginx — disable RPM's built-in default_server block (RHEL family)"
+          ansible.builtin.replace:
+            path: /etc/nginx/nginx.conf
+            regexp: '(listen\s+(?:\[::\]:)?\d+\s+)default_server;'
+            replace: '\1;'
           notify: Reload nginx
           when: not (nginx_preserve_vhost | default(false))
 
@@ -2687,7 +2804,7 @@
       failed_when: false
       when:
         - ansible_facts['os_family'] == 'RedHat'
-        - ansible_facts['selinux']['status'] | default('disabled') == 'enabled'
+        - _selinux_enforced
 
     # ============================================================
     # Infrastructure validation — runs before the heavy CI tests
@@ -3855,35 +3972,16 @@
         msg: "Claude Code install disabled. Set install_claude_code: true in host_vars to enable."
       when: not (install_claude_code | default(false))
 
-    - name: Install Node.js 20 LTS (needed for CC and tests, Debian/Ubuntu)
-      shell: |
-        set -o pipefail
-        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
-        fi
-      args:
-        executable: /bin/bash
-      register: nodejs_install
-      changed_when: "'nodejs is already' not in nodejs_install.stdout"
+    # Needed for CC and tests. Was two inline apt/dnf NodeSource shells here
+    # (duplicating tasks/ensure-node20.yml with an already-divergent version
+    # regexp) — reuse the shared helper like every other call site instead.
+    - name: "Claude Code — ensure Node 20 + npm (NodeSource)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "Claude Code"
       when:
         - install_claude_code | default(false)
-        - ansible_facts['os_family'] == 'Debian'
-
-    - name: Install Node.js 20 LTS (needed for CC and tests, RHEL family)
-      shell: |
-        set -o pipefail
-        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-          dnf install -y nodejs
-        fi
-      args:
-        executable: /bin/bash
-      register: nodejs_install_rhel
-      changed_when: "'nodejs is already' not in nodejs_install_rhel.stdout"
-      when:
-        - install_claude_code | default(false)
-        - ansible_facts['os_family'] == 'RedHat'
+        - ansible_system != "Darwin"
 
     - name: Install Claude Code CLI
       shell: npm install -g @anthropic-ai/claude-code
@@ -4314,34 +4412,11 @@
       changed_when: false
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
-    # Playwright's `--with-deps` OS-dependency installer only knows how to
-    # drive apt (Ubuntu/Debian) — on RHEL family it no-ops with a warning
-    # and leaves Chromium's shared libs missing, so the browser fails to
-    # launch later with a cryptic "error while loading shared libraries".
-    # Install the equivalent RPM packages ourselves first, then run
-    # `playwright install chromium` WITHOUT --with-deps on that family.
     - name: "Install Chromium runtime dependencies (RHEL family, Playwright has no dnf support)"
-      dnf:
-        name:
-          - nss
-          - atk
-          - at-spi2-atk
-          - cups-libs
-          - libdrm
-          - libxkbcommon
-          - libXcomposite
-          - libXdamage
-          - libXfixes
-          - libXrandr
-          - mesa-libgbm
-          - alsa-lib
-          - pango
-          - cairo
-        state: present
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-chromium-deps.yml"
       when:
         - run_ci_tests | default(false)
         - run_playwright_tests | default(false)
-        - ansible_facts['os_family'] == 'RedHat'
 
     - name: Install Playwright Chromium with system dependencies
       shell: >-

@@ -520,6 +520,41 @@ flags. Setting back to `false` sweeps the running search containers.
 ./deploy.sh <tenant> --check --diff --tags compose-config
 ```
 
+### Relocating Docker's storage to another partition — `docker_data_root`
+
+`docker_data_root` (see `inventory/group_vars/all.yml`) only takes effect on
+a box where Docker/containerd have never been started — the playbook fails
+the deploy instead of relocating a `/var/lib/docker` or `/var/lib/containerd`
+that already holds data, since pointing daemon.json/containerd's config at
+an empty directory would orphan every existing image and named volume
+(including the Postgres complaint database).
+
+To move an **already-populated** box's storage by hand first, then let the
+playbook take over:
+
+```bash
+# On the target host, as root:
+systemctl stop docker containerd
+
+mkdir -p /opt/docker /opt/containerd
+rsync -aHAX --info=progress2 /var/lib/docker/  /opt/docker/
+rsync -aHAX --info=progress2 /var/lib/containerd/ /opt/containerd/
+
+# RHEL family only (SELinux enforcing) — match the fcontext the playbook
+# would otherwise register, then relabel:
+semanage fcontext -a -e /var/lib/docker /opt/docker
+semanage fcontext -a -e /var/lib/containerd /opt/containerd
+restorecon -RF /opt/docker /opt/containerd
+
+# Once you've verified the copies (diff -rq old vs new, or just trust rsync),
+# reclaim the space:
+rm -rf /var/lib/docker/* /var/lib/containerd/*
+```
+
+Then set `docker_data_root: "/opt/docker"` in the tenant's host_vars and
+run `./deploy.sh <tenant>` as usual — the playbook finds both directories
+already relocated (and now empty at their original path) and proceeds.
+
 ## Troubleshooting
 
 ### `http: server gave HTTP response to HTTPS client` on docker pull

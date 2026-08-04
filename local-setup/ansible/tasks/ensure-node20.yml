@@ -19,6 +19,12 @@
   changed_when: false
   failed_when: false
 
+- name: "{{ node_ensure_label }} — probe installed npm version"
+  ansible.builtin.command: npm --version
+  register: _ensure_npm_ver
+  changed_when: false
+  failed_when: false
+
 - name: "{{ node_ensure_label }} — install NodeSource Node 20 (Debian/Ubuntu; node <20 or npm absent)"
   ansible.builtin.shell: |
     set -euo pipefail
@@ -29,6 +35,7 @@
   when: >-
     ansible_facts['os_family'] == 'Debian'
     and (_ensure_node_ver.rc != 0
+    or _ensure_npm_ver.rc != 0
     or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')))
 
 - name: "{{ node_ensure_label }} — install NodeSource Node 20 (RHEL family; node <20 or npm absent)"
@@ -41,4 +48,5 @@
   when: >-
     ansible_facts['os_family'] == 'RedHat'
     and (_ensure_node_ver.rc != 0
+    or _ensure_npm_ver.rc != 0
     or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')))

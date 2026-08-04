@@ -1,0 +1,32 @@
+# Playwright's `--with-deps` OS-dependency installer only knows how to
+# drive apt (Ubuntu/Debian) — on RHEL family it no-ops with a warning and
+# leaves Chromium's shared libs (and fonts) missing, so the browser fails
+# to launch later with a cryptic "error while loading shared libraries",
+# or launches with every page rendering blank/tofu glyphs. Install the
+# equivalent RPM packages ourselves, then have callers run
+# `playwright install chromium` WITHOUT --with-deps on this family.
+#
+# Shared by both Playwright call sites (e2e-tests CI stage and the
+# integration-tests runner) so a future dependency bump only needs to
+# happen once.
+- name: "Install Chromium runtime dependencies (RHEL family, Playwright has no dnf support)"
+  ansible.builtin.dnf:
+    name:
+      - nss
+      - atk
+      - at-spi2-atk
+      - cups-libs
+      - libdrm
+      - libxkbcommon
+      - libXcomposite
+      - libXdamage
+      - libXfixes
+      - libXrandr
+      - mesa-libgbm
+      - alsa-lib
+      - pango
+      - cairo
+      - liberation-fonts
+      - google-noto-emoji-color-fonts
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
