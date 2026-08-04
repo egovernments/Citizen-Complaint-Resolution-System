@@ -928,6 +928,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "query": {
       "grain": "facts",
       "filters": {
+        "is_open": false,
         "is_resolved": true
       },
       "measures": [
@@ -1119,7 +1120,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "dir": "desc"
         }
       ],
-      "limit": 8
+      "limit": 500
     },
     "supportsSeries": false,
     "viz": {
@@ -1140,7 +1141,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "measureKey": "total",
       "seriesLabel": "Filed",
       "seriesLabelKey": "DASHBOARD_SERIES_FILED",
-      "limit": 8,
+      "limit": 500,
       "subtitle": "Complaints filed, by type",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
       "labelFormat": "dimension"
@@ -1363,7 +1364,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         }
       ],
       "sortBySegment": "breached",
-      "limit": 8,
+      "limit": 120,
       "labelFormat": "officer",
       "compose": null,
       "pii": {
@@ -1460,7 +1461,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "color": "var(--chart-4)"
         }
       ],
-      "limit": 8,
+      "limit": 300,
       "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
       "labelFormat": "dimension"
@@ -1803,7 +1804,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "numerator": {
             "agg": "count",
             "filter": {
-              "is_reopened": true
+              "is_reopened": true,
+              "is_resolved": true
             }
           },
           "denominator": {
@@ -2027,7 +2029,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "column": "sla_target_ms"
         }
       ],
-      "limit": 50
+      "limit": 1000
     },
     "supportsSeries": false,
     "viz": {
@@ -2301,13 +2303,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "type": "officer"
         },
         {
-          "id": "role",
-          "label": "Role",
-          "labelKey": "DASHBOARD_COL_ROLE",
-          "align": "left",
-          "type": "text"
-        },
-        {
           "id": "department_code",
           "label": "Dept",
           "labelKey": "DASHBOARD_COL_DEPT",
@@ -2568,7 +2563,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "filed",
         "resolved"
       ],
-      "limit": 12,
+      "limit": 500,
       "labelFormat": "department",
       "compose": null,
       "pii": false,
@@ -3473,39 +3468,39 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "id": "cl_table_subtype_performance",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Complaint sub-type performance",
       "accent": "teal",
       "format": "hoursDays",
       "columns": [
         {
-          "id": "subtypeLabel",
+          "id": "service_code",
           "type": "text",
           "align": "left",
           "label": "Subtype",
-          "width": "30%"
+          "width": "40%"
         },
         {
-          "id": "share_pct",
-          "type": "percent",
-          "align": "left",
-          "label": "% of complaints",
-          "width": "18%"
+          "id": "total",
+          "type": "integer",
+          "align": "right",
+          "label": "Complaints",
+          "width": "20%"
         },
         {
-          "id": "avgResolutionMs",
+          "id": "avg_resolution_ms",
           "type": "hoursDays",
-          "align": "left",
+          "align": "right",
           "label": "Avg resolution",
-          "width": "22%"
+          "width": "20%"
         },
         {
-          "id": "idealSlaMs",
+          "id": "ideal_sla_ms",
           "type": "hoursDays",
-          "align": "left",
+          "align": "right",
           "label": "SLA",
-          "width": "18%"
+          "width": "20%"
         }
       ],
       "compose": null,
@@ -3518,8 +3513,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "avg_resolution_ms",
         "ideal_sla_ms"
       ],
-      "dimensionKey": "service_code",
-      "tableProfile": "subtypePerformance"
+      "dimensionKey": "service_code"
     },
     "rbac": {
       "visibleTo": [
