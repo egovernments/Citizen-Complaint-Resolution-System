@@ -2295,10 +2295,26 @@
         headers:
           X-Vault-Token: "{{ bao_root_token }}"
         body_format: json
-        body:
-          # Merge, never replace: a bare {grafana_admin_password: …} write would
-          # drop every other key in this tenant's secret.
-          data: "{{ bao_secrets.json.data.data | combine({'grafana_admin_password': grafana_admin_pw}) }}"
+        # The whole body is ONE template expression on purpose: Ansible preserves
+        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
+        # across YAML keys it would render as the string "5" and the CAS check
+        # would depend on server-side weak decoding.
+        #
+        # cas = the version we just read. Without it this is a blind overwrite of
+        # the entire secret: anything written between our read and this write (a
+        # concurrent deploy, an operator running `bao kv put`) is silently lost,
+        # because `data` is built from the snapshot we read. With cas, a racing
+        # write makes OpenBao reject ours (400) and the deploy stops rather than
+        # clobbering. No retry loop: deploys are serialised per tenant, so a
+        # conflict means something genuinely unexpected touched the secret and a
+        # human should look before we overwrite it.
+        #
+        # `data` merges, never replaces — a bare {grafana_admin_password: …}
+        # write would drop every other key in this tenant's secret.
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
         status_code: [200]
       when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
       no_log: true
@@ -4191,22 +4207,31 @@
       changed_when: false
       ignore_errors: yes
 
+    # Fatal when it runs. Grafana is healthy at this point, so a failing reset is
+    # a genuine anomaly (wrong CLI path after an image bump, unwritable DB), and
+    # the failure mode it leaves behind is silent: the UI keeps whatever password
+    # the volume was seeded with, nobody can log in with the OpenBao value, and a
+    # `failed_when: false` would bury that in a 4000-line deploy log.
     - name: Grafana — align admin password with OpenBao (idempotent)
       ansible.builtin.command: >-
         docker exec digit-grafana
         grafana cli admin reset-admin-password {{ grafana_admin_pw }}
       register: grafana_pw_reset
       changed_when: false
-      failed_when: false
       no_log: true
       when: grafana_health.rc == 0
 
+    # Grafana never came up. Non-fatal, matching the Loki gate above — the
+    # dashboards are not a serving dependency — but say so loudly, because the
+    # stored password has NOT been applied to the running instance.
     - name: Show Grafana admin-password status
       debug:
         msg: >-
           Grafana: {{ 'admin password aligned with OpenBao'
-                      if (grafana_pw_reset.rc | default(1)) == 0
-                      else 'admin password NOT set — log in with the previous credentials and check `bao kv get ' ~ secrets_path ~ '`' }}
+                      if grafana_health.rc == 0
+                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or:
+                            docker exec digit-grafana grafana cli admin reset-admin-password "$(bao kv get -field=grafana_admin_password '
+                           ~ secrets_path ~ ')"' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's
