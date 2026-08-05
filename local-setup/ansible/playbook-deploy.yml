@@ -433,381 +433,381 @@
         # release task below only fires when this one created the file).
         - name: "Docker install — configure data-root before first start (Debian/Ubuntu), always releasing the auto-start hold"
           block:
-          - name: "Docker install — hold package auto-start until data-root is configured (Debian/Ubuntu)"
-            ansible.builtin.copy:
-              dest: /usr/sbin/policy-rc.d
-              mode: '0755'
-              force: false
-              content: |
-                #!/bin/sh
-                # Temporary: installed by the DIGIT ansible deploy while
-                # docker-ce is installed with a relocated data-root; removed
-                # again in the same run.
-                exit 101
-            register: _docker_autostart_hold
-            when:
-              - ansible_facts['os_family'] == 'Debian'
-              - (docker_data_root | default('') | length) > 0
+            - name: "Docker install — hold package auto-start until data-root is configured (Debian/Ubuntu)"
+              ansible.builtin.copy:
+                dest: /usr/sbin/policy-rc.d
+                mode: '0755'
+                force: false
+                content: |
+                  #!/bin/sh
+                  # Temporary: installed by the DIGIT ansible deploy while
+                  # docker-ce is installed with a relocated data-root; removed
+                  # again in the same run.
+                  exit 101
+              register: _docker_autostart_hold
+              when:
+                - ansible_facts['os_family'] == 'Debian'
+                - (docker_data_root | default('') | length) > 0
 
-          - name: Install Docker Engine (Debian/Ubuntu)
-            apt:
-              name:
-                - docker-ce
-                - docker-ce-cli
-                - containerd.io
-                - docker-buildx-plugin
-                - docker-compose-plugin
-              state: present
-              update_cache: yes
-            when: ansible_facts['os_family'] == 'Debian'
+            - name: Install Docker Engine (Debian/Ubuntu)
+              apt:
+                name:
+                  - docker-ce
+                  - docker-ce-cli
+                  - containerd.io
+                  - docker-buildx-plugin
+                  - docker-compose-plugin
+                state: present
+                update_cache: yes
+              when: ansible_facts['os_family'] == 'Debian'
 
-          # ==================== Docker Installation (RHEL family) ====================
-          # Rocky Linux / AlmaLinux / CentOS Stream / RHEL. Docker publishes no
-          # separate "rocky"/"alma" repo — the upstream linux/rhel repo is the
-          # documented path for every RHEL rebuild, BUT the stock
-          # docker-ce.repo uses $releasever, which resolves to the host's
-          # actual major version — and Docker briefly had no EL10 packages
-          # (download.docker.com/linux/rhel/10/ 404'd earlier in 2026;
-          # github.com/docker/roadmap#847). Docker now publishes a
-          # linux/rhel/10/ tree for x86_64 and aarch64, so the host's real
-          # major version is used by default. docker_rhel_releasever_override
-          # remains as an escape hatch for a future major version that again
-          # ships without packages (pin it to the last published releasever
-          # until Docker catches up).
-          - name: "Docker repo (RHEL family) — resolve releasever to use"
-            ansible.builtin.set_fact:
-              _docker_rhel_releasever: >-
-                {{ docker_rhel_releasever_override | default(ansible_distribution_major_version, true) }}
-            when: ansible_facts['os_family'] == 'RedHat'
+            # ==================== Docker Installation (RHEL family) ====================
+            # Rocky Linux / AlmaLinux / CentOS Stream / RHEL. Docker publishes no
+            # separate "rocky"/"alma" repo — the upstream linux/rhel repo is the
+            # documented path for every RHEL rebuild, BUT the stock
+            # docker-ce.repo uses $releasever, which resolves to the host's
+            # actual major version — and Docker briefly had no EL10 packages
+            # (download.docker.com/linux/rhel/10/ 404'd earlier in 2026;
+            # github.com/docker/roadmap#847). Docker now publishes a
+            # linux/rhel/10/ tree for x86_64 and aarch64, so the host's real
+            # major version is used by default. docker_rhel_releasever_override
+            # remains as an escape hatch for a future major version that again
+            # ships without packages (pin it to the last published releasever
+            # until Docker catches up).
+            - name: "Docker repo (RHEL family) — resolve releasever to use"
+              ansible.builtin.set_fact:
+                _docker_rhel_releasever: >-
+                  {{ docker_rhel_releasever_override | default(ansible_distribution_major_version, true) }}
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          - name: "Docker repo (RHEL family) — write docker-ce.repo pinned to a published releasever"
-            ansible.builtin.copy:
-              dest: /etc/yum.repos.d/docker-ce.repo
-              mode: '0644'
-              content: |
-                [docker-ce-stable]
-                name=Docker CE Stable - $basearch
-                baseurl=https://download.docker.com/linux/rhel/{{ _docker_rhel_releasever }}/$basearch/stable
-                enabled=1
-                gpgcheck=1
-                gpgkey=https://download.docker.com/linux/rhel/gpg
-            when: ansible_facts['os_family'] == 'RedHat'
+            - name: "Docker repo (RHEL family) — write docker-ce.repo pinned to a published releasever"
+              ansible.builtin.copy:
+                dest: /etc/yum.repos.d/docker-ce.repo
+                mode: '0644'
+                content: |
+                  [docker-ce-stable]
+                  name=Docker CE Stable - $basearch
+                  baseurl=https://download.docker.com/linux/rhel/{{ _docker_rhel_releasever }}/$basearch/stable
+                  enabled=1
+                  gpgcheck=1
+                  gpgkey=https://download.docker.com/linux/rhel/gpg
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          # podman/podman-docker ship on RHEL-family cloud images and own the
-          # same `docker` CLI shim path as Docker CE's packages — same
-          # conflict as Ubuntu's docker.io above. Idempotent: no-op if absent.
-          - name: Remove conflicting RHEL-family container packages
-            dnf:
-              name: [podman, podman-docker, runc]
-              state: absent
-            when: ansible_facts['os_family'] == 'RedHat'
+            # podman/podman-docker ship on RHEL-family cloud images and own the
+            # same `docker` CLI shim path as Docker CE's packages — same
+            # conflict as Ubuntu's docker.io above. Idempotent: no-op if absent.
+            - name: Remove conflicting RHEL-family container packages
+              dnf:
+                name: [podman, podman-docker, runc]
+                state: absent
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          - name: Install Docker Engine (RHEL family)
-            dnf:
-              name:
-                - docker-ce
-                - docker-ce-cli
-                - containerd.io
-                - docker-buildx-plugin
-                - docker-compose-plugin
-              state: present
-              update_cache: yes
-            when: ansible_facts['os_family'] == 'RedHat'
+            - name: Install Docker Engine (RHEL family)
+              dnf:
+                name:
+                  - docker-ce
+                  - docker-ce-cli
+                  - containerd.io
+                  - docker-buildx-plugin
+                  - docker-compose-plugin
+                state: present
+                update_cache: yes
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          # semanage (and the libselinux python bindings the seboolean module
-          # needs) live in policycoreutils-python-utils, which minimal
-          # RHEL-family cloud images do not preinstall. One early install
-          # serves both the storage-relocation labeling below and the nginx
-          # SELinux block further down.
-          - name: "SELinux — ensure policy tooling is present (RHEL family)"
-            dnf:
-              name: policycoreutils-python-utils
-              state: present
-            when:
-              - ansible_facts['os_family'] == 'RedHat'
-              - _selinux_enforced
+            # semanage (and the libselinux python bindings the seboolean module
+            # needs) live in policycoreutils-python-utils, which minimal
+            # RHEL-family cloud images do not preinstall. One early install
+            # serves both the storage-relocation labeling below and the nginx
+            # SELinux block further down.
+            - name: "SELinux — ensure policy tooling is present (RHEL family)"
+              dnf:
+                name: policycoreutils-python-utils
+                state: present
+              when:
+                - ansible_facts['os_family'] == 'RedHat'
+                - _selinux_enforced
 
-          # ==================== Relocate Docker + containerd storage (optional) ====================
-          # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
-          # Docker's data-root (images/volumes metadata) AND containerd's own
-          # root (the actual image-layer store — a separate config file that
-          # Docker's data-root does NOT control) off a small root filesystem.
-          # Without this, a fresh box with a small `/` and a larger `/opt`
-          # fills `/` mid-deploy pulling the ~30 images in this stack and dies
-          # with "no space left on device". Must run before containerd/docker
-          # are ever started — relocating an already-populated /var/lib/docker
-          # or /var/lib/containerd needs a stop+rsync+relabel migration instead
-          # (not handled here; do that by hand first if Docker's already run).
-          - name: "Docker/containerd storage relocation (when docker_data_root is set)"
-            when: (docker_data_root | default('') | length) > 0
-            vars:
-              # Strip any trailing slash before deriving the sibling containerd
-              # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
-              # INSIDE Docker's own data-root instead of beside it). A top-level
-              # value like '/docker' has dirname '/', which would yield the
-              # bogus '//containerd' — collapse that to '/containerd'.
-              _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
-              _containerd_root: "{{ (_docker_data_root | dirname | regex_replace('^/$', '')) ~ '/containerd' }}"
-            block:
-              # If daemon.json already points at the relocated data-root, the
-              # relocation was applied by an earlier run and anything left in
-              # /var/lib/docker (or /var/lib/containerd) is a harmless
-              # first-start skeleton, not live data — skip the populated-guard
-              # so routine re-deploys don't hard-fail. String-match rather than
-              # from_json so an unparseable daemon.json can't blow up the guard
-              # itself (the daemon.json merge task later fails with a clear
-              # message in that case).
-              - name: "Guard — read daemon.json to detect an already-applied relocation"
-                ansible.builtin.slurp:
-                  src: /etc/docker/daemon.json
-                register: _daemon_json_pre
-                failed_when: false
+            # ==================== Relocate Docker + containerd storage (optional) ====================
+            # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
+            # Docker's data-root (images/volumes metadata) AND containerd's own
+            # root (the actual image-layer store — a separate config file that
+            # Docker's data-root does NOT control) off a small root filesystem.
+            # Without this, a fresh box with a small `/` and a larger `/opt`
+            # fills `/` mid-deploy pulling the ~30 images in this stack and dies
+            # with "no space left on device". Must run before containerd/docker
+            # are ever started — relocating an already-populated /var/lib/docker
+            # or /var/lib/containerd needs a stop+rsync+relabel migration instead
+            # (not handled here; do that by hand first if Docker's already run).
+            - name: "Docker/containerd storage relocation (when docker_data_root is set)"
+              when: (docker_data_root | default('') | length) > 0
+              vars:
+                # Strip any trailing slash before deriving the sibling containerd
+                # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
+                # INSIDE Docker's own data-root instead of beside it). A top-level
+                # value like '/docker' has dirname '/', which would yield the
+                # bogus '//containerd' — collapse that to '/containerd'.
+                _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
+                _containerd_root: "{{ (_docker_data_root | dirname | regex_replace('^/$', '')) ~ '/containerd' }}"
+              block:
+                # If daemon.json already points at the relocated data-root, the
+                # relocation was applied by an earlier run and anything left in
+                # /var/lib/docker (or /var/lib/containerd) is a harmless
+                # first-start skeleton, not live data — skip the populated-guard
+                # so routine re-deploys don't hard-fail. String-match rather than
+                # from_json so an unparseable daemon.json can't blow up the guard
+                # itself (the daemon.json merge task later fails with a clear
+                # message in that case).
+                - name: "Guard — read daemon.json to detect an already-applied relocation"
+                  ansible.builtin.slurp:
+                    src: /etc/docker/daemon.json
+                  register: _daemon_json_pre
+                  failed_when: false
 
-              - name: "Guard — read containerd config.toml to detect its currently-configured root"
-                ansible.builtin.slurp:
-                  src: /etc/containerd/config.toml
-                register: _containerd_config_pre
-                failed_when: false
+                - name: "Guard — read containerd config.toml to detect its currently-configured root"
+                  ansible.builtin.slurp:
+                    src: /etc/containerd/config.toml
+                  register: _containerd_config_pre
+                  failed_when: false
 
-              - name: "Guard — note whether the relocation is already in effect"
-                ansible.builtin.set_fact:
-                  _relocation_already_applied: >-
-                    {{ _daemon_json_pre.content is defined
-                       and (_daemon_json_pre.content | b64decode)
-                           is search('"data-root"\s*:\s*"' ~ (_docker_data_root | regex_escape) ~ '/?"') }}
+                - name: "Guard — note whether the relocation is already in effect"
+                  ansible.builtin.set_fact:
+                    _relocation_already_applied: >-
+                      {{ _daemon_json_pre.content is defined
+                         and (_daemon_json_pre.content | b64decode)
+                             is search('"data-root"\s*:\s*"' ~ (_docker_data_root | regex_escape) ~ '/?"') }}
 
-              # Extract whatever data-root/root Docker/containerd are
-              # CURRENTLY configured to use, if anything — not just whether
-              # /var/lib/* happens to be empty. A box already relocated to one
-              # custom path (e.g. /opt/docker) has nothing under
-              # /var/lib/docker, so checking only the compiled-in default
-              # would let a SECOND relocation (e.g. to /data/docker) sail
-              # through the emptiness check and silently orphan the data
-              # actually live at /opt/docker.
-              - name: "Guard — extract the currently-configured data-root/containerd-root (if any)"
-                ansible.builtin.set_fact:
-                  _current_docker_root: >-
-                    {{ (((_daemon_json_pre.content | default('') | b64decode)
-                         | regex_search('"data-root"\s*:\s*"[^"]*"')) | default(''))
-                       | regex_replace('^.*"([^"]*)"$', '\1') }}
-                  _current_containerd_root: >-
-                    {{ (((_containerd_config_pre.content | default('') | b64decode)
-                         | regex_search('(?m)^\s*root\s*=\s*"[^"]*"')) | default(''))
-                       | regex_replace('^.*"([^"]*)"$', '\1') }}
+                # Extract whatever data-root/root Docker/containerd are
+                # CURRENTLY configured to use, if anything — not just whether
+                # /var/lib/* happens to be empty. A box already relocated to one
+                # custom path (e.g. /opt/docker) has nothing under
+                # /var/lib/docker, so checking only the compiled-in default
+                # would let a SECOND relocation (e.g. to /data/docker) sail
+                # through the emptiness check and silently orphan the data
+                # actually live at /opt/docker.
+                - name: "Guard — extract the currently-configured data-root/containerd-root (if any)"
+                  ansible.builtin.set_fact:
+                    _current_docker_root: >-
+                      {{ (((_daemon_json_pre.content | default('') | b64decode)
+                           | regex_search('"data-root"\s*:\s*"[^"]*"')) | default(''))
+                         | regex_replace('^.*"([^"]*)"$', '\1') }}
+                    _current_containerd_root: >-
+                      {{ (((_containerd_config_pre.content | default('') | b64decode)
+                           | regex_search('(?m)^\s*root\s*=\s*"[^"]*"')) | default(''))
+                         | regex_replace('^.*"([^"]*)"$', '\1') }}
 
-              # Resolve which directory each store actually needs checking:
-              # its current custom location if it's already been relocated
-              # once before (even to a DIFFERENT path than this run's
-              # target), otherwise the compiled-in default.
-              - name: "Guard — resolve which directory to check for each store"
-                ansible.builtin.set_fact:
-                  _dataroot_guard_targets:
-                    - label: docker
-                      current: "{{ _current_docker_root }}"
-                      check_path: "{{ _current_docker_root if (_current_docker_root | length) > 0 else '/var/lib/docker' }}"
-                      matches_target: "{{ _current_docker_root == _docker_data_root }}"
-                    - label: containerd
-                      current: "{{ _current_containerd_root }}"
-                      check_path: "{{ _current_containerd_root if (_current_containerd_root | length) > 0 else '/var/lib/containerd' }}"
-                      matches_target: "{{ _current_containerd_root == _containerd_root }}"
+                # Resolve which directory each store actually needs checking:
+                # its current custom location if it's already been relocated
+                # once before (even to a DIFFERENT path than this run's
+                # target), otherwise the compiled-in default.
+                - name: "Guard — resolve which directory to check for each store"
+                  ansible.builtin.set_fact:
+                    _dataroot_guard_targets:
+                      - label: docker
+                        current: "{{ _current_docker_root }}"
+                        check_path: "{{ _current_docker_root if (_current_docker_root | length) > 0 else '/var/lib/docker' }}"
+                        matches_target: "{{ _current_docker_root == _docker_data_root }}"
+                      - label: containerd
+                        current: "{{ _current_containerd_root }}"
+                        check_path: "{{ _current_containerd_root if (_current_containerd_root | length) > 0 else '/var/lib/containerd' }}"
+                        matches_target: "{{ _current_containerd_root == _containerd_root }}"
 
-              # Relocating a data-root that Docker/containerd have already
-              # written to — whether that's the compiled-in default
-              # (/var/lib/docker, /var/lib/containerd) or a PREVIOUSLY
-              # relocated custom path — would point daemon.json/config.toml at
-              # an empty directory: every existing image and named volume
-              # (including the Postgres complaint database) becomes invisible
-              # and the stack silently re-initializes from scratch. Only a
-              # fresh/never-relocated box, or one already relocated to this
-              # EXACT target, may proceed.
-              - name: "Guard — check the resolved store directories are still empty"
-                ansible.builtin.command: "find {{ item.check_path }} -mindepth 1 -maxdepth 1"
-                loop: "{{ _dataroot_guard_targets }}"
-                loop_control:
-                  label: "{{ item.label }}: {{ item.check_path }}"
-                register: _live_dataroot_check
-                changed_when: false
-                failed_when: false
-                when: not (item.matches_target | bool)
+                # Relocating a data-root that Docker/containerd have already
+                # written to — whether that's the compiled-in default
+                # (/var/lib/docker, /var/lib/containerd) or a PREVIOUSLY
+                # relocated custom path — would point daemon.json/config.toml at
+                # an empty directory: every existing image and named volume
+                # (including the Postgres complaint database) becomes invisible
+                # and the stack silently re-initializes from scratch. Only a
+                # fresh/never-relocated box, or one already relocated to this
+                # EXACT target, may proceed.
+                - name: "Guard — check the resolved store directories are still empty"
+                  ansible.builtin.command: "find {{ item.check_path }} -mindepth 1 -maxdepth 1"
+                  loop: "{{ _dataroot_guard_targets }}"
+                  loop_control:
+                    label: "{{ item.label }}: {{ item.check_path }}"
+                  register: _live_dataroot_check
+                  changed_when: false
+                  failed_when: false
+                  when: not (item.matches_target | bool)
 
-              - name: "Guard — refuse to relocate an already-populated data-root"
-                ansible.builtin.fail:
-                  msg: >-
-                    docker_data_root is set to "{{ _docker_data_root }}" but
-                    {{ item.item.check_path }} already contains data
-                    {{ '(a previously relocated ' ~ item.item.label ~ ' root)'
-                       if (item.item.current | length) > 0
-                       else '(the compiled-in default ' ~ item.item.label ~ ' root)' }},
-                    meaning Docker/containerd have already run against it.
-                    Relocating now would orphan every existing image and named
-                    volume (including the Postgres complaint database) — stop
-                    docker/containerd, rsync {{ item.item.check_path }} to its
-                    new home by hand (relabeling under SELinux if applicable),
-                    then re-run.
-                loop: "{{ _live_dataroot_check.results | default([]) }}"
-                loop_control:
-                  label: "{{ item.item.label | default('') }}"
-                when:
-                  - item.item is defined
-                  - not (item.item.matches_target | bool)
-                  - (item.stdout_lines | default([]) | length) > 0
+                - name: "Guard — refuse to relocate an already-populated data-root"
+                  ansible.builtin.fail:
+                    msg: >-
+                      docker_data_root is set to "{{ _docker_data_root }}" but
+                      {{ item.item.check_path }} already contains data
+                      {{ '(a previously relocated ' ~ item.item.label ~ ' root)'
+                         if (item.item.current | length) > 0
+                         else '(the compiled-in default ' ~ item.item.label ~ ' root)' }},
+                      meaning Docker/containerd have already run against it.
+                      Relocating now would orphan every existing image and named
+                      volume (including the Postgres complaint database) — stop
+                      docker/containerd, rsync {{ item.item.check_path }} to its
+                      new home by hand (relabeling under SELinux if applicable),
+                      then re-run.
+                  loop: "{{ _live_dataroot_check.results | default([]) }}"
+                  loop_control:
+                    label: "{{ item.item.label | default('') }}"
+                  when:
+                    - item.item is defined
+                    - not (item.item.matches_target | bool)
+                    - (item.stdout_lines | default([]) | length) > 0
 
-              - name: "Ensure Docker data-root directory exists"
-                ansible.builtin.file:
-                  path: "{{ _docker_data_root }}"
-                  state: directory
-                  mode: '0711'
+                - name: "Ensure Docker data-root directory exists"
+                  ansible.builtin.file:
+                    path: "{{ _docker_data_root }}"
+                    state: directory
+                    mode: '0711'
 
-              - name: "Ensure containerd root directory exists"
-                ansible.builtin.file:
-                  path: "{{ _containerd_root }}"
-                  state: directory
-                  mode: '0711'
+                - name: "Ensure containerd root directory exists"
+                  ansible.builtin.file:
+                    path: "{{ _containerd_root }}"
+                    state: directory
+                    mode: '0711'
 
-              - name: "containerd — ensure a default config.toml exists"
-                ansible.builtin.shell: |
-                  set -eo pipefail
-                  mkdir -p /etc/containerd
-                  containerd config default > /etc/containerd/config.toml
-                args:
-                  executable: /bin/bash
-                  creates: /etc/containerd/config.toml
+                - name: "containerd — ensure a default config.toml exists"
+                  ansible.builtin.shell: |
+                    set -eo pipefail
+                    mkdir -p /etc/containerd
+                    containerd config default > /etc/containerd/config.toml
+                  args:
+                    executable: /bin/bash
+                    creates: /etc/containerd/config.toml
 
-              # The containerd.io package's shipped config.toml stub has no
-              # top-level `root =` key, so the regexp below matches nothing and
-              # lineinfile appends the line at EOF — landing it inside whatever
-              # `[table]` last preceded it in TOML instead of at the document
-              # root, where containerd silently ignores it. insertbefore: BOF
-              # guarantees the key lands above any table header when absent.
-              - name: "containerd — point root at the relocated directory"
-                ansible.builtin.lineinfile:
-                  path: /etc/containerd/config.toml
-                  regexp: '^\s*root\s*='
-                  line: 'root = "{{ _containerd_root }}"'
-                  insertbefore: BOF
-                register: containerd_root_config
+                # The containerd.io package's shipped config.toml stub has no
+                # top-level `root =` key, so the regexp below matches nothing and
+                # lineinfile appends the line at EOF — landing it inside whatever
+                # `[table]` last preceded it in TOML instead of at the document
+                # root, where containerd silently ignores it. insertbefore: BOF
+                # guarantees the key lands above any table header when absent.
+                - name: "containerd — point root at the relocated directory"
+                  ansible.builtin.lineinfile:
+                    path: /etc/containerd/config.toml
+                    regexp: '^\s*root\s*='
+                    line: 'root = "{{ _containerd_root }}"'
+                    insertbefore: BOF
+                  register: containerd_root_config
 
-              # semanage is provided by the "SELinux — ensure policy tooling is
-              # present" task above (before this relocation block).
-              #
-              # semanage errors if the exact equivalence already exists (e.g. a
-              # re-run) — that's not a real failure, just already-done. Fresh
-              # adds say "already defined"; re-adding after equivalences already
-              # exist for both paths says "already exists" instead — tolerate
-              # both.
-              - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
-                ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
-                loop:
-                  - { orig: /var/lib/docker, new: "{{ _docker_data_root }}" }
-                  - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
-                register: _semanage_fcontext
-                failed_when: >-
-                  _semanage_fcontext.rc != 0
-                  and 'already defined' not in (_semanage_fcontext.stderr | default(''))
-                  and 'already exists' not in (_semanage_fcontext.stderr | default(''))
-                changed_when: _semanage_fcontext.rc == 0
-                when:
-                  - ansible_facts['os_family'] == 'RedHat'
-                  - _selinux_enforced
+                # semanage is provided by the "SELinux — ensure policy tooling is
+                # present" task above (before this relocation block).
+                #
+                # semanage errors if the exact equivalence already exists (e.g. a
+                # re-run) — that's not a real failure, just already-done. Fresh
+                # adds say "already defined"; re-adding after equivalences already
+                # exist for both paths says "already exists" instead — tolerate
+                # both.
+                - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
+                  ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
+                  loop:
+                    - { orig: /var/lib/docker, new: "{{ _docker_data_root }}" }
+                    - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
+                  register: _semanage_fcontext
+                  failed_when: >-
+                    _semanage_fcontext.rc != 0
+                    and 'already defined' not in (_semanage_fcontext.stderr | default(''))
+                    and 'already exists' not in (_semanage_fcontext.stderr | default(''))
+                  changed_when: _semanage_fcontext.rc == 0
+                  when:
+                    - ansible_facts['os_family'] == 'RedHat'
+                    - _selinux_enforced
 
-              # Expensive: walks every file individually (read + possibly
-              # rewrite its security.selinux xattr). Only needed the FIRST time
-              # the relocation happens — the semanage equivalence above makes
-              # new files Docker/containerd create afterward inherit the
-              # correct label automatically (default SELinux file-creation
-              # behavior: a new file/dir inherits its parent's context absent
-              # an explicit type-transition rule, and the parent here is
-              # already correctly labeled after this one pass). Re-running
-              # restorecon on every subsequent deploy against an
-              # already-relocated, already-populated data-root just re-walks
-              # a now-large Docker/containerd tree for nothing — on a
-              # multi-GB overlay2 store this has been observed to take
-              # 15-20+ minutes on IOPS-limited cloud block storage, blocking
-              # every redeploy for no benefit.
-              - name: "SELinux — restorecon the relocated storage dirs (RHEL family, first relocation only)"
-                ansible.builtin.command: "restorecon -RF {{ item }}"
-                loop:
-                  - "{{ _docker_data_root }}"
-                  - "{{ _containerd_root }}"
-                changed_when: false
-                when:
-                  - ansible_facts['os_family'] == 'RedHat'
-                  - _selinux_enforced
-                  - not (_relocation_already_applied | bool)
+                # Expensive: walks every file individually (read + possibly
+                # rewrite its security.selinux xattr). Only needed the FIRST time
+                # the relocation happens — the semanage equivalence above makes
+                # new files Docker/containerd create afterward inherit the
+                # correct label automatically (default SELinux file-creation
+                # behavior: a new file/dir inherits its parent's context absent
+                # an explicit type-transition rule, and the parent here is
+                # already correctly labeled after this one pass). Re-running
+                # restorecon on every subsequent deploy against an
+                # already-relocated, already-populated data-root just re-walks
+                # a now-large Docker/containerd tree for nothing — on a
+                # multi-GB overlay2 store this has been observed to take
+                # 15-20+ minutes on IOPS-limited cloud block storage, blocking
+                # every redeploy for no benefit.
+                - name: "SELinux — restorecon the relocated storage dirs (RHEL family, first relocation only)"
+                  ansible.builtin.command: "restorecon -RF {{ item }}"
+                  loop:
+                    - "{{ _docker_data_root }}"
+                    - "{{ _containerd_root }}"
+                  changed_when: false
+                  when:
+                    - ansible_facts['os_family'] == 'RedHat'
+                    - _selinux_enforced
+                    - not (_relocation_already_applied | bool)
 
-              - name: "Restart containerd if its config changed"
-                ansible.builtin.service:
-                  name: containerd
-                  state: restarted
-                  enabled: true
-                when: containerd_root_config.changed | default(false)
+                - name: "Restart containerd if its config changed"
+                  ansible.builtin.service:
+                    name: containerd
+                    state: restarted
+                    enabled: true
+                  when: containerd_root_config.changed | default(false)
 
-              - name: "Ensure containerd is enabled + running"
-                ansible.builtin.service:
-                  name: containerd
-                  state: started
-                  enabled: true
+                - name: "Ensure containerd is enabled + running"
+                  ansible.builtin.service:
+                    name: containerd
+                    state: started
+                    enabled: true
 
-              # Seed the data-root into daemon.json BEFORE dockerd's first
-              # start. The full merged daemon.json (log rotation, insecure
-              # registries) is written much later in this play — but "Ensure
-              # docker daemon is enabled + running" below starts dockerd first,
-              # and without the seed that first start populates the default
-              # /var/lib/docker, tripping the relocation guard above on every
-              # subsequent re-deploy. Merge, don't overwrite: operator-set keys
-              # in an existing daemon.json survive (the later merge task keeps
-              # them too).
-              - name: "Docker — seed data-root into daemon.json before first start"
-                block:
-                  - name: "Docker — write daemon.json with the relocated data-root"
-                    vars:
-                      _existing: >-
-                        {{ (_daemon_json_pre.content | default('') | b64decode | from_json)
-                           if (_daemon_json_pre.content is defined
-                               and (_daemon_json_pre.content | b64decode | trim | length) > 0)
-                           else {} }}
-                    ansible.builtin.copy:
-                      dest: /etc/docker/daemon.json
-                      content: "{{ _existing | combine({'data-root': _docker_data_root}) | to_nice_json }}\n"
-                      mode: '0644'
-                    register: _daemon_json_seed
-                rescue:
-                  - name: "Docker — existing daemon.json is unreadable"
-                    ansible.builtin.fail:
-                      msg: >-
-                        /etc/docker/daemon.json exists but could not be parsed
-                        as JSON, so the relocated data-root could not be seeded
-                        into it. Fix or remove that file and re-run — it has
-                        been left untouched rather than overwritten.
+                # Seed the data-root into daemon.json BEFORE dockerd's first
+                # start. The full merged daemon.json (log rotation, insecure
+                # registries) is written much later in this play — but "Ensure
+                # docker daemon is enabled + running" below starts dockerd first,
+                # and without the seed that first start populates the default
+                # /var/lib/docker, tripping the relocation guard above on every
+                # subsequent re-deploy. Merge, don't overwrite: operator-set keys
+                # in an existing daemon.json survive (the later merge task keeps
+                # them too).
+                - name: "Docker — seed data-root into daemon.json before first start"
+                  block:
+                    - name: "Docker — write daemon.json with the relocated data-root"
+                      vars:
+                        _existing: >-
+                          {{ (_daemon_json_pre.content | default('') | b64decode | from_json)
+                             if (_daemon_json_pre.content is defined
+                                 and (_daemon_json_pre.content | b64decode | trim | length) > 0)
+                             else {} }}
+                      ansible.builtin.copy:
+                        dest: /etc/docker/daemon.json
+                        content: "{{ _existing | combine({'data-root': _docker_data_root}) | to_nice_json }}\n"
+                        mode: '0644'
+                      register: _daemon_json_seed
+                  rescue:
+                    - name: "Docker — existing daemon.json is unreadable"
+                      ansible.builtin.fail:
+                        msg: >-
+                          /etc/docker/daemon.json exists but could not be parsed
+                          as JSON, so the relocated data-root could not be seeded
+                          into it. Fix or remove that file and re-run — it has
+                          been left untouched rather than overwritten.
 
-              - name: "Docker — check whether dockerd is already running"
-                ansible.builtin.command: systemctl is-active docker
-                register: _dockerd_active
-                changed_when: false
-                failed_when: false
+                - name: "Docker — check whether dockerd is already running"
+                  ansible.builtin.command: systemctl is-active docker
+                  register: _dockerd_active
+                  changed_when: false
+                  failed_when: false
 
-              - name: "Docker — restart a running dockerd to apply the relocated data-root"
-                ansible.builtin.service:
-                  name: docker
-                  state: restarted
-                when:
-                  - _daemon_json_seed.changed | default(false)
-                  - (_dockerd_active.stdout | default('')) == 'active'
+                - name: "Docker — restart a running dockerd to apply the relocated data-root"
+                  ansible.builtin.service:
+                    name: docker
+                    state: restarted
+                  when:
+                    - _daemon_json_seed.changed | default(false)
+                    - (_dockerd_active.stdout | default('')) == 'active'
 
           always:
-          # Release the Debian package auto-start hold now that the data-root
-          # is configured — only if this run created it (an operator-managed
-          # policy-rc.d is never touched).
-          - name: "Docker install — release the package auto-start hold (Debian/Ubuntu)"
-            ansible.builtin.file:
-              path: /usr/sbin/policy-rc.d
-              state: absent
-            when:
-              - ansible_facts['os_family'] == 'Debian'
-              - _docker_autostart_hold.changed | default(false)
+            # Release the Debian package auto-start hold now that the data-root
+            # is configured — only if this run created it (an operator-managed
+            # policy-rc.d is never touched).
+            - name: "Docker install — release the package auto-start hold (Debian/Ubuntu)"
+              ansible.builtin.file:
+                path: /usr/sbin/policy-rc.d
+                state: absent
+              when:
+                - ansible_facts['os_family'] == 'Debian'
+                - _docker_autostart_hold.changed | default(false)
 
-        # apt/dnf both install docker.service disabled by default — enable +
-        # start it explicitly so subsequent tasks can talk to the daemon.
+          # apt/dnf both install docker.service disabled by default — enable +
+          # start it explicitly so subsequent tasks can talk to the daemon.
         - name: Ensure docker daemon is enabled + running
           service:
             name: docker
