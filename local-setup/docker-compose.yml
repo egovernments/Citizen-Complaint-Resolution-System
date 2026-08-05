@@ -1019,7 +1019,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-cae07a3}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-96dcf10}
     container_name: digit-ui
     restart: on-failure
     ports:
