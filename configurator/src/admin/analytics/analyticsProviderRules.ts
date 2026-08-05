@@ -154,6 +154,43 @@ export function urlHost(url: unknown): string {
   return host;
 }
 
+/** A SAME-ORIGIN path, e.g. '/matomo/matomo.js'. Safer than any absolute URL: it
+ *  cannot reach a third party, it inherits the page scheme (so it works on the
+ *  http-only environments), and no host allowlist applies because the host is the
+ *  portal's own. Mirrors isSameOriginPath() in analytics.js — anything that only
+ *  LOOKS same-origin ('//evil.com', '/\\evil.com', '://', control characters) is
+ *  refused. */
+const RE_SAME_ORIGIN_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/;
+const RE_SAME_ORIGIN_QUERY = /^[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*$/;
+
+/** The SPA entrance prefix. The Configurator cannot read the portal's
+ *  globalConfigs, so it assumes the default; the shim uses getConfig("CONTEXT_PATH")
+ *  and the parity test pins both to the same value. */
+export const DEFAULT_CONTEXT_PATH = 'digit-ui';
+
+export function isSameOriginPath(url: unknown, contextPath: string = DEFAULT_CONTEXT_PATH): boolean {
+  if (!isStr(url) || url.length < 2) return false;
+  if (url.charAt(0) !== '/' || url.charAt(1) === '/') return false;
+  if (url.includes('\\')) return false;
+  if (url.includes('://')) return false;
+  if (url.includes('#')) return false;
+  if (/[\s\u0000-\u001f\u007f]/.test(url)) return false;
+
+  const q = url.indexOf('?');
+  const path = q === -1 ? url : url.slice(0, q);
+  const query = q === -1 ? '' : url.slice(q + 1);
+  if (!RE_SAME_ORIGIN_PATH.test(path)) return false;
+  if (query && !RE_SAME_ORIGIN_QUERY.test(query)) return false;
+
+  // A path under the SPA's own entrance prefix is answered by
+  // `try_files ... /index.html` with the HTML shell, and injecting that as a
+  // script throws on every page load. Refuse it — mirrors analytics.js.
+  const seg = path.split('/')[1] ?? '';
+  if (contextPath && seg.startsWith(contextPath)) return false;
+
+  return true;
+}
+
 export function hostMatches(host: string, pattern: string): boolean {
   const h = String(host || '').toLowerCase();
   const p = String(pattern || '').toLowerCase();
@@ -190,6 +227,7 @@ export function sentryScriptUrl(rec: AnalyticsProviderRecord): string {
 
 function validateScriptUrl(url: unknown, extraHosts: readonly string[] = []): Verdict {
   if (!isStr(url) || !url) return fail(REASONS.MISSING_SCRIPT_URL);
+  if (isSameOriginPath(url)) return ok();
   if (!url.startsWith('https://')) return fail(REASONS.SCRIPT_URL_NOT_HTTPS);
   if (!hostAllowed(urlHost(url), extraHosts)) return fail(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
   return ok();
@@ -370,7 +408,8 @@ export function hostIsUnverifiable(rec: AnalyticsProviderRecord): string | null 
   else if (type === 'POSTHOG') url = posthogScriptUrl(rec);
   else if (type === 'SENTRY') url = sentryScriptUrl(rec);
   else if (type === 'CUSTOM') url = trim((rec.adapter?.scriptUrl as string) || rec.scriptUrl);
-  if (!url || !url.startsWith('https://')) return null;
+  if (!url || isSameOriginPath(url)) return null; // same-origin: nothing to verify
+  if (!url.startsWith('https://')) return null;
   const host = urlHost(url);
   if (!host) return null; // a malformed authority is a hard failure, not a warning
   return hostAllowed(host) ? null : host;
