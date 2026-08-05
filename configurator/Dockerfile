@@ -6,9 +6,16 @@
 #   - `vite build` DIRECTLY (not the package.json `tsc -b && vite build`): the
 #     root tsc -b has blocking app-level type errors upstream, but vite/esbuild
 #     emits a working SPA without type-checking.
-# Tenant-neutral: configurator reads no VITE_* build-env (only import.meta.env.MODE),
-# so a single image serves every tenant. Configuration is runtime (login + tenant
-# pick), not baked. amd64 deploy target.
+# Tenant-neutral — but by construction, not by accident. The app DOES read four
+# deployment values (state tenant, Overpass/Turbopass endpoints, boundary search
+# limit); they are resolved at RUNTIME from `<base>/config.js`
+# (window.__CONFIGURATOR_CONFIG__), which the deploy renders per-tenant and drops
+# next to the bundle — the same pattern as digit-ui's globalConfigs.js. A neutral
+# public/config.js ships in the image so an unconfigured run falls through to the
+# in-code defaults. Do NOT reintroduce VITE_* build args: baking them here is what
+# made a pre-built image silently deployment-specific (empty tenant on the login
+# form, public rate-limited Overpass). See configurator/src/api/runtimeConfig.ts.
+# amd64 deploy target.
 ARG NODE_IMAGE=node:20-bookworm-slim
 ARG BASE_PATH=/configurator/
 
