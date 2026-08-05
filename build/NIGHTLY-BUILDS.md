@@ -33,8 +33,9 @@ it with different refs/tags.
    Scheduled workflows fire only from the **default branch**, so the file must
    live there; the reusable build checks out `ref: develop` regardless, so it
    always builds `develop`. Pushes `egovio/<image-name>` under both
-   `nightly-develop` (rolling) and `develop-YYYYMMDD` (immutable), then prunes to
-   the **newest 5** dated tags per image. This is the public source the compose
+   `nightly-develop` (rolling) and `develop-<short-sha>` (immutable — the first
+   8 hex chars of the commit it built), then prunes to the **5 most recently
+   pushed** snapshot tags per image. This is the public source the compose
    defaults and `local-setup/local-deploy.sh` pull from.
 
 2. **GitHub Actions — on release published.**
@@ -47,7 +48,10 @@ it with different refs/tags.
 
 3. **On-box `nightly-build-push.sh` — the pre-existing VPC-registry driver.**
    [`local-setup/ansible/files/nightly-build-push.sh`](../local-setup/ansible/files/nightly-build-push.sh).
-   Unchanged. Runs on the build host, pushes to `$NIGHTLY_PUSH_REGISTRY` (the
+   Unchanged — **including its `develop-YYYYMMDD` immutable tag**, which the
+   GitHub Actions nightly no longer mints (see *Tags* below); the two drivers
+   push to different registries, so they do not collide.
+   Runs on the build host, pushes to `$NIGHTLY_PUSH_REGISTRY` (the
    internal VPC registry, never hard-coded in the repo), and is **amd64-only**
    (its deploy targets are `linux/amd64`). Invoked by the bomet nightly redeploy
    wrapper after the `develop` sync and before the converge.
@@ -69,9 +73,10 @@ build a chosen subset from local source while pulling the rest — see
 | Tag | Meaning | Mutable? |
 |-----|---------|----------|
 | `nightly-develop` | rolling pointer to the latest `develop` nightly. Deploys that want "track develop" pin this. | yes (moves every night) |
-| `develop-YYYYMMDD` | immutable daily snapshot for rollback / reproducible pins. | no |
+| `develop-<short-sha>` | immutable snapshot naming the **commit** it was built from — the first 8 hex chars of that SHA. Minted by the GitHub Actions nightly and by a `build.yml` dispatch on `develop`. | no |
+| `develop-YYYYMMDD` | **legacy.** Still minted by the on-box `nightly-build-push.sh` into the VPC registry. The GitHub Actions nightly no longer creates these; existing ones on Docker Hub stay prune-eligible and age out. | no |
 
-So PGR is `…/pgr-services:nightly-develop` and `…/pgr-services:develop-20260612`.
+So PGR is `…/pgr-services:nightly-develop` and `…/pgr-services:develop-84f88837`.
 
 > **Drift note — `pgr-services` vs `pgr-services-dev`.** The `-dev` suffix was an
 > artifact of an external preview-registry image and put the *channel in the name*,
@@ -80,6 +85,29 @@ So PGR is `…/pgr-services:nightly-develop` and `…/pgr-services:develop-20260
 > tag. The legacy `pgr-services-dev:latest` remains only as the compose **default
 > fallback** until deployments cut their host_vars over to `pgr-services:nightly-develop`,
 > after which it can be retired.
+
+#### Why the commit, not the day
+
+A date names *when a build ran*, which is not the same fact as *what it built*.
+A re-run later the same day overwrote an "immutable" `develop-20260612` with
+different code, and two nights on an unmoved `develop` minted two tags for one
+commit. The tag is now sliced from the exact SHA the pipeline resolves once
+(`enumerate.outputs.sha`) and every build leg checks out, so the tag is
+checkable: `git show 84f88837` **is** the code in `…:develop-84f88837`. A
+nightly on an unchanged `develop` re-pushes that same tag instead of
+accumulating a new one, so "keep 5" now means the last five *distinct develop
+commits built*, not the last five calendar days.
+
+Retention therefore can no longer sort by tag name — hashes have no intrinsic
+order, where `develop-YYYYMMDD` gave newest-first for free. The prune reads
+Docker Hub's per-tag `last_updated` and keeps the five most recently pushed.
+Its pattern is `develop-` + **8 or more** hex chars, which deliberately:
+
+- still matches legacy `develop-YYYYMMDD` (8 digits are 8 hex chars), so those
+  age out rather than leaking now that nothing on Docker Hub mints them; and
+- does **not** match the 7-char `develop-70916ea`-style pins that
+  `local-setup/docker-compose*.yml` and `devops/deploy-as-code/**/values.yaml`
+  carry as image defaults — a `{7,}` bound would have pruned live pins.
 
 ## Scope: what this nightly does and does NOT build
 
@@ -179,9 +207,10 @@ docker ps --format '{{.Names}}\t{{.Image}}' \
   | grep -E 'pgr-services|digit-ui|digit-mcp|otp-publisher|default-data-handler'
 ```
 
-Every line should show your registry + `:nightly-develop` (or a dated
-`:develop-YYYYMMDD`). A `…preview…:latest`, a hand tag like `:pgr-fixes`, or a
-`:local` means that service is **not** on the nightly — fix its pin and/or
+Every line should show your registry + `:nightly-develop` (or an immutable
+snapshot pin — `:develop-<short-sha>` from Docker Hub, `:develop-YYYYMMDD` from
+the on-box VPC registry). A `…preview…:latest`, a hand tag like `:pgr-fixes`, or
+a `:local` means that service is **not** on the nightly — fix its pin and/or
 `build_*` flag.
 
 ### Frontend caveat

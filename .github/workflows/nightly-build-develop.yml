@@ -21,5 +21,5 @@ jobs:
       ref: develop
       rolling_tag: nightly-develop        # rolling latest-develop pointer
       staging_prefix: nightly-develop
-      prune_develop: true                 # keep newest 5 develop-YYYYMMDD per image
+      prune_develop: true                 # keep the 5 most recent develop-<sha> per image
     secrets: inherit
