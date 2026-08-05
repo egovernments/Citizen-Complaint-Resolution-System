@@ -1,4 +1,5 @@
 import React from "react";
+import { parseFilestoreEntry } from "../utils/attachmentKind";
 
 // Shared PGR file uploader — the SAME component/UX as the citizen create
 // wizard's Step-4 uploader (CreatePGRFlowV2 PgrFileUpload): dashed drop-zone
@@ -97,6 +98,16 @@ const UPLOAD_CSS = `
   background: var(--color-surface-secondary, #f1f5f9);
 }
 .pgr-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Video uses contain, not cover: a cropped frame plus cropped-off native
+   controls is useless for confirming what was attached. Black backdrop fills
+   the letterbox so a portrait phone clip doesn't sit on a grey tile. */
+.pgr-card-img video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+/* Native audio controls have a fixed intrinsic width (~300px) that would
+   overflow the tile; pin to the cell and centre it vertically. */
+.pgr-card-img audio { width: 100%; display: block; position: absolute; top: 50%; left: 0; transform: translateY(-50%); }
+/* The video tile needs room for the native control bar (~32px) on top of the
+   frame, otherwise the scrubber is clipped in the default-size card. */
+.pgr-card-img:has(video) { min-height: 6.5rem; }
 .pgr-card-doc { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary, #64748b); }
 .pgr-badge {
   position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 9999px;
@@ -156,6 +167,22 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
   const [error, setError] = React.useState("");
   const inputRef = React.useRef(null);
 
+  // Revoke preview object URLs when the component goes away. removeAt already
+  // revokes on explicit delete, but navigating away from a form with previews
+  // still attached used to leak them — harmless at image sizes, not at 5 MB of
+  // video per file. Tracked through a ref so the effect can stay unmount-only
+  // and never revoke a URL that is still on screen.
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+  React.useEffect(
+    () => () => {
+      itemsRef.current.forEach((i) => {
+        if (typeof i?.url === "string" && i.url.startsWith("blob:")) URL.revokeObjectURL(i.url);
+      });
+    },
+    []
+  );
+
   // Rebuild previews for ids that arrive from outside (session-restored form
   // values). Best-effort — the ids are valid for submit regardless.
   React.useEffect(() => {
@@ -179,8 +206,18 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
         });
         const rebuilt = missing.map((id) => {
           const raw = byId[id] != null ? byId[id] : (typeof d[id] === "string" ? d[id] : "");
-          const url = typeof raw === "string" ? raw.split(",").pop() || "" : "";
-          return { id, url, name: tr(t, "CS_UPLOADED_FILE", "Attachment"), size: 0 };
+          // Was `raw.split(",").pop()` — the LAST variant, i.e. the _small
+          // thumbnail for an image. Videos have no variants, so pop() returned
+          // the video itself and it went straight into <img>. Classify instead:
+          // images keep their thumbnail, media keep the playable original.
+          const parsed = parseFilestoreEntry(raw);
+          return {
+            id,
+            url: parsed ? (parsed.kind === "image" ? parsed.thumb : parsed.full) : "",
+            kind: parsed ? parsed.kind : "doc",
+            name: tr(t, "CS_UPLOADED_FILE", "Attachment"),
+            size: 0,
+          };
         });
         setItems((prev) => [...prev, ...rebuilt]);
       } catch (e) {
@@ -221,9 +258,24 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
         const response = await Digit.UploadServices.Filestorage("property-upload", file, tenantId);
         const id = response?.data?.files?.[0]?.fileStoreId;
         if (id) {
+          // CCSD-2027: video and audio are accepted (see DEFAULT_ACCEPT) but
+          // only images got an object URL, so a just-uploaded clip showed the
+          // generic doc icon with no way to confirm what was attached. Build a
+          // preview URL for playable media too and record the kind so the card
+          // can mount the right element. Object URLs are revoked in removeAt
+          // and on unmount — a 5 MB video held in memory is not free.
+          const mime = (file.type || "").toLowerCase();
+          const previewKind = mime.startsWith("image/")
+            ? "image"
+            : mime.startsWith("video/")
+            ? "video"
+            : mime.startsWith("audio/")
+            ? "audio"
+            : "doc";
           uploaded.push({
             id,
-            url: file.type && file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+            url: previewKind === "doc" ? "" : URL.createObjectURL(file),
+            kind: previewKind,
             name: file.name,
             size: file.size,
           });
@@ -335,7 +387,14 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
                 >
                   {XIcon}
                 </button>
-                {it.url ? (
+                {it.url && it.kind === "video" ? (
+                  // controls, so the uploader can confirm the clip is the right
+                  // one before submitting; preload="metadata" keeps a 5 MB file
+                  // from being pulled just to draw a tile.
+                  <video src={it.url} controls playsInline preload="metadata" aria-label={it.name} />
+                ) : it.url && it.kind === "audio" ? (
+                  <audio src={it.url} controls preload="metadata" aria-label={it.name} />
+                ) : it.url ? (
                   <img src={it.url} alt={it.name} />
                 ) : (
                   <div className="pgr-card-doc">{DocIcon}</div>

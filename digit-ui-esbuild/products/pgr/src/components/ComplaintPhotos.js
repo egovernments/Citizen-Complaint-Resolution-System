@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { DisplayPhotos, ImageViewer, ArrowLeft } from "@egovernments/digit-ui-react-components";
+import { parseFilestoreEntry } from "../utils/attachmentKind";
 
 // ArrowRight is not in upstream react-components; define locally
 const ArrowRight = (props) => (
@@ -8,8 +9,73 @@ const ArrowRight = (props) => (
   </svg>
 );
 
-const ComplaintPhotos = ({ serviceWrapper }) => {
-    const [images, setImages] = useState(null);
+const PaperclipIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M16.5 6v11.5a4 4 0 01-8 0V5a2.5 2.5 0 015 0v10.5a1 1 0 01-2 0V6H10v9.5a2.5 2.5 0 005 0V5a4 4 0 00-8 0v12.5a5.5 5.5 0 0011 0V6h-1.5z" />
+  </svg>
+);
+
+const chipStyle = {
+  display: "inline-flex", alignItems: "center", gap: "0.4rem",
+  fontSize: "0.8rem", padding: "0.45rem 0.7rem", borderRadius: 6,
+  border: "1px solid var(--color-border, #cbd5e1)",
+  color: "var(--color-primary-1, #c84c0e)", textDecoration: "none",
+};
+
+/**
+ * One playable attachment. Mounts a real <video>/<audio> element and falls back
+ * to a download link if the browser rejects the media.
+ *
+ * The fallback is driven by the element's `error` event rather than by a codec
+ * allowlist: container sniffing cannot answer "will this play". Chrome reports
+ * it cannot play video/quicktime yet plays most .mov files (they are usually
+ * H.264), and an .mp4 can still carry a codec the browser refuses. The error
+ * event is the only signal that reflects what actually happened.
+ *
+ * `preload="metadata"` so opening a complaint with several videos fetches only
+ * headers, not whole payloads — these are up to 5 MB each on mobile
+ * connections. `playsInline` stops iOS Safari hijacking playback to fullscreen.
+ */
+const MediaAttachment = ({ url, kind, label, downloadLabel }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" title={label} style={chipStyle}>
+        <PaperclipIcon />
+        {downloadLabel}
+      </a>
+    );
+  }
+
+  if (kind === "audio") {
+    return (
+      <audio
+        controls
+        preload="metadata"
+        src={url}
+        aria-label={label}
+        onError={() => setFailed(true)}
+        style={{ display: "block", width: "16rem", maxWidth: "100%" }}
+      />
+    );
+  }
+
+  return (
+    <video
+      controls
+      playsInline
+      preload="metadata"
+      src={url}
+      aria-label={label}
+      onError={() => setFailed(true)}
+      style={{ display: "block", width: "13.75rem", maxWidth: "100%", maxHeight: "10rem", borderRadius: 6, background: "#000" }}
+    />
+  );
+};
+
+const ComplaintPhotos = ({ t, serviceWrapper }) => {
+    const [attachments, setAttachments] = useState(null);
     const [imageZoom, setImageZoom] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     // #555: attachments are uploaded under the complaint's CITY tenant
@@ -35,11 +101,11 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
                 try {
                     const res = await Digit.UploadServices.Filefetch(fileStoreIds, tenantId);
                     if (res && res.data) {
-                        setImages(res.data);
+                        setAttachments(res.data);
                     }
                 } catch (err) {
-                    console.error("Error fetching images:", err);
-                    setImages(null);
+                    console.error("Error fetching attachments:", err);
+                    setAttachments(null);
                 }
             }
         })();
@@ -54,7 +120,7 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
         setImageZoom(null);
     }
 
-    if (!images) return null;
+    if (!attachments) return null;
 
     // Filefetch's actual response shape is:
     //   { fileStoreIds: [{ id, url: "url1,url2-large,url3-medium,url4-small,…" }, …],
@@ -64,27 +130,28 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
     // exist — so it always produced empty `thumbs`/`fullImages` and
     // the photos panel rendered nothing. CCRS#555.
     //
-    // Pull the per-file URL list off `fileStoreIds[].url`, treat the
-    // first segment as the full image and prefer a "small" variant
-    // for the thumb, falling back to the full image if no small
-    // variant is present (some filestore deployments don't generate
-    // thumbnails).
-    const thumbs = [];
-    const fullImages = [];
+    // CCSD-2027: uploads accept video and audio, but this panel fed every
+    // attachment into <img>. Only images get _large/_medium/_small variants
+    // from filestore, so a video had no "small" URL to find, fell back to the
+    // original URL, and rendered as a broken image. Classify each entry first,
+    // then route images to the existing lightbox and media to a real player.
+    const images = [];   // { full, thumb } — preserves the existing gallery UX
+    const media = [];    // { full, kind } — video/audio, rendered as players
+    const docs = [];     // { full } — anything else, download only
 
-    const filestoreEntries = Array.isArray(images?.fileStoreIds) ? images.fileStoreIds : [];
+    const filestoreEntries = Array.isArray(attachments?.fileStoreIds) ? attachments.fileStoreIds : [];
     filestoreEntries.forEach((entry) => {
-        const raw = typeof entry?.url === "string" ? entry.url : "";
-        if (!raw) return;
-        const urls = raw.split(",").map((u) => u.trim()).filter(Boolean);
-        if (urls.length === 0) return;
-        const fullImage = urls[0];
-        const thumb = urls.find((u) => /small/i.test(u)) || fullImage;
-        fullImages.push(fullImage);
-        thumbs.push(thumb);
+        const parsed = parseFilestoreEntry(entry?.url);
+        if (!parsed) return;
+        if (parsed.kind === "image") images.push({ full: parsed.full, thumb: parsed.thumb });
+        else if (parsed.kind === "video" || parsed.kind === "audio") media.push({ full: parsed.full, kind: parsed.kind });
+        else docs.push({ full: parsed.full });
     });
 
-    if (thumbs.length === 0) return null;
+    if (images.length === 0 && media.length === 0 && docs.length === 0) return null;
+
+    const fullImages = images.map((i) => i.full);
+    const thumbs = images.map((i) => i.thumb);
 
     const handleNext = () => {
         if (currentIndex < fullImages.length - 1) {
@@ -102,9 +169,45 @@ const ComplaintPhotos = ({ serviceWrapper }) => {
         }
     };
 
+    // `t` is not passed by every caller (the citizen ComplaintDetails omits
+    // it), so resolve labels defensively instead of crashing on t(...). An
+    // unseeded key echoes back, so treat "key === value" as a miss too.
+    const label = (key, fallback) => {
+        const v = typeof t === "function" ? t(key) : key;
+        return !v || v === key ? fallback : v;
+    };
+
     return (
         <React.Fragment>
-            <DisplayPhotos srcs={thumbs} onClick={(src, index) => zoomImage(fullImages[index], index)} />
+            {thumbs.length > 0 && (
+                <DisplayPhotos srcs={thumbs} onClick={(src, index) => zoomImage(fullImages[index], index)} />
+            )}
+
+            {media.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", marginTop: thumbs.length > 0 ? "0.75rem" : 0 }}>
+                    {media.map((m, i) => (
+                        <MediaAttachment
+                            key={m.full}
+                            url={m.full}
+                            kind={m.kind}
+                            label={`${label("CS_TIMELINE_ATTACHMENT", "Attachment")} ${i + 1}`}
+                            downloadLabel={label("CS_COMMON_DOWNLOAD", "Download")}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {docs.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+                    {docs.map((d, i) => (
+                        <a key={d.full} href={d.full} target="_blank" rel="noopener noreferrer" style={chipStyle}>
+                            <PaperclipIcon />
+                            {`${label("CS_TIMELINE_ATTACHMENT", "Attachment")} ${i + 1}`}
+                        </a>
+                    ))}
+                </div>
+            )}
+
             {imageZoom && (
                 <React.Fragment>
                     <style>
