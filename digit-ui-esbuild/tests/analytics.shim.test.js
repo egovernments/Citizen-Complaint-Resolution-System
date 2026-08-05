@@ -33,7 +33,14 @@ const SHIM = fs.readFileSync(path.resolve(__dirname, "../public/analytics.js"), 
 function loadShim(opts) {
   opts = opts || {};
   const config = Object.assign(
-    { STATE_LEVEL_TENANT_ID: "mz", CONTEXT_PATH: "digit-ui", MDMS_V2_CONTEXT_PATH: "mdms-v2" },
+    {
+      STATE_LEVEL_TENANT_ID: "mz",
+      CONTEXT_PATH: "digit-ui",
+      MDMS_V2_CONTEXT_PATH: "mdms-v2",
+      // A self-hosted collector's host is NOT in the compile-time allowlist by
+      // design — ops declares it. Most fixtures need it declared.
+      ANALYTICS_SCRIPT_HOSTS: ["matomo.mz.gov.mz"],
+    },
     opts.config || {}
   );
   const local = Object.assign({}, opts.local || {});
@@ -343,13 +350,31 @@ test("CUSTOM records cannot claim a dangerous global or smuggle a placeholder", 
 });
 
 test("the script host allowlist accepts vendor patterns and rejects everything else", () => {
-  const { internal: i } = loadShim({ respond: () => [] });
-  for (const h of ["www.googletagmanager.com", "js.sentry-cdn.com", "o1.ingest.us.sentry.io", "eu.posthog.com", "matomo.mz.gov.mz"]) {
+  const { internal: i } = loadShim({ config: { ANALYTICS_SCRIPT_HOSTS: [] }, respond: () => [] });
+  for (const h of ["www.googletagmanager.com", "js.sentry-cdn.com", "o1.ingest.us.sentry.io", "eu.posthog.com"]) {
     assert.equal(i.hostAllowed(h), true, h);
   }
   for (const h of ["evil.example.com", "posthog.com.evil.net", "notmatomo.com", ""]) {
     assert.equal(i.hostAllowed(h), false, h);
   }
+  // A self-hosted collector is NOT trusted by default: no prefix wildcard exists,
+  // so ops must name the host. Previously "matomo.*" accepted any host starting
+  // "matomo.", i.e. any attacker-registered matomo.<something>.
+  assert.equal(i.hostAllowed("matomo.mz.gov.mz"), false, "self-hosted host is not implicitly trusted");
+  assert.equal(i.hostAllowed("matomo.evil.com"), false, "the old prefix wildcard must stay dead");
+});
+
+test("a userinfo trick cannot smuggle a foreign host past the allowlist", () => {
+  // In https://matomo.io@evil.com/x.js the real host is evil.com. A naive parse
+  // reports "matomo.io@evil.com"; the record must be refused outright.
+  const { internal: i } = loadShim({ respond: () => [] });
+  const rec = {
+    code: "sneaky", type: "MATOMO", enabled: true, siteId: "1",
+    scriptUrl: "https://matomo.mz.gov.mz@evil.com/payload.js",
+  };
+  const v = i.validate(rec);
+  assert.equal(v.ok, false);
+  assert.equal(v.reason, i.REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
 });
 
 test("ops can widen the allowlist but MDMS cannot", () => {
