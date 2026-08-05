@@ -6,12 +6,14 @@ name: Build images (reusable)
 #   - release-build.yml          (on release published) → ref = release tag, version tag only
 #
 # Mechanism: build each service per-arch on native runners (amd64 + arm64),
-# push a run-scoped staging tag (`<prefix>-staging-<run_id>-<arch>`), then stitch
-# a multi-arch manifest for the version tag (+ optional rolling tag). Scoping the
-# staging tag to the run is what makes the manifest safe: it can only be built
-# from images this run produced, so a failed arch build can never be papered over
-# by a previous run's leftover tag. Final manifests reference digests, so the
-# cleanup job deletes the staging tags afterwards without affecting them.
+# push an attempt-scoped staging tag (`<prefix>-staging-<run_id>-<run_attempt>-<arch>`),
+# then stitch a multi-arch manifest for the version tag (+ optional rolling tag).
+# That scope is what makes the manifest safe: it can only be built from images
+# this attempt produced, so a failed arch build can never be papered over by a
+# leftover tag. run_id alone is NOT enough — it is constant across re-runs, so a
+# cancelled attempt (which skips the cleanup job) would leave tags that the next
+# attempt of the SAME run would happily consume. Final manifests reference
+# digests, so cleanup deletes the staging tags afterwards without affecting them.
 
 on:
   workflow_call:
@@ -54,6 +56,7 @@ jobs:
     name: Enumerate build-config.yml
     runs-on: ubuntu-latest
     outputs:
+      sha:     ${{ steps.sha.outputs.sha }}
       targets: ${{ steps.list.outputs.targets }}
       images:  ${{ steps.list.outputs.images }}
       version_tag: ${{ steps.list.outputs.version_tag }}
@@ -61,6 +64,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+      # `ref` may be a mutable branch tip (the nightly passes `develop`). Resolve
+      # it to a SHA ONCE here; every build leg checks out that SHA. Otherwise a
+      # push mid-run means legs build newer code than the manifest enumerated,
+      # and the published image is a mix of two commits.
+      - name: Resolve ref to an immutable SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Install yq
         run: |
           sudo curl -sSL "https://github.com/mikefarah/yq/releases/download/v4.30.8/yq_linux_amd64" -o /usr/local/bin/yq
@@ -104,9 +114,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          # The SHA resolved once by `enumerate`, not the mutable input ref.
+          ref: ${{ needs.enumerate.outputs.sha }}
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v2
+      - uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
@@ -117,15 +128,16 @@ jobs:
           DOCKERFILE: ${{ matrix.target.dockerfile }}
           STAGING_PREFIX: ${{ inputs.staging_prefix }}
           ARCH: ${{ matrix.arch }}
-          RUN_ID: ${{ github.run_id }}
+          RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          # Staging tags carry the run id so a manifest can only ever be
-          # stitched from images THIS run produced. With a per-channel-only
-          # name, a failed arch build would leave the previous run's tag in
-          # place and the manifest step would happily publish a mixed-run
-          # image (e.g. today's amd64 + yesterday's arm64).
-          TAG="${PUSH_NAMESPACE}/${IMAGE}:${STAGING_PREFIX}-staging-${RUN_ID}-${ARCH}"
+          # RUN_SCOPE is run_id + run_attempt, so a manifest can only ever be
+          # stitched from images THIS attempt produced. A per-channel-only name
+          # let a failed arch build leave the previous run's tag in place and
+          # the manifest publish a mixed image (today's amd64 + yesterday's
+          # arm64); run_id alone still allowed that across re-runs of one run,
+          # since run_id is stable per run and only run_attempt increments.
+          TAG="${PUSH_NAMESPACE}/${IMAGE}:${STAGING_PREFIX}-staging-${RUN_SCOPE}-${ARCH}"
           if [ "$DOCKERFILE" = "build/maven/Dockerfile" ]; then
             docker buildx build --platform "linux/${ARCH}" \
               --build-arg WORK_DIR="$WORKDIR" -f build/maven/Dockerfile \
@@ -148,7 +160,7 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: docker/login-action@v2
+      - uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
@@ -158,20 +170,20 @@ jobs:
           VERSION_TAG: ${{ needs.enumerate.outputs.version_tag }}
           ROLLING_TAG: ${{ inputs.rolling_tag }}
           STAGING_PREFIX: ${{ inputs.staging_prefix }}
-          RUN_ID: ${{ github.run_id }}
+          RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -uo pipefail
           failed=0; published=0
           for NAME in $(echo "$IMAGES" | jq -r '.[]'); do
             IMG="${PUSH_NAMESPACE}/${NAME}"
-            AMD="$IMG:${STAGING_PREFIX}-staging-${RUN_ID}-amd64"
-            ARM="$IMG:${STAGING_PREFIX}-staging-${RUN_ID}-arm64"
-            # Both arch tags must exist AND carry this run's id, or we refuse to
-            # publish — a half-built or mixed-run image must never become the
-            # version/rolling tag.
+            AMD="$IMG:${STAGING_PREFIX}-staging-${RUN_SCOPE}-amd64"
+            ARM="$IMG:${STAGING_PREFIX}-staging-${RUN_SCOPE}-arm64"
+            # Both arch tags must exist AND carry this attempt's scope, or we
+            # refuse to publish — a half-built or mixed-attempt image must never
+            # become the version/rolling tag.
             if ! docker buildx imagetools inspect "$AMD" >/dev/null 2>&1 \
                || ! docker buildx imagetools inspect "$ARM" >/dev/null 2>&1; then
-              echo "SKIP ${NAME}: staging tags from run ${RUN_ID} are incomplete"
+              echo "SKIP ${NAME}: staging tags from attempt ${RUN_SCOPE} are incomplete"
               echo "- ❌ SKIPPED \`${NAME}\` — build did not complete for both arches" >> $GITHUB_STEP_SUMMARY
               failed=1
               continue
@@ -203,7 +215,7 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
           IMAGES: ${{ needs.enumerate.outputs.images }}
           STAGING_PREFIX: ${{ inputs.staging_prefix }}
-          RUN_ID: ${{ github.run_id }}
+          RUN_SCOPE: ${{ github.run_id }}-${{ github.run_attempt }}
           PRUNE_DEVELOP: ${{ inputs.prune_develop }}
         run: |
           set -uo pipefail
@@ -212,29 +224,55 @@ jobs:
             -d "{\"username\": \"$DOCKER_USERNAME\", \"password\": \"$DOCKER_PASSWORD\"}" | jq -r .token)
           [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "Hub login failed"; exit 1; }
 
+          # A silently-failed delete is how tags accumulate unnoticed — and it
+          # compounds, because a repo past 100 dated tags then needs pagination
+          # to prune correctly. So: 404 is idempotent success (already gone),
+          # anything else is recorded and fails the job at the end.
+          delete_failures=0
           del() { # $1=image $2=tag
-            curl -fsS -X DELETE -H "Authorization: JWT $TOKEN" \
-              "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/$1/tags/$2/" >/dev/null \
-              && echo "  deleted $1:$2" \
-              || echo "  WARN: delete failed for $1:$2 (token may lack delete scope)"
+            local code
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+              -H "Authorization: JWT $TOKEN" \
+              "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/$1/tags/$2/")
+            case "$code" in
+              2*)  echo "  deleted $1:$2" ;;
+              404) echo "  already absent $1:$2" ;;
+              *)   echo "  ERROR: delete failed for $1:$2 (HTTP $code — token may lack delete scope)"
+                   delete_failures=$((delete_failures+1)) ;;
+            esac
+          }
+
+          # list_dated <image> — every develop-YYYYMMDD tag, following `next`
+          # pages. A single page_size=100 request silently truncated the list,
+          # so a repo with >100 dated tags kept the overflow forever.
+          list_dated() {
+            local url="https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/$1/tags?page_size=100&name=develop-"
+            local body
+            while [ -n "$url" ] && [ "$url" != "null" ]; do
+              body=$(curl -s -H "Authorization: JWT $TOKEN" "$url")
+              echo "$body" | jq -r '.results[]?.name'
+              url=$(echo "$body" | jq -r '.next // ""')
+            done
           }
 
           for IMG in $(echo "$IMAGES" | jq -r '.[]'); do
-            # 1. This run's per-arch staging tags — pure intermediates. The
+            # 1. This attempt's per-arch staging tags — pure intermediates. The
             #    published manifests reference digests, so removing them is safe.
             for ARCH in amd64 arm64; do
-              del "$IMG" "${STAGING_PREFIX}-staging-${RUN_ID}-${ARCH}"
+              del "$IMG" "${STAGING_PREFIX}-staging-${RUN_SCOPE}-${ARCH}"
             done
 
             # 2. Dated tags, newest 5 retained. Only develop-YYYYMMDD is ever
             #    eligible — rolling tags, staging tags and release tags (v*)
             #    can never match this pattern.
             [ "$PRUNE_DEVELOP" = "true" ] || continue
-            TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
-              "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/${IMG}/tags?page_size=100&name=develop-" \
-              | jq -r '.results[].name' | grep -E '^develop-[0-9]{8}$' | sort -r)
-            for T in $(echo "$TAGS" | tail -n +6); do
+            for T in $(list_dated "$IMG" | grep -E '^develop-[0-9]{8}$' | sort -r | tail -n +6); do
               [ -n "$T" ] || continue
               del "$IMG" "$T"
             done
           done
+
+          if [ "$delete_failures" -gt 0 ]; then
+            echo "::error::${delete_failures} tag deletion(s) failed — tags are accumulating on Docker Hub."
+            exit 1
+          fi
