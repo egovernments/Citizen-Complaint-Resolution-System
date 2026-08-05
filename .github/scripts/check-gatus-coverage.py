@@ -96,7 +96,6 @@ COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
     LS / "docker-compose.migrations.yml",
-    LS / "docker-compose.migrations.ansible.yml",
     LS / "docker-compose.fast-path.yml",
     LS / "docker-compose.deploy.yaml",
     LS / "docker-compose.registry.yml",
