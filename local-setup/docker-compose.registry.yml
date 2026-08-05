@@ -43,9 +43,15 @@ services:
     container_name: digit-grafana
     restart: unless-stopped
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Same posture as docker-compose.egov-digit.yaml. This file is NOT the
+      # Ansible path (no .env from OpenBao), so set GF_ADMIN_PASSWORD in your
+      # shell or a local .env before bringing the stack up — otherwise the
+      # admin login is admin/admin.
+      GF_AUTH_ANONYMOUS_ENABLED: ${GF_ANONYMOUS_ENABLED:-false}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
       GF_SERVER_DOMAIN: api.egov.theflywheel.in
       GF_SERVER_ROOT_URL: "https://api.egov.theflywheel.in/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
