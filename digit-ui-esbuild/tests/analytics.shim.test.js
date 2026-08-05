@@ -681,3 +681,73 @@ test("a cache-busted same-origin script URL is allowed", () => {
     assert.equal(i.validate(Object.assign({}, MATOMO_SAME_ORIGIN, { scriptUrl: u })).ok, false, u);
   }
 });
+
+/* ─────────────── derived page titles (no map to maintain) ─────────────── */
+
+test("titles are derived from the parameterised path, with no configuration", () => {
+  const { internal: i } = loadShim({ respond: () => [] });
+  const cases = [
+    ["/employee/pgr/inbox",                      "Complaints \u00b7 Inbox \u00b7 Employee"],
+    ["/citizen/pgr/complaints",                  "Complaints \u00b7 Complaints \u00b7 Citizen"],
+    ["/employee/pgr/complaint-details/:id",      "Complaints \u00b7 Complaint Details \u00b7 Employee"],
+    ["/employee/user/login",                     "Account \u00b7 Login \u00b7 Employee"],
+    ["/citizen/pgr/complaint-details/:id?tenantId=mz", "Complaints \u00b7 Complaint Details \u00b7 Citizen"],
+    ["/",                                        "Home"],
+  ];
+  for (const [page, expected] of cases) {
+    assert.equal(i.pageTitle(page), expected, page);
+  }
+});
+
+test("a parameterised id never leaks into a title", () => {
+  const { internal: i } = loadShim({ respond: () => [] });
+  // The title is built from the ALREADY-SCRUBBED page, so this is structural.
+  const t = i.pageTitle(i.scrub("/employee/pgr/complaint-details/PRD-2026-000023"));
+  assert.equal(t.indexOf("PRD-2026-000023"), -1, t);
+  assert.equal(t, "Complaints \u00b7 Complaint Details \u00b7 Employee");
+});
+
+test("an unknown module degrades visibly rather than silently", () => {
+  const { internal: i } = loadShim({ respond: () => [] });
+  // The failure mode a hand-maintained map has is falling through to a
+  // placeholder; here the module code shows up title-cased, so the missing map
+  // entry is obvious in reports.
+  assert.equal(i.pageTitle("/employee/newmodule/list"), "Newmodule \u00b7 List \u00b7 Employee");
+});
+
+test("settings.titleMap gives an exact override, settings.modules renames a module", () => {
+  const { internal: i } = loadShim({ respond: () => [] });
+  assert.equal(
+    i.pageTitle("/employee/pgr/inbox", { titleMap: { "/employee/pgr/inbox": "Complaints Inbox Employee" } }),
+    "Complaints Inbox Employee"
+  );
+  // an override is matched on the path only, so a query string does not defeat it
+  assert.equal(
+    i.pageTitle("/employee/pgr/inbox?tenantId=mz", { titleMap: { "/employee/pgr/inbox": "Custom" } }),
+    "Custom"
+  );
+  assert.equal(
+    i.pageTitle("/employee/pgr/inbox", { modules: { pgr: "Reclamacoes" } }),
+    "Reclamacoes \u00b7 Inbox \u00b7 Employee"
+  );
+});
+
+test("the title reaches Matomo as setDocumentTitle, per record", () => {
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  assert.equal(t.internal.providers(), 1);
+  const titles = t.sandbox._paq.filter((c) => c[0] === "setDocumentTitle").map((c) => c[1]);
+  assert.ok(titles.length > 0, "a title must be sent");
+  assert.equal(titles[titles.length - 1], "Complaints \u00b7 Inbox \u00b7 Employee");
+});
+
+test("the shim never touches document.title", () => {
+  // An analytics script must not mutate the host UI. The stub records writes.
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  assert.equal(t.sandbox.document.title, undefined, "document.title must be left alone");
+});

@@ -382,6 +382,108 @@
     return m ? m[1] : "";
   }
 
+  /* ------------------------------------------------------------------ *
+   * Page titles — DERIVED, never localised                              *
+   *                                                                      *
+   * Built from the already-scrubbed, already-parameterised page path, so a
+   * title can never contain a complaint id or a mobile number by
+   * construction rather than by remembering to exclude one.
+   *
+   * Derivation means a NEW route gets a sensible title automatically. The
+   * alternative — a hand-maintained route->title map — falls through to a
+   * placeholder the moment someone adds a screen and forgets the map, and on
+   * this codebase routes are assembled from constants rather than literals, so
+   * that drift is close to certain.
+   *
+   * DELIBERATELY NOT LOCALISED. This tenant already runs two locales, so a
+   * localised title would split one page into one report row PER LANGUAGE:
+   * totals fragment, trends break when a translation is edited, and
+   * cross-tenant comparison stops working. `locale` is already sent as its own
+   * dimension, which gives the language insight without corrupting page
+   * identity. Operators wanting translated labels should relabel at the
+   * reporting layer, where it is reversible.
+   *
+   * This function also never touches document.title: an analytics script must
+   * not mutate the host application's UI. */
+
+  /* The only part that cannot be derived: a module CODE carries no clue to its
+   * name. Small and slow-changing (a new module is a deliberate, rare event,
+   * unlike a new route). A code that is missing here still yields a usable
+   * title — "Pgr · Inbox · Employee" — which makes the gap visible in reports
+   * instead of hiding it behind a placeholder. */
+  var MODULE_TITLES = {
+    pgr: "Complaints",
+    dss: "Dashboard",
+    hrms: "HRMS",
+    user: "Account",
+    workbench: "Workbench",
+    "sandbox-ui": "Sandbox",
+    engagement: "Engagement",
+    obps: "Building Permit",
+    ws: "Water & Sewerage",
+    pt: "Property Tax",
+    tl: "Trade License",
+    mcollect: "mCollect",
+    fsm: "FSM"
+  };
+
+  var SURFACE_TITLES = { citizen: "Citizen", employee: "Employee" };
+
+  /* "complaint-details" -> "Complaint Details"; ":id"/":uuid"/":num"/":n"/":email"
+   * placeholders are dropped, since they carry no meaning in a title. */
+  function deslugify(seg) {
+    if (!isStr(seg) || !seg || seg.charAt(0) === ":") return "";
+    var words = seg.split("-");
+    var out = [];
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (!w) continue;
+      out.push(w.charAt(0).toUpperCase() + w.substring(1));
+    }
+    return out.join(" ");
+  }
+
+  /* titleMap / modules overrides come from the record's `settings` bucket, which
+   * is an open object precisely so additions never need a schema change. */
+  function pageTitle(page, settings) {
+    if (!isStr(page)) return "";
+    var pathOnly = page.split("?")[0];
+
+    var overrides = settings && typeof settings === "object" ? settings.titleMap : null;
+    if (overrides && typeof overrides === "object") {
+      /* exact match on the parameterised path wins outright */
+      if (isStr(overrides[pathOnly])) return overrides[pathOnly];
+    }
+
+    var segs = pathOnly.split("/");
+    var clean = [];
+    for (var i = 0; i < segs.length; i++) { if (segs[i]) clean.push(segs[i]); }
+    if (!clean.length) return "Home";
+
+    var surface = "";
+    if (SURFACE_TITLES[clean[0]]) { surface = SURFACE_TITLES[clean[0]]; clean.shift(); }
+
+    var moduleName = "";
+    if (clean.length) {
+      var code = clean[0];
+      var moduleMap = MODULE_TITLES;
+      var extra = settings && typeof settings === "object" ? settings.modules : null;
+      if (extra && typeof extra === "object" && isStr(extra[code])) moduleName = extra[code];
+      else if (isStr(moduleMap[code])) moduleName = moduleMap[code];
+      else moduleName = deslugify(code); /* unknown module: honest, not hidden */
+      clean.shift();
+    }
+
+    var parts = [];
+    if (moduleName) parts.push(moduleName);
+    for (var j = 0; j < clean.length; j++) {
+      var d = deslugify(clean[j]);
+      if (d) parts.push(d);
+    }
+    if (surface) parts.push(surface);
+    return parts.length ? parts.join(" \u00b7 ") : (surface || "Home");
+  }
+
   function referrerHost() {
     try {
       var m = /^https?:\/\/([^\/:?#]+)/i.exec(document.referrer || "");
@@ -467,6 +569,7 @@
       cityTenant: city,
       tenantKnown: !!city,
       page: currentPage(),
+      title: "",            /* filled per-record below: overrides are per-record */
       locale: currentLocale(),
       module: currentModule(),
       contextPath: contextPath(),
@@ -484,6 +587,15 @@
     }
     if (Object.freeze) { try { Object.freeze(ctx); } catch (e) {} }
     return ctx;
+  }
+
+  /* ctx is frozen, so per-record additions need a shallow copy. */
+  function extendCtx(ctx, extra) {
+    var out = {};
+    for (var k in ctx) { if (ctx.hasOwnProperty(k)) out[k] = ctx[k]; }
+    for (var j in extra) { if (extra.hasOwnProperty(j)) out[j] = extra[j]; }
+    if (Object.freeze) { try { Object.freeze(out); } catch (e) {} }
+    return out;
   }
 
   /* DNT is hardcoded, deliberately NOT a schema field: no MDMS row may switch
@@ -696,7 +808,7 @@
         pushTo("_paq", ["setTrackerUrl", endpoint]);
         pushTo("_paq", ["setSiteId", String(rec.siteId)]);
         pushTo("_paq", ["setCustomUrl", ctx.page]);
-        pushTo("_paq", ["setDocumentTitle", ctx.module || ctx.surface]);
+        pushTo("_paq", ["setDocumentTitle", ctx.title || ctx.module || ctx.surface]);
         /* Matomo's own param exclusion, belt to the scrubber's braces. */
         pushTo("_paq", ["setExcludedQueryParams", ["mobileNumber", "mobileNo", "otp", "token", "authToken", "access_token", "uuid", "id", "individualId"]]);
         pushTo("_paq", ["enableLinkTracking", false]);
@@ -704,6 +816,7 @@
       },
       pageView: function (rec, ctx) {
         pushTo("_paq", ["setCustomUrl", ctx.page]);
+        if (ctx.title) pushTo("_paq", ["setDocumentTitle", ctx.title]);
         pushTo("_paq", ["trackPageView"]);
       },
       event: function (rec, ctx) {
@@ -729,7 +842,7 @@
         loadScript("https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(rec.measurementId));
       },
       pageView: function (rec, ctx) {
-        gtag("event", "page_view", { page_path: ctx.page, page_location: undefined, page_title: ctx.module || ctx.surface });
+        gtag("event", "page_view", { page_path: ctx.page, page_location: undefined, page_title: ctx.title || ctx.module || ctx.surface });
       },
       event: function (rec, ctx) {
         var e = ctx.event || {};
@@ -787,7 +900,7 @@
         });
       },
       pageView: function (rec, ctx) {
-        phCall("capture", ["$pageview", { $current_url: ctx.page, tenant: ctx.cityTenant || ctx.stateTenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
+        phCall("capture", ["$pageview", { $current_url: ctx.page, page_title: ctx.title, tenant: ctx.cityTenant || ctx.stateTenant, state_tenant: ctx.stateTenant, entrance: ctx.entrance, surface: ctx.surface, locale: ctx.locale }]);
       },
       event: function (rec, ctx) {
         var e = ctx.event || {};
@@ -1107,6 +1220,11 @@
     var impl = entry.adapter[fn];
     if (typeof impl !== "function") return;
     try {
+      /* The title depends on the RECORD (settings.titleMap / settings.modules),
+       * so it is resolved per adapter rather than once for the whole tick. */
+      if (ctx && !ctx.title) {
+        try { ctx = extendCtx(ctx, { title: pageTitle(ctx.page, entry.record.settings) }); } catch (e) {}
+      }
       impl(entry.record, ctx);
       entry.throws = 0;
     } catch (e) {
@@ -1412,6 +1530,7 @@
       hostAllowed: hostAllowed,
       interpolate: interpolate,
       placeholderMap: placeholderMap,
+      pageTitle: pageTitle,
       REASONS: REASONS,
       PLACEHOLDERS: PLACEHOLDERS,
       providers: function () { return live.length; }
