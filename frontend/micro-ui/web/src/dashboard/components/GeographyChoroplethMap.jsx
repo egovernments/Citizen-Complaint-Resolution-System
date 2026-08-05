@@ -67,6 +67,17 @@ function complaintPinPopupOffset(radius) {
   return L.point(0, -Math.max(radius + 10, 12));
 }
 
+/**
+ * Close whichever ward tooltip is open. NOT map.closeTooltip() — Leaflet 1.9's
+ * Map.closeTooltip(tooltip) dereferences its argument, so a bare call throws and
+ * (from the pin click handler) aborted the event before the popup could open (#1576).
+ */
+function closeOpenTooltips(map) {
+  map?.eachLayer?.((layer) => {
+    if (layer !== map && typeof layer.closeTooltip === "function") layer.closeTooltip();
+  });
+}
+
 function closeOtherPinPopups(activeCircle, pinLayersByKey = {}) {
   Object.values(pinLayersByKey).forEach((circle) => {
     if (circle !== activeCircle && circle.isPopupOpen?.()) {
@@ -706,7 +717,16 @@ const GeographyChoroplethMap = ({
 
       circle.on("click", () => {
         closeOtherPinPopups(circle, pinLayersByKeyRef.current);
-        map.closeTooltip();
+        closeOpenTooltips(map);
+      });
+
+      // Pins had no tooltip of their own, so hovering one showed nothing while
+      // still stealing the pointer from the ward polygon beneath (#1576).
+      circle.bindTooltip(buildComplaintPinTooltipHtml(pin), {
+        ...HOVER_TOOLTIP_OPTIONS,
+        sticky: false,
+        offset: [0, -(baseRadius + 4)],
+        direction: "top",
       });
 
       circle.on("mouseover", function () {
@@ -722,9 +742,10 @@ const GeographyChoroplethMap = ({
       });
 
       circle.on("popupopen", function () {
+        this.closeTooltip?.();
         closeOtherPinPopups(this, pinLayersByKeyRef.current);
         selectedPinKeyRef.current = key;
-        map.closeTooltip();
+        closeOpenTooltips(map);
         const radius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
         Object.entries(pinLayersByKeyRef.current).forEach(([, layer]) => {
           const layerRadius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
