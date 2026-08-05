@@ -24,23 +24,46 @@ for all four combinations; every one of them is inert by default.
 > `host_vars` sets `build_digit_ui: true` before promising anyone the feature is
 > live there.
 
-## On moz-family environments: one command
+## One command per release line
 
-`docs/migration/ccrs-migrate.cjs` (which exists only on the moz release line)
-covers every prerequisite in one safe, re-runnable command — the schema, the
-ACCESSCONTROL rows for the two MDMS write paths, and the Configurator's
-localisation keys, followed by a readiness check that expects **schema present,
-zero destinations** on a fresh environment.
+Both entry points do the same work and are safe to re-run. Pick the one your
+branch has:
 
-```bash
-node docs/migration/ccrs-migrate.cjs --host https://<env> \
-  --user <admin> --pass <pw> --tenant <stateRoot>
+| Release line | Command | What it covers |
+|---|---|---|
+| **develop / master** | `TENANT=<stateRoot> ./local-setup/scripts/seed-analytics-schema.sh` | the MDMS schema **and** the ACCESSCONTROL rows for the two write paths |
+| **moz** | `node docs/migration/ccrs-migrate.cjs --host https://<env> --user <admin> --pass <pw> --tenant <stateRoot>` | the same, wrapped in auth, `--dry-run`, per-phase reporting and a readiness check — plus the Configurator localisation keys |
+
+The seeder is the primitive; `ccrs-migrate.cjs` is moz-only and wraps the same
+source data files. Running both is harmless — every step is add-if-missing.
+
+```
+$ TENANT=mz ./local-setup/scripts/seed-analytics-schema.sh
+==> Seeding common-masters.AnalyticsProvider at tenant=mz
+    schema already present
+==> Ensuring ACCESSCONTROL rows for the analytics write paths
+    actions: 0 created, 2 already present
+    grants:  1 created, 3 already present
+==> OK: common-masters.AnalyticsProvider ready at tenant=mz
+    No destination records are created. Every environment stays
+    analytics-OFF until an admin enables one in the Configurator.
 ```
 
-On develop/master, where that runner does not exist, follow the manual steps
-below — they are the same work.
+Two things neither command does, by design:
+
+- **It never creates a destination.** Absent records *is* the default-off state.
+- **It does not deploy the portal bundle.** The shim ships with the digit-ui
+  build; see step 2.
+
+And one thing only the moz runner does: upsert the **Configurator localisation
+keys**. On develop/master those arrive from the ansible playbook's
+`configurator-i18n` task, which upserts the same bundle — so a normal deploy
+covers it. If you have neither, the sidebar falls back to bundled English.
 
 ## Step 1 — register the schema
+
+*(What the command above automates — useful if you want to do it by hand or
+understand what it touches.)*
 
 ```bash
 TENANT=mz ./local-setup/scripts/seed-analytics-schema.sh
