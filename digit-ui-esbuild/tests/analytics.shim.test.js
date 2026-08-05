@@ -604,3 +604,80 @@ test("the PostHog property sanitiser scrubs vendor-injected urls", () => {
   assert.equal(out.$initial_current_url, undefined, "initial url is dropped entirely");
   assert.ok(out.note.indexOf("841234567") === -1, "arbitrary string props are scrubbed too");
 });
+
+/* ─────────── same-origin script URLs (self-hosted, http-only envs) ─────────── */
+
+const MATOMO_SAME_ORIGIN = {
+  code: "matomo-local", type: "MATOMO", enabled: true, siteId: "1",
+  scriptUrl: "/matomo/matomo.js",
+  endpointUrl: "/matomo/matomo.php",
+};
+
+test("a same-origin script path is accepted with no host declaration at all", () => {
+  // This is what a self-hosted collector behind our own nginx looks like, and it
+  // is the ONLY form that works where the portal is served over plain http —
+  // which is both the local box (no TLS listener) and mctd (HTTPS broken).
+  const t = loadShim({
+    config: { ANALYTICS_SCRIPT_HOSTS: [] }, // nothing declared: must not matter
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_SAME_ORIGIN)] : []),
+  });
+  assert.equal(t.internal.providers(), 1);
+  assert.equal(t.scripts.length, 1);
+  assert.equal(t.scripts[0].src, "/matomo/matomo.js");
+  // crossOrigin would pointlessly demand CORS headers from our own nginx.
+  assert.equal(t.scripts[0].crossOrigin, "", "same-origin scripts must not be crossOrigin");
+  const paq = t.sandbox._paq.map((c) => c[0]);
+  assert.ok(paq.indexOf("setTrackerUrl") !== -1 && paq.indexOf("trackPageView") !== -1);
+  const tracker = t.sandbox._paq.filter((c) => c[0] === "setTrackerUrl")[0];
+  assert.equal(tracker[1], "/matomo/matomo.php", "a relative collector is passed through as-is");
+});
+
+test("things that only LOOK same-origin are still refused", () => {
+  const { internal: i } = loadShim({ config: { ANALYTICS_SCRIPT_HOSTS: [] }, respond: () => [] });
+  const bad = [
+    "//evil.com/x.js",            // protocol-relative: a foreign origin
+    "/\\evil.com/x.js",             // backslash separator
+    "/x.js?u=http://evil.com",    // carries a scheme separator
+    "javascript:alert(1)",        // not a path
+    "data:text/javascript,alert(1)",
+    "/x.js\nhttps://evil.com",     // control character
+    "/",                          // no file
+    "matomo/matomo.js",           // no leading slash: relative to the CURRENT path
+    "/matomo/x.js#f",             // a fragment is meaningless for a script
+    // THE IMPORTANT ONES: anything under the SPA entrance prefix is answered by
+    // try_files with the HTML shell, so injecting it as a script throws on every
+    // page load — the same trap the index.html bootstrapper guards against.
+    "/digit-ui/matomo.js",
+    "/digit-ui/matomo/matomo.js",
+    "/digit-ui-test/matomo.js",
+    "/digit-ui-zzz/matomo.js",
+  ];
+  for (const u of bad) {
+    const v = i.validate({ code: "x", type: "MATOMO", enabled: true, siteId: "1", scriptUrl: u });
+    assert.equal(v.ok, false, `should refuse ${JSON.stringify(u)}`);
+  }
+  // and the good one still passes
+  assert.equal(i.validate(MATOMO_SAME_ORIGIN).ok, true);
+});
+
+test("a same-origin path cannot smuggle a script past loadScript either", () => {
+  // Defence in depth: even if validate() were bypassed, loadScript re-checks.
+  const t = loadShim({
+    config: { ANALYTICS_SCRIPT_HOSTS: [] },
+    respond: (tenant) => (tenant === "mz"
+      ? [row("mz", Object.assign({}, MATOMO_SAME_ORIGIN, { code: "sneaky", scriptUrl: "//evil.com/x.js" }))]
+      : []),
+  });
+  assert.equal(t.internal.providers(), 0);
+  assert.equal(t.scripts.length, 0);
+});
+
+test("a cache-busted same-origin script URL is allowed", () => {
+  const { internal: i } = loadShim({ config: { ANALYTICS_SCRIPT_HOSTS: [] }, respond: () => [] });
+  const rec = Object.assign({}, MATOMO_SAME_ORIGIN, { scriptUrl: "/matomo/matomo.js?v=5" });
+  assert.equal(i.validate(rec).ok, true, "a query string is legitimate on a static asset");
+  // but a query cannot smuggle a scheme or a fragment
+  for (const u of ["/matomo/matomo.js?u=http://evil.com", "/matomo/matomo.js?a=1#f"]) {
+    assert.equal(i.validate(Object.assign({}, MATOMO_SAME_ORIGIN, { scriptUrl: u })).ok, false, u);
+  }
+});

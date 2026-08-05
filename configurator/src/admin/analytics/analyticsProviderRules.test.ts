@@ -17,6 +17,7 @@ import {
   hasResidencyAck,
   hostAllowed,
   hostIsUnverifiable,
+  isSameOriginPath,
   urlHost,
   parseDsn,
   REASONS,
@@ -300,6 +301,24 @@ describe('editor-specific rules', () => {
     expect(hostIsUnverifiable({ ...rec, scriptUrl: 'https://matomo.mz.gov.mz@evil.com/x.js' })).toBeNull();
     expect(validateProviderRecord({ ...rec, scriptUrl: 'https://matomo.mz.gov.mz@evil.com/x.js' }, { extraHosts: ['matomo.mz.gov.mz'] }).reason)
       .toBe(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
+  });
+
+  it('accepts a same-origin path but never one under the SPA entrance prefix', () => {
+    // A path under /digit-ui is answered by nginx try_files with the HTML shell;
+    // injecting that as a script throws on every page load. Must stay in lockstep
+    // with isSameOriginPath() in analytics.js.
+    expect(isSameOriginPath('/matomo/matomo.js')).toBe(true);
+    expect(isSameOriginPath('/matomo/matomo.js?v=5')).toBe(true);
+    for (const bad of [
+      '//evil.com/x.js', '/\\evil.com/x.js', '/x.js?u=http://evil.com', '/x.js#f',
+      'matomo/matomo.js', '/digit-ui/matomo.js', '/digit-ui-test/m.js', '/digit-ui-zzz/m.js',
+    ]) {
+      expect(isSameOriginPath(bad)).toBe(false);
+    }
+    // and it validates end to end with no host declared anywhere
+    expect(validateProviderRecord(
+      { code: 'm', type: 'MATOMO', enabled: true, siteId: '1', scriptUrl: '/matomo/matomo.js' }
+    ).ok).toBe(true);
   });
 
   it('parses a Sentry DSN and rejects a malformed one', () => {
