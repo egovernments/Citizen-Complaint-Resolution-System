@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-ui-components';
 import { convertEpochFormateToDate } from '../utils';
+import { parseFilestoreEntry } from '../utils/attachmentKind';
 
 // NOTE: no useMyContext() here — the citizen route tree has no MyContext
 // provider, and this wrapper renders on BOTH citizen and employee details.
@@ -67,15 +68,15 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                         // document's `documentType` here — the generic action
                         // uploader (ActionUploadComponent) stamps every file as
                         // "PHOTO" regardless of its real type.
-                        const variants = typeof e?.url === "string"
-                            ? e.url.split(",").map((u) => u.trim()).filter(Boolean)
-                            : [];
-                        const full = variants[0] || "";
-                        if (!e?.id || !full) return;
-                        const thumb = variants.find((u) => /small/i.test(u)) || full;
-                        const isImage = variants.length > 1 ||
-                            /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(full);
-                        map[e.id] = { full, thumb, isImage };
+                        // CCSD-2027: this classification moved to
+                        // utils/attachmentKind so the timeline, the details
+                        // panel and the uploader can't drift apart on what
+                        // counts as an image. It also now distinguishes
+                        // video/audio, which used to collapse into "not an
+                        // image" and render as a bare 📎 link.
+                        const parsed = parseFilestoreEntry(e?.url);
+                        if (!e?.id || !parsed) return;
+                        map[e.id] = { full: parsed.full, thumb: parsed.thumb, kind: parsed.kind, isImage: parsed.kind === "image" };
                     });
                 } catch (e) {
                     /* leave those ids unresolved — chip still renders as a plain link */
@@ -105,6 +106,21 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                                 <img src={entry.thumb || url} alt={label}
                                     style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid var(--color-border, #e2e8f0)" }} />
                             </a>
+                        );
+                    }
+                    // Play video/audio in place. The timeline is a dense list,
+                    // so these stay small; preload="metadata" keeps a step with
+                    // several clips from pulling megabytes on render.
+                    if (url && entry?.kind === "video") {
+                        return (
+                            <video key={i} src={url} controls playsInline preload="metadata" aria-label={label}
+                                style={{ width: 160, maxWidth: "100%", maxHeight: 110, borderRadius: 6, background: "#000", border: "1px solid var(--color-border, #e2e8f0)" }} />
+                        );
+                    }
+                    if (url && entry?.kind === "audio") {
+                        return (
+                            <audio key={i} src={url} controls preload="metadata" aria-label={label}
+                                style={{ width: 200, maxWidth: "100%" }} />
                         );
                     }
                     return (
