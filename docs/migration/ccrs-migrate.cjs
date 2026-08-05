@@ -48,7 +48,12 @@
  *         [--matomo] [--matomo-admin-pass '<pw>'] [--matomo-admin-user admin] \
  *         [--matomo-admin-email ops@example.org] [--matomo-site-url https://…] \
  *         [--matomo-site-name 'CCRS Portal'] [--matomo-code matomo-state] \
- *         [--matomo-enable]
+ *         [--matomo-enable] [--matomo-dashboard]
+ *
+ *    --matomo-dashboard also serves the FULL Matomo UI at <host>/matomo/ (no
+ *    SSH tunnel). OFF by default — it publishes an admin console with visitor
+ *    data on the public domain; use a strong --matomo-admin-pass. Tracking
+ *    works without it.
  *
  *    Env-var equivalents (CLI wins): BASE_URL TENANT OAUTH_USER OAUTH_PASS
  *    OAUTH_BASIC TOKEN PHASES DRY_RUN CMS UPDATE_WF LOCALE HIERARCHY REPORT
@@ -89,7 +94,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
     const key = a.slice(2);
-    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters', 'matomo', 'matomo-enable'].includes(key);
+    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters', 'matomo', 'matomo-enable', 'matomo-dashboard'].includes(key);
     const next = argv[i + 1];
     if (flag) {
       out[key] = true;
@@ -155,6 +160,10 @@ const CFG = {
   // The MDMS record's permanent identity. MDMS has no delete, so this must be
   // a name worth keeping (matomo-state, not matomo-test-2).
   matomoCode: ARGS['matomo-code'] || process.env.MATOMO_CODE || 'matomo-state',
+  // Expose the FULL Matomo UI at <host>/matomo/ (no SSH tunnel needed). OFF by
+  // default: it publishes an admin console with visitor data on the public
+  // domain. Tracking works without it — this is purely dashboard access.
+  matomoDashboard: !!ARGS['matomo-dashboard'] || truthy(process.env.MATOMO_DASHBOARD),
 };
 if (CFG.nginxContainer && !/^[A-Za-z0-9_.-]+$/.test(CFG.nginxContainer)) {
   console.error(`--nginx-container must be a plain container name (got: ${CFG.nginxContainer})`);
@@ -1110,10 +1119,26 @@ async function phaseMatomo() {
     }
   }
 
-  /* ---- 3. real visitor IPs behind the proxy ---- */
+  /* ---- 3. Matomo config: real visitor IPs, and (for --matomo-dashboard) the
+   *         reverse-proxy + trusted-host settings that let the full UI be
+   *         served under the /matomo/ path. proxy_uri_header=1 makes Matomo
+   *         build absolute URLs from X-Forwarded-Uri, and the portal host must
+   *         be a trusted_host or Matomo refuses to render. Verified end to end
+   *         on a real box: login + 21 dashboard widgets + Visits Log, zero
+   *         failed requests, nothing escaping the prefix. ---- */
   if (!CFG.dryRun) {
     try { sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.proxy_client_headers=["HTTP_X_FORWARDED_FOR"]'`); }
     catch (e) { failures.push(`config:set proxy_client_headers: ${truncate(e.message, 80)}`); }
+    if (CFG.matomoDashboard) {
+      // portal host (from --host) + the box-local origins the installer needs.
+      const portalHost = U.host; // host[:port] of --host
+      const hosts = JSON.stringify([portalHost, origin.replace('http://', ''), 'localhost', '127.0.0.1']);
+      try {
+        sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.proxy_uri_header=1'`);
+        sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.trusted_hosts=${hosts.replace(/'/g, "'\\''")}'`);
+        notes.push(`dashboard proxy config set (trusted_hosts include ${portalHost})`);
+      } catch (e) { failures.push(`dashboard config:set: ${truncate(e.message, 80)}`); }
+    }
   }
 
   /* ---- 4. nginx tracking locations (host nginx — the same files that serve
@@ -1148,53 +1173,92 @@ async function phaseMatomo() {
     failures.push('no active nginx config serving /digit-ui found — tracking locations not added');
   }
   let nginxEdited = false;
+  const upstream = origin.replace('http://', '');
+  // The tracker/collector block (exact-match; same-origin). Host is Matomo's
+  // OWN origin — it refuses unknown hosts and this image ignores
+  // MATOMO_GENERAL_TRUSTED_HOSTS. The tracked page URL travels in the payload.
+  const trackerLines = () => [
+    `${MATOMO_NGINX_MARK} tracker (added by ccrs-migrate --matomo) — tracker + collector, same-origin.`,
+    `location = /matomo/matomo.js {`,
+    `  proxy_pass http://${upstream}/matomo.js;`,
+    `  proxy_set_header Host ${upstream};`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+    `location = /matomo/matomo.php {`,
+    `  proxy_pass http://${upstream}/matomo.php;`,
+    `  proxy_set_header Host ${upstream};`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+  ];
+  // --matomo-dashboard: the FULL UI under the /matomo/ PREFIX. The exact-match
+  // tracker blocks always win over this prefix, so tracking is unaffected. Host
+  // is $host (not the pin) so Matomo's absolute URLs carry the portal host;
+  // X-Forwarded-Uri + Matomo's proxy_uri_header=1 keep the /matomo prefix on
+  // generated links. Publishing an admin console with visitor data on a public
+  // domain is a deliberate exposure — OFF unless --matomo-dashboard.
+  const dashboardLines = () => [
+    `${MATOMO_NGINX_MARK} dashboard (added by ccrs-migrate --matomo-dashboard) — full UI at /matomo/.`,
+    `location /matomo/ {`,
+    `  proxy_pass http://${upstream}/;`,
+    `  proxy_set_header Host $host;`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_set_header X-Forwarded-Uri /matomo;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+  ];
+
   for (const conf of confs) {
     let cur = '';
     try { cur = sh(`sudo cat ${q(conf)}`); } catch (e) { failures.push(`cannot read ${conf}`); continue; }
-    // marker OR the location itself: an operator may have added the block by
-    // hand (pre-phase runbook) without the marker — inserting a second
-    // exact-match location makes nginx -t fail on the whole site.
-    if (cur.includes(MATOMO_NGINX_MARK) || cur.includes('location = /matomo/matomo.js')) {
-      notes.push(`nginx already carries the /matomo locations (${conf})`);
+    // Detect the tracker and the dashboard INDEPENDENTLY — a prior run (or the
+    // pre-phase runbook, markerless) may have added the tracker but not the
+    // dashboard. Re-inserting an existing location fails nginx -t for the whole
+    // file, so add only what is missing.
+    const hasTracker = cur.includes('location = /matomo/matomo.js');
+    const hasDash = /location\s+\/matomo\/\s*\{/.test(cur);
+    const wantDash = CFG.matomoDashboard;
+    const need = [];
+    if (!hasTracker) need.push('tracker');
+    if (wantDash && !hasDash) need.push('dashboard');
+    if (!need.length) {
+      notes.push(`nginx already has ${hasTracker ? 'tracker' : ''}${hasTracker && hasDash ? '+dashboard' : ''} (${conf})`);
       continue;
     }
-    // anchors: EVERY serving /digit-ui location (one per server{} block),
-    // skipping `location = /digit-ui { return 302 }` redirect stubs — mirrors
-    // gzip's stub test.
+    // Anchor: ONE serving /digit-ui location per server{} block, skipping
+    // `location = /digit-ui { return 302 }` redirect stubs. Crucially ONE per
+    // block, not per location — a server block can hold several serving
+    // /digit-ui* locations (e.g. /digit-ui/ AND /digit-ui-test/), and inserting
+    // the matomo block at each would put duplicate `location`s in one block,
+    // which nginx rejects with `[emerg] duplicate location`. Map each candidate
+    // to its enclosing `server {` and keep only the first per block.
+    const serverStarts = [];
+    { const sre = /(^|\})\s*server\s*\{/gm; let sm; while ((sm = sre.exec(cur)) !== null) serverStarts.push(sm.index); }
+    const serverOf = (at) => { let best = -1; for (const s of serverStarts) if (s <= at) best = s; return best; };
     const locRe = /^([ \t]*)location [^{]*\/digit-ui[^{]*\{/gm;
+    const seenBlocks = new Set();
     const anchors = [];
     let m;
     while ((m = locRe.exec(cur)) !== null) {
       const end = m.index + m[0].length;
       const body = cur.slice(end, cur.indexOf('}', end) === -1 ? end + 600 : cur.indexOf('}', end));
       if (/return\s+30\d/.test(body)) continue;
+      const block = serverOf(m.index);
+      if (seenBlocks.has(block)) continue; // one insert per server{} block
+      seenBlocks.add(block);
       anchors.push({ at: m.index, indent: m[1] });
     }
     if (!anchors.length) { failures.push(`no serving "location /digit-ui" block in ${conf}`); continue; }
-    if (CFG.dryRun) { info(`dry-run: would insert the ${MATOMO_NGINX_MARK} locations at ${anchors.length} anchor(s) in ${conf}, nginx -t, reload`); continue; }
-    const upstream = origin.replace('http://', '');
-    const blockAt = (indent) => [
-      `${MATOMO_NGINX_MARK} (added by ccrs-migrate --matomo) — ONLY the tracker + collector,`,
-      `# same-origin. The dashboard stays on ${upstream}: Matomo emits absolute asset`,
-      `# URLs and breaks if served under a path. Host header is Matomo's OWN origin —`,
-      `# it refuses unknown hosts and this image ignores MATOMO_GENERAL_TRUSTED_HOSTS.`,
-      `location = /matomo/matomo.js {`,
-      `  proxy_pass http://${upstream}/matomo.js;`,
-      `  proxy_set_header Host ${upstream};`,
-      `  proxy_set_header X-Real-IP $remote_addr;`,
-      `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
-      `  proxy_set_header X-Forwarded-Proto $scheme;`,
-      `  proxy_http_version 1.1;`,
-      `}`,
-      `location = /matomo/matomo.php {`,
-      `  proxy_pass http://${upstream}/matomo.php;`,
-      `  proxy_set_header Host ${upstream};`,
-      `  proxy_set_header X-Real-IP $remote_addr;`,
-      `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
-      `  proxy_set_header X-Forwarded-Proto $scheme;`,
-      `  proxy_http_version 1.1;`,
-      `}`,
-    ].map((l) => indent + l).join('\n');
+    if (CFG.dryRun) { info(`dry-run: would insert ${need.join('+')} at ${anchors.length} anchor(s) in ${conf}, nginx -t, reload`); continue; }
+    const lines = [...(need.includes('tracker') ? trackerLines() : []), ...(need.includes('dashboard') ? dashboardLines() : [])];
+    const blockAt = (indent) => lines.map((l) => indent + l).join('\n');
     // last-to-first so earlier offsets stay valid
     let next = cur;
     for (let i = anchors.length - 1; i >= 0; i--) {
@@ -1206,7 +1270,7 @@ async function phaseMatomo() {
       sh(`sudo tee ${q(conf)} > /dev/null`, { input: next });
       sh('sudo nginx -t');
       nginxEdited = true;
-      notes.push(`nginx locations added at ${anchors.length} anchor(s) (${conf}; backup ${bak})`);
+      notes.push(`nginx ${need.join('+')} added at ${anchors.length} anchor(s) (${conf}; backup ${bak})`);
     } catch (e) {
       try { sh(`sudo cp ${q(bak)} ${q(conf)}`); sh('sudo nginx -t'); } catch {}
       failures.push(`nginx edit of ${conf} failed and was rolled back: ${truncate(e.message, 120)}`);
@@ -1236,6 +1300,18 @@ async function phaseMatomo() {
       if (publicOk) break;
     }
     notes.push(`public tracker probe: HTTP ${h.code} ${ct || '—'}${publicOk ? '' : ' — NOT SERVING YET'}`);
+    if (CFG.matomoDashboard) {
+      let d, dct = '', dashOk = false;
+      const dtries = nginxEdited ? 6 : 1;
+      for (let i = 0; i < dtries; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 2000));
+        d = await req('/matomo/index.php?module=Login', 'GET', {});
+        dct = String((d.headers || {})['content-type'] || '');
+        dashOk = d.code === 200 && /html/i.test(dct);
+        if (dashOk) break;
+      }
+      notes.push(`dashboard at ${CFG.base}/matomo/ : HTTP ${d.code}${dashOk ? ' — login page (browse it, no tunnel)' : ' — not serving'}`);
+    }
     if (publicOk) {
       const hit = await req(`/matomo/matomo.php?idsite=1&rec=1&url=${encodeURIComponent(CFG.base + '/ccrs-migrate-verify')}&action_name=ccrs-migrate-verify&rand=${Math.floor(Math.random() * 1e6)}`, 'GET', {});
       notes.push(`collector probe: HTTP ${hit.code}${hit.code === 200 || hit.code === 204 ? '' : ' — unexpected'}`);
