@@ -2390,7 +2390,22 @@
   overflow-x: clip;
   box-sizing: border-box;
   --digit-sidebar-width: 3rem;
-  --dashboard-embedded-inset: 12px;
+  /* Gutter between the host chrome and the dashboard content. 12px read as a
+     missing gutter — cards sat almost flush against the 3rem left rail and the
+     KPI row against the topbar. These match the standalone shell's own
+     tw-p-4 / lg:tw-p-6 (16px, 24px from 1024px up), so embedded and standalone
+     now breathe the same and the page lines up with every other employee
+     screen. Vertical is tracked separately: the grid needs a floor gap that the
+     horizontal inset shouldn't drag around at wide viewports. */
+  --dashboard-embedded-inset: 16px;
+  --dashboard-embedded-inset-y: 16px;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-root.dashboard-embedded {
+    --dashboard-embedded-inset: 24px;
+    --dashboard-embedded-inset-y: 20px;
+  }
 }
 .dashboard-root.dashboard-embedded > div {
   width: 100%;
@@ -2415,6 +2430,9 @@
   box-sizing: border-box;
   padding-left: var(--dashboard-embedded-inset);
   padding-right: var(--dashboard-embedded-inset);
+  /* The grid was the last thing in the scroll container, so the bottom row of
+     cards ended flush against the viewport edge with nothing under it. */
+  padding-bottom: var(--dashboard-embedded-inset-y);
 }
 
 .dashboard-root.dashboard-embedded .dashboard-grid-wrap .react-grid-layout {
@@ -2434,7 +2452,64 @@
 .dashboard-root.dashboard-embedded .dashboard-filters-bar {
   padding-left: var(--dashboard-embedded-inset);
   padding-right: var(--dashboard-embedded-inset);
-  margin-bottom: 12px;
+  /* The filter row sat directly on the header's bottom border and the KPI row
+     sat directly on the filters; give both edges the same rhythm as the
+     horizontal gutter. */
+  padding-top: var(--dashboard-embedded-inset-y);
+  margin-bottom: var(--dashboard-embedded-inset-y);
+}
+
+/* ── Embedded breadcrumb ───────────────────────────────────────────────
+   Rendered only in embedded mode (DashboardLayout). Styled with the
+   dashboard's own tokens rather than the platform's .digit-bread-crumb CSS:
+   that stylesheet ships from the published components package and is not
+   guaranteed to be loaded on the dashboard route, and the dashboard's type
+   scale is smaller than the platform default, so borrowed styles read
+   oversized here. */
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb {
+  flex-shrink: 0;
+  background: var(--surface, #ffffff);
+  padding: 10px var(--dashboard-embedded-inset) 0;
+  box-sizing: border-box;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-link {
+  color: var(--muted-foreground, #505a5f);
+  text-decoration: none;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-link:hover,
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-link:focus-visible {
+  color: var(--primary, #0b4b3f);
+  text-decoration: underline;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-separator {
+  color: var(--muted-foreground, #505a5f);
+  opacity: 0.6;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-breadcrumb-current {
+  color: var(--foreground, #0b0c0c);
+  font-weight: 600;
 }
 
 .dashboard-root.dashboard-embedded .dashboard-grid-layout {

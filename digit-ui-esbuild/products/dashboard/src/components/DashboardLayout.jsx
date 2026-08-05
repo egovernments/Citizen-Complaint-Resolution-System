@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
+import DashboardBreadcrumb from "./DashboardBreadcrumb";
 import DashboardHeader from "./DashboardHeader";
 import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
@@ -49,6 +50,9 @@ const DashboardLayout = ({
     >
       {!embedded && <Sidebar onSignOut={onSignOut} />}
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
+        {/* Embedded only: standalone renders its own dark Sidebar, which
+            already carries the navigation this trail substitutes for. */}
+        {embedded && <DashboardBreadcrumb />}
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}
           catalogItems={catalogItems}
