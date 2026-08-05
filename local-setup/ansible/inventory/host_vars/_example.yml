@@ -579,6 +579,13 @@ nginx_features:
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
+  matomo: false              # /matomo/matomo.{js,php} — SAME-ORIGIN tracking proxy for the
+                             # self-hosted Matomo stack (local-setup/docker-compose.matomo.yml,
+                             # dashboard on 127.0.0.1:8080 — see matomo_port). The stack itself
+                             # is provisioned by `ccrs-migrate --matomo` ON the box (compose up,
+                             # unattended install, MDMS destination row born disabled); this flag
+                             # only makes the two locations survive the next ansible deploy.
+                             # matomo_port: 8080          # published dashboard port, if changed
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.

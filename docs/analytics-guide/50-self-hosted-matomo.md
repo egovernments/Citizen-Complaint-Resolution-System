@@ -1,5 +1,27 @@
 # 5. Self-hosted Matomo, end to end
 
+> **One-command path.** Everything in Phase A and Phase C below is automated by
+> the unified runner, ON the serving box:
+>
+> ```bash
+> node docs/migration/ccrs-migrate.cjs --host <public base URL> --tenant <stateRoot> \
+>   --user <admin> --pass '<pw>' \
+>   --only matomo --matomo --matomo-admin-pass '<strong password>'
+> ```
+>
+> That brings the compose stack up (`local-setup/docker-compose.matomo.yml`),
+> runs the **unattended install** (it drives the web wizard — Matomo 5 ships no
+> CLI installer), sets the proxy header so visitor IPs are real, inserts the two
+> same-origin nginx tracking locations, and creates the MDMS destination row
+> **born disabled**. Add `--matomo-enable` to flip the row on — the flip is
+> refused unless the public tracker probe passes, so one command can never leave
+> an enabled row pointing at a 404. Re-running is safe; every step detects work
+> already done. On ansible-managed boxes also set `nginx_features.matomo: true`
+> in host_vars so the next `./deploy.sh` keeps the locations.
+>
+> The manual walkthrough below remains the reference for what the phase does,
+> for non-docker installs, and for debugging when a step fails.
+
 Every step below was executed on a real box, in this order, and the traps noted
 are ones we actually hit — not hypotheticals. Follow it top to bottom and you
 should not get stuck.
