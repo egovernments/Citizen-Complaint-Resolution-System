@@ -216,20 +216,71 @@
     return host;
   }
 
+  /* A SAME-ORIGIN path: "/matomo/matomo.js". Strictly safer than any absolute
+   * URL — it cannot reach a third party, it inherits the page's scheme (so it
+   * works on the http-only environments where mctd and the local box live), and
+   * no host allowlist applies because the host IS the portal's own.
+   *
+   * Everything that only LOOKS same-origin must be refused:
+   *   "//evil.com/x.js"     protocol-relative — a foreign origin
+   *   "/\evil.com/x.js"     backslash; some parsers treat it as a separator
+   *   "/x?://y"             anything carrying a scheme separator
+   *   "javascript:..."      not a path at all
+   *   whitespace/control chars, which browsers strip before parsing
+   * The test is deliberately whitelist-shaped: one leading slash, then only
+   * characters we are willing to name. */
+  var RE_SAME_ORIGIN_PATH = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%\/-]*$/;
+  var RE_SAME_ORIGIN_QUERY = /^[A-Za-z0-9._~!$&'()*+,;=:@%\/?-]*$/;
+
+  function isSameOriginPath(url) {
+    if (!isStr(url) || url.length < 2) return false;
+    if (url.charAt(0) !== "/" || url.charAt(1) === "/") return false; /* "//host" */
+    if (url.indexOf("\\") !== -1) return false;
+    if (url.indexOf("://") !== -1) return false;
+    if (url.indexOf("#") !== -1) return false; /* a fragment is meaningless here */
+    if (/[\s\u0000-\u001f\u007f]/.test(url)) return false;
+
+    /* Split an optional query: a cache-busted "/matomo/matomo.js?v=5" is
+     * legitimate, so validate the two halves separately. */
+    var q = url.indexOf("?");
+    var path = q === -1 ? url : url.substring(0, q);
+    var query = q === -1 ? "" : url.substring(q + 1);
+    if (!RE_SAME_ORIGIN_PATH.test(path)) return false;
+    if (query && !RE_SAME_ORIGIN_QUERY.test(query)) return false;
+
+    /* THE IMPORTANT ONE. A path under the SPA's own entrance prefix is served by
+     * `try_files ... /index.html`, so it answers 200 with the HTML shell — and
+     * injecting that as a script throws an uncaught SyntaxError on every page
+     * load. Same trap the index.html bootstrapper guards against for the shim's
+     * own file; a same-origin scriptUrl reopens it, so refuse those paths.
+     * Covers the canonical entrance, the testing entrance and Kong's
+     * prefix-match typo paths, all of which begin with the context path. */
+    var cp = contextPath();
+    var seg = path.split("/")[1] || "";
+    if (cp && seg.indexOf(cp) === 0) return false;
+
+    return true;
+  }
+
   /* One script loader for every adapter. async, no credentials leakage, and
    * the host allowlist is re-checked here so a bypassed validate() still
    * cannot load a foreign script. */
   var loaded = {};
   function loadScript(url, onload) {
-    if (!isStr(url) || url.indexOf("https://") !== 0) return false;
-    if (!hostAllowed(urlHost(url))) { dbg("script host not allowed: " + urlHost(url)); return false; }
+    var sameOrigin = isSameOriginPath(url);
+    if (!sameOrigin) {
+      if (!isStr(url) || url.indexOf("https://") !== 0) return false;
+      if (!hostAllowed(urlHost(url))) { dbg("script host not allowed: " + urlHost(url)); return false; }
+    }
     if (loaded[url]) { if (onload) { try { onload(); } catch (e) {} } return true; }
     loaded[url] = true;
     try {
       var s = document.createElement("script");
       s.async = true;
       s.src = url;
-      s.crossOrigin = "anonymous";
+      /* crossOrigin only makes sense for a cross-origin fetch; setting it on a
+       * same-origin script needlessly demands CORS headers from our own nginx. */
+      if (!sameOrigin) s.crossOrigin = "anonymous";
       s.referrerPolicy = "no-referrer";
       if (onload) { s.onload = function () { try { onload(); } catch (e) {} }; }
       s.onerror = function () { dbg("script failed to load: " + url); };
@@ -477,6 +528,8 @@
 
   function validateScriptUrl(url) {
     if (!isStr(url) || !url) return fail(REASONS.MISSING_SCRIPT_URL);
+    /* Same-origin path: no scheme to check, no host to allowlist. */
+    if (isSameOriginPath(url)) return OK;
     if (url.indexOf("https://") !== 0) return fail(REASONS.SCRIPT_URL_NOT_HTTPS);
     if (!hostAllowed(urlHost(url))) return fail(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
     return OK;
@@ -608,6 +661,9 @@
     } catch (e) {}
   }
 
+  /* The collector. A same-origin endpoint is fine and is what a self-hosted
+   * Matomo behind our own nginx looks like; Matomo's own tracker resolves a
+   * relative setTrackerUrl against the page origin. */
   function matomoEndpoint(rec) {
     if (isStr(rec.endpointUrl) && rec.endpointUrl) return rec.endpointUrl;
     if (isStr(rec.scriptUrl) && rec.scriptUrl) return rec.scriptUrl.replace(/matomo\.js(\?.*)?$/, "matomo.php");
