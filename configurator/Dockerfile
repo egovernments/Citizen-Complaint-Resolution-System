@@ -46,12 +46,23 @@ COPY --from=build /app/dist /usr/share/nginx/html${BASE_PATH}
 # path, $uri maps straight to disk and the SPA fallback is the base index.html —
 # avoids the well-known alias+try_files path-doubling footgun and serves
 # deep-link refreshes correctly.
+# config.js MUST NOT be cached. It is the runtime deployment config, so it has a
+# STABLE name and MUTABLE content — the opposite of the hashed assets/ bundle,
+# which is content-addressed and safe to cache forever. Without an explicit
+# Cache-Control, nginx sends only ETag/Last-Modified and browsers apply
+# heuristic freshness: an operator changes a tenant value, redeploys, and users
+# keep serving the old config until a hard refresh. That is precisely the silent
+# staleness this runtime-config mechanism exists to remove.
 RUN printf 'server {\n\
   listen 80;\n\
   root /usr/share/nginx/html;\n\
   location = / { return 302 %s; }\n\
+  location = %sconfig.js {\n\
+    add_header Cache-Control "no-store, must-revalidate" always;\n\
+    try_files $uri =404;\n\
+  }\n\
   location %s {\n\
     try_files $uri $uri/ %sindex.html;\n\
   }\n\
-}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
+}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
 EXPOSE 80
