@@ -24,6 +24,41 @@ for all four combinations; every one of them is inert by default.
 > `host_vars` sets `build_digit_ui: true` before promising anyone the feature is
 > live there.
 
+## The 0 → 1 path: one command
+
+On a moz-family environment the unified migration runner covers every
+prerequisite, and is safe to re-run:
+
+```bash
+node docs/migration/ccrs-migrate.cjs \
+  --host https://<env> --user <admin> --pass <pw> --tenant <stateRoot>
+```
+
+Two phases do the analytics work:
+
+| Phase | What it ensures |
+|---|---|
+| `schemas` | registers `common-masters.AnalyticsProvider` at the state root |
+| `analytics` | ACCESSCONTROL action rows (30/31) + grants for `SUPERUSER`/`MDMS_ADMIN`, and the Configurator's localisation keys in all four locales — then busts the localisation cache, without which the UI keeps serving the raw key |
+
+`verify` then reports readiness, and the expected result on a fresh environment is
+**schema present, zero destinations** — plumbing in place, feature dark:
+
+```
+AnalyticsProvider=schema ok, 0 destination(s) — feature dark, as expected
+```
+
+Add-if-missing throughout: a re-run creates nothing twice and never overwrites a
+label an operator has renamed. Verified on a real stack — first run
+`2 actions / 4 grants / 8 keys created`, second run `0 created, 8 already present`.
+
+Use `--dry-run` first to print the plan without writing. Note that `auth` must be
+in the phase list for any write phase to run:
+`--phases auth,analytics,verify --dry-run`.
+
+Everything else on this page is the manual equivalent, for develop/master
+environments where `ccrs-migrate.cjs` does not exist.
+
 ## Step 1 — register the schema
 
 ```bash
