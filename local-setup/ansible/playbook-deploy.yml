@@ -1324,6 +1324,7 @@
         src: templates/configurator-config.js.j2
         dest: "{{ digit_dir }}/configurator/config.js"
         mode: "0644"
+      register: configurator_config_render
 
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
@@ -2584,6 +2585,30 @@
     # file in AFTERWARDS. Only needed on this path: when build_configurator is
     # false host nginx proxies /configurator/ to the container, which receives
     # the same file through the bind mount in docker-compose.egov-digit.yaml.
+    # A single-FILE bind mount pins the inode. `template:` writes a temp file and
+    # moves it into place, so a re-render replaces the inode and the RUNNING
+    # container keeps serving the file it started with — compose will not
+    # recreate it, because the compose config itself has not changed. Verified on
+    # this stack: after a re-render the host file and the container's copy
+    # diverged, and `docker restart` re-resolved the mount.
+    #
+    # So: restart the container ONLY when the render actually changed. On a first
+    # deploy the container is created after the render and already has the right
+    # content, and `changed` is false on an unchanged re-run, so this is a no-op
+    # in the common case rather than a restart on every deploy.
+    - name: "Configurator SPA — restart container so a re-rendered config.js is picked up"
+      ansible.builtin.command: docker restart configurator
+      register: configurator_restart
+      changed_when: configurator_restart.rc == 0
+      failed_when:
+        - configurator_restart.rc != 0
+        - '"No such container" not in (configurator_restart.stderr | default(""))'
+      when:
+        - nginx_features.configurator | default(false)
+        - not (build_configurator | default(false))
+        - configurator_config_render is defined
+        - configurator_config_render is changed
+
     - name: "Configurator SPA — place runtime config.js beside the host-served dist"
       ansible.builtin.copy:
         src: "{{ digit_dir }}/configurator/config.js"
