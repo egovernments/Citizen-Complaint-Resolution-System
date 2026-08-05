@@ -5,6 +5,13 @@ fully independent stack (~35 containers) on its own machine — same
 playbook, different `host_vars/<tenant>.yml`. Today: `nairobi`, `bomet`,
 plus `mh-iterations` (sandbox).
 
+> **Deploying from Windows?** Follow the
+> [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
+> same `./deploy.sh` flow end-to-end inside WSL2, including the
+> `localhost-slim` / `localhost-full` sizing templates for 16 GB and
+> 32 GB machines. On macOS, the equivalent is the
+> [macOS Quickstart (OrbStack)](../../MAC-QUICKSTART.md).
+
 ## Layout
 
 ```
