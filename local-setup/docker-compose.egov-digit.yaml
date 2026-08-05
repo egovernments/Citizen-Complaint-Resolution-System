@@ -335,7 +335,6 @@ services:
   # Inbox v2 - Queries Elasticsearch for inbox/search views
   # ===========================================================================
   inbox:
-    # FLAG(#1309): stays on flywheel — egovio/inbox:state-tenant-fix does not exist on Docker Hub (core image, not built from this repo).
     image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
     profiles: ["search"]
     container_name: digit-inbox
@@ -1212,7 +1211,7 @@ services:
   # Boundary Management Service - Boundary generation from Excel
   # ===========================================================================
   egov-bndry-mgmnt:
-    image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    image: registry.preview.egov.theflywheel.in/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -1562,10 +1561,10 @@ services:
   # ===========================================================================
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # DIGIT_UI_IMAGE; default tracks the egovio nightly. NOTE: this is the
+    # DIGIT_UI_IMAGE; default keeps the prior pinned tag. NOTE: this is the
     # legacy micro-ui container — the modern esbuild bundle is laid in via
     # build_digit_ui or served by host nginx (see build/NIGHTLY-BUILDS.md).
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui:nightly-develop}
+    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -2046,7 +2045,7 @@ services:
   # /backend/novu-bridge-endpoint/workflows.js — one per domain event
   # (OTP send + 6 complaint lifecycle events).
   novu-bridge-endpoint:
-    image: egovio/novu-bridge-endpoint:nightly-develop
+    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge-endpoint:latest
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2404,7 +2403,6 @@ services:
     # Published unscoped (not under egovio/) at registry.preview because
     # it predates the namespace standardisation. Pin to :dev for now;
     # bump when a versioned tag is published.
-    # FLAG(#1309): stays on flywheel — egovio/token-exchange-svc:keycloak-deploy does not exist on Docker Hub (core image, not built from this repo).
     image: registry.preview.egov.theflywheel.in/token-exchange-svc:keycloak-deploy
     container_name: token-exchange-svc
     restart: unless-stopped
