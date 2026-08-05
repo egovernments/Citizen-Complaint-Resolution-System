@@ -291,13 +291,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      # Embedded Flyway off — egov-indexer-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8080
@@ -484,13 +479,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      # Embedded Flyway off — mdms-backend-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
@@ -763,13 +753,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      # Embedded Flyway off — egov-workflow-v2-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
@@ -904,13 +889,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      # Embedded Flyway off — boundary-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -963,13 +943,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: accesscontrol_schema_version
+      # Embedded Flyway off — egov-accesscontrol-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
@@ -1063,12 +1038,12 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      # Embedded Flyway must stay OFF: egov-filestore-migration in
+      # docker-compose.migrations.yml owns this schema under the canonical
+      # egov_filestore_schema history table. With it ON, a partial redeploy that
+      # skips the overlay baselines a fresh legacy-named history at version 1 and
+      # replays V1 onto a populated database — 42P07 crash loop (#1586).
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
@@ -1173,12 +1148,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      # Embedded Flyway off — egov-hrms-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
@@ -1451,13 +1422,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_TABLE: pgr_services_schema
+      # Embedded Flyway off — pgr-services-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
@@ -2141,11 +2107,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       # application.properties keeps Flyway URL separate from datasource;
       # both env vars must be set or Flyway falls back to localhost.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: digit_config_service_schema
+      # Embedded Flyway off — digit-config-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: '8080'
       SERVER_SERVLET_CONTEXT_PATH: /config-service
       CONFIG_DEFAULT_OFFSET: '0'
@@ -2244,11 +2207,8 @@ services:
       # application.properties hardcodes spring.flyway.url to localhost
       # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
       # is the only way to override.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: novu_bridge_schema
+      # Embedded Flyway off — novu-bridge-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       # application.properties also reads kafka.config.bootstrap_server_config
       # (an egov-services-common convention); set both so any path that
