@@ -1313,16 +1313,32 @@
                  and ((overpass_extract.stat.exists | default(false)) | bool))
              else '' }}
 
+    # The template also renders TURBOPASS_URL and BOUNDARY_SEARCH_LIMIT. Wire
+    # them from the inventory here, or an operator setting them in host_vars
+    # gets silence: the template would read facts nothing ever defines and
+    # render '' every deploy, and the SPA would quietly use its in-code
+    # defaults (/turbopass, 300) with no signal the override was dropped.
+    #
+    # Same-origin '/turbopass' only when this box actually runs the search-api;
+    # blank otherwise falls through to that same default in the SPA anyway.
+    - name: "Configurator SPA — effective Turbopass + boundary-limit settings"
+      ansible.builtin.set_fact:
+        configurator_turbopass_url: >-
+          {{ configurator_turbopass_url
+             | default('/turbopass' if (enable_turbopass | default(false)) else '') }}
+        configurator_boundary_search_limit: >-
+          {{ configurator_boundary_search_limit | default('') }}
+
     - name: "Configurator SPA — ensure the runtime-config dir exists"
       ansible.builtin.file:
-        path: "{{ digit_dir }}/configurator"
+        path: "{{ digit_dir }}/configurator-runtime"
         state: directory
         mode: "0755"
 
     - name: "Configurator SPA — render runtime config.js"
       ansible.builtin.template:
         src: templates/configurator-config.js.j2
-        dest: "{{ digit_dir }}/configurator/config.js"
+        dest: "{{ digit_dir }}/configurator-runtime/config.js"
         mode: "0644"
       register: configurator_config_render
 
@@ -2592,10 +2608,12 @@
     # this stack: after a re-render the host file and the container's copy
     # diverged, and `docker restart` re-resolved the mount.
     #
-    # So: restart the container ONLY when the render actually changed. On a first
-    # deploy the container is created after the render and already has the right
-    # content, and `changed` is false on an unchanged re-run, so this is a no-op
-    # in the common case rather than a restart on every deploy.
+    # So: restart the container ONLY when the render actually changed. Note that
+    # `template:` reports changed on a brand-new render too, so this DOES fire on
+    # a first deploy — harmless, because the container was created after the
+    # render and already holds the right content, it just restarts once. What it
+    # avoids is a restart on every SUBSEQUENT deploy: an unchanged re-render
+    # reports ok, and the task is skipped.
     - name: "Configurator SPA — restart container so a re-rendered config.js is picked up"
       ansible.builtin.command: docker restart configurator
       register: configurator_restart
@@ -2611,7 +2629,7 @@
 
     - name: "Configurator SPA — place runtime config.js beside the host-served dist"
       ansible.builtin.copy:
-        src: "{{ digit_dir }}/configurator/config.js"
+        src: "{{ digit_dir }}/configurator-runtime/config.js"
         dest: "{{ configurator_www_dir }}/config.js"
         remote_src: true
         mode: "0644"
