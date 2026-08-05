@@ -99,6 +99,56 @@ approval before ticking it. Note that the shim does not re-check the flag at
 runtime — it is a save-time control, so a row written directly over the MDMS API
 bypasses it. That is one more reason the ops knobs below exist.
 
+## Page titles
+
+Every destination also receives a human-readable title alongside the path —
+`Complaints · Inbox · Employee` for `/employee/pgr/inbox`. Matomo gets it as
+`setDocumentTitle`, PostHog and GA4 as `page_title`.
+
+It is **derived**, with no configuration required, from the already-parameterised
+path: drop the surface segment, name the module, de-slugify what remains, append
+the surface. Two consequences worth knowing:
+
+- **A new route gets a sensible title automatically.** The alternative — a
+  hand-maintained route→title map — falls through to a placeholder as soon as
+  someone adds a screen and forgets to update it, and routes in this app are
+  assembled from constants rather than literal strings, so that drift is close to
+  certain.
+- **A title can never contain a complaint id or a mobile number**, because it is
+  built from the scrubbed path rather than from `location.href`. That is
+  structural, not a filter to maintain.
+
+Resolution order:
+
+| Priority | Source |
+|---|---|
+| 1 | `settings.titleMap` — exact override, matched on the path ignoring any query string |
+| 2 | `settings.modules`, else the built-in module-code map (`pgr` → Complaints, `dss` → Dashboard, `hrms` → HRMS …) |
+| 3 | derivation |
+
+```jsonc
+"settings": {
+  "titleMap": { "/employee/pgr/inbox": "Complaints Inbox Employee" },
+  "modules":  { "pgr": "Reclamacoes" }
+}
+```
+
+An **unknown** module code yields `Newmodule · List · Employee` — title-cased and
+visible in reports, so a missing map entry announces itself.
+
+### Why titles are not localised
+
+Deliberately stable, not translated. A tenant running two locales (this one runs
+`pt_PT` and `en_IN`) would see every page split into one report row per language:
+totals fragment, trends break when a translation is edited, and cross-tenant
+comparison stops working — irreversibly for data already collected. `locale` is
+already sent as its own dimension, so segment by language instead. Operators who
+want translated labels should relabel at the reporting layer, where it can be
+undone.
+
+The shim also never assigns to `document.title`; an analytics script must not
+mutate the host application's UI.
+
 ## Ops-only knobs
 
 Three keys, in `group_vars/digit.yml` → `templates/globalConfigs.js.j2` →
