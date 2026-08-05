@@ -250,8 +250,12 @@ it off.
 With Kong in audit mode (`ENFORCE_RBAC = false`) and plain `EMPLOYEE` accepted at
 the Configurator login, the UI gate is courtesy, not security: **MDMS write access
 is effectively script-injection access** for `CUSTOM` rows. ACCESSCONTROL rows for
-the two write endpoints (actions 30/31 → `SUPERUSER`/`MDMS_ADMIN`) ship with the
-seed data so a later RBAC flip does not break analytics writes, but they only
-reach **freshly seeded** tenants — `MdmsBulkLoader` skips a file whose tenant
+the two write endpoints (actions 30/31 → `SUPERUSER`/`MDMS_ADMIN`) exist so a
+later RBAC flip does not break analytics writes; they are inert while Kong runs
+in audit mode. Until that flip, the ops knobs are the real control.
+
+Those rows also ship in the default-data-handler seed files, but seed files alone
+never reach a **running** environment: `MdmsBulkLoader` skips a file whose tenant
 already has rows, and default-data-handler is no longer in the compose stack on
-develop/master. Until that flip, the ops knobs are the real control.
+develop/master. That is why the setup command ensures them directly — see
+[10-setup.md](10-setup.md#one-command-per-release-line).
