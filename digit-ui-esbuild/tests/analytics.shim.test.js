@@ -73,9 +73,20 @@ function loadShim(opts) {
     onload: null, onerror: null,
     getAttribute: () => null, parentNode: null,
   });
+  const deferred = [];
   sandbox.document = {
     readyState: "complete",
-    head: { appendChild(el) { scripts.push(el); if (el.onload) el.onload(); } },
+    head: {
+      appendChild(el) {
+        scripts.push(el);
+        // A real script load is asynchronous. opts.deferScriptLoad holds the
+        // onload so a test can fire it AFTER the shim has already emitted, which
+        // is what actually happens on every hard page load.
+        if (!el.onload) return;
+        if (opts.deferScriptLoad) deferred.push(el);
+        else el.onload();
+      },
+    },
     documentElement: { appendChild(el) { scripts.push(el); } },
     createElement: makeEl,
     addEventListener() {},
@@ -120,6 +131,7 @@ function loadShim(opts) {
     internal: sandbox.DigitAnalytics && sandbox.DigitAnalytics._internal,
     xhrCalls, scripts, sandbox, session, local,
     flush: () => { while (timers.length) timers.shift()(); },
+    loadScripts: () => { while (deferred.length) deferred.shift().onload(); },
   };
 }
 
@@ -500,4 +512,95 @@ test("a record scoped to the other surface stays inert", () => {
 test("trackEvent is a no-op when nothing is configured", () => {
   const t = loadShim({ respond: () => [] });
   assert.doesNotThrow(() => t.api.trackEvent("save_clicked", { category: "pgr" }));
+});
+
+/* ───────────── PostHog: the SDK is an object, not a queue ───────────── */
+
+const POSTHOG_OK = { code: "posthog-state", type: "POSTHOG", enabled: true, apiKey: "phc_test" };
+
+test("a pageview emitted before array.js lands is replayed, not dropped", () => {
+  // Found in live verification against PostHog Cloud: array.js, its config,
+  // surveys and web-vitals all loaded, yet ZERO ingest calls were ever made.
+  // Cause: on a hard page load the shim emits the pageview as soon as the
+  // registry resolves, which is always before the SDK object exists — and the
+  // old phCall() silently no-oped. Matomo/GA4/CUSTOM were immune because their
+  // vendor APIs are plain arrays that can be pushed to before load.
+  const t = loadShim({
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  assert.equal(t.internal.providers(), 1, "the provider initialises");
+  assert.equal(t.scripts.length, 1, "array.js was requested");
+  assert.ok(/\/static\/array\.js$/.test(t.scripts[0].src), t.scripts[0].src);
+
+  // The SDK is not there yet: nothing may have been captured, and nothing lost.
+  assert.equal(t.sandbox.posthog, undefined);
+
+  // array.js arrives and defines window.posthog, exactly as the real one does.
+  const captured = [];
+  t.sandbox.posthog = {
+    init: (key, cfg) => { t.sandbox.__phInit = { key, cfg }; },
+    capture: (name, props) => captured.push({ name, props }),
+  };
+  t.loadScripts();
+
+  assert.equal(t.sandbox.__phInit.key, "phc_test", "init got the project key");
+  assert.equal(captured.length, 1, "the queued pageview was replayed after init");
+  assert.equal(captured[0].name, "$pageview");
+  assert.equal(captured[0].props.$current_url, "/employee/pgr/inbox");
+});
+
+test("PostHog init forces every restraint, and no record can loosen them", () => {
+  const t = loadShim({
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz"
+      // a record TRYING to turn the dangerous options back on
+      ? [row("mz", Object.assign({}, POSTHOG_OK, { trackClicks: true, settings: { autocapture: true, disable_session_recording: false } }))]
+      : []),
+  });
+  t.sandbox.posthog = { init: (key, cfg) => { t.sandbox.__cfg = cfg; }, capture: () => {} };
+  t.loadScripts();
+  const cfg = t.sandbox.__cfg;
+  assert.equal(cfg.autocapture, false);
+  assert.equal(cfg.capture_pageview, false);
+  assert.equal(cfg.capture_pageleave, false);
+  assert.equal(cfg.disable_session_recording, true);
+  assert.equal(cfg.mask_all_text, true);
+  assert.equal(cfg.mask_all_element_attributes, true);
+  assert.equal(cfg.enable_recording_console_log, false);
+  assert.equal(cfg.person_profiles, "identified_only");
+  assert.equal(cfg.respect_dnt, true);
+  assert.equal(typeof cfg.sanitize_properties, "function");
+});
+
+test("the pending queue is bounded so a script that never loads cannot grow it", () => {
+  const t = loadShim({
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  for (let i = 0; i < 50; i++) t.api.trackEvent("e" + i, { category: "x" });
+  const captured = [];
+  t.sandbox.posthog = { init: () => {}, capture: (n) => captured.push(n) };
+  t.loadScripts();
+  assert.ok(captured.length <= 20, `replayed ${captured.length}, must be capped at 20`);
+  assert.ok(captured.length > 0, "but it must replay what it kept");
+});
+
+test("the PostHog property sanitiser scrubs vendor-injected urls", () => {
+  const t = loadShim({
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  t.sandbox.posthog = { init: (k, cfg) => { t.sandbox.__cfg = cfg; }, capture: () => {} };
+  t.loadScripts();
+  const out = t.sandbox.__cfg.sanitize_properties({
+    $current_url: "http://localhost/digit-ui/citizen/pgr/complaint-details/PRD-2026-000023?mobileNumber=841234567",
+    $initial_current_url: "http://localhost/digit-ui/x",
+    $referrer: "http://localhost/digit-ui/employee",
+    note: "call 841234567",
+  });
+  assert.ok(out.$current_url.indexOf("PRD-2026-000023") === -1, out.$current_url);
+  assert.ok(out.$current_url.indexOf("841234567") === -1, out.$current_url);
+  assert.equal(out.$initial_current_url, undefined, "initial url is dropped entirely");
+  assert.ok(out.note.indexOf("841234567") === -1, "arbitrary string props are scrubbed too");
 });

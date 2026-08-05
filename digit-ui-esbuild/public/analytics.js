@@ -725,6 +725,8 @@
                 return out;
               }
             });
+            /* Replay anything emitted while array.js was still in flight. */
+            phFlush();
           } catch (e) { dbg("posthog init failed"); }
         });
       },
@@ -808,12 +810,40 @@
     } catch (e) {}
   }
 
+  /* PostHog is the one adapter whose API is a real object rather than a vendor
+   * queue array, so calls made before its script finishes loading have nowhere
+   * to go. That is not a rare edge: on a HARD page load the shim emits the
+   * pageview as soon as the registry resolves, which is always before
+   * array.js has arrived — so dropping early calls means dropping exactly the
+   * one pageview most navigations produce. Queue them instead and replay on
+   * ready. (Matomo's _paq, GA4's dataLayer and CUSTOM's named global are all
+   * arrays, which is why they never had this problem.) */
+  var phReady = false;
+  var phPending = [];
+  var PH_MAX_PENDING = 20; /* bounded: if the script never loads, do not grow */
+
   function phCall(fn, args) {
     try {
-      if (window.posthog && typeof window.posthog[fn] === "function") {
-        window.posthog[fn].apply(window.posthog, args);
+      if (!phReady || !window.posthog || typeof window.posthog[fn] !== "function") {
+        if (phPending.length < PH_MAX_PENDING) phPending.push([fn, args]);
+        return;
       }
+      window.posthog[fn].apply(window.posthog, args);
     } catch (e) {}
+  }
+
+  /* Called once, immediately after posthog.init() succeeds. */
+  function phFlush() {
+    phReady = true;
+    var queued = phPending;
+    phPending = [];
+    for (var i = 0; i < queued.length; i++) {
+      try {
+        if (window.posthog && typeof window.posthog[queued[i][0]] === "function") {
+          window.posthog[queued[i][0]].apply(window.posthog, queued[i][1]);
+        }
+      } catch (e) {}
+    }
   }
 
   /* ------------------------------------------------------------------ *
