@@ -4942,5 +4942,53 @@
     "message": "ou",
     "module": "configurator-ui",
     "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.analytics_providers",
+    "message": "Analytics Providers",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.analytics_providers",
+    "message": "विश्लेषण प्रदाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.analytics_providers",
+    "message": "Fournisseurs d'analyse",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.analytics_providers",
+    "message": "Provedores de análise",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.analytics_providers",
+    "message": "Analytics Providers",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.analytics_providers",
+    "message": "विश्लेषण प्रदाता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.analytics_providers",
+    "message": "Fournisseurs d'analyse",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.analytics_providers",
+    "message": "Provedores de análise",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   }
 ]
