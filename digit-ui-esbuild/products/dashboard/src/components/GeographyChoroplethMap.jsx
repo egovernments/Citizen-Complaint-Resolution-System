@@ -69,6 +69,22 @@ function complaintPinPopupOffset(radius) {
   return L.point(0, -Math.max(radius + 10, 12));
 }
 
+/**
+ * Close whichever ward tooltip is currently open.
+ *
+ * NOT `map.closeTooltip()` — Leaflet 1.9's Map.closeTooltip(tooltip) dereferences
+ * its argument (`tooltip.close()`), so calling it bare throws
+ * "Cannot read properties of undefined (reading 'close')". Thrown from the pin
+ * click handler that exception aborted the event before Leaflet's own bindPopup
+ * listener ran, so clicking a pin silently did nothing (#1576). Layer.closeTooltip()
+ * takes no argument and is the correct call.
+ */
+function closeOpenTooltips(map) {
+  map?.eachLayer?.((layer) => {
+    if (layer !== map && typeof layer.closeTooltip === "function") layer.closeTooltip();
+  });
+}
+
 function closeOtherPinPopups(activeCircle, pinLayersByKey = {}) {
   Object.values(pinLayersByKey).forEach((circle) => {
     if (circle !== activeCircle && circle.isPopupOpen?.()) {
@@ -730,7 +746,17 @@ const GeographyChoroplethMap = ({
 
       circle.on("click", () => {
         closeOtherPinPopups(circle, pinLayersByKeyRef.current);
-        map.closeTooltip();
+        closeOpenTooltips(map);
+      });
+
+      // Hover feedback. Without a tooltip of its own a pin showed nothing on
+      // hover while still stealing the pointer from the ward polygon beneath it,
+      // so the ward tooltip vanished and nothing replaced it (#1576).
+      circle.bindTooltip(buildComplaintPinTooltipHtml(pin), {
+        ...HOVER_TOOLTIP_OPTIONS,
+        sticky: false,
+        offset: [0, -(baseRadius + 4)],
+        direction: "top",
       });
 
       circle.on("mouseover", function () {
@@ -746,9 +772,10 @@ const GeographyChoroplethMap = ({
       });
 
       circle.on("popupopen", function () {
+        this.closeTooltip?.();
         closeOtherPinPopups(this, pinLayersByKeyRef.current);
         selectedPinKeyRef.current = key;
-        map.closeTooltip();
+        closeOpenTooltips(map);
         const radius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
         Object.entries(pinLayersByKeyRef.current).forEach(([, layer]) => {
           const layerRadius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
