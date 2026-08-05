@@ -1,0 +1,68 @@
+# Self-hosted Matomo (On-Premise) as an analytics destination for the DIGIT portal.
+#
+# OPT-IN, like docker-compose.monitoring.yml — never part of the default stack:
+#   cd /opt/digit && docker compose -f docker-compose.matomo.yml up -d
+#   cd /opt/digit && docker compose -f docker-compose.matomo.yml down
+#
+# WHY ITS OWN DB: Matomo requires MySQL/MariaDB. The DIGIT stack is Postgres only
+# and Matomo cannot use it, so this brings its own rather than touching anything
+# the platform depends on.
+#
+# WHY A PORT AND NOT A PATH: Matomo emits absolute asset URLs, so serving the
+# whole app under /matomo/ breaks its dashboard. The ADMIN UI is therefore reached
+# directly on 127.0.0.1:8080, and the host nginx proxies only the two TRACKING
+# endpoints same-origin (/matomo/matomo.js and /matomo/matomo.php). Tracking stays
+# same-origin — no TLS, no host allowlist entry, works on an http-only box — while
+# the dashboard's own URLs are left alone.
+#
+# Bound to 127.0.0.1: nothing here should be reachable off-box.
+services:
+  matomo-db:
+    image: mariadb:11.4
+    container_name: matomo-db
+    restart: unless-stopped
+    command: --max-allowed-packet=64MB
+    environment:
+      MARIADB_DATABASE: matomo
+      MARIADB_USER: matomo
+      MARIADB_PASSWORD: matomo_local_only
+      MARIADB_ROOT_PASSWORD: matomo_root_local_only
+    volumes:
+      - matomo-db:/var/lib/mysql
+    networks: [egov-network]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  matomo:
+    image: matomo:5-apache
+    container_name: matomo
+    restart: unless-stopped
+    depends_on:
+      matomo-db:
+        condition: service_healthy
+    environment:
+      MATOMO_DATABASE_HOST: matomo-db
+      MATOMO_DATABASE_ADAPTER: mysql
+      MATOMO_DATABASE_DBNAME: matomo
+      MATOMO_DATABASE_USERNAME: matomo
+      MATOMO_DATABASE_PASSWORD: matomo_local_only
+      # Matomo rejects a Host header it does not know. Both the dashboard origin
+      # and the portal origin must be listed.
+      MATOMO_GENERAL_TRUSTED_HOSTS: "localhost:8080,127.0.0.1:8080,localhost,127.0.0.1"
+    volumes:
+      - matomo:/var/www/html
+    networks: [egov-network]
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  matomo:
+  matomo-db:
+
+networks:
+  egov-network:
+    external: true
+    name: digit_egov-network
