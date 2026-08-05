@@ -188,6 +188,7 @@ const SEED = {
   cmsWorkflow: path.join(REPO, 'utilities/default-data-handler/src/main/resources/CmsPgrWorkflowConfig.json'),
   tenantSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/tenant.json'),
   citymoduleRows: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/tenant/tenant.citymodule.json'),
+  commonMasterSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/common-masters.json'),
 };
 
 /* ──────────────────────────────── output ──────────────────────────────── */
@@ -388,9 +389,21 @@ function record(id, status, detail, errorCode, remediation) {
 
 async function phaseSchemas() {
   const wanted = [];
-  for (const [file, label] of [[SEED.pgrSchemas, 'RAINMAKER-PGR'], [SEED.landingSchemas, 'landing']]) {
+  // common-masters.json carries dozens of upstream schemas we must NOT touch, so it
+  // is admitted by an explicit allowlist rather than by prefix. AnalyticsProvider is
+  // on it because the analytics registry is inert without the schema, and operators
+  // running the unified runner should not have to also find a separate script.
+  const COMMON_MASTER_CODES = new Set(['common-masters.AnalyticsProvider']);
+  for (const [file, label] of [
+    [SEED.pgrSchemas, 'RAINMAKER-PGR'],
+    [SEED.landingSchemas, 'landing'],
+    [SEED.commonMasterSchemas, 'common-masters'],
+  ]) {
     try {
-      for (const s of readJson(file)) if (String(s.code || '').startsWith('RAINMAKER-PGR.')) wanted.push(s);
+      for (const s of readJson(file)) {
+        const code = String(s.code || '');
+        if (code.startsWith('RAINMAKER-PGR.') || COMMON_MASTER_CODES.has(code)) wanted.push(s);
+      }
     } catch (e) {
       return record('schemas', OUTCOME.FAILED, `cannot read ${label} schema seed: ${e.message}`, 'SEED_FILE_MISSING',
         `Run from a full repo checkout (expected ${file}).`);
