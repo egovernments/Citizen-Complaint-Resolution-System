@@ -148,7 +148,7 @@ if (CFG.tenants.some((t) => (t.includes('.') ? t.split('.')[0] : t) !== CFG.stat
 // Phases that never touch the API with credentials — they may run without a
 // successful auth phase (the driver skips everything else when RI is null).
 const AUTH_FREE_PHASES = new Set(['gzip']);
-const ALL_PHASES = ['auth', 'schemas', 'hierarchy', 'pgr-masters', 'landing', 'cms', 'banner', 'gzip', 'verify'];
+const ALL_PHASES = ['auth', 'schemas', 'hierarchy', 'pgr-masters', 'landing', 'cms', 'analytics', 'banner', 'gzip', 'verify'];
 // --only <list>: run EXACTLY these phases and nothing else. Two conveniences
 // over --phases: (1) the listed phases' opt-in flags are implied (--only gzip
 // used to still SKIP without --gzip; same for cms), (2) auth is auto-prepended
@@ -189,6 +189,7 @@ const SEED = {
   tenantSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/tenant.json'),
   citymoduleRows: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/tenant/tenant.citymodule.json'),
   commonMasterSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/common-masters.json'),
+  configuratorLoc: path.join(REPO, 'local-setup/ansible/files/configurator-localization/configurator-ui.json'),
 };
 
 /* ──────────────────────────────── output ──────────────────────────────── */
@@ -861,6 +862,103 @@ async function phaseCms() {
   return record(CMS_PH(), OUTCOME.OK, 'roles, actions, grants, workflow ensured');
 }
 
+/* ══════════════════════════ PHASE: analytics ══════════════════════════ */
+
+/* Everything a 0->1 deployment needs for the analytics adapter registry to be
+ * USABLE — and nothing that turns it on. The destinations themselves are MDMS
+ * rows an admin creates in the Configurator; a fresh environment must come up
+ * with the plumbing present and the feature dark.
+ *
+ * The schema itself is handled by phaseSchemas (common-masters.AnalyticsProvider
+ * is on its allowlist), so this phase covers the two things nothing else does:
+ *
+ *  1. ACCESSCONTROL rows for the two MDMS write paths, granted to SUPERUSER and
+ *     MDMS_ADMIN. phaseCms also seeds ACCESSCONTROL, but it is opt-in (--cms)
+ *     AND filters to CMS_ROLES, so these grants would never land there. Kong
+ *     currently runs with ENFORCE_RBAC=false, so they change nothing today —
+ *     they exist so the later flip does not silently break analytics writes.
+ *
+ *  2. The Configurator's own localisation keys, so the sidebar entry reads
+ *     "Analytics Providers" rather than the raw key. The ansible playbook
+ *     upserts the same bundle, but an operator who runs only this script should
+ *     not end up with a screen labelled app.nav.analytics_providers.
+ *
+ * Add-if-missing throughout, exactly like phaseLanding: an operator who has
+ * renamed a label keeps their wording on a re-run. */
+
+const ANALYTICS_ACTION_IDS = [30, 31];
+const ANALYTICS_GRANT_ROLES = ['SUPERUSER', 'MDMS_ADMIN'];
+const ANALYTICS_LOC_PREFIXES = ['app.nav.analytics_providers', 'app.resources.analytics_providers'];
+
+async function phaseAnalytics() {
+  const failures = [];
+  const notes = [];
+  try {
+    /* ---- 1. ACCESSCONTROL actions + grants ---- */
+    const catalog = new Map(readJson(SEED.actionsTest).map((a) => [Number(a.id), a]));
+    const wantActions = ANALYTICS_ACTION_IDS.filter((id) => catalog.has(id));
+    if (wantActions.length !== ANALYTICS_ACTION_IDS.length) {
+      failures.push(`action catalog is missing ${ANALYTICS_ACTION_IDS.filter((id) => !catalog.has(id)).join(', ')}`);
+    }
+    const haveActions = new Set((await cmsSearchAll('ACCESSCONTROL-ACTIONS-TEST.actions-test')).map((m) => Number(m.data && m.data.id)));
+    let createdActions = 0;
+    for (const id of wantActions.filter((id) => !haveActions.has(id))) {
+      if (CFG.dryRun) { info(`dry-run: would create action ${id} (${catalog.get(id).url})`); continue; }
+      const res = await mdmsCreate(CFG.state, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', String(id), { ...catalog.get(id), tenantId: CFG.state });
+      if (!res.ok && !res.exists) failures.push(`action ${id}: HTTP ${res.code}`); else createdActions++;
+    }
+    notes.push(`actions: ${wantActions.length} ensured (${createdActions} created)`);
+
+    const wantGrants = readJson(SEED.roleactions)
+      .filter((g) => ANALYTICS_ACTION_IDS.includes(Number(g.actionid)) && ANALYTICS_GRANT_ROLES.includes(g.rolecode));
+    const haveGrants = new Set((await cmsSearchAll('ACCESSCONTROL-ROLEACTIONS.roleactions'))
+      .map((m) => m.uniqueIdentifier || `${m.data && m.data.rolecode}.${m.data && m.data.actionid}`));
+    let createdGrants = 0;
+    for (const g of wantGrants.filter((g) => !haveGrants.has(`${g.rolecode}.${g.actionid}`))) {
+      if (CFG.dryRun) { info(`dry-run: would grant ${g.rolecode} -> action ${g.actionid}`); continue; }
+      const res = await mdmsCreate(CFG.state, 'ACCESSCONTROL-ROLEACTIONS.roleactions', `${g.rolecode}.${g.actionid}`, { ...g, tenantId: CFG.state });
+      if (!res.ok && !res.exists) failures.push(`grant ${g.rolecode}.${g.actionid}: HTTP ${res.code}`); else createdGrants++;
+    }
+    notes.push(`grants: ${wantGrants.length} ensured (${createdGrants} created)`);
+
+    /* ---- 2. Configurator localisation (add-if-missing, per locale) ---- */
+    const bundle = readJson(SEED.configuratorLoc).filter((m) => ANALYTICS_LOC_PREFIXES.includes(m.code));
+    const byLocale = {};
+    for (const m of bundle) { (byLocale[m.locale] = byLocale[m.locale] || []).push(m); }
+    let seeded = 0, kept = 0;
+    for (const locale of Object.keys(byLocale)) {
+      const r = await postJson(
+        `/localization/messages/v1/_search?tenantId=${encodeURIComponent(CFG.state)}&module=configurator-ui&locale=${locale}`,
+        { RequestInfo: ri() });
+      const existing = new Set((parse(r.body)?.messages || []).map((m) => m.code));
+      const missing = byLocale[locale].filter((m) => !existing.has(m.code));
+      kept += byLocale[locale].length - missing.length;
+      if (!missing.length) continue;
+      if (CFG.dryRun) { info(`dry-run: would seed ${missing.length} ${locale} configurator key(s)`); continue; }
+      const { success, failed: fl } = await upsertMessages(CFG.state, locale,
+        missing.map((m) => ({ code: m.code, message: m.message, module: 'configurator-ui', locale })));
+      seeded += success;
+      if (fl) failures.push(`localization ${locale}: ${fl} failed`);
+    }
+    notes.push(`localization: ${seeded} seeded, ${kept} already present`);
+    if (seeded && !CFG.dryRun) {
+      /* An upsert alone is not enough — the UI serves stale until the caches are
+       * evicted. This endpoint does it; a service restart does NOT. */
+      await cacheBust();
+      notes.push('localization cache busted');
+    }
+  } catch (e) {
+    return record('analytics', OUTCOME.FAILED, `unexpected: ${e.message}`, 'ANALYTICS_UNEXPECTED', e.stack ? truncate(e.stack, 300) : null);
+  }
+  if (CFG.dryRun) return record('analytics', OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  const detail = notes.join(' · ');
+  ok(detail);
+  if (failures.length) {
+    return record('analytics', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'ANALYTICS_STEP_FAILED', failures.slice(0, 6).join(' | '));
+  }
+  return record('analytics', OUTCOME.OK, detail);
+}
+
 /* ═══════════════════════════ PHASE: banner ════════════════════════════ */
 
 async function phaseBanner() {
@@ -1132,13 +1230,34 @@ async function phaseVerify() {
   checks.push(`TemplateType=${count('ComplaintTemplateType')}`);
   checks.push(`LandingSection=${count('LandingSection')}`);
   checks.push(`LandingPageConfig=${count('LandingPageConfig')}`);
-  const landingOkStatus = count('LandingSection') >= 10 && count('LandingPageConfig') >= 1;
+  /* Analytics readiness. The correct state for a fresh deployment is
+   * "schema present, ZERO rows" — plumbing in place, feature dark. A row count
+   * above zero is reported, not failed: an operator may legitimately have
+   * enabled a destination already. */
+  let analyticsOk = false;
+  try {
+    const sr = await postJson('/mdms-v2/schema/v1/_search',
+      { RequestInfo: ri(), SchemaDefCriteria: { tenantId: CFG.state, codes: ['common-masters.AnalyticsProvider'], limit: 50 } });
+    analyticsOk = ((parse(sr.body) || {}).SchemaDefinitions || []).some((d) => d.code === 'common-masters.AnalyticsProvider');
+    let rows = 0;
+    if (analyticsOk) {
+      const dr = await postJson('/mdms-v2/v2/_search',
+        { RequestInfo: ri(), MdmsCriteria: { tenantId: CFG.state, schemaCode: 'common-masters.AnalyticsProvider', limit: 200 } });
+      rows = ((parse(dr.body) || {}).mdms || []).length;
+    }
+    checks.push(`AnalyticsProvider=${analyticsOk ? `schema ok, ${rows} destination(s)${rows === 0 ? ' — feature dark, as expected' : ''}` : 'SCHEMA MISSING'}`);
+  } catch (e) {
+    checks.push('AnalyticsProvider=check failed');
+  }
+
+  const landingOkStatus = count('LandingSection') >= 10 && count('LandingPageConfig') >= 1 && analyticsOk;
   const detail = checks.join(' · ');
   info(detail);
   // Only the landing counts have a universal expectation; hierarchy/masters
   // depend on the environment's data, so they're reported, not asserted.
   return record('verify', landingOkStatus ? OUTCOME.OK : OUTCOME.PARTIAL, detail,
-    landingOkStatus ? null : 'VERIFY_LOW_COUNTS', landingOkStatus ? null : 'Landing counts below expected (10 sections + 1 config).');
+    landingOkStatus ? null : 'VERIFY_LOW_COUNTS',
+    landingOkStatus ? null : 'Landing counts below expected (10 sections + 1 config), or the AnalyticsProvider schema is missing — re-run the schemas + analytics phases.');
 }
 
 /* ═══════════════════════════════ driver ═══════════════════════════════ */
@@ -1161,6 +1280,7 @@ async function phaseVerify() {
     ['pgr-masters', phasePgrMasters],
     ['landing', phaseLanding],
     ['cms', phaseCms],
+    ['analytics', phaseAnalytics],
     ['banner', phaseBanner],
     ['gzip', phaseGzip],
     ['verify', phaseVerify],
