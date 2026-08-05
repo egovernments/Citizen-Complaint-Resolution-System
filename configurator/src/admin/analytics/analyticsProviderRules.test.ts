@@ -16,6 +16,8 @@ import {
   requiresResidencyAck,
   hasResidencyAck,
   hostAllowed,
+  hostIsUnverifiable,
+  urlHost,
   parseDsn,
   REASONS,
   PROVIDER_TYPES,
@@ -58,6 +60,9 @@ interface ShimInternal {
  *  parameters keeps the shim off the real jsdom window, so nothing leaks between
  *  tests. */
 function loadShim(config: Record<string, unknown> = {}): ShimInternal {
+  // Most fixtures use a self-hosted collector, which is only trusted when ops
+  // declares it — the compile-time list carries vendor CDNs only.
+  config = { ANALYTICS_SCRIPT_HOSTS: ['matomo.mz.gov.mz'], ...config };
   const win: Record<string, unknown> = {};
   win.window = win;
   win.console = { debug() {}, warn() {}, error() {}, log() {} };
@@ -198,7 +203,13 @@ describe('parity with the shim in digit-ui-esbuild/public/analytics.js', () => {
   it.each(FIXTURES)('agrees on: $name', ({ rec, customEnabled }) => {
     const shim = loadShim({ ANALYTICS_CUSTOM_ENABLED: customEnabled === true });
     const theirs = shim.validate(rec);
-    const ours = validateProviderRecord(rec, { requireEnabled: true, customEnabled: customEnabled === true });
+    // Both sides must see the same ops-declared host list, or they disagree by
+    // construction rather than because the rules drifted.
+    const ours = validateProviderRecord(rec, {
+      requireEnabled: true,
+      customEnabled: customEnabled === true,
+      extraHosts: ['matomo.mz.gov.mz'],
+    });
     expect({ ok: ours.ok, reason: ours.reason }).toEqual({ ok: theirs.ok, reason: theirs.reason });
   });
 
@@ -208,14 +219,26 @@ describe('parity with the shim in digit-ui-esbuild/public/analytics.js', () => {
   });
 
   it('agrees on the script host allowlist', () => {
-    const shim = loadShim();
-    for (const h of ['www.googletagmanager.com', 'js.sentry-cdn.com', 'o1.ingest.us.sentry.io', 'eu.posthog.com', 'matomo.mz.gov.mz']) {
+    const shim = loadShim({ ANALYTICS_SCRIPT_HOSTS: [] });
+    for (const h of ['www.googletagmanager.com', 'js.sentry-cdn.com', 'o1.ingest.us.sentry.io', 'eu.posthog.com']) {
       expect(hostAllowed(h)).toBe(true);
       expect(shim.hostAllowed(h)).toBe(true);
     }
-    for (const h of ['evil.example.com', 'posthog.com.evil.net', 'notmatomo.com', '']) {
+    // Including the two shapes that used to slip through: an attacker-registered
+    // "matomo.*" subdomain, and a self-hosted host nobody declared to ops.
+    for (const h of ['evil.example.com', 'posthog.com.evil.net', 'notmatomo.com', '', 'matomo.evil.com', 'matomo.mz.gov.mz']) {
       expect(hostAllowed(h)).toBe(false);
       expect(shim.hostAllowed(h)).toBe(false);
+    }
+  });
+
+  it('agrees that a userinfo authority yields no host at all', () => {
+    const shim = loadShim({ ANALYTICS_SCRIPT_HOSTS: [] });
+    for (const u of ['https://matomo.mz.gov.mz@evil.com/x.js', 'https://a@b@evil.com/x.js']) {
+      expect(urlHost(u)).toBe('');
+      expect(shim.validate({ code: 'x', type: 'MATOMO', enabled: true, siteId: '1', scriptUrl: u }).reason).toBe(
+        'script_url_host_not_allowed'
+      );
     }
   });
 });
@@ -259,6 +282,24 @@ describe('editor-specific rules', () => {
       expect(fieldsForType(t)).toContain('code');
       expect(fieldsForType(t)).toContain('enabled');
     }
+  });
+
+  it('treats a host ops may have declared as a warning, not a hard failure', () => {
+    // The Configurator cannot read the portal's ANALYTICS_SCRIPT_HOSTS, so it must
+    // not refuse a host ops has legitimately allowed — it warns instead.
+    const rec: AnalyticsProviderRecord = {
+      code: 'm', type: 'MATOMO', enabled: true, siteId: '1',
+      scriptUrl: 'https://matomo.mz.gov.mz/matomo.js',
+    };
+    expect(hostIsUnverifiable(rec)).toBe('matomo.mz.gov.mz');
+    // With the host declared, validation passes outright.
+    expect(validateProviderRecord(rec, { extraHosts: ['matomo.mz.gov.mz'] }).ok).toBe(true);
+    // A vendor CDN is never a warning.
+    expect(hostIsUnverifiable({ code: 'g', type: 'GA4', enabled: true, measurementId: 'G-1' })).toBeNull();
+    // A userinfo authority is a hard failure, not a warning to shrug at.
+    expect(hostIsUnverifiable({ ...rec, scriptUrl: 'https://matomo.mz.gov.mz@evil.com/x.js' })).toBeNull();
+    expect(validateProviderRecord({ ...rec, scriptUrl: 'https://matomo.mz.gov.mz@evil.com/x.js' }, { extraHosts: ['matomo.mz.gov.mz'] }).reason)
+      .toBe(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
   });
 
   it('parses a Sentry DSN and rejects a malformed one', () => {
