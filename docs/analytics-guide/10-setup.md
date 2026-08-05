@@ -24,42 +24,46 @@ for all four combinations; every one of them is inert by default.
 > `host_vars` sets `build_digit_ui: true` before promising anyone the feature is
 > live there.
 
-## The 0 → 1 path: one command
+## One command per release line
 
-On a moz-family environment the unified migration runner covers every
-prerequisite, and is safe to re-run:
+Both entry points do the same work and are safe to re-run. Pick the one your
+branch has:
 
-```bash
-node docs/migration/ccrs-migrate.cjs \
-  --host https://<env> --user <admin> --pass <pw> --tenant <stateRoot>
-```
+| Release line | Command | What it covers |
+|---|---|---|
+| **develop / master** | `TENANT=<stateRoot> ./local-setup/scripts/seed-analytics-schema.sh` | the MDMS schema **and** the ACCESSCONTROL rows for the two write paths |
+| **moz** | `node docs/migration/ccrs-migrate.cjs --host https://<env> --user <admin> --pass <pw> --tenant <stateRoot>` | the same, wrapped in auth, `--dry-run`, per-phase reporting and a readiness check — plus the Configurator localisation keys |
 
-Two phases do the analytics work:
-
-| Phase | What it ensures |
-|---|---|
-| `schemas` | registers `common-masters.AnalyticsProvider` at the state root |
-| `analytics` | ACCESSCONTROL action rows (30/31) + grants for `SUPERUSER`/`MDMS_ADMIN`, and the Configurator's localisation keys in all four locales — then busts the localisation cache, without which the UI keeps serving the raw key |
-
-`verify` then reports readiness, and the expected result on a fresh environment is
-**schema present, zero destinations** — plumbing in place, feature dark:
+The seeder is the primitive; `ccrs-migrate.cjs` is moz-only and wraps the same
+source data files. Running both is harmless — every step is add-if-missing.
 
 ```
-AnalyticsProvider=schema ok, 0 destination(s) — feature dark, as expected
+$ TENANT=mz ./local-setup/scripts/seed-analytics-schema.sh
+==> Seeding common-masters.AnalyticsProvider at tenant=mz
+    schema already present
+==> Ensuring ACCESSCONTROL rows for the analytics write paths
+    actions: 0 created, 2 already present
+    grants:  1 created, 3 already present
+==> OK: common-masters.AnalyticsProvider ready at tenant=mz
+    No destination records are created. Every environment stays
+    analytics-OFF until an admin enables one in the Configurator.
 ```
 
-Add-if-missing throughout: a re-run creates nothing twice and never overwrites a
-label an operator has renamed. Verified on a real stack — first run
-`2 actions / 4 grants / 8 keys created`, second run `0 created, 8 already present`.
+Two things neither command does, by design:
 
-Use `--dry-run` first to print the plan without writing. Note that `auth` must be
-in the phase list for any write phase to run:
-`--phases auth,analytics,verify --dry-run`.
+- **It never creates a destination.** Absent records *is* the default-off state.
+- **It does not deploy the portal bundle.** The shim ships with the digit-ui
+  build; see step 2.
 
-Everything else on this page is the manual equivalent, for develop/master
-environments where `ccrs-migrate.cjs` does not exist.
+And one thing only the moz runner does: upsert the **Configurator localisation
+keys**. On develop/master those arrive from the ansible playbook's
+`configurator-i18n` task, which upserts the same bundle — so a normal deploy
+covers it. If you have neither, the sidebar falls back to bundled English.
 
 ## Step 1 — register the schema
+
+*(What the command above automates — useful if you want to do it by hand or
+understand what it touches.)*
 
 ```bash
 TENANT=mz ./local-setup/scripts/seed-analytics-schema.sh

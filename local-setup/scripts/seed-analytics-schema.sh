@@ -40,6 +40,19 @@
 #   TENANT=mz ./local-setup/scripts/seed-analytics-schema.sh
 #   TENANT=mz MDMS_URL=http://localhost:18094 ./local-setup/scripts/seed-analytics-schema.sh
 #
+# It also ensures the ACCESSCONTROL rows for the two MDMS write paths, because
+# nothing else carries them to a RUNNING environment: they live in DDH resource
+# files, MdmsBulkLoader skips a file whose tenant already has rows, and DDH is no
+# longer in the compose stack on develop/master. They are inert while Kong runs
+# ENFORCE_RBAC=false — they exist so the later flip does not silently break
+# analytics writes. (On the moz release line, ccrs-migrate.cjs's `analytics`
+# phase does the same thing plus the Configurator localisation keys.)
+#
+# NOT handled here: the Configurator's localisation keys. The ansible playbook's
+# "configurator-i18n — upsert configurator-ui bundle (per locale)" task already
+# upserts them from local-setup/ansible/files/configurator-localization/, and
+# doing it here would need an auth token this script deliberately does not use.
+#
 # Idempotent: a second run reports "already present" and exits 0.
 
 set -euo pipefail
@@ -109,12 +122,14 @@ schema_present() {
     '[(.SchemaDefinitions // [])[] | select(.code == $c)] | length > 0' >/dev/null 2>&1
 }
 
+schema_ready=0
 if schema_present; then
-  echo "    already present — nothing to do."
-  exit 0
+  echo "    schema already present"
+  schema_ready=1
 fi
 
-# ---------- 2. create ----------
+# ---------- 2. create (only when absent) ----------
+if [ "$schema_ready" -ne 1 ]; then
 # Description capped at 500 chars so the DDH loader, this script and the moz
 # unified runner all store byte-identical text. ASCII purity was already enforced
 # above, loudly, rather than by silently rewriting the text.
@@ -164,17 +179,80 @@ elapsed=0
 delay=1
 while [ "$elapsed" -lt "$POLL_TIMEOUT_SECS" ]; do
   if schema_present; then
-    echo "==> OK: $SCHEMA_CODE readable at tenant=$TENANT after ${elapsed}s"
-    echo "    No records are created. Every environment stays analytics-OFF until"
-    echo "    an admin enables a destination in the Configurator."
-    exit 0
+    echo "    schema readable after ${elapsed}s"
+    schema_ready=1
+    break
   fi
   sleep "$delay"
   elapsed=$((elapsed + delay))
   [ "$delay" -lt 5 ] && delay=$((delay + 1))
 done
 
-echo "SCHEMA_NOT_PERSISTED: created but not readable after ${POLL_TIMEOUT_SECS}s." >&2
-echo "  Re-run this script; if it keeps failing, check mdms-v2 logs and the" >&2
-echo "  eg_mdms_schema_definition table for tenantid='$TENANT'." >&2
-exit 3
+  if [ "$schema_ready" -ne 1 ]; then
+    echo "SCHEMA_NOT_PERSISTED: created but not readable after ${POLL_TIMEOUT_SECS}s." >&2
+    echo "  Re-run this script; if it keeps failing, check mdms-v2 logs and the" >&2
+    echo "  eg_mdms_schema_definition table for tenantid='$TENANT'." >&2
+    exit 3
+  fi
+fi
+
+# ---------- 4. ACCESSCONTROL rows for the two MDMS write paths ----------
+ACTIONS_FILE="$SCRIPT_DIR/../../utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json"
+GRANTS_FILE="$SCRIPT_DIR/../../utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ROLEACTIONS/ACCESSCONTROL-ROLEACTIONS.roleactions.json"
+ACTION_IDS='[30,31]'
+GRANT_ROLES='["SUPERUSER","MDMS_ADMIN"]'
+
+mdms_data_create() {   # $1 schemaCode  $2 uniqueIdentifier  $3 data-json
+  local body
+  body="$(jq -n --argjson ri "$(request_info)" --arg t "$TENANT" --arg sc "$1" --arg ui "$2" --argjson d "$3" \
+    '{RequestInfo: $ri, Mdms: {tenantId: $t, schemaCode: $sc, uniqueIdentifier: $ui, data: $d, isActive: true}}')"
+  local out code
+  out="$(curl -s -o /tmp/seed-analytics-ac.out -w '%{http_code}' --max-time 25 \
+        -X POST "$MDMS_URL/mdms-v2/v2/_create/$1" -H 'Content-Type: application/json' -d "$body" || echo 000)"
+  code="$out"
+  if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 300 ]; then return 0; fi
+  grep -qiE 'DUPLICATE|ALREADY|already exists' /tmp/seed-analytics-ac.out 2>/dev/null && return 0
+  echo "      WARN: create $1/$2 -> HTTP $code" >&2
+  return 1
+}
+
+mdms_data_ids() {      # $1 schemaCode  -> newline-separated uniqueIdentifiers
+  curl -s --max-time 25 -X POST "$MDMS_URL/mdms-v2/v2/_search" -H 'Content-Type: application/json' \
+    -d "$(jq -n --argjson ri "$(request_info)" --arg t "$TENANT" --arg sc "$1" \
+      '{RequestInfo: $ri, MdmsCriteria: {tenantId: $t, schemaCode: $sc, limit: 500}}')" \
+    | jq -r '(.mdms // [])[] | .uniqueIdentifier // empty' 2>/dev/null
+}
+
+echo "==> Ensuring ACCESSCONTROL rows for the analytics write paths"
+if [ ! -f "$ACTIONS_FILE" ] || [ ! -f "$GRANTS_FILE" ]; then
+  echo "    WARN: ACCESSCONTROL seed files not found — skipping (schema is still in place)" >&2
+else
+  have_actions="$(mdms_data_ids 'ACCESSCONTROL-ACTIONS-TEST.actions-test')"
+  created=0; present=0
+  for id in $(jq -r --argjson want "$ACTION_IDS" '.[] | select(.id as $i | $want | index($i)) | .id' "$ACTIONS_FILE"); do
+    if printf '%s\n' "$have_actions" | grep -qx "$id"; then present=$((present+1)); continue; fi
+    data="$(jq -c --argjson i "$id" --arg t "$TENANT" 'map(select(.id == $i))[0] | .tenantId = $t' "$ACTIONS_FILE")"
+    mdms_data_create 'ACCESSCONTROL-ACTIONS-TEST.actions-test' "$id" "$data" && created=$((created+1)) || true
+  done
+  echo "    actions: $created created, $present already present"
+
+  have_grants="$(mdms_data_ids 'ACCESSCONTROL-ROLEACTIONS.roleactions')"
+  gcreated=0; gpresent=0
+  while IFS= read -r g; do
+    [ -n "$g" ] || continue
+    role="$(printf '%s' "$g" | jq -r '.rolecode')"; act="$(printf '%s' "$g" | jq -r '.actionid')"
+    uid="$role.$act"
+    if printf '%s\n' "$have_grants" | grep -qx "$uid"; then gpresent=$((gpresent+1)); continue; fi
+    data="$(printf '%s' "$g" | jq -c --arg t "$TENANT" '.tenantId = $t')"
+    mdms_data_create 'ACCESSCONTROL-ROLEACTIONS.roleactions' "$uid" "$data" && gcreated=$((gcreated+1)) || true
+  done <<EOF2
+$(jq -c --argjson ids "$ACTION_IDS" --argjson roles "$GRANT_ROLES" \
+   '.[] | select((.actionid as $a | $ids | index($a)) and (.rolecode as $r | $roles | index($r)))' "$GRANTS_FILE")
+EOF2
+  echo "    grants:  $gcreated created, $gpresent already present"
+fi
+
+echo "==> OK: $SCHEMA_CODE ready at tenant=$TENANT"
+echo "    No destination records are created. Every environment stays"
+echo "    analytics-OFF until an admin enables one in the Configurator."
+exit 0
