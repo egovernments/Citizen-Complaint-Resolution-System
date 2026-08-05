@@ -25,6 +25,9 @@ re-pointing analytics never needs a rebuild or an ansible run.
    proper code adapter.
 4. **[40-operations.md](40-operations.md)** — switching it off, troubleshooting,
    propagation timing, verification record.
+5. **[50-self-hosted-matomo.md](50-self-hosted-matomo.md)** — a complete
+   install → deploy → configure walkthrough for self-hosted Matomo, in the order
+   it was actually executed, with the five traps we hit called out inline.
 
 ## The runtime flow
 
