@@ -2484,5 +2484,29 @@
     "serviceCode": "MDMS",
     "code": "null",
     "path": ""
+  },
+  {
+    "id": 30,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_create/common-masters.AnalyticsProvider",
+    "displayName": "Create Analytics Provider",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS v2",
+    "code": "null",
+    "path": ""
+  },
+  {
+    "id": 31,
+    "name": "MDMS",
+    "url": "/mdms-v2/v2/_update/common-masters.AnalyticsProvider",
+    "displayName": "Update Analytics Provider",
+    "orderNumber": 1,
+    "parentModule": "",
+    "enabled": true,
+    "serviceCode": "MDMS",
+    "code": "null",
+    "path": ""
   }
 ]
