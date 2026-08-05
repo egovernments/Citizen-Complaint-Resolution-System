@@ -1116,81 +1116,105 @@ async function phaseMatomo() {
     catch (e) { failures.push(`config:set proxy_client_headers: ${truncate(e.message, 80)}`); }
   }
 
-  /* ---- 4. nginx tracking locations (host nginx — the same file that serves
+  /* ---- 4. nginx tracking locations (host nginx — the same files that serve
    *         /digit-ui; --nginx-container does NOT apply here, that indirection
-   *         is for the digit-ui container's own nginx) ---- */
-  let conf = CFG.nginxConf;
-  if (!conf) {
+   *         is for the digit-ui container's own nginx).
+   *
+   *         EVERY candidate file, and EVERY serving /digit-ui location within
+   *         each file, gets the block. First-file-only silently missed the
+   *         HTTPS vhost on cms-pilot: certbot keeps the 443 server in a
+   *         different sites-enabled file than the ansible-rendered HTTP one,
+   *         both contain a serving /digit-ui location, and portal traffic —
+   *         which is what actually loads the tracker — only ever crosses the
+   *         443 one. An exact-match location duplicated across DIFFERENT
+   *         server{} blocks is valid nginx; a real duplicate inside one block
+   *         is caught by nginx -t and that file is rolled back. ---- */
+  const confs = [];
+  if (CFG.nginxConf) confs.push(CFG.nginxConf);
+  else {
     try {
       const hits = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null")
         .split('\n').map((s) => s.trim()).filter(Boolean)
-        .filter((f) => !/\.(bak|backup|old|orig|save|dpkg-(old|new|dist)|rpm(save|new))(\.|$)/i.test(f) && !/~$/.test(f) && !/backup/i.test(f));
-      const rank = (f) => (/\/(conf\.d|sites-enabled)\//.test(f) ? 0 : /\/sites-available\//.test(f) ? 2 : 1);
-      hits.sort((a, b) => rank(a) - rank(b));
-      conf = hits[0] || '';
-    } catch { conf = ''; }
+        .filter((f) => !/\.(bak|backup|old|orig|save|dpkg-(old|new|dist)|rpm(save|new))(\.|$)/i.test(f) && !/~$/.test(f) && !/backup/i.test(f))
+        // active configs only: sites-available is inert unless symlinked into
+        // sites-enabled, and then it is already matched via that path (skip
+        // the duplicate — editing both would double-insert through the link).
+        .filter((f) => !/\/sites-available\//.test(f));
+      confs.push(...hits);
+      if (hits.length > 1) info(`multiple active configs serve /digit-ui — patching all: ${hits.join(', ')}`);
+    } catch { /* none found */ }
   }
-  if (!conf) {
-    failures.push('no nginx config serving /digit-ui found — tracking locations not added');
-  } else {
+  if (!confs.length) {
+    failures.push('no active nginx config serving /digit-ui found — tracking locations not added');
+  }
+  let nginxEdited = false;
+  for (const conf of confs) {
     let cur = '';
-    try { cur = sh(`sudo cat ${q(conf)}`); } catch (e) { failures.push(`cannot read ${conf}`); }
+    try { cur = sh(`sudo cat ${q(conf)}`); } catch (e) { failures.push(`cannot read ${conf}`); continue; }
     // marker OR the location itself: an operator may have added the block by
     // hand (pre-phase runbook) without the marker — inserting a second
     // exact-match location makes nginx -t fail on the whole site.
-    if (cur && (cur.includes(MATOMO_NGINX_MARK) || cur.includes('location = /matomo/matomo.js'))) {
+    if (cur.includes(MATOMO_NGINX_MARK) || cur.includes('location = /matomo/matomo.js')) {
       notes.push(`nginx already carries the /matomo locations (${conf})`);
-    } else if (cur) {
-      // anchor: the SERVING /digit-ui location (same server{} block), skipping
-      // the `location = /digit-ui { return 302 }` redirect stub — mirrors gzip.
-      const locRe = /^([ \t]*)location [^{]*\/digit-ui[^{]*\{/gm;
-      let at = -1, indent = '  ', m;
-      while ((m = locRe.exec(cur)) !== null) {
-        const end = m.index + m[0].length;
-        const body = cur.slice(end, cur.indexOf('}', end) === -1 ? end + 600 : cur.indexOf('}', end));
-        if (/return\s+30\d/.test(body)) continue;
-        at = m.index; indent = m[1]; break;
-      }
-      if (at === -1) { failures.push(`no serving "location /digit-ui" block in ${conf}`); }
-      else if (CFG.dryRun) { info(`dry-run: would insert the ${MATOMO_NGINX_MARK} locations into ${conf}, nginx -t, reload`); }
-      else {
-        const upstream = origin.replace('http://', '');
-        const block = [
-          `${MATOMO_NGINX_MARK} (added by ccrs-migrate --matomo) — ONLY the tracker + collector,`,
-          `# same-origin. The dashboard stays on ${upstream}: Matomo emits absolute asset`,
-          `# URLs and breaks if served under a path. Host header is Matomo's OWN origin —`,
-          `# it refuses unknown hosts and this image ignores MATOMO_GENERAL_TRUSTED_HOSTS.`,
-          `location = /matomo/matomo.js {`,
-          `  proxy_pass http://${upstream}/matomo.js;`,
-          `  proxy_set_header Host ${upstream};`,
-          `  proxy_set_header X-Real-IP $remote_addr;`,
-          `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
-          `  proxy_set_header X-Forwarded-Proto $scheme;`,
-          `  proxy_http_version 1.1;`,
-          `}`,
-          `location = /matomo/matomo.php {`,
-          `  proxy_pass http://${upstream}/matomo.php;`,
-          `  proxy_set_header Host ${upstream};`,
-          `  proxy_set_header X-Real-IP $remote_addr;`,
-          `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
-          `  proxy_set_header X-Forwarded-Proto $scheme;`,
-          `  proxy_http_version 1.1;`,
-          `}`,
-        ].map((l) => indent + l).join('\n');
-        const bak = `${conf}.${new Date().toISOString().slice(0, 10)}.ccrs-matomo.bak`;
-        try {
-          sh(`sudo cp ${q(conf)} ${q(bak)}`);
-          const next = cur.slice(0, at) + block + '\n\n' + cur.slice(at);
-          sh(`sudo tee ${q(conf)} > /dev/null`, { input: next });
-          sh('sudo nginx -t');
-          try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); }
-          notes.push(`nginx locations added (${conf}; backup ${bak})`);
-        } catch (e) {
-          try { sh(`sudo cp ${q(bak)} ${q(conf)}`); sh('sudo nginx -t'); } catch {}
-          failures.push(`nginx edit failed and was rolled back: ${truncate(e.message, 120)}`);
-        }
-      }
+      continue;
     }
+    // anchors: EVERY serving /digit-ui location (one per server{} block),
+    // skipping `location = /digit-ui { return 302 }` redirect stubs — mirrors
+    // gzip's stub test.
+    const locRe = /^([ \t]*)location [^{]*\/digit-ui[^{]*\{/gm;
+    const anchors = [];
+    let m;
+    while ((m = locRe.exec(cur)) !== null) {
+      const end = m.index + m[0].length;
+      const body = cur.slice(end, cur.indexOf('}', end) === -1 ? end + 600 : cur.indexOf('}', end));
+      if (/return\s+30\d/.test(body)) continue;
+      anchors.push({ at: m.index, indent: m[1] });
+    }
+    if (!anchors.length) { failures.push(`no serving "location /digit-ui" block in ${conf}`); continue; }
+    if (CFG.dryRun) { info(`dry-run: would insert the ${MATOMO_NGINX_MARK} locations at ${anchors.length} anchor(s) in ${conf}, nginx -t, reload`); continue; }
+    const upstream = origin.replace('http://', '');
+    const blockAt = (indent) => [
+      `${MATOMO_NGINX_MARK} (added by ccrs-migrate --matomo) — ONLY the tracker + collector,`,
+      `# same-origin. The dashboard stays on ${upstream}: Matomo emits absolute asset`,
+      `# URLs and breaks if served under a path. Host header is Matomo's OWN origin —`,
+      `# it refuses unknown hosts and this image ignores MATOMO_GENERAL_TRUSTED_HOSTS.`,
+      `location = /matomo/matomo.js {`,
+      `  proxy_pass http://${upstream}/matomo.js;`,
+      `  proxy_set_header Host ${upstream};`,
+      `  proxy_set_header X-Real-IP $remote_addr;`,
+      `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+      `  proxy_set_header X-Forwarded-Proto $scheme;`,
+      `  proxy_http_version 1.1;`,
+      `}`,
+      `location = /matomo/matomo.php {`,
+      `  proxy_pass http://${upstream}/matomo.php;`,
+      `  proxy_set_header Host ${upstream};`,
+      `  proxy_set_header X-Real-IP $remote_addr;`,
+      `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+      `  proxy_set_header X-Forwarded-Proto $scheme;`,
+      `  proxy_http_version 1.1;`,
+      `}`,
+    ].map((l) => indent + l).join('\n');
+    // last-to-first so earlier offsets stay valid
+    let next = cur;
+    for (let i = anchors.length - 1; i >= 0; i--) {
+      next = next.slice(0, anchors[i].at) + blockAt(anchors[i].indent) + '\n\n' + next.slice(anchors[i].at);
+    }
+    const bak = `${conf}.${new Date().toISOString().slice(0, 10)}.ccrs-matomo.bak`;
+    try {
+      sh(`sudo cp ${q(conf)} ${q(bak)}`);
+      sh(`sudo tee ${q(conf)} > /dev/null`, { input: next });
+      sh('sudo nginx -t');
+      nginxEdited = true;
+      notes.push(`nginx locations added at ${anchors.length} anchor(s) (${conf}; backup ${bak})`);
+    } catch (e) {
+      try { sh(`sudo cp ${q(bak)} ${q(conf)}`); sh('sudo nginx -t'); } catch {}
+      failures.push(`nginx edit of ${conf} failed and was rolled back: ${truncate(e.message, 120)}`);
+    }
+  }
+  if (nginxEdited) {
+    try { try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); } }
+    catch (e) { failures.push(`nginx reload failed: ${truncate(e.message, 80)}`); }
   }
 
   /* ---- probe the PUBLIC path — the gate for --matomo-enable ---- */
