@@ -14,9 +14,10 @@
 // A blank value here falls through rather than overriding with "".
 window.__CONFIGURATOR_CONFIG__ = {
   // Root (state) tenant. Pre-fills the login form's tenant field — it is the
-  // field's actual initial VALUE, not a placeholder, so leaving this blank
-  // means operators must type the tenant on every login. A city code like
-  // "mz.maputo" collapses to its root segment "mz" in the app.
+  // field's actual initial VALUE, not a placeholder. A city code like
+  // "mz.maputo" collapses to its root segment "mz" in the app. Blank here falls
+  // through to the SPA's default, 'pg' (the tenant the seed dump creates), so an
+  // unconfigured deployment still points at a tenant that exists.
   STATE_TENANT_ID: {{ (state_tenant_id | default('')) | to_json }},
 
   // Overpass endpoint for the Phase-2 boundary-polygon fetch. Same-origin when

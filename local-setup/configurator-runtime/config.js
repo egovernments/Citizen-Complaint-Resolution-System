@@ -13,8 +13,8 @@
 // The ansible deploy OVERWRITES this per tenant (templates/configurator-config.js.j2).
 // Do not put deployment values here — they would be committed.
 //   STATE_TENANT_ID        root tenant, e.g. "mz". Pre-fills the login form's
-//                          tenant field — NOT just a placeholder, so leaving it
-//                          blank means operators must type it every login.
+//                          tenant field — the field's VALUE, not a placeholder.
+//                          Blank => 'pg' (the tenant the seed dump creates).
 //   OVERPASS_URL           Overpass endpoint for the Phase-2 polygon fetch,
 //                          e.g. "/overpass/api/interpreter" when self-hosted.
 //                          Blank => public overpass-api.de (rate-limited).

@@ -16,16 +16,22 @@ export function getApiBaseUrl(): string {
 // falling back to the build-time `VITE_STATE_TENANT_ID` so dev and any
 // build-with-env workflow are unchanged. See ./runtimeConfig.ts for why this
 // moved off build-time-only. A city tenant like "mz.maputo" collapses to its
-// root segment "mz". Empty when unset (dev/standalone) — callers fall back to
-// a neutral hint.
-export const STATE_TENANT_ID: string = resolveConfig(
-  'STATE_TENANT_ID',
-  import.meta.env.VITE_STATE_TENANT_ID,
-);
+// root segment "mz".
+//
+// Defaults to 'pg' — the tenant the seed dump always creates — so an
+// unconfigured deployment points at something that exists rather than leaving
+// the login form's tenant field blank. This mirrors the other three settings,
+// which have always had in-code defaults (public Overpass, '/turbopass', 300);
+// STATE_TENANT_ID was the only one without, which is why a blank config.js used
+// to mean "retype the tenant on every login".
+export const DEFAULT_STATE_TENANT_ID = 'pg';
+export const STATE_TENANT_ID: string =
+  resolveConfig('STATE_TENANT_ID', import.meta.env.VITE_STATE_TENANT_ID) ||
+  DEFAULT_STATE_TENANT_ID;
 
-/** Root (state) tenant code for this deployment, e.g. "mz". Derived from the
- *  build-time `VITE_STATE_TENANT_ID` (a city code collapses to its root
- *  segment). Empty string when the build wasn't given one. */
+/** Root (state) tenant code for this deployment, e.g. "mz". A city code
+ *  collapses to its root segment. Never empty: falls back to
+ *  DEFAULT_STATE_TENANT_ID ('pg', the tenant the seed dump always creates). */
 export function getConfiguredRootTenant(): string {
   return STATE_TENANT_ID.split('.')[0];
 }

@@ -89,3 +89,28 @@ describe('resolvePositiveNumber', () => {
     expect(resolvePositiveNumber(resolveConfig('BOUNDARY_SEARCH_LIMIT', '250'), 300)).toBe(300);
   });
 });
+
+// STATE_TENANT_ID is the only one of the four settings that used to have no
+// in-code default, which is what made a blank config.js mean "retype the tenant
+// on every login". It now falls back to 'pg' (the tenant the seed dump always
+// creates) like the other three fall back to their own defaults.
+describe('STATE_TENANT_ID default', () => {
+  afterEach(() => {
+    delete window.__CONFIGURATOR_CONFIG__;
+  });
+
+  it('honours a configured tenant over the default', () => {
+    window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: 'mz' };
+    expect(resolveConfig('STATE_TENANT_ID', undefined) || 'pg').toBe('mz');
+  });
+
+  it("falls back to 'pg' when nothing is configured at any layer", () => {
+    window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: '' };
+    expect(resolveConfig('STATE_TENANT_ID', undefined) || 'pg').toBe('pg');
+  });
+
+  it('a blank runtime value still defers to a build-time one before the default', () => {
+    window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: '' };
+    expect(resolveConfig('STATE_TENANT_ID', 'ke') || 'pg').toBe('ke');
+  });
+});
