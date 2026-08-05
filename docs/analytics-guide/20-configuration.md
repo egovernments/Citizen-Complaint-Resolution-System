@@ -123,6 +123,29 @@ This is the **opposite** polarity to `dashboard_metrics_enabled` next door, whic
 is on-by-default and fails open. The inversion is deliberate and commented at
 both sites: reviewers pattern-match on that file.
 
+### Same-origin script URLs (self-hosted collectors)
+
+A `scriptUrl` may instead be a **same-origin path**: `/matomo/matomo.js`. That form
+is the safest one available — it cannot reach a third party, it needs no entry in
+`analytics_script_hosts`, and it inherits the page's scheme, so it is the **only**
+way a self-hosted collector can work on an environment served over plain http
+(the local box has no TLS listener; mctd's HTTPS is broken).
+
+Refused, because each would resolve somewhere other than your own origin or would
+be served as the SPA shell:
+
+| Rejected | Why |
+|---|---|
+| `//evil.com/x.js` | protocol-relative — a foreign origin |
+| `/\evil.com/x.js` | backslash; some parsers treat it as a separator |
+| `/x.js?u=http://evil.com` | carries a scheme separator |
+| `/x.js#frag`, control characters | meaningless or parser-hostile |
+| `matomo/matomo.js` | no leading slash — relative to the *current* page |
+| **`/digit-ui/...`, `/digit-ui-test/...`** | **under the SPA entrance prefix**, where `try_files` answers `200 text/html`; injecting that as a script throws on every page load |
+
+That last row is the same trap the `index.html` bootstrapper guards against for the
+shim's own file. A cache-busted `/matomo/matomo.js?v=5` is fine.
+
 ### Host matching rules
 
 Only two shapes are supported:
