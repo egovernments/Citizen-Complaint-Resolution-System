@@ -6,10 +6,12 @@ name: Build images (reusable)
 #   - release-build.yml          (on release published) → ref = release tag, version tag only
 #
 # Mechanism: build each service per-arch on native runners (amd64 + arm64),
-# push a stable per-channel staging tag, then stitch a multi-arch manifest for
-# the version tag (+ optional rolling tag). Staging tags are per-channel and
-# overwritten every run (no accumulation); final manifests reference digests, so
-# a later run overwriting a staging tag never affects an already-published tag.
+# push a run-scoped staging tag (`<prefix>-staging-<run_id>-<arch>`), then stitch
+# a multi-arch manifest for the version tag (+ optional rolling tag). Scoping the
+# staging tag to the run is what makes the manifest safe: it can only be built
+# from images this run produced, so a failed arch build can never be papered over
+# by a previous run's leftover tag. Final manifests reference digests, so the
+# cleanup job deletes the staging tags afterwards without affecting them.
 
 on:
   workflow_call:
@@ -65,18 +67,29 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
       - name: Flatten manifest + resolve version tag
         id: list
+        # Caller-controlled values go through `env:` and are read as shell
+        # variables — never interpolated into the script body, where a ref or
+        # tag containing shell metacharacters would execute in this job.
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERSION_TAG: ${{ inputs.version_tag }}
         run: |
           set -euo pipefail
           TARGETS=$(yq -o=json -I=0 '[.config[].build[] | {"image": .["image-name"], "workdir": .["work-dir"], "dockerfile": (.dockerfile // "")}]' build/build-config.yml)
           IMAGES=$(yq -o=json -I=0 '[.config[].build[].["image-name"]]' build/build-config.yml)
           COUNT=$(echo "$TARGETS" | jq 'length')
           if [ "$COUNT" -eq 0 ]; then echo "FATAL: no targets parsed"; exit 1; fi
-          VERSION_TAG='${{ inputs.version_tag }}'
+          VERSION_TAG="$INPUT_VERSION_TAG"
           if [ -z "$VERSION_TAG" ]; then VERSION_TAG="develop-$(date -u +%Y%m%d)"; fi
+          # A tag is pushed verbatim to the registry and re-read by later shell
+          # steps; reject anything outside Docker's own tag grammar up front.
+          if ! printf '%s' "$VERSION_TAG" | grep -qE '^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'; then
+            echo "FATAL: refusing unsafe version tag: $VERSION_TAG"; exit 1
+          fi
           echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
           echo "images=$IMAGES"   >> "$GITHUB_OUTPUT"
           echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
-          echo "### Build targets ($COUNT) — ref ${{ inputs.ref }} → $VERSION_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "### Build targets ($COUNT) — ref ${INPUT_REF} → ${VERSION_TAG}" >> $GITHUB_STEP_SUMMARY
           echo "$TARGETS" | jq -r '.[].image' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
 
   build:
@@ -98,83 +111,130 @@ jobs:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
       - name: Build and push per-arch staging tag
+        env:
+          IMAGE: ${{ matrix.target.image }}
+          WORKDIR: ${{ matrix.target.workdir }}
+          DOCKERFILE: ${{ matrix.target.dockerfile }}
+          STAGING_PREFIX: ${{ inputs.staging_prefix }}
+          ARCH: ${{ matrix.arch }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          IMAGE='${{ matrix.target.image }}'
-          WORKDIR='${{ matrix.target.workdir }}'
-          DOCKERFILE='${{ matrix.target.dockerfile }}'
-          TAG="${PUSH_NAMESPACE}/${IMAGE}:${{ inputs.staging_prefix }}-staging-${{ matrix.arch }}"
+          # Staging tags carry the run id so a manifest can only ever be
+          # stitched from images THIS run produced. With a per-channel-only
+          # name, a failed arch build would leave the previous run's tag in
+          # place and the manifest step would happily publish a mixed-run
+          # image (e.g. today's amd64 + yesterday's arm64).
+          TAG="${PUSH_NAMESPACE}/${IMAGE}:${STAGING_PREFIX}-staging-${RUN_ID}-${ARCH}"
           if [ "$DOCKERFILE" = "build/maven/Dockerfile" ]; then
-            docker buildx build --platform linux/${{ matrix.arch }} \
+            docker buildx build --platform "linux/${ARCH}" \
               --build-arg WORK_DIR="$WORKDIR" -f build/maven/Dockerfile \
               -t "$TAG" --push .
           elif [ -n "$DOCKERFILE" ]; then
-            docker buildx build --platform linux/${{ matrix.arch }} \
+            docker buildx build --platform "linux/${ARCH}" \
               -f "$DOCKERFILE" -t "$TAG" --push "$WORKDIR"
           else
-            docker buildx build --platform linux/${{ matrix.arch }} \
+            docker buildx build --platform "linux/${ARCH}" \
               -t "$TAG" --push "$WORKDIR"
           fi
 
+  # One job looping over the images, not a matrix: each leg was a whole runner
+  # VM doing a login plus one imagetools call, so boot/checkout dwarfed the real
+  # work and burned ~19 org runner slots every nightly. Per-image isolation is
+  # kept in the loop — one image failing skips only that image.
   manifest:
-    name: Stitch ${{ matrix.image }} multi-arch tags
+    name: Stitch multi-arch tags
     needs: [enumerate, build]
     if: ${{ !cancelled() }}
-    strategy:
-      fail-fast: false
-      matrix:
-        image: ${{ fromJson(needs.enumerate.outputs.images) }}
     runs-on: ubuntu-latest
     steps:
       - uses: docker/login-action@v2
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
-      - name: Create version (+ rolling) manifest
+      - name: Create version (+ rolling) manifests
+        env:
+          IMAGES: ${{ needs.enumerate.outputs.images }}
+          VERSION_TAG: ${{ needs.enumerate.outputs.version_tag }}
+          ROLLING_TAG: ${{ inputs.rolling_tag }}
+          STAGING_PREFIX: ${{ inputs.staging_prefix }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          set -euo pipefail
-          IMG="${PUSH_NAMESPACE}/${{ matrix.image }}"
-          VERSION_TAG='${{ needs.enumerate.outputs.version_tag }}'
-          ROLLING_TAG='${{ inputs.rolling_tag }}'
-          SP='${{ inputs.staging_prefix }}'
-          # Both arch tags must exist (fresh from this run) or we refuse to publish
-          # — a half-built image must never become the version/rolling tag.
-          docker buildx imagetools inspect "$IMG:${SP}-staging-amd64" >/dev/null
-          docker buildx imagetools inspect "$IMG:${SP}-staging-arm64" >/dev/null
-          TAGS=(-t "$IMG:$VERSION_TAG")
-          if [ -n "$ROLLING_TAG" ]; then TAGS+=(-t "$IMG:$ROLLING_TAG"); fi
-          docker buildx imagetools create "${TAGS[@]}" \
-            "$IMG:${SP}-staging-amd64" "$IMG:${SP}-staging-arm64"
-          echo "- $IMG:$VERSION_TAG${ROLLING_TAG:+, $IMG:$ROLLING_TAG}" >> $GITHUB_STEP_SUMMARY
+          set -uo pipefail
+          failed=0; published=0
+          for NAME in $(echo "$IMAGES" | jq -r '.[]'); do
+            IMG="${PUSH_NAMESPACE}/${NAME}"
+            AMD="$IMG:${STAGING_PREFIX}-staging-${RUN_ID}-amd64"
+            ARM="$IMG:${STAGING_PREFIX}-staging-${RUN_ID}-arm64"
+            # Both arch tags must exist AND carry this run's id, or we refuse to
+            # publish — a half-built or mixed-run image must never become the
+            # version/rolling tag.
+            if ! docker buildx imagetools inspect "$AMD" >/dev/null 2>&1 \
+               || ! docker buildx imagetools inspect "$ARM" >/dev/null 2>&1; then
+              echo "SKIP ${NAME}: staging tags from run ${RUN_ID} are incomplete"
+              echo "- ❌ SKIPPED \`${NAME}\` — build did not complete for both arches" >> $GITHUB_STEP_SUMMARY
+              failed=1
+              continue
+            fi
+            TAGS=(-t "$IMG:$VERSION_TAG")
+            if [ -n "$ROLLING_TAG" ]; then TAGS+=(-t "$IMG:$ROLLING_TAG"); fi
+            if docker buildx imagetools create "${TAGS[@]}" "$AMD" "$ARM"; then
+              echo "- ✅ \`$IMG:$VERSION_TAG\`${ROLLING_TAG:+, \`$IMG:$ROLLING_TAG\`}" >> $GITHUB_STEP_SUMMARY
+              published=$((published+1))
+            else
+              echo "- ❌ \`${NAME}\` — imagetools create failed" >> $GITHUB_STEP_SUMMARY
+              failed=1
+            fi
+          done
+          echo "Published ${published} image(s)."
+          exit $failed
 
-  prune:
-    name: Retain newest 5 develop-YYYYMMDD tags per image
+  # Runs even when `manifest` failed, so a broken run does not leak its staging
+  # tags. The dated-tag prune is still gated on the caller opting in.
+  cleanup:
+    name: Delete this run's staging tags (+ prune dated tags)
     needs: [enumerate, manifest]
-    if: ${{ inputs.prune_develop && !cancelled() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - name: Prune dated tags on Docker Hub (egovio namespace)
+      - name: Clean up Docker Hub tags (egovio namespace)
         env:
           DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+          IMAGES: ${{ needs.enumerate.outputs.images }}
+          STAGING_PREFIX: ${{ inputs.staging_prefix }}
+          RUN_ID: ${{ github.run_id }}
+          PRUNE_DEVELOP: ${{ inputs.prune_develop }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login/" \
             -H "Content-Type: application/json" \
             -d "{\"username\": \"$DOCKER_USERNAME\", \"password\": \"$DOCKER_PASSWORD\"}" | jq -r .token)
           [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "Hub login failed"; exit 1; }
-          for IMG in $(echo '${{ needs.enumerate.outputs.images }}' | jq -r '.[]'); do
-            # Only develop-YYYYMMDD is ever eligible. Rolling tags, per-arch staging
-            # tags, and release version tags (v*) are never matched.
+
+          del() { # $1=image $2=tag
+            curl -fsS -X DELETE -H "Authorization: JWT $TOKEN" \
+              "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/$1/tags/$2/" >/dev/null \
+              && echo "  deleted $1:$2" \
+              || echo "  WARN: delete failed for $1:$2 (token may lack delete scope)"
+          }
+
+          for IMG in $(echo "$IMAGES" | jq -r '.[]'); do
+            # 1. This run's per-arch staging tags — pure intermediates. The
+            #    published manifests reference digests, so removing them is safe.
+            for ARCH in amd64 arm64; do
+              del "$IMG" "${STAGING_PREFIX}-staging-${RUN_ID}-${ARCH}"
+            done
+
+            # 2. Dated tags, newest 5 retained. Only develop-YYYYMMDD is ever
+            #    eligible — rolling tags, staging tags and release tags (v*)
+            #    can never match this pattern.
+            [ "$PRUNE_DEVELOP" = "true" ] || continue
             TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
               "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/${IMG}/tags?page_size=100&name=develop-" \
-              | jq -r '.results[].name' | grep -E '^develop-[0-9]{8}$' | sort -r || true)
-            STALE=$(echo "$TAGS" | tail -n +6)
-            for T in $STALE; do
+              | jq -r '.results[].name' | grep -E '^develop-[0-9]{8}$' | sort -r)
+            for T in $(echo "$TAGS" | tail -n +6); do
               [ -n "$T" ] || continue
-              echo "delete ${PUSH_NAMESPACE}/${IMG}:${T}"
-              curl -fsS -X DELETE -H "Authorization: JWT $TOKEN" \
-                "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/${IMG}/tags/${T}/" \
-                || echo "WARN: delete failed for ${IMG}:${T} (token may lack delete scope)"
+              del "$IMG" "$T"
             done
           done
