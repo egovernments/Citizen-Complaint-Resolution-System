@@ -1107,44 +1107,22 @@
     #
     # db/ is already synchronized below (digit_config_dirs), which carries
     # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
+    # All migrators pull pinned egovio/*-db images (pgr-services, novu-bridge
+    # and digit-config-service used to build from in-repo contexts via an
+    # Ansible-only overlay + context rsync; CI-published -db images replaced
+    # that), so the overlay needs no build context on the host.
     - name: Copy DB-migration overlay
       copy:
         src: ../docker-compose.migrations.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.yml"
 
-    # The overlay's three in-repo migrators (pgr-services, novu-bridge,
-    # digit-config-service) build from ../backend/<svc>/src/main/resources/db.
-    # That path exists in the repo but NOT on a deployed host, so sync those
-    # contexts under docker/ (the existing build-context convention) and repoint
-    # them with an Ansible-only overlay. docker-compose.migrations.yml itself
-    # stays valid for anyone running compose straight from the repo.
-    #
-    # rsync creates only the FINAL component of the destination path, so this
-    # needs {{ digit_dir }}/docker to exist already. On a cold-start box it does
-    # not: the task that creates it ("Synchronize docker build context dirs")
-    # runs ~100 tasks later. Without this the FIRST deploy to a fresh host dies
-    # with rsync rc=11, mkdir "<digit_dir>/docker/pgr-services-db" failed
-    # (ENOENT) — while a re-deploy onto a host that already has the directory
-    # passes, which is why it went unnoticed. Idempotent.
-    - name: Ensure docker build-context dir exists (cold start)
+    # Earlier deploys shipped the build-context repoint overlay; it is no
+    # longer layered anywhere, so clear stale copies before someone -f's one
+    # by hand against a migrations.yml it no longer matches.
+    - name: Remove retired Ansible migrations overlay (if present)
       file:
-        path: "{{ digit_dir }}/docker"
-        state: directory
-        mode: "0755"
-
-    - name: Synchronize in-repo migrator build contexts
-      synchronize:
-        src: "../../backend/{{ item }}/src/main/resources/db/"
-        dest: "{{ digit_dir }}/docker/{{ item }}-db/"
-      loop:
-        - pgr-services
-        - novu-bridge
-        - digit-config-service
-
-    - name: Copy DB-migration overlay (Ansible build-context paths)
-      copy:
-        src: ../docker-compose.migrations.ansible.yml
-        dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+        path: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+        state: absent
 
     # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
     # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
@@ -1465,7 +1443,6 @@
             '-f docker-compose.egov-digit.yaml' +
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
-            ' -f docker-compose.migrations.ansible.yml' +
             ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
