@@ -204,22 +204,6 @@ Every create/update of a complaint and every workflow step is recorded in a dedi
 | `SecurityPolicy` (expanded) | DataSecurity | Yes | Who may see personal data (name, phone, address…) — review before applying to live cities |
 | New role `CMS_SCREENING_OFFICER` | ACCESSCONTROL | Yes | Screening Officer: reviews and routes incoming complaints |
 
-## Service Build Updates
-
-Images pinned by this release in `local-setup/docker-compose.egov-digit.yaml` (Compose and Helm tags are kept consistent):
-
-| Service | Image tag |
-|---|---|
-| pgr-services (Complaints service) | `egovio/pgr-services:develop-70916ea` (default; built from this repo) |
-| egov-user | `egovio/egov-user:2.12-87e13fe` |
-| egov-enc-service (encryption) | `egovio/egov-enc-service:2.12-87e13fe` (embedded Flyway disabled; migrates via db-migrations) |
-| egov-workflow-v2 | `egovio/egov-workflow-v2:2.12-87e13fe` |
-| egov-localization | `egovio/egov-localization:2.12-87e13fe` |
-| egov-hrms | `egovio/egov-hrms:hrms-boundary-dd641a6` |
-| boundary-service | `egovio/boundary-service:maven-jdk21-9f83afb` — **intentionally held back**: the newer build breaks the deployed UI's boundary search |
-| digit-ui (employee/citizen UI) | `digit-ui:pgr-fixes` (preview registry) |
-| digit-mcp (automation tools) | `ghcr.io/subhashini-egov/digit-mcp:2026-06-11` (public) |
-| Novu notification stack | `2.3.0`; novu-bridge `egovio/novu-bridge:develop-70916ea` |
 
 ## Technical Enhancements & Fixes
 
