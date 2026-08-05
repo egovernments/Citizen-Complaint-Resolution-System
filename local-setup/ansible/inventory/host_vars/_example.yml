@@ -586,6 +586,10 @@ nginx_features:
                              # unattended install, MDMS destination row born disabled); this flag
                              # only makes the two locations survive the next ansible deploy.
                              # matomo_port: 8080          # published dashboard port, if changed
+# matomo_dashboard: false    # ALSO serve the full Matomo UI at <host>/matomo/ (no SSH tunnel).
+                             # Publishes an admin console with visitor data on the public domain —
+                             # keep the strong admin password, consider an allow/deny on the location.
+                             # Provisioned in one go by `ccrs-migrate --matomo --matomo-dashboard`.
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
