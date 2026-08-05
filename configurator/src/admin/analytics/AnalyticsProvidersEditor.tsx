@@ -19,6 +19,7 @@ import {
   REASON_TEXT,
   fieldsForType,
   hasResidencyAck,
+  hostIsUnverifiable,
   requiresResidencyAck,
   validateProviderRecord,
   type AnalyticsProviderRecord,
@@ -177,6 +178,10 @@ export function AnalyticsProvidersEditor() {
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [draft, setDraft] = useState<AnalyticsProviderRecord | null>(null);
   const [isNew, setIsNew] = useState(false);
+  /** Per-field JSON parse errors for the settings/adapter textareas. A parse error
+   *  blocks save: the alternative (keep the last valid value) persists the
+   *  pre-edit object under a success toast. */
+  const [jsonErrors, setJsonErrors] = useState<Record<string, string | null>>({});
   /** null = probe not finished. false = this environment's SPA bundle has no shim. */
   const [bundleSupported, setBundleSupported] = useState<boolean | null>(null);
 
@@ -216,6 +221,12 @@ export function AnalyticsProvidersEditor() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Under `vite` there is no /digit-ui proxy, so the probe always fails and
+      // the warning would be a false alarm on a developer's machine.
+      if (import.meta.env.DEV) {
+        if (!cancelled) setBundleSupported(null);
+        return;
+      }
       try {
         const res = await fetch('/digit-ui/analytics.js', { method: 'HEAD' });
         const ct = res.headers.get('content-type') || '';
@@ -230,6 +241,7 @@ export function AnalyticsProvidersEditor() {
   }, []);
 
   const startEdit = (row: MergedRow) => {
+    setJsonErrors({});
     setEditingCode(row.code);
     setIsNew(false);
     setDraft({ ...row.data });
@@ -237,6 +249,7 @@ export function AnalyticsProvidersEditor() {
   };
 
   const startCreate = () => {
+    setJsonErrors({});
     setEditingCode('');
     setIsNew(true);
     setDraft({ code: '', type: 'MATOMO', enabled: false });
@@ -244,6 +257,7 @@ export function AnalyticsProvidersEditor() {
   };
 
   const cancelEdit = () => {
+    setJsonErrors({});
     setEditingCode(null);
     setDraft(null);
     setSaveError(null);
@@ -266,11 +280,18 @@ export function AnalyticsProvidersEditor() {
   const ackMissing = draft ? requiresResidencyAck(draft) && !hasResidencyAck(draft) : false;
   // A draft may be saved incomplete while it is switched OFF; enabling it
   // requires it to be complete and, for a cloud destination, acknowledged.
+  const jsonError = Object.values(jsonErrors).find((e) => !!e) ?? null;
+  // A host outside the compile-time allowlist is not necessarily wrong: ops can
+  // widen the list with ANALYTICS_SCRIPT_HOSTS, which this app cannot read. Warn,
+  // and let the shim be the enforcer.
+  const unverifiableHost = draft ? hostIsUnverifiable(draft) : null;
   const blockedReason = !draft
     ? null
-    : !String(draft.code || '').trim()
+    : jsonError
+      ? jsonError
+      : !String(draft.code || '').trim()
       ? REASON_TEXT[REASONS.MISSING_CODE]
-      : draft.enabled === true && verdict && !verdict.ok
+      : draft.enabled === true && verdict && !verdict.ok && verdict.reason !== REASONS.SCRIPT_URL_HOST_NOT_ALLOWED
         ? REASON_TEXT[verdict.reason] ?? verdict.reason
         : ackMissing
           ? 'Tick the data-residency acknowledgement before switching a destination outside the cluster on.'
@@ -357,7 +378,12 @@ export function AnalyticsProvidersEditor() {
     }
   };
 
-  const effective = rows.filter((r) => r.data.enabled === true);
+  // Only rows the shim would ACTUALLY initialise: enabled AND valid. Counting
+  // merely-enabled rows overstates the rollout — an enabled row missing its
+  // siteId is refused at boot.
+  const effective = rows.filter(
+    (r) => r.data.enabled === true && validateProviderRecord(r.data, { requireEnabled: false, customEnabled: true }).ok
+  );
 
   const label = (path: string, fallback: string) => specByPath.get(path)?.label ?? fallback;
   const help = (path: string) => specByPath.get(path)?.help;
@@ -426,30 +452,52 @@ export function AnalyticsProvidersEditor() {
     }
 
     if (JSON_KEYS.has(key)) {
+      const parseError = jsonErrors[key];
       return (
         <div key={key} className="space-y-1.5 md:col-span-2">
           <Label htmlFor={`ap-${key}`}>{label(key, key)}</Label>
           <textarea
             id={`ap-${key}`}
+            // Keyed by the row being edited so React REMOUNTS it when the admin
+            // switches rows. Without this the textarea keeps the previous row's
+            // JSON on screen (same position, same key) and could save it onto the
+            // new record.
+            key={`${editingCode ?? 'new'}-${key}`}
             rows={key === 'adapter' ? 10 : 4}
             spellCheck={false}
-            className="w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+            className={
+              'w-full rounded-md border bg-background p-2 font-mono text-xs ' +
+              (parseError ? 'border-destructive' : 'border-input')
+            }
             defaultValue={value ? JSON.stringify(value, null, 2) : ''}
             disabled={!canWrite}
+            aria-invalid={parseError ? true : undefined}
             onChange={(e) => {
               const text = e.target.value;
               if (text.trim() === '') {
+                setJsonErrors((prev) => ({ ...prev, [key]: null }));
                 setField(key as keyof AnalyticsProviderRecord, undefined);
                 return;
               }
               try {
-                setField(key as keyof AnalyticsProviderRecord, JSON.parse(text));
+                const parsed = JSON.parse(text);
+                setJsonErrors((prev) => ({ ...prev, [key]: null }));
+                setField(key as keyof AnalyticsProviderRecord, parsed);
               } catch {
-                /* keep the last valid value; validation below reports the state */
+                // Record the error and BLOCK save. Silently keeping the last
+                // valid value would let a typo persist the pre-edit object under
+                // a "saved" toast — the admin would believe their edit landed.
+                setJsonErrors((prev) => ({ ...prev, [key]: 'Invalid JSON — fix the syntax to enable save.' }));
               }
             }}
           />
-          {help(key) && <p className="text-xs text-muted-foreground">{help(key)}</p>}
+          {parseError ? (
+            <p className="text-xs text-destructive" role="alert">
+              {parseError}
+            </p>
+          ) : (
+            help(key) && <p className="text-xs text-muted-foreground">{help(key)}</p>
+          )}
         </div>
       );
     }
@@ -640,6 +688,18 @@ export function AnalyticsProvidersEditor() {
                       <span className="font-mono"> settings.residencyAck</span>.
                     </span>
                   </label>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {unverifiableHost && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <span className="font-mono">{unverifiableHost}</span> is not one of the vendor hosts the portal trusts
+                  by default. The portal will refuse this destination unless ops has added the host to{' '}
+                  <span className="font-mono">ANALYTICS_SCRIPT_HOSTS</span> in globalConfigs — this screen cannot check
+                  that, and cannot widen it.
                 </AlertDescription>
               </Alert>
             )}

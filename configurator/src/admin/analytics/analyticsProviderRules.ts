@@ -24,14 +24,18 @@ export const CLOUD_TYPES: readonly string[] = ['GA4', 'POSTHOG', 'SENTRY', 'CUST
 
 /** Mirrors HOST_ALLOWLIST in analytics.js. MDMS cannot widen this; only the
  *  ops-controlled ANALYTICS_SCRIPT_HOSTS globalConfigs key can, which is why the
- *  editor shows a warning rather than silently accepting an unknown host. */
+ *  editor shows a warning rather than silently accepting an unknown host.
+ *
+ *  Only exact hosts and dot-boundary '*.suffix' patterns are supported. There is
+ *  deliberately no prefix wildcard — 'matomo.*' would have accepted
+ *  matomo.<anything-an-attacker-registers>.com. A self-hosted collector's host is
+ *  environment-specific and belongs in ANALYTICS_SCRIPT_HOSTS. */
 export const HOST_ALLOWLIST: readonly string[] = [
   'www.googletagmanager.com',
   'js.sentry-cdn.com',
   'browser.sentry-cdn.com',
   '*.sentry.io',
   '*.posthog.com',
-  'matomo.*',
 ];
 
 /** Globals a CUSTOM record may never claim. Mirrors GLOBAL_DENYLIST in analytics.js. */
@@ -135,10 +139,19 @@ const fail = (reason: Reason): Verdict => ({ ok: false, reason });
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const trim = (v: unknown): string => (isStr(v) ? v.trim() : '');
 
+/** Host of an https URL, or '' when anything is uncertain. The authority must not
+ *  carry userinfo: in 'https://matomo.io@evil.com/x.js' the real host is
+ *  evil.com, but a naive parse reports 'matomo.io@evil.com' and would pass a host
+ *  check. Mirrors urlHost() in analytics.js. */
 export function urlHost(url: unknown): string {
   if (!isStr(url)) return '';
-  const m = /^https:\/\/([^/:?#]+)/i.exec(url);
-  return m ? m[1] : '';
+  const m = /^https:\/\/([^/?#]+)/i.exec(url);
+  if (!m) return '';
+  const authority = m[1];
+  if (authority.includes('@')) return '';
+  const host = authority.split(':')[0];
+  if (!host || host.includes('..')) return '';
+  return host;
 }
 
 export function hostMatches(host: string, pattern: string): boolean {
@@ -149,10 +162,6 @@ export function hostMatches(host: string, pattern: string): boolean {
   if (p.startsWith('*.')) {
     const suffix = p.slice(1);
     return h.length > suffix.length && h.endsWith(suffix);
-  }
-  if (p.length > 2 && p.endsWith('.*')) {
-    const prefix = p.slice(0, -1);
-    return h.startsWith(prefix);
   }
   return false;
 }
@@ -179,10 +188,10 @@ export function sentryScriptUrl(rec: AnalyticsProviderRecord): string {
   return d ? `https://js.sentry-cdn.com/${d.key}.min.js` : '';
 }
 
-function validateScriptUrl(url: unknown): Verdict {
+function validateScriptUrl(url: unknown, extraHosts: readonly string[] = []): Verdict {
   if (!isStr(url) || !url) return fail(REASONS.MISSING_SCRIPT_URL);
   if (!url.startsWith('https://')) return fail(REASONS.SCRIPT_URL_NOT_HTTPS);
-  if (!hostAllowed(urlHost(url))) return fail(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
+  if (!hostAllowed(urlHost(url), extraHosts)) return fail(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
   return ok();
 }
 
@@ -196,11 +205,11 @@ function badTemplateString(s: string): boolean {
   return residue.includes('{') || residue.includes('}');
 }
 
-function validateCustomAdapter(rec: AnalyticsProviderRecord): Verdict {
+function validateCustomAdapter(rec: AnalyticsProviderRecord, extraHosts: readonly string[] = []): Verdict {
   const a = rec.adapter as Record<string, unknown> | undefined;
   if (!a || typeof a !== 'object') return fail(REASONS.MISSING_SCRIPT_URL);
 
-  const urlCheck = validateScriptUrl((a.scriptUrl as string) || rec.scriptUrl);
+  const urlCheck = validateScriptUrl((a.scriptUrl as string) || rec.scriptUrl, extraHosts);
   if (!urlCheck.ok) return urlCheck;
 
   const name = (a.globalName as string) || rec.globalName;
@@ -253,6 +262,13 @@ export interface ValidateOptions {
    *  cannot read the other app's config, so it validates the record's shape and
    *  warns separately that ops still has to switch CUSTOM on. */
   customEnabled?: boolean;
+  /** Mirrors the ops-only ANALYTICS_SCRIPT_HOSTS key — hosts allowed ON TOP of the
+   *  compile-time list. The Configurator runs in a different app and cannot read
+   *  the portal's globalConfigs, so it passes nothing here and instead surfaces an
+   *  unknown host as a WARNING (see hostIsUnverifiable). Parity checks against the
+   *  shim must pass the same list the shim was given, or the two disagree by
+   *  construction. */
+  extraHosts?: readonly string[];
 }
 
 /** Mirror of validate() in digit-ui-esbuild/public/analytics.js. */
@@ -262,6 +278,7 @@ export function validateProviderRecord(
 ): Verdict {
   const requireEnabled = opts.requireEnabled !== false;
   const customEnabled = opts.customEnabled === true;
+  const extraHosts = opts.extraHosts ?? [];
 
   if (!rec || typeof rec !== 'object') return fail(REASONS.MISSING_CODE);
   if (!trim(rec.code)) return fail(REASONS.MISSING_CODE);
@@ -277,7 +294,7 @@ export function validateProviderRecord(
   const type = trim(rec.type).toUpperCase();
   if (type === 'MATOMO') {
     if (!trim(rec.siteId)) return fail(REASONS.MISSING_SITE_ID);
-    return validateScriptUrl(rec.scriptUrl);
+    return validateScriptUrl(rec.scriptUrl, extraHosts);
   }
   if (type === 'GA4') {
     if (!trim(rec.measurementId)) return fail(REASONS.MISSING_MEASUREMENT_ID);
@@ -285,15 +302,15 @@ export function validateProviderRecord(
   }
   if (type === 'POSTHOG') {
     if (!trim(rec.apiKey)) return fail(REASONS.MISSING_API_KEY);
-    return validateScriptUrl(posthogScriptUrl(rec));
+    return validateScriptUrl(posthogScriptUrl(rec), extraHosts);
   }
   if (type === 'SENTRY') {
     if (!parseDsn(rec.dsn)) return fail(REASONS.MISSING_DSN);
-    return validateScriptUrl(sentryScriptUrl(rec));
+    return validateScriptUrl(sentryScriptUrl(rec), extraHosts);
   }
   if (type === 'CUSTOM') {
     if (!customEnabled) return fail(REASONS.CUSTOM_DISABLED_BY_OPS);
-    return validateCustomAdapter(rec);
+    return validateCustomAdapter(rec, extraHosts);
   }
   return fail(REASONS.UNKNOWN_TYPE);
 }
@@ -301,7 +318,13 @@ export function validateProviderRecord(
 /** Which fields the editor should show for a given type. Everything else is
  *  noise for that provider and is hidden to keep the form honest. */
 export function fieldsForType(type: string): string[] {
-  const common = ['code', 'type', 'enabled', 'order', 'surfaces', 'sampleRate', 'disablePageViews', 'trackClicks', 'trackErrors', 'scrubPatterns'];
+  const common = [
+    'code', 'type', 'enabled', 'order', 'surfaces', 'sampleRate',
+    'disablePageViews', 'trackClicks', 'trackErrors', 'scrubPatterns',
+    // The open bucket. Editable because it is where residencyAck lives and where
+    // options that have no field yet land — invisible would mean unrepairable.
+    'settings',
+  ];
   switch (String(type || '').toUpperCase()) {
     case 'MATOMO':
       return [...common, 'scriptUrl', 'endpointUrl', 'siteId'];
@@ -323,9 +346,32 @@ export function fieldsForType(type: string): string[] {
  *  `additionalProperties: false` and has no schema-update API — `settings` is the
  *  open bucket that exists precisely for additions like this. */
 export function requiresResidencyAck(rec: AnalyticsProviderRecord): boolean {
-  return rec.enabled === true && CLOUD_TYPES.includes(String(rec.type || '').toUpperCase());
+  // trim() matters: validateProviderRecord trims `type`, so without it here a
+  // record typed 'GA4 ' (trailing space, e.g. seeded over the API) would validate
+  // as a cloud destination and skip the acknowledgement entirely.
+  return rec.enabled === true && CLOUD_TYPES.includes(trim(rec.type).toUpperCase());
 }
 
 export function hasResidencyAck(rec: AnalyticsProviderRecord): boolean {
   return (rec.settings as Record<string, unknown> | undefined)?.residencyAck === true;
+}
+
+/** True when the record's script host is not in the compile-time allowlist.
+ *
+ *  This is NOT the same as "invalid": ops can legitimately widen the list with
+ *  ANALYTICS_SCRIPT_HOSTS, and the Configurator — a separate app — cannot read
+ *  that value. So the editor treats an unknown host as something to WARN about
+ *  ("the portal will refuse this unless ops has declared the host") rather than
+ *  as a hard save block it has no authority to impose. The shim is the enforcer. */
+export function hostIsUnverifiable(rec: AnalyticsProviderRecord): string | null {
+  const type = trim(rec.type).toUpperCase();
+  let url = '';
+  if (type === 'MATOMO') url = trim(rec.scriptUrl);
+  else if (type === 'POSTHOG') url = posthogScriptUrl(rec);
+  else if (type === 'SENTRY') url = sentryScriptUrl(rec);
+  else if (type === 'CUSTOM') url = trim((rec.adapter?.scriptUrl as string) || rec.scriptUrl);
+  if (!url || !url.startsWith('https://')) return null;
+  const host = urlHost(url);
+  if (!host) return null; // a malformed authority is a hard failure, not a warning
+  return hostAllowed(host) ? null : host;
 }
