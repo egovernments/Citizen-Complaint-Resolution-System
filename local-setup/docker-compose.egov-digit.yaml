@@ -1113,7 +1113,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # hrms-boundary-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # 2.12-beta-dd641a6: a released egovio/egov-hrms tag (repinned from the
     # preview-only 800-preview build). Its lineage relative to the previously
     # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
     # CCRS#482 custom password on employee create, CCRS#484 null tenantId
@@ -1123,7 +1123,7 @@ services:
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1394,7 +1394,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1545,7 +1545,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the SPA Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-96dcf10}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1575,7 +1575,7 @@ services:
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-96dcf10}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-beta-96dcf10}
     container_name: configurator
     ports:
       - "18890:80"
@@ -2089,7 +2089,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: egovio/digit-config-service:master-8116812
+    image: egovio/digit-config-service:2.12-beta-96dcf10
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2144,7 +2144,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: egovio/digit-user-preferences-service:master-8116812
+    image: egovio/digit-user-preferences-service:2.12-beta-96dcf10
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2182,7 +2182,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-8116812}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]

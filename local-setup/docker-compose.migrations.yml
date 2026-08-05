@@ -344,7 +344,7 @@ services:
     depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
 
   egov-hrms-migration:
-    image: egovio/egov-hrms-db:hrms-boundary-dd641a6
+    image: egovio/egov-hrms-db:2.12-beta-dd641a6
     container_name: egov-hrms-migration
     depends_on:
       postgres-db: { condition: service_healthy }
