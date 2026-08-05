@@ -24,6 +24,22 @@ for all four combinations; every one of them is inert by default.
 > `host_vars` sets `build_digit_ui: true` before promising anyone the feature is
 > live there.
 
+## On moz-family environments: one command
+
+`docs/migration/ccrs-migrate.cjs` (which exists only on the moz release line)
+covers every prerequisite in one safe, re-runnable command — the schema, the
+ACCESSCONTROL rows for the two MDMS write paths, and the Configurator's
+localisation keys, followed by a readiness check that expects **schema present,
+zero destinations** on a fresh environment.
+
+```bash
+node docs/migration/ccrs-migrate.cjs --host https://<env> \
+  --user <admin> --pass <pw> --tenant <stateRoot>
+```
+
+On develop/master, where that runner does not exist, follow the manual steps
+below — they are the same work.
+
 ## Step 1 — register the schema
 
 ```bash
