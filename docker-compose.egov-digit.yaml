@@ -114,12 +114,18 @@ services:
     ports:
     - 15432:5432
     healthcheck:
+      # -h forces the TCP path every consumer actually connects over. Without it,
+      # pg_isready defaults to the Unix socket, which the docker-entrypoint temp
+      # server (listen_addresses='') answers on during initdb, well before the
+      # real server starts listening on 5432 - so depends_on: service_healthy
+      # trips "healthy" before the restart into the real server completes.
       test:
       - CMD-SHELL
-      - pg_isready -U egov
+      - pg_isready -h 127.0.0.1 -U egov
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 60s
     networks:
     - egov-network
 
