@@ -54,14 +54,20 @@
   /* Compile-time script-host allowlist. MDMS CANNOT widen this; only the
    * ops-controlled ANALYTICS_SCRIPT_HOSTS globalConfigs key can. This is the
    * only control standing between "an employee can write an MDMS row" and
-   * "script execution on every citizen page" — there is no CSP on any env. */
+   * "script execution on every citizen page" — there is no CSP on any env.
+   *
+   * Only two shapes are allowed: an exact host, or "*.suffix" which matches on a
+   * DOT BOUNDARY. There is deliberately no prefix wildcard: a pattern like
+   * "matomo.*" would accept matomo.<anything-an-attacker-registers>.com, which
+   * is not a control at all. A self-hosted Matomo (or any first-party
+   * collector) is environment-specific, so its host belongs in the ops-only
+   * ANALYTICS_SCRIPT_HOSTS key rather than baked in here. */
   var HOST_ALLOWLIST = [
     "www.googletagmanager.com",
     "js.sentry-cdn.com",
     "browser.sentry-cdn.com",
     "*.sentry.io",
-    "*.posthog.com",
-    "matomo.*"
+    "*.posthog.com"
   ];
 
   /* Globals a CUSTOM record may never claim. */
@@ -167,17 +173,15 @@
   }
 
   function hostMatches(host, pattern) {
-    if (!isStr(host) || !isStr(pattern)) return false;
+    if (!isStr(host) || !isStr(pattern) || !host || !pattern) return false;
     host = host.toLowerCase();
     pattern = pattern.toLowerCase();
     if (pattern === host) return true;
     if (pattern.indexOf("*.") === 0) {
+      /* Dot-boundary suffix match: "*.posthog.com" accepts eu.posthog.com but
+       * NOT posthog.com.evil.net, and never the bare suffix itself. */
       var suffix = pattern.substring(1); /* ".posthog.com" */
       return host.length > suffix.length && host.substring(host.length - suffix.length) === suffix;
-    }
-    if (pattern.length > 2 && pattern.substring(pattern.length - 2) === ".*") {
-      var prefix = pattern.substring(0, pattern.length - 1); /* "matomo." */
-      return host.indexOf(prefix) === 0;
     }
     return false;
   }
@@ -196,10 +200,20 @@
     return false;
   }
 
+  /* Host of an https URL, or "" if the URL is anything we are not certain about.
+   * The authority must NOT contain userinfo: in "https://matomo.io@evil.com/x.js"
+   * the real host is evil.com, but a naive parse reports "matomo.io@evil.com" and
+   * would sail past a host check. Anything with "@", or an empty/odd authority,
+   * returns "" and therefore fails the allowlist. */
   function urlHost(url) {
     if (!isStr(url)) return "";
-    var m = /^https:\/\/([^\/:?#]+)/i.exec(url);
-    return m ? m[1] : "";
+    var m = /^https:\/\/([^\/?#]+)/i.exec(url);
+    if (!m) return "";
+    var authority = m[1];
+    if (authority.indexOf("@") !== -1) return "";
+    var host = authority.split(":")[0]; /* drop an explicit port */
+    if (!host || host.indexOf("..") !== -1) return "";
+    return host;
   }
 
   /* One script loader for every adapter. async, no credentials leakage, and

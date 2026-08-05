@@ -28,7 +28,8 @@
 #   * schema/v1/_search answers HTTP 202, not 200. Never test for == 200.
 #   * Old MDMS images silently drop schema creates whose description contains
 #     non-ASCII, and the moz migration runner truncates descriptions at 500
-#     chars. We sanitise to ASCII and cap at 500 so every carrier agrees.
+#     chars. We cap at 500 and REFUSE non-ASCII rather than stripping it: the
+#     obvious jq gsub for that is broken on jq 1.6 (see the check below).
 #   * Talking to the service DIRECTLY (default :18094) sidesteps the Kong
 #     auth-enrichment pre-function, which re-encodes the POST body with plain
 #     lua-cjson and cannot distinguish [] from {} — the documented cause of
@@ -64,7 +65,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEF_FILE="$SCRIPT_DIR/../../utilities/default-data-handler/src/main/resources/schema/common-masters.json"
 [ -f "$DEF_FILE" ] || { echo "FATAL: schema source not found at $DEF_FILE" >&2; exit 1; }
 
-command -v jq >/dev/null || { echo "FATAL: jq is required" >&2; exit 1; }
+command -v jq >/dev/null   || { echo "FATAL: jq is required" >&2; exit 1; }
+command -v curl >/dev/null || { echo "FATAL: curl is required" >&2; exit 1; }
+
+# Refuse to proceed if the source description is not pure ASCII. We deliberately
+# do NOT strip non-ASCII here: jq 1.6's Oniguruma does not understand \uXXXX
+# inside a character class, so the obvious `gsub("[^\u0020-\u007E]";"")` silently
+# deletes ordinary ASCII (spaces, '/', '.', letters) and would store a mangled
+# description that no API can ever repair — schema/v1/_update returns 501.
+# Failing loudly and letting a human fix the source file is the safe direction.
+if jq -r --arg c "$SCHEMA_CODE" 'map(select(.code == $c)) | .[0].description // ""' "$DEF_FILE" \
+     | LC_ALL=C grep -q '[^ -~]'; then
+  echo "FATAL: the schema description in $DEF_FILE contains non-ASCII characters." >&2
+  echo "  Old mdms-v2 images silently drop such schema creates. Fix the source text" >&2
+  echo "  (plain ASCII, <=500 chars) and re-run." >&2
+  exit 1
+fi
 
 echo "==> Seeding $SCHEMA_CODE at tenant=$TENANT via $MDMS_URL"
 
@@ -99,8 +115,9 @@ if schema_present; then
 fi
 
 # ---------- 2. create ----------
-# Description sanitised to ASCII and capped at 500 chars so the DDH loader, this
-# script and the moz unified runner all store byte-identical text.
+# Description capped at 500 chars so the DDH loader, this script and the moz
+# unified runner all store byte-identical text. ASCII purity was already enforced
+# above, loudly, rather than by silently rewriting the text.
 create_body="$(jq -n \
   --argjson ri "$(request_info)" \
   --arg t "$TENANT" \
@@ -114,14 +131,20 @@ create_body="$(jq -n \
         tenantId: $t,
         code: $c,
         definition: $e.definition,
-        description: ($e.description // "" | gsub("[^\\u0020-\\u007E]"; "") | .[0:500]),
+        description: ($e.description // "" | .[0:500]),
         isActive: (if $e.isActive == false then false else true end)
       }
     }')"
 
+set +e
 http_code="$(curl -s -o /tmp/seed-analytics-create.out -w '%{http_code}' --max-time 30 \
   -X POST "$MDMS_URL/mdms-v2/schema/v1/_create" \
-  -H 'Content-Type: application/json' -d "$create_body" || echo 000)"
+  -H 'Content-Type: application/json' -d "$create_body")"
+curl_rc=$?
+set -e
+if [ "$curl_rc" -ne 0 ] || ! printf '%s' "$http_code" | grep -Eq '^[0-9]{3}$'; then
+  http_code="000"
+fi
 body="$(cat /tmp/seed-analytics-create.out 2>/dev/null || true)"
 
 if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
