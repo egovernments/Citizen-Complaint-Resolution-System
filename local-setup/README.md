@@ -317,7 +317,7 @@ For a local/sandbox deploy (`domain: localhost`, `tls_enabled: false`), use
 
 Once the stack is up, create your city and load its master data — via the
 browser **configurator wizard** or the Jupyter DataLoader. See the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md).
 
 ### What the Ansible playbook deploys
 
@@ -372,7 +372,7 @@ complaint needs — the tenant record + branding, the boundary hierarchy, common
 masters (departments, designations, complaint types), and employees.
 
 **Full step-by-step instructions live in the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).** There are three paths,
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md).** There are three paths,
 all creating the same data:
 
 | Path | Interface | Available on |
@@ -410,7 +410,7 @@ loader.login(username="ADMIN", password="eGov@123", tenant_id=TARGET_TENANT)
 Then run the remaining cells top to bottom: **2a** boundary template → **2b**
 load boundaries → **3** common masters → **4** employees → **5** localizations
 (optional) → **6** workflow. See the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md#b-jupyter-dataloader-scripted)
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md#b-jupyter-dataloader-scripted)
 for the per-phase details and template shapes.
 
 ### Rollback
@@ -755,7 +755,7 @@ local-setup/
 ├── postman/                        # Newman/Postman collections
 ├── gatus/                          # Health monitoring dashboard config
 └── docs/
-    ├── TENANT-ONBOARDING.md        # Enable a tenant + load master data (configurator / DataLoader)
+    ├── ONBOARDING-AND-ADDONS.md    # Enable a tenant + load master data + opt-in add-ons
     └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)

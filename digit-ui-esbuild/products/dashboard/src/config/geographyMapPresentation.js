@@ -1,6 +1,7 @@
 // Not a component — translate lazily inside render-time functions only (never
 // at module level), so language switches pick up fresh strings.
 import { translate as t } from "../i18n/localeRuntime";
+import { formatNumber } from "../utils/numberFormat";
 
 /** @typedef {'created' | 'open' | 'resolved'} GeographyMapLayerId */
 
@@ -30,16 +31,136 @@ export function getGeographyMapLayerMeta(layerId) {
   return GEOGRAPHY_MAP_LAYERS.find((layer) => layer.id === layerId);
 }
 
-/** Created — complaint count buckets (blue scale). */
-export const CREATED_COUNT_LEGEND = [
-  { id: "none", label: "No complaints", fill: "#ffffff", stroke: "#d1d5db", fillOpacity: 0.95 },
-  { id: "b1", label: "1–3", fill: "#dbeafe", stroke: "#bfdbfe", fillOpacity: 0.78 },
-  { id: "b2", label: "4–5", fill: "#93c5fd", stroke: "#60a5fa", fillOpacity: 0.76 },
-  { id: "b3", label: "6–8", fill: "#60a5fa", stroke: "#3b82f6", fillOpacity: 0.74 },
-  { id: "b4", label: "9–10", fill: "#3b82f6", stroke: "#2563eb", fillOpacity: 0.74 },
-  { id: "b5", label: "11–13", fill: "#2563eb", stroke: "#1d4ed8", fillOpacity: 0.76 },
-  { id: "b6", label: "14–15", fill: "#1e40af", stroke: "#1e3a8a", fillOpacity: 0.78 },
+/** The white "nothing here" swatch, shared by all three legends. */
+export const CREATED_COUNT_NONE = {
+  id: "none",
+  label: "No complaints",
+  fill: "#ffffff",
+  stroke: "#d1d5db",
+  fillOpacity: 0.95,
+};
+
+/** Created — the blue ramp, darkest last. Bucket EDGES are computed per tenant. */
+export const CREATED_COUNT_RAMP = [
+  { fill: "#dbeafe", stroke: "#bfdbfe", fillOpacity: 0.78 },
+  { fill: "#93c5fd", stroke: "#60a5fa", fillOpacity: 0.76 },
+  { fill: "#60a5fa", stroke: "#3b82f6", fillOpacity: 0.74 },
+  { fill: "#3b82f6", stroke: "#2563eb", fillOpacity: 0.74 },
+  { fill: "#2563eb", stroke: "#1d4ed8", fillOpacity: 0.76 },
+  { fill: "#1e40af", stroke: "#1e3a8a", fillOpacity: 0.78 },
 ];
+
+export const MAX_CREATED_COUNT_BUCKETS = CREATED_COUNT_RAMP.length;
+
+/**
+ * Fallback scale, used only when no data has been seen yet (and by the legacy
+ * getWowChangeFillStyle path). Real scales come from buildCreatedCountScale.
+ */
+export const CREATED_COUNT_LEGEND = [
+  CREATED_COUNT_NONE,
+  { id: "b1", label: "1–3", min: 1, max: 3, ...CREATED_COUNT_RAMP[0] },
+  { id: "b2", label: "4–5", min: 4, max: 5, ...CREATED_COUNT_RAMP[1] },
+  { id: "b3", label: "6–8", min: 6, max: 8, ...CREATED_COUNT_RAMP[2] },
+  { id: "b4", label: "9–10", min: 9, max: 10, ...CREATED_COUNT_RAMP[3] },
+  { id: "b5", label: "11–13", min: 11, max: 13, ...CREATED_COUNT_RAMP[4] },
+  { id: "b6", label: "14+", min: 14, max: Infinity, ...CREATED_COUNT_RAMP[5] },
+];
+
+/** Round up to the next 1–2–5 ladder rung (1,2,5,10,20,50,100,…). */
+function niceCeil(value) {
+  if (!(value > 1)) return 1;
+  const decade = 10 ** Math.floor(Math.log10(value));
+  const mantissa = value / decade;
+  const rung = mantissa <= 1 ? 1 : mantissa <= 2 ? 2 : mantissa <= 5 ? 5 : 10;
+  return rung * decade;
+}
+
+/**
+ * Build the Created-layer scale from the values actually on the map (#1461).
+ *
+ * The old scale was a constant topping out at 15, so on a tenant like bomet —
+ * where one ward holds 1250 complaints and the next holds 55 — every ward
+ * saturated the darkest bucket and the choropleth carried no information at all.
+ *
+ * Complaint volume is skewed MULTIPLICATIVELY (1250 / 55 / 3), so the breaks are
+ * geometric rather than linear: an equal-interval scale over [0, max] would put
+ * all 22 of bomet's smaller wards in bucket 1 and merely invert the bug. Breaks
+ * are then snapped up to the 1–2–5 ladder, which is itself near-logarithmic, so
+ * "log spacing" and "round human numbers" cost nothing against each other — and
+ * quantization gives free hysteresis: the legend only moves when the max crosses
+ * a rung, not on every refresh.
+ *
+ * Quantile/Jenks breaks were rejected: with 6–23 wards they degenerate into a
+ * rank map, produce arbitrary labels like "3–1250", and reshuffle on every
+ * filter change.
+ *
+ * The domain must be the WARD-level series. Zoom rolls counts up by summing
+ * children, so scaling to the rendered features would rewrite the legend on
+ * every scroll step; the open-ended top bucket absorbs rolled-up values instead.
+ *
+ * Pure and total — safe to call with anything.
+ *
+ * @param {Array<number>} values raw per-ward counts
+ * @returns {{ max: number, breaks: number[], buckets: object[] }}
+ */
+export function buildCreatedCountScale(values = []) {
+  let max = 0;
+  for (const raw of Array.isArray(values) ? values : []) {
+    const n = Math.trunc(Number(raw));
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  if (max <= 0) return { max: 0, breaks: [], buckets: [CREATED_COUNT_NONE] };
+
+  let breaks;
+  if (max <= MAX_CREATED_COUNT_BUCKETS) {
+    // Tiny tenants (mz peaks at 32; a fresh install at 1): give each count its
+    // own shade rather than rounding a max of 8 up to a 50-wide bucket.
+    breaks = Array.from({ length: max - 1 }, (_, i) => i + 1);
+  } else {
+    // Geometric interior breaks, snapped up to the ladder. The top bucket is
+    // open-ended, so only MAX-1 edges are needed.
+    breaks = Array.from({ length: MAX_CREATED_COUNT_BUCKETS - 1 }, (_, i) =>
+      niceCeil(max ** ((i + 1) / MAX_CREATED_COUNT_BUCKETS))
+    );
+  }
+  // Snapping collapses duplicates; that is how the scale degrades gracefully to
+  // fewer buckets on small domains instead of emitting empty ranges.
+  breaks = [...new Set(breaks)].filter((b) => b >= 1 && b < max).sort((a, b) => a - b);
+
+  const edges = [...breaks, Infinity];
+  const last = edges.length - 1;
+  return {
+    max,
+    breaks,
+    buckets: [
+      CREATED_COUNT_NONE,
+      ...edges.map((upper, i) => {
+        const lower = i === 0 ? 1 : edges[i - 1] + 1;
+        // Always anchor the darkest stop to the top bucket, however few there are.
+        const ramp =
+          CREATED_COUNT_RAMP[
+            last === 0 ? CREATED_COUNT_RAMP.length - 1 : Math.round((i * (CREATED_COUNT_RAMP.length - 1)) / last)
+          ];
+        return { id: `b${i + 1}`, label: formatBucketLabel(lower, upper), min: lower, max: upper, ...ramp };
+      }),
+    ],
+  };
+}
+
+/**
+ * "1–5" / "501+" / "7". Numerals only: legend labels used to be seeded l10n
+ * messages, but a computed range has no fixed key and translate() renders the
+ * RAW KEY when a message is missing — so a minted key would paint
+ * "DASHBOARD_MAP_LEGEND_COUNT_124_248" on screen. The seeded count messages were
+ * byte-identical across en_IN and pt_PT anyway (they were pure numerals), so
+ * nothing translatable is lost. Digit grouping still honours the tenant mask.
+ */
+function formatBucketLabel(lower, upper) {
+  const n = (value) => formatNumber(value, { decimals: 0 }) ?? String(value);
+  if (upper === Infinity) return `${n(lower)}+`;
+  if (lower === upper) return n(lower);
+  return `${n(lower)}–${n(upper)}`;
+}
 
 /** % Open — share of filed complaints still open (red scale). */
 export const OPEN_SHARE_LEGEND = [
@@ -68,18 +189,6 @@ function localizeLegendBucketLabel(label) {
   switch (label) {
     case "No complaints":
       return t("DASHBOARD_MAP_LEGEND_NO_COMPLAINTS", "No complaints");
-    case "1–3":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_1_3", "1–3");
-    case "4–5":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_4_5", "4–5");
-    case "6–8":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_6_8", "6–8");
-    case "9–10":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_9_10", "9–10");
-    case "11–13":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_11_13", "11–13");
-    case "14–15":
-      return t("DASHBOARD_MAP_LEGEND_COUNT_14_15", "14–15");
     case "0%":
       return t("DASHBOARD_MAP_LEGEND_PCT_0", "0%");
     case "≤ 20%":
@@ -97,14 +206,98 @@ function localizeLegendBucketLabel(label) {
   }
 }
 
-export function getGeographyMapLegend(layerId) {
+export function getGeographyMapLegend(layerId, createdBuckets = CREATED_COUNT_LEGEND) {
   const legend =
     layerId === "open"
       ? OPEN_SHARE_LEGEND
       : layerId === "resolved"
         ? RESOLVED_SHARE_LEGEND
-        : CREATED_COUNT_LEGEND;
+        : createdBuckets;
+  // The share legends keep their seeded messages; computed count labels are
+  // already numerals and fall through localizeLegendBucketLabel's default.
   return legend.map((bucket) => ({ ...bucket, label: localizeLegendBucketLabel(bucket.label) }));
+}
+
+/**
+ * Pin colours, one per layer. DELIBERATELY not part of any legend array:
+ * getGeographyMapLegend returns a colour SCALE that getCreatedCountBucket scans
+ * by range, so an extra entry in there would corrupt bucket classification.
+ * The pin row is rendered as a separate <li> below the scale.
+ */
+export const GEOGRAPHY_MAP_PIN_STYLES = {
+  created: { fill: "#475569", stroke: "#334155" },
+  open: { fill: "#f59e0b", stroke: "#b45309" },
+  resolved: { fill: "#16a34a", stroke: "#15803d" },
+};
+
+export function getGeographyMapPinStyle(layerId) {
+  return GEOGRAPHY_MAP_PIN_STYLES[layerId] || GEOGRAPHY_MAP_PIN_STYLES.created;
+}
+
+const pinNum = (value) => {
+  const n = Number(value) || 0;
+  return formatNumber(n, { decimals: 0 }) ?? String(n);
+};
+
+/**
+ * The pin legend row: what the pins on the CURRENT layer mean, plus the honesty
+ * notes (how many of the layer's complaints actually carry a location, whether
+ * the row cap truncated them, and how many complaints have no ward at all and
+ * are therefore not on the map anywhere).
+ *
+ * @param {GeographyMapLayerId} layerId
+ * @param {{shown?: number, total?: number, semantics?: 'per-layer'|'open-only',
+ *          truncated?: boolean, unmapped?: number}} pins
+ * @returns {{swatch: {fill: string, stroke: string}, label: string, note: string}}
+ */
+export function getGeographyMapPinLegendEntry(layerId, pins = {}) {
+  const semantics = pins.semantics === "open-only" ? "open-only" : "per-layer";
+  // Old catalog + new UI: pins are still hard-filtered to open complaints, so
+  // they cannot follow the toggle. Say that on EVERY layer rather than
+  // mislabelling open complaints as "filed" or "resolved".
+  const label =
+    semantics === "open-only"
+      ? t(
+          "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+          "Pins: complaints still open — pins do not follow this layer"
+        )
+      : layerId === "open"
+        ? t("DASHBOARD_MAP_LEGEND_PINS_OPEN", "Pins: complaints still open")
+        : layerId === "resolved"
+          ? t("DASHBOARD_MAP_LEGEND_PINS_RESOLVED", "Pins: complaints resolved")
+          : t("DASHBOARD_MAP_LEGEND_PINS_CREATED", "Pins: complaints filed");
+
+  // No interpolation in the message store — compose by concatenation, the same
+  // pattern as getGeographyMapLegendFooter.
+  const notes = [];
+  const total = Number(pins.total) || 0;
+  if (total > 0) {
+    notes.push(
+      pinNum(pins.shown) +
+        t("DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF", " of ") +
+        pinNum(total) +
+        t(
+          "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+          " shown on the map (rest have no location)"
+        )
+    );
+  }
+  if (pins.truncated) {
+    notes.push(
+      t("DASHBOARD_MAP_LEGEND_PINS_TRUNCATED", "Showing the most recent 1,000 only")
+    );
+  }
+  if (Number(pins.unmapped) > 0) {
+    notes.push(
+      pinNum(pins.unmapped) +
+        t(
+          "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+          " complaints have no ward and are not mapped"
+        )
+    );
+  }
+
+  return { swatch: getGeographyMapPinStyle(layerId), label, note: notes.join(" · ") };
 }
 
 export function getGeographyMapLegendTitle(layerId) {
@@ -141,18 +334,27 @@ function bucketToFillStyle(bucket) {
   };
 }
 
-export function getCreatedCountBucket(count) {
+/** Range scan, so it classifies against ANY generated scale, not fixed edges. */
+export function getCreatedCountBucket(count, buckets = CREATED_COUNT_LEGEND) {
+  const scale = Array.isArray(buckets) && buckets.length ? buckets : CREATED_COUNT_LEGEND;
   const n = Number(count) || 0;
-  if (n <= 0) return CREATED_COUNT_LEGEND[0];
-  if (n <= 3) return CREATED_COUNT_LEGEND[1];
-  if (n <= 5) return CREATED_COUNT_LEGEND[2];
-  if (n <= 8) return CREATED_COUNT_LEGEND[3];
-  if (n <= 10) return CREATED_COUNT_LEGEND[4];
-  if (n <= 13) return CREATED_COUNT_LEGEND[5];
-  return CREATED_COUNT_LEGEND[6];
+  if (n <= 0) return scale[0];
+  for (let i = 1; i < scale.length; i += 1) {
+    if (n <= scale[i].max) return scale[i];
+  }
+  // Above every edge — only reachable when the top bucket is not open-ended
+  // (rolled-up county values against a stale scale).
+  return scale[scale.length - 1];
 }
 
-export function getSharePctBucket(pct, legend) {
+/**
+ * `filed` is passed so a ward with NO complaints gets the white "No complaints"
+ * swatch. Both share layers compute pct as 0 when filed is 0, and pct 0 maps to
+ * legend[1] ("0%") — so the white swatch was unreachable and an empty ward
+ * painted identically to one with complaints but none resolved.
+ */
+export function getSharePctBucket(pct, legend, filed) {
+  if (filed !== undefined && !(Number(filed) > 0)) return legend[0];
   const value = Number(pct);
   if (!Number.isFinite(value) || value < 0) return legend[0];
   if (value === 0) return legend[1];
@@ -163,16 +365,16 @@ export function getSharePctBucket(pct, legend) {
   return legend[6];
 }
 
-export function getCreatedCountFillStyle(count) {
-  return bucketToFillStyle(getCreatedCountBucket(count));
+export function getCreatedCountFillStyle(count, buckets = CREATED_COUNT_LEGEND) {
+  return bucketToFillStyle(getCreatedCountBucket(count, buckets));
 }
 
-export function getOpenShareFillStyle(openPct) {
-  return bucketToFillStyle(getSharePctBucket(openPct, OPEN_SHARE_LEGEND));
+export function getOpenShareFillStyle(openPct, filed) {
+  return bucketToFillStyle(getSharePctBucket(openPct, OPEN_SHARE_LEGEND, filed));
 }
 
-export function getResolvedShareFillStyle(resolvedPct) {
-  return bucketToFillStyle(getSharePctBucket(resolvedPct, RESOLVED_SHARE_LEGEND));
+export function getResolvedShareFillStyle(resolvedPct, filed) {
+  return bucketToFillStyle(getSharePctBucket(resolvedPct, RESOLVED_SHARE_LEGEND, filed));
 }
 
 /** @deprecated Legacy WoW styling — map uses created/open/resolved layers only. */

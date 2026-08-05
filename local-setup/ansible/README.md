@@ -5,6 +5,13 @@ fully independent stack (~35 containers) on its own machine — same
 playbook, different `host_vars/<tenant>.yml`. Today: `nairobi`, `bomet`,
 plus `mh-iterations` (sandbox).
 
+> **Deploying from Windows?** Follow the
+> [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
+> same `./deploy.sh` flow end-to-end inside WSL2, including the
+> `localhost-slim` / `localhost-full` sizing templates for 16 GB and
+> 32 GB machines. On macOS, the equivalent is the
+> [macOS Quickstart (OrbStack)](../../MAC-QUICKSTART.md).
+
 ## Layout
 
 ```
@@ -519,6 +526,48 @@ flags. Setting back to `false` sweeps the running search containers.
 ```bash
 ./deploy.sh <tenant> --check --diff --tags compose-config
 ```
+
+### Relocating Docker's storage to another partition — `docker_data_root`
+
+`docker_data_root` (see `inventory/group_vars/all.yml`) only takes effect on
+a box where Docker/containerd have never been started — the playbook fails
+the deploy instead of relocating a `/var/lib/docker` or `/var/lib/containerd`
+that already holds data, since pointing daemon.json/containerd's config at
+an empty directory would orphan every existing image and named volume
+(including the Postgres complaint database).
+
+To move an **already-populated** box's storage by hand first, then let the
+playbook take over:
+
+```bash
+# On the target host, as root:
+# Stop docker.socket too — leaving it active means any client that touches
+# /var/run/docker.sock during the copy (a stray `docker ps`, a monitoring
+# agent, a cron job) socket-activates dockerd again, which then writes into
+# /var/lib/docker while rsync is still reading it.
+systemctl stop docker.socket docker.service containerd
+
+mkdir -p /opt/docker /opt/containerd
+rsync -aHAX --info=progress2 /var/lib/docker/  /opt/docker/
+rsync -aHAX --info=progress2 /var/lib/containerd/ /opt/containerd/
+
+# RHEL family only (SELinux enforcing) — match the fcontext the playbook
+# would otherwise register, then relabel:
+semanage fcontext -a -e /var/lib/docker /opt/docker
+semanage fcontext -a -e /var/lib/containerd /opt/containerd
+restorecon -RF /opt/docker /opt/containerd
+
+# Once you've verified the copies (diff -rq old vs new, or just trust rsync),
+# reclaim the space. Remove the directories themselves rather than `rm -rf
+# .../*` — a bare `*` glob skips dotfiles (e.g. dockerd's own
+# .buildNodeID), which would otherwise survive and make the playbook's
+# emptiness guard see the "cleaned" path as still populated on the next run:
+rm -rf /var/lib/docker /var/lib/containerd
+```
+
+Then set `docker_data_root: "/opt/docker"` in the tenant's host_vars and
+run `./deploy.sh <tenant>` as usual — the playbook finds both directories
+already relocated (and now empty at their original path) and proceeds.
 
 ## Troubleshooting
 

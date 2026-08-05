@@ -12,6 +12,11 @@ import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
 import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
 import { formatNumber } from '../utils/numberFormat';
+import {
+  GEO_MAP_LAYER_KEYS,
+  partitionPinsByLayer,
+  summarizeWardRows,
+} from '../utils/complaintPins';
 import { getNumberTileDeltaClass, formatOfficerLabel, dimensionKindForName } from '../config/kpiDisplay';
 import {
   resolveSlaRiskPresentation,
@@ -867,12 +872,11 @@ function renderSlaRiskTable(ctx) {
 // Her widget fetches its own ward geometry and toggles created/open/resolved
 // layers; it reads layers[layerKey] (ward series), layers.wardDetails, and
 // layers.complaintPinsByLayer[layerKey]. We shape the tile's ward aggregate +
-// the companion pin source into that contract. (Per-layer distinct counts —
-// created vs open vs resolved — is a refinement; today every layer shows the
-// tile's aggregate so the toggle always renders data.)
+// the companion pin source into that contract. The ward series carries all
+// three counts so any layer renders; the PINS are now partitioned per layer
+// (previously the same open-only array was pinned to all three, so the Resolved
+// layer shaded "0 resolved" underneath still-open complaints).
 // ---------------------------------------------------------------------------
-
-const GEO_MAP_LAYER_KEYS = ['created', 'open', 'resolved'];
 
 function adaptMapLayers(ctx) {
   const { viz, result } = ctx;
@@ -904,17 +908,42 @@ function adaptMapLayers(ctx) {
       };
     });
   const pins = result.pins || [];
-  const layers = { wardDetails: {}, complaintPinsByLayer: {}, complaintPinsError: null };
+  const statusKnown = result.pinsStatusKnown === true;
+  const { layerTotals, unmapped } = summarizeWardRows(result.rows || [], dimKey);
+  const layers = {
+    wardDetails: {},
+    complaintPinsByLayer: partitionPinsByLayer(pins, statusKnown),
+    complaintPinsError: null,
+    // 'open-only' = the tenant's catalog still has the legacy pin def, so pins
+    // cannot follow the layer; the legend says so instead of lying by omission.
+    pinSemantics: statusKnown ? 'per-layer' : 'open-only',
+    pinsTruncated: result.pinsTruncated === true,
+    layerTotals,
+    unmapped,
+  };
   for (const key of GEO_MAP_LAYER_KEYS) {
     layers[key] = wards;
-    layers.complaintPinsByLayer[key] = pins;
   }
   return layers;
 }
 
+/**
+ * The map branch is memoized on its own inputs: adaptMapLayers re-derives fresh
+ * ward/pin ARRAYS on every parent render, and the Leaflet pin effect keys off
+ * that identity — so an unmemoized call tore down and rebuilt up to 1,000
+ * circle markers (closing any open popup) on every unrelated re-render.
+ */
+function MapTile({ ctx, loading }) {
+  const layers = React.useMemo(
+    () => adaptMapLayers(ctx),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ctx.result, ctx.viz, ctx.locale]
+  );
+  return <OpenComplaintsByGeographyWidget layers={layers} loading={loading} />;
+}
+
 function renderChoroplethMap(ctx) {
-  const { loading } = ctx;
-  return <OpenComplaintsByGeographyWidget layers={adaptMapLayers(ctx)} loading={loading} />;
+  return <MapTile ctx={ctx} loading={ctx.loading} />;
 }
 
 // ---------------------------------------------------------------------------

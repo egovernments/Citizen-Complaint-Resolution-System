@@ -23,13 +23,18 @@ import {
 const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
 const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || ADMIN_PASS;
 
-// NOTE: postal-code validation is driven by the CORE_POSTAL_CONFIGS global
-// config (per-tenant regex), which CreateComplaintConfig.js compiles straight
-// into the field's rules. Nothing below hardcodes a country's postal shape: the
-// accepted sample comes from POSTAL_CODE_VALID and the rejected ones are derived
-// from POSTAL_CODE_PATTERN — both resolved env var -> deployment-profile.json ->
-// legacy default by utils/env.ts, and the profile reads the pattern out of the
-// SPA's own globalConfigs. So these specs compare the form to its own config.
+// NOTE: postal-code validation is config-driven per tenant (MDMS
+// FormValidations postalCode row first, then the CORE_POSTAL_CONFIGS global
+// config — see utils/postalCode.js). CreateComplaintConfig.js enforces it
+// through a react-hook-form `validate` rule (NOT a `pattern`, which would leak
+// onto the native input and trigger the browser's own unlocalized bubble), and
+// createComplaintForm.js additionally re-checks it on every keystroke so the
+// error shows in real time, not only on submit. Nothing below hardcodes a
+// country's postal shape: the accepted sample comes from POSTAL_CODE_VALID and
+// the rejected ones are derived from POSTAL_CODE_PATTERN — both resolved
+// env var -> deployment-profile.json -> legacy default by utils/env.ts, and
+// the profile reads the pattern out of the SPA's own globalConfigs. So these
+// specs compare the form to its own config.
 
 const CREATE_URL = `${BASE_URL}/digit-ui/employee/pgr/create-complaint`;
 
@@ -54,36 +59,50 @@ function postalRejectedSamples(pattern: string, validBase: string): { tooLong: s
   return { tooLong, tooShort };
 }
 const { tooLong: INVALID_POSTAL_LONG, tooShort: INVALID_POSTAL_SHORT } =
-  postalRejectedSamples(POSTAL_CODE_PATTERN, POSTAL_CODE_VALID.split('-')[0]);
+  postalRejectedSamples(POSTAL_CODE_PATTERN, POSTAL_CODE_VALID);
 
 /**
- * The base (hyphen-free) segment of the deployment's valid sample. The
- * create-complaint postalCode input is `type=number` on the redesigned build and
- * cannot hold a hyphen, while the base 4/5-digit code is valid on its own (the
- * '-NN' sector suffix is optional in every pattern we ship). For Kenya '00100'
- * this is a no-op; for mz.maputo '0101-03' it yields '0101'.
+ * The deployment's valid sample, verbatim. The create-complaint postalCode
+ * input is `type=text` (PR #1315 flipped it from `number` so the field can
+ * hold every shape the configured pattern accepts), so a dash-suffixed
+ * sample like mz.maputo's '0101-03' is enterable as-is.
  */
-const VALID_POSTAL = POSTAL_CODE_VALID.split('-')[0];
+const VALID_POSTAL = POSTAL_CODE_VALID;
 
-/** The localization code the postal validator raises (CreateComplaintConfig populators.error). */
-const POSTAL_ERROR_KEY = 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR';
+/**
+ * The digit count for a plain ^[0-9]{N}$-shaped pattern, or null — the same
+ * anchored derivation utils/postalCode.js uses (a bare {N} scrape would match
+ * an unrelated quantifier in an alnum pattern).
+ */
+function postalDigitLength(pattern: string): string | null {
+  const m = pattern.match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/);
+  return m ? m[1] : null;
+}
 
 /**
  * Resolve what the postal error actually RENDERS AS on this deployment.
  *
- * Both the inline CardLabelError and the submit toast render `t(POSTAL_ERROR_KEY)`,
- * so on any deployment that seeds rainmaker-pgr the raw key NEVER appears in the
- * DOM — it is replaced by e.g. "Please enter a valid 5-digit postal code". The
- * previous `text=CS_COMPLAINT_POSTALCODE_INVALID_ERROR` locator therefore matched
- * nothing, which made the rejection cases unassertable and the acceptance case
- * (count 0) vacuous: it would have passed with the validator deleted outright.
- *
- * Ask the localization service instead, in the locale the SPA is actually running
- * in, and fall back to the raw key when the deployment has NOT seeded it (i18next
- * echoes the key back in that case, so the fallback is the truthful expectation —
- * not a hardcoded English string).
+ * The employee form (createComplaintForm.js) overrides the field's error with
+ * `getPostalCodeErrorMessage(t)` — the SAME dynamic, length-aware message the
+ * citizen flows show. So the expected inline text is:
+ *   - digit-only pattern: the localized CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN
+ *     with {{length}} interpolated (English fallback "Please enter a valid
+ *     N-digit postal code" when the key is unseeded);
+ *   - anything else: the localized ..._GENERIC key (English fallback
+ *     "Please enter a valid postal code").
+ * A raw key never appears in the DOM — getPostalCodeErrorMessage falls back to
+ * final English text, not the key, so the fallback expectation here mirrors
+ * that exactly.
  */
 async function resolvePostalErrorText(page: Page): Promise<string> {
+  const len = postalDigitLength(POSTAL_CODE_PATTERN);
+  const key = len
+    ? 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN'
+    : 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC';
+  const fallback = len
+    ? `Please enter a valid ${len}-digit postal code`
+    : 'Please enter a valid postal code';
+
   // The locale the employee SPA booted with — the same one t() reads. LOCALES[0]
   // (profile-discovered) is the floor for the case where the key is absent.
   const locale =
@@ -106,15 +125,19 @@ async function resolvePostalErrorText(page: Page): Promise<string> {
       if (!res.ok) continue;
       const body = (await res.json()) as { messages?: { code?: string; message?: string }[] };
       const hit = (body.messages || []).find(
-        (m) => m.code === POSTAL_ERROR_KEY && (m.message || '').trim(),
+        (m) => m.code === key && (m.message || '').trim(),
       );
-      if (hit) return (hit.message as string).trim();
+      if (hit) {
+        // Same {{length}} interpolation i18next performs for the LEN key.
+        return (hit.message as string).trim().replace(/\{\{\s*length\s*\}\}/g, len ?? '');
+      }
     } catch {
       // Try the next tenant; an unreachable localization service falls through
-      // to the raw key, which is what an unseeded deployment renders anyway.
+      // to the English fallback, which is what getPostalCodeErrorMessage
+      // renders when the key can't resolve.
     }
   }
-  return POSTAL_ERROR_KEY;
+  return fallback;
 }
 
 /**
@@ -224,9 +247,9 @@ This case used to be VACUOUS twice over: it asserted count 0 of a raw localizati
 Steps:
 1. Log in via API as the city admin.
 2. Navigate to /digit-ui/employee/pgr/create-complaint and wait for hydration.
-3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr, the SPA's own locale), falling back to the raw key when unseeded.
+3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr, the SPA's own locale), falling back to the English getPostalCodeErrorMessage() text when unseeded.
 4. Fill an invalid code, dispatch form.requestSubmit(), assert the scoped postal error IS visible — this proves the assertion locator can match.
-5. Fill POSTAL_CODE_VALID's base segment, dispatch form.requestSubmit(), assert the scoped postal error clears (count = 0).
+5. Fill POSTAL_CODE_VALID verbatim, dispatch form.requestSubmit(), assert the scoped postal error clears (count = 0).
 
 Catches a regression where the validator over-restricts and rejects valid codes.`,
     },
@@ -257,6 +280,52 @@ Catches a regression where the validator over-restricts and rejects valid codes.
     ).toHaveCount(0);
   });
 
+  test('postal error shows in real time while typing, without submit', {
+    annotation: {
+      type: 'description',
+      description: `Real-time validation regression guard (PR #1315 follow-up): the postal error must appear AS THE USER TYPES an invalid value and clear the moment the value becomes valid — with NO submit dispatched at any point. react-hook-form 6 runs in its default mode:"onSubmit", so the field's own validate rule is submit-only; createComplaintForm.js's onFormValueChange re-checks isPostalCodeValid() on every keystroke and drives the error through the same guarded setError/clearErrors pattern the mobile field uses.
+
+Steps:
+1. Log in via API as the city admin and open /digit-ui/employee/pgr/create-complaint.
+2. Resolve the expected error text (same dynamic, length-aware message as the citizen flows).
+3. Type an invalid sample into input[name="postalCode"] — do NOT submit.
+4. Assert the scoped, localized error is visible (and that the browser's native validation bubble is not the mechanism: the input must carry no pattern attribute).
+5. Replace the value with POSTAL_CODE_VALID — still no submit — and assert the error clears.
+6. Clear the field entirely and assert it stays error-free (optional field).
+
+Catches: the field silently reverting to submit-only validation, the native pattern attribute sneaking back onto the input (browser bubble instead of the localized message), and an error that fails to clear once corrected.`,
+    },
+    tag: ['@area:pgr', '@ccrs:722', '@kind:regression', '@layer:ui', '@persona:cross', '@pr:1315'] }, async ({ page }) => {
+    const postalInput = await openCreateComplaint(page);
+    const expectedError = await resolvePostalErrorText(page);
+    const postalError = postalErrorLocator(page, expectedError);
+
+    // The native pattern attribute must NOT be on the input — its presence
+    // would mean the browser's own "Please match the requested format" bubble
+    // gates submit before any localized validation runs (the original bug).
+    expect(await postalInput.getAttribute('pattern')).toBeNull();
+
+    // Type an invalid value keystroke-by-keystroke; the error must appear
+    // without any submit.
+    await postalInput.click();
+    await postalInput.pressSequentially(INVALID_POSTAL_LONG, { delay: 40 });
+    await expect(
+      postalError.first(),
+      `postal error "${expectedError}" must appear while typing ${INVALID_POSTAL_LONG}, before any submit`,
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Correcting the value must clear it immediately — still no submit.
+    await postalInput.fill(VALID_POSTAL);
+    await expect(
+      postalError,
+      `postal error must clear as soon as the value becomes valid (${VALID_POSTAL})`,
+    ).toHaveCount(0);
+
+    // Optional field: emptying it must not raise an error either.
+    await postalInput.fill('');
+    await expect(postalError).toHaveCount(0);
+  });
+
   test('invalid postal code (6 digits / Indian format) is rejected', {
     annotation: {
       type: 'description',
@@ -267,7 +336,7 @@ Previously skipped: it tried to click Submit, which the redesigned form keeps di
 Steps:
 1. Log in via API as the city admin.
 2. Navigate to /digit-ui/employee/pgr/create-complaint.
-3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr), falling back to the raw key when unseeded.
+3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr), falling back to the English getPostalCodeErrorMessage() text when unseeded.
 4. Fill input[name="postalCode"] with the over-long sample and dispatch form.requestSubmit().
 5. Assert the error renders inside the postal field's own container, and that the URL still contains "create-complaint".
 
@@ -304,7 +373,7 @@ Previously skipped for the same reason as the over-long case — it clicked a Su
 Steps:
 1. Log in via API as the city admin.
 2. Navigate to /digit-ui/employee/pgr/create-complaint.
-3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr), falling back to the raw key when unseeded.
+3. Resolve the expected error text from /localization/messages/v1/_search (module rainmaker-pgr), falling back to the English getPostalCodeErrorMessage() text when unseeded.
 4. Fill input[name="postalCode"] with the too-short sample and dispatch form.requestSubmit().
 5. Assert the error renders inside the postal field's own container, and that the URL still contains "create-complaint".
 

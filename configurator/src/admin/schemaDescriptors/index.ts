@@ -1,5 +1,6 @@
 import type { SchemaDescriptor } from './types';
 import { mobileValidationDescriptor } from './mobile-validation';
+import { formValidationsDescriptor } from './form-validations';
 import { themeConfigDescriptor } from './theme-config';
 import { tenantBoundaryDescriptor } from './tenant-boundary';
 import { autoEscalationIgnoreDescriptor } from './auto-escalation-ignore';
@@ -13,6 +14,7 @@ import { mapConfigDescriptor } from './map-config';
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [mobileValidationDescriptor.schema]: mobileValidationDescriptor,
+  [formValidationsDescriptor.schema]: formValidationsDescriptor,
   [themeConfigDescriptor.schema]: themeConfigDescriptor,
   [tenantBoundaryDescriptor.schema]: tenantBoundaryDescriptor,
   [autoEscalationIgnoreDescriptor.schema]: autoEscalationIgnoreDescriptor,
