@@ -1217,12 +1217,24 @@ async function phaseMatomo() {
     catch (e) { failures.push(`nginx reload failed: ${truncate(e.message, 80)}`); }
   }
 
-  /* ---- probe the PUBLIC path — the gate for --matomo-enable ---- */
+  /* ---- probe the PUBLIC path — the gate for --matomo-enable ----
+   * Retry, because `systemctl reload nginx` returns as soon as the signal is
+   * sent: old workers keep serving until the new ones take over, so a probe
+   * fired immediately after a successful edit reads the PRE-reload config and
+   * reports a false "NOT SERVING YET" (observed on cms-pilot — the endpoint was
+   * live seconds later). Only retry when we just edited; an unpatched box
+   * should still fail fast. */
   let publicOk = false;
   if (!CFG.dryRun) {
-    const h = await req('/matomo/matomo.js', 'HEAD', {});
-    const ct = String((h.headers || {})['content-type'] || '');
-    publicOk = h.code === 200 && /javascript/i.test(ct);
+    let h, ct = '';
+    const tries = nginxEdited ? 6 : 1;
+    for (let i = 0; i < tries; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 2000));
+      h = await req('/matomo/matomo.js', 'HEAD', {});
+      ct = String((h.headers || {})['content-type'] || '');
+      publicOk = h.code === 200 && /javascript/i.test(ct);
+      if (publicOk) break;
+    }
     notes.push(`public tracker probe: HTTP ${h.code} ${ct || '—'}${publicOk ? '' : ' — NOT SERVING YET'}`);
     if (publicOk) {
       const hit = await req(`/matomo/matomo.php?idsite=1&rec=1&url=${encodeURIComponent(CFG.base + '/ccrs-migrate-verify')}&action_name=ccrs-migrate-verify&rand=${Math.floor(Math.random() * 1e6)}`, 'GET', {});
