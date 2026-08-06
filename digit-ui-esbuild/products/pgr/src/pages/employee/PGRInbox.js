@@ -258,6 +258,15 @@ const PGRSearchInbox = () => {
 
   return (
     <div className="v2-pgr-inbox v2-scope">
+      {/* CCSD-2086: centre the system-name header in the inbox's left links card
+          (it read left-aligned). Scoped to .v2-pgr-inbox so the shared
+          InboxSearchComposer class isn't recentred for other modules; the
+          two-class selector outranks the component's own single-class rule
+          without needing !important. */}
+      <style>{`
+        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; }
+        .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: center; }
+      `}</style>
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
       </header>

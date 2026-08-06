@@ -62,6 +62,20 @@ const isTenantVisibleOnEntrance = (tenantCode) => {
   return onTestingEntrance ? testing.has(tenantCode) : !testing.has(tenantCode);
 };
 
+// The exact tenant list the employee entrance may show: an optional
+// LOGIN_TENANT_ALLOWLIST (deploy config), then the testing-vs-production
+// entrance filter. Exported so every screen with a city/institution dropdown
+// (login AND forgot-password, and any future one) scopes it identically —
+// CCSD-2150 was the forgot-password dropdown listing every platform tenant
+// because it skipped this. Returns the raw tenant objects; callers map to
+// their own option shape.
+export const scopeLoginTenants = (tenants) => {
+  const all = Array.isArray(tenants) ? tenants : [];
+  const allow = window?.globalConfigs?.getConfig?.("LOGIN_TENANT_ALLOWLIST");
+  const allowed = Array.isArray(allow) && allow.length > 0 ? all.filter((tnt) => allow.includes(tnt.code)) : all;
+  return allowed.filter((tnt) => isTenantVisibleOnEntrance(tnt.code));
+};
+
 const setEmployeeDetail = (userObject, token) => {
   if (Digit.Utils.getMultiRootTenant() && process.env.NODE_ENV !== "development") return;
   let locale = JSON.parse(sessionStorage.getItem("Digit.locale"))?.value || Digit.Utils.getDefaultLanguage();
@@ -232,15 +246,9 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
   // legacy `select:` literal in config.js).
   const cityField = useMemo(() => propsConfig?.inputs?.find((f) => f?.key === "city"), [propsConfig]);
   const cityOptions = useMemo(() => {
-    const all = Array.isArray(cities) ? cities : [];
-    const allow = window?.globalConfigs?.getConfig?.("LOGIN_TENANT_ALLOWLIST");
-    const allowed = Array.isArray(allow) && allow.length > 0
-      ? all.filter((tnt) => allow.includes(tnt.code))
-      : all;
-    // Keep testing tenants off the production entrance (and non-testing
-    // tenants off /digit-ui-test) — matches the citizen dispatcher/list.
-    const filtered = allowed.filter((tnt) => isTenantVisibleOnEntrance(tnt.code));
-    return filtered.map((tnt) => ({
+    // Scoping (LOGIN_TENANT_ALLOWLIST + testing-vs-production entrance) is shared
+    // with forgot-password via scopeLoginTenants so the two dropdowns can't drift.
+    return scopeLoginTenants(cities).map((tnt) => ({
       value: tnt.code,
       label: tr(`TENANT_TENANTS_${Digit?.Utils?.locale?.getTransformedLocale?.(tnt.code) ?? tnt.code}`, tnt.name || tnt.code),
     }));
