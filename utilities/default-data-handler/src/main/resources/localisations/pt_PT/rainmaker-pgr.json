@@ -1585,13 +1585,13 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
-        "message": "Enviar fotos ou documentos da reclamação",
+        "message": "Enviar fotos ou documentos da reclamação (Opcional)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Formatos permitidos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX. Até 5 MB por ficheiro.",
+        "message": "Formatos aceitos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MP3 (máximo 5 MB por ficheiro)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

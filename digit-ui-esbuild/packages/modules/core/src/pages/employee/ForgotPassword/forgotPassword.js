@@ -26,7 +26,7 @@ import { useTranslation } from "react-i18next";
 import { useHistory, useLocation } from "react-router-dom";
 import ImageComponent from "../../../components/ImageComponent";
 import { useLoginConfig } from "../../../hooks/useLoginConfig";
-import { V2LoginShell } from "../Login/login";
+import { V2LoginShell, scopeLoginTenants } from "../Login/login";
 
 const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
   const { t: trans } = useTranslation();
@@ -111,7 +111,11 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
     return <Loader page={true} variant="PageLoader" />;
   }
 
-  const cityOptions = (cities || []).map((c) => ({
+  // CCSD-2150: scope to the same tenant list the login screen shows — an
+  // allowlist (if configured) plus the testing-vs-production entrance filter.
+  // The raw useTenants() list is every platform tenant, so without this the
+  // forgot-password dropdown showed demo/other-state cities that can't log in.
+  const cityOptions = scopeLoginTenants(cities).map((c) => ({
     value: c.code,
     label: c.i18nKey ? trans(c.i18nKey) : c.code,
   }));

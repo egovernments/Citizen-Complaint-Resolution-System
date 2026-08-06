@@ -751,7 +751,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
-        "message": "Upload complaint photos or documents",
+        "message": "Upload complaint photos or documents (Optional)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7069,7 +7069,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files.",
+        "message": "Accepted formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MP3 (max 5 MB per file)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
