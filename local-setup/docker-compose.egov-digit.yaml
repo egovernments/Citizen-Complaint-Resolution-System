@@ -1659,6 +1659,14 @@ services:
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8005"
+      # Public TLS-certificate check (#1622). Ansible renders both of these into
+      # .env from `domain` + `tls_enabled`; the defaults keep the check OFF for a
+      # bare `docker compose up` outside Ansible, where there is no public
+      # hostname. Off is the safe default: an unset `enabled` var reads as TRUE to
+      # Gatus, which would leave a permanently-red check against a URL that never
+      # resolves — and a red square nobody can fix is how dashboards get ignored.
+      GATUS_TLS: ${GATUS_TLS:-false}
+      GATUS_PUBLIC_URL: ${GATUS_PUBLIC_URL:-}
     networks:
       - egov-network
 

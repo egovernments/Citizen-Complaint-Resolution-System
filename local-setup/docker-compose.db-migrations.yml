@@ -1309,6 +1309,12 @@ services:
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "false"
       GATUS_SMS_PORT: "8080"
+      # No public hostname on this path — the TLS check (#1622) is off.
+      # Declared explicitly because Gatus treats an UNSET `enabled` var as
+      # true, which would leave a permanently-red check for a URL that does
+      # not resolve.
+      GATUS_TLS: "false"
+      GATUS_PUBLIC_URL: ""
     deploy:
       resources:
         limits:
