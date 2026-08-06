@@ -7282,3 +7282,836 @@ ALTER TABLE ONLY public.eg_userrole_v1
 
 \unrestrict khfTsZ1ktr0RAULBk6Bs28kBqKU4Bfrmf02yBc0FejfEp5oIZSwwvgwBY2kwXs5
 
+
+--
+-- PGR objects created by backend/pgr-services migrations (V20260405084400,
+-- V20260422000000, V20260608000000, V20260715000000 and their follow-ups).
+--
+-- They live here because local-setup/docker-compose.yml seeds Postgres from
+-- THIS FILE ALONE (docker-entrypoint-initdb.d) and runs no Flyway container —
+-- so anything a migration creates must be in the dump or it simply does not
+-- exist. Without eg_pgr_document_v2 every PGR _search 500s with
+-- 'relation "eg_pgr_document_v2" does not exist'.
+--
+-- Placed after the COPY blocks so the materialized views populate from the
+-- seeded rows. Created WITH DATA (as the migrations do) — pg_dump writes
+-- WITH NO DATA, which would make every read fail with
+-- 'materialized view has not been populated'.
+--
+--
+-- PostgreSQL database dump
+--
+
+\restrict kAT49ENS9PUdkX0uPsLmEFnaW2GPyg8DUSoVqYGIGoDjd58gpOXRYjWqxoOku8j
+
+-- Dumped from database version 16.14
+-- Dumped by pg_dump version 16.14
+
+
+
+
+--
+-- Name: complaint_events; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.complaint_events AS
+ WITH RECURSIVE svc AS (
+         SELECT s.servicerequestid,
+            s.id AS pgr_id,
+            s.tenantid,
+            s.servicecode,
+            s.accountid,
+            s.source,
+            s.createdtime AS complaint_created_at,
+            s.createdby AS filed_by_uuid,
+            a.locality AS locality_code,
+            a.latitude,
+            a.longitude,
+            ((a.latitude IS NOT NULL) AND (a.longitude IS NOT NULL)) AS has_geo_pin
+           FROM (public.eg_pgr_service_v2 s
+             LEFT JOIN public.eg_pgr_address_v2 a ON (((a.parentid)::text = (s.id)::text)))
+        ), bnd0 AS (
+         SELECT DISTINCT ON (boundary_relationship.code) boundary_relationship.code,
+            boundary_relationship.tenantid,
+            boundary_relationship.hierarchytype,
+            boundary_relationship.boundarytype AS leaf_type,
+            ((boundary_relationship.ancestralmaterializedpath || '|'::text) || (boundary_relationship.code)::text) AS boundary_path
+           FROM public.boundary_relationship
+          ORDER BY boundary_relationship.code, (length(boundary_relationship.ancestralmaterializedpath)) DESC
+        ), btype AS (
+         SELECT DISTINCT ON (boundary_relationship.code) boundary_relationship.code,
+            boundary_relationship.boundarytype
+           FROM public.boundary_relationship
+          ORDER BY boundary_relationship.code, (length(boundary_relationship.ancestralmaterializedpath)) DESC
+        ), wardlvl AS (
+         SELECT DISTINCT ON (h.tenantid, h.hierarchytype) h.tenantid,
+            h.hierarchytype,
+            (lvl.value ->> 'boundaryType'::text) AS ward_type,
+            (lvl.value ->> 'parentBoundaryType'::text) AS zone_type
+           FROM (public.boundary_hierarchy h
+             CROSS JOIN LATERAL jsonb_array_elements(h.boundaryhierarchy) lvl(value))
+          WHERE (lower((lvl.value ->> 'boundaryType'::text)) = 'ward'::text)
+        ), bnd AS (
+         SELECT b.code,
+            b.boundary_path,
+            b.code AS boundary_leaf_code,
+            b.leaf_type AS boundary_leaf_type,
+                CASE
+                    WHEN (w.ward_type IS NOT NULL) THEN seg.ward_seg
+                    ELSE segs.arr[array_length(segs.arr, 1)]
+                END AS ward_code,
+                CASE
+                    WHEN (w.ward_type IS NOT NULL) THEN seg.zone_seg
+                    ELSE segs.arr[(array_length(segs.arr, 1) - 1)]
+                END AS zone_code
+           FROM (((bnd0 b
+             LEFT JOIN wardlvl w ON ((((w.tenantid)::text = (b.tenantid)::text) AND ((w.hierarchytype)::text = (b.hierarchytype)::text))))
+             CROSS JOIN LATERAL ( SELECT string_to_array(b.boundary_path, '|'::text) AS arr) segs)
+             LEFT JOIN LATERAL ( SELECT max(s.seg) FILTER (WHERE (lower((bt.boundarytype)::text) = lower(w.ward_type))) AS ward_seg,
+                    max(s.seg) FILTER (WHERE (lower((bt.boundarytype)::text) = lower(w.zone_type))) AS zone_seg
+                   FROM (unnest(segs.arr) s(seg)
+                     LEFT JOIN btype bt ON (((bt.code)::text = s.seg)))) seg ON (true))
+        ), bs AS (
+         SELECT DISTINCT ON (eg_wf_businessservice_v2.tenantid, eg_wf_businessservice_v2.businessservice) eg_wf_businessservice_v2.tenantid,
+            eg_wf_businessservice_v2.businessservice,
+            eg_wf_businessservice_v2.businessservicesla
+           FROM public.eg_wf_businessservice_v2
+        ), asg AS (
+         SELECT eg_wf_assignee_v2.processinstanceid,
+            count(*) AS assignee_count,
+            (array_agg(eg_wf_assignee_v2.assignee ORDER BY eg_wf_assignee_v2.assignee))[1] AS assignee_uuid
+           FROM public.eg_wf_assignee_v2
+          GROUP BY eg_wf_assignee_v2.processinstanceid
+        ), chlvl AS (
+         SELECT DISTINCT (lvl.value ->> 'levelCode'::text) AS level_code
+           FROM (public.eg_mdms_data d
+             CROSS JOIN LATERAL jsonb_array_elements((d.data -> 'levels'::text)) lvl(value))
+          WHERE (((d.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchyDefinition'::text) AND d.isactive AND ((lvl.value ->> 'isLeafServiceCode'::text))::boolean)
+        ), mdms AS (
+         SELECT DISTINCT ON ((eg_mdms_data.data ->> 'code'::text)) (eg_mdms_data.data ->> 'code'::text) AS service_code,
+                CASE
+                    WHEN (upper(btrim(COALESCE((eg_mdms_data.data ->> 'department'::text), ((eg_mdms_data.data -> 'departments'::text) ->> 0)))) = ANY (ARRAY['NA'::text, ''::text])) THEN NULL::text
+                    ELSE btrim(COALESCE((eg_mdms_data.data ->> 'department'::text), ((eg_mdms_data.data -> 'departments'::text) ->> 0)))
+                END AS department_code
+           FROM public.eg_mdms_data
+          WHERE (((eg_mdms_data.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchy'::text) AND eg_mdms_data.isactive AND ((eg_mdms_data.data ->> 'levelCode'::text) IN ( SELECT chlvl.level_code
+                   FROM chlvl)))
+          ORDER BY (eg_mdms_data.data ->> 'code'::text), (length((eg_mdms_data.tenantid)::text)), eg_mdms_data.tenantid
+        ), ch AS (
+         SELECT DISTINCT ON ((eg_mdms_data.data ->> 'code'::text)) (eg_mdms_data.data ->> 'code'::text) AS code,
+            NULLIF((eg_mdms_data.data ->> 'path'::text), ''::text) AS node_path,
+            NULLIF((eg_mdms_data.data ->> 'parentCode'::text), ''::text) AS parent_code
+           FROM public.eg_mdms_data
+          WHERE (((eg_mdms_data.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchy'::text) AND eg_mdms_data.isactive)
+          ORDER BY (eg_mdms_data.data ->> 'code'::text), ((eg_mdms_data.data ->> 'levelCode'::text) IN ( SELECT chlvl.level_code
+                   FROM chlvl)) DESC, (length((eg_mdms_data.tenantid)::text))
+        ), chwalk AS (
+         SELECT ch.code AS leaf_code,
+            ch.code,
+            ch.parent_code,
+            ch.code AS built_path,
+            1 AS depth
+           FROM ch
+        UNION ALL
+         SELECT w.leaf_code,
+            p.code,
+            p.parent_code,
+            ((p.code || '.'::text) || w.built_path),
+            (w.depth + 1)
+           FROM (chwalk w
+             JOIN ch p ON ((p.code = w.parent_code)))
+          WHERE (w.depth < 12)
+        ), cnp AS (
+         SELECT ch.code,
+                CASE
+                    WHEN (EXISTS ( SELECT 1
+                       FROM chwalk w
+                      WHERE ((w.leaf_code = ch.code) AND ((POSITION(('.'::text) IN (w.code)) > 0) OR (POSITION(('.'::text) IN (COALESCE(w.parent_code, ''::text))) > 0))))) THEN NULL::text
+                    ELSE COALESCE(ch.node_path, walk.built_path)
+                END AS complaint_node_path
+           FROM (ch
+             LEFT JOIN LATERAL ( SELECT w.built_path
+                   FROM chwalk w
+                  WHERE (w.leaf_code = ch.code)
+                  ORDER BY w.depth DESC
+                 LIMIT 1) walk ON (true))
+        ), tx AS (
+         SELECT pi.id AS event_id,
+            pi.businessid AS service_request_id,
+            pi.tenantid,
+            pi.businessservice,
+            pi.action,
+            pi.assigner AS actor_uuid,
+            pi.escalated,
+            pi.rating AS event_rating,
+            pi.comment,
+            pi.createdtime AS entered_at,
+            st.state AS status,
+            st.seq AS status_seq,
+            st.sla AS state_sla_ms,
+            st.isterminatestate AS status_is_terminal,
+            lead(pi.createdtime) OVER w AS exited_at,
+            lag(st.state) OVER w AS previous_status,
+            lag(st.seq) OVER w AS previous_status_seq,
+            row_number() OVER w AS seq_no,
+            (lead(pi.id) OVER w IS NULL) AS is_current_state
+           FROM (public.eg_wf_processinstance_v2 pi
+             LEFT JOIN public.eg_wf_state_v2 st ON (((st.uuid)::text = (pi.status)::text)))
+          WINDOW w AS (PARTITION BY pi.businessid ORDER BY pi.createdtime, pi.id)
+        )
+ SELECT tx.event_id,
+    tx.service_request_id,
+    tx.tenantid AS tenant_id,
+    tx.businessservice AS business_service,
+    tx.seq_no,
+    tx.is_current_state,
+    tx.action,
+    tx.status,
+    tx.previous_status,
+    COALESCE(tx.status_is_terminal, false) AS status_is_terminal,
+    (NOT COALESCE(tx.status_is_terminal, false)) AS status_is_open,
+    tx.actor_uuid,
+    asg.assignee_uuid,
+    ((ua.type)::text = 'SYSTEM'::text) AS actor_is_system,
+    tx.entered_at,
+    tx.exited_at,
+    (tx.exited_at - tx.entered_at) AS dwell_ms,
+    tx.status_seq,
+    tx.previous_status_seq,
+    (tx.status_seq - tx.previous_status_seq) AS seq_delta,
+    (tx.status_seq < tx.previous_status_seq) AS is_backward_transition,
+    tx.state_sla_ms,
+        CASE
+            WHEN ((tx.state_sla_ms IS NOT NULL) AND (tx.exited_at IS NOT NULL)) THEN ((tx.exited_at - tx.entered_at) > tx.state_sla_ms)
+            ELSE NULL::boolean
+        END AS state_sla_breached_on_exit,
+    bs.businessservicesla AS business_sla_ms,
+    ((tx.action)::text = ANY ((ARRAY['ASSIGN'::character varying, 'REASSIGN'::character varying])::text[])) AS is_assignment,
+    ((tx.action)::text = 'REOPEN'::text) AS is_reopen,
+    COALESCE(tx.escalated, false) AS is_escalation,
+        CASE
+            WHEN COALESCE(tx.escalated, false) THEN
+            CASE
+                WHEN ((ua.type)::text = 'SYSTEM'::text) THEN 'auto'::text
+                ELSE 'manual'::text
+            END
+            ELSE NULL::text
+        END AS escalation_source,
+    ((tx.comment IS NOT NULL) AND ((tx.comment)::text <> ''::text)) AS has_comment,
+    length((tx.comment)::text) AS comment_length,
+    tx.event_rating,
+    COALESCE(asg.assignee_count, (0)::bigint) AS assignee_count,
+    (COALESCE(asg.assignee_count, (0)::bigint) > 1) AS has_multiple_assignees,
+    svc.accountid AS account_id,
+    svc.source,
+    svc.servicecode AS service_code,
+    m.department_code,
+    cnp.complaint_node_path,
+    (array_length(string_to_array(cnp.complaint_node_path, '.'::text), 1))::smallint AS complaint_depth,
+    svc.locality_code,
+    svc.has_geo_pin,
+    svc.complaint_created_at,
+    (tx.entered_at - svc.complaint_created_at) AS complaint_age_at_event_ms,
+    bnd.boundary_path,
+    bnd.zone_code,
+    bnd.ward_code,
+    bnd.boundary_leaf_code,
+    bnd.boundary_leaf_type,
+    ((to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text))::date AS occurred_date,
+    (date_trunc('week'::text, (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::date AS occurred_week_start,
+    to_char((to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text), 'YYYY-MM'::text) AS occurred_month,
+    (EXTRACT(hour FROM (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::smallint AS occurred_hour,
+    (EXTRACT(isodow FROM (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::smallint AS occurred_dow,
+    (EXTRACT(isodow FROM (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) = ANY (ARRAY[(6)::numeric, (7)::numeric])) AS occurred_is_weekend,
+    ((EXTRACT(hour FROM (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) >= (8)::numeric) AND (EXTRACT(hour FROM (to_timestamp(((tx.entered_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) <= (17)::numeric)) AS occurred_is_business_hr
+   FROM (((((((tx
+     LEFT JOIN svc ON (((svc.servicerequestid)::text = (tx.service_request_id)::text)))
+     LEFT JOIN bnd ON (((bnd.code)::text = (svc.locality_code)::text)))
+     LEFT JOIN cnp ON ((cnp.code = (svc.servicecode)::text)))
+     LEFT JOIN LATERAL ( SELECT b.businessservicesla
+           FROM bs b
+          WHERE (((b.businessservice)::text = (tx.businessservice)::text) AND ((b.tenantid)::text = ANY ((ARRAY[tx.tenantid, (split_part((tx.tenantid)::text, '.'::text, 1))::character varying])::text[])))
+          ORDER BY (length((b.tenantid)::text)) DESC
+         LIMIT 1) bs ON (true))
+     LEFT JOIN asg ON (((asg.processinstanceid)::text = (tx.event_id)::text)))
+     LEFT JOIN mdms m ON ((m.service_code = (svc.servicecode)::text)))
+     LEFT JOIN public.eg_user ua ON ((ua.uuid = (tx.actor_uuid)::bpchar)))
+;
+
+
+--
+-- Name: complaint_facts; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.complaint_facts AS
+ WITH RECURSIVE clock AS (
+         SELECT ((EXTRACT(epoch FROM now()) * (1000)::numeric))::bigint AS now_ms
+        ), roll AS (
+         SELECT complaint_events.service_request_id,
+            min(complaint_events.entered_at) AS created_at,
+            max(complaint_events.entered_at) AS last_transition_at,
+            count(*) AS transition_count,
+            count(*) FILTER (WHERE complaint_events.is_assignment) AS assignment_count,
+            count(*) FILTER (WHERE complaint_events.is_escalation) AS escalation_count,
+            count(*) FILTER (WHERE complaint_events.is_reopen) AS reopen_count,
+            count(DISTINCT complaint_events.assignee_uuid) AS distinct_assignee_count,
+            count(DISTINCT complaint_events.actor_uuid) AS distinct_actor_count,
+            count(*) FILTER (WHERE complaint_events.actor_is_system) AS system_transition_count,
+            count(*) FILTER (WHERE (NOT complaint_events.actor_is_system)) AS manual_transition_count,
+            bool_or(((complaint_events.status)::text = ANY ((ARRAY['REJECTED'::character varying, 'CLOSEDAFTERREJECTION'::character varying])::text[]))) AS was_rejected,
+            min(complaint_events.entered_at) FILTER (WHERE complaint_events.is_assignment) AS first_assigned_at,
+            min(complaint_events.entered_at) FILTER (WHERE ((complaint_events.status)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS resolved_at,
+            max(complaint_events.entered_at) FILTER (WHERE complaint_events.is_escalation) AS last_escalated_at,
+            min(complaint_events.entered_at) FILTER (WHERE complaint_events.is_escalation) AS first_escalated_at,
+            max(complaint_events.dwell_ms) AS max_dwell_ms,
+            sum(complaint_events.dwell_ms) FILTER (WHERE (complaint_events.assignee_uuid IS NOT NULL)) AS assigned_dwell_ms,
+            sum(complaint_events.dwell_ms) FILTER (WHERE (complaint_events.assignee_uuid IS NULL)) AS unassigned_dwell_ms
+           FROM public.complaint_events
+          GROUP BY complaint_events.service_request_id
+        ), cur AS (
+         SELECT complaint_events.service_request_id,
+            complaint_events.status AS application_status,
+            complaint_events.status_seq AS current_state_seq,
+            complaint_events.status_is_open AS is_open,
+            complaint_events.assignee_uuid AS current_assignee_uuid,
+            complaint_events.state_sla_ms AS current_state_sla_ms,
+            complaint_events.business_sla_ms,
+            complaint_events.boundary_path,
+            complaint_events.ward_code,
+            complaint_events.zone_code,
+            complaint_events.boundary_leaf_code,
+            complaint_events.boundary_leaf_type
+           FROM public.complaint_events
+          WHERE complaint_events.is_current_state
+        ), chlvl AS (
+         SELECT DISTINCT (lvl.value ->> 'levelCode'::text) AS level_code
+           FROM (public.eg_mdms_data d
+             CROSS JOIN LATERAL jsonb_array_elements((d.data -> 'levels'::text)) lvl(value))
+          WHERE (((d.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchyDefinition'::text) AND d.isactive AND ((lvl.value ->> 'isLeafServiceCode'::text))::boolean)
+        ), mdms AS (
+         SELECT DISTINCT ON ((eg_mdms_data.data ->> 'code'::text)) (eg_mdms_data.data ->> 'code'::text) AS service_code,
+            ((eg_mdms_data.data ->> 'slaHours'::text))::integer AS mdms_sla_hours,
+            NULL::text AS legacy_service_group,
+            ((eg_mdms_data.data ->> 'order'::text))::smallint AS service_order,
+                CASE
+                    WHEN (upper(btrim(COALESCE((eg_mdms_data.data ->> 'department'::text), ((eg_mdms_data.data -> 'departments'::text) ->> 0)))) = ANY (ARRAY['NA'::text, ''::text])) THEN NULL::text
+                    ELSE btrim(COALESCE((eg_mdms_data.data ->> 'department'::text), ((eg_mdms_data.data -> 'departments'::text) ->> 0)))
+                END AS department_code
+           FROM public.eg_mdms_data
+          WHERE (((eg_mdms_data.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchy'::text) AND eg_mdms_data.isactive AND ((eg_mdms_data.data ->> 'levelCode'::text) IN ( SELECT chlvl.level_code
+                   FROM chlvl)))
+          ORDER BY (eg_mdms_data.data ->> 'code'::text), (length((eg_mdms_data.tenantid)::text)), eg_mdms_data.tenantid
+        ), ch AS (
+         SELECT DISTINCT ON ((eg_mdms_data.data ->> 'code'::text)) (eg_mdms_data.data ->> 'code'::text) AS code,
+            NULLIF((eg_mdms_data.data ->> 'path'::text), ''::text) AS node_path,
+            NULLIF((eg_mdms_data.data ->> 'parentCode'::text), ''::text) AS parent_code
+           FROM public.eg_mdms_data
+          WHERE (((eg_mdms_data.schemacode)::text = 'RAINMAKER-PGR.ComplaintHierarchy'::text) AND eg_mdms_data.isactive)
+          ORDER BY (eg_mdms_data.data ->> 'code'::text), ((eg_mdms_data.data ->> 'levelCode'::text) IN ( SELECT chlvl.level_code
+                   FROM chlvl)) DESC, (length((eg_mdms_data.tenantid)::text))
+        ), chwalk AS (
+         SELECT ch.code AS leaf_code,
+            ch.code,
+            ch.parent_code,
+            ch.code AS built_path,
+            1 AS depth
+           FROM ch
+        UNION ALL
+         SELECT w.leaf_code,
+            p.code,
+            p.parent_code,
+            ((p.code || '.'::text) || w.built_path),
+            (w.depth + 1)
+           FROM (chwalk w
+             JOIN ch p ON ((p.code = w.parent_code)))
+          WHERE (w.depth < 12)
+        ), cnp AS (
+         SELECT ch.code,
+                CASE
+                    WHEN (EXISTS ( SELECT 1
+                       FROM chwalk w
+                      WHERE ((w.leaf_code = ch.code) AND ((POSITION(('.'::text) IN (w.code)) > 0) OR (POSITION(('.'::text) IN (COALESCE(w.parent_code, ''::text))) > 0))))) THEN NULL::text
+                    ELSE COALESCE(ch.node_path, walk.built_path)
+                END AS complaint_node_path
+           FROM (ch
+             LEFT JOIN LATERAL ( SELECT w.built_path
+                   FROM chwalk w
+                  WHERE (w.leaf_code = ch.code)
+                  ORDER BY w.depth DESC
+                 LIMIT 1) walk ON (true))
+        ), esc AS (
+         SELECT eg_mdms_data.tenantid,
+            (eg_mdms_data.data -> 'overrides'::text) AS overrides,
+            (eg_mdms_data.data -> 'defaultSlaByLevel'::text) AS default_levels
+           FROM public.eg_mdms_data
+          WHERE (((eg_mdms_data.schemacode)::text = 'RAINMAKER-PGR.EscalationConfig'::text) AND eg_mdms_data.isactive)
+        ), seq AS (
+         SELECT eg_pgr_service_v2.id,
+            row_number() OVER (PARTITION BY eg_pgr_service_v2.accountid ORDER BY eg_pgr_service_v2.createdtime, eg_pgr_service_v2.id) AS complaint_seq_for_citizen
+           FROM public.eg_pgr_service_v2
+        )
+ SELECT s.servicerequestid AS service_request_id,
+    s.id AS pgr_id,
+    s.tenantid AS tenant_id,
+    s.accountid AS account_id,
+    'PGR'::text AS business_service,
+    s.servicecode AS service_code,
+    cur.application_status,
+    s.source,
+    s.rating AS rating_raw,
+    s.active,
+    length((s.description)::text) AS description_length,
+    ((s.description IS NOT NULL) AND ((s.description)::text <> ''::text)) AS has_description,
+    s.createdby AS filed_by_uuid,
+    ((s.createdby)::text <> (s.accountid)::text) AS filed_on_behalf,
+    a.locality AS locality_code,
+    a.pincode,
+    a.city,
+    a.latitude,
+    a.longitude,
+    ((a.latitude IS NOT NULL) AND (a.longitude IS NOT NULL)) AS has_geo_pin,
+    (a.parentid IS NOT NULL) AS has_address,
+    cur.boundary_path,
+    (((length(COALESCE(cur.boundary_path, ''::text)) - length(replace(COALESCE(cur.boundary_path, ''::text), '|'::text, ''::text))) + 1))::smallint AS boundary_depth,
+    cur.ward_code,
+    cur.zone_code,
+    cur.boundary_leaf_code,
+    cur.boundary_leaf_type,
+    cnp.complaint_node_path,
+    cx.complaint_depth,
+    COALESCE(cx.root_code, m.legacy_service_group) AS service_group,
+    cx.service_parent_code,
+    m.service_order,
+    m.mdms_sla_hours,
+    m.department_code,
+    cur.current_state_seq,
+    cur.current_state_sla_ms,
+    tgt.sla_target_ms,
+    ((m.mdms_sla_hours IS NOT NULL) AND (cur.business_sla_ms IS NOT NULL) AND (((m.mdms_sla_hours)::bigint * 3600000) <> cur.business_sla_ms)) AS sla_config_mismatch,
+    roll.created_at,
+    roll.first_assigned_at,
+    roll.first_assigned_at AS first_response_at,
+    roll.resolved_at,
+    roll.last_transition_at,
+    roll.first_escalated_at,
+    roll.last_escalated_at,
+    roll.transition_count,
+    roll.assignment_count,
+    roll.escalation_count,
+    roll.reopen_count,
+    roll.distinct_assignee_count,
+    roll.distinct_actor_count,
+    roll.system_transition_count,
+    roll.manual_transition_count,
+    roll.was_rejected,
+    (roll.reopen_count > 0) AS is_reopened,
+    cur.is_open,
+    (roll.resolved_at IS NOT NULL) AS is_resolved,
+    roll.max_dwell_ms,
+    roll.assigned_dwell_ms,
+    roll.unassigned_dwell_ms,
+    cur.current_assignee_uuid,
+    (roll.resolved_at - roll.created_at) AS resolution_ms,
+    (roll.first_assigned_at - roll.created_at) AS time_to_assign_ms,
+        CASE
+            WHEN cur.is_open THEN (clock.now_ms - roll.created_at)
+            ELSE NULL::bigint
+        END AS open_age_ms,
+        CASE
+            WHEN cur.is_open THEN (clock.now_ms - roll.last_transition_at)
+            ELSE NULL::bigint
+        END AS current_state_age_ms,
+    (roll.first_escalated_at - roll.created_at) AS first_escalation_ms,
+        CASE
+            WHEN cur.is_open THEN ((tgt.sla_target_ms IS NOT NULL) AND ((clock.now_ms - roll.created_at) > tgt.sla_target_ms))
+            WHEN (roll.resolved_at IS NOT NULL) THEN ((tgt.sla_target_ms IS NOT NULL) AND ((roll.resolved_at - roll.created_at) > tgt.sla_target_ms))
+            ELSE false
+        END AS sla_breached,
+    (cur.is_open AND (cur.current_state_sla_ms IS NOT NULL) AND ((clock.now_ms - roll.last_transition_at) > cur.current_state_sla_ms)) AS current_state_sla_breached,
+        CASE
+            WHEN (NOT cur.is_open) THEN NULL::text
+            WHEN ((clock.now_ms - roll.created_at) < 86400000) THEN '<1d'::text
+            WHEN ((clock.now_ms - roll.created_at) < 259200000) THEN '1-3d'::text
+            WHEN ((clock.now_ms - roll.created_at) < 604800000) THEN '3-7d'::text
+            ELSE '>7d'::text
+        END AS aging_bucket,
+        CASE
+            WHEN ((NOT cur.is_open) OR (tgt.sla_target_ms IS NULL)) THEN NULL::text
+            WHEN ((clock.now_ms - roll.created_at) > tgt.sla_target_ms) THEN 'breached'::text
+            WHEN (((clock.now_ms - roll.created_at))::numeric > (0.8 * (tgt.sla_target_ms)::numeric)) THEN 'approaching'::text
+            ELSE 'within'::text
+        END AS sla_status_bucket,
+    (s.rating IS NOT NULL) AS has_rating,
+    s.rating,
+    ((s.rating IS NOT NULL) AND (s.rating <= 2)) AS is_negative_rating,
+    seq.complaint_seq_for_citizen,
+    (seq.complaint_seq_for_citizen = 1) AS is_first_time_complainant,
+    ((to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text))::date AS created_date,
+    (date_trunc('week'::text, (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::date AS created_week_start,
+    to_char((to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text), 'YYYY-MM'::text) AS created_month,
+    (EXTRACT(year FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::smallint AS created_year,
+    to_char((to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text), 'YYYY-"Q"Q'::text) AS created_quarter,
+    (EXTRACT(hour FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::smallint AS created_hour,
+    (EXTRACT(isodow FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)))::smallint AS created_dow,
+    (EXTRACT(isodow FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) = ANY (ARRAY[(6)::numeric, (7)::numeric])) AS created_is_weekend,
+    ((EXTRACT(hour FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) >= (8)::numeric) AND (EXTRACT(hour FROM (to_timestamp(((roll.created_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text)) <= (17)::numeric)) AS created_is_business_hr,
+    ((to_timestamp(((roll.resolved_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text))::date AS resolved_date,
+    to_char((to_timestamp(((roll.resolved_at / 1000))::double precision) AT TIME ZONE 'Etc/GMT-3'::text), 'YYYY-MM'::text) AS resolved_month,
+    clock.now_ms AS facts_built_at
+   FROM ((((((((((public.eg_pgr_service_v2 s
+     CROSS JOIN clock)
+     LEFT JOIN public.eg_pgr_address_v2 a ON (((a.parentid)::text = (s.id)::text)))
+     LEFT JOIN roll ON (((roll.service_request_id)::text = (s.servicerequestid)::text)))
+     LEFT JOIN cur ON (((cur.service_request_id)::text = (s.servicerequestid)::text)))
+     LEFT JOIN mdms m ON ((m.service_code = (s.servicecode)::text)))
+     LEFT JOIN cnp ON ((cnp.code = (s.servicecode)::text)))
+     CROSS JOIN LATERAL ( SELECT x.arr[1] AS root_code,
+            (array_length(x.arr, 1))::smallint AS complaint_depth,
+            x.arr[(array_length(x.arr, 1) - 1)] AS service_parent_code
+           FROM ( SELECT string_to_array(cnp.complaint_node_path, '.'::text) AS arr) x) cx)
+     LEFT JOIN LATERAL ( SELECT
+                CASE
+                    WHEN (jsonb_typeof((e.overrides -> (s.servicecode)::text)) = 'array'::text) THEN ( SELECT (sum((v.value)::numeric))::bigint AS sum
+                       FROM jsonb_array_elements_text((e.overrides -> (s.servicecode)::text)) v(value))
+                    WHEN (jsonb_typeof(e.default_levels) = 'array'::text) THEN ( SELECT (sum((v.value)::numeric))::bigint AS sum
+                       FROM jsonb_array_elements_text(e.default_levels) v(value))
+                    ELSE NULL::bigint
+                END AS ladder_sla_ms
+           FROM esc e
+          WHERE ((e.tenantid)::text = ANY ((ARRAY[s.tenantid, (split_part((s.tenantid)::text, '.'::text, 1))::character varying])::text[]))
+          ORDER BY (length((e.tenantid)::text)) DESC
+         LIMIT 1) lad ON (true))
+     CROSS JOIN LATERAL ( SELECT COALESCE(((m.mdms_sla_hours)::bigint * 3600000), lad.ladder_sla_ms, cur.business_sla_ms) AS sla_target_ms) tgt)
+     LEFT JOIN seq ON (((seq.id)::text = (s.id)::text)))
+  WHERE (s.active = true)
+;
+
+
+--
+-- Name: eg_pgr_document_v2; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eg_pgr_document_v2 (
+    id character varying(64) NOT NULL,
+    document_type character varying(64),
+    filestore_id character varying(64),
+    document_uid character varying(64),
+    service_id character varying(64),
+    additional_details jsonb,
+    created_by character varying(64),
+    last_modified_by character varying(64),
+    created_time bigint,
+    last_modified_time bigint
+);
+
+
+--
+-- Name: eg_pgr_hrms_projection; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eg_pgr_hrms_projection (
+    uuid character varying(128) NOT NULL,
+    tenantid character varying(256) NOT NULL,
+    reporting_to character varying(128),
+    department character varying(256),
+    active boolean DEFAULT true,
+    lastmodifiedtime bigint
+);
+
+
+--
+-- Name: pgr_mv_dimension; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.pgr_mv_dimension AS
+ SELECT s.tenantid,
+    'status'::text AS dimension,
+    s.applicationstatus AS dim_value,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text <> ALL ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS open_count,
+    round(avg(
+        CASE
+            WHEN ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[])) THEN (((s.lastmodifiedtime - s.createdtime))::numeric / 86400000.0)
+            ELSE NULL::numeric
+        END), 1) AS avg_resolution_days,
+    round(((100.0 * (count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS completion_rate
+   FROM public.eg_pgr_service_v2 s
+  WHERE (s.active = true)
+  GROUP BY s.tenantid, s.applicationstatus
+UNION ALL
+ SELECT s.tenantid,
+    'source'::text AS dimension,
+    COALESCE(s.source, 'unknown'::character varying) AS dim_value,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text <> ALL ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS open_count,
+    round(avg(
+        CASE
+            WHEN ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[])) THEN (((s.lastmodifiedtime - s.createdtime))::numeric / 86400000.0)
+            ELSE NULL::numeric
+        END), 1) AS avg_resolution_days,
+    round(((100.0 * (count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS completion_rate
+   FROM public.eg_pgr_service_v2 s
+  WHERE (s.active = true)
+  GROUP BY s.tenantid, s.source
+UNION ALL
+ SELECT s.tenantid,
+    'type'::text AS dimension,
+    s.servicecode AS dim_value,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text <> ALL ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS open_count,
+    round(avg(
+        CASE
+            WHEN ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[])) THEN (((s.lastmodifiedtime - s.createdtime))::numeric / 86400000.0)
+            ELSE NULL::numeric
+        END), 1) AS avg_resolution_days,
+    round(((100.0 * (count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS completion_rate
+   FROM public.eg_pgr_service_v2 s
+  WHERE (s.active = true)
+  GROUP BY s.tenantid, s.servicecode
+UNION ALL
+ SELECT s.tenantid,
+    'boundary'::text AS dimension,
+    COALESCE(a.locality, 'Unknown'::character varying) AS dim_value,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    count(*) FILTER (WHERE ((s.applicationstatus)::text <> ALL ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS open_count,
+    round(avg(
+        CASE
+            WHEN ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[])) THEN (((s.lastmodifiedtime - s.createdtime))::numeric / 86400000.0)
+            ELSE NULL::numeric
+        END), 1) AS avg_resolution_days,
+    round(((100.0 * (count(*) FILTER (WHERE ((s.applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS completion_rate
+   FROM (public.eg_pgr_service_v2 s
+     LEFT JOIN public.eg_pgr_address_v2 a ON (((s.id)::text = (a.parentid)::text)))
+  WHERE (s.active = true)
+  GROUP BY s.tenantid, a.locality
+;
+
+
+--
+-- Name: pgr_mv_kpi; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.pgr_mv_kpi AS
+ SELECT tenantid,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    round(((100.0 * (count(*) FILTER (WHERE ((applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))))::numeric) / (NULLIF(count(*), 0))::numeric), 2) AS completion_rate,
+    round(avg(
+        CASE
+            WHEN ((applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[])) THEN (((lastmodifiedtime - createdtime))::numeric / 86400000.0)
+            ELSE NULL::numeric
+        END), 1) AS avg_resolution_days,
+    count(DISTINCT accountid) AS unique_citizens
+   FROM public.eg_pgr_service_v2 s
+  WHERE (active = true)
+  GROUP BY tenantid
+;
+
+
+--
+-- Name: pgr_mv_monthly; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.pgr_mv_monthly AS
+ SELECT tenantid,
+    to_char(to_timestamp(((createdtime / 1000))::double precision), 'Mon-YYYY'::text) AS month_label,
+    (date_trunc('month'::text, to_timestamp(((createdtime / 1000))::double precision)))::date AS month_date,
+    count(*) AS total,
+    count(*) FILTER (WHERE ((applicationstatus)::text = ANY ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS closed,
+    count(*) FILTER (WHERE ((applicationstatus)::text <> ALL ((ARRAY['RESOLVED'::character varying, 'CLOSEDAFTERRESOLUTION'::character varying])::text[]))) AS open_count,
+    count(DISTINCT accountid) AS unique_citizens
+   FROM public.eg_pgr_service_v2 s
+  WHERE (active = true)
+  GROUP BY tenantid, (to_char(to_timestamp(((createdtime / 1000))::double precision), 'Mon-YYYY'::text)), ((date_trunc('month'::text, to_timestamp(((createdtime / 1000))::double precision)))::date)
+;
+
+
+--
+-- Name: pgr_mv_monthly_source; Type: MATERIALIZED VIEW; Schema: public; Owner: -
+--
+
+CREATE MATERIALIZED VIEW public.pgr_mv_monthly_source AS
+ SELECT tenantid,
+    to_char(to_timestamp(((createdtime / 1000))::double precision), 'Mon-YYYY'::text) AS month_label,
+    (date_trunc('month'::text, to_timestamp(((createdtime / 1000))::double precision)))::date AS month_date,
+    COALESCE(source, 'unknown'::character varying) AS source,
+    count(*) AS total
+   FROM public.eg_pgr_service_v2 s
+  WHERE (active = true)
+  GROUP BY tenantid, (to_char(to_timestamp(((createdtime / 1000))::double precision), 'Mon-YYYY'::text)), ((date_trunc('month'::text, to_timestamp(((createdtime / 1000))::double precision)))::date), source
+;
+
+
+--
+-- Name: eg_pgr_hrms_projection pk_eg_pgr_hrms_projection; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.eg_pgr_hrms_projection
+    ADD CONSTRAINT pk_eg_pgr_hrms_projection PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_pgr_document_v2 uk_eg_pgr_document_v2; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.eg_pgr_document_v2
+    ADD CONSTRAINT uk_eg_pgr_document_v2 PRIMARY KEY (id);
+
+
+--
+-- Name: idx_eg_pgr_hrms_projection_reporting; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_eg_pgr_hrms_projection_reporting ON public.eg_pgr_hrms_projection USING btree (tenantid, reporting_to);
+
+
+--
+-- Name: index_eg_pgr_document_v2_filestore_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_eg_pgr_document_v2_filestore_id ON public.eg_pgr_document_v2 USING btree (filestore_id);
+
+
+--
+-- Name: index_eg_pgr_document_v2_tenant_service; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_eg_pgr_document_v2_tenant_service ON public.eg_pgr_document_v2 USING btree (service_id);
+
+
+--
+-- Name: ix_ce_assignee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ce_assignee ON public.complaint_events USING btree (assignee_uuid);
+
+
+--
+-- Name: ix_ce_dept; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ce_dept ON public.complaint_events USING btree (department_code);
+
+
+--
+-- Name: ix_ce_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ce_status ON public.complaint_events USING btree (status);
+
+
+--
+-- Name: ix_ce_timeline; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ce_timeline ON public.complaint_events USING btree (service_request_id, seq_no);
+
+
+--
+-- Name: ix_ce_week; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ce_week ON public.complaint_events USING btree (occurred_week_start);
+
+
+--
+-- Name: ix_cf_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_created ON public.complaint_facts USING btree (created_week_start);
+
+
+--
+-- Name: ix_cf_dept; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_dept ON public.complaint_facts USING btree (department_code);
+
+
+--
+-- Name: ix_cf_open; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_open ON public.complaint_facts USING btree (is_open) WHERE is_open;
+
+
+--
+-- Name: ix_cf_service; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_service ON public.complaint_facts USING btree (service_code);
+
+
+--
+-- Name: ix_cf_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_status ON public.complaint_facts USING btree (application_status);
+
+
+--
+-- Name: ix_cf_ward; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_cf_ward ON public.complaint_facts USING btree (ward_code);
+
+
+--
+-- Name: pgr_mv_dimension_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pgr_mv_dimension_idx ON public.pgr_mv_dimension USING btree (tenantid, dimension, dim_value);
+
+
+--
+-- Name: pgr_mv_kpi_tenantid_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pgr_mv_kpi_tenantid_idx ON public.pgr_mv_kpi USING btree (tenantid);
+
+
+--
+-- Name: pgr_mv_monthly_source_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pgr_mv_monthly_source_idx ON public.pgr_mv_monthly_source USING btree (tenantid, month_date, source);
+
+
+--
+-- Name: pgr_mv_monthly_tenantid_month_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pgr_mv_monthly_tenantid_month_idx ON public.pgr_mv_monthly USING btree (tenantid, month_date);
+
+
+--
+-- Name: ux_complaint_events; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_complaint_events ON public.complaint_events USING btree (event_id);
+
+
+--
+-- Name: ux_complaint_facts; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_complaint_facts ON public.complaint_facts USING btree (service_request_id);
+
+
+--
+-- Name: eg_pgr_document_v2 fk_eg_pgr_document_v2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.eg_pgr_document_v2
+    ADD CONSTRAINT fk_eg_pgr_document_v2 FOREIGN KEY (service_id) REFERENCES public.eg_pgr_service_v2(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict kAT49ENS9PUdkX0uPsLmEFnaW2GPyg8DUSoVqYGIGoDjd58gpOXRYjWqxoOku8j
