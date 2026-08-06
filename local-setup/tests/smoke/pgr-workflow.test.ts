@@ -157,10 +157,13 @@ describe('PGR End-to-End Workflow', () => {
             address: {
               city: tenant.city,
               locality: {
-                // Real Locality seeded in full-dump.sql under pg.citya
-                // (…|PG_CITYA_B1|SUN01_LOCALITY). PGR validates the locality
-                // against the boundary service, so it must actually exist. #1308
-                code: 'SUN01_LOCALITY',
+                // Leaf boundary seeded under the SAME TENANT this complaint is
+                // filed against. PGR resolves the locality at the EXACT tenant,
+                // so the tenant column matters, not the materialized path:
+                // SUN01_LOCALITY's path names pg.citya nodes but its rows are
+                // tenantid 'pg', which is why it failed INVALID_BOUNDARY_CODE.
+                // W1_ADMIN_WARD is the Ward leaf of pg.citya's ADMIN tree. #1308
+                code: 'W1_ADMIN_WARD',
                 name: 'Test Locality',
               },
               geoLocation: {
