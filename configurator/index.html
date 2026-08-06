@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DIGIT Complaints Management</title>
+    <!-- Runtime deployment config. Mirrors digit-ui's /digit-ui/globalConfigs.js:
+         a small script the deploy renders per-tenant and drops next to the
+         bundle, so ONE pre-built image serves every deployment instead of
+         baking VITE_* values in at build time. %BASE_URL% is substituted by
+         Vite with the configured base (/configurator/). Must load BEFORE the
+         module bundle. See src/api/runtimeConfig.ts. -->
+    <script src="%BASE_URL%config.js"></script>
   </head>
   <body>
     <div id="root"></div>
