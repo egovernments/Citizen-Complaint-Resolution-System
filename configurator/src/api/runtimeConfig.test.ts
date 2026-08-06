@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { resolveConfig, resolvePositiveNumber } from './runtimeConfig';
 
 // Precedence contract: runtime (config.js) > build-time (import.meta.env) >
@@ -94,23 +94,46 @@ describe('resolvePositiveNumber', () => {
 // in-code default, which is what made a blank config.js mean "retype the tenant
 // on every login". It now falls back to 'pg' (the tenant the seed dump always
 // creates) like the other three fall back to their own defaults.
-describe('STATE_TENANT_ID default', () => {
+//
+// These exercise the PRODUCTION consumer in ./config.ts, not a test-side copy of
+// the `|| 'pg'` expression. That distinction is load-bearing: with the fallback
+// re-implemented here, deleting it from config.ts left every case green (checked
+// by mutation), so the suite could not have caught the regression it exists to
+// prevent. config.ts resolves STATE_TENANT_ID once at module scope, so each case
+// resets the module registry and re-imports to pick up the new window state.
+describe('STATE_TENANT_ID (as config.ts resolves it)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   afterEach(() => {
     delete window.__CONFIGURATOR_CONFIG__;
+    vi.unstubAllEnvs();
   });
 
-  it('honours a configured tenant over the default', () => {
+  it('honours a configured tenant over the default', async () => {
     window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: 'mz' };
-    expect(resolveConfig('STATE_TENANT_ID', undefined) || 'pg').toBe('mz');
+    const { STATE_TENANT_ID } = await import('./config');
+    expect(STATE_TENANT_ID).toBe('mz');
   });
 
-  it("falls back to 'pg' when nothing is configured at any layer", () => {
+  it("falls back to 'pg' when nothing is configured at any layer", async () => {
     window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: '' };
-    expect(resolveConfig('STATE_TENANT_ID', undefined) || 'pg').toBe('pg');
+    const { STATE_TENANT_ID, DEFAULT_STATE_TENANT_ID } = await import('./config');
+    expect(STATE_TENANT_ID).toBe('pg');
+    expect(STATE_TENANT_ID).toBe(DEFAULT_STATE_TENANT_ID);
   });
 
-  it('a blank runtime value still defers to a build-time one before the default', () => {
+  it('a blank runtime value still defers to a build-time one before the default', async () => {
+    vi.stubEnv('VITE_STATE_TENANT_ID', 'ke');
     window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: '' };
-    expect(resolveConfig('STATE_TENANT_ID', 'ke') || 'pg').toBe('ke');
+    const { STATE_TENANT_ID } = await import('./config');
+    expect(STATE_TENANT_ID).toBe('ke');
+  });
+
+  it('getConfiguredRootTenant collapses a city code and is never empty', async () => {
+    window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: 'mz.maputo' };
+    const { getConfiguredRootTenant } = await import('./config');
+    expect(getConfiguredRootTenant()).toBe('mz');
   });
 });
