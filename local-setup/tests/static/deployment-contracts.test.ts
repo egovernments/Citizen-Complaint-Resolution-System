@@ -46,11 +46,19 @@ describe('ansible playbook-deploy.yml', () => {
 
   // HRMS crash-loops on non-pg tenants without the INTERNAL_USER system
   // user at state_root (its startup lookup is tenant-scoped).
+  // Asserted on the SUBSTANCE, not the task's title. This previously pinned the
+  // exact name 'post-bootstrap — seed INTERNAL_USER system user on state_root
+  // for HRMS'; commit 20e40ca7 renamed the task when it added the retry loop
+  // ('… (retry until tenant UserValidation is live)') and the seeding kept
+  // working, but this test went red and stayed red. A title is not the contract
+  // — the contract is that a post-bootstrap task creates INTERNAL_USER on
+  // state_root with the microservice role.
   test('seeds INTERNAL_USER on state_root after bootstrap', () => {
-    expect(playbook).toContain(
-      'post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS'
-    );
-    expect(playbook).toContain('userName: INTERNAL_USER');
+    expect(playbook).toMatch(/post-bootstrap — seed INTERNAL_USER on state_root/);
+    // JSON body, so no space after the colon: "userName":"INTERNAL_USER"
+    expect(playbook).toMatch(/"userName"\s*:\s*"INTERNAL_USER"/);
+    expect(playbook).toMatch(/"tenantId"\s*:\s*"\{\{ state_root \}\}"/);
+    expect(playbook).toContain('INTERNAL_MICROSERVICE_ROLE');
   });
 
   // The HRMS prereq gate ships hardcoded to tenant pg; without the

@@ -25,7 +25,21 @@ const TENANT_LABEL = TENANT.split('.').pop()!.toUpperCase();
 const timestamp = Date.now();
 
 const cityPart = TENANT.includes('.') ? TENANT.split('.').pop()! : TENANT;
-const LOCALITY_CODE = `LOC_${cityPart.toUpperCase()}_1`;
+// Leaf boundary seeded in full-dump.sql under the SAME TENANT the complaint is
+// filed against. PGR validates the locality via
+// boundary-service/boundary/_search?tenantId=<complaint tenant>&codes=<code>,
+// which resolves at the EXACT tenant — it does not walk up to the parent.
+//
+// The tenant column is what matters, NOT the materialized path. SUN01_LOCALITY
+// was used here before and its path reads
+// PG_STATE|PG_CITYA|PG_CITYA_Z1|PG_CITYA_B1|SUN01_LOCALITY, which looks like
+// pg.citya — but every one of those rows carries tenantid 'pg', so the lookup
+// under pg.citya returned nothing and every create failed with
+// INVALID_BOUNDARY_CODE. The two tenants have disjoint boundary sets:
+//   pg        PG_STATE, PG_CITYA, PG_CITYA_Z1, PG_CITYA_B1, SUN0{1,2,3}_LOCALITY
+//   pg.citya  PG_CITYA_ADMIN_CITY, Z{1,2}_ADMIN_ZONE, W{1,2,3}_ADMIN_WARD
+// W1_ADMIN_WARD is a Ward — the leaf of pg.citya's ADMIN hierarchy. See #1308.
+const LOCALITY_CODE = process.env.LOCALITY_CODE || 'W1_ADMIN_WARD';
 
 const PGR_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
