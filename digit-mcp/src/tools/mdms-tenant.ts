@@ -168,6 +168,57 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
   return cleaned.length > 0 ? cleaned : null;
 }
 
+/** Minimal shape of an mdms-v2 record this module needs to read a master's code + name. */
+interface MasterRowLike {
+  uniqueIdentifier?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * #1590: derive `COMMON_MASTERS_DEPARTMENT_<CODE>` / `COMMON_MASTERS_DESIGNATION_<CODE>`
+ * messages from the department/designation MASTERS a bootstrap just copied.
+ *
+ * tenant_bootstrap's localization step can only carry a message that already
+ * exists on some source tenant, while the MDMS data copy carries the masters
+ * unconditionally. A master the source dump never localized therefore lands on
+ * the target with no message and renders as its raw code — the canned
+ * `pg.citya` / `india.citya` `PMC_*` departments are the live example, and the
+ * dashboard's department tiles show `PMC_ELEC` because the dimensionLabel
+ * contract deliberately has no humaniser
+ * (digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+ *
+ * The message text is the master's own `name` — DATA-OWNED text an operator
+ * authored, which is exactly what that contract sanctions as fallback. A
+ * master with no `name` yields nothing: the gap stays visible rather than
+ * being papered over with a label invented from the code.
+ *
+ * Callers apply this as a FLOOR (a real copied message always wins) and for
+ * the primary locale only — writing an English master name into a pt_PT pack
+ * would hide a genuine translation gap.
+ */
+export function deriveMasterLocalizations(
+  departments: MasterRowLike[],
+  designations: MasterRowLike[],
+): { code: string; message: string; module: string }[] {
+  const out: { code: string; message: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const derive = (rows: MasterRowLike[], prefix: string) => {
+    for (const row of rows || []) {
+      const data = row?.data || {};
+      const code = (row?.uniqueIdentifier || (data.code as string | undefined) || '').trim();
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!code || !name) continue;
+      const key = `${prefix}${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ code: key, message: name, module: 'rainmaker-common' });
+    }
+  };
+  derive(departments, 'COMMON_MASTERS_DEPARTMENT_');
+  derive(designations, 'COMMON_MASTERS_DESIGNATION_');
+  return out;
+}
+
 /**
  * Schemas where copying ZERO records from the source is a defect, not a no-op.
  *
@@ -2142,7 +2193,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // ────────────────────────────────────────────────────────────────
       emitProgress({ phase: 'localizations:start', message: 'Copying localization messages (this can take a while for the full set)', pct: 95 });
 
-      const localizationResults: { locale: string; copied: number; failed: number; error?: string }[] = [];
+      const localizationResults: { locale: string; copied: number; failed: number; derived?: number; error?: string }[] = [];
       const UPSERT_BATCH = 500;
 
       // Discover locales — read source's StateInfo, pull `.languages[].value`.
@@ -2168,6 +2219,43 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const localeSourceTenants = Array.from(
         new Set([source, 'statea', 'statea.g', 'pg', 'pg.citest', 'ke', 'ke.nairobi']),
       );
+
+      // #1590: the copy loop can only carry a message that already exists on
+      // SOME source tenant. Step 2 copies the department/designation MASTERS
+      // regardless — so a master the source dump never localized (the canned
+      // `pg.citya`/`india.citya` PMC_* departments are the live example) lands
+      // on the target with no `COMMON_MASTERS_DEPARTMENT_<CODE>` message and
+      // renders as the raw code wherever a code is displayed: HRMS forms, the
+      // employee filters, and the dashboard's department tiles (which have no
+      // humaniser by design — see the dimensionLabel contract in
+      // digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+      //
+      // Derive the missing keys from the master's own `name`. That is the
+      // DATA-OWNED display text an operator authored, which is exactly what
+      // the dimensionLabel contract sanctions as fallback — not a code-owned
+      // English guess. Copied messages still win (added below only when the
+      // union has no entry for the key).
+      //
+      // PRIMARY LOCALE ONLY — and the primary locale is StateInfo.languages[0],
+      // the deployment's own default, NOT en_IN. The master `name` is authored
+      // in whatever language the operator onboarded in ("Obras Públicas" on mz),
+      // so it belongs in that deployment's default pack. Copying it into the
+      // *other* packs would paper over a real translation gap and defeat the
+      // locale-strict resolution added for #1108 — an untranslated department
+      // must stay visibly untranslated in the locales nobody translated it into.
+      const primaryLocale = locales[0];
+      let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
+      try {
+        const [deptRows, desigRows] = await Promise.all([
+          digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 500 }).catch(() => []),
+          digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 500 }).catch(() => []),
+        ]);
+        derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
+      } catch (e) {
+        // Non-fatal: the copy loop below still runs. A master read failure
+        // just means no derived floor for this run.
+        console.error(`[tenant_bootstrap] master-derived localization skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       for (const locale of locales) {
         emitProgress({
@@ -2232,6 +2320,26 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (!byKey.has(key)) byKey.set(key, m);
             }
           }
+          // #1590 floor: department/designation labels derived from the masters
+          // Step 2 copied, for codes no source tenant localized. Primary locale
+          // only, and only where the union has nothing — a real translation
+          // always wins over the master name.
+          let derivedCount = 0;
+          if (locale === primaryLocale) {
+            for (const m of derivedMasterMessages) {
+              const key = `${m.module}::${m.code}`;
+              if (byKey.has(key)) continue;
+              byKey.set(key, m);
+              derivedCount++;
+            }
+            if (derivedCount > 0) {
+              emitProgress({
+                phase: 'localizations:derived',
+                message: `${locale}: derived ${derivedCount} department/designation label(s) from MDMS masters (no source tenant localized them)`,
+                data: { locale, derived: derivedCount },
+              });
+            }
+          }
           const messages = Array.from(byKey.values());
 
           if (messages.length === 0) {
@@ -2290,7 +2398,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             }
           }
-          localizationResults.push({ locale, copied, failed });
+          localizationResults.push({ locale, copied, failed, ...(derivedCount > 0 ? { derived: derivedCount } : {}) });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           localizationResults.push({ locale, copied: 0, failed: 0, error: msg.slice(0, 200) });
@@ -2299,6 +2407,34 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
       const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
+
+      // The derived floor also has to land on the ROOT tenant, not just the
+      // city. egov-localization `_search` resolves a tenant's OWN rows only —
+      // verified on bomet: a `_search` at `ke.india` returns its 9 rows and no
+      // `ke` row, and a `_search` at `ke` never sees a `ke.india` row. The
+      // dashboard (like the rest of the employee shell) loads its packs for
+      // `stateTenantId`, so a message written only to `ke.india` is invisible
+      // exactly where #1590 was reported — the root dashboard aggregating that
+      // city's complaints. Same reason, same shape as the TENANT_TENANTS_*
+      // push below. Duplicate-tolerant: the root usually already has most of
+      // these, and the upsert treats a repeat as a no-op.
+      if (derivedMasterMessages.length > 0 && target.includes('.')) {
+        const rootTenant = target.split('.')[0];
+        let rootDerived = 0;
+        for (const m of derivedMasterMessages) {
+          try {
+            await digitApi.localizationUpsert(rootTenant, primaryLocale, [m]);
+            rootDerived++;
+          } catch {
+            // Already present at the root (the common case) — a no-op.
+          }
+        }
+        emitProgress({
+          phase: 'localizations:derived_root',
+          message: `${primaryLocale}: pushed ${rootDerived}/${derivedMasterMessages.length} derived master label(s) to root "${rootTenant}" so state-level UIs resolve them`,
+          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived },
+        });
+      }
 
       // Push TENANT_TENANTS_<CODE> to both the city tenant and its root so the
       // city-selection dropdown resolves regardless of whether stateTenantId is
