@@ -118,6 +118,12 @@ describe('STATE_TENANT_ID (as config.ts resolves it)', () => {
   });
 
   it("falls back to 'pg' when nothing is configured at any layer", async () => {
+    // Blank the build-time layer EXPLICITLY rather than assuming it is unset.
+    // vitest loads VITE_*-prefixed variables from the environment and .env
+    // files, so a stray VITE_STATE_TENANT_ID=pg would satisfy this assertion
+    // through the build-time layer and the case would still pass with the
+    // in-code default deleted — i.e. it would stop testing the default at all.
+    vi.stubEnv('VITE_STATE_TENANT_ID', '');
     window.__CONFIGURATOR_CONFIG__ = { STATE_TENANT_ID: '' };
     const { STATE_TENANT_ID, DEFAULT_STATE_TENANT_ID } = await import('./config');
     expect(STATE_TENANT_ID).toBe('pg');
