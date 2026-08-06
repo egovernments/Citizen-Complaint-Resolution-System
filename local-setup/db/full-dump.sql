@@ -662,7 +662,8 @@ CREATE TABLE public.eg_pgr_service_v2 (
     createdtime bigint NOT NULL,
     lastmodifiedby character varying(256),
     lastmodifiedtime bigint,
-    active boolean DEFAULT true
+    active boolean DEFAULT true,
+    extended_attributes jsonb
 );
 
 
@@ -7053,6 +7054,20 @@ CREATE INDEX idx_token_number_identity_tenant ON public.eg_token USING btree (to
 --
 
 CREATE INDEX index_eg_pgr_address_v2_locality ON public.eg_pgr_address_v2 USING btree (locality);
+
+
+--
+-- Name: index_eg_pgr_service_v2_accountid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pgr_svc_ext_case_related_to ON public.eg_pgr_service_v2 USING btree (((extended_attributes ->> 'caseRelatedTo'::text)));
+
+
+--
+-- Name: idx_pgr_svc_ext_is_confidential; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pgr_svc_ext_is_confidential ON public.eg_pgr_service_v2 USING btree ((((extended_attributes ->> 'isConfidential'::text))::boolean));
 
 
 --
