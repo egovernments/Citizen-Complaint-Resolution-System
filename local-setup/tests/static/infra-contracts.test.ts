@@ -102,12 +102,17 @@ describe('image pin immutability', () => {
   // this many times, no more, no less — extras, duplicates, AND removals
   // all fail the test until this list is updated to match. The list IS
   // the changelog of this debt; it may shrink, never grow.
+  // RENAMED, NOT GROWN: the egovio registry migration re-published these same
+  // images under the egovio namespace (curlimages/curl -> egovio/curl,
+  // twinproduction/gatus -> egovio/gatus, edoburu/pgbouncer -> egovio/pgbouncer,
+  // tilt-demo-* -> egovio/tilt-demo-*). Same eight pins on the same services;
+  // only the names moved. openbao is upstream and was never migrated.
   const FROZEN_LATEST_DEBT: Record<string, number> = {
-    'edoburu/pgbouncer:latest': 1,
-    'tilt-demo-db-migrations:latest': 1,
-    'curlimages/curl:latest': 2, // two gate containers
-    'twinproduction/gatus:latest': 1,
-    'tilt-demo-jupyter:latest': 1,
+    'egovio/pgbouncer:latest': 1,
+    'egovio/tilt-demo-db-migrations:latest': 1,
+    'egovio/curl:latest': 2, // two gate containers
+    'egovio/gatus:latest': 1,
+    'egovio/tilt-demo-jupyter:latest': 1,
     'openbao/openbao:latest': 1,
     'egovio/novu-bridge-endpoint:latest': 1,
   };
