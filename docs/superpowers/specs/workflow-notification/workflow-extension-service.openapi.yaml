@@ -1,0 +1,619 @@
+openapi: 3.0.3
+info:
+  title: DIGIT Workflow Extension Service API
+  description: |
+    Workflow Extension Service provides extra-workflow metadata that modules
+    layer on top of the canonical `Workflow.BusinessService` definition served
+    by `egov-workflow-v2`.
+
+    Each extension document is keyed by `(tenantId, businessService)` and
+    carries a list of transitions. For each `(fromState, action)` it names
+    the audience codes (`notifyRoles[]`) that should receive a notification
+    when the transition fires. The consuming module translates each audience
+    code into actual recipients while building the outbound domain event's
+    `stakeholders[]`.
+
+    The service is the **single integrity authority** for the
+    `Workflow.BusinessServiceExtension` MDMS master. All writes flow through
+    it; on every write the candidate document is validated against the matching
+    `Workflow.BusinessService` entry before being persisted to MDMS.
+
+    Out of scope for v1:
+      - Per-channel template selection, template bodies, and rendering — all
+        handled downstream by `novu-bridge` via `egov-config-service`.
+      - User channel preferences — handled by `novu-bridge`'s preference
+        client.
+      - State-level metadata (display labels, colors, terminal-state
+        classification, escalation eligibility) — handled by localization and
+        the consumer module's own logic.
+
+    Companions:
+      - Design doc: `2026-06-19-moz_007-workflow-extension-service-design.md`
+      - MDMS shape: `Workflow.BusinessServiceExtension.json`
+      - First consumer: `pgr-services` via `WorkflowExtensionClient.java`.
+  version: 0.1.0
+  contact:
+    name: DIGIT Platform Team
+servers:
+  - url: https://{host}/workflow-extension
+    variables:
+      host:
+        default: workflow-extension.example.org
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Extension
+    description: |
+      CRUD + validation for `BusinessServiceExtension` documents.
+
+paths:
+
+  /v1/extension/_search:
+    post:
+      tags: [Extension]
+      summary: Search BusinessService extensions
+      description: |
+        Returns the extension documents matching the criteria. Empty `extensions`
+        array when no match. Use `tenantId` alone to list all extensions for a
+        tenant; add `businessService` to retrieve one specific extension.
+
+        RBAC: requires role `WORKFLOW_EXTENSION_VIEWER` or higher.
+      operationId: searchExtensions
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ExtensionSearchRequest"
+      responses:
+        "200":
+          description: Search result.
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ExtensionSearchResponse"
+        "400":
+          description: Malformed input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /v1/extension/_validate:
+    post:
+      tags: [Extension]
+      summary: Validate an extension candidate without persisting
+      description: |
+        Validates a candidate extension document against the corresponding
+        `Workflow.BusinessService` entry. Always returns HTTP 200 with a
+        `ValidationResult` body. The `valid` field is `false` when one or
+        more rule violations are present in `errors[]`. Warnings are advisory
+        and do not flip `valid` to `false`.
+
+        HTTP 400 is reserved for malformed JSON or missing required fields,
+        not for validation failures.
+
+        RBAC: requires role `WORKFLOW_EXTENSION_VIEWER` or higher.
+      operationId: validateExtension
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ExtensionValidateRequest"
+      responses:
+        "200":
+          description: Validation result.
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ExtensionValidateResponse"
+        "400":
+          description: Malformed input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /v1/extension/_create:
+    post:
+      tags: [Extension]
+      summary: Create a new BusinessService extension
+      description: |
+        Validates the candidate document, then persists it to MDMS under
+        `Workflow.BusinessServiceExtension`. Validation failures return HTTP
+        400 with a structured `ErrorRes` body whose `Errors[]` array carries
+        the rule violations using the same `code` taxonomy as
+        `/v1/extension/_validate`. A duplicate `(tenantId, businessService)`
+        returns HTTP 409.
+
+        RBAC: requires role `WORKFLOW_EXTENSION_EDITOR`.
+      operationId: createExtension
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ExtensionCreateRequest"
+      responses:
+        "201":
+          description: Extension created.
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ExtensionResponse"
+        "400":
+          description: Malformed input or validation failure.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "409":
+          description: Extension already exists for `(tenantId, businessService)`.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /v1/extension/_update:
+    post:
+      tags: [Extension]
+      summary: Update an existing BusinessService extension
+      description: |
+        Full document replacement (no patch semantics). Validates the candidate
+        before persisting. Validation failures return HTTP 400; missing target
+        returns HTTP 404.
+
+        RBAC: requires role `WORKFLOW_EXTENSION_EDITOR`.
+      operationId: updateExtension
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ExtensionUpdateRequest"
+      responses:
+        "200":
+          description: Extension updated.
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ExtensionResponse"
+        "400":
+          description: Malformed input or validation failure.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "404":
+          description: No extension exists for the supplied `(tenantId, businessService)`.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+  /v1/extension/_delete:
+    post:
+      tags: [Extension]
+      summary: Delete a BusinessService extension
+      description: |
+        Removes the extension entry for `(tenantId, businessService)`. Consumers
+        for that tenant subsequently fall back to legacy hardcoded behavior
+        (as if the per-tenant flag were off).
+
+        RBAC: requires role `WORKFLOW_EXTENSION_EDITOR`.
+      operationId: deleteExtension
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema:
+              $ref: "#/components/schemas/ExtensionDeleteRequest"
+      responses:
+        "200":
+          description: Extension deleted.
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/ExtensionDeleteResponse"
+        "400":
+          description: Malformed input.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "401":
+          description: Unauthorized.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+        "404":
+          description: No extension exists for the supplied `(tenantId, businessService)`.
+          content:
+            "*/*":
+              schema:
+                $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/ErrorRes"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    # ─── Enums ───────────────────────────────────────────────────────────
+
+    NotifyRole:
+      type: string
+      description: |
+        Logical recipient of a notification on a workflow transition.
+        The consuming module resolves each role to actual identities:
+          - CITIZEN: the citizen on `Service.accountId`.
+          - ASSIGNEE: current `ProcessInstance.assignes`.
+          - CREATOR: `Service.auditDetails.createdBy`.
+          - SUPERVISOR: HRMS reportingTo of ASSIGNEE.
+          - PREVIOUS_ASSIGNEE: ProcessInstance history, one step back.
+      enum:
+        - CITIZEN
+        - ASSIGNEE
+        - CREATOR
+        - SUPERVISOR
+        - PREVIOUS_ASSIGNEE
+
+    ValidationErrorCode:
+      type: string
+      description: |
+        Stable codes for validation rule violations. See the design doc §4.3
+        for full semantics.
+      enum:
+        - UNKNOWN_TRANSITION
+        - INVALID_NOTIFY_ROLE
+        - DUPLICATE_TRANSITION_EXTENSION
+        - BUSINESS_SERVICE_NOT_FOUND
+
+    ValidationWarningCode:
+      type: string
+      description: |
+        Non-blocking advisory codes. Returned alongside successful validation
+        when the candidate document is incomplete relative to the BusinessService.
+      enum:
+        - MISSING_TRANSITION_COVERAGE
+
+    # ─── Core domain models ──────────────────────────────────────────────
+
+    TransitionExtension:
+      type: object
+      required:
+        - action
+        - notifyRoles
+      properties:
+        fromState:
+          type: string
+          nullable: true
+          description: |
+            State the transition fires from. `null` matches the workflow
+            start state (the implicit pre-APPLY position).
+            Joins to `BusinessService.states[].state`.
+          maxLength: 128
+          example: PENDINGATLME
+        action:
+          type: string
+          description: |
+            Workflow action name. Joins to
+            `BusinessService.states[fromState].actions[].action`.
+          minLength: 1
+          maxLength: 64
+          example: RESOLVE
+        notifyRoles:
+          type: array
+          description: |
+            Audience codes for the notification fired when this transition
+            occurs. The consuming module translates each code to actual
+            recipients while building the outbound domain event's
+            `stakeholders[]`. Order is irrelevant; duplicates are
+            deduplicated by the consumer.
+
+            Per-channel template selection, user channel preferences, and
+            template rendering are all downstream of this contract
+            (handled by `novu-bridge` via `egov-config-service`).
+          minItems: 0
+          items:
+            $ref: "#/components/schemas/NotifyRole"
+          example: ["CITIZEN", "ASSIGNEE"]
+
+    BusinessServiceExtension:
+      type: object
+      required:
+        - tenantId
+        - businessService
+        - transitions
+      properties:
+        tenantId:
+          type: string
+          description: |
+            Tenant identifier. Supports the standard DIGIT
+            state-level / city-level convention: an extension at `mz` is
+            visible to all `mz.*` sub-tenants unless overridden at the
+            sub-tenant level.
+          minLength: 1
+          maxLength: 256
+          example: mz
+        businessService:
+          type: string
+          description: |
+            BusinessService name. Joins to
+            `Workflow.BusinessService.businessService`.
+          minLength: 1
+          maxLength: 128
+          example: PGR
+        transitions:
+          type: array
+          description: |
+            One entry per (fromState, action) pair for which a notification
+            should fire. A transition not present in this list is treated as
+            "no notification configured" by consumers, which fall back to
+            their legacy behavior under the per-tenant flag.
+            Each entry must correspond to a defined action in the BusinessService.
+          items:
+            $ref: "#/components/schemas/TransitionExtension"
+        auditDetails:
+          $ref: "#/components/schemas/AuditDetails"
+
+    AuditDetails:
+      type: object
+      description: Standard DIGIT audit envelope. Populated by the server.
+      properties:
+        createdBy:
+          type: string
+        createdTime:
+          type: integer
+          format: int64
+        lastModifiedBy:
+          type: string
+        lastModifiedTime:
+          type: integer
+          format: int64
+
+    # ─── Validation result models ────────────────────────────────────────
+
+    ValidationError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: "#/components/schemas/ValidationErrorCode"
+        state:
+          type: string
+          nullable: true
+          description: State this error pertains to, when applicable.
+        fromState:
+          type: string
+          nullable: true
+          description: For transition-scoped errors.
+        action:
+          type: string
+          nullable: true
+          description: For transition-scoped errors.
+        message:
+          type: string
+          description: Human-readable description of the violation.
+
+    ValidationWarning:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: "#/components/schemas/ValidationWarningCode"
+        state:
+          type: string
+          nullable: true
+        fromState:
+          type: string
+          nullable: true
+        action:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    ValidationResult:
+      type: object
+      required:
+        - valid
+      properties:
+        valid:
+          type: boolean
+          description: |
+            `true` iff no `errors[]` entries. Warnings do not flip this.
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationWarning"
+
+    # ─── Search criteria ─────────────────────────────────────────────────
+
+    ExtensionSearchCriteria:
+      type: object
+      required:
+        - tenantId
+      properties:
+        tenantId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          example: mz
+        businessService:
+          type: string
+          description: |
+            When omitted, returns all extensions for the tenant.
+          minLength: 1
+          maxLength: 128
+          example: PGR
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 200
+          default: 50
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+
+    # ─── Request envelopes ───────────────────────────────────────────────
+
+    ExtensionSearchRequest:
+      type: object
+      required:
+        - requestInfo
+        - criteria
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        criteria:
+          $ref: "#/components/schemas/ExtensionSearchCriteria"
+
+    ExtensionValidateRequest:
+      type: object
+      required:
+        - requestInfo
+        - extension
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        extension:
+          $ref: "#/components/schemas/BusinessServiceExtension"
+
+    ExtensionCreateRequest:
+      type: object
+      required:
+        - requestInfo
+        - extension
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        extension:
+          $ref: "#/components/schemas/BusinessServiceExtension"
+
+    ExtensionUpdateRequest:
+      type: object
+      required:
+        - requestInfo
+        - extension
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        extension:
+          $ref: "#/components/schemas/BusinessServiceExtension"
+
+    ExtensionDeleteRequest:
+      type: object
+      required:
+        - requestInfo
+        - tenantId
+        - businessService
+      properties:
+        requestInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/RequestInfo"
+        tenantId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          example: mz
+        businessService:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: PGR
+
+    # ─── Response envelopes ──────────────────────────────────────────────
+
+    ExtensionSearchResponse:
+      type: object
+      required:
+        - responseInfo
+        - extensions
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        extensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusinessServiceExtension"
+        pagination:
+          $ref: "https://raw.githubusercontent.com/egovernments/DIGIT-OSS/master/core-services/docs/common-contract_v1-1.yml#/components/schemas/Pagination"
+
+    ExtensionValidateResponse:
+      type: object
+      required:
+        - responseInfo
+        - result
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        result:
+          $ref: "#/components/schemas/ValidationResult"
+
+    ExtensionResponse:
+      type: object
+      required:
+        - responseInfo
+        - extension
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        extension:
+          $ref: "#/components/schemas/BusinessServiceExtension"
+
+    ExtensionDeleteResponse:
+      type: object
+      required:
+        - responseInfo
+      properties:
+        responseInfo:
+          $ref: "https://raw.githubusercontent.com/egovernments/egov-services/master/docs/common/contracts/v1-0-0.yml#/definitions/ResponseInfo"
+        deleted:
+          type: object
+          properties:
+            tenantId:
+              type: string
+            businessService:
+              type: string
