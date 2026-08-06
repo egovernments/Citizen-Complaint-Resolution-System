@@ -118,6 +118,21 @@ plugins:
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
           -- flips. POST-only, size- and rate-limited at the route (see below).
           ["/otel/v1/metrics"]=true, ["/otel/v1/logs"]=true,
+          -- Public dashboard read path. These three are what the anonymous
+          -- dashboard page (digit-ui-esbuild src/public-dashboard.js) calls; the
+          -- server-side PUBLIC floor is the real boundary, not this list:
+          -- AnalyticsService degrades a role-less caller to the PUBLIC role, so
+          -- only rbac.visibleTo:["PUBLIC"] defs resolve, and inline query grammar
+          -- is refused for that caller (kpiId-by-reference only). Listing them
+          -- makes the public floor an explicit contract rather than a side effect
+          -- of ENFORCE_UNAUTH being false, so the page survives that flag flip.
+          --
+          -- /_schema is deliberately NOT listed: the dashboard never calls it and
+          -- it enumerates every grain's columns (UUID dimensions included), so it
+          -- should start 401ing as soon as enforcement is on.
+          ["/pgr-services/v2/analytics/packs"]=true,
+          ["/pgr-services/v2/analytics/catalog/_search"]=true,
+          ["/pgr-services/v2/analytics/_query"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]

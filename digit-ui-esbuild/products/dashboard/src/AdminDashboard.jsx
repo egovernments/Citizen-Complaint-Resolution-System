@@ -145,10 +145,24 @@ function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, 
 /* Auth gate (mirrors AdminDashboard)                                          */
 /* -------------------------------------------------------------------------- */
 
-const AdminDashboard = ({ embedded = false }) => {
-  // Embedded (inside the DigitUI employee chrome) the host guarantees the
-  // session and owns sign-out, so the standalone login gate is skipped.
-  const [authed, setAuthed] = useState(() => embedded || hasDashboardSession());
+const AdminDashboard = ({ embedded = false, mode }) => {
+  // `mode` splits the two concerns the old boolean `embedded` conflated:
+  // WHO OWNS THE CHROME, and WHETHER A SESSION IS REQUIRED.
+  //
+  //   embedded   host chrome (DigitUI), session guaranteed by AppModules
+  //   standalone own shell, own login gate
+  //   public     own shell, NO login — requests go out anonymously and the
+  //              backend's PUBLIC floor decides what comes back
+  //
+  // `embedded` is kept as a legacy alias so Module.js (and any other caller)
+  // keeps working unchanged; an explicit `mode` always wins.
+  const resolvedMode = mode || (embedded ? "embedded" : "standalone");
+  const isEmbedded = resolvedMode === "embedded";
+  // Only the standalone shell owns a session: embedded inherits the host's,
+  // public deliberately has none.
+  const requiresSession = resolvedMode === "standalone";
+
+  const [authed, setAuthed] = useState(() => !requiresSession || hasDashboardSession());
   const [expired, setExpired] = useState(false);
 
   // The gate used to be evaluated once at mount, so a session that died while
@@ -157,19 +171,21 @@ const AdminDashboard = ({ embedded = false }) => {
   // authService announces an unrecoverable session and we drop to the login
   // screen with an explanation.
   //
-  // Not when embedded: there the surrounding DigitUI chrome owns the session and
-  // its own expiry handling, and rendering our standalone login form inside it
-  // would be wrong. authService has already cleared the dead token, so the host
-  // sees the same state on its next call.
+  // Only in standalone mode. Embedded, the surrounding DigitUI chrome owns the
+  // session and its own expiry handling, and rendering our standalone login form
+  // inside it would be wrong. Public has no session to expire — dropping a
+  // public visitor onto a login form would be a regression, not a recovery.
+  // authService has already cleared the dead token, so the host sees the same
+  // state on its next call.
   useEffect(() => {
-    if (embedded) return undefined;
+    if (!requiresSession) return undefined;
     const onExpired = () => {
       setExpired(true);
       setAuthed(false);
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
-  }, [embedded]);
+  }, [requiresSession]);
 
   // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
   // #1272). Primed synchronously so the first painted frame is already masked.
@@ -195,10 +211,12 @@ const AdminDashboard = ({ embedded = false }) => {
   if (dashboardConfigLoading) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
+  // Public renders the standalone shell (embedded=false) but with no sign-out —
+  // Sidebar only draws that control when onSignOut is supplied.
   return (
     <AdminDashboardInner
-      embedded={embedded}
-      onSignOut={embedded ? undefined : handleSignOut}
+      embedded={isEmbedded}
+      onSignOut={requiresSession ? handleSignOut : undefined}
       timeZone={timeZone}
     />
   );
