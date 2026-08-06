@@ -43,11 +43,22 @@ export const locationDetails = {
       "inline": true,
       "label": "CS_COMPLAINT_POSTALCODE__DETAILS",
       "isMandatory": false,
-      "type": "number",
+      // "text", not "number": the configured postalCodePattern may be alnum
+      // or dash-suffixed (see _example.yml), and FormExplorer validates this
+      // field against the full pattern via the shared utils/postalCode.js —
+      // a number input can't hold those shapes, which would make the field
+      // unfillable on such tenants.
+      "type": "text",
       "disable": false,
       "populators": {
         "name": "postalCode",
-        "maxlength": 7,
+        // Lives under validation.maxlength — RenderFormFields reads
+        // populators.validation.maxlength; a bare populators.maxlength is
+        // never passed to the input (the old `"maxlength": 7` here was
+        // inert, this field never actually had a cap).
+        "validation": {
+          "maxlength": 16,
+        },
       }
     }
   ]

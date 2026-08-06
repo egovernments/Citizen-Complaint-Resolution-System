@@ -37,7 +37,7 @@ Two resolution seams in `products/dashboard/src/i18n/`:
 ## 2. Dashboard-owned keys (module `rainmaker-dashboard`)
 
 Seed all of these per locale. The authoritative en_IN set is the generated pack
-`digit-mcp/src/tools/dashboard-l10n-seed.ts` (277 messages) — grep it rather than trusting this
+`digit-mcp/src/tools/dashboard-l10n-seed.ts` (309 messages) — grep it rather than trusting this
 table to stay exhaustive.
 
 | family | pattern | examples | source of the key |

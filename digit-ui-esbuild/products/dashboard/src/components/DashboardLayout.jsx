@@ -13,8 +13,6 @@ const DashboardLayout = ({
   onResetLayout,
   onDragWidgetStart,
   onDragWidgetEnd,
-  searchQuery,
-  onSearchQueryChange,
   onExport,
   filters,
   onFilterChange,
@@ -62,8 +60,6 @@ const DashboardLayout = ({
           onResetLayout={onResetLayout}
           onDragWidgetStart={onDragWidgetStart}
           onDragWidgetEnd={onDragWidgetEnd}
-          searchQuery={searchQuery}
-          onSearchQueryChange={onSearchQueryChange}
           onExport={onExport}
           filters={filters}
           filterOptions={filterOptions}

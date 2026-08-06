@@ -1,37 +1,11 @@
-import { getTenantId, hasAuth } from "./analyticsService";
+import {
+  authFetch,
+  buildRequestInfo,
+  getTenantId,
+  hasAuth,
+} from "./authService";
 import { withTraceHeaders } from "./dashboardMetrics";
 
-function parseJson(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function getEmployeeToken() {
-  const raw = window.localStorage?.getItem("Employee.token");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function getEmployeeInfo() {
-  const raw = window.localStorage?.getItem("Employee.user-info");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function buildRequestInfo() {
-  const authToken = getEmployeeToken();
-  const userInfo = getEmployeeInfo();
-  return {
-    apiId: "Rainmaker",
-    ver: ".01",
-    ts: Date.now(),
-    action: "_search",
-    msgId: `dashboard-boundary-${Date.now()}`,
-    ...(authToken && { authToken }),
-    ...(userInfo && { userInfo }),
-  };
-}
 
 /**
  * Fetch boundary entities with GeoJSON geometry.
@@ -45,6 +19,7 @@ export async function fetchBoundariesByCodes(codes = []) {
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
   const chunkSize = 100;
   const all = [];
+  let lastError = null;
 
   for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
     const chunk = uniqueCodes.slice(i, i + chunkSize);
@@ -54,22 +29,33 @@ export async function fetchBoundariesByCodes(codes = []) {
       limit: String(chunk.length),
     });
 
-    const response = await fetch(`/boundary-service/boundary/_search?${params}`, {
-      method: "POST",
-      headers: withTraceHeaders({ "Content-Type": "application/json" }),
-      credentials: "omit",
-      body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
-    });
+    // Per-chunk tolerance so one failure does not discard what is already
+    // loaded, but a TOTAL failure still rethrows so the map can show its error
+    // state instead of a silently blank choropleth. Auxiliary data: a 401 here
+    // must never be allowed to declare the whole session dead.
+    try {
+      const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
+        headers: withTraceHeaders({}),
+        buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+        sessionCritical: false,
+      });
 
-    if (!response.ok) {
-      console.warn(`boundary/_search failed (${response.status})`);
-      continue;
+      if (!response.ok) {
+        console.warn(`boundary/_search failed (${response.status})`);
+        lastError = new Error(`boundary/_search failed (${response.status})`);
+        continue;
+      }
+
+      const payload = await response.json();
+      const boundaries = payload?.Boundary || [];
+      all.push(...boundaries);
+    } catch (error) {
+      console.warn("boundary/_search error", error);
+      lastError = error;
     }
-
-    const payload = await response.json();
-    const boundaries = payload?.Boundary || [];
-    all.push(...boundaries);
   }
+
+  if (!all.length && lastError) throw lastError;
 
   return all;
 }
@@ -154,13 +140,12 @@ export async function fetchBoundaryRelationshipsByCodes(
       limit: "500",
     });
 
-    const response = await fetch(
+    const response = await authFetch(
       `/boundary-service/boundary-relationships/_search?${params}`,
       {
-        method: "POST",
-        headers: withTraceHeaders({ "Content-Type": "application/json" }),
-        credentials: "omit",
-        body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
+        headers: withTraceHeaders({}),
+        buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+        sessionCritical: false,
       }
     );
 

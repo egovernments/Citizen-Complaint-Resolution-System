@@ -1,5 +1,5 @@
 # docker-compose.egov-digit.yaml
-# Standalone compose — all images from public registry registry.preview.egov.theflywheel.in
+# Standalone compose — all images from the egovio Docker Hub org (plus upstream public registries)
 # Generated from docker-compose.deploy.yaml with registry-prefixed images and build: removed
 #
 # Usage: docker compose -f docker-compose.egov-digit.yaml up -d
@@ -7,7 +7,7 @@
 services:
   # ==================== Tracing Infrastructure ====================
   otel-collector:
-    image: registry.preview.egov.theflywheel.in/otel/opentelemetry-collector-contrib:0.114.0
+    image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -21,7 +21,7 @@ services:
       - egov-network
 
   tempo:
-    image: registry.preview.egov.theflywheel.in/grafana/tempo:2.6.1
+    image: egovio/tempo:2.6.1
     container_name: digit-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
@@ -39,7 +39,7 @@ services:
       - egov-network
 
   grafana:
-    image: registry.preview.egov.theflywheel.in/grafana/grafana:11.4.0
+    image: egovio/grafana:11.4.0
     container_name: digit-grafana
     restart: unless-stopped
     environment:
@@ -93,7 +93,7 @@ services:
   # ==================== Core Infrastructure ====================
   # Actual PostgreSQL - services should NOT connect directly to this
   postgres-db:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     container_name: docker-postgres
     # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
     # that a parallel query's workers use to exchange tuples here — about 8 MB
@@ -125,7 +125,7 @@ services:
 
   # PgBouncer - transparent connection pooler, aliased as "postgres"
   pgbouncer:
-    image: registry.preview.egov.theflywheel.in/edoburu/pgbouncer:latest
+    image: egovio/pgbouncer:latest
     container_name: digit-pgbouncer
     environment:
       DB_HOST: postgres-db
@@ -153,7 +153,7 @@ services:
           - postgres
 
   redis:
-    image: registry.preview.egov.theflywheel.in/redis:7.2.4
+    image: egovio/redis:7.2.4
     container_name: digit-redis
     ports:
     - 16379:6379
@@ -170,7 +170,7 @@ services:
 
   # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
   redpanda:
-    image: registry.preview.egov.theflywheel.in/redpandadata/redpanda:v24.1.1
+    image: egovio/redpanda:v24.1.1
     container_name: digit-redpanda
     command:
       - redpanda
@@ -206,7 +206,7 @@ services:
 
   # MinIO - S3-compatible object storage for filestore
   minio:
-    image: registry.preview.egov.theflywheel.in/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -227,7 +227,7 @@ services:
 
   # MinIO init - creates the bucket
   minio-init:
-    image: registry.preview.egov.theflywheel.in/minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -243,7 +243,7 @@ services:
       - egov-network
 
   elasticsearch:
-    image: registry.preview.egov.theflywheel.in/docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    image: egovio/elasticsearch:8.10.3
     profiles: ["search"]
     container_name: digit-elasticsearch
     environment:
@@ -291,13 +291,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      # Embedded Flyway off — egov-indexer-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8080
@@ -335,7 +330,7 @@ services:
   # Inbox v2 - Queries Elasticsearch for inbox/search views
   # ===========================================================================
   inbox:
-    image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
+    image: egovio/inbox:state-tenant-fix
     profiles: ["search"]
     container_name: digit-inbox
     depends_on:
@@ -367,8 +362,8 @@ services:
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: mz
-      PARENT_LEVEL_TENANT_ID: mz
+      STATE_LEVEL_TENANT_ID: pg
+      PARENT_LEVEL_TENANT_ID: pg
       WORKFLOW_PROCESS_SEARCH_PATH: egov-workflow-v2/egov-wf/process/_search
       WORKFLOW_BUSINESSSERVICE_SEARCH_PATH: egov-workflow-v2/egov-wf/businessservice/_search
       WORKFLOW_PROCESS_COUNT_PATH: egov-workflow-v2/egov-wf/process/_count
@@ -484,13 +479,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      # Embedded Flyway off — mdms-backend-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
@@ -514,7 +504,7 @@ services:
   # MDMS Proxy - handles path rewriting for backward compatibility
   # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
   egov-mdms-service:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-mdms-service
     depends_on:
       mdms-backend:
@@ -643,7 +633,7 @@ services:
   # Unified database migrations for all DIGIT services
   # Runs all Flyway migrations in one container before services start
   db-migrations:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-db-migrations:latest
+    image: egovio/tilt-demo-db-migrations:latest
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -726,7 +716,7 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -763,13 +753,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      # Embedded Flyway off — egov-workflow-v2-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
@@ -813,7 +798,7 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -904,13 +889,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      # Embedded Flyway off — boundary-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -963,13 +943,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: accesscontrol_schema_version
+      # Embedded Flyway off — egov-accesscontrol-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
@@ -1094,12 +1069,12 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      # Embedded Flyway must stay OFF: egov-filestore-migration in
+      # docker-compose.migrations.yml owns this schema under the canonical
+      # egov_filestore_schema history table. With it ON, a partial redeploy that
+      # skips the overlay baselines a fresh legacy-named history at version 1 and
+      # replays V1 onto a populated database — 42P07 crash loop (#1586).
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
@@ -1133,7 +1108,7 @@ services:
   # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
   # ===========================================================================
   hrms-prereq-gate:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: hrms-prereq-gate
     depends_on:
       egov-user:
@@ -1169,7 +1144,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # hrms-boundary-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # 2.12-beta-dd641a6: a released egovio/egov-hrms tag (repinned from the
     # preview-only 800-preview build). Its lineage relative to the previously
     # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
     # CCRS#482 custom password on employee create, CCRS#484 null tenantId
@@ -1179,7 +1154,7 @@ services:
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1204,12 +1179,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      # Embedded Flyway off — egov-hrms-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
@@ -1251,7 +1222,7 @@ services:
   # Boundary Management Service - Boundary generation from Excel
   # ===========================================================================
   egov-bndry-mgmnt:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -1300,13 +1271,19 @@ services:
 
   # RE-ENABLED: Required for services to start (schema definitions)
   user-seed:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: user-seed-container
     depends_on:
       egov-user:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
+      # The script talks to egov-user-proxy (EGOV_USER_HOST below), and a
+      # container's DNS name only registers once the container exists — on
+      # a cold start the seed could burn its whole retry budget on curl
+      # exit 6 (couldn't resolve host) because the proxy hadn't started yet.
+      egov-user-proxy:
+        condition: service_started
     volumes:
       - ./seeds/user-seed.sh:/user-seed.sh:ro
     entrypoint: ["sh", "/user-seed.sh"]
@@ -1448,7 +1425,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1476,13 +1453,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_TABLE: pgr_services_schema
+      # Embedded Flyway off — pgr-services-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
@@ -1601,10 +1573,10 @@ services:
   # ===========================================================================
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # DIGIT_UI_IMAGE; default keeps the prior pinned tag. NOTE: this is the
-    # legacy micro-ui container — the modern esbuild bundle is laid in via
-    # build_digit_ui or served by host nginx (see build/NIGHTLY-BUILDS.md).
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
+    # the SPA Build Pipeline, multi-arch); the bundle lives at
+    # /var/web/digit-ui, matching the mounted digit-ui.conf root.
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1627,11 +1599,32 @@ services:
       - egov-network
 
   # ===========================================================================
+  # Configurator (DIGIT Studio) — tenant onboarding admin console
+  # Static Vite SPA served by the image's nginx under /configurator/.
+  # Tenant-neutral (no VITE_* baked); CI-built by the SPA Build Pipeline.
+  # Ansible deploys may instead serve a host-built dist via host nginx
+  # (build_configurator: true) — this container is the pull-based default.
+  # ===========================================================================
+  configurator:
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-beta-96dcf10}
+    container_name: configurator
+    ports:
+      - "18890:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  # ===========================================================================
   # Kong API Gateway (DB-less mode)
   # Main entry point: http://localhost:18000/digit-ui/
   # ===========================================================================
   kong:
-    image: registry.preview.egov.theflywheel.in/kong:3.6
+    image: egovio/kong:3.6
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"
@@ -1673,7 +1666,7 @@ services:
 
   # ==================== Gatus Health Monitoring ====================
   gatus:
-    image: registry.preview.egov.theflywheel.in/twinproduction/gatus:latest
+    image: egovio/gatus:latest
     container_name: digit-gatus
     depends_on:
       pgbouncer:
@@ -1689,6 +1682,7 @@ services:
       # Profile-gated stacks: keep these beside COMPOSE_PROFILES in .env.
       # Unset means off -- gatus enables an endpoint when its variable is missing.
       GATUS_PROFILE_OTP: ${GATUS_PROFILE_OTP:-false}
+      GATUS_CONFIGURATOR: ${GATUS_CONFIGURATOR:-true}
       GATUS_PROFILE_SEARCH: ${GATUS_PROFILE_SEARCH:-false}
       GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
       GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
@@ -1832,7 +1826,7 @@ services:
 
   # ==================== Jupyter Lab for PGR Configuration ====================
   jupyter:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-jupyter:latest
+    image: egovio/tilt-demo-jupyter:latest
     container_name: digit-jupyter
     user: root
     depends_on:
@@ -2085,7 +2079,7 @@ services:
   # /backend/novu-bridge-endpoint/workflows.js — one per domain event
   # (OTP send + 6 complaint lifecycle events).
   novu-bridge-endpoint:
-    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge-endpoint:latest
+    image: egovio/novu-bridge-endpoint:latest
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2126,7 +2120,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: egovio/digit-config-service:develop-70916ea
+    image: egovio/digit-config-service:2.12-beta-96dcf10
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2145,11 +2139,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       # application.properties keeps Flyway URL separate from datasource;
       # both env vars must be set or Flyway falls back to localhost.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: digit_config_service_schema
+      # Embedded Flyway off — digit-config-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: '8080'
       SERVER_SERVLET_CONTEXT_PATH: /config-service
       CONFIG_DEFAULT_OFFSET: '0'
@@ -2184,7 +2175,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: egovio/digit-user-preferences-service:develop-70916ea
+    image: egovio/digit-user-preferences-service:2.12-beta-96dcf10
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2205,16 +2196,24 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      # 30s was never enough for a Spring Boot cold start and is an outlier among
+      # its peers (egov-hrms 150s, egov-user 120s, boundary-service 120s,
+      # digit-config-service 90s — the last added in this very same commit).
+      # novu-bridge is the only service that depends_on this one with
+      # condition: service_healthy, so when it flaps the whole `compose up -d`
+      # exits non-zero, ansible stops the play, and every task after
+      # "Start DIGIT stack" is silently skipped. That is the mechanism behind
+      # CCRS#1551. Align with the other JVM services.
+      start_period: 120s
     networks:
       - egov-network
 
   novu-bridge:
     # Overridable so Bomet can pull the pass-through build (PGR pre-renders
     # + localizes; the bridge only identifies the Novu subscriber and
-    # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
-    # registry; default keeps the prior preview tag.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:develop-70916ea}
+    # delivers renderedBody — design D4/D6). Default is the multi-arch
+    # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2240,11 +2239,8 @@ services:
       # application.properties hardcodes spring.flyway.url to localhost
       # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
       # is the only way to override.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: novu_bridge_schema
+      # Embedded Flyway off — novu-bridge-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       # application.properties also reads kafka.config.bootstrap_server_config
       # (an egov-services-common convention); set both so any path that
@@ -2436,14 +2432,13 @@ services:
   # token-exchange-svc — bridges a Keycloak access_token to a DIGIT
   # access_token (and resolves / provisions the matching eg_user).
   # Source: /root/DIGIT-keycloak-overlay (Dockerfile, TypeScript).
-  # The image is pre-built and pushed to the preview registry; if you
+  # The image is pre-built and pushed to the egovio Docker Hub org; if you
   # need to rebuild locally, switch from `image:` to a `build:` block
   # pointing at the overlay repo path.
   token-exchange-svc:
-    # Published unscoped (not under egovio/) at registry.preview because
-    # it predates the namespace standardisation. Pin to :dev for now;
-    # bump when a versioned tag is published.
-    image: registry.preview.egov.theflywheel.in/token-exchange-svc:keycloak-deploy
+    # Pinned to the keycloak-deploy tag on egovio; bump when a versioned
+    # tag is published.
+    image: egovio/token-exchange-svc:keycloak-deploy
     container_name: token-exchange-svc
     restart: unless-stopped
     profiles: ["keycloak"]

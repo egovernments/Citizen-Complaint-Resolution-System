@@ -529,89 +529,6 @@
   align-items: center;
   gap: 0.5rem;
 }
-
-.dashboard-header-search{
-  position: relative;
-  margin: 0px;
-  display: inline-flex;
-  height: 2rem;
-  flex-shrink: 0;
-  align-items: center;
-}
-
-.dashboard-header-search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--dashboard-muted-foreground, #6b6860);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.dashboard-header-search-input{
-  margin: 0px;
-  box-sizing: border-box;
-  display: block;
-  height: 2rem;
-  width: 14rem;
-  -webkit-appearance: none;
-     -moz-appearance: none;
-          appearance: none;
-  border-radius: 4px;
-  border-width: 1px;
-  border-color: var(--border);
-  background-color: var(--surface);
-  padding-top: 0px;
-  padding-bottom: 0px;
-  padding-left: 2rem;
-  padding-right: 0.75rem;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--foreground);
-}
-
-.dashboard-header-search-input::-moz-placeholder{
-  color: var(--muted-foreground);
-}
-
-.dashboard-header-search-input::placeholder{
-  color: var(--muted-foreground);
-}
-
-.dashboard-header-search-input:focus{
-  border-color: var(--foreground);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-}
-
-.dashboard-header-search-input {
-  -webkit-appearance: none;
-}
-
-/* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
-     long :not(.class) chain outranks this class, forcing the left padding to
-     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
-     the ID-specificity column and, with !important, wins. */
-
-.dashboard-header-search-input:not(#dashboard-search-noop) {
-  padding-left: 2rem !important;
-}
-
-.dashboard-header-search-input::-webkit-search-decoration,
-  .dashboard-header-search-input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.dashboard-header-search-input:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
-}
-
 .dashboard-header-controls .dashboard-header-btn{
   margin: 0px;
   box-sizing: border-box;
@@ -1644,26 +1561,7 @@
   .dashboard-header-controls .dashboard-header-btn{
     padding-left: 0.5rem;
     padding-right: 0.5rem;
-  }
-
-  .dashboard-header-mobile-search {
-    display: block;
-    border-bottom: 1px solid var(--border);
-    background-color: var(--surface);
-    padding: 0.5rem 0.75rem;
-  }
-
-  .dashboard-header-search--mobile {
-    display: flex !important;
-    width: 100%;
-  }
-
-  .dashboard-header-search--mobile .dashboard-header-search-input {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .dashboard-filters-card {
+  }  .dashboard-filters-card {
     align-items: stretch;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
@@ -1716,11 +1614,6 @@
 }
 
 @media (min-width: 640px) and (max-width: 1023px) {
-  .dashboard-header-search-input{
-    width: 11rem;
-    max-width: 100%;
-  }
-
   .dashboard-filters-row {
     row-gap: 0.5rem;
   }
@@ -3144,12 +3037,6 @@
   color: var(--status-breach);
   font-weight: 500;
 }
-
-.dashboard-search-dimmed {
-  opacity: 0.12;
-  pointer-events: none;
-}
-
 .tw-pointer-events-none{
   pointer-events: none;
 }
@@ -3249,11 +3136,6 @@
 .tw-inline-flex{
   display: inline-flex;
 }
-
-.tw-hidden{
-  display: none;
-}
-
 .tw-h-1\.5{
   height: 0.375rem;
 }
@@ -4164,26 +4046,6 @@
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
 }
-
-/* Header search — same height as Add KPI / Reset / Export (vendor forces 44px). */
-
-.dashboard-root .dashboard-header-search,
-.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
-  height: 2rem !important;
-  min-height: 2rem !important;
-  max-height: 2rem !important;
-}
-
-.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
-  font-size: 12px !important;
-  line-height: 1.25 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  padding-left: 2rem !important;
-  border-radius: 4px !important;
-  box-sizing: border-box !important;
-}
-
 .dashboard-root .dashboard-header-controls .dashboard-header-btn {
   height: 2rem !important;
   min-height: 2rem !important;
@@ -4217,12 +4079,6 @@
 
 .hover\:tw-text-foreground:hover{
   color: var(--foreground);
-}
-
-@media (min-width: 640px){
-  .sm\:tw-inline-flex{
-    display: inline-flex;
-  }
 }
 
 @media (min-width: 1024px){
