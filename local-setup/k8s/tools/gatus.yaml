@@ -487,6 +487,54 @@ data:
         interval: 60s
         conditions:
           - "[STATUS] == 200"
+
+      # ==================== Observability stack ====================
+      # OFF in this tier: it has no grafana/prometheus/loki/tempo/otel-collector
+      # manifests (#1618). Defined here only to keep both catalogues identical,
+      # per the header — flip GATUS_OBSERVABILITY to "true" when they land.
+      #
+      # promtail and node-exporter stay out: no reachable HTTP listener, and a
+      # dead node-exporter shows as a stale prometheus target instead.
+      - name: Grafana
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://grafana:3000/api/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Prometheus
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://prometheus:9090/-/healthy"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Loki
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://loki:3100/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Tempo
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://tempo:3200/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: OTEL Collector
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://otel-collector:13133"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -538,6 +586,10 @@ spec:
               value: "false"
             - name: GATUS_SMS_PORT
               value: "8080"
+            # No observability stack in this tier (#1618), so these checks stay off.
+            # Declared rather than omitted: an unset enabled-var reads as true.
+            - name: GATUS_OBSERVABILITY
+              value: "false"
           resources:
             limits:
               memory: 64Mi
