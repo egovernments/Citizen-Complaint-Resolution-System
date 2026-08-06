@@ -416,6 +416,20 @@ server {
   }
 
 {% endif %}
+  # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
+  # a second esbuild entry living in the same /digit-ui/ docroot as the employee
+  # app (so hashed assets resolve against one publicPath), which means this only
+  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  #
+  # The three analytics read paths this page calls are explicitly auth-optional
+  # on both gateways (kong.yml AUTH_OPTIONAL + env.yaml mixed-mode whitelist), so
+  # the page keeps working when ENFORCE_UNAUTH is flipped on. The real boundary
+  # is server-side: a role-less caller degrades to the PUBLIC role and sees only
+  # rbac.visibleTo:["PUBLIC"] tiles, by kpiId reference (no inline grammar).
+  location = /dashboard {
+    return 302 /digit-ui/public-dashboard.html;
+  }
+
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
