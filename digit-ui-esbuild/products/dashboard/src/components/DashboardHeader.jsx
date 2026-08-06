@@ -77,13 +77,6 @@ function buildSubtitle(filters, filterOptions, t, language) {
   return `${geo} · ${period}`;
 }
 
-const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
 const ExportIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -99,8 +92,6 @@ const DashboardHeader = ({
   onResetLayout,
   onDragWidgetStart,
   onDragWidgetEnd,
-  searchQuery,
-  onSearchQueryChange,
   onExport,
   filters,
   filterOptions,
@@ -213,22 +204,6 @@ const DashboardHeader = ({
         </div>
 
         <div className="dashboard-header-controls">
-          <label className="dashboard-header-search tw-hidden sm:tw-inline-flex">
-            <span className="dashboard-header-search-icon" aria-hidden>
-              <SearchIcon />
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder={t(
-                "DASHBOARD_HEADER_SEARCH_PLACEHOLDER",
-                "Search complaints, wards, citizens."
-              )}
-              className="dashboard-header-search-input"
-            />
-          </label>
-
           <div className="dashboard-header-kpi-anchor">
             <button
               ref={addKpiRef}

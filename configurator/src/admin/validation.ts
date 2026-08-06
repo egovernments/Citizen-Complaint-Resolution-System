@@ -39,14 +39,21 @@ export const phone = raRegex(
  *
  * Per @vinothrallapalli-eGov review on PR #690: don't hardcode the
  * length / starting-digit constraints, because each country has its
- * own postal-code rule. The canonical source is the
- * `common-masters.MobileNumberValidation` MDMS master — same master used for
- * mobile validation — for postal code, use a separate MDMS entry or
- * globalConfigs.CORE_POSTAL_CONFIGS.
+ * own postal-code rule. An MDMS-authored rule is a
+ * `fieldType: "postalCode"` row in `common-masters.FormValidations`
+ * (the same per-fieldType master that carries the name/email rules);
+ * otherwise the rule comes from globalConfigs.CORE_POSTAL_CONFIGS.
  *
- * Read order (matches `useMobileValidation`):
- *   1. `window.__DIGIT_USER_VALIDATION.postalCode` — populated by the
- *      `useMobileValidation` hook from the MDMS master.
+ * Read order (matches `useMobileValidation` and the PGR flows'
+ * utils/postalCode.js — one precedence for one rule):
+ *   1. `window.__DIGIT_FORM_VALIDATIONS.postalCode` — a window channel
+ *      named after the master it mirrors, keyed by fieldType exactly
+ *      like the FormValidations rows themselves. Written by
+ *      `usePostalRule` here (mounted by the Complaint create/edit
+ *      screens) and by `useMobileValidation` in digit-ui. This is the
+ *      PRIMARY per-tenant knob: DDH seeds a default 5-digit row at
+ *      tenant creation, and editing it changes the tenant's rule —
+ *      MDMS outranks the host_vars pattern.
  *   2. `globalConfigs.CORE_POSTAL_CONFIGS` — build-time fallback rendered
  *      by the ansible playbook from host_vars `core_postal_configs`
  *      (legacy `CORE_POSTAL_CODE_CONFIGS` key also honoured).
@@ -58,19 +65,36 @@ export const phone = raRegex(
  * at validation time (every keystroke), not at module-import time.
  * That way a tenant switch mid-session picks up the latest rule.
  *
+ * There is no separate "error message" config field to keep in sync with
+ * the pattern (CCRS#722 — a hand-set message drifted from the pattern's
+ * actual digit count on more than one tenant). The message is always
+ * derived from the pattern itself: the digit count when it's a plain
+ * `^[0-9]{N}$` shape, otherwise a generic message. The FormValidations
+ * row is pattern-only too ({ fieldType, regex }, additionalProperties
+ * false) — no message knob exists anywhere in the chain.
+ *
  * Form usage: `<DigitFormInput validate={v.postalCode} ... />` — the
  * old `postalCodeKE` alias still works as a backward-compat shim
  * pointing at the same dynamic validator.
  */
 const DEFAULT_POSTAL_PATTERN = /^[0-9]{5}$/;
-const DEFAULT_POSTAL_MESSAGE = 'Enter a valid 5-digit postal code (e.g. 00100)';
+const GENERIC_POSTAL_MESSAGE = 'Enter a valid postal code';
+
+function deriveMessage(patternStr: string): string {
+  // Anchored to the whole `^[0-9]{N}$` shape — a bare `\{(\d+)\}` search would
+  // also match an unrelated quantifier elsewhere in an alnum pattern (e.g. the
+  // UK shape's trailing `{2}` character-class repeat), misreporting a digit
+  // count for a field that isn't digit-only.
+  const m = patternStr.match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/); // ^[0-9]{5}$ -> "5"
+  return m ? `Enter a valid ${m[1]}-digit postal code` : GENERIC_POSTAL_MESSAGE;
+}
 
 function resolvePostalRule(): { pattern: RegExp; message: string } {
-  const userValidation =
+  const formValidations =
     typeof window !== 'undefined'
-      ? (window as unknown as Record<string, unknown>).__DIGIT_USER_VALIDATION
+      ? (window as unknown as Record<string, unknown>).__DIGIT_FORM_VALIDATIONS
       : undefined;
-  const mdmsRule = (userValidation as Record<string, Record<string, unknown>> | undefined)?.postalCode;
+  const mdmsRule = (formValidations as Record<string, Record<string, unknown>> | undefined)?.postalCode;
   const getConfig =
     typeof window !== 'undefined'
       ? (window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
@@ -78,26 +102,27 @@ function resolvePostalRule(): { pattern: RegExp; message: string } {
       : undefined;
   // Ansible templates this as CORE_POSTAL_CONFIGS (from host_vars
   // `core_postal_configs`); fall back to the legacy CORE_POSTAL_CODE_CONFIGS key.
-  const globalRule =
-    getConfig?.('CORE_POSTAL_CONFIGS') ?? getConfig?.('CORE_POSTAL_CODE_CONFIGS');
+  // Select on the field, not the object: globalConfigs.js.j2 renders
+  // CORE_POSTAL_CONFIGS as at least `{}` (not nullish), so `??` on the
+  // object would never reach the legacy key.
+  const globalRule = [
+    getConfig?.('CORE_POSTAL_CONFIGS'),
+    getConfig?.('CORE_POSTAL_CODE_CONFIGS'),
+  ].find((c) => c?.postalCodePattern);
 
   const patternStr =
     (mdmsRule?.pattern as string | undefined) ||
     (globalRule?.postalCodePattern as string | undefined);
-  const message =
-    (mdmsRule?.errorMessage as string | undefined) ||
-    (globalRule?.postalCodeErrorMessage as string | undefined) ||
-    DEFAULT_POSTAL_MESSAGE;
 
   if (patternStr) {
     try {
-      return { pattern: new RegExp(patternStr), message };
+      return { pattern: new RegExp(patternStr), message: deriveMessage(patternStr) };
     } catch {
       // Bad pattern in MDMS — fall through to the default rather than
       // throwing during validation.
     }
   }
-  return { pattern: DEFAULT_POSTAL_PATTERN, message };
+  return { pattern: DEFAULT_POSTAL_PATTERN, message: deriveMessage(DEFAULT_POSTAL_PATTERN.source) };
 }
 
 export const postalCode = (value: unknown) => {

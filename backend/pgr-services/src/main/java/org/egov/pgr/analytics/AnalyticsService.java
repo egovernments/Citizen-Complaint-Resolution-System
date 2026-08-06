@@ -205,7 +205,11 @@ public class AnalyticsService {
      */
     private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles,
                                    List<String> paramsIgnored) {
-        if (!queryNode.has("kpiId")) return queryNode;
+        // Inline path: the suppression marker is composer-internal, so a caller-supplied one is
+        // stripped rather than trusted. Replaying a logged effective query (which legitimately
+        // carries it) must still be planned and validated, not short-circuited into a clean empty
+        // result that masks whatever the planner would have rejected.
+        if (!queryNode.has("kpiId")) return stripSuppressionMarker(queryNode);
 
         String kpiId = queryNode.get("kpiId").asText();
         Optional<KpiDefinition> def = kpiCatalogService.getDef(kpiId, tenantId);
@@ -343,6 +347,20 @@ public class AnalyticsService {
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
             Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText());
+            // A suppressed source is UNANSWERABLE, not zero. firstRow() would flatten it to {} and
+            // computeCompose would read a missing measure as 0 — netBacklogDaily would then publish a
+            // confident number derived from a period the filter excludes. Propagate instead.
+            if (r.containsKey("suppressed")) {
+                Map<String,Object> out = new LinkedHashMap<>();
+                out.put("grain", "compose");
+                out.put("columns", Collections.emptyList());
+                out.put("rows", Collections.emptyList());
+                out.put("rowCount", 0);
+                out.put("compose", type);
+                out.put("suppressed", r.get("suppressed"));
+                if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
+                return out;
+            }
             sourceRows.add(firstRow(r));
         }
 
@@ -358,6 +376,20 @@ public class AnalyticsService {
         out.put("compose", type);
         if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         return out;
+    }
+
+    /**
+     * Remove a caller-supplied {@link KpiQueryComposer#SUPPRESSED} marker. Copy-on-write: the request
+     * body is left untouched unless the marker is actually present.
+     */
+    private JsonNode stripSuppressionMarker(JsonNode queryNode) {
+        if (queryNode == null || !queryNode.isObject() || !queryNode.has(KpiQueryComposer.SUPPRESSED))
+            return queryNode;
+        com.fasterxml.jackson.databind.node.ObjectNode copy =
+                (com.fasterxml.jackson.databind.node.ObjectNode) queryNode.deepCopy();
+        copy.remove(KpiQueryComposer.SUPPRESSED);
+        log.debug("ignoring caller-supplied '{}' on an inline query", KpiQueryComposer.SUPPRESSED);
+        return copy;
     }
 
     /** Build a synthetic {kpiId, params} ref node so a source kpiId resolves through the normal path. */
@@ -486,6 +518,19 @@ public class AnalyticsService {
      */
     private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
                                       String entryName, String kpiId){
+        // #1462: a pinned-window def whose interval falls outside the selected date range is
+        // unanswerable, not empty-by-filter. Return no rows WITHOUT running SQL, flagged so the tile
+        // renders "no data for the applied filters" rather than a zero the user would read as fact.
+        if (q.path(KpiQueryComposer.SUPPRESSED).asBoolean(false)) {
+            Map<String,Object> r = new LinkedHashMap<>();
+            r.put("grain", q.hasNonNull("grain") ? q.get("grain").asText() : "facts");
+            r.put("columns", Collections.emptyList());
+            r.put("rows", Collections.emptyList());
+            r.put("rowCount", 0);
+            r.put("suppressed", "filter_excludes_window");
+            r.put("tookMs", 0L);
+            return r;
+        }
         AnalyticsPlanner.Planned p = planner.plan(q, scope);
         long t0 = System.currentTimeMillis();
         List<Map<String,Object>> rows = jdbc.queryForList(p.sql, p.params.toArray());
@@ -511,7 +556,7 @@ public class AnalyticsService {
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("aggFns", AnalyticsCatalog.AGG_FNS);
         out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with","subtree"));
-        out.put("windows", Arrays.asList("all","live","last_<N>d","wtd","mtd","qtd","ytd"));
+        out.put("windows", Arrays.asList("all","live","last_<N>d","dtd","wtd","mtd","qtd","ytd"));
         out.put("timeBuckets", Arrays.asList("day","week","month","quarter","year"));
         Map<String,Object> grains = new LinkedHashMap<>();
         for (Grain g : catalog.grains()) {

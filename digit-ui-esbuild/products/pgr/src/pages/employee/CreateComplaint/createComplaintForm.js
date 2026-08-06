@@ -17,6 +17,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import { formPayloadToCreateComplaint } from "../../../utils";
+import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
 
 const CreateComplaintForm = ({
   createComplaintConfig,      // Form configuration for Create Complaint screen
@@ -240,6 +241,21 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             }];
           }
+          if (fname === "postalCode") {
+            // Show the SAME dynamic, length-aware message the citizen flows
+            // show ("Please enter a valid 4-digit postal code" on a 4-digit
+            // tenant) instead of the static generic key the raw config
+            // carries. getPostalCodeErrorMessage(t) returns final localized
+            // text; FieldV1 passes it through t() again, which echoes an
+            // unknown key back verbatim, so the text survives untouched.
+            return [{
+              ...field,
+              populators: {
+                ...field.populators,
+                error: getPostalCodeErrorMessage(t),
+              },
+            }];
+          }
           return [field];
         }),
       };
@@ -262,6 +278,8 @@ const CreateComplaintForm = ({
   // actually changes — preventing the infinite render loop that trigger() causes
   // (trigger → errors change → re-render → watch() new ref → useEffect fires → loop).
   const mobileErrorRef = useRef(null);
+  // Same guard for the postal-code field's real-time validation.
+  const postalErrorRef = useRef(null);
 
   // Track whether every isMandatory field in the live config has a
   // non-empty value, so we can gate the SUBMIT button. FormComposerV2
@@ -326,6 +344,23 @@ const CreateComplaintForm = ({
     } else if (!mobile && mobileErrorRef.current !== null) {
       clearErrors?.("ComplainantContactNumber");
       mobileErrorRef.current = null;
+    }
+
+    // Real-time postal validation, same guarded setError/clearErrors pattern
+    // as the mobile field above (react-hook-form 6 is mode:"onSubmit", so
+    // the field's own `validate` rule only fires on submit — this surfaces
+    // the SAME error while the user types). The message text comes from the
+    // field's populators.error, which updatedConfig set to the dynamic,
+    // length-aware getPostalCodeErrorMessage(t). Optional field: empty is
+    // never an error.
+    const pc = String(formData?.postalCode ?? "").trim();
+    const postalInvalid = pc.length > 0 && !isPostalCodeValid(pc);
+    if (postalInvalid && postalErrorRef.current !== "invalid") {
+      setError?.("postalCode", { type: "validate" });
+      postalErrorRef.current = "invalid";
+    } else if (!postalInvalid && postalErrorRef.current === "invalid") {
+      clearErrors?.("postalCode");
+      postalErrorRef.current = null;
     }
 
     // The flat Type→Sub-Type cascade only applies to the legacy dropdowns.
@@ -419,24 +454,19 @@ const CreateComplaintForm = ({
       });
       return;
     }
-    // Postal pattern check — Kenya is 5 digits. Optional field; only
-    // enforce format when filled. The config-level `validation.pattern`
-    // on a `type:"number"` field doesn't reliably fire, so do it
-    // explicitly here. Closes egovernments/CCRS#478 — postal validation
-    // message, CSR path.
+    // Postal pattern check. Optional field; only enforce format when filled.
+    // Kept as an explicit submit-time check (in addition to the config-level
+    // `validation.pattern`) so a mangled or programmatically-set value can
+    // never slip past field-level validation. Closes
+    // egovernments/CCRS#478 — postal validation message, CSR path.
+    // Pattern + message are both config-driven per tenant (CCRS#722) — see
+    // utils/postalCode.js.
     if (_data?.postalCode != null && String(_data.postalCode).trim().length > 0) {
       const pc = String(_data.postalCode).trim();
-      // Postal-code shape is per-country. Read from globalConfigs
-      // `CORE_POSTAL_CONFIGS` so each tenant can pin their own pattern
-      // (Kenya 5 digits, India 6, UK alnum, US 5/5+4, …). Falls back to
-      // the legacy hard default when the host hasn't configured it.
-      const postalCfg = window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-      const postalPattern = postalCfg.postalCodePattern || "^[0-9]{5}$";
-      const postalErrorKey = postalCfg.postalCodeErrorMessage || "CS_COMPLAINT_POSTALCODE_INVALID_ERROR";
-      if (!new RegExp(postalPattern).test(pc)) {
+      if (!isPostalCodeValid(pc)) {
         setToast({
           show: true,
-          label: t(postalErrorKey),
+          label: getPostalCodeErrorMessage(t),
           type: "error",
         });
         return;

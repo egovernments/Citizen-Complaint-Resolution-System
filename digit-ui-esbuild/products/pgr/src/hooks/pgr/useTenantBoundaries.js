@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import useMapConfig from "./useMapConfig";
+import { sameLevelName } from "../../utils/boundaryLevels";
 
 // No hardcoded boundary data. When a tenant has no usable geometry (or no
 // boundary tenant is configured), the map shows NO ward overlay rather than
@@ -117,11 +118,40 @@ const useTenantBoundaries = () => {
           roots.forEach((root) => walk(root, undefined, 0));
         });
 
-        // Leaf level = the deepest depth present in the tree (Ward in a
-        // County > Sub-County > Ward hierarchy). Only leaves carry the
-        // polygons the map needs.
-        const maxDepth = nodes.reduce((max, n) => (n.depth > max ? n.depth : max), -1);
-        const leaves = nodes.filter((n) => n.depth === maxDepth);
+        // Which level the pin resolves against. PGR_BOUNDARY_LOWEST_LEVEL is the
+        // level the boundary cascade files at, so the map has to resolve at that
+        // same level or the two disagree: the map hands back a node the cascade
+        // is not looking for and auto-fill silently no-ops.
+        //
+        // It also decides coverage. Deeper is not better — a level only the
+        // populated parts of a tenant carry (Mozambique seeds Município for 66
+        // of 158 Distritos) leaves every pin outside them unresolvable, while
+        // the level above tiles the whole territory.
+        //
+        // Falls back to the deepest depth in the tree when nothing is configured
+        // or the configured name is not a level of THIS tree, which is the
+        // pre-existing behaviour.
+        const configuredLevel = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+        const atConfiguredLevel = configuredLevel
+          ? nodes.filter((n) => sameLevelName(n.boundaryType, configuredLevel))
+          : [];
+
+        let leaves;
+        if (atConfiguredLevel.length > 0) {
+          leaves = atConfiguredLevel;
+        } else {
+          if (configuredLevel) {
+            // Silent fallbacks here cost hours to diagnose — the map looks fine
+            // and merely resolves nothing. Say which levels the tree does have.
+            console.warn(
+              `PGR_BOUNDARY_LOWEST_LEVEL "${configuredLevel}" is not a level of the ${MAP_TENANT} boundary tree ` +
+                `(levels present: ${[...new Set(nodes.map((n) => n.boundaryType))].join(", ") || "none"}). ` +
+                "Falling back to the deepest level."
+            );
+          }
+          const maxDepth = nodes.reduce((max, n) => (n.depth > max ? n.depth : max), -1);
+          leaves = nodes.filter((n) => n.depth === maxDepth);
+        }
 
         // Step 2: geometry per leaf code, chunked.
         const geometryByCode = {};

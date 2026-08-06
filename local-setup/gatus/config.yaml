@@ -412,6 +412,18 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
+  # Configurator (DIGIT Studio) — tenant onboarding admin console. Serving
+  # dependency: onboarding a new city goes through this SPA. Probes the base
+  # path rather than / because the image serves the bundle under /configurator/
+  # and redirects / to it.
+  - name: Configurator
+    group: Application
+    enabled: ${GATUS_CONFIGURATOR}
+    url: "http://configurator:80/configurator/"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
   # ==================== API Functionality Tests ====================
   - name: MDMS API - Tenant Search
     group: API Tests

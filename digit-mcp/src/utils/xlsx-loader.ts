@@ -199,6 +199,60 @@ function normalizeForMatch(s: string): string {
 }
 
 /**
+ * Localization for one boundary code/name pair. Ports
+ * configurator/src/api/services/localization.ts's buildBoundaryLocalizations
+ * so both onboarding paths produce identical keys: the bare code (what the
+ * PGR create-complaint dropdown looks up via `t(boundary.code)`) plus a
+ * tenant+hierarchyType-prefixed variant (used by map/BPr components). Module
+ * is lower-cased to match the reader convention on the consuming side
+ * (digit-ui-esbuild and frontend/micro-ui both build it as
+ * `boundary-${hierarchyType.toLowerCase()}`).
+ */
+function buildBoundaryLocalizations(
+  tenantId: string,
+  code: string,
+  name: string,
+  hierarchyType: string,
+): { code: string; message: string; module: string }[] {
+  const module = `rainmaker-boundary-${hierarchyType.toLowerCase()}`;
+  const tenantPrefix = tenantId.toUpperCase().replace(/\./g, '_');
+  const prefixedCode = `${tenantPrefix}_${hierarchyType}_${code}`;
+  const messages = [{ code, message: name, module }];
+  if (prefixedCode !== code) {
+    messages.push({ code: prefixedCode, message: name, module });
+  }
+  return messages;
+}
+
+/**
+ * Localization for boundary hierarchy level labels (e.g. "Bairro",
+ * "Quarteirão") — ports buildHierarchyLevelLocalizations from the same
+ * configurator service. BoundaryComponent.js builds its dropdown-label key
+ * as `${hierarchyType}_${boundaryType.toUpperCase()}`; the original-case and
+ * fully-uppercase variants are back-compat / map-component keys. All three
+ * land in rainmaker-common, the only module guaranteed loaded at startup.
+ */
+function buildHierarchyLevelLocalizations(
+  hierarchyType: string,
+  levels: string[],
+): { code: string; message: string; module: string }[] {
+  const module = 'rainmaker-common';
+  const seen = new Set<string>();
+  const messages: { code: string; message: string; module: string }[] = [];
+  for (const boundaryType of levels) {
+    const push = (code: string) => {
+      if (seen.has(code)) return;
+      seen.add(code);
+      messages.push({ code, message: boundaryType, module });
+    };
+    push(`${hierarchyType}_${boundaryType.toUpperCase()}`);
+    push(`${hierarchyType}_${boundaryType}`);
+    push(`${hierarchyType}_${boundaryType}`.toUpperCase());
+  }
+  return messages;
+}
+
+/**
  * boundary-service /boundary/_create only accepts `Point` and `Polygon`
  * geometries — it 400s on `MultiPolygon` even though jsonb storage doesn't
  * care. OSM exports (e.g. Maputo bairros) come back as MultiPolygon for
@@ -495,6 +549,35 @@ async function runBoundaryPhase(
     levels: fileLevels,
   };
 
+  // ── Phase D: seed localization ──
+  // This xlsx path created boundary entities + relationships but never wrote
+  // any localization messages, so the citizen/employee PGR boundary picker
+  // rendered raw boundaryTypes/codes instead of real names — for every
+  // level, not just the deepest one (egovernments/CCRS#721). Mirrors
+  // configurator/src/api/services/localization.ts's
+  // buildBoundaryLocalizations / buildHierarchyLevelLocalizations, which
+  // already do this correctly for the other (SPA) onboarding path.
+  let localizationKeys = 0;
+  try {
+    const boundaryMessages = rows.flatMap((r) =>
+      buildBoundaryLocalizations(tenantId, r.code, r.name, hierarchyType),
+    );
+    const levelMessages = buildHierarchyLevelLocalizations(hierarchyType, fileLevels);
+    const seenCodes = new Set<string>();
+    const localizationMessages = [...boundaryMessages, ...levelMessages].filter((m) => {
+      if (seenCodes.has(m.code)) return false;
+      seenCodes.add(m.code);
+      return true;
+    });
+    if (localizationMessages.length > 0) {
+      await digitApi.localizationUpsert(tenantId, 'en_IN', localizationMessages);
+      localizationKeys = localizationMessages.length;
+    }
+  } catch {
+    // Non-fatal — boundaries are already created; localization can be
+    // re-seeded separately if this call fails.
+  }
+
   const failed = entityStats.failed + relStats.failed;
   const created = entityStats.created + relStats.created;
 
@@ -523,6 +606,7 @@ async function runBoundaryPhase(
     counts: { entities: entityStats, relationships: relStats, total_rows: rows.length, entity_gate: entityGate },
     entity_failures: entityFailures,
     relationship_failures: relFailures,
+    localization_keys: localizationKeys,
     context,
     ...(geojsonStats && {
       geojson: {

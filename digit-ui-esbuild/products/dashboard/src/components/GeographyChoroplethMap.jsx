@@ -5,11 +5,15 @@ import {
   getGeographyMapLegend,
   getGeographyMapLegendFooter,
   getGeographyMapLegendTitle,
+  getGeographyMapPinLegendEntry,
+  getGeographyMapPinStyle,
   getCreatedCountFillStyle,
+  buildCreatedCountScale,
   getOpenShareFillStyle,
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
+import { getNumberFormatStamp } from "../utils/numberFormat";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
@@ -65,6 +69,22 @@ function complaintPinPopupOffset(radius) {
   return L.point(0, -Math.max(radius + 10, 12));
 }
 
+/**
+ * Close whichever ward tooltip is currently open.
+ *
+ * NOT `map.closeTooltip()` — Leaflet 1.9's Map.closeTooltip(tooltip) dereferences
+ * its argument (`tooltip.close()`), so calling it bare throws
+ * "Cannot read properties of undefined (reading 'close')". Thrown from the pin
+ * click handler that exception aborted the event before Leaflet's own bindPopup
+ * listener ran, so clicking a pin silently did nothing (#1576). Layer.closeTooltip()
+ * takes no argument and is the correct call.
+ */
+function closeOpenTooltips(map) {
+  map?.eachLayer?.((layer) => {
+    if (layer !== map && typeof layer.closeTooltip === "function") layer.closeTooltip();
+  });
+}
+
 function closeOtherPinPopups(activeCircle, pinLayersByKey = {}) {
   Object.values(pinLayersByKey).forEach((circle) => {
     if (circle !== activeCircle && circle.isPopupOpen?.()) {
@@ -90,15 +110,19 @@ function createComplaintPinPopup(pin, radius) {
 const MAP_COUNTY_MAX_ZOOM = 10; // below -> county outline only
 const MAP_SUBCOUNTY_MAX_ZOOM = 12; // below -> sub-counties; at/above -> wards
 
-function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
+function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11, createdBuckets) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
+  // `filed` gates the share layers on the white "No complaints" swatch: a ward
+  // with nothing filed has a 0% share, which would otherwise paint like a ward
+  // that has complaints but none open/resolved.
+  const filed = Number(props.count) || Number(props.created) || 0;
   const base =
     layerMode === "open"
-      ? getOpenShareFillStyle(props.openPct)
+      ? getOpenShareFillStyle(props.openPct, filed)
       : layerMode === "resolved"
-        ? getResolvedShareFillStyle(props.resolvedPct)
-        : getCreatedCountFillStyle(Number(props.count) || Number(props.created) || 0);
+        ? getResolvedShareFillStyle(props.resolvedPct, filed)
+        : getCreatedCountFillStyle(filed, createdBuckets);
 
   const weight = isFocused ? 2.5 : zoom < 11 ? 0.75 : zoom < 14 ? 1.1 : 1.5;
 
@@ -159,6 +183,12 @@ const GeographyChoroplethMap = ({
   onLayerModeChange,
   layerOptions = [],
   cityLabel = getMapCityLabel(),
+  // Pin provenance for the legend row: 'per-layer' when the pin source projects
+  // is_open/is_resolved, 'open-only' on a tenant still serving the legacy def.
+  pinSemantics = "open-only",
+  pinsTruncated = false,
+  layerTotal = 0,
+  unmappedTotal = 0,
 }) => {
   const { t, language } = useDashboardT();
   const shellRef = useRef(null);
@@ -321,7 +351,49 @@ const GeographyChoroplethMap = ({
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
-  const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode, language]);
+  // Scale the Created layer to the data actually on the map (#1461). Derived from
+  // the WARD series, never from the rendered features: zoom rolls counts up by
+  // summing children, so a per-level scale would rewrite the legend on every
+  // scroll step. Not keyed on layerMode either — toggling layers must not move it.
+  const createdBuckets = useMemo(
+    () => buildCreatedCountScale((wardCounts || []).map((w) => w?.count)).buckets,
+    [wardCounts]
+  );
+  // wardCounts is rebuilt by identity on every layer toggle, so depend on the
+  // EDGES rather than the array — an identical scale must not force Leaflet to
+  // tear down and rebuild every polygon.
+  const createdScaleKey = useMemo(
+    () => createdBuckets.map((b) => `${b.min ?? 0}:${b.max ?? 0}`).join("|"),
+    [createdBuckets]
+  );
+  const legendItems = useMemo(
+    () => getGeographyMapLegend(layerMode, createdBuckets),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layerMode, language, createdScaleKey, getNumberFormatStamp()]
+  );
+  // Kept OUT of legendItems on purpose: that array is a colour scale scanned by
+  // range (getCreatedCountBucket), so the pin row renders as its own <li> below.
+  const pinLegendEntry = useMemo(
+    () =>
+      getGeographyMapPinLegendEntry(layerMode, {
+        shown: complaintPins.length,
+        total: layerTotal,
+        semantics: pinSemantics,
+        truncated: pinsTruncated,
+        unmapped: unmappedTotal,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      layerMode,
+      complaintPins.length,
+      layerTotal,
+      pinSemantics,
+      pinsTruncated,
+      unmappedTotal,
+      language,
+      getNumberFormatStamp(),
+    ]
+  );
   const legendTitle = getGeographyMapLegendTitle(layerMode);
   const legendFooter = getGeographyMapLegendFooter(drillTrail.length);
 
@@ -530,7 +602,7 @@ const GeographyChoroplethMap = ({
 
     L.geoJSON(geoFeatures, {
       style: (feature) =>
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current),
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets),
       onEachFeature: (feature, layer) => {
         layer.feature = feature;
         const code = feature?.properties?.code;
@@ -548,7 +620,8 @@ const GeographyChoroplethMap = ({
             feature,
             layerMode,
             focusedCode,
-            zoomLevelRef.current
+            zoomLevelRef.current,
+            createdBuckets
           );
           layer.setStyle({ ...s, weight: 2.5, fillOpacity: Math.min(s.fillOpacity + 0.1, 0.75) });
           layer.bringToFront?.();
@@ -556,7 +629,7 @@ const GeographyChoroplethMap = ({
 
         layer.on("mouseout", () => {
           layer.setStyle(
-            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current)
+            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current, createdBuckets)
           );
         });
 
@@ -615,6 +688,7 @@ const GeographyChoroplethMap = ({
     // (#882 ward-tooltip precedent) so bound tooltip text picks up the new locale.
     language,
     layerMode,
+    createdScaleKey,
   ]);
 
   // ── update choropleth border weights when zoom / focus / mode changes ─────
@@ -623,10 +697,13 @@ const GeographyChoroplethMap = ({
       const feature = layer.feature;
       if (!feature) return;
       layer.setStyle(
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel)
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel, createdBuckets)
       );
     });
-  }, [focusedCode, layerMode, zoomLevel]);
+    // createdScaleKey, not createdBuckets: the array is rebuilt on every layer
+    // toggle but the scale itself rarely changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedCode, layerMode, zoomLevel, createdScaleKey]);
 
   // ── draw complaint pins — redraw on data change; resize on zoom without closing popup
   useEffect(() => {
@@ -646,6 +723,9 @@ const GeographyChoroplethMap = ({
     }
 
     const currentZoom = zoomLevelRef.current;
+    // Pins carry the LAYER's colour (slate filed / amber open / green resolved),
+    // so a pin can never read as "open" while sitting on the Resolved layer.
+    const pinStyle = getGeographyMapPinStyle(layerMode);
 
     visibleComplaintPins.forEach((pin) => {
       if (pin.lat == null || pin.lng == null) return;
@@ -658,15 +738,25 @@ const GeographyChoroplethMap = ({
         renderer: pinRendererRef.current ?? undefined,
         pane: "complaintPins",
         radius: baseRadius,
-        color: "#b45309",
+        color: pinStyle.stroke,
         weight: 1.5,
-        fillColor: "#f59e0b",
+        fillColor: pinStyle.fill,
         fillOpacity: 0.92,
       });
 
       circle.on("click", () => {
         closeOtherPinPopups(circle, pinLayersByKeyRef.current);
-        map.closeTooltip();
+        closeOpenTooltips(map);
+      });
+
+      // Hover feedback. Without a tooltip of its own a pin showed nothing on
+      // hover while still stealing the pointer from the ward polygon beneath it,
+      // so the ward tooltip vanished and nothing replaced it (#1576).
+      circle.bindTooltip(buildComplaintPinTooltipHtml(pin), {
+        ...HOVER_TOOLTIP_OPTIONS,
+        sticky: false,
+        offset: [0, -(baseRadius + 4)],
+        direction: "top",
       });
 
       circle.on("mouseover", function () {
@@ -682,9 +772,10 @@ const GeographyChoroplethMap = ({
       });
 
       circle.on("popupopen", function () {
+        this.closeTooltip?.();
         closeOtherPinPopups(this, pinLayersByKeyRef.current);
         selectedPinKeyRef.current = key;
-        map.closeTooltip();
+        closeOpenTooltips(map);
         const radius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
         Object.entries(pinLayersByKeyRef.current).forEach(([, layer]) => {
           const layerRadius = markerRadiusForZoom(zoomLevelRef.current, false, { complaint: true });
@@ -721,7 +812,9 @@ const GeographyChoroplethMap = ({
     }
     // `language` dep: popup content is baked at bind time — rebuild pins on
     // language switch so pin tooltips re-render localized (#882 precedent).
-  }, [visibleComplaintPins, language]);
+    // `layerMode`: pin colour follows the layer. (The pin ARRAY also changes per
+    // layer, but not on an 'open-only' catalog where all three are identical.)
+  }, [visibleComplaintPins, language, layerMode]);
 
   // ── initial fit ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -933,6 +1026,26 @@ const GeographyChoroplethMap = ({
                     </span>
                   </li>
                 ))}
+                <li className="dashboard-map-legend-pin-row tw-flex tw-items-start tw-gap-2 tw-border-t tw-border-border tw-pt-1.5">
+                  <span
+                    className="dashboard-map-legend-swatch dashboard-map-legend-swatch--pin"
+                    style={{
+                      backgroundColor: pinLegendEntry.swatch.fill,
+                      borderColor: pinLegendEntry.swatch.stroke,
+                      borderRadius: "9999px",
+                    }}
+                  />
+                  <span className="tw-flex tw-flex-col tw-gap-0.5">
+                    <span className="tw-text-[10px] tw-leading-tight tw-text-foreground">
+                      {pinLegendEntry.label}
+                    </span>
+                    {pinLegendEntry.note ? (
+                      <span className="tw-text-[9px] tw-leading-tight tw-text-muted-foreground">
+                        {pinLegendEntry.note}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
               </ul>
               <p className="tw-border-t tw-border-border tw-px-2.5 tw-py-2 tw-text-[9px] tw-leading-snug tw-text-muted-foreground">
                 {legendFooter}

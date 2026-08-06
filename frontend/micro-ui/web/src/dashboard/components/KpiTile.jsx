@@ -822,12 +822,51 @@ function renderSlaRiskTable(ctx) {
 // Her widget fetches its own ward geometry and toggles created/open/resolved
 // layers; it reads layers[layerKey] (ward series), layers.wardDetails, and
 // layers.complaintPinsByLayer[layerKey]. We shape the tile's ward aggregate +
-// the companion pin source into that contract. (Per-layer distinct counts —
-// created vs open vs resolved — is a refinement; today every layer shows the
-// tile's aggregate so the toggle always renders data.)
+// the companion pin source into that contract. The ward series carries all
+// three counts so any layer renders; the PINS are now partitioned per layer
+// (previously the same open-only array was pinned to all three, so the Resolved
+// layer shaded "0 resolved" underneath still-open complaints).
 // ---------------------------------------------------------------------------
 
 const GEO_MAP_LAYER_KEYS = ['created', 'open', 'resolved'];
+
+/**
+ * Split pins into the three map layers: created = every pin in the window,
+ * open/resolved = the pins whose complaint is in that state.
+ *
+ * `statusKnown === false` means the pin source does not project is_open /
+ * is_resolved (the legacy cl_map_complaint_pins def, which is open-only), so
+ * nothing can honestly be partitioned — keep the legacy behaviour and let the
+ * legend say the pins do not follow the layer.
+ */
+function partitionPinsByLayer(pins, statusKnown) {
+  const all = Array.isArray(pins) ? pins : [];
+  if (!statusKnown) return { created: all, open: all, resolved: all };
+  return {
+    created: all,
+    open: all.filter((pin) => pin?.isOpen === true),
+    resolved: all.filter((pin) => pin?.isResolved === true),
+  };
+}
+
+/**
+ * Totals over the ward series, plus the counts the ward mapper DROPS (rows with
+ * a null/blank ward code). Those complaints are real and counted by every card
+ * on the dashboard; discarding them silently made the map disagree with the
+ * cards with no explanation on screen.
+ */
+function summarizeWardRows(rows, dimKey) {
+  const layerTotals = { filed: 0, open: 0, resolved: 0 };
+  const unmapped = { filed: 0, open: 0, resolved: 0 };
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const code = String(row?.[dimKey] ?? '').trim();
+    const bucket = code && code !== 'null' ? layerTotals : unmapped;
+    bucket.filed += Number(row?.filed) || 0;
+    bucket.open += Number(row?.open) || 0;
+    bucket.resolved += Number(row?.resolved) || 0;
+  }
+  return { layerTotals, unmapped };
+}
 
 function adaptMapLayers(ctx) {
   const { viz, result } = ctx;
@@ -859,17 +898,39 @@ function adaptMapLayers(ctx) {
       };
     });
   const pins = result.pins || [];
-  const layers = { wardDetails: {}, complaintPinsByLayer: {}, complaintPinsError: null };
+  const statusKnown = result.pinsStatusKnown === true;
+  const { layerTotals, unmapped } = summarizeWardRows(result.rows || [], dimKey);
+  const layers = {
+    wardDetails: {},
+    complaintPinsByLayer: partitionPinsByLayer(pins, statusKnown),
+    complaintPinsError: null,
+    // 'open-only' = the tenant's catalog still has the legacy pin def, so pins
+    // cannot follow the layer; the legend says so instead of lying by omission.
+    pinSemantics: statusKnown ? 'per-layer' : 'open-only',
+    pinsTruncated: result.pinsTruncated === true,
+    layerTotals,
+    unmapped,
+  };
   for (const key of GEO_MAP_LAYER_KEYS) {
     layers[key] = wards;
-    layers.complaintPinsByLayer[key] = pins;
   }
   return layers;
 }
 
+/**
+ * The map branch is memoized on its own inputs: adaptMapLayers re-derives fresh
+ * ward/pin ARRAYS on every parent render, and the Leaflet pin effect keys off
+ * that identity — so an unmemoized call tore down and rebuilt up to 1000 circle
+ * markers (closing any open popup) on every unrelated re-render.
+ */
+function MapTile({ ctx, loading }) {
+  // (this tree's ctx carries no locale — labels here are not localized)
+  const layers = React.useMemo(() => adaptMapLayers(ctx), [ctx.result, ctx.viz]);
+  return <OpenComplaintsByGeographyWidget layers={layers} loading={loading} />;
+}
+
 function renderChoroplethMap(ctx) {
-  const { loading } = ctx;
-  return <OpenComplaintsByGeographyWidget layers={adaptMapLayers(ctx)} loading={loading} />;
+  return <MapTile ctx={ctx} loading={ctx.loading} />;
 }
 
 // ---------------------------------------------------------------------------

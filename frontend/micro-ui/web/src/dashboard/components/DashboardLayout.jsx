@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
 import DashboardHeader from "./DashboardHeader";
 import DashboardFilters from "./DashboardFilters";
+import DashboardFooter from "./DashboardFooter";
 import Sidebar from "./Sidebar";
 
 const DashboardLayout = ({
@@ -12,8 +13,6 @@ const DashboardLayout = ({
   onResetLayout,
   onDragWidgetStart,
   onDragWidgetEnd,
-  searchQuery,
-  onSearchQueryChange,
   onExport,
   filters,
   onFilterChange,
@@ -52,8 +51,6 @@ const DashboardLayout = ({
           onResetLayout={onResetLayout}
           onDragWidgetStart={onDragWidgetStart}
           onDragWidgetEnd={onDragWidgetEnd}
-          searchQuery={searchQuery}
-          onSearchQueryChange={onSearchQueryChange}
           onExport={onExport}
           filters={filters}
           filterOptions={filterOptions}
@@ -74,6 +71,10 @@ const DashboardLayout = ({
           />
           {children}
         </main>
+        {/* Sibling of <main>, not a child: the shell is tw-h-screen with an
+            overflow-hidden column, so the footer must sit outside the scroll
+            container to stay pinned at the bottom. */}
+        <DashboardFooter />
       </div>
     </div>
   );

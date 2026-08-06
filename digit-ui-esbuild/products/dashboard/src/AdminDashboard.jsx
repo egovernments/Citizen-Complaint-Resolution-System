@@ -17,6 +17,7 @@ import {
   buildWidgetHeaderClassName,
   getWidgetBodyClassName,
 } from "./config/visualizationStyles";
+import { SESSION_EXPIRED_EVENT } from "./services/authService";
 import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
@@ -40,6 +41,7 @@ import {
   isMapKind,
   buildRefs,
   buildRefsKey,
+  PIN_ROW_CAP,
 } from "./utils/queryPlan";
 import {
   hierLevelParam,
@@ -145,7 +147,28 @@ function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, 
 const AdminDashboard = ({ embedded = false }) => {
   // Embedded (inside the DigitUI employee chrome) the host guarantees the
   // session and owns sign-out, so the standalone login gate is skipped.
-  const [authed] = useState(() => embedded || hasDashboardSession());
+  const [authed, setAuthed] = useState(() => embedded || hasDashboardSession());
+  const [expired, setExpired] = useState(false);
+
+  // The gate used to be evaluated once at mount, so a session that died while
+  // the tab was open could never flip it — the 401 just rendered as a raw error
+  // banner and a reload re-passed the gate on the stale token (#1466).
+  // authService announces an unrecoverable session and we drop to the login
+  // screen with an explanation.
+  //
+  // Not when embedded: there the surrounding DigitUI chrome owns the session and
+  // its own expiry handling, and rendering our standalone login form inside it
+  // would be wrong. authService has already cleared the dead token, so the host
+  // sees the same state on its next call.
+  useEffect(() => {
+    if (embedded) return undefined;
+    const onExpired = () => {
+      setExpired(true);
+      setAuthed(false);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [embedded]);
 
   // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
   // #1272). Primed synchronously so the first painted frame is already masked.
@@ -163,7 +186,7 @@ const AdminDashboard = ({ embedded = false }) => {
     window.location.reload();
   }, []);
 
-  if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  if (!authed) return <DashboardLogin onLogin={handleLogin} expired={expired} />;
   if (dashboardConfigLoading) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
@@ -275,10 +298,23 @@ function assembleResult(kpiId, def, results) {
   if (isMapKind(viz.kind)) {
     const pinRes = results?.[`${kpiId}__pins`];
     if (pinRes?.rows?.length) {
+      // Whether the pin source projects the open/resolved state at all. The
+      // legacy def (cl_map_complaint_pins) does not — its rows are open-only —
+      // so the UI must fall back to "pins do not follow this layer" rather than
+      // silently classing every pin as neither open nor resolved.
+      assembled.pinsStatusKnown = (pinRes.columns || []).some(
+        (c) => (typeof c === "string" ? c : c?.name) === "is_open"
+      );
+      // The server clamps every query at AnalyticsPlanner.MAX_LIMIT, so a
+      // result exactly at the cap is indistinguishable from a truncated one.
+      assembled.pinsTruncated = pinRes.rows.length >= PIN_ROW_CAP;
       assembled.pins = pinRes.rows
         .map((r) => ({
           id: r.service_request_id,
           serviceRequestId: r.service_request_id,
+          // Booleans arrive as true/"true" depending on the JDBC/JSON path.
+          isOpen: r.is_open === true || r.is_open === "true",
+          isResolved: r.is_resolved === true || r.is_resolved === "true",
           // Kajal's resolveComplaintPinPositions needs wardCode to place a pin
           // (snaps/jitters around the ward centroid when the geo-pin is unusable).
           wardCode: String(r.ward_code ?? ""),
@@ -404,8 +440,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     visibleLayoutIds,
     findDragHoverTarget,
   } = useCatalogLayout(kpis, pack?.layout);
-
-  const [searchQuery, setSearchQuery] = useState("");
 
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
   const draggingWidgetIdRef = useRef(null);
@@ -623,19 +657,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     [layout]
   );
 
-  // Title-based tile search: dim tiles whose title doesn't match the query.
-  // Matches against the LOCALIZED title (what the user sees on the tile).
-  const matchesSearch = useCallback(
-    (kpiId) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return true;
-      const title = (resolveTitle(kpis[kpiId]) || kpiId).toLowerCase();
-      return title.includes(q);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
-    [searchQuery, kpis, i18nTick]
-  );
-
   // Add-KPI picker source: every role-visible catalog tile (already filtered
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
   // `language` re-localizes the resolved names on a language switch; `i18nTick`
@@ -824,8 +845,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       onResetLayout={resetLayout}
       onDragWidgetStart={handleDragWidgetStart}
       onDragWidgetEnd={handleDragWidgetEnd}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
       onFilterChange={handleFilterChange}
@@ -896,7 +915,6 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
-            const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
               <TypeFilterIgnoredNote />
             ) : null;
@@ -914,7 +932,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
               return (
                 <div
                   key={item.i}
-                  className={`dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col${dimClass}`}
+                  className="dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col"
                 >
                   {removeBtn}
                   {renderTile(item.i)}
@@ -946,7 +964,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             return (
               <section
                 key={item.i}
-                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
+                className="dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
               >
                 {removeBtn}
                 {!selfHeaders && (
