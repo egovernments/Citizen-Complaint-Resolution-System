@@ -15,6 +15,11 @@ There are **three independent ways** to run this stack. Pick one:
 Options A and B run locally. Option C deploys a full per-tenant stack to a
 remote Ubuntu machine with `./deploy.sh <tenant>`. **Pick one.**
 
+> **On Windows?** The full Ansible stack also runs locally via WSL2 — see
+> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a
+> 16 GB machine; the playbook self-heals the WSL-specific quirks). The macOS
+> equivalent is [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+
 ---
 
 ## Prerequisites
@@ -312,7 +317,7 @@ For a local/sandbox deploy (`domain: localhost`, `tls_enabled: false`), use
 
 Once the stack is up, create your city and load its master data — via the
 browser **configurator wizard** or the Jupyter DataLoader. See the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md).
 
 ### What the Ansible playbook deploys
 
@@ -324,7 +329,7 @@ The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
 -f docker-compose.egov-digit.yaml
 [-f docker-compose.fast-path.yml]          # when db_fast_path is set
 -f docker-compose.migrations.yml
--f docker-compose.migrations.ansible.yml
+-f docker-compose.monitoring.yml
 [-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
 ```
 
@@ -367,7 +372,7 @@ complaint needs — the tenant record + branding, the boundary hierarchy, common
 masters (departments, designations, complaint types), and employees.
 
 **Full step-by-step instructions live in the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).** There are three paths,
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md).** There are three paths,
 all creating the same data:
 
 | Path | Interface | Available on |
@@ -405,7 +410,7 @@ loader.login(username="ADMIN", password="eGov@123", tenant_id=TARGET_TENANT)
 Then run the remaining cells top to bottom: **2a** boundary template → **2b**
 load boundaries → **3** common masters → **4** employees → **5** localizations
 (optional) → **6** workflow. See the
-[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md#b-jupyter-dataloader-scripted)
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md#b-jupyter-dataloader-scripted)
 for the per-phase details and template shapes.
 
 ### Rollback
@@ -750,7 +755,7 @@ local-setup/
 ├── postman/                        # Newman/Postman collections
 ├── gatus/                          # Health monitoring dashboard config
 └── docs/
-    ├── TENANT-ONBOARDING.md        # Enable a tenant + load master data (configurator / DataLoader)
+    ├── ONBOARDING-AND-ADDONS.md    # Enable a tenant + load master data + opt-in add-ons
     └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)

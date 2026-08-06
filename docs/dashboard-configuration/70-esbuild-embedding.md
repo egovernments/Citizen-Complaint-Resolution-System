@@ -228,8 +228,10 @@ Key files and behaviours:
   Persistence is debounced (300 ms) on drag/resize.
 - **`AdminDashboard.buildRefs`** — one `{kpiId, params}` ref per tile, plus companion refs keyed
   by `viz.kind`: `__prior` (delta cards, `compare:"prior"`), `__series` (sparkline cards,
-  `series:"daily"`), `__pins` (map tiles, the internal `cl_map_complaint_pins` source). Only card
-  and map kinds emit companions, so a plain chart issues a single query.
+  `series:"daily"`), `__pins` (map tiles, the internal pin source — `cl_map_complaint_pins_all`
+  when the tenant's catalog has it, else the legacy open-only `cl_map_complaint_pins`; see
+  `utils/queryPlan.resolvePinKpiId`). Only card and map kinds emit companions, so a plain chart
+  issues a single query.
 - **`AdminDashboard.globalParams`** — the filter-bar → param mapping: `geography!="all"` → `ward`,
   `complaintType!="all"` → `serviceCode`, an active date range → `dateFrom`/`dateTo` (`yyyy-MM-dd`).
   **No global `window` is emitted**, so each def keeps its baked window when no date range is

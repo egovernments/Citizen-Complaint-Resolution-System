@@ -475,57 +475,10 @@
   gap: 0.5rem;
 }
 
-.dashboard-header-search{
-  position: relative;
-  margin: 0px;
-  display: inline-flex;
-  height: 2rem;
-  flex-shrink: 0;
-  align-items: center;
-}
-
-.dashboard-header-search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--dashboard-muted-foreground, #6b6860);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.dashboard-header-search-input{
-  margin: 0px;
-  box-sizing: border-box;
-  display: block;
-  height: 2rem;
-  width: 14rem;
-  border-radius: 4px;
-  border-width: 1px;
-  border-color: var(--border);
-  background-color: var(--surface);
-  padding-top: 0px;
-  padding-bottom: 0px;
-  padding-left: 2rem;
-  padding-right: 0.75rem;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--foreground);
-}
-
-.dashboard-header-search-input::placeholder{
-  color: var(--muted-foreground);
-}
-
-.dashboard-header-search-input:focus{
-  border-color: var(--foreground);
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+.dashboard-footer-img {
+  height: 1.1em;
+  width: auto;
+  cursor: pointer;
 }
 
 .dashboard-header-controls .dashboard-header-btn{
@@ -1107,23 +1060,6 @@
     padding-right: 0.5rem;
   }
 
-  .dashboard-header-mobile-search {
-    display: block;
-    border-bottom: 1px solid var(--border);
-    background-color: var(--surface);
-    padding: 0.5rem 0.75rem;
-  }
-
-  .dashboard-header-search--mobile {
-    display: flex !important;
-    width: 100%;
-  }
-
-  .dashboard-header-search--mobile .dashboard-header-search-input {
-    width: 100%;
-    min-width: 0;
-  }
-
   .dashboard-filters-card {
     align-items: stretch;
     padding-left: 0.625rem;
@@ -1176,11 +1112,6 @@
 }
 
 @media (min-width: 640px) and (max-width: 1023px) {
-  .dashboard-header-search-input{
-    width: 11rem;
-    max-width: 100%;
-  }
-
   .dashboard-filters-row {
     row-gap: 0.5rem;
   }
@@ -2563,11 +2494,6 @@
   font-weight: 500;
 }
 
-.dashboard-search-dimmed {
-  opacity: 0.12;
-  pointer-events: none;
-}
-
 .tw-pointer-events-none{
   pointer-events: none;
 }
@@ -2662,10 +2588,6 @@
 
 .tw-inline-flex{
   display: inline-flex;
-}
-
-.tw-hidden{
-  display: none;
 }
 
 .tw-h-1\.5{
@@ -3288,12 +3210,6 @@
 
 .hover\:tw-text-foreground:hover{
   color: var(--foreground);
-}
-
-@media (min-width: 640px){
-  .sm\:tw-inline-flex{
-    display: inline-flex;
-  }
 }
 
 @media (min-width: 1024px){
