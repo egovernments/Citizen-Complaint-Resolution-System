@@ -127,6 +127,31 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+  # Gateway metrics (#1648). Every citizen request crosses this controller and
+  # it contributes nothing to Prometheus, so "are we returning errors, and on
+  # which route?" can only be answered by reading logs.
+  #
+  # Set HERE, not in env.yaml. This is a vendored upstream chart that reads
+  # .Values.controller.* directly (39 templates) with no chart-name hoisting,
+  # so env.yaml's `ingress-nginx:` block lands one level too deep and is
+  # ignored in full — which is the wider defect #1648 tracks. And it must not
+  # move to a top-level `controller:` key either: kafka-kraft reads
+  # .Values.controller too (13 templates, its own controller block), so the
+  # override would leak into the broker.
+  set:
+    # Already effectively true via the chart default, but the env.yaml block
+    # tries to set it FALSE. Pinning it here means the deployed state stops
+    # depending on which of two ignored/honoured paths wins.
+    - name: controller.metrics.enabled
+      value: true
+    - name: controller.metrics.serviceMonitor.enabled
+      value: true
+    # Prometheus selects only ServiceMonitors carrying its release name
+    # (serviceMonitorSelectorNilUsesHelmValues true + empty selector renders as
+    # matchLabels {release: kube-prometheus-stack}). Without this the object
+    # exists and is never scraped.
+    - name: controller.metrics.serviceMonitor.additionalLabels.release
+      value: kube-prometheus-stack
 
 - name: novu
   installed: true
