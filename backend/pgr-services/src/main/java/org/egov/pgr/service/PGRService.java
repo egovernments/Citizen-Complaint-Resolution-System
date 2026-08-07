@@ -322,10 +322,18 @@ public class PGRService {
      * Skipped entirely when {@code criteria.isSkipEmployeeDepartmentScope()} — set by
      * AdminComplaintSearchService for the SUPERUSER cross-department admin search, whose
      * explicitly chosen departmentCodes must not be overwritten by the caller's own HRMS
-     * department just because they also happen to hold a scoped role.
+     * department just because they also happen to hold a scoped role. Also skipped when
+     * {@code criteria.getCreatedBy()} is set — that filter already targets a specific filer,
+     * so forcing the caller's own department onto it would just drop unrelated results.
      */
     private boolean applyEmployeeDepartmentScope(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         if (criteria.isSkipEmployeeDepartmentScope())
+            return true;
+
+        // A createdBy search targets a specific complaint-filer, not the caller's own department —
+        // forcing the caller's department onto it would silently drop results filed under a
+        // different department, defeating the point of searching by createdBy at all.
+        if (!CollectionUtils.isEmpty(criteria.getCreatedBy()))
             return true;
 
         if (requestInfo.getUserInfo() == null

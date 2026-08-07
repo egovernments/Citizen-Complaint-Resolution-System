@@ -34,6 +34,15 @@ public class RequestSearchCriteria {
     @JsonProperty("mobileNumber")
     private String mobileNumber;
 
+    /**
+     * uuid(s) of the user who actually submitted the complaint (ser.createdby) —
+     * e.g. the employee who filed it on a citizen's behalf. Distinct from
+     * ownership: accountId/userIds identify whose complaint it is (the citizen),
+     * this identifies who created the record.
+     */
+    @JsonProperty("createdBy")
+    private Set<String> createdBy;
+
     @SafeHtml
     @JsonProperty("serviceRequestId")
     private String serviceRequestId;
@@ -143,7 +152,7 @@ public class RequestSearchCriteria {
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
         && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null
-        && this.assignee==null && this.department==null);
+        && this.assignee==null && this.createdBy==null && this.department==null);
     }
 
 }

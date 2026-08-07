@@ -144,6 +144,13 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, userIds);
         }
 
+        Set<String> createdBy = criteria.getCreatedBy();
+        if (!CollectionUtils.isEmpty(createdBy)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.createdby IN (").append(createQuery(createdBy)).append(")");
+            addToPreparedStatement(preparedStmtList, createdBy);
+        }
+
         Set<String> serviceRequestIds = criteria.getServiceRequestIds();
         if (!CollectionUtils.isEmpty(serviceRequestIds)) {
             addClauseIfRequired(preparedStmtList, builder);

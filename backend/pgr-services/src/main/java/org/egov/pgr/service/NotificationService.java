@@ -16,6 +16,7 @@ import org.egov.pgr.service.notification.TemplateRenderer;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.NotificationUtil;
+import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.web.models.Notification.*;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.RequestInfoWrapper;
@@ -59,6 +60,9 @@ public class NotificationService {
 
     @Autowired
     private HRMSUtil hrmsUtils;
+
+    @Autowired
+    private PGRUtils pgrUtils;
 
     @Autowired
     private ObjectMapper mapper;
@@ -703,55 +707,91 @@ public class NotificationService {
 
     public Map<String, String> getHRMSEmployee(ServiceRequest request){
         Map<String, String> reassigneeDetails = new HashMap<>();
-        List<String> mdmsDepartmentList = null;
-        List<String> hrmsDepartmentList = null;
-        List<String> designation = null;
-        List<String> employeeName = null;
-        String departmentFromMDMS;
 
         String localisationMessageForPlaceholder =  notificationUtil.getLocalizationMessages(request.getService().getTenantId(), request.getRequestInfo(),COMMON_MODULE);
-        //HRSMS CALL
+        //HRMS CALL
         StringBuilder url = hrmsUtils.getHRMSURI(request.getWorkflow().getAssignes(),request.getService().getTenantId());
         RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(request.getRequestInfo()).build();
         Object response = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
 
-        //MDMS CALL
-        Object mdmsData = mdmsUtils.mDMSCall(request);
-        String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}",request.getService().getServiceCode());
-
+        List<String> hrmsDepartmentList;
+        List<String> employeeName;
         try{
-            mdmsDepartmentList = JsonPath.read(mdmsData,jsonPath);
             hrmsDepartmentList = JsonPath.read(response, HRMS_DEPARTMENT_JSONPATH);
-        }
-        catch (Exception e){
-            throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response for department");
-        }
-
-        if(CollectionUtils.isEmpty(mdmsDepartmentList))
-            throw new CustomException("PARSING_ERROR","Failed to fetch department from mdms data for serviceCode: "+request.getService().getServiceCode());
-        else departmentFromMDMS = mdmsDepartmentList.get(0);
-
-        if(hrmsDepartmentList.contains(departmentFromMDMS)){
-            String localisedDept = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,"COMMON_MASTERS_DEPARTMENT_"+departmentFromMDMS);
-            reassigneeDetails.put("department",localisedDept);
-        }
-
-        String designationJsonPath = HRMS_DESIGNATION_JSONPATH.replace("{department}",departmentFromMDMS);
-
-        try{
-            designation = JsonPath.read(response, designationJsonPath);
             employeeName = JsonPath.read(response, HRMS_EMP_NAME_JSONPATH);
         }
         catch (Exception e){
-            throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response for department");
+            throw new CustomException("JSONPATH_ERROR","Failed to parse HRMS response for department/name");
         }
 
-        String localisedDesignation = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,"COMMON_MASTERS_DESIGNATION_"+designation.get(0));
+        if(CollectionUtils.isEmpty(hrmsDepartmentList))
+            throw new CustomException("DEPARTMENT_NOT_FOUND","No HRMS department found for the assigned employee");
 
-        reassigneeDetails.put("designation",localisedDesignation);
-        reassigneeDetails.put("employeeName",employeeName.get(0));
+        // Department to DISPLAY, in priority order:
+        //  1. ComplaintHierarchy's configured department for this complaint's serviceCode (the
+        //     complaint's "official" category department).
+        //  2. If ComplaintHierarchy has no mapping at all for this serviceCode, fall back to the
+        //     department already stored on the complaint itself — additionalDetails.department, set
+        //     at create/update time by PGRService#getDepartmentFromMDMS, which stores the
+        //     MDMS-resolved NAME when resolvable, or the raw HRMS CODE otherwise (see that method).
+        //  3. If neither source yields anything, fall back to the assignee's own current HRMS
+        //     department so the field isn't left blank.
+        // Whatever value we land on may be a raw CODE or an already-resolved NAME — try the
+        // localization lookup (code-keyed) first, and if that comes up empty, treat the value as
+        // already being a display-ready name.
+        String departmentValue = resolveComplaintHierarchyDepartment(request);
+        if (!StringUtils.hasText(departmentValue))
+            departmentValue = readAdditionalDetailsDepartment(request.getService());
+        if (!StringUtils.hasText(departmentValue))
+            departmentValue = hrmsDepartmentList.get(0);
+
+        String localisedDept = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,"COMMON_MASTERS_DEPARTMENT_"+departmentValue);
+        reassigneeDetails.put("department", StringUtils.hasText(localisedDept) ? localisedDept : departmentValue);
+
+        // Designation is filtered by the assignee's ACTUAL current department code (not
+        // departmentValue above, which may be a name or the complaint's category-level department,
+        // not necessarily this specific employee's) — HRMS assignments are keyed by code, and
+        // hrmsDepartmentList came from that same response, so it's guaranteed to match.
+        String designationJsonPath = HRMS_DESIGNATION_JSONPATH.replace("{department}",hrmsDepartmentList.get(0));
+        try{
+            List<String> designation = JsonPath.read(response, designationJsonPath);
+            if(!CollectionUtils.isEmpty(designation)){
+                String rawDesignation = designation.get(0);
+                String localisedDesignation = notificationUtil.getCustomizedMsgForPlaceholder(localisationMessageForPlaceholder,"COMMON_MASTERS_DESIGNATION_"+rawDesignation);
+                reassigneeDetails.put("designation", StringUtils.hasText(localisedDesignation) ? localisedDesignation : rawDesignation);
+            }
+        }
+        catch (Exception e){
+            log.debug("Could not resolve designation for department {}: {}", hrmsDepartmentList.get(0), e.getMessage());
+        }
+
+        if(!CollectionUtils.isEmpty(employeeName))
+            reassigneeDetails.put("employeeName",employeeName.get(0));
 
         return reassigneeDetails;
+    }
+
+    /** ComplaintHierarchy's configured department code for this complaint's serviceCode, or null if unmapped. */
+    private String resolveComplaintHierarchyDepartment(ServiceRequest request) {
+        try {
+            Object mdmsData = mdmsUtils.mDMSCall(request);
+            String jsonPath = MDMS_DEPARTMENT_SEARCH.replace("{SERVICEDEF}", request.getService().getServiceCode());
+            List<String> mdmsDepartmentList = JsonPath.read(mdmsData, jsonPath);
+            return CollectionUtils.isEmpty(mdmsDepartmentList) ? null : mdmsDepartmentList.get(0);
+        } catch (Exception e) {
+            log.debug("ComplaintHierarchy has no department mapping for serviceCode {}: {}",
+                    request.getService().getServiceCode(), e.getMessage());
+            return null;
+        }
+    }
+
+    /** The department value already stored on the complaint (additionalDetails.department), or null if unset/"NA". */
+    private String readAdditionalDetailsDepartment(org.egov.pgr.web.models.Service service) {
+        Map<String, Object> details = pgrUtils.extractAdditionalDetails(service.getAdditionalDetail());
+        Object dept = details.get("department");
+        if (dept == null) return null;
+        String value = dept.toString().trim();
+        return (value.isEmpty() || value.equalsIgnoreCase("NA")) ? null : value;
     }
 
     private List<SMSRequest> enrichSmsRequest(String mobileNumber, String finalMessage) {
@@ -1245,7 +1285,49 @@ public class NotificationService {
         } catch (Exception e) {
             log.debug("Could not resolve HRMS employee for placeholders (may be no assignee yet): {}", e.getMessage());
         }
+        putAssignerPlaceholders(v, request);
         return v;
+    }
+
+    /**
+     * Department/name/designation of the employee who performed THIS transition (the assigner) —
+     * distinct from emp_department/emp_name/emp_designation above, which describe the assignee.
+     * Skips silently, leaving these placeholders unset, when the actor isn't an employee (e.g. a
+     * citizen APPLY/REOPEN, or a SYSTEM-driven migration) or any HRMS/localization lookup fails —
+     * same degrade-gracefully behavior as the assignee placeholders.
+     */
+    private void putAssignerPlaceholders(Map<String, String> v, ServiceRequest request) {
+        try {
+            RequestInfo ri = request.getRequestInfo();
+            User actor = ri != null ? ri.getUserInfo() : null;
+            if (actor == null || !StringUtils.hasText(actor.getUuid())
+                    || !USERTYPE_EMPLOYEE.equalsIgnoreCase(actor.getType()))
+                return;
+
+            String tenantId = request.getService().getTenantId();
+            List<String> currentDepts = hrmsUtils.getCurrentDepartment(actor.getUuid(), ri, tenantId);
+            if (CollectionUtils.isEmpty(currentDepts)) return;
+            String deptCode = currentDepts.get(0);
+
+            String localisation = notificationUtil.getLocalizationMessages(tenantId, ri, COMMON_MODULE);
+            String localisedDept = notificationUtil.getCustomizedMsgForPlaceholder(localisation, "COMMON_MASTERS_DEPARTMENT_" + deptCode);
+            put(v, "assigner_department", StringUtils.hasText(localisedDept) ? localisedDept : deptCode);
+            put(v, "assigner_name", actor.getName());
+
+            StringBuilder url = hrmsUtils.getHRMSURI(Collections.singletonList(actor.getUuid()), tenantId);
+            Object hrmsResponse = serviceRequestRepository.fetchResult(url,
+                    RequestInfoWrapper.builder().requestInfo(ri).build());
+            String designationJsonPath = HRMS_DESIGNATION_JSONPATH.replace("{department}", deptCode);
+            List<String> designation = JsonPath.read(hrmsResponse, designationJsonPath);
+            if (!CollectionUtils.isEmpty(designation)) {
+                String rawDesignation = designation.get(0);
+                String localisedDesignation = notificationUtil.getCustomizedMsgForPlaceholder(
+                        localisation, "COMMON_MASTERS_DESIGNATION_" + rawDesignation);
+                put(v, "assigner_designation", StringUtils.hasText(localisedDesignation) ? localisedDesignation : rawDesignation);
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve assigning-employee HRMS details for placeholders: {}", e.getMessage());
+        }
     }
 
     private void put(Map<String, String> map, String key, String value) {
