@@ -22,10 +22,21 @@
  *    7. banner        tenant.citymodule schema/rows + PGR bannerImage
  *                     (rows create-missing-only; value set only with
  *                     --banner-url and only when currently empty)
- *    8. gzip          (opt-in: --gzip, or `--only gzip` to run JUST this
+ *    8. analytics     ACCESSCONTROL rows + Configurator labels for the
+ *                     analytics adapter registry (the schema itself is
+ *                     registered by phase 2). Creates NO destination rows —
+ *                     a fresh environment comes up with the feature dark.
+ *    9. matomo        (opt-in: --matomo, needs the serving box) self-hosted
+ *                     Matomo end to end: compose stack up, UNATTENDED
+ *                     install (drives the web wizard — Matomo 5 ships no CLI
+ *                     installer), proxy-header config, the two same-origin
+ *                     nginx tracking locations, and the MDMS destination row
+ *                     (born disabled; --matomo-enable flips it only after
+ *                     the public tracker probe passes).
+ *   10. gzip          (opt-in: --gzip, or `--only gzip` to run JUST this
  *                     phase) verify /digit-ui gzip+Cache-Control; applies
  *                     the nginx block when run ON the serving box
- *    9. verify        consolidated read-back across everything
+ *   11. verify        consolidated read-back across everything
  *
  *  USAGE
  *    node ccrs-migrate.cjs --host http://<gateway> --tenant mz \
@@ -33,7 +44,16 @@
  *         [--phases schemas,landing] [--only gzip] [--dry-run] [--cms] \
  *         [--update-wf] [--locale en_IN] [--hierarchy PGR] [--report out.json] \
  *         [--banner-url https://.../logo.png] [--gzip] [--nginx-conf /etc/nginx/...] \
- *         [--nginx-container digit-ui]
+ *         [--nginx-container digit-ui] \
+ *         [--matomo] [--matomo-admin-pass '<pw>'] [--matomo-admin-user admin] \
+ *         [--matomo-admin-email ops@example.org] [--matomo-site-url https://…] \
+ *         [--matomo-site-name 'CCRS Portal'] [--matomo-code matomo-state] \
+ *         [--matomo-enable] [--matomo-dashboard]
+ *
+ *    --matomo-dashboard also serves the FULL Matomo UI at <host>/matomo/ (no
+ *    SSH tunnel). OFF by default — it publishes an admin console with visitor
+ *    data on the public domain; use a strong --matomo-admin-pass. Tracking
+ *    works without it.
  *
  *    Env-var equivalents (CLI wins): BASE_URL TENANT OAUTH_USER OAUTH_PASS
  *    OAUTH_BASIC TOKEN PHASES DRY_RUN CMS UPDATE_WF LOCALE HIERARCHY REPORT
@@ -74,7 +94,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
     const key = a.slice(2);
-    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters'].includes(key);
+    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters', 'matomo', 'matomo-enable', 'matomo-dashboard'].includes(key);
     const next = argv[i + 1];
     if (flag) {
       out[key] = true;
@@ -106,7 +126,11 @@ const CFG = {
   pass: ARGS.pass || process.env.OAUTH_PASS || 'eGov@123',
   basicRaw: ARGS.basic || process.env.OAUTH_BASIC || 'egov-user-client:',
   token: ARGS.token || process.env.TOKEN || '',
-  phases: String(ARGS.phases || process.env.PHASES || 'auth,schemas,hierarchy,pgr-masters,landing,cms,banner,gzip,verify')
+  // `analytics` was in ALL_PHASES but missing here, so a plain 0->1 run
+  // silently skipped it — the exact "deployed but inert" failure the phase
+  // exists to prevent. `matomo` is NOT here: it is opt-in via --matomo, like
+  // cms/gzip, because it provisions server-side infrastructure.
+  phases: String(ARGS.phases || process.env.PHASES || 'auth,schemas,hierarchy,pgr-masters,landing,cms,analytics,matomo,banner,gzip,verify')
     .split(',').map((s) => s.trim()).filter(Boolean),
   dryRun: !!ARGS['dry-run'] || truthy(process.env.DRY_RUN),
   cms: !!ARGS.cms || truthy(process.env.CMS),
@@ -121,6 +145,25 @@ const CFG = {
   gzip: !!ARGS.gzip || truthy(process.env.GZIP),
   nginxConf: ARGS['nginx-conf'] || process.env.NGINX_CONF || '',
   nginxContainer: ARGS['nginx-container'] || process.env.NGINX_CONTAINER || '',
+  // ── matomo phase (opt-in) ──
+  matomo: !!ARGS.matomo || truthy(process.env.MATOMO),
+  // Flips the MDMS destination row on — but ONLY after the public tracker
+  // probe passes, so one command can never leave a row pointing at a 404.
+  matomoEnable: !!ARGS['matomo-enable'] || truthy(process.env.MATOMO_ENABLE),
+  matomoAdminUser: ARGS['matomo-admin-user'] || process.env.MATOMO_ADMIN_USER || 'admin',
+  // No default on purpose: a fresh install creates the Matomo superuser and a
+  // guessable default password on a public-ish box is worse than a hard stop.
+  matomoAdminPass: ARGS['matomo-admin-pass'] || process.env.MATOMO_ADMIN_PASS || '',
+  matomoAdminEmail: ARGS['matomo-admin-email'] || process.env.MATOMO_ADMIN_EMAIL || '',
+  matomoSiteUrl: ARGS['matomo-site-url'] || process.env.MATOMO_SITE_URL || '',
+  matomoSiteName: ARGS['matomo-site-name'] || process.env.MATOMO_SITE_NAME || 'CCRS Portal',
+  // The MDMS record's permanent identity. MDMS has no delete, so this must be
+  // a name worth keeping (matomo-state, not matomo-test-2).
+  matomoCode: ARGS['matomo-code'] || process.env.MATOMO_CODE || 'matomo-state',
+  // Expose the FULL Matomo UI at <host>/matomo/ (no SSH tunnel needed). OFF by
+  // default: it publishes an admin console with visitor data on the public
+  // domain. Tracking works without it — this is purely dashboard access.
+  matomoDashboard: !!ARGS['matomo-dashboard'] || truthy(process.env.MATOMO_DASHBOARD),
 };
 if (CFG.nginxContainer && !/^[A-Za-z0-9_.-]+$/.test(CFG.nginxContainer)) {
   console.error(`--nginx-container must be a plain container name (got: ${CFG.nginxContainer})`);
@@ -148,7 +191,7 @@ if (CFG.tenants.some((t) => (t.includes('.') ? t.split('.')[0] : t) !== CFG.stat
 // Phases that never touch the API with credentials — they may run without a
 // successful auth phase (the driver skips everything else when RI is null).
 const AUTH_FREE_PHASES = new Set(['gzip']);
-const ALL_PHASES = ['auth', 'schemas', 'hierarchy', 'pgr-masters', 'landing', 'cms', 'banner', 'gzip', 'verify'];
+const ALL_PHASES = ['auth', 'schemas', 'hierarchy', 'pgr-masters', 'landing', 'cms', 'analytics', 'matomo', 'banner', 'gzip', 'verify'];
 // --only <list>: run EXACTLY these phases and nothing else. Two conveniences
 // over --phases: (1) the listed phases' opt-in flags are implied (--only gzip
 // used to still SKIP without --gzip; same for cms), (2) auth is auto-prepended
@@ -162,6 +205,7 @@ if ('only' in ARGS) {
   CFG.phases = needsAuth && !only.includes('auth') ? ['auth', ...only] : only;
   if (only.includes('gzip')) CFG.gzip = true;
   if (only.includes('cms')) CFG.cms = true;
+  if (only.includes('matomo')) CFG.matomo = true;
 }
 // Fallback banner: with no --banner-url, an EMPTY bannerImage is filled with
 // the standard hero image. Overwriting an existing, different image still
@@ -188,6 +232,9 @@ const SEED = {
   cmsWorkflow: path.join(REPO, 'utilities/default-data-handler/src/main/resources/CmsPgrWorkflowConfig.json'),
   tenantSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/tenant.json'),
   citymoduleRows: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/tenant/tenant.citymodule.json'),
+  commonMasterSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/common-masters.json'),
+  configuratorLoc: path.join(REPO, 'local-setup/ansible/files/configurator-localization/configurator-ui.json'),
+  matomoCompose: path.join(REPO, 'local-setup/docker-compose.matomo.yml'),
 };
 
 /* ──────────────────────────────── output ──────────────────────────────── */
@@ -388,9 +435,21 @@ function record(id, status, detail, errorCode, remediation) {
 
 async function phaseSchemas() {
   const wanted = [];
-  for (const [file, label] of [[SEED.pgrSchemas, 'RAINMAKER-PGR'], [SEED.landingSchemas, 'landing']]) {
+  // common-masters.json carries dozens of upstream schemas we must NOT touch, so it
+  // is admitted by an explicit allowlist rather than by prefix. AnalyticsProvider is
+  // on it because the analytics registry is inert without the schema, and operators
+  // running the unified runner should not have to also find a separate script.
+  const COMMON_MASTER_CODES = new Set(['common-masters.AnalyticsProvider']);
+  for (const [file, label] of [
+    [SEED.pgrSchemas, 'RAINMAKER-PGR'],
+    [SEED.landingSchemas, 'landing'],
+    [SEED.commonMasterSchemas, 'common-masters'],
+  ]) {
     try {
-      for (const s of readJson(file)) if (String(s.code || '').startsWith('RAINMAKER-PGR.')) wanted.push(s);
+      for (const s of readJson(file)) {
+        const code = String(s.code || '');
+        if (code.startsWith('RAINMAKER-PGR.') || COMMON_MASTER_CODES.has(code)) wanted.push(s);
+      }
     } catch (e) {
       return record('schemas', OUTCOME.FAILED, `cannot read ${label} schema seed: ${e.message}`, 'SEED_FILE_MISSING',
         `Run from a full repo checkout (expected ${file}).`);
@@ -848,6 +907,498 @@ async function phaseCms() {
   return record(CMS_PH(), OUTCOME.OK, 'roles, actions, grants, workflow ensured');
 }
 
+/* ══════════════════════════ PHASE: analytics ══════════════════════════ */
+
+/* Everything a 0->1 deployment needs for the analytics adapter registry to be
+ * USABLE — and nothing that turns it on. The destinations themselves are MDMS
+ * rows an admin creates in the Configurator; a fresh environment must come up
+ * with the plumbing present and the feature dark.
+ *
+ * The schema itself is handled by phaseSchemas (common-masters.AnalyticsProvider
+ * is on its allowlist), so this phase covers the two things nothing else does:
+ *
+ *  1. ACCESSCONTROL rows for the two MDMS write paths, granted to SUPERUSER and
+ *     MDMS_ADMIN. phaseCms also seeds ACCESSCONTROL, but it is opt-in (--cms)
+ *     AND filters to CMS_ROLES, so these grants would never land there. Kong
+ *     currently runs with ENFORCE_RBAC=false, so they change nothing today —
+ *     they exist so the later flip does not silently break analytics writes.
+ *
+ *  2. The Configurator's own localisation keys, so the sidebar entry reads
+ *     "Analytics Providers" rather than the raw key. The ansible playbook
+ *     upserts the same bundle, but an operator who runs only this script should
+ *     not end up with a screen labelled app.nav.analytics_providers.
+ *
+ * Add-if-missing throughout, exactly like phaseLanding: an operator who has
+ * renamed a label keeps their wording on a re-run. */
+
+const ANALYTICS_ACTION_IDS = [30, 31];
+const ANALYTICS_GRANT_ROLES = ['SUPERUSER', 'MDMS_ADMIN'];
+const ANALYTICS_LOC_PREFIXES = ['app.nav.analytics_providers', 'app.resources.analytics_providers'];
+
+async function phaseAnalytics() {
+  const failures = [];
+  const notes = [];
+  try {
+    /* ---- 1. ACCESSCONTROL actions + grants ---- */
+    const catalog = new Map(readJson(SEED.actionsTest).map((a) => [Number(a.id), a]));
+    const wantActions = ANALYTICS_ACTION_IDS.filter((id) => catalog.has(id));
+    if (wantActions.length !== ANALYTICS_ACTION_IDS.length) {
+      failures.push(`action catalog is missing ${ANALYTICS_ACTION_IDS.filter((id) => !catalog.has(id)).join(', ')}`);
+    }
+    const haveActions = new Set((await cmsSearchAll('ACCESSCONTROL-ACTIONS-TEST.actions-test')).map((m) => Number(m.data && m.data.id)));
+    let createdActions = 0;
+    for (const id of wantActions.filter((id) => !haveActions.has(id))) {
+      if (CFG.dryRun) { info(`dry-run: would create action ${id} (${catalog.get(id).url})`); continue; }
+      const res = await mdmsCreate(CFG.state, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', String(id), { ...catalog.get(id), tenantId: CFG.state });
+      if (!res.ok && !res.exists) failures.push(`action ${id}: HTTP ${res.code}`); else createdActions++;
+    }
+    notes.push(`actions: ${wantActions.length} ensured (${createdActions} created)`);
+
+    const wantGrants = readJson(SEED.roleactions)
+      .filter((g) => ANALYTICS_ACTION_IDS.includes(Number(g.actionid)) && ANALYTICS_GRANT_ROLES.includes(g.rolecode));
+    const haveGrants = new Set((await cmsSearchAll('ACCESSCONTROL-ROLEACTIONS.roleactions'))
+      .map((m) => m.uniqueIdentifier || `${m.data && m.data.rolecode}.${m.data && m.data.actionid}`));
+    let createdGrants = 0;
+    for (const g of wantGrants.filter((g) => !haveGrants.has(`${g.rolecode}.${g.actionid}`))) {
+      if (CFG.dryRun) { info(`dry-run: would grant ${g.rolecode} -> action ${g.actionid}`); continue; }
+      const res = await mdmsCreate(CFG.state, 'ACCESSCONTROL-ROLEACTIONS.roleactions', `${g.rolecode}.${g.actionid}`, { ...g, tenantId: CFG.state });
+      if (!res.ok && !res.exists) failures.push(`grant ${g.rolecode}.${g.actionid}: HTTP ${res.code}`); else createdGrants++;
+    }
+    notes.push(`grants: ${wantGrants.length} ensured (${createdGrants} created)`);
+
+    /* ---- 2. Configurator localisation (add-if-missing, per locale) ---- */
+    const bundle = readJson(SEED.configuratorLoc).filter((m) => ANALYTICS_LOC_PREFIXES.includes(m.code));
+    const byLocale = {};
+    for (const m of bundle) { (byLocale[m.locale] = byLocale[m.locale] || []).push(m); }
+    let seeded = 0, kept = 0;
+    for (const locale of Object.keys(byLocale)) {
+      const r = await postJson(
+        `/localization/messages/v1/_search?tenantId=${encodeURIComponent(CFG.state)}&module=configurator-ui&locale=${locale}`,
+        { RequestInfo: ri() });
+      const existing = new Set((parse(r.body)?.messages || []).map((m) => m.code));
+      const missing = byLocale[locale].filter((m) => !existing.has(m.code));
+      kept += byLocale[locale].length - missing.length;
+      if (!missing.length) continue;
+      if (CFG.dryRun) { info(`dry-run: would seed ${missing.length} ${locale} configurator key(s)`); continue; }
+      const { success, failed: fl } = await upsertMessages(CFG.state, locale,
+        missing.map((m) => ({ code: m.code, message: m.message, module: 'configurator-ui', locale })));
+      seeded += success;
+      if (fl) failures.push(`localization ${locale}: ${fl} failed`);
+    }
+    notes.push(`localization: ${seeded} seeded, ${kept} already present`);
+    if (seeded && !CFG.dryRun) {
+      /* An upsert alone is not enough — the UI serves stale until the caches are
+       * evicted. This endpoint does it; a service restart does NOT. */
+      await cacheBust();
+      notes.push('localization cache busted');
+    }
+  } catch (e) {
+    return record('analytics', OUTCOME.FAILED, `unexpected: ${e.message}`, 'ANALYTICS_UNEXPECTED', e.stack ? truncate(e.stack, 300) : null);
+  }
+  if (CFG.dryRun) return record('analytics', OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  const detail = notes.join(' · ');
+  ok(detail);
+  if (failures.length) {
+    return record('analytics', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'ANALYTICS_STEP_FAILED', failures.slice(0, 6).join(' | '));
+  }
+  return record('analytics', OUTCOME.OK, detail);
+}
+
+/* ═══════════════════════════ PHASE: matomo ════════════════════════════ */
+
+/* Self-hosted Matomo, end to end, ON the serving box:
+ *
+ *   1. compose stack up   (local-setup/docker-compose.matomo.yml → /opt/digit)
+ *   2. unattended install (drives the web wizard over HTTP — Matomo 5 ships
+ *                          NO CLI installer; verified against matomo:5-apache
+ *                          5.12: console list has core:update but no install)
+ *   3. proxy-header config (console config:set, so visitor IPs are real ones
+ *                          rather than the box's)
+ *   4. nginx               the two SAME-ORIGIN tracking locations. Same-origin
+ *                          is the whole design: no TLS requirement, no
+ *                          ANALYTICS_SCRIPT_HOSTS entry, works on http-only
+ *                          boxes. Only matomo.js + matomo.php are exposed —
+ *                          Matomo emits absolute asset URLs, so serving the
+ *                          dashboard under /matomo/ breaks it; the dashboard
+ *                          deliberately stays on 127.0.0.1:<port>.
+ *   5. MDMS destination row, BORN DISABLED. --matomo-enable flips it, and only
+ *                          after the public tracker probe passes — one command
+ *                          must never leave an enabled row pointing at a 404.
+ *
+ * Wizard facts that cost time to learn, so they are encoded here:
+ *   - the installer records trusted_hosts from the origin it was driven on,
+ *     and this image IGNORES MATOMO_GENERAL_TRUSTED_HOSTS — which is why the
+ *     nginx locations present `Host 127.0.0.1:<port>` (Matomo's OWN origin)
+ *     instead of forwarding the portal host. The tracked page URL travels in
+ *     the payload, so nothing is lost.
+ *   - the trackingCode wizard page 500s on this image; the install still
+ *     completes (verified: tracker 200, collector 200, / serves the login
+ *     page). Its status is deliberately ignored.
+ *   - the post-install dashboard date picker sits on YESTERDAY; a working
+ *     tracker reads "no data" until Visitors → Real-time is used.
+ */
+
+const MATOMO_NGINX_MARK = '# ccrs-matomo';
+
+async function phaseMatomo() {
+  if (!CFG.matomo) return record('matomo', OUTCOME.SKIPPED, 'opt-in phase — pass --matomo to run');
+  if (typeof fetch !== 'function') {
+    return record('matomo', OUTCOME.FAILED, 'the unattended installer needs global fetch (node >= 18)', 'MATOMO_NODE_TOO_OLD',
+      `This node is ${process.version}; run with node 18+.`);
+  }
+  const { execSync } = require('child_process');
+  const sh = (cmd, opts) => execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], ...opts });
+  const q = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+  const failures = [];
+  const notes = [];
+
+  /* ---- 0. serving box? ---- */
+  try { sh('sudo docker version --format {{.Server.Version}}'); }
+  catch {
+    return record('matomo', OUTCOME.PARTIAL, 'docker is not reachable on THIS machine — the matomo phase provisions the serving box', 'MATOMO_NOT_ON_BOX',
+      'Run the script on the serving box (everything else can run remotely).');
+  }
+
+  /* ---- 1. compose stack ---- */
+  const running = () => { try { return sh("sudo docker ps --filter name='^matomo$' --format '{{.Names}}'").trim() === 'matomo'; } catch { return false; } };
+  if (!running()) {
+    if (CFG.dryRun) { info('dry-run: would install /opt/digit/docker-compose.matomo.yml and docker compose up -d'); }
+    else {
+      try {
+        // keep an operator-edited copy; only seed when absent
+        sh('sudo test -f /opt/digit/docker-compose.matomo.yml') && void 0;
+      } catch {
+        try { sh(`sudo cp ${q(SEED.matomoCompose)} /opt/digit/docker-compose.matomo.yml`); notes.push('compose file installed'); }
+        catch (e) { return record('matomo', OUTCOME.FAILED, `cannot install compose file: ${truncate(e.message, 100)}`, 'MATOMO_COMPOSE_COPY', 'Check /opt/digit exists and sudo works.'); }
+      }
+      try { sh('cd /opt/digit && sudo docker compose -f docker-compose.matomo.yml up -d', { timeout: 300000 }); }
+      catch (e) {
+        return record('matomo', OUTCOME.FAILED, `docker compose up failed: ${truncate(e.message, 140)}`, 'MATOMO_COMPOSE_UP',
+          'Common cause: the digit_egov-network external network does not exist — is the DIGIT stack deployed on this box?');
+      }
+    }
+  } else { notes.push('containers already running'); }
+
+  /* Matomo's admin origin: derive from the ACTUAL published port, never assume. */
+  let origin = '';
+  if (!CFG.dryRun) {
+    try { origin = 'http://' + sh("sudo docker port matomo 80/tcp").trim().split('\n')[0]; }
+    catch { return record('matomo', OUTCOME.FAILED, 'matomo container has no published port 80', 'MATOMO_NO_PORT', 'Check docker-compose.matomo.yml ports.'); }
+    // wait for apache+php to answer (first boot copies the whole app into the volume)
+    let up = false;
+    for (let i = 0; i < 40 && !up; i++) {
+      try { const r = await fetch(origin + '/', { redirect: 'manual' }); up = r.status > 0; } catch { await new Promise((r) => setTimeout(r, 3000)); }
+    }
+    if (!up) return record('matomo', OUTCOME.FAILED, `matomo did not answer on ${origin} within 120s`, 'MATOMO_NOT_UP', 'sudo docker logs matomo');
+    notes.push(`admin ui on ${origin} (box-local only; reach it via: ssh -L 8080:${origin.replace('http://', '')} <box>)`);
+  }
+
+  /* ---- 2. unattended install ---- */
+  const installed = () => { try { return sh("sudo docker exec matomo sh -c 'test -s /var/www/html/config/config.ini.php && grep -c trusted_hosts /var/www/html/config/config.ini.php'").trim() !== '0'; } catch { return false; } };
+  if (CFG.dryRun) { info('dry-run: would run the unattended web-wizard install if config.ini.php is absent'); }
+  else if (installed()) { notes.push('already installed — wizard skipped'); }
+  else {
+    if (!CFG.matomoAdminPass || CFG.matomoAdminPass.length < 8) {
+      return record('matomo', OUTCOME.FAILED, 'fresh install needs --matomo-admin-pass (>= 8 chars) — no default superuser password, on purpose', 'MATOMO_NO_ADMIN_PASS',
+        "Re-run with --matomo --matomo-admin-pass '<strong password>'.");
+    }
+    // DB creds come from the compose file actually on disk, so an operator who
+    // rotated them there stays consistent without another flag.
+    let dbPass = 'matomo_local_only';
+    try { const m = /MARIADB_PASSWORD:\s*(\S+)/.exec(sh('sudo cat /opt/digit/docker-compose.matomo.yml')); if (m) dbPass = m[1]; } catch {}
+    const email = CFG.matomoAdminEmail || ('admin@' + U.hostname);
+    const siteUrl = CFG.matomoSiteUrl || CFG.base;
+    try {
+      await matomoWizard(origin, { host: 'matomo-db', user: 'matomo', pass: dbPass, name: 'matomo' },
+        { login: CFG.matomoAdminUser, pass: CFG.matomoAdminPass, email },
+        { name: CFG.matomoSiteName, url: siteUrl });
+      notes.push(`installed (superuser ${CFG.matomoAdminUser}, site 1 = ${siteUrl})`);
+    } catch (e) {
+      return record('matomo', OUTCOME.FAILED, `unattended install failed: ${truncate(e.message, 160)}`, 'MATOMO_INSTALL_FAILED',
+        `Finish it by hand: ssh -L 8080:${origin.replace('http://', '')} <box>, open http://localhost:8080, then re-run --only matomo.`);
+    }
+  }
+
+  /* ---- 3. Matomo config: real visitor IPs, and (for --matomo-dashboard) the
+   *         reverse-proxy + trusted-host settings that let the full UI be
+   *         served under the /matomo/ path. proxy_uri_header=1 makes Matomo
+   *         build absolute URLs from X-Forwarded-Uri, and the portal host must
+   *         be a trusted_host or Matomo refuses to render. Verified end to end
+   *         on a real box: login + 21 dashboard widgets + Visits Log, zero
+   *         failed requests, nothing escaping the prefix. ---- */
+  if (!CFG.dryRun) {
+    try { sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.proxy_client_headers=["HTTP_X_FORWARDED_FOR"]'`); }
+    catch (e) { failures.push(`config:set proxy_client_headers: ${truncate(e.message, 80)}`); }
+    if (CFG.matomoDashboard) {
+      // portal host (from --host) + the box-local origins the installer needs.
+      const portalHost = U.host; // host[:port] of --host
+      const hosts = JSON.stringify([portalHost, origin.replace('http://', ''), 'localhost', '127.0.0.1']);
+      try {
+        sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.proxy_uri_header=1'`);
+        sh(`sudo docker exec matomo php /var/www/html/console config:set 'General.trusted_hosts=${hosts.replace(/'/g, "'\\''")}'`);
+        notes.push(`dashboard proxy config set (trusted_hosts include ${portalHost})`);
+      } catch (e) { failures.push(`dashboard config:set: ${truncate(e.message, 80)}`); }
+    }
+  }
+
+  /* ---- 4. nginx tracking locations (host nginx — the same files that serve
+   *         /digit-ui; --nginx-container does NOT apply here, that indirection
+   *         is for the digit-ui container's own nginx).
+   *
+   *         EVERY candidate file, and EVERY serving /digit-ui location within
+   *         each file, gets the block. First-file-only silently missed the
+   *         HTTPS vhost on cms-pilot: certbot keeps the 443 server in a
+   *         different sites-enabled file than the ansible-rendered HTTP one,
+   *         both contain a serving /digit-ui location, and portal traffic —
+   *         which is what actually loads the tracker — only ever crosses the
+   *         443 one. An exact-match location duplicated across DIFFERENT
+   *         server{} blocks is valid nginx; a real duplicate inside one block
+   *         is caught by nginx -t and that file is rolled back. ---- */
+  const confs = [];
+  if (CFG.nginxConf) confs.push(CFG.nginxConf);
+  else {
+    try {
+      const hits = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null")
+        .split('\n').map((s) => s.trim()).filter(Boolean)
+        .filter((f) => !/\.(bak|backup|old|orig|save|dpkg-(old|new|dist)|rpm(save|new))(\.|$)/i.test(f) && !/~$/.test(f) && !/backup/i.test(f))
+        // active configs only: sites-available is inert unless symlinked into
+        // sites-enabled, and then it is already matched via that path (skip
+        // the duplicate — editing both would double-insert through the link).
+        .filter((f) => !/\/sites-available\//.test(f));
+      confs.push(...hits);
+      if (hits.length > 1) info(`multiple active configs serve /digit-ui — patching all: ${hits.join(', ')}`);
+    } catch { /* none found */ }
+  }
+  if (!confs.length) {
+    failures.push('no active nginx config serving /digit-ui found — tracking locations not added');
+  }
+  let nginxEdited = false;
+  const upstream = origin.replace('http://', '');
+  // The tracker/collector block (exact-match; same-origin). Host is Matomo's
+  // OWN origin — it refuses unknown hosts and this image ignores
+  // MATOMO_GENERAL_TRUSTED_HOSTS. The tracked page URL travels in the payload.
+  const trackerLines = () => [
+    `${MATOMO_NGINX_MARK} tracker (added by ccrs-migrate --matomo) — tracker + collector, same-origin.`,
+    `location = /matomo/matomo.js {`,
+    `  proxy_pass http://${upstream}/matomo.js;`,
+    `  proxy_set_header Host ${upstream};`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+    `location = /matomo/matomo.php {`,
+    `  proxy_pass http://${upstream}/matomo.php;`,
+    `  proxy_set_header Host ${upstream};`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+  ];
+  // --matomo-dashboard: the FULL UI under the /matomo/ PREFIX. The exact-match
+  // tracker blocks always win over this prefix, so tracking is unaffected. Host
+  // is $host (not the pin) so Matomo's absolute URLs carry the portal host;
+  // X-Forwarded-Uri + Matomo's proxy_uri_header=1 keep the /matomo prefix on
+  // generated links. Publishing an admin console with visitor data on a public
+  // domain is a deliberate exposure — OFF unless --matomo-dashboard.
+  const dashboardLines = () => [
+    `${MATOMO_NGINX_MARK} dashboard (added by ccrs-migrate --matomo-dashboard) — full UI at /matomo/.`,
+    `location /matomo/ {`,
+    `  proxy_pass http://${upstream}/;`,
+    `  proxy_set_header Host $host;`,
+    `  proxy_set_header X-Real-IP $remote_addr;`,
+    `  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`,
+    `  proxy_set_header X-Forwarded-Proto $scheme;`,
+    `  proxy_set_header X-Forwarded-Uri /matomo;`,
+    `  proxy_http_version 1.1;`,
+    `}`,
+  ];
+
+  for (const conf of confs) {
+    let cur = '';
+    try { cur = sh(`sudo cat ${q(conf)}`); } catch (e) { failures.push(`cannot read ${conf}`); continue; }
+    // Detect the tracker and the dashboard INDEPENDENTLY — a prior run (or the
+    // pre-phase runbook, markerless) may have added the tracker but not the
+    // dashboard. Re-inserting an existing location fails nginx -t for the whole
+    // file, so add only what is missing.
+    const hasTracker = cur.includes('location = /matomo/matomo.js');
+    const hasDash = /location\s+\/matomo\/\s*\{/.test(cur);
+    const wantDash = CFG.matomoDashboard;
+    const need = [];
+    if (!hasTracker) need.push('tracker');
+    if (wantDash && !hasDash) need.push('dashboard');
+    if (!need.length) {
+      notes.push(`nginx already has ${hasTracker ? 'tracker' : ''}${hasTracker && hasDash ? '+dashboard' : ''} (${conf})`);
+      continue;
+    }
+    // Anchor: ONE serving /digit-ui location per server{} block, skipping
+    // `location = /digit-ui { return 302 }` redirect stubs. Crucially ONE per
+    // block, not per location — a server block can hold several serving
+    // /digit-ui* locations (e.g. /digit-ui/ AND /digit-ui-test/), and inserting
+    // the matomo block at each would put duplicate `location`s in one block,
+    // which nginx rejects with `[emerg] duplicate location`. Map each candidate
+    // to its enclosing `server {` and keep only the first per block.
+    const serverStarts = [];
+    { const sre = /(^|\})\s*server\s*\{/gm; let sm; while ((sm = sre.exec(cur)) !== null) serverStarts.push(sm.index); }
+    const serverOf = (at) => { let best = -1; for (const s of serverStarts) if (s <= at) best = s; return best; };
+    const locRe = /^([ \t]*)location [^{]*\/digit-ui[^{]*\{/gm;
+    const seenBlocks = new Set();
+    const anchors = [];
+    let m;
+    while ((m = locRe.exec(cur)) !== null) {
+      const end = m.index + m[0].length;
+      const body = cur.slice(end, cur.indexOf('}', end) === -1 ? end + 600 : cur.indexOf('}', end));
+      if (/return\s+30\d/.test(body)) continue;
+      const block = serverOf(m.index);
+      if (seenBlocks.has(block)) continue; // one insert per server{} block
+      seenBlocks.add(block);
+      anchors.push({ at: m.index, indent: m[1] });
+    }
+    if (!anchors.length) { failures.push(`no serving "location /digit-ui" block in ${conf}`); continue; }
+    if (CFG.dryRun) { info(`dry-run: would insert ${need.join('+')} at ${anchors.length} anchor(s) in ${conf}, nginx -t, reload`); continue; }
+    const lines = [...(need.includes('tracker') ? trackerLines() : []), ...(need.includes('dashboard') ? dashboardLines() : [])];
+    const blockAt = (indent) => lines.map((l) => indent + l).join('\n');
+    // last-to-first so earlier offsets stay valid
+    let next = cur;
+    for (let i = anchors.length - 1; i >= 0; i--) {
+      next = next.slice(0, anchors[i].at) + blockAt(anchors[i].indent) + '\n\n' + next.slice(anchors[i].at);
+    }
+    const bak = `${conf}.${new Date().toISOString().slice(0, 10)}.ccrs-matomo.bak`;
+    try {
+      sh(`sudo cp ${q(conf)} ${q(bak)}`);
+      sh(`sudo tee ${q(conf)} > /dev/null`, { input: next });
+      sh('sudo nginx -t');
+      nginxEdited = true;
+      notes.push(`nginx ${need.join('+')} added at ${anchors.length} anchor(s) (${conf}; backup ${bak})`);
+    } catch (e) {
+      try { sh(`sudo cp ${q(bak)} ${q(conf)}`); sh('sudo nginx -t'); } catch {}
+      failures.push(`nginx edit of ${conf} failed and was rolled back: ${truncate(e.message, 120)}`);
+    }
+  }
+  if (nginxEdited) {
+    try { try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); } }
+    catch (e) { failures.push(`nginx reload failed: ${truncate(e.message, 80)}`); }
+  }
+
+  /* ---- probe the PUBLIC path — the gate for --matomo-enable ----
+   * Retry, because `systemctl reload nginx` returns as soon as the signal is
+   * sent: old workers keep serving until the new ones take over, so a probe
+   * fired immediately after a successful edit reads the PRE-reload config and
+   * reports a false "NOT SERVING YET" (observed on cms-pilot — the endpoint was
+   * live seconds later). Only retry when we just edited; an unpatched box
+   * should still fail fast. */
+  let publicOk = false;
+  if (!CFG.dryRun) {
+    let h, ct = '';
+    const tries = nginxEdited ? 6 : 1;
+    for (let i = 0; i < tries; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 2000));
+      h = await req('/matomo/matomo.js', 'HEAD', {});
+      ct = String((h.headers || {})['content-type'] || '');
+      publicOk = h.code === 200 && /javascript/i.test(ct);
+      if (publicOk) break;
+    }
+    notes.push(`public tracker probe: HTTP ${h.code} ${ct || '—'}${publicOk ? '' : ' — NOT SERVING YET'}`);
+    if (CFG.matomoDashboard) {
+      let d, dct = '', dashOk = false;
+      const dtries = nginxEdited ? 6 : 1;
+      for (let i = 0; i < dtries; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 2000));
+        d = await req('/matomo/index.php?module=Login', 'GET', {});
+        dct = String((d.headers || {})['content-type'] || '');
+        dashOk = d.code === 200 && /html/i.test(dct);
+        if (dashOk) break;
+      }
+      notes.push(`dashboard at ${CFG.base}/matomo/ : HTTP ${d.code}${dashOk ? ' — login page (browse it, no tunnel)' : ' — not serving'}`);
+    }
+    if (publicOk) {
+      const hit = await req(`/matomo/matomo.php?idsite=1&rec=1&url=${encodeURIComponent(CFG.base + '/ccrs-migrate-verify')}&action_name=ccrs-migrate-verify&rand=${Math.floor(Math.random() * 1e6)}`, 'GET', {});
+      notes.push(`collector probe: HTTP ${hit.code}${hit.code === 200 || hit.code === 204 ? '' : ' — unexpected'}`);
+    }
+  }
+
+  /* ---- 5. the MDMS destination row ---- */
+  const SCHEMA = 'common-masters.AnalyticsProvider';
+  try {
+    const rows = await cmsSearchAll(SCHEMA);
+    const mine = rows.find((r) => r.data && r.data.code === CFG.matomoCode && r.tenantId === CFG.state);
+    if (!mine) {
+      const data = { code: CFG.matomoCode, type: 'MATOMO', enabled: false, scriptUrl: '/matomo/matomo.js', endpointUrl: '/matomo/matomo.php', siteId: '1' };
+      if (CFG.dryRun) info(`dry-run: would create ${SCHEMA}/${CFG.matomoCode} (enabled:false)`);
+      else {
+        const res = await mdmsCreate(CFG.state, SCHEMA, CFG.matomoCode, { ...data, tenantId: CFG.state });
+        if (!res.ok && !res.exists) failures.push(`destination row create: HTTP ${res.code}`);
+        else notes.push(`destination row ${CFG.matomoCode} created (disabled)`);
+      }
+    } else { notes.push(`destination row ${CFG.matomoCode} exists (enabled:${mine.data.enabled === true})`); }
+    if (CFG.matomoEnable && !CFG.dryRun) {
+      if (!publicOk) { failures.push('--matomo-enable refused: the public tracker probe did not pass — an enabled row must never point at a 404'); }
+      else {
+        const cur2 = (await cmsSearchAll(SCHEMA)).find((r) => r.data && r.data.code === CFG.matomoCode && r.tenantId === CFG.state);
+        if (cur2 && cur2.data.enabled !== true) {
+          // full envelope: _update 400s (AUDIT_DETAILS_ABSENT_ERR) without auditDetails echoed back
+          const res = await mdmsUpdate(SCHEMA, { ...cur2, data: { ...cur2.data, enabled: true } });
+          if (res.ok) notes.push('destination row ENABLED — the portal starts tracking on its next load (<= 90s cache)');
+          else failures.push(`enable flip: HTTP ${res.code}`);
+        } else if (cur2) { notes.push('destination row already enabled'); }
+      }
+    }
+  } catch (e) { failures.push(`MDMS row step: ${truncate(e.message, 100)}`); }
+
+  if (CFG.dryRun) return record('matomo', OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  const detail = notes.join(' · ');
+  ok(detail);
+  if (failures.length) return record('matomo', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'MATOMO_STEP_FAILED', failures.slice(0, 6).join(' | '));
+  return record('matomo', OUTCOME.OK, detail);
+}
+
+/* Drives Matomo 5's web installer. The wizard advances an internal step
+ * pointer, so the calls MUST happen in this order, carrying cookies. Verified
+ * end to end against matomo:5-apache (5.12): databaseSetup/setupSuperUser/
+ * firstWebsiteSetup answer 302 on success; an error re-renders the form with
+ * an error node instead. trackingCode 500s on this image and is ignored —
+ * `finished` still lands and the instance serves the login page after. */
+async function matomoWizard(origin, db, su, site) {
+  const jar = {};
+  const cookies = () => Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  async function step(name, action, post, tolerate) {
+    const opts = { redirect: 'manual', headers: { Cookie: cookies() } };
+    if (post) {
+      opts.method = 'POST';
+      opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      opts.body = new URLSearchParams(post).toString();
+    }
+    const res = await fetch(`${origin}/index.php?action=${action}`, opts);
+    const set = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+    for (const c of set) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar[kv.slice(0, i).trim()] = kv.slice(i + 1); }
+    if (tolerate) return;
+    const body = res.status >= 300 && res.status < 400 ? '' : await res.text();
+    // Two-step on purpose: first a STRICT test for the installer's own error
+    // classes, then extraction. A single loose extract regex false-positived on
+    // systemCheck, whose healthy page contains benign *error* substrings in
+    // attributes (icon names, "no-errors" classes).
+    if (/<p class="error"|<div class="error"|id="error"|installation-error/i.test(body)) {
+      const em = /<(?:p|div)[^>]*class="[^"]*error[^"]*"[^>]*>([\s\S]{0,300}?)<\//i.exec(body);
+      throw new Error(`${name}: ${(em ? em[1].replace(/<[^>]+>/g, ' ').trim() : 'installer reported an error') || 'installer reported an error'}`);
+    }
+    if (res.status >= 400) throw new Error(`${name}: HTTP ${res.status}`);
+  }
+  await step('welcome', 'welcome');
+  await step('systemCheck', 'systemCheck');
+  await step('databaseSetup', 'databaseSetup', { host: db.host, username: db.user, password: db.pass, dbname: db.name, tables_prefix: 'matomo_', adapter: 'PDO\\MYSQL' });
+  await step('tablesCreation', 'tablesCreation');
+  await step('setupSuperUser', 'setupSuperUser', { login: su.login, password: su.pass, password_bis: su.pass, email: su.email, subscribe_newsletter_piwikorg: '0', subscribe_newsletter_professionalservices: '0' });
+  await step('firstWebsiteSetup', 'firstWebsiteSetup', { siteName: site.name, url: site.url, timezone: 'Africa/Maputo', ecommerce: '0' });
+  await step('trackingCode', 'trackingCode', null, /* tolerate: */ true);
+  await step('finished', 'finished', { do_not_track: '1', anonymise_ip: '1', submit: 'Continue to Matomo »' });
+  // prove it before declaring success
+  const js = await fetch(`${origin}/matomo.js`);
+  if (js.status !== 200) throw new Error(`post-install: matomo.js HTTP ${js.status}`);
+  const hit = await fetch(`${origin}/matomo.php?idsite=1&rec=1&url=${encodeURIComponent(site.url)}&action_name=install-proof`);
+  if (hit.status !== 200 && hit.status !== 204) throw new Error(`post-install: collector HTTP ${hit.status}`);
+}
+
 /* ═══════════════════════════ PHASE: banner ════════════════════════════ */
 
 async function phaseBanner() {
@@ -1119,13 +1670,34 @@ async function phaseVerify() {
   checks.push(`TemplateType=${count('ComplaintTemplateType')}`);
   checks.push(`LandingSection=${count('LandingSection')}`);
   checks.push(`LandingPageConfig=${count('LandingPageConfig')}`);
-  const landingOkStatus = count('LandingSection') >= 10 && count('LandingPageConfig') >= 1;
+  /* Analytics readiness. The correct state for a fresh deployment is
+   * "schema present, ZERO rows" — plumbing in place, feature dark. A row count
+   * above zero is reported, not failed: an operator may legitimately have
+   * enabled a destination already. */
+  let analyticsOk = false;
+  try {
+    const sr = await postJson('/mdms-v2/schema/v1/_search',
+      { RequestInfo: ri(), SchemaDefCriteria: { tenantId: CFG.state, codes: ['common-masters.AnalyticsProvider'], limit: 50 } });
+    analyticsOk = ((parse(sr.body) || {}).SchemaDefinitions || []).some((d) => d.code === 'common-masters.AnalyticsProvider');
+    let rows = 0;
+    if (analyticsOk) {
+      const dr = await postJson('/mdms-v2/v2/_search',
+        { RequestInfo: ri(), MdmsCriteria: { tenantId: CFG.state, schemaCode: 'common-masters.AnalyticsProvider', limit: 200 } });
+      rows = ((parse(dr.body) || {}).mdms || []).length;
+    }
+    checks.push(`AnalyticsProvider=${analyticsOk ? `schema ok, ${rows} destination(s)${rows === 0 ? ' — feature dark, as expected' : ''}` : 'SCHEMA MISSING'}`);
+  } catch (e) {
+    checks.push('AnalyticsProvider=check failed');
+  }
+
+  const landingOkStatus = count('LandingSection') >= 10 && count('LandingPageConfig') >= 1 && analyticsOk;
   const detail = checks.join(' · ');
   info(detail);
   // Only the landing counts have a universal expectation; hierarchy/masters
   // depend on the environment's data, so they're reported, not asserted.
   return record('verify', landingOkStatus ? OUTCOME.OK : OUTCOME.PARTIAL, detail,
-    landingOkStatus ? null : 'VERIFY_LOW_COUNTS', landingOkStatus ? null : 'Landing counts below expected (10 sections + 1 config).');
+    landingOkStatus ? null : 'VERIFY_LOW_COUNTS',
+    landingOkStatus ? null : 'Landing counts below expected (10 sections + 1 config), or the AnalyticsProvider schema is missing — re-run the schemas + analytics phases.');
 }
 
 /* ═══════════════════════════════ driver ═══════════════════════════════ */
@@ -1148,6 +1720,8 @@ async function phaseVerify() {
     ['pgr-masters', phasePgrMasters],
     ['landing', phaseLanding],
     ['cms', phaseCms],
+    ['analytics', phaseAnalytics],
+    ['matomo', phaseMatomo],
     ['banner', phaseBanner],
     ['gzip', phaseGzip],
     ['verify', phaseVerify],

@@ -255,6 +255,65 @@
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
   <div id="root"></div>
+  <!--
+    Analytics adapter registry bootstrap.
+
+    Deliberately NOT a bare <script src="/digit-ui/analytics.js">: every nginx
+    layer that serves this app ends in `try_files $uri $uri/ /digit-ui/index.html`,
+    so on any environment whose bundle predates analytics.js the request returns
+    200 text/html (the SPA shell) rather than 404. A bare script tag would make
+    the browser parse HTML as JavaScript and throw an uncaught SyntaxError on
+    every page load, and there is no CSP or X-Content-Type-Options anywhere to
+    stop it. Fetching and checking the content type keeps a stale-bundle
+    environment silently inert, which is the whole requirement.
+
+    Placed at the end of <body> so it runs after the globalConfigs.js that nginx
+    injects at </head> - on the testing entrance that injection is a DIFFERENT
+    file (globalConfigs.testing.js) and must win.
+
+    Cache mode is left at the browser default on purpose: both nginx layers send
+    `Cache-Control: no-cache`, which forces revalidation (cheap 304) instead of a
+    re-download on every navigation. `no-store` would re-fetch the whole file on
+    every page load of every environment, including the ones where analytics is
+    switched off - and cms-pilot serves /digit-ui/ ungzipped.
+  -->
+  <script>
+    (function () {
+      try {
+        if (window.localStorage && window.localStorage.getItem("digit.analytics.off") === "1") return;
+        var gc = window.globalConfigs;
+        if (gc && gc.getConfig && gc.getConfig("ANALYTICS_KILL_SWITCH") === true) return;
+        if (typeof window.fetch !== "function") return;
+        var boot = function () {
+          try {
+            /* The file sits next to this index.html by definition, so derive the
+               prefix from the path we were actually served under - not from
+               getConfig("CONTEXT_PATH"), which is a bare service name whose value
+               need not be a URL base. Falls back to the literal this file already
+               hardcodes for globalConfigs.js. Loading the shim on a non-canonical
+               entrance is harmless: the shim's own guards refuse to track there. */
+            var seg = /^\/(digit-ui[^\/?#]*)/.exec(window.location.pathname || "");
+            var prefix = seg ? seg[1] : "digit-ui";
+            fetch("/" + prefix + "/analytics.js", { credentials: "omit" })
+              .then(function (r) {
+                var ct = (r.headers && r.headers.get("content-type")) || "";
+                if (!r.ok || ct.indexOf("javascript") === -1) return null;
+                return r.text();
+              })
+              .then(function (src) {
+                if (!src) return;
+                var s = document.createElement("script");
+                s.textContent = src;
+                (document.head || document.documentElement).appendChild(s);
+              })
+              .catch(function () {});
+          } catch (e) {}
+        };
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+        else boot();
+      } catch (e) {}
+    })();
+  </script>
 </body>
 
 </html>
