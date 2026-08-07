@@ -650,7 +650,10 @@ shared belongs in `group_vars/digit.yml`.
 4. **digit-ui** — render `globalConfigs.js`, ship nginx config, optional `npm install` + esbuild rebuild for HMR
 5. **OpenBao bootstrap** (first run) + secret-pull for every run
 6. **Compose pull + start** (with profiles)
-7. **Health gates** — wait for kong / persister / hrms / ui / mcp / loki / grafana
+7. **Health gates** — wait for kong / persister / hrms / ui / mcp (fatal), then the
+   observability stack — loki / grafana / prometheus / tempo / otel-collector
+   (non-fatal: dashboards are not a serving dependency, but each is named in the
+   output and carries a Gatus check, see #1613)
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 

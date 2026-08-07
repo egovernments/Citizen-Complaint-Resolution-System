@@ -1659,6 +1659,11 @@ services:
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8005"
+      # Watch the monitoring itself (#1613). This is the only compose path that
+      # deploys the full observability stack, so it is the only one where these
+      # checks can pass. Ansible renders it true in .env; the default keeps a
+      # bare `docker compose up` of this file honest if the overlay is skipped.
+      GATUS_OBSERVABILITY: ${GATUS_OBSERVABILITY:-true}
     networks:
       - egov-network
 

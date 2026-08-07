@@ -472,3 +472,58 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+
+  # ==================== Observability stack ====================
+  # The monitoring itself. Deliberately gated: these components exist only in
+  # docker-compose.egov-digit.yaml (plus grafana/tempo/otel-collector in
+  # registry.yml). docker-compose.yml and the k3s tier have none, so an ungated
+  # check would be red forever there — which is how dashboards get ignored.
+  #
+  # This closes the TODO the coverage guard left parked ("Monitoring the
+  # monitoring is a separate decision -- if it is ever wanted, they need a
+  # GATUS_OBSERVABILITY toggle"). It matters most once alerting lands (#1609):
+  # from that point silence means "all clear", and silence looks identical if
+  # Loki has crashed and Grafana has stopped evaluating rules.
+  #
+  # promtail and node-exporter stay out: promtail exposes no HTTP listener the
+  # network can reach, and node-exporter is scraped by prometheus (a dead
+  # exporter shows as a stale `node` target, not a missing check).
+  - name: Grafana
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://grafana:3000/api/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Prometheus
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://prometheus:9090/-/healthy"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Loki
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://loki:3100/ready"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Tempo
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://tempo:3200/ready"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: OTEL Collector
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://otel-collector:13133"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
