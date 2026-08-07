@@ -70,6 +70,25 @@ assert(deriveMasterLocalizations([{ data: { name: 'Orphan' } }], []).length === 
 assert(deriveMasterLocalizations([{ uniqueIdentifier: 'N', data: { code: 'N', name: 42 as unknown as string } }], []).length === 0,
   'non-string name → no message');
 
+// A non-string `code` used to reach String.prototype.trim and throw. The throw
+// escaped into the caller's catch, dropping the ENTIRE derived floor for the
+// bootstrap rather than just the malformed row. (CodeRabbit, PR #1655.)
+const malformed = [
+  { data: { code: 42 as unknown as string, name: 'Numeric code' } },
+  { data: { code: { nested: true } as unknown as string, name: 'Object code' } },
+  { uniqueIdentifier: 'GOOD', data: { code: 'GOOD', name: 'Good Department' } },
+];
+let survived = true;
+let out: ReturnType<typeof deriveMasterLocalizations> = [];
+try {
+  out = deriveMasterLocalizations(malformed, []);
+} catch {
+  survived = false;
+}
+assert(survived, 'non-string code does not throw');
+assert(out.length === 1 && out[0].code === 'COMMON_MASTERS_DEPARTMENT_GOOD',
+  'a malformed row is skipped without taking the well-formed rows with it');
+
 console.log('\n4. shape tolerance (mdms-v2 rows vary between search paths)');
 const fallbackCode = deriveMasterLocalizations([{ data: { code: 'FROM_DATA', name: 'From data.code' } }], []);
 assert(fallbackCode[0]?.code === 'COMMON_MASTERS_DEPARTMENT_FROM_DATA', 'falls back to data.code when uniqueIdentifier is absent');

@@ -205,7 +205,13 @@ export function deriveMasterLocalizations(
   const derive = (rows: MasterRowLike[], prefix: string) => {
     for (const row of rows || []) {
       const data = row?.data || {};
-      const code = (row?.uniqueIdentifier || (data.code as string | undefined) || '').trim();
+      // Both fields are typed loosely enough to arrive non-string from a
+      // hand-edited or dump-imported record. Guard before trim(): a throw
+      // here escapes into the caller's catch and drops the WHOLE derived
+      // floor, not just the malformed row.
+      const identifier = typeof row?.uniqueIdentifier === 'string' ? row.uniqueIdentifier.trim() : '';
+      const dataCode = typeof data.code === 'string' ? data.code.trim() : '';
+      const code = identifier || dataCode;
       const name = typeof data.name === 'string' ? data.name.trim() : '';
       if (!code || !name) continue;
       const key = `${prefix}${code}`;
@@ -2405,9 +2411,6 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       }
 
-      const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
-      const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
-
       // The derived floor also has to land on the ROOT tenant, not just the
       // city. egov-localization `_search` resolves a tenant's OWN rows only —
       // verified on bomet: a `_search` at `ke.india` returns its 9 rows and no
@@ -2421,20 +2424,41 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       if (derivedMasterMessages.length > 0 && target.includes('.')) {
         const rootTenant = target.split('.')[0];
         let rootDerived = 0;
+        let rootExisting = 0;
+        let rootFailed = 0;
         for (const m of derivedMasterMessages) {
           try {
             await digitApi.localizationUpsert(rootTenant, primaryLocale, [m]);
             rootDerived++;
-          } catch {
-            // Already present at the root (the common case) — a no-op.
+          } catch (e) {
+            const em = e instanceof Error ? e.message : String(e);
+            if (isDuplicateError(em)) {
+              // Already present at the root (the common case) — a no-op.
+              rootExisting++;
+            } else {
+              // A service/auth/validation failure leaves the root without the
+              // label, which is the whole point of this push. Count it so the
+              // run cannot report clean while a state-level UI still renders
+              // the raw code.
+              rootFailed++;
+              console.error(`[tenant_bootstrap] derived label ${m.code} → root "${rootTenant}": ${em.slice(0, 200)}`);
+            }
           }
+        }
+        if (rootFailed > 0) {
+          localizationResults.push({ locale: primaryLocale, copied: 0, failed: rootFailed, error: `derived-label push to root "${rootTenant}" failed for ${rootFailed} message(s)` });
         }
         emitProgress({
           phase: 'localizations:derived_root',
-          message: `${primaryLocale}: pushed ${rootDerived}/${derivedMasterMessages.length} derived master label(s) to root "${rootTenant}" so state-level UIs resolve them`,
-          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived },
+          message: `${primaryLocale}: pushed ${rootDerived} derived master label(s) to root "${rootTenant}" (${rootExisting} already present, ${rootFailed} failed) so state-level UIs resolve them`,
+          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived, existing: rootExisting, failed: rootFailed },
         });
       }
+
+      // Totalled AFTER the root push so its failures reach both the reported
+      // counts and the run's success condition.
+      const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
+      const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
 
       // Push TENANT_TENANTS_<CODE> to both the city tenant and its root so the
       // city-selection dropdown resolves regardless of whether stateTenantId is
