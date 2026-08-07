@@ -239,6 +239,16 @@ K8s gateway fully enforces its "mixed" APIs (its lenient branch is dead code).
   `_upsert` API were denied although the sheet believes its seeding is correct — check
   that URI's seeded roles; 2 denies on MapConfig `_update` look *correct* (the caller
   genuinely lacked admin roles).
+- **Also re-check E1's bucket.** The 2,105 E1 calls above are counted under
+  *missing-permission*, but the gateway only reaches the permission call — and so only ever
+  logs a missing-permission warning — once it has resolved a token out of
+  `RequestInfo.authToken` (`local-setup/kong/kong.yml`, the `is_protected and resolved`
+  guard). A body with no envelope exits earlier, as *missing-login*. Both can't be true for
+  the same call, and 2,105 can't sit in a missing-login bucket that totals 198. So either
+  these callers (chiefly translation cache-refresh, 2,049) do send a normal envelope — in
+  which case the remedy is a permission row, not E1's engineering fix — or the two buckets
+  were mis-attributed when the log was tallied. Settle it from the raw warning lines before
+  acting on E1, and correct the spreadsheet's E1 rows if the envelope turns out to be there.
 - **Public-site traffic**: 65 anonymous complaint search/count calls came from the app
   domain. Once the login switch flips these get 401s — decide whether the public landing
   page needs them (then whitelist explicitly) or not (then this is working as intended).
