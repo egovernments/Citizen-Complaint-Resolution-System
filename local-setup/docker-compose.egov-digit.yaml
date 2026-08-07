@@ -43,9 +43,19 @@ services:
     container_name: digit-grafana
     restart: unless-stopped
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Auth. Anonymous access is OFF by default: Grafana proxies the Loki
+      # datasource, and Kong access logs in Loki carry bearer tokens in query
+      # strings — so "read-only" anonymous is still credential disclosure.
+      # A tenant that wants a public board sets GF_ANONYMOUS_ENABLED=true in
+      # .env; the role stays Viewer, never Admin.
+      GF_AUTH_ANONYMOUS_ENABLED: ${GF_ANONYMOUS_ENABLED:-false}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      # Admin password comes from OpenBao via .env (key: grafana_admin_password,
+      # auto-generated on first deploy). The compose fallback only applies to a
+      # bare `docker compose up` outside Ansible.
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
       # Domain + root URL templated per tenant via /opt/digit/.env
       # (Ansible writes GF_SERVER_DOMAIN there from inventory `domain`).
       GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-api.egov.theflywheel.in}

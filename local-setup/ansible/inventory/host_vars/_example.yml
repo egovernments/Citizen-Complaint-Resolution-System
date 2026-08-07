@@ -557,6 +557,11 @@ bootstrap_secrets:
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
   egov_hrms_default_password: "eGov@123"
+  # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
+  # playbook generates a 24-char password on first deploy and stores it here
+  # in OpenBao. Read it back with:
+  #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+  # grafana_admin_password: ""
   # Keycloak secrets — only consumed when enable_keycloak: true.
   # Leave empty on tenants without Keycloak; the playbook only resolves
   # these via `| mandatory` inside the digit.env.j2 keycloak block,

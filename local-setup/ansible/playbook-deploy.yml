@@ -2273,6 +2273,52 @@
       register: bao_secrets
       no_log: true
 
+    # Grafana admin password. Tenants seeded BEFORE this key existed can't get
+    # it from the bootstrap seed above (that write is cas:0 — it only fires when
+    # no version exists yet), so generate one here and persist it. After the
+    # first run the stored value is reused, which keeps the password stable
+    # across deploys. Operators read it back with:
+    #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
+      ansible.builtin.set_fact:
+        grafana_admin_pw: >-
+          {{ bao_secrets.json.data.data.grafana_admin_password
+             | default('', true)
+             | ternary(bao_secrets.json.data.data.grafana_admin_password | default(''),
+                       lookup('password', '/dev/null length=24 chars=ascii_letters,digits')) }}
+      no_log: true
+
+    - name: "OpenBao — persist generated Grafana admin password"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        # The whole body is ONE template expression on purpose: Ansible preserves
+        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
+        # across YAML keys it would render as the string "5" and the CAS check
+        # would depend on server-side weak decoding.
+        #
+        # cas = the version we just read. Without it this is a blind overwrite of
+        # the entire secret: anything written between our read and this write (a
+        # concurrent deploy, an operator running `bao kv put`) is silently lost,
+        # because `data` is built from the snapshot we read. With cas, a racing
+        # write makes OpenBao reject ours (400) and the deploy stops rather than
+        # clobbering. No retry loop: deploys are serialised per tenant, so a
+        # conflict means something genuinely unexpected touched the secret and a
+        # human should look before we overwrite it.
+        #
+        # `data` merges, never replaces — a bare {grafana_admin_password: …}
+        # write would drop every other key in this tenant's secret.
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+        status_code: [200]
+      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      no_log: true
+
     - name: "OpenBao — write secrets into compose .env (idempotent block)"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
@@ -2288,6 +2334,7 @@
           AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          GF_ADMIN_PASSWORD={{ grafana_admin_pw }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
@@ -4145,6 +4192,46 @@
     - name: Show Loki health status
       debug:
         msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+
+    # GF_SECURITY_ADMIN_PASSWORD only seeds the admin user on the FIRST boot of a
+    # fresh grafana_data volume. Every box deployed before this change already has
+    # an admin row — from the era when the login form was disabled entirely — so
+    # without this reset they would keep unknown/legacy credentials and nobody
+    # could log in to the UI we just closed off.
+    - name: Wait for Grafana health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13000/api/health -o /dev/null
+      register: grafana_health
+      retries: 12
+      delay: 10
+      until: grafana_health.rc == 0
+      changed_when: false
+      ignore_errors: yes
+
+    # Fatal when it runs. Grafana is healthy at this point, so a failing reset is
+    # a genuine anomaly (wrong CLI path after an image bump, unwritable DB), and
+    # the failure mode it leaves behind is silent: the UI keeps whatever password
+    # the volume was seeded with, nobody can log in with the OpenBao value, and a
+    # `failed_when: false` would bury that in a 4000-line deploy log.
+    - name: Grafana — align admin password with OpenBao (idempotent)
+      ansible.builtin.command: >-
+        docker exec digit-grafana
+        grafana cli admin reset-admin-password {{ grafana_admin_pw }}
+      register: grafana_pw_reset
+      changed_when: false
+      no_log: true
+      when: grafana_health.rc == 0
+
+    # Grafana never came up. Non-fatal, matching the Loki gate above — the
+    # dashboards are not a serving dependency — but say so loudly, because the
+    # stored password has NOT been applied to the running instance.
+    - name: Show Grafana admin-password status
+      debug:
+        msg: >-
+          Grafana: {{ 'admin password aligned with OpenBao'
+                      if grafana_health.rc == 0
+                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or:
+                            docker exec digit-grafana grafana cli admin reset-admin-password "$(bao kv get -field=grafana_admin_password '
+                           ~ secrets_path ~ ')"' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's
