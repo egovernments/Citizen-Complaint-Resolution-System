@@ -15,6 +15,15 @@ PGR_PATH = CCRS_PATH + '/backend/pgr-services'
 # CI mode: use pre-built Docker Hub images, no live reload
 CI_MODE = os.getenv('CI', '') != '' or os.getenv('TILT_CI', '') != ''
 
+# Monitoring stack (#1618). OFF by default and opt-in via MONITORING=true, for
+# the same reason the production tier's components default to installed:false --
+# Prometheus, Grafana, Loki and a Promtail DaemonSet are a real resource cost,
+# and turning them on for every `tilt up` would change what a plain local
+# bring-up means. Never on in CI: the tier's CI run asserts a fixed set of
+# resources come up healthy, and adding five more would slow it and broaden
+# what can flake without testing anything CI is there to test.
+MONITORING = os.getenv('MONITORING', '').lower() in ('1', 'true', 'yes') and not CI_MODE
+
 # ==================== ConfigMaps from files ====================
 # Generated dynamically so edits to source files auto-apply on tilt up
 # NB: the directory is configs/egov-persister, not configs/persister. 09a8ec2e renamed
@@ -38,6 +47,43 @@ k8s_yaml(local('kubectl create configmap nginx-configs --from-file=mdms-proxy.co
 # impossible by construction. That invariant is now enforced mechanically instead,
 # by .github/workflows/gatus-coverage.yml, which fails a PR when the two tiers'
 # endpoint catalogues diverge.
+
+# ==================== Monitoring ConfigMaps (#1618) ====================
+# Generated from local-setup/otel/, the SAME files the compose tier uses, so the
+# two tiers cannot drift in scrape config, retention or what the dashboards show.
+# Same pattern as the persister/kong/nginx maps above.
+#
+# One ConfigMap PER DASHBOARD, not one combined: node-exporter-full.json alone is
+# 456 KB against Kubernetes' ~1 MiB per-object limit, so a combined map would
+# apply cleanly today and fail on whoever adds the next dashboard -- with an
+# error that does not obviously point at the size.
+#
+# Promtail is the exception and is NOT generated from otel/promtail-config.yaml:
+# that config discovers containers over the Docker socket, which k3s (containerd)
+# does not have. Its k8s rewrite lives in k8s/monitoring/promtail.yaml.
+if MONITORING:
+    k8s_yaml(local('kubectl create configmap loki-config --from-file=config.yaml=otel/loki-config.yaml -n monitoring --dry-run=client -o yaml'))
+    k8s_yaml(local('kubectl create configmap grafana-datasources --from-file=otel/grafana/provisioning/datasources/ -n monitoring --dry-run=client -o yaml'))
+    k8s_yaml(local('kubectl create configmap grafana-dashboards-provider --from-file=dashboards.yaml=otel/grafana/provisioning/dashboards/dashboards.yaml -n monitoring --dry-run=client -o yaml'))
+    k8s_yaml(local('kubectl create configmap grafana-dash-jvm --from-file=otel/grafana/provisioning/dashboards/jvm-services.json -n monitoring --dry-run=client -o yaml'))
+    # node-exporter-full.json (456 KB) is applied SERVER-SIDE, outside Tilt.
+    #
+    # Client-side `kubectl apply` -- which is what Tilt does -- stores a copy of
+    # the entire object in the kubectl.kubernetes.io/last-applied-configuration
+    # ANNOTATION, and annotations are capped at 256 KiB. So this fails:
+    #   ConfigMap "grafana-dash-node" is invalid: metadata.annotations:
+    #   Too long: must have at most 262144 bytes
+    # even though the ConfigMap is comfortably under the ~1 MiB object limit.
+    # Splitting one map per dashboard (#1618 item 4) does NOT avoid this -- the
+    # single largest dashboard already exceeds the annotation cap on its own.
+    #
+    # Server-side apply does not use that annotation. The cost is that Tilt does
+    # not manage this one, so editing that dashboard needs a re-run rather than
+    # hot-reloading; the other three stay Tilt-managed and reload normally.
+    local('kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -')
+    local('kubectl create configmap grafana-dash-node --from-file=otel/grafana/provisioning/dashboards/node-exporter-full.json -n monitoring --dry-run=client -o yaml | kubectl apply --server-side -f -')
+    k8s_yaml(local('kubectl create configmap grafana-dash-loki --from-file=otel/grafana/provisioning/dashboards/loki-logs.json -n monitoring --dry-run=client -o yaml'))
+    k8s_yaml(local('kubectl create configmap grafana-dash-tempo --from-file=otel/grafana/provisioning/dashboards/tempo-traces.json -n monitoring --dry-run=client -o yaml'))
 
 # ==================== K8s Manifests ====================
 k8s_yaml([
@@ -72,6 +118,16 @@ k8s_yaml([
     # Tools
     'k8s/tools/gatus.yaml',
 ])
+
+# Monitoring manifests, loaded only when MONITORING is on (#1618).
+if MONITORING:
+    k8s_yaml([
+        'k8s/monitoring/prometheus.yaml',
+        'k8s/monitoring/node-exporter.yaml',
+        'k8s/monitoring/grafana.yaml',
+        'k8s/monitoring/loki.yaml',
+        'k8s/monitoring/promtail.yaml',
+    ])
 
 # ==================== PGR Services ====================
 if CI_MODE:
