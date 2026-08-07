@@ -202,6 +202,69 @@ groups:
         execErrState: Alerting
         isPaused: false
 
+      # ────────────────────────────────────────────────────────────────
+      # Kafka consumer lag (#1623). NOT paused, unlike the error-spike rule
+      # below, and the difference is principled rather than a hunch: a consumer
+      # that is keeping up sits at ~0 lag, so the healthy baseline is known
+      # without observing it. Error-log volume has no such baseline -- DIGIT
+      # services log stack traces during normal operation -- which is why that
+      # rule ships paused and this one does not.
+      #
+      # This is the failure Gatus structurally cannot see: egov-persister falls
+      # behind, the API keeps returning 200, every check stays green, and
+      # complaints are never written to the database.
+      #
+      # 10k for 15m, not a tighter bound: bulk seeding and migrations move real
+      # backlogs through legitimately, and they drain. Sustained 15m above 10k
+      # is not a burst.
+      - uid: digit-kafka-consumer-lag
+        title: Kafka consumer lag high
+        condition: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.redpanda_group }} is more than 10k messages behind'
+          description: >-
+            Records are being accepted and not processed. Check whether the
+            consumer is slow or GONE -- the "Consumers per group" panel on the
+            DIGIT Kafka Consumer Lag dashboard reading 0 means the latter, which
+            needs the opposite fix. Lag concentrated on a single partition
+            usually means a poison record rather than an undersized consumer.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # max_offset carries redpanda_namespace and no group; committed
+              # carries redpanda_group and no namespace. Hence the join on
+              # (topic, partition) with group_right() to keep the group label,
+              # and the namespace filter to exclude Redpanda's internal topics.
+              expr: >-
+                sum by (redpanda_group) (
+                  redpanda_kafka_max_offset{redpanda_namespace="kafka"}
+                  - on(redpanda_topic, redpanda_partition) group_right()
+                    redpanda_kafka_consumer_group_committed_offset
+                )
+          - refId: B
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [10000]}
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+
   - orgId: 1
     name: errors
     folder: DIGIT Alerts
