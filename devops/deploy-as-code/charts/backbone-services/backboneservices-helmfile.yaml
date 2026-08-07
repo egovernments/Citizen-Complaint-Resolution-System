@@ -136,3 +136,29 @@ releases:
   values:
     - ./novu/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
+    # Serve on THIS deployment's domain over TLS (#1644). The chart default
+    # named another environment's hostname and had no tls block at all, so the
+    # dashboard was reachable only by Host-header and only over plain HTTP.
+    # Same <domain>-tls-certs name every other ingress here uses -- but note
+    # TLS secrets are namespace-scoped and novu runs in its OWN namespace, not
+    # `backbone`/`egov` where the other copies live. So the cluster-issuer
+    # annotation is REQUIRED here, not decorative: it is what makes cert-manager
+    # issue a certificate into the novu namespace. Without it the name would
+    # resolve to nothing locally and ingress-nginx would fall back to its
+    # --default-ssl-certificate (egov/<domain>-tls-certs).
+    - ingress:
+        annotations:
+          cert-manager.io/cluster-issuer: {{ index .Values "root-ingress" "cert-issuer" | quote }}
+        host: {{ .Values.global.domain | quote }}
+        tls:
+          - secretName: {{ printf "%s-tls-certs" .Values.global.domain | quote }}
+            hosts:
+              - {{ .Values.global.domain | quote }}
+    # Signing/encryption secrets from the SOPS-covered file rather than the
+    # chart's example values. jwtSecret signs sessions; a known value is a
+    # forged login.
+    - novu:
+        secrets:
+          jwtSecret: {{ .Values.secrets.novu.jwtSecret | quote }}
+          storeEncryptionKey: {{ .Values.secrets.novu.storeEncryptionKey | quote }}
+          novuSecretKey: {{ .Values.secrets.novu.novuSecretKey | quote }}
