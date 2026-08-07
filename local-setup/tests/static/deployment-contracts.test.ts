@@ -46,11 +46,16 @@ describe('ansible playbook-deploy.yml', () => {
 
   // HRMS crash-loops on non-pg tenants without the INTERNAL_USER system
   // user at state_root (its startup lookup is tenant-scoped).
+  // Asserts the BEHAVIOUR, not the task's display name. This test originally
+  // pinned the exact task title and the payload's YAML form; c0a21204 rewrote
+  // the task as a retrying curl POST — on the same day the test landed — and
+  // broke both assertions without changing what they were protecting. The
+  // invariant that matters is simply: INTERNAL_USER gets created at
+  // state_root. Pin that, so a rename or a re-implementation does not.
   test('seeds INTERNAL_USER on state_root after bootstrap', () => {
-    expect(playbook).toContain(
-      'post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS'
-    );
-    expect(playbook).toContain('userName: INTERNAL_USER');
+    expect(playbook).toContain('seed INTERNAL_USER on state_root');
+    expect(playbook).toContain('"userName":"INTERNAL_USER"');
+    expect(playbook).toContain('"tenantId":"{{ state_root }}"');
   });
 
   // The HRMS prereq gate ships hardcoded to tenant pg; without the
