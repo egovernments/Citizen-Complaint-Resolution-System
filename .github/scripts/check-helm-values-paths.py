@@ -38,14 +38,22 @@ that cries wolf gets disabled, which would cost more than it saves.
 
 Run with --self-test to verify the detection logic itself catches the failure
 mode and stays quiet on correct configuration.
+
+Set VALUES_BASELINE_REF to a git ref (CI passes the pull request's base commit)
+to additionally verify that the KNOWN_UNREAD baseline has not grown since that
+revision. Without it that one check is skipped, loudly.
 """
+import ast
+import os
 import pathlib
+import subprocess
 import sys
 import tempfile
 
 import yaml
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+SELF = pathlib.Path(__file__).resolve()
+ROOT = SELF.parents[2]
 DAC = ROOT / "devops" / "deploy-as-code"
 ENV = DAC / "charts" / "environments" / "env.yaml"
 
@@ -71,9 +79,12 @@ ALLOW = {
 # guard goes in green today and fails on anything NEW, instead of being merged
 # red and ignored.
 #
-# This list may only shrink. A path here that no longer reproduces is a STALE
-# BASELINE and fails the check too -- otherwise the baseline outlives the bug
-# and quietly re-opens the hole it was meant to hold.
+# This list may only shrink, and that is ENFORCED, not merely asked for: a path
+# here that no longer reproduces is a STALE BASELINE and fails the check, and an
+# entry ADDED since the base revision fails it too (see baseline_growth). Without
+# the second half the rule is unenforceable -- a change that introduces a
+# mis-path and lists it here in the same breath makes that path `seen`, so
+# neither the new-path check nor the stale check fires.
 KNOWN_UNREAD = {
     "prometheus.retention": "#1645 -- reads at prometheus.prometheusSpec.retention",
     "prometheus.storageSpec": "#1645 -- reads at prometheus.prometheusSpec.storageSpec",
@@ -150,6 +161,76 @@ def orphans_for(env_tree, block, reference):
     return sorted(p for p in unread if not any(p.startswith(q + ".") for q in unread))
 
 
+# git ref KNOWN_UNREAD is compared against. CI sets it to the pull request's
+# base commit; see .github/workflows/deploy-as-code-validation.yml.
+BASELINE_REF_ENV = "VALUES_BASELINE_REF"
+
+
+def known_unread_in_source(src):
+    """KNOWN_UNREAD's keys as declared in `src`, or None if it cannot be read.
+
+    The source is PARSED, never executed: another revision of this file is data
+    here, not code to run.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "KNOWN_UNREAD"
+                for t in node.targets):
+            try:
+                return set(ast.literal_eval(node.value))
+            except ValueError:
+                return None
+    return None
+
+
+def known_unread_at(ref):
+    """KNOWN_UNREAD's keys as of git `ref`, or None if that revision is unreadable
+    (ref unknown, file not there yet, or not a git checkout at all)."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(ROOT), "show",
+             f"{ref}:{SELF.relative_to(ROOT).as_posix()}"],
+            capture_output=True, text=True)
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return known_unread_in_source(proc.stdout)
+
+
+def baseline_growth():
+    """(entries added to KNOWN_UNREAD since the base revision, status line).
+
+    The stale check above compares the baseline with the CURRENT env.yaml, which
+    cannot enforce "may only shrink": add a mis-path and list it here in the same
+    change and the path is `seen`, so nothing fires. Only the previous revision
+    of the list catches that, so read it and reject anything new.
+
+    The revision comes from VALUES_BASELINE_REF. Off CI there is no dependable
+    answer -- a working tree sits wherever it sits -- so an unset or unreadable
+    ref SKIPS this one check loudly rather than crashing or guessing at a base
+    and failing a legitimate local run. The run on the pull request is the
+    authoritative one and always has the ref. To check locally, point it at the
+    merge-base: VALUES_BASELINE_REF=$(git merge-base HEAD origin/develop).
+    """
+    ref = os.environ.get(BASELINE_REF_ENV, "").strip()
+    if not ref:
+        return [], (f"baseline-growth check SKIPPED: {BASELINE_REF_ENV} is unset. "
+                    f"Set it to a git ref (in CI, the PR base) to verify that "
+                    f"KNOWN_UNREAD has not grown.")
+    base = known_unread_at(ref)
+    if base is None:
+        return [], (f"baseline-growth check SKIPPED: no readable revision of this "
+                    f"file at {ref} -- new file, unknown ref, or no git checkout.")
+    return sorted(set(KNOWN_UNREAD) - base), (
+        f"baseline-growth check: KNOWN_UNREAD vs {ref} "
+        f"({len(base)} entries there, {len(KNOWN_UNREAD)} here).")
+
+
 def run():
     env_tree = load(ENV)
     seen = set()
@@ -164,6 +245,7 @@ def run():
                 new.append((p, block, ref_path))
 
     stale = sorted(set(KNOWN_UNREAD) - seen)
+    added, baseline_note = baseline_growth()
     rc = 0
 
     if new:
@@ -188,11 +270,25 @@ def run():
             print(f"  {p}    ({KNOWN_UNREAD[p]})")
         print()
 
+    if added:
+        rc = 1
+        print("FAIL: KNOWN_UNREAD has GROWN. It is a baseline of mis-paths that "
+              "predate this guard and may only shrink -- a newly unread key has "
+              "to be FIXED, not recorded here. Recording it is how a guard gets "
+              "switched off one line at a time, and it is invisible to every "
+              "other check in this script: listing the path makes it `seen`.\n")
+        for p in added:
+            print(f"  {p}    ({KNOWN_UNREAD[p]})")
+        print("\nIf an entry genuinely belongs in the baseline -- a pre-existing "
+              "mis-path this change only made visible -- say so in the pull "
+              "request and have a human agree to it.\n")
+
     if rc == 0:
         print(f"OK: {len(CASES)} external chart(s) checked, no new unread key "
               f"paths. {len(KNOWN_UNREAD)} known mis-path(s) still outstanding:")
         for p in sorted(KNOWN_UNREAD):
             print(f"  {p}    ({KNOWN_UNREAD[p]})")
+    print(baseline_note)
     return rc
 
 
@@ -240,8 +336,25 @@ def self_test():
         got = orphans_for({"foo": {"storageSpec": {"x": 1}}}, "foo", reference2)
         assert got == ["foo.storageSpec"], f"mis-path masked by passthrough logic: {got}"
 
+    # 6. the baseline-growth guard: it reads KNOWN_UNREAD out of another
+    #    revision of this file WITHOUT executing it, fires on an addition, and
+    #    stays silent on a removal (the list is allowed to shrink).
+    before = known_unread_in_source(
+        'KNOWN_UNREAD = {\n    "a.b": "#1 -- reason",\n    "c.d": "#2 -- reason",\n}\n')
+    assert before == {"a.b", "c.d"}, f"baseline not parsed: {before}"
+    assert sorted({"a.b", "c.d", "e.f"} - before) == ["e.f"], "addition not caught"
+    assert sorted({"a.b"} - before) == [], "removal wrongly flagged"
+
+    #    unreadable or absent baselines degrade to "unknown" (-> skipped), never
+    #    to a silent pass-by-accident inside the comparison itself
+    assert known_unread_in_source("KNOWN_UNREAD = {") is None, "syntax error not handled"
+    assert known_unread_in_source("X = 1\n") is None, "absent baseline not handled"
+    assert known_unread_in_source(
+        "KNOWN_UNREAD = {k: v for k, v in x}") is None, "non-literal not handled"
+    assert known_unread_at("definitely-not-a-ref") is None, "bad git ref not handled"
+
     print("self-test OK: detects mis-paths and orphaned blocks, "
-          "silent on correct configuration")
+          "silent on correct configuration, and rejects baseline growth")
     return 0
 
 
