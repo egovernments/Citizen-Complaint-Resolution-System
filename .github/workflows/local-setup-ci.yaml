@@ -6,7 +6,13 @@ on:
     paths:
       - 'local-setup/**'
   pull_request:
-    branches: [main, master, develop]
+    # `monitoring-fix` is a temporary integration branch collecting the
+    # monitoring work before it goes to master as one change. Without it here
+    # this workflow does NOT run on those PRs — a branch filter is a silent
+    # skip, not a failure, so retargeting them dropped `Config combination +
+    # infra contracts`, `test` and `Ansible static validation` while the PRs
+    # merely looked cleaner. Remove this entry once the branch is merged.
+    branches: [main, master, develop, monitoring-fix]
     paths:
       - 'local-setup/**'
   workflow_dispatch:
