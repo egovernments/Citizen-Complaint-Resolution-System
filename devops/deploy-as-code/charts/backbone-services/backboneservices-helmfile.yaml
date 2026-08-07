@@ -117,6 +117,30 @@ releases:
   set:
     - name: kraft.clusterId
       value: {{ .Values.secrets.kafka.clusterID }}
+    # Broker metrics (#1647). Scoped to THIS release on purpose: the chart
+    # reads .Values.metrics.*, and a top-level `metrics:` key in env.yaml would
+    # be injected into every release — including charts/common/_service.yaml,
+    # which emits prometheus.io/* scrape annotations for any chart that sets
+    # `metrics`, i.e. all 41 application services.
+    #
+    # kafka exporter is the one that yields consumer-group LAG
+    # (kafka_consumergroup_lag). Lag is the failure that matters here:
+    # egov-persister is the sole Kafka->Postgres write path and runs a single
+    # replica, so when it stalls the API still returns 200 while complaints are
+    # never persisted. JMX gives broker health (under-replicated partitions,
+    # request rates) but NOT lag — both, or the exercise misses its point.
+    - name: metrics.kafka.enabled
+      value: true
+    - name: metrics.jmx.enabled
+      value: true
+    # Prometheus only selects ServiceMonitors labelled with its release name:
+    # serviceMonitorSelectorNilUsesHelmValues is true with an empty selector,
+    # which renders as matchLabels {release: kube-prometheus-stack}. Without
+    # this label the object is created and silently never scraped.
+    - name: metrics.serviceMonitor.enabled
+      value: true
+    - name: metrics.serviceMonitor.labels.release
+      value: kube-prometheus-stack
 
 - name: ingress-nginx
   installed: true
