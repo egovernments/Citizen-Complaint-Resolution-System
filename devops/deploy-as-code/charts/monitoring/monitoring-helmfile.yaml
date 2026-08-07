@@ -88,6 +88,21 @@ releases:
     - name: ingress.tls[0].hosts[0]
       value: {{ .Values.global.domain | quote }}
 
+- name: dashboards
+  # Vendored Grafana dashboards as labelled ConfigMaps (#1650). A local chart,
+  # not an upstream one -- it exists only to turn the JSON files in this repo
+  # into ConfigMaps the grafana sidecar can pick up.
+  #
+  # NOTE for whoever merges #1675 (per-component monitoring toggles): this
+  # should be gated alongside grafana, i.e. on monitoring.dashboards. Left
+  # ungated here only because that toggle block does not exist on this branch.
+  # Deploying it unconditionally is harmless in the meantime -- they are inert
+  # ConfigMaps until a Grafana with the sidecar reads them.
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: ./dashboards
+  version: 0.1.0
+
 - name: blackbox
   installed: false
   namespace: {{ .Values.namespace | default "default-namespace" }}
