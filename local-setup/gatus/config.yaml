@@ -8,8 +8,13 @@
 # deployment actually runs. Add an endpoint to one file, add it to the other.
 # CI enforces this (.github/workflows/gatus-coverage.yml).
 
+# Uptime history survives restarts (#1610). With the previous `type: memory`
+# every redeploy wiped it, so "how long was it down?" and "is this endpoint
+# flapping or is this the first failure?" were unanswerable — which is the
+# first question anyone asks when an alert fires.
 storage:
-  type: memory
+  type: sqlite
+  path: /data/gatus.db
 
 ui:
   title: DIGIT Core Services - Health Dashboard
