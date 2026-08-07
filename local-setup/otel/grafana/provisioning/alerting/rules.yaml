@@ -1,0 +1,268 @@
+# Grafana alert rules (#1611).
+#
+# Gatus answers "is it up?". These rules answer "is it about to stop being up?"
+# -- the gradual failures that actually take these boxes down: a disk filling,
+# memory running out, a JVM creeping toward its heap ceiling.
+#
+# THERE IS DELIBERATELY NO SERVICE-DOWN RULE HERE. That is Gatus's job (#1609).
+# Duplicating it would mean two Slack messages for one incident, which teaches
+# people to ignore both.
+#
+# ── noDataState: OK, everywhere ──
+# Every rule below reports OK rather than alerting when its series are missing.
+# That is deliberate. node-exporter lives in the docker-compose.monitoring.yml
+# OVERLAY, and the JVM metrics only exist once the OTEL pipeline is running, so
+# "no data" here usually means "this deployment does not run that component" --
+# a valid configuration, not an incident. Alerting on it would fire a permanent,
+# unfixable alert on every slim deployment, and a channel with a permanent red
+# alert in it is a muted channel. A monitoring component that has genuinely
+# died is caught by Gatus watching the monitoring stack (#1613), which is the
+# right place for it.
+#
+# execErrState is left at Alerting: a query that ERRORS is a broken rule, which
+# is worth surfacing, unlike an absent exporter.
+#
+# ── metric names ──
+# Taken from the queries in the dashboards provisioned beside this file
+# (jvm-services.json, node-exporter-full.json), not invented -- including the
+# mountpoint="/" matcher, which is what node-exporter-full.json uses and which
+# reflects node-exporter stripping its --path.rootfs prefix from the label.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: capacity
+    folder: DIGIT Alerts
+    interval: 1m
+    rules:
+      # ────────────────────────────────────────────────────────────────
+      - uid: digit-host-disk-low
+        title: Host disk low
+        condition: C
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Root filesystem is below 15% free on {{ $labels.instance }}'
+          description: >-
+            Logs, database growth and image layers fill this disk. It is fine
+            until it abruptly is not: a full root filesystem takes down every
+            service on the box at once, and Postgres in particular fails in ways
+            that need manual recovery. Reclaim space now rather than at 3am.
+            Usual suspects: docker image/volume churn, and container logs if
+            log rotation is not capped.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                node_filesystem_avail_bytes{mountpoint="/", fstype!="rootfs"}
+                / node_filesystem_size_bytes{mountpoint="/", fstype!="rootfs"}
+          - refId: B
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: lt, params: [0.15]}
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+
+      # ────────────────────────────────────────────────────────────────
+      - uid: digit-host-memory-low
+        title: Host memory low
+        condition: C
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Less than 10% memory available on {{ $labels.instance }}'
+          description: >-
+            Sharper here than on a typical box: these tenant hosts have NO SWAP,
+            so the kernel does not degrade gracefully under memory pressure --
+            it goes straight to OOM-killing processes, and what it kills is
+            whichever JVM happens to be largest, not whichever is least
+            important. Severity is critical for that reason: there is no slow
+            middle ground between "tight" and "a service died".
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+          - refId: B
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: lt, params: [0.10]}
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+
+      # ────────────────────────────────────────────────────────────────
+      - uid: digit-host-cpu-saturated
+        title: Host CPU saturated
+        condition: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'CPU above 90% for 15 minutes on {{ $labels.instance }}'
+          description: >-
+            Sustained saturation, not a spike -- 15 minutes is long enough to
+            rule out a deploy, a batch index or a JVM warming up. Past this
+            point request latency is already degraded even though every health
+            check still answers, so nothing else will tell you.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: '1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))'
+          - refId: B
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.90]}
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+
+      # ────────────────────────────────────────────────────────────────
+      - uid: digit-jvm-heap-headroom-low
+        title: JVM heap headroom low
+        condition: C
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.service_name }} is using over 90% of its heap limit'
+          description: >-
+            A service climbing toward its heap ceiling will eventually die and
+            restart, dropping in-flight requests. Ten minutes above 90% means
+            steady pressure rather than a GC sawtooth.
+            Caveat when reading this: the ratio is against jvm_memory_limit_bytes,
+            so a service that never publishes a heap limit produces NO series and
+            therefore cannot trigger this rule. Absence of this alert is not
+            proof of headroom -- check the DIGIT JVM Services dashboard.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (service_name) (jvm_memory_used_bytes{jvm_memory_type="heap"})
+                / sum by (service_name) (jvm_memory_limit_bytes{jvm_memory_type="heap"})
+          - refId: B
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.90]}
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+
+  - orgId: 1
+    name: errors
+    folder: DIGIT Alerts
+    interval: 1m
+    rules:
+      # ────────────────────────────────────────────────────────────────
+      # SHIPPED PAUSED ON PURPOSE. Read before unpausing.
+      #
+      # This is the rule that catches the failure Gatus structurally cannot see:
+      # a service answering /health perfectly while failing every real request.
+      # It is also the only rule here whose threshold cannot be derived from
+      # first principles. "500 errors in 5 minutes" is a guess -- the real number
+      # depends on how chatty these services are at baseline, and DIGIT services
+      # log exception stack traces during entirely normal operation.
+      #
+      # A wrong threshold is not a neutral outcome. Too low and the channel
+      # cries wolf until someone mutes it, which silently disables every OTHER
+      # rule in this file for that person. Too high and it never fires, which
+      # looks identical to "no errors".
+      #
+      # TO ENABLE: watch `sum by (service_name) (count_over_time(...))` on a real
+      # tenant for about a week, take the observed p95, set the threshold above
+      # it, then set isPaused: false. Do not skip the observation step.
+      - uid: digit-log-error-spike
+        title: Log error spike
+        condition: C
+        for: 5m
+        isPaused: true
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Error log volume is elevated for {{ $labels.service_name }}'
+          description: >-
+            This service is logging errors far above its normal rate while very
+            likely still passing health checks -- the failure mode where a
+            dashboard is entirely green and nothing works. Check the service's
+            logs in Explore, filtered to this service_name.
+            NOTE: the threshold on this rule is a placeholder that must be tuned
+            against an observed baseline; see the comment above the rule.
+        data:
+          - refId: A
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: >-
+                sum by (service_name) (count_over_time({service_name=~".+"}
+                |~ "(?i)ERROR|Exception" [5m]))
+          - refId: B
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: __expr__
+            model: {refId: B, type: reduce, expression: A, reducer: last}
+          - refId: C
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [500]}
+        noDataState: OK
+        execErrState: Alerting
