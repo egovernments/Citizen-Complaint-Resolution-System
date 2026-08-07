@@ -177,8 +177,19 @@ additionalPrometheusRules:
    groups:
      - name: SSLCertificateAlerts
        rules:
+       # instance= deliberately NOT pinned (#1649). The blackbox scrape relabels
+       # instance to the PROBED URL (source_labels: [__param_target] ->
+       # target_label: instance); the exporter's own address only ever appears
+       # in __address__. So matching instance="prometheus-blackbox-exporter:9115"
+       # could never select a probe series — this alert has never been able to
+       # fire, independently of blackbox having been installed: false.
+       #
+       # NOTE: 2 days of warning is very little for a certificate. cert-manager
+       # renews at two-thirds of lifetime, so a renewal that silently stops
+       # leaves ~30 days of runway that this would not surface until the last
+       # 48 hours. Raising it is a deliberate decision, left out of this change.
        - alert: SSLCertificateExpiring
-         expr: probe_ssl_earliest_cert_expiry{job="blackbox", instance="prometheus-blackbox-exporter:9115"} - time() < 2*24*3600
+         expr: probe_ssl_earliest_cert_expiry{job="blackbox"} - time() < 2*24*3600
          for: 1m
          labels:
            severity: warning

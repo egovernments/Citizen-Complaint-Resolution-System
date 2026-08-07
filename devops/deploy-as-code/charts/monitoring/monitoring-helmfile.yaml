@@ -38,6 +38,36 @@ releases:
   values:
   - ./values/prometheus.yaml
   - {{ .Values | toYaml | nindent 8 }}
+  # External probe target (#1649). values/prometheus.yaml probes a hardcoded
+  # https://unified-uat.digit.org/citizen/ — a FOREIGN environment carried in by
+  # the upstream import (#1619). Left as-is, enabling blackbox would start
+  # probing someone else's deployment and report its health as ours.
+  #
+  # This list REPLACES the one in values/prometheus.yaml (helm replaces lists,
+  # it does not merge them). Deliberate — the three jobs there were: this
+  # blackbox probe with the wrong target; `blackbox_exporter` self-metrics,
+  # kept below; and `nginx-ingress-metrics` against a Service name that never
+  # resolved, now superseded by the ServiceMonitor in #1648.
+  - prometheus:
+      prometheusSpec:
+        additionalScrapeConfigs:
+          - job_name: blackbox
+            metrics_path: /probe
+            params:
+              module: [http_2xx]
+            static_configs:
+              - targets:
+                  - https://{{ .Values.global.domain }}/
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: __param_target
+              - source_labels: [__param_target]
+                target_label: instance
+              - target_label: __address__
+                replacement: prometheus-blackbox-exporter:9115
+          - job_name: blackbox_exporter
+            static_configs:
+              - targets: ['prometheus-blackbox-exporter:9115']
 
 - name: jaeger
   installed: false
@@ -74,14 +104,38 @@ releases:
     - name: ingress.tls[0].hosts[0]
       value: {{ .Values.global.domain | quote }}
 
+# External probing (#1649). Everything else in this tier watches the platform
+# from the INSIDE — kubelet, pods, services. Nothing verified that a citizen can
+# actually reach the site: DNS, ingress, TLS, routing, end to end.
+#
+# Three things in the repo already depend on this exporter and have therefore
+# never worked:
+#   - the `blackbox` scrape job in values/prometheus.yaml
+#   - the `blackbox_exporter` self-metrics job
+#   - the SSLCertificateExpiring alert (values/prometheus.yaml:181), which
+#     matches instance="prometheus-blackbox-exporter:9115" — so certificate
+#     expiry has never been alertable here despite the rule existing
 - name: blackbox
-  installed: false
+  installed: true
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: prometheus-community/prometheus-blackbox-exporter
   version: 8.2.0
   values:
   - ./values/blackbox-exporter.yaml
   - {{ .Values | toYaml | nindent 8 }}
+  set:
+    # Helm would name the Service <release>-<chart>, i.e.
+    # blackbox-prometheus-blackbox-exporter. The scrape jobs and the SSL alert
+    # all hardcode `prometheus-blackbox-exporter`, so without this override the
+    # exporter runs and nothing that references it resolves — the same
+    # never-resolving-name failure this issue exists to fix.
+    - name: fullnameOverride
+      value: prometheus-blackbox-exporter
+    # The chart's own comment: "set to true to add the release label so
+    # scraping of the servicemonitor with kube-prometheus-stack works out of
+    # the box". Same selector requirement as #1647 and #1648.
+    - name: releaseLabel
+      value: true
 
 - name: kafka-ui
   installed: true
