@@ -80,7 +80,7 @@ KNOWN_UNREAD = {
     "prometheus.externalLabels": "#1645 -- reads at prometheus.prometheusSpec.externalLabels",
     "prometheus.additionalScrapeConfigs": "#1645 -- reads at prometheus.prometheusSpec.additionalScrapeConfigs",
     "prometheus.alertmanager": "#1645 -- chart reads alertmanager.enabled at top level",
-    "ingress-nginx": "#1648 -- vendored chart reads .Values.controller.* at root, not under a chart-name block",
+    "ingress-nginx": "#1648 -- vendored chart reads .Values.controller.* at root; the helmfile now re-paths this block deliberately (PR #1679), so the env.yaml keys are read via templating rather than by the chart",
 }
 
 
