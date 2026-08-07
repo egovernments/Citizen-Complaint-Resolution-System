@@ -9,6 +9,11 @@ services:
   otel-collector:
     image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 320m   # internal memory_limiter is 200 MiB; this is the hard backstop above it
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
@@ -23,6 +28,11 @@ services:
   tempo:
     image: egovio/tempo:2.6.1
     container_name: digit-tempo
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 384m   # 24h retention, small blocks
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
     volumes:
@@ -41,6 +51,11 @@ services:
   grafana:
     image: egovio/grafana:11.4.0
     container_name: digit-grafana
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 256m   # query proxy + dashboard rendering
     restart: unless-stopped
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
@@ -77,6 +92,11 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: digit-prometheus
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 512m   # 15d TSDB; scrape targets grow as exporters are added
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -1637,6 +1657,11 @@ services:
   gatus:
     image: egovio/gatus:latest
     container_name: digit-gatus
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 64m   # matches the 64Mi already set on the k3s Deployment
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1666,6 +1691,11 @@ services:
   loki:
     image: grafana/loki:3.4.2
     container_name: digit-loki
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 512m   # largest real-world grower: chunks plus query working set
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
@@ -1689,6 +1719,11 @@ services:
   promtail:
     image: grafana/promtail:3.4.2
     container_name: digit-promtail
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    mem_limit: 128m   # log shipper: tails files, small buffers
     restart: unless-stopped
     command: ["-config.file=/etc/promtail/config.yaml"]
     volumes:

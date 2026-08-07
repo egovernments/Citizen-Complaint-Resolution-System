@@ -22,6 +22,10 @@ services:
     # prom/prometheus) — not the registry.preview mirror.
     image: prom/node-exporter:v1.8.2
     container_name: digit-node-exporter
+    # Memory ceiling (#1612) — see the note on the observability services in
+    # docker-compose.egov-digit.yaml. node-exporter is a thin reader of /proc
+    # and /sys; 64m is generous for it.
+    mem_limit: 64m
     restart: unless-stopped
     # A containerised node-exporter sees only the container's namespaces
     # unless pointed at the host's. pid:host + the read-only /proc, /sys and /
