@@ -15,10 +15,36 @@ ui:
   title: DIGIT Core Services - Health Dashboard
   description: Real-time health monitoring for all DIGIT microservices
 
-# Alerting (optional - configure as needed)
-# alerting:
-#   slack:
-#     webhook-url: "https://hooks.slack.com/services/xxx/yyy/zzz"
+# Alerting (#1609). Gatus detected outages but told nobody -- the dashboard is
+# only useful to someone already looking at it, which is never at 3am.
+#
+# OFF BY DEFAULT, and safely so: Gatus expands ${GATUS_SLACK_WEBHOOK_URL} to an
+# EMPTY STRING when the variable is unset, and a slack provider with an empty
+# webhook-url fails its own Validate(). Gatus then logs a warning, drops that
+# provider, and carries on serving the dashboard normally -- it does not refuse
+# to start. So a deployment that never sets the variable behaves exactly as it
+# does today. Set the variable to turn alerting on; nothing else changes.
+#
+# The webhook URL is a secret (anyone holding it can post into the channel), so
+# it comes from the environment, never from this file. The channel is chosen by
+# whoever mints the webhook -- there is no channel name to configure here.
+alerting:
+  slack:
+    webhook-url: "${GATUS_SLACK_WEBHOOK_URL}"
+    # Defaults merged into every endpoint's `alerts:` entry below. This block
+    # alone does NOT attach alerts to anything -- Gatus requires each endpoint to
+    # declare `alerts: - type: slack` for these defaults to apply to it, which is
+    # why every endpoint in this file carries that two-line block.
+    default-alert:
+      enabled: true
+      # 3 consecutive failures before alerting, not 1. At a 30s interval that is
+      # ~90s of sustained failure, which is what keeps a single dropped health
+      # check or a rolling restart from paging anyone.
+      failure-threshold: 3
+      success-threshold: 2
+      # Send the recovery message too -- an alert with no all-clear leaves people
+      # checking manually to find out whether it is still broken.
+      send-on-resolved: true
 
 endpoints:
   # ==================== Infrastructure ====================
@@ -31,6 +57,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: PgBouncer
     group: Infrastructure
@@ -38,6 +66,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Redis
     group: Infrastructure
@@ -45,6 +75,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Redpanda (Kafka)
     group: Infrastructure
@@ -52,6 +84,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: MinIO
     group: Infrastructure
@@ -59,6 +93,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # ==================== Core Services ====================
   - name: MDMS Service
@@ -67,6 +103,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: MDMS Backend
     group: Core Services
@@ -74,6 +112,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Encryption Service
     group: Core Services
@@ -81,6 +121,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: ID Generation Service
     group: Core Services
@@ -88,6 +130,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: User Service
     group: Core Services
@@ -95,6 +139,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Workflow Service
     group: Core Services
@@ -102,6 +148,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Localization Service
     group: Core Services
@@ -109,6 +157,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Boundary Service
     group: Core Services
@@ -116,6 +166,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # No HTTP health endpoint exposed; its own container healthcheck is a TCP probe.
   - name: Boundary Management Service
@@ -124,6 +176,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Access Control Service
     group: Core Services
@@ -131,6 +185,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Persister Service
     group: Core Services
@@ -138,6 +194,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Filestore Service
     group: Core Services
@@ -145,6 +203,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: HRMS Service
     group: Core Services
@@ -152,6 +212,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: URL Shortening Service
     group: Core Services
@@ -159,6 +221,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # audit-service exists only in docker-compose.egov-digit.yaml (the tenant path
   # ansible deploys); docker-compose.yml and the k3s tier have none, so it carries
@@ -170,6 +234,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # ==================== Optional stacks (profile-gated) ====================
   # These services only exist when their compose profile is active (see
@@ -191,6 +257,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: User OTP Service
     group: OTP
@@ -200,6 +268,8 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].status == UP"
+    alerts:
+      - type: slack
 
   # The port is a variable because this service listens on 8005 under
   # docker-compose.egov-digit.yaml but on 8080 in every other compose file, and
@@ -213,6 +283,8 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].status == UP"
+    alerts:
+      - type: slack
 
   # -------------------- profile: search --------------------
   - name: Elasticsearch
@@ -222,6 +294,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Indexer Service
     group: Search
@@ -230,6 +304,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Inbox Service
     group: Search
@@ -238,6 +314,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # -------------------- profile: mcp --------------------
   - name: DIGIT MCP
@@ -247,6 +325,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: MCP Postgres
     group: MCP
@@ -255,6 +335,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   # -------------------- profile: keycloak --------------------
   - name: Keycloak
@@ -264,6 +346,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Keycloak Postgres
     group: Keycloak
@@ -272,6 +356,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Token Exchange Service
     group: Keycloak
@@ -280,6 +366,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # -------------------- profile: notifications --------------------
   # novu-worker exposes no port and so cannot be probed; it is deliberately absent.
@@ -290,6 +378,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Novu WS
     group: Notifications
@@ -298,6 +388,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Novu Dashboard
     group: Notifications
@@ -306,6 +398,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Novu Mongo
     group: Notifications
@@ -314,6 +408,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: slack
 
   - name: Novu Bridge
     group: Notifications
@@ -322,6 +418,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Novu Bridge Endpoint
     group: Notifications
@@ -330,6 +428,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Config Service
     group: Notifications
@@ -338,6 +438,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: User Preferences Service
     group: Notifications
@@ -346,6 +448,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: OTP Publisher
     group: Notifications
@@ -354,6 +458,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # ==================== API Gateway ====================
   - name: Kong Gateway (Proxy)
@@ -362,6 +468,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] < 500"
+    alerts:
+      - type: slack
 
   - name: Kong Admin API
     group: API Gateway
@@ -369,6 +477,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Kong Status
     group: API Gateway
@@ -376,6 +486,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # nginx proxies fronting egov-user / egov-workflow-v2. Not profile-gated, but
   # absent from docker-compose.deploy.yaml and docker-compose.db-migrations.yml,
@@ -387,6 +499,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: Workflow Service Proxy
     group: API Gateway
@@ -395,6 +509,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # ==================== Application Services ====================
   - name: PGR Services
@@ -404,6 +520,8 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].status == UP"
+    alerts:
+      - type: slack
 
   - name: DIGIT UI
     group: Application
@@ -411,6 +529,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # Configurator (DIGIT Studio) — tenant onboarding admin console. Serving
   # dependency: onboarding a new city goes through this SPA. Probes the base
@@ -423,6 +543,8 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   # ==================== API Functionality Tests ====================
   - name: MDMS API - Tenant Search
@@ -442,6 +564,8 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
 
   - name: IDGen API - Generate ID
     group: API Tests
@@ -458,6 +582,8 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[BODY].responseInfo.status == SUCCESSFUL"
+    alerts:
+      - type: slack
 
   - name: Localization API - Message Search
     group: API Tests
@@ -472,3 +598,5 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: slack
