@@ -105,6 +105,29 @@ def load(path):
         raise SystemExit(2)
 
 
+def passthrough_paths(node, prefix=""):
+    """Paths whose reference value is an empty map or null.
+
+    Upstream charts use these for free-form blocks handed straight to
+    `toYaml` -- `storageSpec: {}`, `resources: {}`, `nodeSelector: {}`. Any
+    structure underneath is valid and IS read, so descending into them and
+    demanding each child appear in the reference reports pure noise.
+
+    Found by fixing #1645: re-pathing storageSpec correctly then tripped this
+    guard on `storageSpec.volumeClaimTemplate`, which is exactly the shape the
+    chart expects. A guard that fails a correct fix is worse than no guard.
+    """
+    out = set()
+    if isinstance(node, dict):
+        for k, v in node.items():
+            p = f"{prefix}.{k}" if prefix else str(k)
+            if v is None or (isinstance(v, dict) and not v):
+                out.add(p)
+            else:
+                out |= passthrough_paths(v, p)
+    return out
+
+
 def orphans_for(env_tree, block, reference):
     """Key paths the env block sets that the reference chart never defines.
 
@@ -116,7 +139,14 @@ def orphans_for(env_tree, block, reference):
         return []
     ours = key_paths({block: env_tree[block]})
     theirs = key_paths(reference)
-    unread = {p for p in ours if p not in theirs and p not in ALLOW}
+    free = passthrough_paths(reference)
+    unread = {
+        p for p in ours
+        if p not in theirs
+        and p not in ALLOW
+        # anything below a free-form block is the chart's to interpret
+        and not any(p.startswith(f + ".") for f in free)
+    }
     return sorted(p for p in unread if not any(p.startswith(q + ".") for q in unread))
 
 
@@ -193,6 +223,22 @@ def self_test():
 
         # 4. absent block is not a failure
         assert orphans_for({}, "foo", reference) == []
+
+        # 5. free-form passthrough blocks: the chart declares `storageSpec: {}`
+        #    and hands whatever is underneath to toYaml, so children are valid
+        #    and must NOT be reported. Regression test for the false positive
+        #    that fixing #1645 exposed.
+        ref2 = tmp / "ref2.yaml"
+        ref2.write_text(yaml.safe_dump({"foo": {"barSpec": {"storageSpec": {}}}}))
+        reference2 = load(ref2)
+        deep = {"foo": {"barSpec": {"storageSpec": {
+            "volumeClaimTemplate": {"spec": {"resources": {"requests": {"storage": "15Gi"}}}}}}}}
+        got = orphans_for(deep, "foo", reference2)
+        assert got == [], f"false positive under a free-form block: {got}"
+
+        # ...but a genuine mis-path OUTSIDE the free-form block still fires
+        got = orphans_for({"foo": {"storageSpec": {"x": 1}}}, "foo", reference2)
+        assert got == ["foo.storageSpec"], f"mis-path masked by passthrough logic: {got}"
 
     print("self-test OK: detects mis-paths and orphaned blocks, "
           "silent on correct configuration")
