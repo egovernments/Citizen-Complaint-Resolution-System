@@ -72,51 +72,62 @@ At `metrics` and `logs`, `OTEL_TRACES_EXPORTER` is set to `none` — otherwise e
 
 ---
 
-## Kubernetes tier: it is off by default
+## Kubernetes tier: wired in, every component off by default
 
-`devops/deploy-as-code/digit-helmfile.yaml` lists the tiers to install. The monitoring line is commented out:
+`devops/deploy-as-code/digit-helmfile.yaml` lists the tiers to install. The monitoring line **used to be commented out entirely**; as of #1675 it is present, and each component is gated instead:
 
 ```yaml
   - path: ./charts/auxiliary-services/auxiliary-helmfile.yaml
-#  - path: ./charts/monitoring/monitoring-helmfile.yaml
+  - path: ./charts/monitoring/monitoring-helmfile.yaml
 ```
 
-So a standard deploy installs **no** Prometheus, Grafana, Loki or Alertmanager.
+A standard deploy still installs **no** Prometheus, Grafana, Loki or Alertmanager — the path being listed changes nothing on its own, because every release defaults to `installed: false`.
 
-### Why it is commented out
+### Why it was commented out
 
 Not a decision anyone here took. `deploy-as-code` was imported wholesale from upstream `egovernments/DIGIT-DevOps`, and the line **arrived already commented** — directly beside `#  - path: ./charts/sanitation/sanitation-helmfile.yaml`, an unrelated business module. The file's convention is "commented = a module this deployment does not use", and monitoring was categorised the same way and never revisited.
 
-That history also explains values you will find pointing at other environments (`unified-qa`, `unified-uat.digit.org`, a `#unified-qa-alerts` Slack channel): they came in with the import and were never adapted.
+The practical consequence was that every monitoring fix in the tree edited files nothing deployed.
+
+That history also explains values you will find pointing at other environments (`unified-qa`, `unified-uat.digit.org`, `urban-lts.digit.org`, a `#unified-qa-alerts` Slack channel): they came in with the import and were never adapted.
 
 ### Enabling it
 
-Uncomment the line. That installs the releases in `charts/monitoring/monitoring-helmfile.yaml`.
+Set the toggles in `devops/deploy-as-code/charts/environments/env.yaml`:
 
-**Check these first** — enabling it as-is deploys a stack with known gaps, each tracked:
-
-- Prometheus and Alertmanager persistence (#1645) — without it, metrics vanish on every pod restart
-- Grafana login and admin password (#1650)
-- Dashboards fetched from GitHub `master` at pod start rather than vendored (#1650)
-- No application metrics until the OTEL agent work lands (#1646)
-- `kafka-ui` is published with **no authentication**
+```yaml
+monitoring:
+  metrics: true      # kube-prometheus-stack — Prometheus, Alertmanager, node-exporter
+  dashboards: true   # Grafana
+  logs: true         # Loki + Promtail
+  probes: false      # blackbox-exporter — external HTTP/TLS probing
+  traces: false      # Jaeger — needs an Elasticsearch backend; much the most expensive
+  kafkaUi: false     # Kafka admin console — see the warning below
+```
 
 ### Running a subset
 
-This tier is modular per component — every release carries its own `installed:` flag:
+Rough order of value if you are picking only some:
 
-```yaml
-- name: loki-stack
-  installed: true      # logs
-- name: kube-prometheus-stack
-  installed: true      # metrics + Alertmanager
-- name: grafana
-  installed: true      # dashboards
-- name: blackbox
-  installed: true      # external probes
-```
+1. **`metrics`** — without it nothing else has data to work from
+2. **`dashboards`** — makes the metrics legible; on its own it has nothing to query
+3. **`logs`** — answers *why*, once metrics tell you *what*
+4. **`probes`** — catches TLS expiry and outside-in failures
+5. **`traces`** — only worth it when chasing latency across services
 
-Set any to `false` to leave it out. The same dependency applies as on the Ansible tier: Grafana without Prometheus or Loki is an empty dashboard.
+`kafkaUi` is not observability at all: it is a **write-capable Kafka admin console**, published with no authentication. Treat enabling it as an access-control decision.
+
+### Known gaps before you enable it
+
+Each is tracked:
+
+- **No application metrics** until the OTEL agent work lands (#1646) — you get cluster and infra views, not per-service ones
+- Prometheus and Alertmanager persistence (#1645) — without it, metrics vanish on every pod restart
+- Alertmanager email needs its SMTP secret created first (#1640):
+  ```
+  kubectl -n monitoring create secret generic alertmanager-smtp \
+    --from-literal=password='<smtp-app-password>'
+  ```
 
 ---
 
@@ -132,6 +143,7 @@ Being explicit, because a gap you chose is different from one you missed.
 
 ## Related
 
+- `alerting-runbook.md` — what each alert means, what to do when it fires, and how to turn alerting on
 - `dashboard-metrics.md` — what the dashboard instrumentation measures, client and server side
 - `local-setup/README.md` — what the Ansible playbook deploys
 - `local-setup/ansible/README.md` — deploy stages, including the health gates
