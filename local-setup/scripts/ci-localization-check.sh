@@ -17,10 +17,26 @@ echo ""
 
 # Core modules that must have messages for PGR to function.
 # These are the modules actually seeded by the full-dump.sql load.
+#
+# `egov-user` was listed here from the start (22a1457c) and has never passed:
+# full-dump.sql contains NO egov-user rows, and never has -- checked back
+# through every revision of the dump. The module distribution it does carry is
+# rainmaker-pgr (852), rainmaker-common (734), rainmaker-hr (244),
+# rainmaker-workbench (228), digit-privacy-policy (5), egov-hrms (2).
+#
+# So this check has failed on every PR in the repo since it landed, which is
+# worse than not having it: a check that is always red is one nobody reads, and
+# it masked the real signal on ~37 monitoring PRs.
+#
+# Removed rather than "fixed" by seeding, because nothing appears to want it --
+# the SPA requests rainmaker-common, rainmaker-pgr, rainmaker-dashboard,
+# rainmaker-boundary-admin, egov-hrms and egov-mdms-service, not egov-user.
+# If those messages ARE required, seeding them is a dump change and belongs in
+# its own PR; this list is documented as "modules actually seeded", so it should
+# describe reality either way.
 MODULES=(
   "rainmaker-common"
   "rainmaker-pgr"
-  "egov-user"
 )
 
 LOCALE="en_IN"
