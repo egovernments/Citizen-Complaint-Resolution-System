@@ -14,6 +14,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 320m   # internal memory_limiter is 200 MiB; this is the hard backstop above it
+    # JVM metrics flow through it, not just traces (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
@@ -33,6 +35,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 384m   # 24h retention, small blocks
+    # trace store — the only traces-only component (#1657)
+    profiles: [obs-traces]
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
     volumes:
@@ -56,6 +60,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 256m   # query proxy + dashboard rendering
+    # the only UI for any of it (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     environment:
       # Auth. Anonymous access is OFF by default: Grafana proxies the Loki
@@ -98,11 +104,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Only prometheus, which shares grafana's profile (#1657). tempo and loki
+    # were hard dependencies here, which breaks two ways:
+    #   1. compose refuses to start a service whose depends_on target is
+    #      excluded by the active profiles — so `metrics` or `logs` level would
+    #      fail the deploy outright, not degrade;
+    #   2. even at full stack, `condition: service_healthy` made the dashboards
+    #      unreachable whenever the LOG store was unhealthy — a trace/log
+    #      backend being down is a reason to open Grafana, not to withhold it.
+    # Grafana needs neither at boot: an unreachable datasource surfaces as a
+    # panel error and recovers on its own once the backend appears.
     depends_on:
-      tempo:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
       prometheus:
         condition: service_started
     networks:
@@ -119,6 +131,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 512m   # 15d TSDB; scrape targets grow as exporters are added
+    # metrics store (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -352,11 +366,11 @@ services:
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-indexer
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-indexer
       JAVA_OPTS: "-Xms192m -Xmx512m"
@@ -419,11 +433,11 @@ services:
       MANAGEMENT_SECURITY_ENABLED: 'false'
       # Accept unknown fields in userInfo (locale, active, permanentCity etc.)
       SPRING_JACKSON_DESERIALIZATION_FAIL_ON_UNKNOWN_PROPERTIES: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: inbox
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_OPTS: -Xms256m -Xmx256m
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
@@ -479,11 +493,11 @@ services:
       SPRING_FLYWAY_ENABLED: 'false'
       SPRING_FLYWAY_TABLE: enc_schema_version
       SERVER_PORT: 1234
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-enc-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       MASTER_PASSWORD: ${ELASTICSEARCH_MASTER_PASSWORD:-asd@#$@$!132123}
       MASTER_SALT: qweasdzx
@@ -530,11 +544,11 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: mdms-backend
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
@@ -603,11 +617,11 @@ services:
       AUTOCREATE_NEW_SEQ: 'true'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8088
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-idgen
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
@@ -739,11 +753,11 @@ services:
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_STATE_LEVEL_TENANT_ID: pg
       STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-user
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
@@ -816,11 +830,11 @@ services:
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-workflow-v2
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       # Raise default search limit from 10 to 200 — PGR's internal workflow call
@@ -893,7 +907,7 @@ services:
       # OTEL export disabled — image has OTEL on classpath, but no agent attached
       # This avoids the ~200MB heap overhead from the javaagent while keeping OTEL JDBC driver happy
       OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       JAVA_OPTS: -Xms128m -Xmx512m
@@ -947,11 +961,11 @@ services:
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096
       STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: boundary-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
@@ -994,11 +1008,11 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-accesscontrol
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
@@ -1036,11 +1050,11 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8091
       EGOV_PERSIST_YML_REPO_PATH: /persister-config/
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-persister
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # Kafka consumer concurrency — process more messages in parallel
@@ -1091,11 +1105,11 @@ services:
       # replays V1 onto a populated database — 42P07 crash loop (#1586).
       SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-filestore
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # MinIO/S3 storage (local S3-compatible storage for dev)
@@ -1200,11 +1214,11 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
       SERVER_PORT: 8092
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-hrms
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
@@ -1534,11 +1548,11 @@ services:
       PGR_VISIBILITY_ENABLED: 'true'
       JAVA_OPTS: '-Xmx384m -Xms384m'
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: pgr-services
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/pgr-services/health >/dev/null 2>&1 || exit 1"]
@@ -1738,6 +1752,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 512m   # largest real-world grower: chunks plus query working set
+    # log store (#1657)
+    profiles: [obs-logs]
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
@@ -1766,6 +1782,8 @@ services:
     # have no swap, and the OOM killer takes the biggest process — a JVM
     # service — not the monitoring that misbehaved.
     mem_limit: 128m   # log shipper: tails files, small buffers
+    # log shipper (#1657)
+    profiles: [obs-logs]
     restart: unless-stopped
     command: ["-config.file=/etc/promtail/config.yaml"]
     volumes:
@@ -2202,11 +2220,11 @@ services:
       # tenant has no schema of its own. Should match the deployment's
       # state-level tenant (set in host_vars).
       STATE_LEVEL_TENANT_ID: ${STATE_LEVEL_TENANT_ID:-pg}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: digit-config-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
     healthcheck:
@@ -2356,11 +2374,11 @@ services:
       # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: novu-bridge
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
     healthcheck:
