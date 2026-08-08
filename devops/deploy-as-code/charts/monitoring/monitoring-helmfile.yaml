@@ -95,9 +95,23 @@ releases:
       auth.github:
         allowed_organizations: {{ .Values.grafana.github.allowed_organizations }}
         role_attribute_path: {{ .Values.grafana.github.role_attribute_path }}
+  # Grafana's override convention is GF_<SECTION>_<KEY>, so auth.github /
+  # client_id is GF_AUTH_GITHUB_CLIENT_ID (#1650). The name used previously —
+  # GF_AUTH_GITHUB_YAMLAPPLICATIONCONFIG_AUTH_OAUTH2_CLIENT_GITHUB_CLIENTID —
+  # matches no Grafana setting and was silently ignored; it is copy-paste debris
+  # from kafka-ui's yamlApplicationConfig.auth.oauth2.client.github.clientId.
+  # The line below it already used the correct form for the secret, so OAuth had
+  # a secret and no client id: the provider could never complete a login.
+  #
+  # GF_SECURITY_ADMIN_PASSWORD is set from the same secrets file. Without it the
+  # chart falls back to its own default for the `admin` account, on an instance
+  # published at /monitoring with no ingress-level auth — so a broken OAuth
+  # provider left a local login form as the only door, with an unmanaged
+  # password behind it.
   - envRenderSecret:
-      GF_AUTH_GITHUB_YAMLAPPLICATIONCONFIG_AUTH_OAUTH2_CLIENT_GITHUB_CLIENTID: {{ .Values.secrets.grafana.clientID }}
+      GF_AUTH_GITHUB_CLIENT_ID: {{ .Values.secrets.grafana.clientID }}
       GF_AUTH_GITHUB_CLIENT_SECRET: {{ .Values.secrets.grafana.clientSecret }}
+      GF_SECURITY_ADMIN_PASSWORD: {{ .Values.secrets.grafana.adminPassword }}
   set:
     - name: ingress.hosts[0]
       value: {{ .Values.global.domain | quote }}
@@ -115,6 +129,21 @@ releases:
 #   - the SSLCertificateExpiring alert (values/prometheus.yaml:181), which
 #     matches instance="prometheus-blackbox-exporter:9115" — so certificate
 #     expiry has never been alertable here despite the rule existing
+- name: dashboards
+  # Vendored Grafana dashboards as labelled ConfigMaps (#1650). A local chart,
+  # not an upstream one -- it exists only to turn the JSON files in this repo
+  # into ConfigMaps the grafana sidecar can pick up.
+  #
+  # NOTE for whoever merges #1675 (per-component monitoring toggles): this
+  # should be gated alongside grafana, i.e. on monitoring.dashboards. Left
+  # ungated here only because that toggle block does not exist on this branch.
+  # Deploying it unconditionally is harmless in the meantime -- they are inert
+  # ConfigMaps until a Grafana with the sidecar reads them.
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: ./dashboards
+  version: 0.1.0
+
 - name: blackbox
   installed: true
   namespace: {{ .Values.namespace | default "default-namespace" }}
