@@ -462,7 +462,21 @@ alertmanager:
           from: 'unified.alerts@example.com'
           smarthost: 'smtp.gmail.com:587'
           auth_username: 'unified.alerts@egovernments.org'
-          auth_password: 'mujp cgjj fwxa whyd'
+          # SMTP password (#1640). Read from a mounted Secret, never from this
+          # file: this repo is PUBLIC, and a committed literal here is a
+          # working credential for anyone who clones it. Alertmanager reads
+          # the file at send time, so the value never enters git, the Helm
+          # release, or `helm get values` output.
+          #
+          # The path is fixed by the operator: kube-prometheus-stack mounts
+          # everything in alertmanagerSpec.secrets under
+          # /etc/alertmanager/secrets/<secret-name>/<key>.
+          #
+          # Create it once per cluster (the namespace must match this
+          # release's):
+          #   kubectl -n monitoring create secret generic alertmanager-smtp \
+          #     --from-literal=password='<smtp-app-password>'
+          auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
           send_resolved: true 
           headers:
             subject: |
@@ -804,7 +818,12 @@ alertmanager:
     ## Secrets is a list of Secrets in the same namespace as the Alertmanager object, which shall be mounted into the
     ## Alertmanager Pods. The Secrets are mounted into /etc/alertmanager/secrets/.
     ##
-    secrets: []
+    ## alertmanager-smtp carries the SMTP password (#1640) that the
+    ## email-notification receiver above reads via auth_password_file. Without
+    ## this mount that file does not exist and Alertmanager fails to send email
+    ## -- so the two must be changed together.
+    secrets:
+      - alertmanager-smtp
 
     ## ConfigMaps is a list of ConfigMaps in the same namespace as the Alertmanager object, which shall be mounted into the Alertmanager Pods.
     ## The ConfigMaps are mounted into /etc/alertmanager/configmaps/.
