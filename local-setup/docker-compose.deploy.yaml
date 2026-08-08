@@ -911,6 +911,11 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Slack alerting (#1609). Unset = alerting off: gatus expands the
+      # missing variable to an empty string and drops the slack provider
+      # with a warning instead of failing to start. Set it in .env to
+      # switch alerting on.
+      GATUS_SLACK_WEBHOOK_URL: ${GATUS_SLACK_WEBHOOK_URL:-}
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"

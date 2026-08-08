@@ -1,0 +1,27 @@
+# Grafana notification policy tree (#1611).
+#
+# ⚠ Provisioning the policy tree REPLACES it wholesale -- Grafana treats it as a
+# single resource, so anything created through the UI is overwritten on restart.
+# That is the intended behaviour here (the tree should live in git, like the
+# dashboards and datasources beside it), but it is why this file stays minimal:
+# every route added here is a route nobody can adjust from the UI.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: slack
+    # Group by rule and by the service/instance the rule fired for, so one bad
+    # service produces one thread rather than one message per series.
+    group_by:
+      - grafana_folder
+      - alertname
+      - service_name
+      - instance
+    # 30s of quiet before the first message, so a burst of related series lands
+    # as a single notification.
+    group_wait: 30s
+    group_interval: 5m
+    # Re-send an alert that is still firing every 4h. Long on purpose: these are
+    # slow-moving capacity trends, and a shorter repeat trains people to mute
+    # the channel, which is the failure mode this whole issue is about.
+    repeat_interval: 4h
