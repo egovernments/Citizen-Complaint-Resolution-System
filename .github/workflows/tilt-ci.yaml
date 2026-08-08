@@ -219,11 +219,26 @@ jobs:
           # captures fewer events than the long-running docker compose job.
           # Verify the sidecar started and is capturing events (>=1 each).
 
-          # Must have at least 1 start event
+          # Start events are only observable if the sidecar attaches BEFORE the
+          # containers come up. Under `tilt ci` it usually does not: tilt brings
+          # the stack up and the sidecar then attaches to an already-running
+          # project, logging e.g. "running=29 containers" before it begins
+          # monitoring. There are no starts left to see, so asserting >=1
+          # unconditionally makes this job fail or pass on a race -- which is
+          # exactly what it has been doing across the repo.
+          #
+          # So assert it only when it is actually observable: if the sidecar
+          # attached to an empty project, a missing start event is a real
+          # regression; if containers were already running, it is not evidence
+          # of anything.
+          RUNNING_AT_ATTACH=$(echo "$LOGS" | grep -oE 'running=[0-9]+' | head -1 | cut -d= -f2)
+          RUNNING_AT_ATTACH=${RUNNING_AT_ATTACH:-0}
           START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
           echo "  Container start events: $START_COUNT"
-          if [ "$START_COUNT" -lt 1 ]; then
-            echo "  FAIL: expected at least 1 start event"
+          if [ "$RUNNING_AT_ATTACH" -gt 0 ]; then
+            echo "  (not asserted — sidecar attached with $RUNNING_AT_ATTACH containers already running, so starts were unobservable)"
+          elif [ "$START_COUNT" -lt 1 ]; then
+            echo "  FAIL: expected at least 1 start event (sidecar attached to an empty project, so starts should have been visible)"
             FAIL=1
           fi
 
