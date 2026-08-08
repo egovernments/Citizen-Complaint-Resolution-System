@@ -492,6 +492,28 @@ data:
         interval: 60s
         conditions:
           - "[STATUS] == 200"
+
+      # ==================== Public endpoint (TLS) ====================
+      # Every other check in this file runs INSIDE the cluster network and never
+      # traverses the public ingress, so none of them presents the public
+      # certificate. An expired cert therefore leaves this whole dashboard green
+      # while every citizen and employee gets a browser security warning — the
+      # dashboard would actively mislead whoever is diagnosing the outage (#1622).
+      #
+      # This is also the only check that exercises the REAL public path end to
+      # end: DNS, firewall, TLS termination and routing through to the app.
+      #
+      # OFF in this tier: it has no ingress and no public hostname (see #1618).
+      # Defined here only to keep both catalogues identical, per the header.
+      - name: TLS Certificate
+        group: Public Endpoint
+        enabled: ${GATUS_TLS}
+        url: "${GATUS_PUBLIC_URL}"
+        interval: 5m
+        conditions:
+          - "[CERTIFICATE_EXPIRATION] > 240h"
+          - "[STATUS] < 500"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -543,6 +565,14 @@ spec:
               value: "false"
             - name: GATUS_SMS_PORT
               value: "8080"
+            # No ingress and no public hostname in this tier (#1618), so the
+            # public TLS check stays off. Declared rather than omitted: Gatus
+            # reads an UNSET enabled-var as true, which would leave a
+            # permanently-red check against a URL that never resolves.
+            - name: GATUS_TLS
+              value: "false"
+            - name: GATUS_PUBLIC_URL
+              value: ""
           resources:
             limits:
               memory: 64Mi

@@ -477,3 +477,34 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+
+  # ==================== Public endpoint (TLS) ====================
+  # Every other check in this file runs INSIDE the container network and never
+  # traverses nginx, so none of them presents the public certificate. An expired
+  # cert therefore leaves this whole dashboard green while every citizen and
+  # employee gets a browser security warning — the dashboard would actively
+  # mislead whoever is diagnosing the outage (#1622).
+  #
+  # This is also the only check that exercises the REAL public path end to end:
+  # DNS, the host firewall, nginx, TLS termination and routing through to the
+  # app. Everything above bypasses all of it.
+  #
+  # Certificates are Let's Encrypt, renewed by certbot's systemd timer. Renewal
+  # is automatic and unverified: if it fails (expired ACME account, blocked
+  # HTTP-01 challenge, nginx not reloaded, disabled timer) the expiry is
+  # perfectly predictable 90 days ahead, and nothing currently notices.
+  #
+  # 240h ≈ 10 days of warning. Certbot renews at 30 days, so this only fires
+  # once renewal has genuinely failed, not on the normal renewal cycle.
+  #
+  # GATUS_TLS is false unless the deployment sets it: it needs a real public
+  # hostname AND the gatus container must be able to reach it from inside
+  # (hairpin NAT is not universal). Ansible enables it only when tls_enabled.
+  - name: TLS Certificate
+    group: Public Endpoint
+    enabled: ${GATUS_TLS}
+    url: "${GATUS_PUBLIC_URL}"
+    interval: 5m
+    conditions:
+      - "[CERTIFICATE_EXPIRATION] > 240h"
+      - "[STATUS] < 500"
