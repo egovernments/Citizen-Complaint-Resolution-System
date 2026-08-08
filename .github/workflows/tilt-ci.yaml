@@ -231,8 +231,16 @@ jobs:
           # attached to an empty project, a missing start event is a real
           # regression; if containers were already running, it is not evidence
           # of anything.
-          RUNNING_AT_ATTACH=$(echo "$LOGS" | grep -oE 'running=[0-9]+' | head -1 | cut -d= -f2)
-          RUNNING_AT_ATTACH=${RUNNING_AT_ATTACH:-0}
+          # Matched in-shell rather than `grep ... | head -1`. head closes the
+          # pipe after the first line, so grep can take SIGPIPE and return 141 --
+          # harmless today (this workflow runs under `bash -e`, no pipefail) but
+          # it would abort the step the moment anyone adds pipefail, which four
+          # other workflows in this repo already set. No pipe, no race.
+          if [[ "$LOGS" =~ running=([0-9]+) ]]; then
+            RUNNING_AT_ATTACH="${BASH_REMATCH[1]}"
+          else
+            RUNNING_AT_ATTACH=0
+          fi
           START_COUNT=$(echo "$LOGS" | grep -c '\[telemetry\] +' || true)
           echo "  Container start events: $START_COUNT"
           if [ "$RUNNING_AT_ATTACH" -gt 0 ]; then
