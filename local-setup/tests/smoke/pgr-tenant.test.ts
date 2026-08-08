@@ -25,7 +25,42 @@ const TENANT_LABEL = TENANT.split('.').pop()!.toUpperCase();
 const timestamp = Date.now();
 
 const cityPart = TENANT.includes('.') ? TENANT.split('.').pop()! : TENANT;
-const LOCALITY_CODE = `LOC_${cityPart.toUpperCase()}_1`;
+
+// Resolved from the tenant's actual boundary tree in beforeAll, not built from
+// a naming convention. This used to be `LOC_${cityPart.toUpperCase()}_1`, which
+// produced LOC_CITYA_1 for pg.citya — a code that is not seeded and never has
+// been. pgr-services rejected every create with INVALID_BOUNDARY_CODE, taking
+// nine assertions down with it. The convention the test assumed simply is not
+// the convention the seed data uses (W1_ADMIN_WARD, Z1_ADMIN_ZONE, ...).
+//
+// Looked up rather than hardcoded because this spec is parameterised by TENANT
+// and is meant to run against any of them; W1_ADMIN_WARD would only move the
+// coupling from one wrong guess to one right-for-pg.citya guess.
+let LOCALITY_CODE = '';
+
+// The locality PGR wants is the LEAF of the hierarchy — the level with no
+// children (Ward here, Locality on India-shaped tenants). Deriving it from the
+// tree keeps this correct across tenants without the test knowing their shapes.
+async function resolveLeafLocality(tenant: string): Promise<string> {
+  const code = await db.queryValue<string>(
+    `SELECT r.code
+       FROM boundary_relationship r
+      WHERE r.tenantid = $1
+        AND NOT EXISTS (
+              SELECT 1 FROM boundary_relationship c WHERE c.parent = r.code
+            )
+      ORDER BY r.code
+      LIMIT 1`,
+    [tenant],
+  );
+  if (!code) {
+    throw new Error(
+      `No leaf boundary seeded for tenant ${tenant}. PGR create needs a locality; ` +
+        `check boundary_relationship for this tenant.`,
+    );
+  }
+  return code;
+}
 
 const PGR_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
@@ -71,6 +106,12 @@ describe(`PGR E2E — ${TENANT}`, () => {
     test('Workflow', async () => { expect((await api.get(ports.workflow, '/egov-workflow-v2/health')).ok).toBe(true); });
     test('MDMS', async () => { expect((await api.get(ports.mdms, '/mdms-v2/health')).ok).toBe(true); });
     test('PostgreSQL', async () => { expect(await db.queryValue<number>('SELECT 1')).toBe(1); });
+
+    test('tenant has a leaf boundary to file complaints against', async () => {
+      LOCALITY_CODE = await resolveLeafLocality(TENANT);
+      expect(LOCALITY_CODE).toBeTruthy();
+      console.log(`  locality resolved for ${TENANT}: ${LOCALITY_CODE}`);
+    });
   });
 
   // ── Step 1: Bootstrap — login as ADMIN, fetch master data, create HRMS employee
