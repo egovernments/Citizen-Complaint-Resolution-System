@@ -654,6 +654,10 @@ shared belongs in `group_vars/digit.yml`.
    observability stack — loki / grafana / prometheus / tempo / otel-collector
    (non-fatal: dashboards are not a serving dependency, but each is named in the
    output and carries a Gatus check, see #1613)
+   observability stack: loki / grafana / prometheus / tempo / otel-collector
+   (non-fatal — dashboards are not a serving dependency, so an unhealthy one is
+   reported loudly and the deploy continues; the path that reaches a human is the
+   Gatus check, see `docs/observability/enabling-monitoring.md`)
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 
