@@ -18,6 +18,8 @@ repositories:
   url: https://helm.elastic.co
 - name: apm-attacher
   url: https://helm.elastic.co
+- name: open-telemetry
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts
 
 releases:
 - name: loki-stack
@@ -68,6 +70,20 @@ releases:
           - job_name: blackbox_exporter
             static_configs:
               - targets: ['prometheus-blackbox-exporter:9115']
+
+# Application telemetry pipeline (#1646). Services attach the OTEL javaagent
+# and export OTLP here; the collector re-exposes everything on ONE Prometheus
+# endpoint, so collection needs a single ServiceMonitor rather than one per
+# service. Deploying this is inert until the agent is switched on in the common
+# chart (otel.enabled), so it is safe to land first.
+- name: otel-collector
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: open-telemetry/opentelemetry-collector
+  version: 0.108.0
+  values:
+  - ./values/otel-collector.yaml
+  - {{ .Values | toYaml | nindent 8 }}
 
 - name: jaeger
   installed: false
