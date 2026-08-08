@@ -81,7 +81,10 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
-      - --web.enable-lifecycle
+      # NOTE: no --web.enable-lifecycle (#1608) — it exposes POST /-/reload
+      # AND POST /-/quit unauthenticated. The Ansible deploy reloads by
+      # SIGHUP instead. (This root-level copy is separately tracked for
+      # removal or CI drift-checking in #1617.)
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
