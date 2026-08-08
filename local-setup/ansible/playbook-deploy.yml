@@ -4212,18 +4212,42 @@
       when: enable_mcp | default(false)
 
     # ==================== Wait for Loki ====================
-    - name: Wait for Loki health (up to 2 min)
-      shell: curl -sf http://127.0.0.1:13100/ready -o /dev/null
-      register: loki_health
+    # ==================== Observability stack health (#1613) ====================
+    # These stay NON-FATAL on purpose: the observability stack is not a serving
+    # dependency, and failing a tenant deploy over a dashboard is
+    # disproportionate. What was wrong before is that only Loki was checked at
+    # all, its failure printed a single easily-missed line, and ansible/README.md
+    # claimed gates for "loki / grafana" that did not exist.
+    #
+    # The path that actually reaches a human is Gatus -> Slack (#1609/#1613);
+    # this loop exists so the deploy operator sees it immediately, and names
+    # every component rather than only the one that happened to be checked.
+    - name: Wait for observability stack health (up to 2 min each)
+      shell: "curl -sf {{ item.url }} -o /dev/null"
+      register: observability_health
       retries: 12
       delay: 10
-      until: loki_health.rc == 0
+      until: observability_health.rc == 0
       changed_when: false
       ignore_errors: yes
+      loop:
+        - { name: Loki,           url: "http://127.0.0.1:13100/ready" }
+        - { name: Grafana,        url: "http://127.0.0.1:13000/api/health" }
+        - { name: Prometheus,     url: "http://127.0.0.1:19090/-/healthy" }
+        - { name: Tempo,          url: "http://127.0.0.1:13200/ready" }
+        - { name: OTEL Collector, url: "http://127.0.0.1:13133" }
+      loop_control:
+        label: "{{ item.name }}"
 
-    - name: Show Loki health status
+    - name: Show observability stack health
       debug:
-        msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+        msg: >-
+          {{ item.item.name }}:
+          {{ 'HEALTHY' if item.rc == 0
+             else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)' }}
+      loop: "{{ observability_health.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
 
     # GF_SECURITY_ADMIN_PASSWORD only seeds the admin user on the FIRST boot of a
     # fresh grafana_data volume. Every box deployed before this change already has
