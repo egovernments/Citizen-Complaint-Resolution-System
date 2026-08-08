@@ -86,11 +86,6 @@ ALLOW = {
 # mis-path and lists it here in the same breath makes that path `seen`, so
 # neither the new-path check nor the stale check fires.
 KNOWN_UNREAD = {
-    "prometheus.retention": "#1645 -- reads at prometheus.prometheusSpec.retention",
-    "prometheus.storageSpec": "#1645 -- reads at prometheus.prometheusSpec.storageSpec",
-    "prometheus.externalLabels": "#1645 -- reads at prometheus.prometheusSpec.externalLabels",
-    "prometheus.additionalScrapeConfigs": "#1645 -- reads at prometheus.prometheusSpec.additionalScrapeConfigs",
-    "prometheus.alertmanager": "#1645 -- chart reads alertmanager.enabled at top level",
     "ingress-nginx": "#1648 -- vendored chart reads .Values.controller.* at root; the helmfile now re-paths this block deliberately (PR #1679), so the env.yaml keys are read via templating rather than by the chart",
 }
 

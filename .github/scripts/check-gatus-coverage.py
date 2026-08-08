@@ -133,6 +133,7 @@ EXEMPT = {
     # registry.yml) and absent from docker-compose.yml and the k3s tier, so the
     # toggle is what keeps them from being red where they do not exist.
     "node-exporter": "observability plumbing: host-metrics exporter (#1335); no check because prometheus scrapes it directly -- a dead exporter surfaces as a stale `node` target, not a missing endpoint. Absent from k3s tier and docker-compose.yml",
+    "postgres-exporter": "observability plumbing: database-metrics exporter (#1615); same shape as node-exporter -- prometheus scrapes it directly, so a dead exporter surfaces as a stale `postgres` target rather than a missing endpoint. Absent from the k3s tier and docker-compose.yml",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
