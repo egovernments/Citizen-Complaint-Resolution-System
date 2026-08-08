@@ -28,8 +28,13 @@ metadata:
   namespace: digit
 data:
   config.yaml: |
+    # Uptime history survives container restarts (#1610). emptyDir, not a PVC:
+    # it is tied to the pod, so a restart keeps history while a reschedule does
+    # not. That is the right trade while this tier runs nothing real — revisit
+    # with a PVC when it does (#1618).
     storage:
-      type: memory
+      type: sqlite
+      path: /data/gatus.db
 
     ui:
       title: DIGIT Core Services - Health Dashboard
@@ -559,10 +564,16 @@ spec:
             - name: gatus-config
               mountPath: /config/config.yaml
               subPath: config.yaml
+            # sqlite store (#1610). The config mount is a read-only ConfigMap,
+            # so the database needs a writable volume of its own.
+            - name: gatus-data
+              mountPath: /data
       volumes:
         - name: gatus-config
           configMap:
             name: gatus-config
+        - name: gatus-data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
