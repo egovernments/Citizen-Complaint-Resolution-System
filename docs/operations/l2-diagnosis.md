@@ -281,21 +281,35 @@ sudo du -h --max-depth=1 /var/lib/docker/containers | sort -h | tail -10
 Container names follow two patterns — `digit-egov-user-1` (compose default) and
 `boundary-service` (explicitly named). `sudo docker ps` shows the truth.
 
-To restart **one** service, pass the full compose file stack, or Compose computes a
-different — wrong — configuration:
+To restart **one** wedged service, use plain `docker restart` — **not** `docker compose`:
 
 ```bash
-cd /opt/digit
-C="sudo docker compose -f docker-compose.egov-digit.yaml \
-                       -f docker-compose.migrations.yml \
-                       -f docker-compose.migrations.ansible.yml \
-                       -f docker-compose.monitoring.yml"
-# add -f docker-compose.<tenant>.yml if this deployment has a per-tenant overlay
-
-eval "$C restart pgr-services"        # name the service explicitly, always
+sudo docker restart <container>       # the name from `docker ps`, e.g. pgr-services
 ```
 
-**Capture the logs before restarting** (`docker logs --tail 500 <container> > /tmp/x.log`).
+`docker restart` stops and starts the container that is already there, with the image,
+environment and volumes it already has. It cannot recreate anything with the wrong
+configuration, and it needs no knowledge of which compose files this deployment uses. For
+"the service is stuck, bounce it" — the only restart an incident normally needs — this is
+the right command.
+
+> **Why not `docker compose restart`.** Compose only behaves correctly when handed the
+> *exact* file stack the deployment was built with, and that stack varies per box: the
+> monitoring overlay only exists on deployments made from 2026-07-22 onward, the fast-path
+> overlay only when it was enabled, and some deployments carry a per-tenant overlay as well.
+> A hard-coded `-f` list will either fail outright on a missing file or, worse, compute a
+> configuration that differs from the one the box is running. If you need to check what this
+> deployment actually has:
+>
+> ```bash
+> ls /opt/digit/docker-compose*.y*ml
+> ```
+>
+> Anything that genuinely requires re-reading configuration — an env change, a new image, an
+> added container — is a **redeploy**, not a hand-assembled compose command. Raise it with us
+> rather than reconstructing the stack by hand.
+
+**Capture the logs before restarting** (`sudo docker logs --tail 500 <container> > /tmp/x.log`).
 A restart clears the container's log buffer along with the symptom, and without it the next
 step is usually reproducing the failure from scratch.
 

@@ -43,12 +43,20 @@ expected.
 
 **Two things to know about access:**
 
-- Grafana is configured for **anonymous Admin access with the login form disabled**. You can
-  create alert rules immediately, with no account. The flip side is that there is no user
-  identity — Grafana cannot tell who created or silenced a rule, and anyone with the URL
-  has the same power. **Keep a written change log of who changed which alert.** If the
-  instance is reachable from the public internet, ask us to put it behind your VPN or an
-  authenticating proxy.
+- Grafana is configured for **anonymous Admin access with the login form disabled**
+  (`GF_AUTH_ANONYMOUS_ORG_ROLE: Admin`, `GF_AUTH_DISABLE_LOGIN_FORM: true`). You should be
+  able to create alert rules immediately, with no account. Two consequences worth knowing
+  before you start:
+  - **There is no user identity.** Grafana cannot record who created, edited or silenced a
+    rule, and anyone with the URL has the same power. **Keep your own written change log.**
+    If the instance is reachable from the public internet, ask us to put it behind your VPN
+    or an authenticating proxy.
+  - **There is also no way to sign in as a real user through the UI**, because the login
+    form is switched off. So before you invest an afternoon in building rules, do step 1 of
+    [Creating your first rule](#creating-your-first-rule-click-by-click) and **press Save
+    once**. If saving is rejected, don't work around it — tell us, and use the
+    [alerts-as-code path](#shipping-alerts-as-code-so-they-survive-a-rebuild) instead, which
+    does not depend on the UI at all.
 - Rules you create in the UI are stored in Grafana's own database inside the
   `grafana_data` Docker volume. They survive restarts and redeployments. They do **not**
   survive `docker compose down -v` — which is one more reason that command appears on the

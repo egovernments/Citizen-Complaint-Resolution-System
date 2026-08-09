@@ -13,6 +13,19 @@ that's L2's work — capture what you've found and pass it on.
 Everything here is done from a browser. You need no server access, and nothing on this page
 changes anything.
 
+**What you need before your first call** — check you actually have these, and ask L2 for
+anything missing. Each one is assumed by a step below:
+
+| You need | Used in | If you don't have it |
+|---|---|---|
+| The `/status/` and `/grafana/` URLs, reachable from your desk | Steps 2–4 | Ask L2 — Grafana may sit behind the VPN |
+| A **login of your own** for the system | Step 1 | You cannot confirm scope; say so in the ticket rather than guessing |
+| A **second test login**, ideally in a different office | Step 1 | Ask a colleague to try instead, and note whose account was used |
+| The **maintenance window**, written on your [cheat sheet](cheatsheet.md) | Step 3 | Ask L2 before reporting restarts |
+
+An admin login to the Configurator or HRMS is **not** assumed anywhere here. Some entries in
+[known-issues.md](known-issues.md) need one — if yours doesn't have it, those are L2's.
+
 ← back to **[Operations handbook](README.md)** · one-page version:
 **[cheatsheet.md](cheatsheet.md)**
 
@@ -52,13 +65,22 @@ If the caller can send a screenshot, ask for one **with the error visible**.
 
 Before anything else, find out whether this is one machine or the system.
 
-1. Open the site yourself, in a **private/incognito window**.
-2. If you can, try a **second account**, and a **different network** (a phone hotspot).
+1. **Open the site yourself, in a private/incognito window**, and try the same action. This
+   one test is the important one, and it needs nothing but your own login.
+2. If you can, also vary **the account** (a second test login, or ask a colleague in another
+   office to try) and **the network** (a phone hotspot).
 
 | Result | What it means | Do this |
 |---|---|---|
 | Works for you, fails for them | Their browser, network or account | Try the browser-side items in [known-issues.md](known-issues.md) |
 | Fails for you too | Server-side | Continue to Step 2 |
+| You can't test it yourself | Unknown scope | Say so explicitly in the ticket — "could not reproduce, no second account" is information; silence reads as "not checked" |
+
+**If you can reproduce it, capture the failing request while you're there** — it is the
+single most useful attachment and the caller cannot get it for you. Press **F12** → the
+**Network** tab → repeat the action → click the red row → screenshot the **URL and status
+code**. If you cannot reproduce it, skip this; do not talk a caller through developer tools
+on the phone.
 
 Skipping this step is the most common way a single stale login turns into a system-wide
 alarm.
@@ -83,7 +105,9 @@ What the groups mean:
 | **Application** | The complaint system itself |
 | **Search** | Inbox and search break; filing complaints still works |
 | **Notifications** | SMS / email / WhatsApp not going out; everything else fine |
-| **Keycloak / OTP** | Login and OTP paths |
+| **Keycloak** | Sign-in / identity |
+| **OTP** | OTP delivery for login |
+| **MCP** | Integration tooling — no effect on citizens or staff using the system |
 | **API Tests** | The service is running but its API is failing — usually data or configuration |
 
 Two things worth knowing:

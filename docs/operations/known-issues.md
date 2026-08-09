@@ -20,6 +20,16 @@ values below are a starting suggestion, assuming L1 has dashboards only and no s
 access. Change them to match how you work, and treat the column as authoritative once you
 have.
 
+Two markers appear in that column because the fix needs access beyond the dashboards:
+
+- **†** — needs an **admin login to the Configurator or HRMS**. The
+  [first-response checklist](l1-first-response.md) does not assume one. If your service desk
+  doesn't have it, these are L2's.
+- **‡** — needs the **notification provider's console** (the SMS/WhatsApp account). Usually
+  held by whoever owns the provider contract, which may be neither tier.
+
+Worth settling both before an incident rather than during one.
+
 A good entry has all five: the **symptom as a user describes it**, how to **confirm** it's
 this and not something that looks like it, the **resolution**, who **applies** it, and the
 **underlying cause** if known.
@@ -31,8 +41,8 @@ this and not something that looks like it, the **resolution**, who **applies** i
 | Symptom | Confirm it's this | Resolution | Applied by |
 |---|---|---|---|
 | One user sees errors everywhere, others fine | Works in a private window / on another account | Sign out fully and back in; clear site data for the domain | L1 |
-| One user gets "unauthorised" or sees no menu items | Other users with the same role are fine | Check the user's roles and tenant in HRMS / Configurator; missing role assignment | L1 |
-| User can log in but their office's complaints are missing | Another user in the same office sees the same gap | Check the employee's jurisdiction/boundary assignment in HRMS | L1 |
+| One user gets "unauthorised" or sees no menu items | Other users with the same role are fine | Check the user's roles and tenant in HRMS / Configurator; missing role assignment | L1 **†** |
+| User can log in but their office's complaints are missing | Another user in the same office sees the same gap | Check the employee's jurisdiction/boundary assignment in HRMS | L1 **†** |
 | Site "down" for one person only | Loads for you on another network | Their DNS or network. Test with a phone hotspot | L1 |
 
 ---
@@ -41,8 +51,8 @@ this and not something that looks like it, the **resolution**, who **applies** i
 
 | Symptom | Confirm it's this | Resolution | Applied by |
 |---|---|---|---|
-| OTP or SMS not delivered, everything else works | Health dashboard *Notifications* green; `novu-worker` logs show a provider rejection | Provider account out of credit, or credentials expired. Check the provider console | L1 |
-| A complaint type, department or locality is missing from a dropdown | Present for another tenant | Master data not seeded for that tenant — add it via the Configurator | L1 |
+| OTP or SMS not delivered, everything else works | Health dashboard *Notifications* green; `novu-worker` logs show a provider rejection | Provider account out of credit, or credentials expired. Check the provider console | L1 **‡** |
+| A complaint type, department or locality is missing from a dropdown | Present for another tenant | Master data not seeded for that tenant — add it via the Configurator | L1 **†** |
 | Dashboard or reports show nothing | Empty for a second account too, and for a wider date range | Usually a filter or a role scope, not a fault. If the date range is wide and roles are right, escalate | L1 |
 | Works in one city, not another | Same action, two tenant codes, different outcome | Tenant configuration or data difference. Diff the two tenants' masters | L2 |
 

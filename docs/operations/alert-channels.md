@@ -70,9 +70,13 @@ and Grafana will fail silently apart from a line in its own log.
 Test it before you spend an hour on configuration:
 
 ```bash
-sudo docker exec digit-grafana wget -qO- --timeout=10 https://slack.com >/dev/null \
+sudo docker exec digit-grafana curl -sS --max-time 10 -o /dev/null https://slack.com \
   && echo "egress OK" || echo "EGRESS BLOCKED — talk to your network team"
 ```
+
+(`curl` is the client the Grafana container's own healthcheck uses, so it is present in the
+image. Substitute the host your webhook actually points at — reaching `slack.com` says
+nothing about `chat.googleapis.com`.)
 
 If it is blocked, your options are: ask the network team to allow outbound HTTPS to the
 specific webhook host; route through your corporate proxy (Grafana honours `HTTP_PROXY` /
