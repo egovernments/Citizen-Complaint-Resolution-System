@@ -32,6 +32,39 @@ export const AVAILABLE_LOCALES: Locale[] = [
   { locale: 'fr_FR', name: 'FR' },
 ];
 
+/**
+ * Boot locale — SAME mechanism as the esbuild portal. index.html loads the
+ * env's /digit-ui/globalConfigs.js (ansible-rendered from host_vars), and the
+ * default is derived from LOCALE_DEFAULT/LOCALE_REGION exactly like the
+ * portal's getDefaultLanguage(). One host_vars setting drives BOTH apps.
+ *
+ * Mapping: the portal's locale codes differ from the Studio's (portal
+ * Portuguese is pt_PT, the Studio ships pt_BR), so resolve exact first, then
+ * by language prefix ("pt" -> pt_BR). Unknown/absent config falls back to
+ * en_IN (previous hardcoded behaviour, and the right answer on boxes that
+ * don't serve the portal's globalConfigs at all). A user's manual language
+ * pick is persisted by react-admin's store and always wins over this default.
+ */
+export const resolveInitialLocale = (): string => {
+  try {
+    const getConfig = (window as unknown as {
+      globalConfigs?: { getConfig?: (key: string) => unknown };
+    })?.globalConfigs?.getConfig;
+    const lang = getConfig?.('LOCALE_DEFAULT');
+    if (typeof lang === 'string' && lang) {
+      const region = getConfig?.('LOCALE_REGION');
+      const codes = AVAILABLE_LOCALES.map((l) => l.locale);
+      const exact = typeof region === 'string' && region ? `${lang}_${region}` : lang;
+      if (codes.includes(exact)) return exact;
+      const byPrefix = codes.find((c) => c.startsWith(`${lang}_`));
+      if (byPrefix) return byPrefix;
+    }
+  } catch {
+    /* config script absent/broken — built-in default below */
+  }
+  return 'en_IN';
+};
+
 // ---------------------------------------------------------------------------
 // Bundled: English (full — ra.* from package + app.* as fallback)
 // ---------------------------------------------------------------------------
@@ -678,16 +711,31 @@ function buildSyncMessages(locale: string): TranslationMessages {
   return base as TranslationMessages;
 }
 
+// Resolved once at module load — index.html has already executed the classic
+// globalConfigs script by the time this module runs (module scripts are
+// deferred), so the env default is available here.
+const INITIAL_LOCALE = resolveInitialLocale();
+// Reflect the boot language on <html lang> (a11y: index.html ships lang="en";
+// screen readers and translators should see the real UI language). Also the
+// observable signal tests assert on.
+try {
+  if (typeof document !== 'undefined') document.documentElement.lang = INITIAL_LOCALE.replace('_', '-');
+} catch {
+  /* non-DOM context */
+}
+
 function getMessages(locale: string): TranslationMessages | Promise<TranslationMessages> {
-  // The default locale (en_IN) must resolve synchronously for polyglot's first
-  // render, so we can't await the network here. Instead we serve the bundled
-  // base immediately — overlaid with any backend app.* strings already in the
-  // localStorage cache — and kick off a background refresh so the next render
-  // (or locale switch) picks up edits made in the Localization UI. English is
-  // no longer a hardcoded-only locale: its app.* strings live in the
-  // `configurator-ui` backend module like every other locale, and the bundle
-  // is only a boot/offline fallback.
-  if (locale === 'en_IN' || locale === 'en') {
+  // The DEFAULT locale must resolve synchronously for polyglot's first render
+  // (ra-i18n-polyglot throws "returned a Promise for the messages of the
+  // default locale" otherwise — verified by booting with a pt default), so we
+  // can't await the network here. Serve the bundled base immediately — that
+  // locale's ra.* bundle over the English app.* base, overlaid with any
+  // backend app.* strings already in the localStorage cache — and kick off a
+  // background refresh so the next render (or locale switch) picks up edits
+  // made in the Localization UI. The default is no longer hardcoded en_IN:
+  // INITIAL_LOCALE comes from the env's globalConfigs (same mechanism as the
+  // esbuild portal), so the sync path must cover whichever locale that is.
+  if (locale === INITIAL_LOCALE || locale === 'en_IN' || locale === 'en') {
     const sync = memoryCache.get(locale) ?? buildSyncMessages(locale);
     void getMessagesAsync(locale);
     return sync;
@@ -700,7 +748,7 @@ function getMessages(locale: string): TranslationMessages | Promise<TranslationM
 // ---------------------------------------------------------------------------
 export const i18nProvider = polyglotI18nProvider(
   getMessages,
-  'en_IN',
+  INITIAL_LOCALE,
   AVAILABLE_LOCALES,
   { allowMissing: true },
 );

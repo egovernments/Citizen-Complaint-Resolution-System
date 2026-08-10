@@ -8,6 +8,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Same-origin runtime config shared with the portal (rendered by ansible
+         from globalConfigs.js.j2). Loaded so the Studio can honour the SAME
+         per-env settings the esbuild portal reads — first consumer is the
+         default locale (LOCALE_DEFAULT/LOCALE_REGION, i18nProvider). A classic
+         script tag executes before the module bundle, so window.globalConfigs
+         is defined by the time main.tsx runs. On a box without the portal the
+         request 404s and the app just falls back to its built-in defaults. -->
+    <script src="/digit-ui/globalConfigs.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
