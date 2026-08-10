@@ -1330,6 +1330,10 @@ services:
       # entire dashboard down with it. This value is only ever parsed by the
       # config loader; the check is disabled, so it is never dialled.
       GATUS_PUBLIC_URL: "https://localhost/"
+      # No grafana/prometheus/loki/tempo on this path, so the observability
+      # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
+      # enabled-var as true, which would make them red forever here.
+      GATUS_OBSERVABILITY: "false"
     deploy:
       resources:
         limits:

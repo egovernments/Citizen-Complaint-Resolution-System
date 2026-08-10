@@ -4440,31 +4440,59 @@
         msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
       when: enable_mcp | default(false)
 
-    # ==================== Wait for Loki ====================
-    # Gated on the logs tier being active (#1657). Ungated, a tenant running
-    # `observability_level: metrics` burns 12 retries x 10s waiting for a
-    # container it deliberately did not deploy, then prints
-    # "Loki: UNHEALTHY (non-critical)" — two minutes of a slower deploy and a
-    # status line that reads like a fault when it is the configured state.
-    # ignore_errors kept it from failing the run, so it degraded quietly rather
-    # than announcing itself.
+    # ==================== Observability stack health ====================
+    # Non-fatal on purpose (#1613): the observability stack is not a serving
+    # dependency, and failing a tenant deploy over a dashboard is
+    # disproportionate. What was wrong before is that only Loki was checked,
+    # its failure printed one easily-missed line, and ansible/README.md claimed
+    # gates for "loki / grafana" that did not exist.
     #
-    # The status line is gated too: with the wait skipped, loki_health is
-    # undefined and referencing .rc would error.
-    - name: Wait for Loki health (up to 2 min)
-      shell: curl -sf http://127.0.0.1:13100/ready -o /dev/null
-      register: loki_health
-      retries: 12
-      delay: 10
-      until: loki_health.rc == 0
+    # Each item carries the profile that deploys it, and the check is skipped
+    # when that tier is not active (#1657/#1666). Without this, a tenant on
+    # `observability_level: metrics` burns the full retry budget waiting for
+    # containers it deliberately did not deploy, then reports them UNHEALTHY --
+    # which reads as a fault when it is the configured state. An empty profile
+    # means ungated: otel-collector carries no profile, so it runs at every
+    # level (12 unprofiled services depend on it).
+    #
+    # Budget: 6 x 5s = 30s per component, so a fully-down stack costs at most
+    # 2 min rather than the 10 min that 12 x 10s each would. `until` retries are
+    # sequential per loop item, so the old single-check budget cannot simply be
+    # reused four times over. 30s is ample because this is a readiness re-check,
+    # not a startup wait: `docker compose up -d` runs ~2400 lines earlier, and
+    # everything between (keycloak bootstrap alone allows 5 min to bind) has
+    # already given the stack minutes to settle.
+    #
+    # Grafana is deliberately NOT in this loop -- it keeps its own wait below,
+    # whose result gates the admin-password reset.
+    - name: Wait for observability stack health (up to 30s each)
+      shell: "curl -sf {{ item.url }} -o /dev/null"
+      register: observability_health
+      retries: 6
+      delay: 5
+      until: observability_health.rc == 0
       changed_when: false
       ignore_errors: yes
-      when: "'obs-logs' in (compose_profiles | default('')).split(',')"
+      when: >-
+        item.profile == ''
+        or item.profile in (compose_profiles | default('')).split(',')
+      loop:
+        - { name: Loki,           profile: obs-logs,    url: "http://127.0.0.1:13100/ready" }
+        - { name: Prometheus,     profile: obs-metrics, url: "http://127.0.0.1:19090/-/healthy" }
+        - { name: Tempo,          profile: obs-traces,  url: "http://127.0.0.1:13200/ready" }
+        - { name: OTEL Collector, profile: "",          url: "http://127.0.0.1:13133" }
+      loop_control:
+        label: "{{ item.name }}"
 
-    - name: Show Loki health status
+    - name: Show observability stack health
       debug:
-        msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
-      when: "'obs-logs' in (compose_profiles | default('')).split(',')"
+        msg: >-
+          {{ item.item.name }}:
+          {{ 'HEALTHY' if item.rc == 0
+             else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)' }}
+      loop: "{{ observability_health.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
 
     # GF_SECURITY_ADMIN_PASSWORD only seeds the admin user on the FIRST boot of a
     # fresh grafana_data volume. Every box deployed before this change already has

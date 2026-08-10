@@ -650,15 +650,16 @@ shared belongs in `group_vars/digit.yml`.
 4. **digit-ui** — render `globalConfigs.js`, ship nginx config, optional `npm install` + esbuild rebuild for HMR
 5. **OpenBao bootstrap** (first run) + secret-pull for every run
 6. **Compose pull + start** (with profiles)
-7. **Health gates** — wait for kong / persister / hrms / ui / mcp. The only
-   observability service waited on is **loki**, and non-fatally (`ignore_errors`):
-   dashboards are not a serving dependency, so an unhealthy one is reported and the
-   deploy continues. #1657 gates that wait on the logs tier actually being active, so a
-   `observability_level: metrics` tenant no longer spends two minutes retrying a
-   container it deliberately did not deploy. **grafana, prometheus, tempo,
-   otel-collector and node-exporter are not waited on at all** — and are not Gatus-checked
-   either, so nothing reports them either way (#1613). See
-   `docs/observability/enabling-monitoring.md`.
+7. **Health gates** — wait for kong / persister / hrms / ui / mcp (fatal), then the
+   observability stack — loki / prometheus / tempo / otel-collector — non-fatally
+   (`ignore_errors`): dashboards are not a serving dependency, so an unhealthy one is
+   reported and the deploy continues. Each check is skipped when its tier is not active
+   (#1657/#1666), so an `observability_level: metrics` tenant no longer spends the retry
+   budget on containers it deliberately did not deploy. Grafana has its own wait, whose
+   result gates the admin-password reset (#1602). **node-exporter is not waited on** —
+   prometheus scrapes it directly, so a dead exporter surfaces as a stale `node` target.
+   The five loop components also carry Gatus checks behind `GATUS_OBSERVABILITY` (#1613);
+   node-exporter does not. See `docs/observability/enabling-monitoring.md`.
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 
