@@ -258,14 +258,49 @@ const PGRSearchInbox = () => {
 
   return (
     <div className="v2-pgr-inbox v2-scope">
-      {/* CCSD-2086: centre the system-name header in the inbox's left links card
-          (it read left-aligned). Scoped to .v2-pgr-inbox so the shared
-          InboxSearchComposer class isn't recentred for other modules; the
+      {/* CCSD-2086: the system-name card in the inbox's left links panel read
+          flush top-left. The shipped digit-inbox-search-links-container has NO
+          padding / height / centering rule (only the legacy non-"digit-"
+          prefixed .inbox-search-links-container scss did), so the header text
+          sat in the top-left corner with the rest of the card empty below it.
+          Give the container real padding and make it a full-height flex column
+          that centres its content vertically, and centre the header row + text
+          horizontally. Scoped to .v2-pgr-inbox so the shared
+          InboxSearchComposer classes aren't restyled for other modules; the
           two-class selector outranks the component's own single-class rule
-          without needing !important. */}
+          without !important. margin-bottom:0 on the header stops the stock
+          1.5rem gap (meant to separate header from links) from nudging the
+          text up when there are no links below it. */}
       <style>{`
-        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; }
-        .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: center; }
+        .v2-pgr-inbox .digit-inbox-search-links-container {
+          /* The links card (.digit-section.links) is a flex ROW item that the
+             sections grid stretches to match the search column's height, but
+             its default align-items:flex-start pins THIS container to the top
+             and percentage-height won't resolve against a grid-stretched
+             parent. align-self:stretch makes the container fill that height so
+             justify-content:center actually centres in the visible card. */
+          align-self: stretch;
+          height: 100%;
+          box-sizing: border-box;
+          padding: 1.5rem 1rem 1.5rem 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        /* Title and quick-links (e.g. "New Complaint") are both LEFT-aligned and
+           share the same left edge, so they line up. The card content is still
+           vertically centred (container justify-content:center below); only the
+           horizontal alignment is left. Collapse the empty logo span so the
+           title starts at the true left edge, matching the link. */
+        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: flex-start; text-align: left; margin-bottom: 0; }
+        .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: left; }
+        .v2-pgr-inbox .digit-inbox-search-links-header-logo:empty { display: none; }
+        .v2-pgr-inbox .digit-inbox-search-links-contents { align-items: flex-start; text-align: left; }
+        .v2-pgr-inbox .digit-inbox-search-links-contents:not(:empty) { margin-top: 1rem; }
+        /* Page title sat flush in the top-left corner (header padding 12px 0 8px
+           — no left gutter), 24px left of the card content below it. Give it a
+           left gutter that lines up with the card and a little more top room. */
+        .v2-pgr-inbox .v2-employee-page-header { padding: 1rem 1.5rem 0.75rem; }
       `}</style>
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
