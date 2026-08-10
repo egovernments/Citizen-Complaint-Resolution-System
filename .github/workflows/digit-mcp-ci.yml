@@ -2,12 +2,12 @@ name: DIGIT-MCP CI
 
 on:
   push:
-    branches: [develop, main]
+    branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - '.github/workflows/digit-mcp-ci.yml'
   pull_request:
-    branches: [develop, main]
+    branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - '.github/workflows/digit-mcp-ci.yml'
