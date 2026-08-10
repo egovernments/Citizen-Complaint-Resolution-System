@@ -93,6 +93,17 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
         if (!Array.isArray(documents) || documents.length === 0) return null;
         return (
             <div key="docs" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+                {/* CCSD-2153: release the inline size in fullscreen so the video
+                    fills the screen and the control bar pins to the bottom (the
+                    browser's fullscreen UA rule isn't !important, so the inline
+                    max-height would otherwise win and center a small box). */}
+                <style>
+                    {`
+                    video:fullscreen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                    video:-webkit-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                    video:-moz-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                    `}
+                </style>
                 <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary, #64748b)", width: "100%" }}>
                     {t("CS_TIMELINE_ATTACHMENTS")}
                 </span>
@@ -113,8 +124,13 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     // several clips from pulling megabytes on render.
                     if (url && entry?.kind === "video") {
                         return (
-                            <video key={i} src={url} controls playsInline preload="metadata" aria-label={label}
-                                style={{ width: 160, maxWidth: "100%", maxHeight: 110, borderRadius: 6, background: "#000", border: "1px solid var(--color-border, #e2e8f0)" }} />
+                            // CCSD-2153: `#t=0.1` makes the browser seek to 0.1s and paint
+                            // that frame as the thumbnail (a bare preload=metadata <video> on
+                            // a remote presigned src shows only the black background). The
+                            // fragment is safe after the S3 ?X-Amz-… query. object-fit:contain
+                            // letterboxes the frame instead of stretching it.
+                            <video key={i} src={`${url}#t=0.1`} controls playsInline preload="metadata" aria-label={label}
+                                style={{ width: 160, maxWidth: "100%", maxHeight: 110, objectFit: "contain", borderRadius: 6, background: "#000", border: "1px solid var(--color-border, #e2e8f0)" }} />
                         );
                     }
                     if (url && entry?.kind === "audio") {

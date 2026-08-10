@@ -69,7 +69,7 @@ const MediaAttachment = ({ url, kind, label, downloadLabel }) => {
       src={url}
       aria-label={label}
       onError={() => setFailed(true)}
-      style={{ display: "block", width: "13.75rem", maxWidth: "100%", maxHeight: "10rem", borderRadius: 6, background: "#000" }}
+      style={{ display: "block", width: "13.75rem", maxWidth: "100%", maxHeight: "10rem", objectFit: "contain", borderRadius: 6, background: "#000" }}
     />
   );
 };
@@ -179,6 +179,20 @@ const ComplaintPhotos = ({ t, serviceWrapper }) => {
 
     return (
         <React.Fragment>
+            {/* CCSD-2153: in native fullscreen the inline width/max-height on the
+                <video> below beat the browser's non-!important fullscreen UA rule,
+                so the video stayed a small box and its control bar sat mid-screen.
+                Release the size constraints in fullscreen so the video fills the
+                viewport and the controls pin to the true bottom. Inert otherwise.
+                Vendor selectors kept in separate rules — an engine that doesn't
+                know one prefixed pseudo would otherwise drop the whole group. */}
+            <style>
+                {`
+                video:fullscreen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                video:-webkit-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                video:-moz-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                `}
+            </style>
             {thumbs.length > 0 && (
                 <DisplayPhotos srcs={thumbs} onClick={(src, index) => zoomImage(fullImages[index], index)} />
             )}
