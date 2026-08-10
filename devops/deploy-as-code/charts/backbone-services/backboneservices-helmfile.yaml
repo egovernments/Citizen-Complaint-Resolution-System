@@ -114,6 +114,46 @@ releases:
   values:
     - ./kafka-kraft/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
+    # Exporter images (#1647). BOTH images the chart pins were retired from
+    # Docker Hub -- bitnami/jmx-exporter:0.19.0-debian-11-r95 and
+    # bitnami/kafka-exporter:1.7.0-debian-11-r132 are 404 today -- so enabling
+    # metrics without this turns a working release into ImagePullBackOff.
+    # Verified on a cluster; every plausible source was checked first:
+    #
+    #   jmx   -> bitnamilegacy/*, where Bitnami moved the legacy tags. Same
+    #            pinned tag, still published (updated 2025-07-02).
+    #   kafka -> danielqsj/*, the upstream project Bitnami repackaged, at the
+    #            SAME version. NOT egovio/kafka-exporter: that mirror carries
+    #            exactly one tag, `latest`, last pushed 2020 -- unpinnable and
+    #            six years stale. bitnamilegacy/kafka-exporter does not exist.
+    #
+    # The durable fix is mirroring both into egovio/ with real version tags, as
+    # was done for the broker (egovio/bitnami-kafka:3.6.0-debian-11-r0); that
+    # needs registry push rights this change does not have.
+    - metrics:
+        jmx:
+          image:
+            repository: bitnamilegacy/jmx-exporter
+        kafka:
+          image:
+            repository: danielqsj/kafka-exporter
+            tag: v1.7.0
+          # The chart runs the exporter through a shell: `command: [bash]` with
+          # every flag in one `-ce` string. Bitnami's image had bash; the
+          # upstream one is a scratch image whose entrypoint IS the binary, so
+          # under the chart's default it exits 128 with no logs. Invoking it
+          # directly is what makes a shell-less image usable.
+          #
+          # This repeats the chart's own broker list, so it must track
+          # controller.replicaCount (3 in kafka-kraft/values.yaml). Guarded by
+          # the fact that a wrong list shows up immediately as a down target.
+          command:
+            - /bin/kafka_exporter
+          args:
+{{- range $i := until 3 }}
+            - --kafka.server=kafka-kraft-controller-{{ $i }}.kafka-kraft-controller-headless.backbone.svc.cluster.local:9092
+{{- end }}
+            - --web.listen-address=:9308
   set:
     - name: kraft.clusterId
       value: {{ .Values.secrets.kafka.clusterID }}
