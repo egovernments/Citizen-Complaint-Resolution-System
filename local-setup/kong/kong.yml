@@ -670,24 +670,6 @@ services:
     paths:
     - /jupyter
     strip_path: false
-- name: grafana-service
-  url: http://grafana:3000
-  tags:
-  - observability
-  host: grafana
-  port: 3000
-  routes:
-  - name: grafana-route
-    paths:
-    - /grafana
-    strip_path: false
-    preserve_host: true
-  plugins:
-  - name: request-transformer
-    config:
-      add:
-        headers:
-        - "X-Forwarded-Proto:https"
 - name: indexer-service
   url: http://egov-indexer:8080
   tags:
@@ -706,18 +688,16 @@ services:
     paths:
     - /inbox
     strip_path: false
-- name: tempo-service
-  url: http://tempo:3200
-  tags:
-  - observability
-  routes:
-  - name: tempo-route
-    paths:
-    - /tempo
-    strip_path: true
+# NOTE: the /grafana and /tempo routes were removed (#1604). Both proxied to
+# the observability stack with no auth, and the Grafana one also created a
+# fall-through: host nginx's `location /` catch-all forwards to Kong, so a
+# tenant that disabled the nginx /grafana/ location was still served Grafana
+# through here. Grafana is now reachable only via the nginx location (gated on
+# nginx_features.grafana) and Tempo only via Grafana's server-side datasource.
+#
 # Browser -> otel-collector OTLP/HTTP ingest for the dashboard render-lag
-# instrumentation (#1110). Same-origin (follows the /tempo and /grafana
-# observability precedent) so the SPA needs no CORS work and no new host port.
+# instrumentation (#1110). Same-origin so the SPA needs no CORS work and no
+# new host port.
 # Security posture (R8): EXACT paths, POST only, /v1/traces deliberately NOT
 # exposed; per-route 1MB size cap + 60/min-per-IP rate limit; both paths are
 # whitelisted in the pre-function's AUTH_OPTIONAL above. No ingest token in v1
