@@ -495,10 +495,23 @@ data:
       #
       # promtail and node-exporter stay out: no reachable HTTP listener, and a
       # dead node-exporter shows as a stale prometheus target instead.
+      #
+      # NAMESPACE-QUALIFIED on purpose. Gatus runs in `digit` (see the Deployment
+      # below) and this stack lands in `monitoring`, so a bare `http://grafana:3000`
+      # resolves as grafana.digit.svc.cluster.local and does not exist. Verified
+      # on a cluster: every one of these five failed with
+      #   dial tcp: lookup grafana on 10.96.0.10:53: no such host
+      # while `http://grafana.monitoring:3000/api/health` returned 200 from the
+      # same pod. DNS failures, not connection failures -- the name never resolved.
+      #
+      # Via a variable rather than a literal so the stack can move, and given a
+      # non-empty default on the Deployment for the reason #1622 documents: an
+      # empty substitution here does not disable anything, it makes Gatus refuse
+      # to start.
       - name: Grafana
         group: Observability
         enabled: ${GATUS_OBSERVABILITY}
-        url: "http://grafana:3000/api/health"
+        url: "http://grafana.${GATUS_OBSERVABILITY_NS}:3000/api/health"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -506,7 +519,7 @@ data:
       - name: Prometheus
         group: Observability
         enabled: ${GATUS_OBSERVABILITY}
-        url: "http://prometheus:9090/-/healthy"
+        url: "http://prometheus.${GATUS_OBSERVABILITY_NS}:9090/-/healthy"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -514,7 +527,7 @@ data:
       - name: Loki
         group: Observability
         enabled: ${GATUS_OBSERVABILITY}
-        url: "http://loki:3100/ready"
+        url: "http://loki.${GATUS_OBSERVABILITY_NS}:3100/ready"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -522,7 +535,7 @@ data:
       - name: Tempo
         group: Observability
         enabled: ${GATUS_OBSERVABILITY}
-        url: "http://tempo:3200/ready"
+        url: "http://tempo.${GATUS_OBSERVABILITY_NS}:3200/ready"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -530,7 +543,7 @@ data:
       - name: OTEL Collector
         group: Observability
         enabled: ${GATUS_OBSERVABILITY}
-        url: "http://otel-collector:13133"
+        url: "http://otel-collector.${GATUS_OBSERVABILITY_NS}:13133"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
@@ -590,6 +603,17 @@ spec:
             # Declared rather than omitted: an unset enabled-var reads as true.
             - name: GATUS_OBSERVABILITY
               value: "false"
+            # Namespace the observability stack lives in (#1618 deploys it to
+            # `monitoring`; Gatus itself runs in `digit`). Only ever substituted
+            # into the five Observability URLs above.
+            #
+            # Non-empty even while GATUS_OBSERVABILITY is false, for the reason
+            # #1622 documents: Gatus validates `url` on EVERY endpoint before it
+            # consults `enabled:`, so an empty value here would not disable the
+            # checks -- it would abort startup with "you must specify an url for
+            # each endpoint" and CrashLoopBackOff the pod.
+            - name: GATUS_OBSERVABILITY_NS
+              value: "monitoring"
           resources:
             limits:
               memory: 64Mi
