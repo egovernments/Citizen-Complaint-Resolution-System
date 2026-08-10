@@ -110,7 +110,7 @@ plugins:
           ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
           ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
           ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
-          ["/egov-url-shortening"]=true, ["/default-data-handler/tenant/new"]=true,
+          ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
