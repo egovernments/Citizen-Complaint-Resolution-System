@@ -67,6 +67,11 @@ Replace `<your-domain>` with your deployment's domain throughout this handbook.
 > deployment is reachable from the public internet, raise it with us and we will put it
 > behind your VPN or an authentication proxy. See
 > [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
+>
+> **Credentials.** Nothing in the first-response checklist needs a password. For the things
+> that do — the Novu notification dashboard, the SMS/WhatsApp provider console, or server
+> access — **ask your system administrator**. Never send credentials in a ticket or a chat
+> message, including to us.
 
 ---
 

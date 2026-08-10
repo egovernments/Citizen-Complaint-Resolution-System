@@ -297,7 +297,7 @@ Two specific traps:
 - **OTP and login flows log phone numbers.** If you are sending `egov-user` or `novu-worker`
   logs, scan for them.
 
-**Never send us:** passwords, API keys, `.env` files, database dumps, or Keycloak client
+**Never send us:** passwords, API keys, `.env` files, database dumps, or any service's client
 secrets. If you think we need a credential to diagnose something, say so and we will arrange
 a proper channel — do not paste it into a ticket or a chat.
 

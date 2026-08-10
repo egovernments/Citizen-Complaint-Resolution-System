@@ -1,7 +1,12 @@
 # Reference
 
-Lookup tables for the other documents in this handbook: URLs, what each service does, what
-breaks when it stops, retention, and a query cookbook.
+Lookup tables for the other documents in this handbook: URLs, what the dashboards show and
+what the readings mean, what each service does, what breaks when it stops, retention, and a
+query cookbook.
+
+Written to be readable without prior knowledge of monitoring tools — where a term appears
+for the first time it is explained, and the [glossary](#glossary) at the end collects them
+all.
 
 ← back to **[Operations handbook](README.md)**
 
@@ -10,8 +15,9 @@ breaks when it stops, retention, and a query cookbook.
 ## Contents
 
 - [URLs](#urls)
+- [Credentials — who to ask](#credentials--who-to-ask)
 - [The observability stack](#the-observability-stack)
-- [Grafana dashboards](#grafana-dashboards)
+- [Grafana dashboards — what each one shows](#grafana-dashboards--what-each-one-shows)
 - [What each service does](#what-each-service-does)
 - [Metric and log coverage — what is and isn't watched](#metric-and-log-coverage--what-is-and-isnt-watched)
 - [Data retention](#data-retention)
@@ -24,31 +30,63 @@ breaks when it stops, retention, and a query cookbook.
 
 Replace `<your-domain>` with your deployment's domain.
 
-| Path | What it is | Notes |
+| Path | What it is | When you'd open it |
 |---|---|---|
-| `/` | Citizen / employee UI | |
-| `/status/` | **Gatus health dashboard** | ~50 endpoint checks, 30s interval. `/gatus/` redirects here |
-| `/grafana/` | **Grafana** | Metrics, logs, traces, alerting |
-| `/configurator/` | Configurator (masters, branding, providers) | |
-| `/citizen` | Citizen-facing entry point | |
-| `/auth/` | Keycloak authentication | |
-| `/novu/` | Notification platform admin | Only where notifications are enabled |
+| `/digit-ui/employee` | **The staff app.** Where clerks, supervisors and grievance officers log in to see, assign and resolve complaints | **Most reported problems are here.** Open it first to reproduce what the caller is describing |
+| `/digit-ui/citizen` | **The citizen app.** The public-facing site where a member of the public files a complaint and tracks it | When the report comes from a citizen, or is about filing / tracking rather than processing |
+| `/status/` | **Health dashboard** (a tool called Gatus). Around 50 automated checks — one per service — re-run every 30 seconds. Green means the service answered, red means it did not | Every incident, first thing. It tells you in one screen whether something is actually down |
+| `/grafana/` | **Grafana** — the window onto the system's own data: memory, logs, request timings, and alerts | When the health dashboard is all green but something is still wrong, and you need the error text |
+| `/configurator/` | **Configurator** — admin screens for master data (complaint types, departments, localities), branding and notification providers | When a dropdown is missing an option, or something looks mis-configured rather than broken. Needs an admin login |
+| `/novu/` | **Notification platform admin** — where SMS / email / WhatsApp delivery is set up and delivery attempts can be inspected | Only on deployments where notifications are enabled, and only for "the SMS never arrived" reports. Needs a login |
 
-**Host ports** (not normally exposed publicly — nginx proxies them):
+`/gatus/` is an old address for the health dashboard and redirects to `/status/`.
+
+**Host ports.** Each service also listens on a port on the server itself. These are not
+normally reachable from outside — the web server in front proxies the paths above to them.
+You will only need this table if someone on the call refers to a port number.
 
 | Port | Service |
 |---|---|
 | 13000 | Grafana |
-| 18889 | Gatus |
-| 18000 | Kong gateway |
-| 13100 | Loki |
-| 13101 | MCP |
-| 18080 | esbuild UI |
-| 19000 | MinIO |
+| 18889 | Gatus (health dashboard) |
+| 18000 | Kong (the API gateway every request passes through) |
+| 13100 | Loki (log storage) |
+| 13101 | MCP (integration tooling) |
+| 18080 | esbuild UI (the front-end build server) |
+| 19000 | MinIO (file/photo storage) |
+
+---
+
+## Credentials — who to ask
+
+**Grafana and the health dashboard need no login.** On these deployments they are open to
+anyone who has the URL, so you can start work immediately. Nothing you do on either page
+changes the system — they only display data.
+
+Anything else that asks for a username and password is **not** yours to obtain on your own:
+
+| Needs credentials | Ask |
+|---|---|
+| Notification platform admin (`/novu/`) | Your system administrator |
+| The SMS / WhatsApp / email provider console | Your system administrator — it is usually held by whoever owns the provider contract |
+| Configurator admin screens | Your system administrator |
+| Server / SSH access | Not applicable to first-line work. This is L2's |
+
+Two rules that do not bend:
+
+- **Never share credentials in a ticket, an email or a chat message**, even internally. If a
+  password is needed to progress, hand the task to whoever already holds it.
+- **Never ask a caller for their password**, and never accept one if offered. You do not
+  need it to investigate anything in this handbook.
 
 ---
 
 ## The observability stack
+
+> **For L2.** This section explains *how* the monitoring data is collected and where it is
+> stored. First-line work never needs it — if you are on the service desk, skip straight to
+> [Grafana dashboards](#grafana-dashboards--what-each-one-shows), which is about *reading*
+> the data rather than plumbing it.
 
 ```
    Java services ──OTLP──▶ otel-collector ──┬──▶ Prometheus  (metrics, 15d)
@@ -70,27 +108,150 @@ Gatus and Loki.
 
 ---
 
-## Grafana dashboards
+## Grafana dashboards — what each one shows
 
-| Dashboard | URL | Use it for |
+### First, the words you will see on every screen
+
+Grafana is one website showing several different collections of data. A few terms recur, and
+knowing them makes every dashboard readable:
+
+| Term | What it means |
+|---|---|
+| **Dashboard** | One page of charts about one subject. You pick it from the menu or open it by URL |
+| **Panel** | One box on that page — a single chart, number or table. Each panel answers one question |
+| **Time range** | **Top right of every dashboard.** Everything on the page describes the window you choose here — "Last 6 hours", "Last 24 hours", or a specific start and end. **Getting this right matters more than anything else**: if the problem happened at 09:15 and your range is "Last 5 minutes", every panel will look perfectly healthy |
+| **Datasource** | Where a panel's numbers come from. Three exist: **Prometheus** (measurements over time), **Loki** (log messages), **Tempo** (request timings). You rarely pick one on a dashboard; you do in Explore |
+| **Explore** | A menu item in the left sidebar. A blank page where you pick a datasource and run one query, instead of viewing a pre-built dashboard. Used when this handbook gives you a query to paste |
+| **Refresh** | Dashboards do not update by themselves unless set to. Use the refresh icon beside the time range if you are watching something live |
+
+**Panel shapes**, because the same data looks different depending on the shape:
+
+| Shape | Looks like | Read it as |
 |---|---|---|
-| **DIGIT JVM Services** | `/grafana/d/digit-jvm/` | Heap, restarts, OOM, GC, threads, JVM CPU |
-| **DIGIT — Logs (Loki)** | `/grafana/d/digit-loki-logs/` | Error text, per-service log volume, free-text search |
-| **DIGIT — Traces (Tempo)** | `/grafana/d/digit-tempo-traces/` | Slow requests, error traces, per-request waterfall |
-| **Node Exporter Full** | `/grafana/d/node-exporter-full/` | Host CPU, RAM, disk, network — **empty unless node-exporter is installed** |
+| **Stat** | One big number | A total or current value for the whole time range. Fast to read, no detail |
+| **Timeseries** | A line graph, time along the bottom | How something changed. One coloured line per service, named in the legend |
+| **Table** | Rows and columns | One row per service, several values side by side. Best for comparing services |
+| **Logs** | Scrolling text lines with timestamps | The actual messages the software wrote |
 
-Panels worth knowing by name:
+**Jargon that appears in the panel names themselves:**
 
-| Panel | Dashboard | Answers |
+- **JVM** — the Java runtime. Most services here are Java programs, and each runs inside its
+  own JVM.
+- **Heap** — the pool of memory a Java service is allowed to use for its work. Every service
+  is given a fixed ceiling. Normal behaviour is for heap use to rise and fall repeatedly.
+- **OOM ("out of memory")** — the service needed more memory than its heap ceiling allowed
+  and **crashed**. Not a slowdown; a stop.
+- **GC ("garbage collection")** — the JVM periodically clears out memory it no longer needs.
+  This is routine and constant. It only matters when a service spends so much time doing it
+  that it has little time left to serve requests — then it *looks* frozen while technically
+  alive.
+- **Thread** — one unit of work happening inside a service. Many run at once.
+- **Trace** — the complete record of one request as it travelled through several services,
+  showing how long each step took.
+
+---
+
+### DIGIT JVM Services — `/grafana/d/digit-jvm/`
+
+**What it is:** the memory and health of the Java services, one line or row per service.
+
+**The question it answers:** *did something crash, restart, or run out of memory — and
+when?*
+
+**Who uses it:** L1 reads two panels from it (see
+[l1-first-response.md](l1-first-response.md)). L2 uses the rest.
+
+| Panel | Shape | What it shows and what the reading means |
 |---|---|---|
-| Right-sizing snapshot | JVM | Which service is close to its heap limit |
-| OOM events (current range) | JVM | Did anything run out of memory |
-| Heap used (MB) — by service | JVM | Did anything crash and restart (line drops to zero) |
-| GC pause time (s/s) | JVM | Is a service thrashing rather than working |
-| Errors / Exceptions (current range) | Logs | How bad is it, right now |
-| Log volume by service | Logs | Which service suddenly went quiet or loud |
-| Slow traces — duration > 500ms | Traces | Which requests are slow, and where the time goes |
-| Error traces (status = error) | Traces | Which requests failed |
+| **OOM events (current range)** | Stat | A count of out-of-memory crashes in your chosen time range. **`0` is the healthy answer.** Anything above `0` means a service ran out of memory and crashed during that window. This is the single easiest panel on the dashboard to read |
+| **Incidents — OOM / heap-space errors (last range)** | Logs | The actual crash messages behind the number above, naming the service. If the stat panel is above zero, this is where you copy the evidence from |
+| **Right-sizing snapshot — heap profile per service (heap, MB)** | Table | One row per service: memory in use now, its peak in the last hour, and its ceiling. The **headroom** column is the useful one — the percentage of its allowance still free. Low headroom means the service is close to crashing. This is a capacity judgement, so it is L2's to act on |
+| **Heap used (MB) — by service** | Timeseries | Memory in use over time, one line per service. A healthy line **rises and falls repeatedly** — that is normal. A line that **drops to zero and then climbs again from the bottom** is a service that crashed and restarted at that moment. Reading this correctly needs to know what that service normally looks like, so it is L2's panel |
+| **Heap committed vs used (MB) — by service** | Timeseries | Two lines per service: memory reserved versus actually used. When "used" sits right against "committed" for a long time, the service is under real pressure |
+| **JVM CPU — recent utilization (ratio)** | Timeseries | How much processor each service is consuming. **`1.0` means one whole CPU core.** `0.05` is idle chatter. A service sitting high with no users on the system is stuck in a loop |
+| **GC pause time (s/s)** | Timeseries | Seconds per second spent on garbage collection. `0.05` is routine. **Sustained above about `0.2`** means the service is spending a fifth of its life tidying memory rather than working — users experience this as the system hanging |
+| **Live threads** | Timeseries | How many pieces of work are in flight. A steady number is fine. A line **climbing and never coming back down** means work is piling up, usually because something it depends on is slow or dead |
+| **Loaded classes** | Timeseries | How much program code the service has loaded. Rarely useful in an incident; it flattens out shortly after start-up |
+
+---
+
+### DIGIT — Logs (Loki) — `/grafana/d/digit-loki-logs/`
+
+**What it is:** the messages the software itself writes as it runs — the closest thing to
+the system explaining what went wrong, in its own words.
+
+**The question it answers:** *what is the actual error?*
+
+**Who uses it:** everyone. This is the most valuable dashboard on the system, and unlike the
+JVM dashboard it covers **every** container, not just the Java ones.
+
+**Three controls sit across the top of the page.** You do not need to write a query — set
+these and read the result:
+
+| Control | What to do with it |
+|---|---|
+| **service** | Choose which service's messages to show. Leave it as `.+` to see all of them at once |
+| **level** | How serious a message is. Set it to **`ERROR`** to hide routine chatter and see only failures. `WARN` is "worth noticing", `INFO` is normal running commentary |
+| **q** | A free-text filter. Paste a complaint number or a user ID here to follow one specific case across every service that touched it |
+
+| Panel | Shape | What it shows and what the reading means |
+|---|---|---|
+| **Log lines (current range)** | Stat | How many messages were written in your time range. Context only — a large number is not itself a problem |
+| **Errors / Exceptions (current range)** | Stat | How many of those were failures. **This is the "how bad is it" number.** Compare it against a quiet period to judge whether it is unusual |
+| **Log volume by service (rate / sec)** | Timeseries | How talkative each service is over time. **Both directions are signals**: a sudden spike means something started failing repeatedly; a line **dropping to silence** means a service stopped running altogether |
+| **Logs** | Logs | The messages themselves, newest at the top. **Scroll to the oldest one in your range and read that first** — when something breaks, everything downstream fails afterwards, so the earliest error is the cause and the rest are consequences |
+
+---
+
+### DIGIT — Traces (Tempo) — `/grafana/d/digit-tempo-traces/`
+
+**What it is:** timings for individual requests. A **trace** follows one click — one complaint
+submission, say — through every service it touched, and shows how long each step took.
+
+**The question it answers:** *why was this slow, and which step took the time?*
+
+**Who uses it:** mainly L2. L1's involvement is usually to copy a **Trace ID** into the
+ticket, which is enormously useful and takes seconds.
+
+| Panel | Shape | What it shows and what the reading means |
+|---|---|---|
+| **Services with traces (last 30m)** | Stat | How many services are currently reporting timings. A sanity check that trace collection is working at all |
+| **Recent traces** | Table | The most recent requests. Click any row to open its breakdown |
+| **Slow traces — duration > 500ms (last range)** | Table | Requests that took longer than half a second. **This is the panel to use for a "the system is slow" report.** Click a row and you see which service and which database call consumed the time |
+| **Error traces (status = error)** | Table | Requests that failed outright rather than merely being slow |
+| **Trace by ID** | Trace view | Paste a Trace ID here to see one specific request laid out as a waterfall — each service as a bar, its width being time spent |
+
+> **Traces are kept for 24 hours only.** A slowness report raised on Monday about something
+> that happened on Friday cannot be answered from traces. If you have one, copy the Trace ID
+> into the ticket the same day.
+
+---
+
+### Node Exporter Full — `/grafana/d/node-exporter-full/`
+
+**What it is:** the health of the physical machine everything runs on — processor, memory,
+and above all **disk space** — as opposed to the individual services.
+
+**The question it answers:** *is the server itself running out of something?*
+
+**Who uses it:** L2.
+
+> **If this dashboard is completely empty, that is expected on some deployments and is not a
+> fault.** The component that reports machine statistics (`node-exporter`) was added to the
+> platform on **2026-07-22**; installations older than that do not have it, so there is
+> nothing for the dashboard to draw. Do not raise it as an incident — it is a known gap that
+> needs a redeploy to close. See
+> [alerts-setup.md](alerts-setup.md#prerequisite--turn-on-host-metrics).
+
+When it does have data, the readings that matter:
+
+| Reading | Concerning when | Why it matters |
+|---|---|---|
+| **CPU Busy** | Above 90% for a sustained period | Everything slows down; health checks start timing out and services get killed for being unresponsive |
+| **RAM Used** | Above 90% | The operating system begins killing containers to reclaim memory, usually the largest one, without warning |
+| **Swap** | Any sustained use | The machine has run out of real memory and is using disk as a substitute. Everything becomes dramatically slower |
+| **Disk Space Used** | Above 85% (warning), above 95% (critical) | **The most common cause of a complete outage.** The database refuses to accept new data when the disk fills, so complaints stop saving |
+| **Load average** | Higher than the number of CPU cores, sustained | More work is queued than the machine can get through |
 
 ---
 
@@ -116,8 +277,7 @@ Grouped as the health dashboard groups them.
 
 | Service | Role | When it's down |
 |---|---|---|
-| `egov-user` | User accounts, authentication | Nobody can log in |
-| `keycloak` + `token-exchange-svc` | Identity provider | Login flows fail |
+| `egov-user` | User accounts and sign-in / identity | Nobody can log in |
 | `egov-workflow-v2` | Complaint state machine | Complaints cannot change state or be assigned |
 | `egov-mdms-service` / `mdms-backend` | Master data (complaint types, departments, config) | Forms come up empty; most services fail to start |
 | `egov-hrms` | Employees, departments, reporting hierarchy | Assignment and inbox visibility break |
@@ -159,7 +319,7 @@ If notifications stop, check in this order: the provider account (credit, creden
 
 | Signal | Covers | Does not cover |
 |---|---|---|
-| **JVM metrics** (Prometheus) | The 16 instrumented Java services: `boundary-service`, `digit-config-service`, `egov-accesscontrol`, `egov-enc-service`, `egov-filestore`, `egov-hrms`, `egov-idgen`, `egov-indexer`, `egov-persister`, `egov-user`, `egov-workflow-v2`, `inbox`, `mdms-backend`, `novu-bridge`, `pgr-services`, plus dashboard web metrics | Postgres, Redis, Kafka, Kong, Elasticsearch, Keycloak, MinIO, nginx, Node services |
+| **JVM metrics** (Prometheus) | The 16 instrumented Java services: `boundary-service`, `digit-config-service`, `egov-accesscontrol`, `egov-enc-service`, `egov-filestore`, `egov-hrms`, `egov-idgen`, `egov-indexer`, `egov-persister`, `egov-user`, `egov-workflow-v2`, `inbox`, `mdms-backend`, `novu-bridge`, `pgr-services`, plus dashboard web metrics | Postgres, Redis, Kafka, Kong, Elasticsearch, MinIO, nginx, the sign-in / identity service, Node services |
 | **Logs** (Loki) | **Every container** — around 44 of them | Nothing, as long as promtail is running |
 | **Traces** (Tempo) | Requests through instrumented Java services and Kong | Direct database or broker activity |
 | **Health checks** (Gatus) | ~50 endpoints across every group, including infrastructure | Anything not in the endpoint catalogue |

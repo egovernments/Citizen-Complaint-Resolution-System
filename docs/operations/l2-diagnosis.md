@@ -86,7 +86,7 @@ Restarts outside that window are the interesting ones.
 > OpenTelemetry agent**: boundary-service, digit-config-service, egov-accesscontrol,
 > egov-enc-service, egov-filestore, egov-hrms, egov-idgen, egov-indexer, egov-persister,
 > egov-user, egov-workflow-v2, inbox, mdms-backend, novu-bridge, pgr-services, plus dashboard
-> web metrics. **Postgres, Redis, Kafka, Kong, Elasticsearch, Keycloak, nginx and the Node
+> web metrics. **Postgres, Redis, Kafka, Kong, Elasticsearch, nginx, the sign-in service and the Node
 > services have no metrics at all** — for those, the health dashboard and the logs are the
 > only signals, and both cover them fully.
 
@@ -233,7 +233,7 @@ Disk fails slowly and then all at once, and it takes the database with it.
 |---|---|---|
 | **Site won't load at all** (browser error, not a DIGIT page) | nginx down, TLS certificate expired, DNS | Try the health dashboard URL — if that also fails, it's the edge, not DIGIT. Check certificate expiry in the browser padlock |
 | **502 / 504 Bad Gateway** | Kong or the upstream service down or restarting | Health dashboard *API Gateway* + *Application* → restarts → Kong logs |
-| **Login fails for everyone** | egov-user, Keycloak, Redis, or accesscontrol | Health dashboard *Core Services* + *Keycloak* → logs for `egov-user` and `keycloak` |
+| **Login fails for everyone** | egov-user, the sign-in service, Redis, or accesscontrol | Health dashboard *Core Services* + the sign-in group → logs for `egov-user` and the sign-in containers |
 | **Login fails for one user** | Wrong tenant, disabled account, role missing | Usually a data question rather than an outage — check the user in HRMS/Configurator |
 | **OTP not received** | Notification/SMS provider, not DIGIT | Health dashboard *OTP* + *Notifications* → logs for `egov-user-proxy`, `novu-worker`. Check provider credit/credentials |
 | **Complaint submit fails** | pgr-services, workflow, idgen, or Postgres | Browser Network tab → failing URL → that service's logs → Health dashboard *Infrastructure* |

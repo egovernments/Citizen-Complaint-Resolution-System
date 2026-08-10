@@ -206,7 +206,7 @@ bearer token on the request.
 
 The health dashboard at `/status/` already checks ~50 endpoints every 30 seconds. It can
 notify you directly, and it is the **only thing watching the containers that emit no
-metrics** — Postgres, Redis, Kafka, Kong, Elasticsearch, Keycloak, nginx. That makes it the
+metrics** — Postgres, Redis, Kafka, Kong, Elasticsearch, nginx and the sign-in service. That makes it the
 highest-value alerting you can add, and the fastest.
 
 It is configured in `local-setup/gatus/config.yaml`, which currently has alerting commented
