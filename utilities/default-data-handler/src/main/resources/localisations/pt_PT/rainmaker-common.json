@@ -1,5 +1,35 @@
 [
     {
+        "code": "Home",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Create Complaint",
+        "message": "Criar Reclamação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Search Complaint",
+        "message": "Pesquisar Reclamação",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Dashboard viewer",
+        "message": "Visualizador do Painel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "Search",
+        "message": "Pesquisar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_HOME_HEADER",
         "message": "Todos os Serviços",
         "module": "rainmaker-common",
