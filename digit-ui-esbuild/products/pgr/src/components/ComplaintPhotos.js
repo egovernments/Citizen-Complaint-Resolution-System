@@ -56,7 +56,7 @@ const MediaAttachment = ({ url, kind, label, downloadLabel }) => {
         src={url}
         aria-label={label}
         onError={() => setFailed(true)}
-        style={{ display: "block", width: "16rem", maxWidth: "100%" }}
+        style={{ display: "block", width: 280, maxWidth: "100%" }}
       />
     );
   }
@@ -66,10 +66,12 @@ const MediaAttachment = ({ url, kind, label, downloadLabel }) => {
       controls
       playsInline
       preload="metadata"
-      src={url}
+      // CCSD-2153: same size + first-frame still as the timeline tiles
+      // (280x180, #t=0.1) so video attachments look identical everywhere.
+      src={`${url}#t=0.1`}
       aria-label={label}
       onError={() => setFailed(true)}
-      style={{ display: "block", width: "13.75rem", maxWidth: "100%", maxHeight: "10rem", objectFit: "contain", borderRadius: 6, background: "#000" }}
+      style={{ display: "block", width: 280, maxWidth: "100%", maxHeight: 180, objectFit: "contain", borderRadius: 6, background: "#000" }}
     />
   );
 };
