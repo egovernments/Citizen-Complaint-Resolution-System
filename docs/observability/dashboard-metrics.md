@@ -239,6 +239,21 @@ topk(5, sum by (kpi_id) (rate(pgr_analytics_query_duration_ms_sum[15m]))
       / sum by (kpi_id) (rate(pgr_analytics_query_duration_ms_count[15m])))
 ```
 
+### Grafana dashboard
+
+`local-setup/otel/grafana/provisioning/dashboards/pgr-analytics.json` — *DIGIT — PGR
+Analytics Queries*, uid `pgr-analytics`, folder `DIGIT`. Eight panels over the four
+series above, filtered by `tenant`, `kpi_id` and `grain`. The two examples just above
+are the dashboard's own headline panels.
+
+**Expect it to be blank on a fresh box, and that is not a fault.** The instruments are
+registered lazily on first use, so until something actually executes an analytics query
+the series do not exist at all — no data, and the three template variables offer no
+values either, because they are populated by `label_values()` against those same
+series. Exercising the path needs KPIs seeded on the tenant; no test tenant currently
+has them, so this dashboard has been verified as valid, correctly-named JSON and as
+provisioning into the `DIGIT` folder, **not** as rendering populated panels.
+
 ### Per-request slow-query log (Loki)
 
 After every `_query` request, pgr-services logs **one** structured line with the top-3
