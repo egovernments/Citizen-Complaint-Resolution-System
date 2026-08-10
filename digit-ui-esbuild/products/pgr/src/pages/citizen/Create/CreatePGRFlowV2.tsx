@@ -1688,7 +1688,7 @@ const CreatePGRFlowV2: React.FC = () => {
   // getPostalCodeErrorMessage() read FIRST. Without this, the v2 flow would
   // silently keep validating against the globalConfigs fallback while the
   // employee form honours the (higher-precedence) MDMS row.
-  Digit.Hooks.pgr.useMobileValidation(tenantId);
+  Digit.Hooks.pgr.useMobileValidation(baseTenant);
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
