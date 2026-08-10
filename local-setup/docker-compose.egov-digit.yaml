@@ -1809,17 +1809,17 @@ services:
       # whole dashboard down (nginx /status/ then 502s). Only ever parsed here --
       # with GATUS_TLS false the endpoint is never dialled.
       GATUS_PUBLIC_URL: ${GATUS_PUBLIC_URL:-https://localhost/}
+      # Watch the monitoring itself (#1613). This is the only compose path that
+      # deploys the full observability stack, so it is the only one where these
+      # checks can pass. Ansible renders it true in .env; the default keeps a
+      # bare `docker compose up` of this file honest if the overlay is skipped.
+      GATUS_OBSERVABILITY: ${GATUS_OBSERVABILITY:-true}
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
     deploy:
       resources:
         limits:
           memory: 64M   # matches the 64Mi already set on the k3s Deployment
-      # Watch the monitoring itself (#1613). This is the only compose path that
-      # deploys the full observability stack, so it is the only one where these
-      # checks can pass. Ansible renders it true in .env; the default keeps a
-      # bare `docker compose up` of this file honest if the overlay is skipped.
-      GATUS_OBSERVABILITY: ${GATUS_OBSERVABILITY:-true}
     networks:
       - egov-network
 
