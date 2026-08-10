@@ -2,8 +2,13 @@ import { useMemo } from 'react';
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { useLocalizationModules } from '@/hooks/useLocalizationModules';
+import { useLocalizationSaveRefresh } from './useLocalizationSaveRefresh';
 
-const DEFAULT_MODULE = 'rainmaker-common';
+// CCSD-2157: default new rows to configurator-ui — the module the Studio reads
+// with PRECEDENCE (see i18nProvider.fetchAppTranslations). A correction typed
+// against rainmaker-common was shadowed by any existing configurator-ui row for
+// the same code, so it appeared to "not save".
+const DEFAULT_MODULE = 'configurator-ui';
 
 const defaultRecord = {
   locale: 'en_IN',
@@ -16,6 +21,7 @@ export function LocalizationCreate() {
   // list view's paginated rows, which truncate at perPage and drop modules.
   const { modules } = useLocalizationModules(defaultRecord.locale);
   const { locales } = useAvailableLocales();
+  const refreshAfterSave = useLocalizationSaveRefresh();
 
   const moduleChoices = useMemo(
     () => modules.map((m) => ({ value: m, label: m })),
@@ -25,7 +31,7 @@ export function LocalizationCreate() {
   const localeChoices = locales.map((l) => ({ value: l.value, label: l.label }));
 
   return (
-    <DigitCreate title="Create Localization Message" record={defaultRecord}>
+    <DigitCreate title="Create Localization Message" record={defaultRecord} afterCreate={refreshAfterSave}>
       <DigitFormCodeInput source="code" label="Code" validate={v.codeRequired} />
       <DigitFormInput source="message" label="Message" validate={v.required} />
       <DigitFormSelect
