@@ -69,6 +69,18 @@ services:
       # Credentials match postgres-db's own POSTGRES_USER/DB (egov/egov), with
       # the password coming from the same ${POSTGRES_PASSWORD} the deploy
       # writes into .env from OpenBao. No new secret is introduced.
+      #
+      # Least privilege: `egov` is the stack's superuser, and postgres_exporter
+      # only needs pg_monitor. Reusing it is not a new grant — every backend
+      # service already connects as `egov` through PgBouncer — but a dedicated
+      # role would be tighter. It is deliberately not done here: the only place
+      # this stack creates roles is postgres-db's /docker-entrypoint-initdb.d
+      # (db/full-dump.sql), which Postgres runs ONLY on an empty data
+      # directory. Adding the role there would take effect on fresh volumes
+      # only, so every existing deploy would come up with an exporter that
+      # cannot authenticate — a blank dashboard, which is the failure mode this
+      # work exists to remove. Doing it properly needs a migration that runs
+      # against live databases; tracked as follow-up, not smuggled in here.
       DATA_SOURCE_NAME: "postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres-db:5432/egov?sslmode=disable"
     networks:
       - egov-network
