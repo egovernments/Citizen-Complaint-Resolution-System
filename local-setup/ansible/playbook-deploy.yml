@@ -2436,9 +2436,22 @@
         - _obs_teardown | length > 0
       vars:
         # Services belonging to each tier, so an inactive tier can be named.
+        #
+        # Membership here tracks one thing only: whether the service is
+        # profiles:-gated. A gated service stopped at a lower tier stays
+        # stopped, because the next `up -d` will not select it, so the teardown
+        # settles after one run. An UNGATED service would come straight back on
+        # the next `up -d` and flap `changed` forever, which is why
         # otel-collector is deliberately absent: it is unprofiled and always
         # runs (every instrumented service depends on it) -- see the comment on
         # the service in docker-compose.egov-digit.yaml.
+        #
+        # All six listed below are gated. tempo/loki/promtail in
+        # docker-compose.egov-digit.yaml; prometheus and grafana likewise; and
+        # node-exporter in docker-compose.monitoring.yml, which is always
+        # layered as an -f flag but whose one service still carries
+        # `profiles: [obs-metrics]` (since #1657). Layered-always and
+        # started-always are different things.
         _obs_tier_services:
           obs-metrics: [prometheus, grafana, node-exporter]
           obs-logs: [loki, promtail]

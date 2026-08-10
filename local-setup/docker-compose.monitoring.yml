@@ -7,8 +7,12 @@
 # (kube-prometheus-stack already ships node_exporter as a DaemonSet).
 #
 # Layered ALWAYS by the Ansible deploy (see playbook-deploy.yml "Compute
-# compose -f flags"), like the migrations overlay — node metrics are wanted on
-# every deployed box, not gated behind an opt-in flag.
+# compose -f flags"), like the migrations overlay. "Always layered" is about the
+# -f flag, NOT about the service starting: since #1657 node-exporter carries
+# `profiles: [obs-metrics]` and so starts only at observability_level metrics or
+# above, exactly like prometheus and grafana. The two are easy to conflate —
+# `docker compose -f docker-compose.monitoring.yml config --services` prints
+# nothing without the profile and `node-exporter` with it.
 #
 # The scrape job lives in otel/prometheus.yml (job_name: node ->
 # node-exporter:9100); Prometheus reaches this container by its DNS name over
