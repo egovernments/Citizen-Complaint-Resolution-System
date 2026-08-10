@@ -501,6 +501,28 @@ data:
         conditions:
           - "[STATUS] == 200"
 ---
+# Backing store for the sqlite database (#1610). Without this the volume was an
+# emptyDir, which is destroyed with the pod -- so the uptime history this PR
+# exists to preserve was still lost on every rollout, drain or eviction.
+# Measured before the fix: after deleting the pod, the oldest row in the
+# database was timestamped one second after the new pod started.
+#
+# No storageClassName: k3s provisions this with local-path, the default. 1Gi is
+# generous -- Gatus stores one row per check per interval and prunes on read.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: digit
+  labels:
+    app: gatus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -510,6 +532,13 @@ metadata:
     app: gatus
 spec:
   replicas: 1
+  # Recreate, not the default RollingUpdate. The claim above is ReadWriteOnce
+  # and holds a sqlite file, so a rolling update would deadlock: the new pod
+  # cannot mount the volume until the old one releases it, and the old one is
+  # not terminated until the new one is ready. Recreate also keeps two Gatus
+  # processes off one sqlite file, which replicas: 1 assumes anyway.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: gatus
@@ -581,7 +610,8 @@ spec:
           configMap:
             name: gatus-config
         - name: gatus-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: gatus-data
 ---
 apiVersion: v1
 kind: Service
