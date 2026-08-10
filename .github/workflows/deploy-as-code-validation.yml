@@ -1,0 +1,111 @@
+# Validation for devops/deploy-as-code/ — the PRODUCTION, large-scale deploy path.
+#
+# Until this workflow existed, a pull request touching that directory triggered
+# ZERO checks. The one workflow that reads anything there (gateway-whitelist-parity)
+# looks at exactly two list keys in env.yaml. Everything else in CI is pointed at
+# local-setup/, the frontend, or the backend.
+#
+# That is how two long-lived defects survived in the production deploy path:
+#   #1645  Prometheus/Alertmanager run on emptyDir because the env.yaml block
+#          specifying a 15Gi volume sits one level too shallow to be read.
+#   #1648  ingress-nginx metrics are exposed but never scraped, because its
+#          override block is nested under a chart-name key the vendored chart
+#          does not read.
+#
+# Both look correct in review. Neither is detectable by helm: values nothing
+# reads are dropped silently, and `helm template` does not warn -- it fails only
+# on template errors, required/fail calls, or a values.schema.json violation, and
+# these charts ship no schema. Hence a purpose-built guard.
+name: deploy-as-code validation
+
+on:
+  pull_request:
+    paths:
+      - 'devops/deploy-as-code/**'
+      - '.github/scripts/check-helm-values-paths.py'
+      - '.github/workflows/deploy-as-code-validation.yml'
+  push:
+    branches: [develop, master]
+    paths:
+      - 'devops/deploy-as-code/**'
+      - '.github/scripts/check-helm-values-paths.py'
+      - '.github/workflows/deploy-as-code-validation.yml'
+
+# Both jobs only read the checkout and run a script from the pull request, so
+# the token gets nothing beyond read, and no credential is left behind in
+# .git/config for that script to pick up.
+permissions:
+  contents: read
+
+jobs:
+  values-paths:
+    name: values keys must be read by their chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The guard rejects any GROWTH of its KNOWN_UNREAD baseline, which it can
+      # only see by reading the previous revision of itself -- the default
+      # depth-1 checkout does not contain it. Fetching the base explicitly keeps
+      # a failure here loud: if it ever breaks, this step goes red rather than
+      # the guard quietly downgrading to "baseline check skipped".
+      - name: fetch the pull request base for the baseline comparison
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - run: pip install pyyaml
+
+      # Verify the detector itself before trusting its verdict — same idiom as
+      # check-gatus-coverage.py and check-flyway-dump-alignment.py.
+      - name: self-test the guard
+        run: python3 .github/scripts/check-helm-values-paths.py --self-test
+
+      # On `push` there is no pull_request context, so this expression renders
+      # empty and the guard SKIPS the baseline-growth comparison, loudly. That is
+      # deliberate, not an oversight: push only fires post-merge, by which time
+      # the pull-request run has already rejected any growth, and there is no
+      # honest baseline to compare a merged commit against. The other two checks
+      # (new unread paths, stale baseline) still run on push.
+      - name: env.yaml keys must match paths the chart reads
+        env:
+          VALUES_BASELINE_REF: ${{ github.event.pull_request.base.sha }}
+        run: python3 .github/scripts/check-helm-values-paths.py
+
+  duplicate-keys:
+    name: no duplicate YAML keys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - run: pip install yamllint
+
+      # A duplicated key is silently last-wins in every YAML parser used here —
+      # PyYAML keeps the last value without a warning, and so does Helm. So a
+      # duplicate is invisible to the values-path guard above, to review, and to
+      # the deploy. Only a linter that looks at the raw document catches it.
+      #
+      # Scoped to the files this repo authors and edits. The vendored upstream
+      # chart values (thousands of lines of third-party defaults) are excluded:
+      # linting those reports other people's style, which is noise, and a guard
+      # that produces noise gets switched off.
+      - name: key-duplicates in authored values files
+        run: |
+          yamllint -d '{rules: {key-duplicates: enable}}' \
+            devops/deploy-as-code/charts/environments/env.yaml \
+            devops/deploy-as-code/charts/environments/env-secrets.yaml \
+            devops/deploy-as-code/charts/monitoring/values/ \
+            devops/deploy-as-code/digit-helmfile.yaml
