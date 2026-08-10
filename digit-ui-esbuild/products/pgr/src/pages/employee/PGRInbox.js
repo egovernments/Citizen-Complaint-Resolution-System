@@ -287,18 +287,15 @@ const PGRSearchInbox = () => {
           flex-direction: column;
           justify-content: center;
         }
-        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; margin-bottom: 0; }
-        .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: center; }
-        /* When there's no logo icon the logo span is empty but still reserves
-           2rem, shoving the centred title ~11px right of the link below it.
-           Collapse it when empty so title and link share the same centre. */
+        /* Title and quick-links (e.g. "New Complaint") are both LEFT-aligned and
+           share the same left edge, so they line up. The card content is still
+           vertically centred (container justify-content:center below); only the
+           horizontal alignment is left. Collapse the empty logo span so the
+           title starts at the true left edge, matching the link. */
+        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: flex-start; text-align: left; margin-bottom: 0; }
+        .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: left; }
         .v2-pgr-inbox .digit-inbox-search-links-header-logo:empty { display: none; }
-        /* Centre the quick-links (e.g. "New Complaint") too — the header was
-           centred but the links list defaulted to left-aligned, so title and
-           link were mismatched. :not(:empty) keeps a gap below the title ONLY
-           when links actually render (empty otherwise on roles without them,
-           preserving the pure-title vertical centring). */
-        .v2-pgr-inbox .digit-inbox-search-links-contents { align-items: center; text-align: center; }
+        .v2-pgr-inbox .digit-inbox-search-links-contents { align-items: flex-start; text-align: left; }
         .v2-pgr-inbox .digit-inbox-search-links-contents:not(:empty) { margin-top: 1rem; }
         /* Page title sat flush in the top-left corner (header padding 12px 0 8px
            — no left gutter), 24px left of the card content below it. Give it a
