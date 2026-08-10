@@ -36,6 +36,24 @@ snapshot is attributable and re-fetchable:
 Content is byte-for-byte upstream — deliberately not reformatted, so a future
 `diff` against a newer upstream commit shows only real changes.
 
+## Licensing
+
+`dotdc/grafana-dashboards-kubernetes` is Apache-2.0, Copyright 2020 David
+Calvert. Apache-2.0 §4(a) asks a redistributor to hand recipients a copy of the
+licence, not just point at it, so the upstream `LICENSE` is vendored verbatim
+at [`third-party/LICENSE.dotdc-grafana-dashboards-kubernetes`](third-party/LICENSE.dotdc-grafana-dashboards-kubernetes)
+— fetched from the same pinned commit as the boards. Upstream ships no `NOTICE`
+file, so §4(d) does not apply. The three files are unmodified, so there is
+nothing to mark under §4(b):
+
+- `k8s-views-global.json`
+- `k8s-views-namespaces.json`
+- `k8s-views-nodes.json`
+
+The remaining boards come from `egovernments/configs` (MIT, same organisation
+and same licence as this repo), so they carry no separate redistribution
+obligation.
+
 ## Updating one
 
 Fetch from a specific commit (never `master`), replace the file, and update the
