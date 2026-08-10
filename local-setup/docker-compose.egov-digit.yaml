@@ -9,8 +9,29 @@ services:
   otel-collector:
     image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
-    # JVM metrics flow through it, not just traces (#1657)
-    profiles: [obs-metrics]
+    # Deliberately NOT profiled (#1657).
+    #
+    # Twelve unprofiled core services declare `depends_on: otel-collector`
+    # (egov-user, egov-workflow-v2, egov-persister, egov-filestore, ...).
+    # Compose rejects the whole project when a selected service depends on one
+    # excluded by profile:
+    #
+    #   service "egov-filestore" depends on undefined service
+    #   "otel-collector": invalid compose project
+    #
+    # With it profiled, EVERY ad-hoc `docker compose` command failed unless the
+    # caller happened to export COMPOSE_PROFILES -- config, ps, logs, up. The
+    # ansible deploy always passes them, so deploys were fine; what broke was
+    # everything a human types, including six runbooks under docs/.
+    #
+    # It is also the wrong thing to gate. The collector is the pipeline every
+    # instrumented service emits into, so it is needed at EVERY level -- the
+    # tiers gate what CONSUMES telemetry (prometheus/grafana/loki/tempo), not
+    # what receives it. A site on `observability_level: metrics` still needs the
+    # collector; what it does not need is Tempo and Loki.
+    #
+    # Cheap to leave running: OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER already
+    # follow the level, so at a lower tier it simply receives less.
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
