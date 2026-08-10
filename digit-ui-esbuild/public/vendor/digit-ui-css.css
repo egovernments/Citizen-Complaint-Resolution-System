@@ -4091,11 +4091,6 @@
   justify-content: flex-end;
   min-width: 85px; }
 
-video::-webkit-media-controls-panel {
-  top: 55%;
-  position: absolute;
-  width: 100%; }
-
 .topbarOptionsClassName {
   right: -3rem !important; }
 

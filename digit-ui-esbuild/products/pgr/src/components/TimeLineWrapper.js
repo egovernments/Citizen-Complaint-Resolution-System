@@ -130,7 +130,9 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                             // fragment is safe after the S3 ?X-Amz-… query. object-fit:contain
                             // letterboxes the frame instead of stretching it.
                             <video key={i} src={`${url}#t=0.1`} controls playsInline preload="metadata" aria-label={label}
-                                style={{ width: 160, maxWidth: "100%", maxHeight: 110, objectFit: "contain", borderRadius: 6, background: "#000", border: "1px solid var(--color-border, #e2e8f0)" }} />
+                                // CCSD-2153: 280x180 (was 160x110) — the small tile cramped the
+                                // native controls and QA asked for a larger preview.
+                                style={{ width: 280, maxWidth: "100%", maxHeight: 180, objectFit: "contain", borderRadius: 6, background: "#000", border: "1px solid var(--color-border, #e2e8f0)" }} />
                         );
                     }
                     if (url && entry?.kind === "audio") {
