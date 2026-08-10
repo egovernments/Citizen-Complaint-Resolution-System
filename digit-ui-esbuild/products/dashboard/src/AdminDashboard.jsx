@@ -32,7 +32,7 @@ import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
-import { runKpiBatch, getTenantId } from "./services/analyticsService";
+import { runKpiBatch, runPublicKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
@@ -42,6 +42,8 @@ import {
   isMapKind,
   buildRefs,
   buildRefsKey,
+  buildPublicRefs,
+  buildPublicRefsKey,
   PIN_ROW_CAP,
 } from "./utils/queryPlan";
 import {
@@ -216,6 +218,7 @@ const AdminDashboard = ({ embedded = false, mode }) => {
   return (
     <AdminDashboardInner
       embedded={isEmbedded}
+      publicMode={resolvedMode === "public"}
       onSignOut={requiresSession ? handleSignOut : undefined}
       timeZone={timeZone}
     />
@@ -402,7 +405,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* Inner dashboard                                                             */
 /* -------------------------------------------------------------------------- */
 
-const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
+const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, timeZone }) => {
   // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount.
   useState(() => {
     dashboardMetrics.beginLoad();
@@ -411,24 +414,25 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
   useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
-    useDashboardFilters(timeZone);
+    useDashboardFilters({ persistent: !publicMode, timeZone });
   const { options: filterOptions, loading: filterOptionsLoading } =
-    useFilterOptions();
+    useFilterOptions({ enabled: !publicMode });
   const tenantId = useMemo(() => getTenantId(), []);
 
   // Feed the server-scoped option lists into the filter store so persisted
   // filter values that no longer match any option get reconciled
   // (reconcileFiltersWithOptions) instead of silently sending dead params.
   useEffect(() => {
-    if (filterOptions) applyFilterOptions(filterOptions);
-  }, [filterOptions, applyFilterOptions]);
+    if (!publicMode && filterOptions) applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions, publicMode]);
   const { loading: catalogLoading, kpis, pack, error: catalogError } =
-    useCatalog(tenantId);
+    useCatalog(tenantId, { publicMode });
 
   // Deployment complaint-hierarchy levels for the per-widget "Group by"
   // control. NO_HIERARCHY-shaped until the fetch resolves (control hidden).
   const [hierarchy, setHierarchy] = useState(null);
   useEffect(() => {
+    if (publicMode) return undefined;
     let cancelled = false;
     fetchComplaintHierarchyLevels().then((h) => {
       if (!cancelled) setHierarchy(h);
@@ -436,18 +440,20 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [publicMode]);
 
   // Per-widget hierLevel overrides — see the module comment on
   // HIER_OVERRIDES_STORAGE_KEY for why this is NOT in `filters`.
-  const [hierOverrides, setHierOverrides] = useState(readHierOverrides);
+  const [hierOverrides, setHierOverrides] = useState(() =>
+    publicMode ? {} : readHierOverrides()
+  );
   const setHierLevelOverride = useCallback((kpiId, value) => {
     setHierOverrides((prev) => {
       const next = { ...prev, [kpiId]: value };
-      persistHierOverrides(next);
+      if (!publicMode) persistHierOverrides(next);
       return next;
     });
-  }, []);
+  }, [publicMode]);
 
   const [batch, setBatch] = useState({
     loading: true,
@@ -470,7 +476,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
     addKpiToLayout,
     visibleLayoutIds,
     findDragHoverTarget,
-  } = useCatalogLayout(kpis, pack?.layout);
+  } = useCatalogLayout(kpis, pack?.layout, { persistent: !publicMode });
 
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
   const draggingWidgetIdRef = useRef(null);
@@ -695,7 +701,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
   // BEFORE the new locale's bundles finish fetching, so the names must also
   // re-resolve when the messages actually land ("added" store event).
   const catalogItems = useMemo(
-    () =>
+    () => publicMode ? [] :
       Object.values(kpis)
         .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
         .map((def) => ({
@@ -705,7 +711,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
-    [kpis, language, i18nTick]
+    [kpis, language, i18nTick, publicMode]
   );
 
   // Re-run the batch whenever the catalog resolves, the filters change, or a
@@ -714,8 +720,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
   // are unchanged) AND the applied hierLevel overrides (R7c — without them a
   // Group-by change would never refire this effect).
   const refsKey = useMemo(
-    () => buildRefsKey(tiles, kpis, filters, hierOverrides),
-    [tiles, filters, kpis, hierOverrides]
+    () => publicMode
+      ? buildPublicRefsKey(tiles, kpis)
+      : buildRefsKey(tiles, kpis, filters, hierOverrides),
+    [tiles, filters, kpis, hierOverrides, publicMode]
   );
 
   useEffect(() => {
@@ -723,12 +731,26 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
       setBatch({ loading: false, results: {}, errors: null, partial: false, asOf: null, calendar: null });
       return;
     }
-    const refs = buildRefs(tiles, kpis, filters, hierOverrides);
+    const refs = publicMode
+      ? buildPublicRefs(tiles, kpis)
+      : buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
     dashboardMetrics.markBatchStart(reqId);
-    setBatch((prev) => ({ ...prev, loading: true }));
+    // A changed query plan must not leave the prior values visible/exportable
+    // beneath new filter labels while the replacement request is in flight.
+    setBatch({
+      loading: true,
+      results: {},
+      errors: null,
+      partial: false,
+      asOf: null,
+      calendar: null,
+    });
 
-    runKpiBatch(refs, tenantId)
+    const request = publicMode
+      ? runPublicKpiBatch(refs, tenantId)
+      : runKpiBatch(refs, tenantId);
+    request
       .then((res) => {
         if (reqId !== reqIdRef.current) return;
         setBatch({
@@ -760,7 +782,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refsKey, pack, tenantId]);
+  }, [refsKey, pack, tenantId, publicMode]);
 
   // "Last updated" reads the batch's OWN echoed asOf/calendar (#29) — the single
   // clock reading every tile in this batch was judged against — never a fresh
@@ -881,6 +903,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
   return (
     <DashboardLayout
       embedded={embedded}
+      readOnly={publicMode}
+      publicMode={publicMode}
       visibleLayoutIds={visibleLayoutIds}
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
@@ -942,9 +966,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
           containerPadding={[0, 0]}
           compactType={null}
           allowOverlap={false}
-          isDraggable
-          isResizable
-          isDroppable={isExternalDrag}
+          isDraggable={!publicMode}
+          isResizable={!publicMode}
+          isDroppable={!publicMode && isExternalDrag}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
           onDropDragOver={handleDropDragOver}
@@ -961,7 +985,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
             const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
               <TypeFilterIgnoredNote />
             ) : null;
-            const removeBtn = (
+            const removeBtn = publicMode ? null : (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
                 onClick={(e) => {
@@ -1043,7 +1067,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
                 </div>
                 {ignoredNote}
                 {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
-                <ResizeGrip />
+                {!publicMode && <ResizeGrip />}
               </section>
             );
           })}

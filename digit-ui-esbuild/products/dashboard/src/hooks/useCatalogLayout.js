@@ -134,7 +134,7 @@ function persist(layout) {
   persistPositions(layout);
 }
 
-export function useCatalogLayout(kpis, packLayout) {
+export function useCatalogLayout(kpis, packLayout, { persistent = true } = {}) {
   const seed = useMemo(() => buildSeedLayout(packLayout, kpis), [packLayout, kpis]);
   const geom = useMemo(() => createCatalogDragGeometry(kpis), [kpis]);
 
@@ -150,7 +150,7 @@ export function useCatalogLayout(kpis, packLayout) {
 
   useEffect(() => {
     if (!seed.length) return;
-    const saved = readSaved();
+    const saved = persistent ? readSaved() : null;
     const source = saved !== null ? saved : seed;
     const reconciled = source
       .filter((item) => kpis[item.i])
@@ -159,9 +159,9 @@ export function useCatalogLayout(kpis, packLayout) {
       ? geom.resolveRemainingOverlaps(reconciled, [])
       : reconciled;
     setLayout(repaired);
-    if (repaired !== reconciled) persist(repaired);
+    if (persistent && repaired !== reconciled) persist(repaired);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, geom]);
+  }, [seed, geom, persistent]);
 
   const syncFlagRef = useRef(false);
   const stampSync = useCallback((next) => {
@@ -173,10 +173,10 @@ export function useCatalogLayout(kpis, packLayout) {
   const applyLayout = useCallback(
     (next) => {
       const normalized = canonicalizeLayout(next, kpis);
-      persistPositions(normalized);
+      if (persistent) persistPositions(normalized);
       setLayout(stampSync(normalized));
     },
-    [stampSync, kpis]
+    [stampSync, kpis, persistent]
   );
 
   const commitLayoutWithReflow = useCallback(

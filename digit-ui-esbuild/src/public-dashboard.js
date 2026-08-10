@@ -19,21 +19,22 @@
  * assets resolve against one publicPath) at public-dashboard.html; give it a
  * friendly URL with an nginx alias rather than a second docroot.
  *
- * The three analytics read paths this page calls (/packs, /catalog/_search,
- * /_query) are explicitly auth-optional on both gateways, so anonymous access is
- * a declared contract rather than a side effect of Kong's audit mode. The actual
- * boundary is server-side: AnalyticsService degrades a role-less caller to the
- * PUBLIC role, which resolves only rbac.visibleTo:["PUBLIC"] defs and refuses
- * inline query grammar (kpiId reference only).
+ * The analytics read paths this page calls are explicitly auth-optional on Kong,
+ * so anonymous access is a declared compose/Ansible contract rather than a side
+ * effect of Kong's audit mode. Kubernetes' Spring mixed-mode gateway is
+ * deliberately not opened: unlike Kong, it does not strip spoofed userInfo from
+ * anonymous bodies. The actual data boundary remains server-side.
  */
 import React from "react";
 import ReactDOM from "react-dom";
 import AdminDashboard from "../products/dashboard/src/AdminDashboard";
+import { configurePublicDashboardRuntime } from "../products/dashboard/src/services/dashboardRuntime";
 import { applyTheme } from "./theme/applyTheme";
 import defaultTheme from "./theme/default.json";
 
 // Same bundled default theme the employee app applies synchronously before
 // render, so shared design tokens resolve identically on both surfaces.
+configurePublicDashboardRuntime();
 applyTheme(defaultTheme);
 
 ReactDOM.render(

@@ -2,6 +2,7 @@ package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -69,6 +70,104 @@ public class AnalyticsController {
     @PostMapping("/_schema")
     public ResponseEntity<Map<String,Object>> schema(){
         return ResponseEntity.ok(service.schema());
+    }
+
+    /**
+     * Anonymous dashboard bootstrap. Unlike the mixed authenticated endpoint, this route never
+     * reads RequestInfo from the body: its identity is unconditionally the synthetic PUBLIC role.
+     * A missing PUBLIC pack fails closed to an empty dashboard rather than falling back to every
+     * PUBLIC-visible definition.
+     */
+    @PostMapping("/public/packs")
+    public ResponseEntity<Map<String,Object>> getPublicPack(@RequestBody Map<String,Object> body){
+        try {
+            String tenantId = extractTenantId(body);
+            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
+            Map<String,KpiDefinition> defIndex = visibleDefs.stream()
+                    .collect(Collectors.toMap(KpiDefinition::getId, d -> d));
+            Optional<DashboardPack> pack = kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs);
+
+            List<Map<String,Object>> tiles = new ArrayList<>();
+            for (String kpiId : pack.map(DashboardPack::getTiles).orElse(Collections.emptyList())) {
+                KpiDefinition def = defIndex.get(kpiId);
+                if (def != null) tiles.add(safeTile(def));
+            }
+
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("tiles", tiles);
+            out.put("defaultLayout", pack.map(DashboardPack::getLayout).orElse(Collections.emptyList()));
+            out.put("asOf", System.currentTimeMillis());
+            out.put("packId", pack.map(DashboardPack::getId).orElse(null));
+            // Deliberately no recordCount: even a matching public pack must not become a
+            // tenant-volume enumeration primitive.
+            return ResponseEntity.ok(out);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics packs failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
+        }
+    }
+
+    /**
+     * Anonymous dashboard data endpoint. Only a bounded batch of bare {@code {kpiId}} references
+     * selected by the tenant's matched PUBLIC pack is accepted. RequestInfo and caller parameters
+     * are discarded by construction before delegating to the normal analytics execution path.
+     */
+    @PostMapping("/public/_query")
+    public ResponseEntity<Map<String,Object>> publicQuery(@RequestBody JsonNode body,
+            @RequestHeader(value = "x-trace-id", required = false) String xTraceId){
+        try {
+            String tenantId = body.hasNonNull("tenantId") ? body.get("tenantId").asText() : null;
+            if (tenantId == null || tenantId.isEmpty())
+                throw new IllegalArgumentException("invalid_param: tenantId is required");
+
+            JsonNode queries = body.get("queries");
+            if (queries == null || !queries.isObject() || queries.isEmpty())
+                throw new IllegalArgumentException("invalid_param: public query requires a non-empty 'queries' object");
+            AnalyticsService.validateBatchSize(queries);
+
+            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
+            DashboardPack pack = kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "public_pack_not_found: no PUBLIC dashboard pack is configured"));
+            Set<String> allowedKpis = new HashSet<>(
+                    pack.getTiles() == null ? Collections.emptyList() : pack.getTiles());
+
+            ObjectNode sanitizedQueries = mapper.createObjectNode();
+            Iterator<Map.Entry<String,JsonNode>> it = queries.fields();
+            while (it.hasNext()) {
+                Map.Entry<String,JsonNode> entry = it.next();
+                JsonNode ref = entry.getValue();
+                if (ref == null || !ref.isObject() || ref.size() != 1 || !ref.hasNonNull("kpiId")
+                        || !ref.get("kpiId").isTextual() || ref.get("kpiId").asText().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "invalid_param: public queries must be bare {kpiId} references without params");
+                }
+                String kpiId = ref.get("kpiId").asText();
+                if (!allowedKpis.contains(kpiId))
+                    throw new IllegalArgumentException(
+                            "kpi_forbidden: KPI is not selected by the PUBLIC dashboard pack");
+                ObjectNode cleanRef = mapper.createObjectNode();
+                cleanRef.put("kpiId", kpiId);
+                sanitizedQueries.set(entry.getKey(), cleanRef);
+            }
+
+            ObjectNode sanitizedBody = mapper.createObjectNode();
+            sanitizedBody.put("tenantId", tenantId);
+            sanitizedBody.set("queries", sanitizedQueries);
+            int stateLen = config.getStateLevelTenantIdLength() == null
+                    ? 1 : config.getStateLevelTenantIdLength();
+            return ResponseEntity.ok(service.query(
+                    sanitizedBody, null, tenantId, stateLen, xTraceId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics query failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
+        }
     }
 
     /**

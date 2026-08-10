@@ -63,6 +63,9 @@ public class AnalyticsService {
      */
     static final String PUBLIC_ROLE = "PUBLIC";
 
+    /** Hard request budget: batch entries execute sequentially and each may hit PostgreSQL. */
+    static final int MAX_BATCH_QUERIES = 50;
+
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
@@ -110,6 +113,7 @@ public class AnalyticsService {
     private Map<String,Object> doQuery(JsonNode body, RequestInfo requestInfo, String tenantId,
                                        int stateLevelLen, QueryTelemetry tel){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
+        if (body.has("queries")) validateBatchSize(body.get("queries"));
         AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
         boolean publicFloor = isPublicFloor(callerRoles);
@@ -192,6 +196,13 @@ public class AnalyticsService {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
         return out;
+    }
+
+    /** Reject oversized batches before principal resolution or any SQL execution. */
+    static void validateBatchSize(JsonNode queries) {
+        if (queries != null && queries.isObject() && queries.size() > MAX_BATCH_QUERIES)
+            throw new IllegalArgumentException("invalid_param: queries may contain at most "
+                    + MAX_BATCH_QUERIES + " entries");
     }
 
     /**
@@ -630,7 +641,7 @@ public class AnalyticsService {
         try {
             Long count = stateLevel
                     ? jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?",
-                                          Long.class, tenantId + "%")
+                                          Long.class, AnalyticsPlanner.escapeLikeLiteral(tenantId) + "%")
                     : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
                                           Long.class, tenantId);
             if (count == null) return null;

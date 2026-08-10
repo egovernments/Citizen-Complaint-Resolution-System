@@ -421,11 +421,10 @@ server {
   # app (so hashed assets resolve against one publicPath), which means this only
   # needs to be a redirect and works in BOTH digit_ui_mode branches below.
   #
-  # The three analytics read paths this page calls are explicitly auth-optional
-  # on both gateways (kong.yml AUTH_OPTIONAL + env.yaml mixed-mode whitelist), so
-  # the page keeps working when ENFORCE_UNAUTH is flipped on. The real boundary
-  # is server-side: a role-less caller degrades to the PUBLIC role and sees only
-  # rbac.visibleTo:["PUBLIC"] tiles, by kpiId reference (no inline grammar).
+  # Its analytics read paths are explicitly auth-optional on Kong, so the page
+  # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
+  # gateway is deliberately not opened because it does not normalize spoofed
+  # anonymous userInfo. The real data boundary remains server-side.
   location = /dashboard {
     return 302 /digit-ui/public-dashboard.html;
   }

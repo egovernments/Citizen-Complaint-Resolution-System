@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchPack, fetchCatalog } from '../services/analyticsService';
+import { fetchPack, fetchCatalog, fetchPublicPack } from '../services/analyticsService';
 import { markInteraction, setPackMeta } from '../services/dashboardMetrics';
 
 // Role set observed at the previous catalog fetch (module-scoped: survives
@@ -38,7 +38,7 @@ function currentRoleSetKey() {
  * Falls back gracefully (error state + empty) if the endpoints don't exist yet —
  * the existing hardcoded path is left intact.
  */
-export function useCatalog(tenantId) {
+export function useCatalog(tenantId, { publicMode = false } = {}) {
   const [state, setState] = useState({ loading: true, kpis: {}, pack: null, packMeta: null, error: null });
 
   useEffect(() => {
@@ -50,18 +50,28 @@ export function useCatalog(tenantId) {
     // persona_switch (#1110): the pack is the server's role->pack match, so a
     // refetch under a changed role set IS a persona change from the
     // dashboard's point of view.
-    const roleSetKey = currentRoleSetKey();
-    if (lastRoleSetKey != null && roleSetKey !== lastRoleSetKey) {
-      markInteraction('persona');
+    if (!publicMode) {
+      const roleSetKey = currentRoleSetKey();
+      if (lastRoleSetKey != null && roleSetKey !== lastRoleSetKey) {
+        markInteraction('persona');
+      }
+      lastRoleSetKey = roleSetKey;
     }
-    lastRoleSetKey = roleSetKey;
 
     let cancelled = false;
-    Promise.all([fetchPack(tenantId), fetchCatalog(tenantId)])
+    const request = publicMode
+      // Public is a curated, read-only surface. /public/packs already contains
+      // every descriptor it may render, so never open or call catalog/_search.
+      ? fetchPublicPack(tenantId).then((packRes) => [packRes, null])
+      : Promise.all([fetchPack(tenantId), fetchCatalog(tenantId)]);
+    request
       .then(([packRes, catalogRes]) => {
         if (cancelled) return;
+        const catalogTiles = publicMode
+          ? (packRes?.tiles || [])
+          : (catalogRes?.tiles || []);
         const allKpis = Object.fromEntries(
-          ((catalogRes && catalogRes.tiles) || []).map(k => [k.kpiId, k])
+          catalogTiles.map(k => [k.kpiId, k])
         );
         const packTiles = (packRes && packRes.tiles) || [];
         const packLayout = (packRes && packRes.defaultLayout) || [];
@@ -92,7 +102,7 @@ export function useCatalog(tenantId) {
       });
 
     return () => { cancelled = true; };
-  }, [tenantId]);
+  }, [tenantId, publicMode]);
 
   return state;
 }

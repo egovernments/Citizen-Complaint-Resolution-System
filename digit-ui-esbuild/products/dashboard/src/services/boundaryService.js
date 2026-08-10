@@ -4,6 +4,7 @@ import {
   getTenantId,
   hasAuth,
 } from "./authService";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 import { withTraceHeaders } from "./dashboardMetrics";
 
 
@@ -13,7 +14,7 @@ import { withTraceHeaders } from "./dashboardMetrics";
  * API: POST /boundary-service/boundary/_search?tenantId=&codes=&limit=
  */
 export async function fetchBoundariesByCodes(codes = []) {
-  if (!hasAuth() || !codes.length) return [];
+  if ((!hasAuth() && !isPublicDashboardRuntime()) || !codes.length) return [];
 
   const tenantId = getTenantId();
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
@@ -123,7 +124,7 @@ export async function fetchBoundaryRelationshipsByCodes(
   codes = [],
   { hierarchyType = "ADMIN" } = {}
 ) {
-  if (!hasAuth() || !codes.length) return {};
+  if ((!hasAuth() && !isPublicDashboardRuntime()) || !codes.length) return {};
 
   const tenantId = getTenantId();
   const rootCode = deriveBoundaryRootCode(codes);
