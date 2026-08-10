@@ -1882,6 +1882,51 @@
         | list | length > 0
       changed_when: true
 
+    # Same failure mode as Kong, one hop further down (#1683). The OpenTelemetry
+    # Collector reads --config once at startup and does not watch the file, and
+    # nothing else recreates it on a routine redeploy: unlike gatus/grafana it
+    # declares no `environment:` at all, so the ".env changed" recreate above
+    # never selects it. Result: otel-collector-config.yaml now correctly lands
+    # on disk and inside the container -- and is still not applied.
+    #
+    # Gatus is deliberately NOT restarted here. It watches its config file and
+    # reloads itself, which the --inplace sync above is what makes possible: the
+    # watcher follows the mounted inode, so the old rename-over-the-top swap was
+    # invisible to it. A restart would also drop its uptime history for no gain.
+    # prometheus.yml is handled separately by its own SIGHUP reload (#1608).
+    #
+    # A restart, not a reload: the collector has no reload signal or admin
+    # endpoint. It is a few seconds of dropped telemetry, which is why the gate
+    # below is on the ONE file that matters rather than on the otel/ directory
+    # as a whole -- that directory also holds prometheus.yml, the Loki/Tempo/
+    # Promtail configs, the javaagent jar and every Grafana dashboard JSON, so a
+    # directory-level gate would bounce the collector on any dashboard tweak.
+    #
+    # synchronize's per-file itemized output is what makes the narrow gate
+    # possible: stdout_lines carries one rsync `>f.st...... <name>` line per
+    # changed file, and is empty when the dir is unchanged. Verified locally
+    # against ansible.posix.synchronize 2.2.2 + rsync 3.4.4: editing only
+    # prometheus.yml leaves this gate false while the item still reports
+    # changed=true; editing otel-collector-config.yaml flips it true.
+    - name: "OTEL Collector — restart when its config changed (#1683)"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-otel-collector$')" ]; then
+          echo "NOCHANGE collector not running"
+          exit 0
+        fi
+        docker restart digit-otel-collector
+      args:
+        executable: /bin/bash
+      register: otel_collector_restart
+      changed_when: "'NOCHANGE' not in otel_collector_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'otel-collector-config')
+        | list | length > 0
+
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
