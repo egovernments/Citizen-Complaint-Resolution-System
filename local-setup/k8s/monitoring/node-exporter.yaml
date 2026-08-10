@@ -1,0 +1,88 @@
+# Host metrics for the k3s tier (#1618, phase 1).
+#
+# The compose tier runs this as a single container in
+# docker-compose.monitoring.yml. Here it is a DaemonSet: one pod per node, which
+# is the actual difference between the tiers -- compose has one host by
+# definition, a cluster does not.
+#
+# Same image and the same --path.* rebasing as the compose overlay, so
+# node_filesystem_* mountpoints come out identically and the Node Exporter Full
+# dashboard works unchanged across tiers.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+    spec:
+      # A containerised node-exporter sees only its own namespaces unless
+      # pointed at the host's -- same reason the compose overlay sets pid: host.
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      # Must run on every node, including control-plane ones: a node whose
+      # metrics are missing looks identical to a healthy one.
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --path.rootfs=/host/root
+            # Drop pseudo/virtual mounts and container layers so the filesystem
+            # panels show real volumes rather than per-container churn.
+            - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+|run/k3s/.+)($|/)
+          ports:
+            - containerPort: 9100
+              name: metrics
+              hostPort: 9100
+          securityContext:
+            runAsUser: 65534
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: proc, mountPath: /host/proc, readOnly: true}
+            - {name: sys, mountPath: /host/sys, readOnly: true}
+            # No mountPropagation, deliberately. The compose overlay uses
+            # rslave so mounts appearing AFTER start propagate in, and the
+            # upstream node-exporter DaemonSet sets HostToContainer for the same
+            # reason -- but that requires / on the node to be a shared or slave
+            # mount. Where it is not (notably k3s running inside Docker, which
+            # is how this tier is developed locally) the kubelet refuses to
+            # create the container at all:
+            #   path "/" is mounted on "/" but it is not a shared or slave mount
+            # A node-exporter that cannot start reports nothing; one that misses
+            # a filesystem mounted after boot reports slightly less. The second
+            # is the better failure.
+            - {name: root, mountPath: /host/root, readOnly: true}
+      volumes:
+        - {name: proc, hostPath: {path: /proc}}
+        - {name: sys, hostPath: {path: /sys}}
+        - {name: root, hostPath: {path: /}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  clusterIP: None
+  selector:
+    app: node-exporter
+  ports:
+    - port: 9100
+      targetPort: 9100
+      name: metrics
