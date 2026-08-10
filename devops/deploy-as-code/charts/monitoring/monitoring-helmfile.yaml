@@ -113,15 +113,27 @@ releases:
   - envRenderSecret:
       GF_AUTH_GITHUB_CLIENT_ID: {{ .Values.secrets.grafana.clientID }}
       GF_AUTH_GITHUB_CLIENT_SECRET: {{ .Values.secrets.grafana.clientSecret }}
-{{- if not $grafanaAdminSecret }}
-      GF_SECURITY_ADMIN_PASSWORD: {{ $grafanaAdminPassword | quote }}
-{{- end }}
   set:
 {{- if $grafanaAdminSecret }}
     # Chart wires GF_SECURITY_ADMIN_USER/PASSWORD from this Secret's
     # admin-user / admin-password keys and creates no Secret of its own.
     - name: admin.existingSecret
       value: {{ $grafanaAdminSecret | quote }}
+{{- else }}
+    # `adminPassword`, NOT GF_SECURITY_ADMIN_PASSWORD via envRenderSecret.
+    #
+    # envRenderSecret becomes an `envFrom: secretRef` on the container, while
+    # the chart declares GF_SECURITY_ADMIN_PASSWORD explicitly in `env` from its
+    # own generated Secret. Kubernetes gives explicit `env` precedence over
+    # `envFrom`, so the value set here would be present in the pod's environment
+    # and simply lose. Verified on a cluster: the configured password returned
+    # 401 while the chart's generated one returned 200, and the two hashes
+    # differed -- the operator would set a password and be locked out by it.
+    #
+    # `adminPassword` is the value the chart itself writes into that Secret, so
+    # setting it here is what the explicit env then reads.
+    - name: adminPassword
+      value: {{ $grafanaAdminPassword | quote }}
 {{- end }}
     - name: ingress.hosts[0]
       value: {{ .Values.global.domain | quote }}
