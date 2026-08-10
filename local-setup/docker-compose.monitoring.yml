@@ -49,6 +49,13 @@ services:
       # Ubuntu deploy targets mount / as `shared` by default, so rslave binds
       # cleanly there.
       - /:/rootfs:ro,rslave
+    # Memory ceiling (#1612) — see the note on otel-collector in
+    # docker-compose.egov-digit.yaml. node-exporter is a thin reader of /proc
+    # and /sys; 64m is generous for it.
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     networks:
       - egov-network
 
