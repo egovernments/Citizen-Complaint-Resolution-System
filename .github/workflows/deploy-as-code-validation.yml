@@ -68,6 +68,12 @@ jobs:
       - name: self-test the guard
         run: python3 .github/scripts/check-helm-values-paths.py --self-test
 
+      # On `push` there is no pull_request context, so this expression renders
+      # empty and the guard SKIPS the baseline-growth comparison, loudly. That is
+      # deliberate, not an oversight: push only fires post-merge, by which time
+      # the pull-request run has already rejected any growth, and there is no
+      # honest baseline to compare a merged commit against. The other two checks
+      # (new unread paths, stale baseline) still run on push.
       - name: env.yaml keys must match paths the chart reads
         env:
           VALUES_BASELINE_REF: ${{ github.event.pull_request.base.sha }}

@@ -36,6 +36,15 @@ all genuinely consumed but undeclared). Covering them needs the reference set to
 include template references too -- a later refinement, not a blocker. A guard
 that cries wolf gets disabled, which would cost more than it saves.
 
+One more limit, for whoever extends CASES: key_paths/orphans_for recurse into
+`dict` nodes only, never into `list` items. A mis-keyed field inside a list
+element -- an `extraVolumes:` / container-array style block -- is therefore NOT
+detected; only the list-valued key itself is, at its own path. That is harmless
+for the two CASES here (the one list in scope, prometheus.additionalScrapeConfigs,
+is caught whole at the top level and baselined as such), but a chart whose
+overrides live inside lists needs list recursion added first, or it will be
+covered in name only.
+
 Run with --self-test to verify the detection logic itself catches the failure
 mode and stays quiet on correct configuration.
 
@@ -85,6 +94,16 @@ ALLOW = {
 # the second half the rule is unenforceable -- a change that introduces a
 # mis-path and lists it here in the same breath makes that path `seen`, so
 # neither the new-path check nor the stale check fires.
+#
+# MERGE-ORDER NOTE, live right now: the five `prometheus.*` entries below are
+# exactly the five paths PR #1659 re-paths under prometheus.prometheusSpec.* (and
+# alertmanager to the top level). Both PRs target `monitoring-fix` and neither has
+# merged, so today they still reproduce and belong here. Whichever merges SECOND
+# must delete all five in the same change -- verified by running this guard
+# against #1659's env.yaml, which fails with precisely those five and nothing
+# else. That is the stale-baseline check doing its job, not a regression: it goes
+# red rather than letting a fixed baseline sit there re-opening the hole. Only
+# `ingress-nginx` (#1648) should survive that merge.
 KNOWN_UNREAD = {
     "prometheus.retention": "#1645 -- reads at prometheus.prometheusSpec.retention",
     "prometheus.storageSpec": "#1645 -- reads at prometheus.prometheusSpec.storageSpec",
@@ -268,7 +287,9 @@ def run():
               "quietly re-opens the hole it was holding.\n")
         for p in stale:
             print(f"  {p}    ({KNOWN_UNREAD[p]})")
-        print()
+        print("\nThis is the EXPECTED outcome when the fixing pull request lands: "
+              "delete the listed entries from KNOWN_UNREAD in that same change. "
+              "The five prometheus.* entries all go together with #1659.\n")
 
     if added:
         rc = 1
