@@ -326,6 +326,14 @@ otel:
   # /javaagent.jar. Pinned to match the Ansible tier's agent version
   # (local-setup/otel/download-agent.sh pins 2.11.0) so metric names and the
   # JVM dashboard line up across both tiers.
+  #
+  # The 2.11.0 tag is published and pullable — GHCR's package page only shows
+  # recent tags by default, so check the registry, not the page. Verified
+  # 2026-08-10 against ghcr.io/v2/.../manifests/2.11.0: an OCI image index at
+  # sha256:b32b2153611bb11a98006d8d34c3ee91d307f491fa754ab66f5b0aff31a93a1b
+  # covering linux/amd64, arm64, s390x and ppc64le. Re-check before bumping:
+  # otel.enabled adds this as an init container to every service, so a bad tag
+  # is ImagePullBackOff across the whole tier at once.
   agentImage: "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.11.0"
   # Path to the jar INSIDE agentImage. Configurable because it differs between
   # the operator image (/javaagent.jar) and a hand-built one.

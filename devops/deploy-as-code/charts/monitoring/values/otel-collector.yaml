@@ -8,9 +8,14 @@
 # receives on a single Prometheus endpoint, with per-service labels preserved
 # via the `service.name` resource attribute. That is what turns "add a
 # ServiceMonitor to each of 41 charts" into "add one ServiceMonitor for the
-# collector" — see #1646. It also carries traces, so it closes the tracing gap
-# in the same move: 25 live services currently emit Jaeger spans to an agent
-# that is not deployed and could not receive them if it were.
+# collector" — see #1646.
+#
+# Metrics only for now. The OTLP receiver below already accepts traces, but the
+# pipeline that would forward them is deliberately absent until a trace backend
+# lands on this tier — see the NOTE under `service.pipelines`, and
+# `otel.tracesExporter: "none"` in charts/common/values.yaml. So this does not
+# yet close the tracing gap: 25 live services still emit Jaeger spans to an
+# agent that is not deployed and could not receive them if it were.
 mode: deployment
 replicaCount: 1
 
