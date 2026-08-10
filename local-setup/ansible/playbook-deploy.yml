@@ -100,6 +100,14 @@
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      # GF_SECURITY_ADMIN_PASSWORD in the compose file is `${GF_ADMIN_PASSWORD:?}`
+      # (no default, on purpose — see the grafana service there). Compose
+      # interpolates for `down` too, so a box whose previous deploy aborted
+      # before .env got the real value would fail this teardown on an
+      # unresolvable variable. The value is irrelevant to `down`; feed it a
+      # placeholder rather than let a missing secret block a teardown.
+      environment:
+        GF_ADMIN_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -1577,6 +1585,30 @@
       when:
         - build_digit_ui | default(false)
 
+    # ---- Grafana admin password BEFORE the first compose-up ----
+    # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
+    # ${GF_ADMIN_PASSWORD:?} — no default, so an unset variable aborts the whole
+    # compose invocation (that is the point: a `:-admin` default would ship
+    # admin/admin to anyone running the file standalone). But the authoritative
+    # value only exists further down, after the OpenBao bootstrap — which itself
+    # needs the stack up. Same ordering trap the KEYCLOAK/novu prep blocks below
+    # solve, and the same fix: put a value in .env before anything runs compose.
+    #
+    # It is random per run, not a fixed placeholder, because it IS the password
+    # Grafana seeds its admin row with on a first boot (GF_SECURITY_ADMIN_PASSWORD
+    # is only read when grafana_data is empty). If a deploy dies between here and
+    # the OpenBao block, the box is left with an unguessable admin password
+    # instead of admin/admin. The cost is that Grafana gets recreated once more
+    # per deploy, when the OpenBao value replaces this line further down.
+    - name: "Grafana prep — write a GF_ADMIN_PASSWORD into .env BEFORE compose-up"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+        create: true
+        mode: '0600'
+      no_log: true
+
     # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
     # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
     # secret is otherwise written to .env only AFTER it (the OpenBao block further
@@ -2279,13 +2311,19 @@
     # first run the stored value is reused, which keeps the password stable
     # across deploys. Operators read it back with:
     #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+    #
+    # `or`, not `ternary`. Jinja evaluates every filter argument before calling
+    # the filter, so `… | ternary(stored, lookup('password', …))` runs the
+    # generator on every deploy and throws the result away whenever OpenBao
+    # already has a value. `or` compiles to Python's `or` and short-circuits, so
+    # the lookup only runs when there is nothing stored — which is also what the
+    # task name claims. (default('', true) turns both "undefined" and "" into the
+    # falsey '' that `or` needs.)
     - name: "OpenBao — resolve Grafana admin password (generate if absent)"
       ansible.builtin.set_fact:
         grafana_admin_pw: >-
-          {{ bao_secrets.json.data.data.grafana_admin_password
-             | default('', true)
-             | ternary(bao_secrets.json.data.data.grafana_admin_password | default(''),
-                       lookup('password', '/dev/null length=24 chars=ascii_letters,digits')) }}
+          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
       no_log: true
 
     - name: "OpenBao — persist generated Grafana admin password"
@@ -2334,10 +2372,24 @@
           AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
-          GF_ADMIN_PASSWORD={{ grafana_admin_pw }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    # GF_ADMIN_PASSWORD is the one OpenBao-backed value that is NOT in the block
+    # above: "Grafana prep" already wrote a pre-boot line for it before the stack
+    # came up (the compose file has no default for it), and appending a second
+    # line inside the block would leave two GF_ADMIN_PASSWORD entries in .env
+    # with the winner decided by file order. Replace the existing line in place
+    # instead, so .env always has exactly one — now the authoritative value.
+    - name: "OpenBao — put the stored Grafana admin password into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
+        create: false
+        mode: '0600'
       no_log: true
 
     # Keycloak-tier secrets — appended as a separate marked block so the
@@ -4212,12 +4264,30 @@
     # the failure mode it leaves behind is silent: the UI keeps whatever password
     # the volume was seeded with, nobody can log in with the OpenBao value, and a
     # `failed_when: false` would bury that in a 4000-line deploy log.
+    #
+    # --password-from-stdin, NOT the positional argument. As an argument the
+    # password lands in the host's process table and the container's argv, and
+    # /proc/<pid>/cmdline is world-readable — so every `no_log` on the Ansible
+    # side is undone for the lifetime of the exec by any local user running
+    # `ps aux`. The CLI reads one line off stdin instead (bufio.Scanner in
+    # pkg/cmd/grafana-cli/commands/reset_password_command.go; present in the
+    # pinned grafana 11.4.0), and `docker exec -i` is what forwards it.
+    #
+    # failed_when is explicit because a non-zero rc is not the only failure:
+    # resetPasswordCommand returns nil when the admin user cannot be found, so
+    # the CLI exits 0 after printing "Admin user cannot be found". Gate on the
+    # success line so that case is loud too.
     - name: Grafana — align admin password with OpenBao (idempotent)
       ansible.builtin.command: >-
-        docker exec digit-grafana
-        grafana cli admin reset-admin-password {{ grafana_admin_pw }}
+        docker exec -i digit-grafana
+        grafana cli admin reset-admin-password --password-from-stdin
+      args:
+        stdin: "{{ grafana_admin_pw }}"
       register: grafana_pw_reset
       changed_when: false
+      failed_when: >-
+        grafana_pw_reset.rc != 0
+        or 'Admin password changed successfully' not in grafana_pw_reset.stdout
       no_log: true
       when: grafana_health.rc == 0
 
@@ -4229,9 +4299,11 @@
         msg: >-
           Grafana: {{ 'admin password aligned with OpenBao'
                       if grafana_health.rc == 0
-                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or:
-                            docker exec digit-grafana grafana cli admin reset-admin-password "$(bao kv get -field=grafana_admin_password '
-                           ~ secrets_path ~ ')"' }}
+                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or (piped, so the
+                            password stays out of ps aux):
+                            bao kv get -field=grafana_admin_password '
+                           ~ secrets_path ~
+                           ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's

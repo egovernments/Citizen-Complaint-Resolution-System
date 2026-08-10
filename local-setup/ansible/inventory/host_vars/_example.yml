@@ -514,6 +514,28 @@ force_clean: false
 # is a Linux box running as root.
 install_claude_code: false
 
+# Let logged-out visitors read Grafana at https://<domain>/grafana/ with the
+# Viewer role (never Admin — the role is pinned in the compose file).
+#
+# READ THIS BEFORE ENABLING. Viewer is not a safe role on this stack, because
+# Grafana is not just dashboards:
+#   * the Loki datasource is provisioned with `access: proxy`, so Grafana's
+#     backend runs any Loki query a Viewer asks for;
+#   * promtail ships every container's stdout into Loki, including
+#     egov-user-proxy's nginx access log;
+#   * Kong's auth-enrichment calls that proxy as
+#     /user/_details?access_token=<live session token>, so those tokens are
+#     sitting in Loki as plain log text.
+# A logged-out visitor with Viewer can therefore harvest live bearer tokens and
+# replay them against the API. That is the same credential disclosure the login
+# form was turned on to stop; it just costs an extra query. Leave this false on
+# anything reachable from the internet unless you have first scrubbed
+# access_token out of the log pipeline.
+#
+# Set it here, not in /opt/digit/.env — the playbook regenerates that file from
+# templates/digit.env.j2 on every deploy, so a hand-edit there silently reverts.
+grafana_anonymous_enabled: false
+
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 
 nginx_features:
@@ -562,6 +584,9 @@ bootstrap_secrets:
   # in OpenBao. Read it back with:
   #   bao kv get -field=grafana_admin_password {{ secrets_path }}
   # grafana_admin_password: ""
+  #
+  # (Anonymous/logged-out Grafana access is a separate, top-level knob —
+  #  `grafana_anonymous_enabled`, documented further down. It is not a secret.)
   # Keycloak secrets — only consumed when enable_keycloak: true.
   # Leave empty on tenants without Keycloak; the playbook only resolves
   # these via `| mandatory` inside the digit.env.j2 keycloak block,
