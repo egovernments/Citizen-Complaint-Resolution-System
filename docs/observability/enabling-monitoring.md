@@ -4,8 +4,18 @@ How much monitoring to run, what each part costs, and how to turn parts on and o
 
 Written for the question an operator actually has: **"how much can I afford, and what do I lose if I skip a piece?"**
 
-> Describes the state of the `monitoring-fix` branch. Some knobs referenced here
-> (`observability_level`, the Gatus observability checks) arrive with that work.
+> **This describes work in flight on the `monitoring-fix` integration branch, not
+> what is on `master` today.** Named, so nobody goes looking for a knob that is not
+> there yet:
+>
+> | Described here | Actually arrives with |
+> |---|---|
+> | `observability_level` and the `obs-*` compose profiles | #1657, plus the three defect fixes in #1687 |
+> | `.github/scripts/check-helm-values-paths.py` in CI | #1652 |
+> | The Kubernetes tier's `monitoring.*` toggles | #1675 — until it lands the helmfile line really is commented out, as the Kubernetes section below describes |
+>
+> None of those had merged when this was written. Everything else here — what each
+> component does, the Gatus coverage rules, the Kubernetes layout — is current.
 
 ---
 
@@ -35,7 +45,7 @@ The same components appear on both tiers under different names. What matters is 
 
 Two things worth knowing before you choose:
 
-- **The collector is not only for traces.** JVM metrics travel OTLP → collector → `:8889`, which is what Prometheus scrapes. Drop the collector and you lose per-service JVM metrics too. **Tempo** is the only traces-exclusive component.
+- **The collector is not only for traces.** JVM metrics travel OTLP → collector → `:8889`, which is what Prometheus scrapes, so it is not something a metrics-only site can skip — which is why the Ansible tier runs it unconditionally rather than putting it in a level. **Tempo** is the only traces-exclusive component.
 - **Gatus tells you *that* something is down; the rest tell you *why*.** Uptime checks alone are a smoke alarm with no thermometer.
 
 ---
@@ -46,9 +56,16 @@ Set it in `host_vars/<tenant>.yml`. Levels are **cumulative** — each includes 
 
 | Level | Adds | Footprint |
 |---|---|---|
-| `metrics` | Gatus, Prometheus, node-exporter, Grafana, collector | ~1.2 GB |
+| `metrics` | Prometheus, node-exporter, Grafana | ~1.2 GB |
 | `logs` | + Loki, Promtail | ~1.8 GB |
 | `traces` **(default)** | + Tempo | ~2.2 GB |
+
+**Gatus and the OTEL collector are not in any level — they always run.** Gatus is the
+uptime board and is cheap; the collector is the pipeline every instrumented service
+emits *into*, so it is needed at every level, and profiling it was reverted in #1687
+(see below). The levels gate what *consumes* telemetry, not what receives it. Their
+cost (~384 MB of the ~1.2 GB above) is therefore a floor, not something a level can
+remove.
 
 ```yaml
 # host_vars/mytenant.yml — keep metrics, skip log and trace storage
@@ -57,9 +74,41 @@ observability_level: metrics
 
 **Why this knob exists.** These boxes are small. 29 services declare roughly **12.8 GB** of configured JVM heap on machines that are commonly 16 GB, and the boxes have **no swap** — so memory pressure means the kernel starts killing processes rather than slowing down. Log and trace storage is where the observability cost concentrates, and skipping it is a legitimate choice.
 
-**Footprints are ceilings, not measurements.** They come from the per-container `mem_limit` values, so treat them as a budget rather than expected usage.
+**Footprints are budgets on paper, not measurements — and not yet enforced.** They are
+the sum of the per-container caps **proposed** in #1612. That issue is still open, so
+no observability container in `local-setup/` carries a `mem_limit` today; every one of
+them runs uncapped. Read the numbers as "what this tier is meant to be allowed", not as
+what it will use, and not as a limit the box imposes.
 
-**There is no Gatus-only level yet.** It would be the cheapest (~64 MB), but 16 application services declare `depends_on: otel-collector`, so a level omitting the collector risks failing the deploy rather than shrinking it. Removing that dependency is the fix, and it is tracked separately.
+<details>
+<summary>These numbers differ from the ones in #1601 — why</summary>
+
+The umbrella issue quotes *uptime ~64 MB, +metrics ~900 MB, +logs ~1.5 GB, +traces
+~2.2 GB*. Both sets add up the same #1612 caps; they disagree about which tier the OTEL
+collector (320 MB) belongs to.
+
+#1601 counted it under *traces*, the natural assumption. #1657 moved it to *metrics*,
+because JVM metrics travel OTLP → collector → `:8889` and Prometheus scrapes that — a
+site on `metrics` needs the collector or it gets no per-service metrics at all. That one
+reclassification is the whole gap: 896 + 320 = 1216 (~1.2 GB) instead of ~900 MB, and
+1536 + 320 = 1856 (~1.8 GB) instead of ~1.5 GB. The endpoints match because the total
+is unchanged (2240 MB) and *uptime* contains neither.
+
+**#1687 then moved it out of the tiers entirely** — see below. The three numbers in the
+table are unaffected, because the collector is included at every one of them either way.
+The `uptime` figure is the casualty: a Gatus-only level would still run the collector,
+so its floor is ~384 MB, not ~64 MB.
+
+</details>
+
+**There is still no Gatus-only level**, and the reason has changed. It *was* that 16
+application services declare `depends_on: otel-collector`, so a level omitting the
+collector risked failing the deploy rather than shrinking it. #1687 removed the
+collector's profile altogether — 12 of those 16 dependents are themselves unprofiled,
+and Compose rejects the entire project when a selected service depends on one excluded
+by a profile, which broke every ad-hoc `docker compose` command (`config`, `ps`, `logs`,
+`up`) for anyone who had not exported `COMPOSE_PROFILES`. So the deploy risk is gone,
+but so is most of the saving: an `uptime` level would still run the collector.
 
 ### Verifying it did what you asked
 
@@ -68,7 +117,17 @@ docker compose ps --format '{{.Name}}' | sort     # which containers actually st
 grep -E 'OTEL_(TRACES|METRICS)_EXPORTER' /opt/digit/.env
 ```
 
+Expect `digit-gatus` and `digit-otel-collector` at every level; Prometheus, Grafana and
+node-exporter from `metrics` up; Loki and Promtail from `logs` up; Tempo only at
+`traces`.
+
 At `metrics` and `logs`, `OTEL_TRACES_EXPORTER` is set to `none` — otherwise every Java service would keep shipping spans to a Tempo that is not running, and the collector would log export failures on a loop.
+
+**Lowering the level removes containers, as of #1687.** Compose profiles only decide
+what to *start*; on their own they leave anything already running untouched, so before
+#1687 dropping a tenant from `traces` to `metrics` left Tempo, Loki and Promtail running
+and the operator saw no change. The playbook now tears down the tiers the tenant no
+longer runs.
 
 ---
 
@@ -135,7 +194,19 @@ Each is tracked:
 
 Being explicit, because a gap you chose is different from one you missed.
 
-**Ansible tier** — `promtail` and `node-exporter` have no Gatus check: Promtail exposes no HTTP listener, and a dead node-exporter surfaces as a stale Prometheus target rather than a missing check. `.github/scripts/check-gatus-coverage.py` keeps the full list with a reason for each entry, and CI fails if a new service is added without either a check or an entry.
+**Ansible tier — nothing monitors the monitoring.** Not just Promtail and node-exporter:
+Gatus has no check for **any** of the seven observability services. `grafana`,
+`prometheus`, `loki`, `tempo`, `otel-collector` and `node-exporter` are all exempted in
+`.github/scripts/check-gatus-coverage.py` as *"observability plumbing … not a serving
+dependency"*, and `promtail` additionally exposes no HTTP listener to check. The
+reasoning is that these failing costs visibility, not service — but the consequence is
+that the stack telling you about outages cannot tell you about its own. That is a
+deliberate gap with a real edge, and it is tracked as **#1613**, which has no PR yet.
+Until it does, a dead Prometheus is discovered by noticing the graphs stopped.
+
+The exemption list carries a reason per entry, and CI fails if a new service is added
+without either a check or an entry — so the gap stays visible rather than growing
+quietly.
 
 **Kubernetes tier** — pod health is covered natively by liveness and readiness probes plus the `kubernetesApps` alert rules, which is why there is no Gatus equivalent. What blackbox adds is the outside view: DNS, ingress, TLS and routing, which no in-cluster probe exercises.
 

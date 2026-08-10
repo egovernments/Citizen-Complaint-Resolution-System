@@ -56,7 +56,13 @@ A standard deploy therefore installs **no** Prometheus, Grafana, Loki or Alertma
 
 **A mis-pathed values key is silent.** Helm ignores values nothing reads: no warning, no exit code, and `helm template` will not catch it either — it fails only on template errors, `required`/`fail`, or a `values.schema.json` violation, and these charts ship no schema. So a key at the wrong depth looks exactly like working configuration.
 
-Two long-lived defects came from precisely this, which is why `.github/scripts/check-helm-values-paths.py` now runs in CI and fails on any values key the target chart cannot read.
+Two long-lived defects came from precisely this (#1645 and #1648), which is why `.github/scripts/check-helm-values-paths.py` fails CI on any values key the target chart cannot read.
+
+> **Not merged yet.** That guard and its `deploy-as-code validation` workflow arrive with
+> **#1652**; `.github/scripts/` currently holds only the flyway, gateway-whitelist and
+> gatus-coverage checkers. Until #1652 lands, **nothing** in CI validates this directory
+> beyond `gateway-whitelist-parity`, which reads exactly two list keys out of `env.yaml`.
+> Assume a mis-pathed key here reaches production unremarked.
 
 ## Secrets
 
