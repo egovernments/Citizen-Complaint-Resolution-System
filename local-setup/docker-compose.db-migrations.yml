@@ -858,7 +858,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1130,7 +1130,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1214,7 +1214,7 @@ services:
   # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-cae07a3}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"

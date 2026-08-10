@@ -329,7 +329,7 @@ The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
 -f docker-compose.egov-digit.yaml
 [-f docker-compose.fast-path.yml]          # when db_fast_path is set
 -f docker-compose.migrations.yml
--f docker-compose.migrations.ansible.yml
+-f docker-compose.monitoring.yml
 [-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
 ```
 
