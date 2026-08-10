@@ -1,5 +1,35 @@
 [
     {
+        "code": "Home",
+        "message": "Home",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Create Complaint",
+        "message": "Create Complaint",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Search Complaint",
+        "message": "Search Complaint",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Dashboard viewer",
+        "message": "Dashboard viewer",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "Search",
+        "message": "Search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
         "code": "AADHAAR_IS_REQUIRED",
         "message": "Aadhaar number is required",
         "module": "rainmaker-common",
