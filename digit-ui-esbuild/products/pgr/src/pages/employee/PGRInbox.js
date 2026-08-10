@@ -258,13 +258,29 @@ const PGRSearchInbox = () => {
 
   return (
     <div className="v2-pgr-inbox v2-scope">
-      {/* CCSD-2086: centre the system-name header in the inbox's left links card
-          (it read left-aligned). Scoped to .v2-pgr-inbox so the shared
-          InboxSearchComposer class isn't recentred for other modules; the
+      {/* CCSD-2086: the system-name card in the inbox's left links panel read
+          flush top-left. The shipped digit-inbox-search-links-container has NO
+          padding / height / centering rule (only the legacy non-"digit-"
+          prefixed .inbox-search-links-container scss did), so the header text
+          sat in the top-left corner with the rest of the card empty below it.
+          Give the container real padding and make it a full-height flex column
+          that centres its content vertically, and centre the header row + text
+          horizontally. Scoped to .v2-pgr-inbox so the shared
+          InboxSearchComposer classes aren't restyled for other modules; the
           two-class selector outranks the component's own single-class rule
-          without needing !important. */}
+          without !important. margin-bottom:0 on the header stops the stock
+          1.5rem gap (meant to separate header from links) from nudging the
+          text up when there are no links below it. */}
       <style>{`
-        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; }
+        .v2-pgr-inbox .digit-inbox-search-links-container {
+          height: 100%;
+          box-sizing: border-box;
+          padding: 1.5rem 1rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; margin-bottom: 0; }
         .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: center; }
       `}</style>
       <header className="v2-employee-page-header">
