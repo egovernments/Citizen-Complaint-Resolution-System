@@ -4486,10 +4486,17 @@
 
     - name: Show observability stack health
       debug:
+        # item.get(), not item.rc — an item skipped by the profile gate above has
+        # no `rc` key at all, and attribute access on the result dict RAISES
+        # ("object of type 'dict' has no attribute 'rc'") before `| default()`
+        # can supply a fallback, which fails the whole task and with it the
+        # deploy. Caught on a tenant at observability_level: metrics, where loki
+        # and tempo are correctly skipped and were the only two items without rc.
         msg: >-
           {{ item.item.name }}:
-          {{ 'HEALTHY' if item.rc == 0
-             else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)' }}
+          {{ 'SKIPPED (tier not deployed)' if item.get('skipped', false)
+             else ('HEALTHY' if item.get('rc', 1) == 0
+                   else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)') }}
       loop: "{{ observability_health.results }}"
       loop_control:
         label: "{{ item.item.name }}"
