@@ -12,6 +12,14 @@
 # every redeploy wiped it, so "how long was it down?" and "is this endpoint
 # flapping or is this the first failure?" were unanswerable — which is the
 # first question anyone asks when an alert fires.
+#
+# Retention is deliberately left unset: Gatus bounds it itself, per endpoint, at
+# maximum-number-of-results 100 and maximum-number-of-events 50 (upstream
+# storage/config.go, DefaultMaximumNumberOfResults / DefaultMaximumNumberOfEvents),
+# and the SQL store prunes past those thresholds. gatus.db therefore settles at a
+# steady-state size instead of growing forever. Set those keys here only if a
+# deployment wants a different window -- and check the pinned image supports them,
+# since Gatus rejects unknown config keys outright.
 storage:
   type: sqlite
   path: /data/gatus.db
