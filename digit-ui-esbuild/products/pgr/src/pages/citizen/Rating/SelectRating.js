@@ -15,7 +15,6 @@ import {
 
 import { updateComplaints } from "../../../redux/actions/index";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
-import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
 
 // i18n fallback — when a translation key is unavailable, surface the
 // English copy instead of leaving a raw constant on screen.
@@ -181,20 +180,21 @@ const SelectRating = ({ parentRoute }) => {
       complaintDetails.service.additionalDetail,
       { ratingFeedback: selections.join(",") }
     );
-    // CCSD-2167: a rating routes the complaint to the CASE MANAGER who last
-    // handled it, found by walking the workflow history for CMS_CASE_MANAGER.
-    // Omit assignes entirely when none is found (a complaint with no case
-    // manager in its history, or the standard non-CMS workflow) so the payload
-    // stays identical to the pre-2167 behaviour. hrmsAssignes mirrors assignes,
-    // matching the employee ASSIGN payload (PGRDetails.js).
-    const stateCode = Digit.ULBService.getStateId();
-    const businessId = complaintDetails?.service?.serviceRequestId || id;
-    const caseManagerUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_CASE_MANAGER");
+    // CCSD-2167: the ticket asked for RATE to assign the complaint to the Case
+    // Manager. That is NOT achievable via the workflow: RATE transitions to a
+    // TERMINAL state (CLOSEDAFTERRESOLUTION / CLOSEDAFTERREJECTION), and
+    // egov-workflow-v2 rejects ANY assignee on a terminal transition —
+    // verified live on cms-pilot: sending the case-manager uuid returned
+    // 400 INVALID_ASSIGNEE ("Cannot assign to the user: <uuid>"), which would
+    // block the citizen's rating. So RATE sends no assignes (unchanged from
+    // pre-2167). Routing a rating to the Case Manager needs a backend change
+    // (allow an assignee on the RATE transition, or record it off-workflow) —
+    // tracked back to the ticket owner. The Reopen -> Supervisor half works and
+    // stays. See utils/workflowAssignee.js (still used by reopen).
     complaintDetails.workflow = {
       action: "RATE",
       comments,
       verificationDocuments: [],
-      ...(caseManagerUuid ? { assignes: [caseManagerUuid], hrmsAssignes: [caseManagerUuid] } : {}),
     };
 
     try {
