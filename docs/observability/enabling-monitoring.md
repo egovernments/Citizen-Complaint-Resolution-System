@@ -12,7 +12,8 @@ Written for the question an operator actually has: **"how much can I afford, and
 > |---|---|
 > | `observability_level` and the `obs-*` compose profiles | #1657, plus the three defect fixes in #1687 |
 > | `.github/scripts/check-helm-values-paths.py` in CI | #1652 |
-> | The Kubernetes tier's `monitoring.*` toggles | #1675 — until it lands the helmfile line really is commented out, as the Kubernetes section below describes |
+> | The Kubernetes tier's wired-in helmfile and `monitoring.*` toggles | #1675 — until it lands the helmfile line is still commented out and `env.yaml` has no `monitoring:` block |
+| Grafana alert rules, contact points and the alerting test | #1673, stacked on #1609 — a different branch chain from this one |
 >
 > None of those had merged when this was written. Everything else here — what each
 > component does, the Gatus coverage rules, the Kubernetes layout — is current.
@@ -25,7 +26,7 @@ Written for the question an operator actually has: **"how much can I afford, and
 |---|---|---|
 | Used for | **small-scale** deployments, one tenant per box | **large-scale**, production Kubernetes |
 | Lives in | `local-setup/` | `devops/deploy-as-code/` |
-| Monitoring is | **on by default**, sized by `observability_level` | **off by default** — one commented line |
+| Monitoring is | **on by default**, sized by `observability_level` | **off by default** — six per-component booleans, all `false` |
 
 If you only run one of them, read only that section.
 
@@ -133,7 +134,14 @@ longer runs.
 
 ## Kubernetes tier: wired in, every component off by default
 
-`devops/deploy-as-code/digit-helmfile.yaml` lists the tiers to install. The monitoring line **used to be commented out entirely**; as of #1675 it is present, and each component is gated instead:
+> **This section describes #1675, which has not merged.** On `monitoring-fix` today
+> the helmfile line is still commented out and `charts/environments/env.yaml` has no
+> `monitoring:` block, so the toggles below do not exist yet. #1675 and this PR both
+> target `monitoring-fix` and neither depends on the other's merge, so whichever lands
+> first, expect a window where the tree and this page disagree. Nothing here is wrong
+> about the intended shape — it is the timing that is unsettled.
+
+`devops/deploy-as-code/digit-helmfile.yaml` lists the tiers to install. The monitoring line **used to be commented out entirely**; #1675 makes it present, and gates each component instead:
 
 ```yaml
   - path: ./charts/auxiliary-services/auxiliary-helmfile.yaml

@@ -4,15 +4,34 @@ What alerts exist, what each one means, and what to do when one fires.
 
 Alerting ships **off**. Nothing here sends anything until someone sets a webhook — see [Turning it on](#turning-it-on). That is deliberate: an alert channel nobody reads is worse than no alerting, because it looks like coverage.
 
+> **The rules this documents are not merged yet.** `local-setup/otel/grafana/provisioning/alerting/`
+> (`rules.yaml`, `contactpoints.yaml`, `policies.yaml`) and
+> `local-setup/tests/static/grafana-alerting.test.ts` arrive with **#1673**, stacked on
+> **#1609** — a different branch chain from this one, so they are not in this PR's tree
+> and will not be until both land. Every threshold, `noDataState` and `isPaused` value
+> below was read off #1673's `rules.yaml`; the file paths are where those files will be.
+
 ---
 
 ## Who receives these
 
 **Undecided at the time of writing.** No team or channel has been named.
 
-That is a real gap, not a formality: every rule below assumes a human eventually looks. Until an owner exists, treat enabling alerting as incomplete, and record the decision here when it is made — otherwise the next person rediscovers the question rather than the answer.
+That is a real gap, not a formality: every rule below assumes a human eventually looks. #1601 calls it a hard blocker in as many words — *"an alert stream with no named owner gets muted within a week"* — and names where it gets settled: **#1609 needs two decisions before it ships, which Slack channel and webhook, and who triages per tenant. #1611 reuses the same channel — decide once, in #1609.**
 
-There is no channel name anywhere in the repo, and there should not be. The channel is chosen by whoever mints the webhook.
+So the next step is not a new issue, it is **#1609**, and this page is where the answer lands:
+
+- [ ] Owner / triage rota decided in **#1609**, then written into the table below.
+
+| Tier | Channel | Owner | Decided in |
+|---|---|---|---|
+| Compose | *unset* | *unset* | #1609 |
+| Ansible (per tenant) | *unset* | *unset* | #1609 |
+| k3s | *unset* | *unset* | #1609 |
+
+Do not turn alerting on for a tenant while those rows are empty — an unowned stream gets muted, and a muted channel silently disables every rule on this page, not just the noisy one.
+
+There is no channel name anywhere in the repo, and there should not be. The channel is chosen by whoever mints the webhook; only the *owner* belongs in the table.
 
 ---
 
@@ -107,7 +126,19 @@ A service climbing toward its ceiling will eventually die and restart, dropping 
 
 The failure Gatus structurally cannot see: `egov-persister` falls behind, the API keeps returning 200, every check stays green, and complaints are **never written to the database**.
 
-First question is *slow or gone*: the **Consumers per group** panel on the *DIGIT Kafka Consumer Lag* dashboard reading **0** means the consumer has died, which needs the opposite fix from a slow one. Lag concentrated on a single partition usually means a poison record, not an undersized consumer.
+First question is *slow or gone*, and a dead consumer needs the opposite fix from a slow one.
+
+**Neither the data nor the dashboard exists yet — both are #1623.** The rule's own description sends you to the *Consumers per group* panel on a *DIGIT Kafka Consumer Lag* board. That board arrives with **#1678**; `local-setup/otel/grafana/provisioning/dashboards/` currently holds only `jvm-services`, `node-exporter-full`, `loki-logs` and `tempo-traces` (plus `pgr-analytics`, once #1634 lands). The `redpanda_*` series it queries arrive with **#1628**, the Redpanda scrape job.
+
+Read that order carefully, because it is the one place on this page where `noDataState: OK` lies. Until #1628 lands, this rule evaluates an empty vector and reports a healthy **ok** that is indistinguishable from "lag is fine" when it actually means *nothing is being measured*. It ships unpaused anyway, deliberately, so it starts working the moment the scrape job appears rather than waiting on someone remembering to unpause it — but do not read a green Kafka rule as evidence the persister is keeping up until #1628 is in the tree.
+
+Meanwhile, answer *slow or gone* from the broker instead — the same call `digit-mcp`'s `kafka_lag` tool makes:
+
+```bash
+docker exec digit-redpanda rpk group describe egov-persister
+```
+
+`LAG` per partition, and an empty member list means gone. Lag concentrated on a single partition usually means a poison record, not an undersized consumer.
 
 10k/15m is deliberately loose — bulk seeding and migrations move real backlogs through legitimately, and they drain.
 
@@ -131,9 +162,13 @@ Do not skip step 1.
 
 ## Why every rule reports OK on missing data
 
-`noDataState: OK` throughout. node-exporter ships in the `docker-compose.monitoring.yml` **overlay** and JVM metrics need the OTEL pipeline, so "no data" usually means *this deployment does not run that component* — a valid configuration, not an incident.
+`noDataState: OK` throughout. node-exporter ships in the `docker-compose.monitoring.yml` **overlay**, JVM metrics need the OTEL pipeline, and below `observability_level: metrics` several of these components are not deployed at all — so "no data" usually means *this deployment does not run that component*, a valid configuration rather than an incident.
 
-Alerting on it would put a permanent, unfixable alert in the channel, and a channel with a permanent alert gets muted — which disables every other rule too. A monitoring component that has genuinely died is Gatus's job (#1613).
+Alerting on it would put a permanent, unfixable alert in the channel, and a channel with a permanent alert gets muted — which disables every other rule too.
+
+**The cost of that choice: an OK is not a positive signal.** A rule reading ok means *either* healthy *or* not measured, and nothing distinguishes them from the channel. The Kafka lag rule is the live example — see above; it will report ok until #1628 gives it data. Confirm a rule has series behind it before treating its silence as reassurance.
+
+**And nothing catches a monitoring component that has genuinely died.** That is meant to be Gatus's job, but Gatus does not check any of them: `grafana`, `prometheus`, `loki`, `tempo`, `otel-collector`, `node-exporter` and `promtail` are all exempted in `.github/scripts/check-gatus-coverage.py` as observability plumbing. Closing that is **#1613**, which has no PR. Today a dead Prometheus is discovered by noticing the graphs stopped.
 
 `execErrState` stays at `Alerting`: a query that *errors* is a broken rule, and that is worth surfacing.
 
