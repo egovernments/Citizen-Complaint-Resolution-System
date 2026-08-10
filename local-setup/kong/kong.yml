@@ -52,6 +52,22 @@ plugins:
   config:
     allowed_payload_size: 10
     size_unit: megabytes
+# Gateway metrics (#1614). Kong bundles this plugin — nothing to install.
+# It serves Prometheus-format metrics on the STATUS listener
+# (KONG_STATUS_LISTEN 0.0.0.0:8100, the port Gatus already health-checks)
+# at /metrics; Prometheus scrapes it by DNS over egov-network, so no host
+# port is published. Every citizen request crosses Kong, so this is the
+# only source of per-route status-code and latency data we have.
+#
+# per_consumer is deliberately NOT enabled: it multiplies series count for
+# little incident-response value, and metric cardinality is a real cost on
+# a memory-tight box (#1612).
+- name: prometheus
+  config:
+    status_code_metrics: true
+    latency_metrics: true
+    bandwidth_metrics: true
+    upstream_health_metrics: true
 - name: pre-function
   config:
     access:
