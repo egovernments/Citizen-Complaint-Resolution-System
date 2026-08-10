@@ -166,7 +166,14 @@ export const StoreService = {
               ?.sort((x, y) => x?.order - y?.order) || [],
           uiHomePage: uiHomePage,
         };
-    initData.selectedLanguage = Digit.SessionStorage.get("locale") || initData.languages[0].value;
+    // CCSD-2161: on a fresh session (no stored "locale") fall back to the
+    // CONFIGURED default locale, NOT languages[0]. i18next's active language
+    // already resolves to getDefaultLanguage() (e.g. pt_PT); using
+    // languages[0] here (English — first in the StateInfo seed) fetched the
+    // en_IN bundle instead, so the app rendered English while the locale read
+    // pt_PT. Aligning both makes a fresh session render the default locale.
+    initData.selectedLanguage =
+      Digit.SessionStorage.get("locale") || Digit.Utils.getDefaultLanguage() || initData.languages[0].value;
 
     ApiCacheService.saveSetting(MdmsRes["DIGIT-UI"]?.ApiCachingSettings);
 

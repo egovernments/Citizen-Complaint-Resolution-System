@@ -23,7 +23,17 @@ initLibraries();
 window.Digit.Customizations = { PGR: {}};
 window.Digit.applyTheme = applyTheme;
 
-const DEFAULT_LOCALE = "en_IN";
+// CCSD-2161: derive the boot default from the deploy's configured locale
+// (globalConfigs LOCALE_DEFAULT/LOCALE_REGION — pt_PT on Moz) instead of a
+// hardcoded en_IN, which clobbered the "pt" that public/globalConfigs.js had
+// just written and forced every fresh session to English.
+const getDefaultLocale = () => {
+  try {
+    const d = window?.Digit?.Utils?.getDefaultLanguage?.();
+    if (d && !d.includes("undefined")) return d;
+  } catch (e) {}
+  return "en_IN";
+};
 
 const parseValue = (value) => {
   try { return JSON.parse(value); } catch (e) { return value; }
@@ -40,13 +50,22 @@ const getFromInfo = (info) => {
   return info?.tenantId || info?.tenantid || info?.userInfo?.tenantId || null;
 };
 
+// CCSD-2161: only seed defaults when the user has NO stored choice — the old
+// version unconditionally rewrote locale/selectedLanguage/i18nextLng to en_IN
+// on EVERY boot, overriding both the configured default and any prior manual
+// toggle's raw-localStorage traces. Crucially, also seed the wrapped
+// Digit.SessionStorage "locale" key: that is the ONE key both language paths
+// read (i18next's active lng via getCurrentLanguage(), and the bundle fetch
+// via initData.selectedLanguage). Nothing seeded it before, which is why the
+// active language said pt_PT while the en_IN bundle loaded.
 const normalizeLocale = () => {
-  window.localStorage.setItem("locale", DEFAULT_LOCALE);
-  window.localStorage.setItem("selectedLanguage", DEFAULT_LOCALE);
-  window.localStorage.setItem("i18nextLng", DEFAULT_LOCALE);
-  if (window?.Digit?.StoreData?.setCurrentLanguage) {
-    window.Digit.StoreData.setCurrentLanguage(DEFAULT_LOCALE);
-  }
+  const existing = window.Digit?.SessionStorage?.get?.("locale");
+  if (existing) return; // explicit user choice (manual toggle) always wins
+  const def = getDefaultLocale();
+  window.localStorage.setItem("locale", def);
+  window.localStorage.setItem("selectedLanguage", def);
+  window.localStorage.setItem("i18nextLng", def);
+  window.Digit?.SessionStorage?.set?.("locale", def);
 };
 
 async function bootstrap() {
