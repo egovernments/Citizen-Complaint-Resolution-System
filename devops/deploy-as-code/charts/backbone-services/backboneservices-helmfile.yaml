@@ -141,6 +141,35 @@ releases:
       value: true
     - name: metrics.serviceMonitor.labels.release
       value: kube-prometheus-stack
+    # Both exporters default to `resources: {limits: {}, requests: {}}`, so
+    # without these they would join the broker as unbounded containers -- the
+    # pattern #1612 flags -- and the jmx one is a sidecar on the broker pod
+    # itself, where an unbounded exporter competes with the broker for the
+    # node. Sized for what they are: kafka-exporter is a small Go binary that
+    # polls consumer offsets; jmx-exporter is a JVM.
+    - name: metrics.kafka.resources.requests.cpu
+      value: 50m
+    - name: metrics.kafka.resources.requests.memory
+      value: 64Mi
+    - name: metrics.kafka.resources.limits.cpu
+      value: 200m
+    - name: metrics.kafka.resources.limits.memory
+      value: 128Mi
+    # 384Mi and not tighter because the chart hardcodes
+    # `-XX:MaxRAMPercentage=100` on this container
+    # (kafka-kraft/templates/controller-eligible/statefulset.yaml:326, not
+    # exposed as a value), so the memory limit IS the JVM's max heap with no
+    # allowance for metaspace, thread stacks or GC structures. The live set of
+    # jmx_prometheus_httpserver is tens of MB; the headroom is there so a heap
+    # that expands under GC pressure cannot reach the cgroup ceiling.
+    - name: metrics.jmx.resources.requests.cpu
+      value: 50m
+    - name: metrics.jmx.resources.requests.memory
+      value: 128Mi
+    - name: metrics.jmx.resources.limits.cpu
+      value: 250m
+    - name: metrics.jmx.resources.limits.memory
+      value: 384Mi
 
 - name: ingress-nginx
   installed: true
