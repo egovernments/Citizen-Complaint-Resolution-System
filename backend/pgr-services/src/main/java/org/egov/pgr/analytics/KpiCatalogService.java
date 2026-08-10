@@ -39,11 +39,32 @@ public class KpiCatalogService {
 
     /** The only departmentScoping value that turns employee department scoping OFF (#1280). */
     private static final String DEPT_SCOPING_DISABLED = "disabled";
-    /** stateRoot -> [Boolean disabled, Long expiresAtMs]. Mirrors AnalyticsService.recordCountCache. */
-    private final java.util.concurrent.ConcurrentHashMap<String, Object[]> deptScopingCache =
+
+    /**
+     * Documented backward-compatible fallback zone (#29 timezone addendum) — used ONLY when a
+     * tenant's state-root {@code dss.DashboardConfig.timeZone} is absent, malformed (not a valid
+     * IANA zone id), or MDMS is unreachable. Matches the historical hardcoded EAT behavior every
+     * unconfigured tenant already had, so an unconfigured deployment sees no change.
+     */
+    static final java.time.ZoneId DEFAULT_TIME_ZONE = BusinessCalendar.DEFAULT_ZONE;
+
+    /**
+     * ONE cached fetch of the state-root's {@code dss.DashboardConfig} record, shared by
+     * {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} so the two config axes
+     * never trigger duplicate MDMS calls or run parallel cache implementations (#29 requirement).
+     * stateRoot -> [Map<String,Object> record-or-null, Long expiresAtMs].
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object[]> dashboardConfigCache =
             new java.util.concurrent.ConcurrentHashMap<>();
     /** Injectable clock for cache-expiry tests (see KpiCatalogServiceDeptScopingTest). */
     private java.util.function.LongSupplier configClock = System::currentTimeMillis;
+    /**
+     * TTL-bounded warning gate for {@link #resolveTimeZone}'s fallback logging — see
+     * {@link #shouldWarnTimeZoneFallback}. stateRoot -> the {@code dashboardConfigCache}
+     * generation (expiresAtMs) already warned for.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> timeZoneFallbackWarnedGeneration =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private final PGRConfiguration config;
     private final ServiceRequestRepository serviceRequestRepository;
@@ -130,22 +151,13 @@ public class KpiCatalogService {
     public boolean isDepartmentScopingDisabled(String tenantId) {
         try {
             if (tenantId == null || tenantId.isEmpty()) return false;
-            String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-            long now = configClock.getAsLong();
-            Object[] cached = deptScopingCache.get(stateRoot);
-            if (cached != null && (Long) cached[1] > now) return (Boolean) cached[0];
-
-            boolean disabled = false;
-            List<Map<String, Object>> records =
-                    fetchMaster(stateRoot, MASTER_CONFIG, new TypeReference<List<Map<String, Object>>>() {});
-            if (!records.isEmpty()) {
-                Object v = records.get(0).get("departmentScoping");
-                disabled = v instanceof String && DEPT_SCOPING_DISABLED.equalsIgnoreCase(((String) v).trim());
-            }
+            Map<String, Object> record = dashboardConfig(tenantId);
+            if (record == null) return false;
+            Object v = record.get("departmentScoping");
+            boolean disabled = v instanceof String && DEPT_SCOPING_DISABLED.equalsIgnoreCase(((String) v).trim());
             if (disabled)
                 log.info("dss.DashboardConfig.departmentScoping=disabled at {} — employee department scoping OFF",
-                        stateRoot);
-            deptScopingCache.put(stateRoot, new Object[]{disabled, now + configCacheTtlMs()});
+                        multiStateInstanceUtil.getStateLevelTenant(tenantId));
             return disabled;
         } catch (Exception e) {
             // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
@@ -153,6 +165,163 @@ public class KpiCatalogService {
             log.warn("departmentScoping lookup failed for tenant {}; treating as enforced", tenantId, e);
             return false;
         }
+    }
+
+    /**
+     * Resolve the IANA {@link java.time.ZoneId} {@code dss.DashboardConfig.timeZone} declares for
+     * this tenant's state root (#29 timezone addendum) — the single source of the analytics
+     * calendar zone every downstream consumer (planner, composer, compose ops, response) uses.
+     *
+     * <p>Falls back to {@link #DEFAULT_TIME_ZONE} (Africa/Nairobi, documented migration
+     * compatibility default) when the record/field is absent, the value fails
+     * {@link java.time.ZoneId#of}, or MDMS is unreachable (fetchMaster resolves that to "no
+     * record" — see {@link #fetchMaster}). Logged at WARN, gated by {@link #shouldWarnTimeZoneFallback}
+     * so it fires at most once per {@link #dashboardConfigEntry} cache generation (i.e. once per
+     * TTL window) per state root, then again the first request after that generation's config
+     * refresh — never once per request. The rare genuine-exception path (e.g. state-root
+     * resolution itself throwing) is not TTL-gated; it is not expected to repeat every request.
+     * Never throws; never consults the browser or JVM default zone.
+     */
+    public java.time.ZoneId resolveTimeZone(String tenantId) {
+        try {
+            if (tenantId == null || tenantId.isEmpty()) return DEFAULT_TIME_ZONE;
+            String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+            Object[] entry = dashboardConfigEntry(tenantId);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> record = (Map<String, Object>) entry[0];
+            long generation = (Long) entry[1];
+            if (record == null) {
+                if (shouldWarnTimeZoneFallback(stateRoot, generation)) {
+                    log.warn("dss.DashboardConfig not found at {} — falling back to {} (migration compatibility default)",
+                            stateRoot, DEFAULT_TIME_ZONE);
+                }
+                return DEFAULT_TIME_ZONE;
+            }
+            Object v = record.get("timeZone");
+            if (!(v instanceof String) || ((String) v).trim().isEmpty()) {
+                if (shouldWarnTimeZoneFallback(stateRoot, generation)) {
+                    log.warn("dss.DashboardConfig.timeZone not configured at {} — falling back to {}",
+                            stateRoot, DEFAULT_TIME_ZONE);
+                }
+                return DEFAULT_TIME_ZONE;
+            }
+            try {
+                return java.time.ZoneId.of(((String) v).trim());
+            } catch (java.time.DateTimeException ex) {
+                if (shouldWarnTimeZoneFallback(stateRoot, generation)) {
+                    log.warn("dss.DashboardConfig.timeZone '{}' at {} is not a valid IANA zone — falling back to {}",
+                            v, stateRoot, DEFAULT_TIME_ZONE);
+                }
+                return DEFAULT_TIME_ZONE;
+            }
+        } catch (Exception e) {
+            log.warn("timeZone lookup failed for tenant {}; falling back to {}", tenantId, DEFAULT_TIME_ZONE, e);
+            return DEFAULT_TIME_ZONE;
+        }
+    }
+
+    /**
+     * Per-state-root TTL-bounded warning gate for {@link #resolveTimeZone}'s fallback branches
+     * (#29 review fix): {@code generation} is the owning cache entry's {@code expiresAtMs} (see
+     * {@link #dashboardConfigEntry}) — a stable id for "this fetch" that changes only when the
+     * TTL expires and the config is re-fetched. Returns {@code true} (and atomically records
+     * {@code generation} as warned) the FIRST time a given state root/generation pair asks;
+     * every subsequent call for the same still-cached generation returns {@code false}, so a
+     * missing/invalid config warns once per TTL window, then again only after the next refresh.
+     *
+     * <p>{@code ConcurrentHashMap#compute} makes the check-and-set atomic per key, so concurrent
+     * requests racing the same state root's first warning cannot both win. Keyed 1:1 with
+     * {@link #dashboardConfigCache}'s own state-root key set — no separate unbounded retention;
+     * an entry here lives exactly as long as its config-cache counterpart is relevant.
+     */
+    private boolean shouldWarnTimeZoneFallback(String stateRoot, long generation) {
+        boolean[] shouldWarn = {false};
+        timeZoneFallbackWarnedGeneration.compute(stateRoot, (root, warnedGeneration) -> {
+            if (warnedGeneration == null || warnedGeneration != generation) {
+                shouldWarn[0] = true;
+                return generation;
+            }
+            return warnedGeneration;
+        });
+        return shouldWarn[0];
+    }
+
+    /**
+     * THE single cached fetch of the state-root's {@code dss.DashboardConfig} record — the shared
+     * seam {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} both read, so a
+     * request touching both axes issues exactly one MDMS call, and a config flip (either field)
+     * takes effect together within one {@link #configCacheTtlMs()} window. Returns {@code null}
+     * (cached) when no record exists; never throws — callers apply their own field-specific
+     * fallback.
+     */
+    private Map<String, Object> dashboardConfig(String tenantId) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> record = (Map<String, Object>) dashboardConfigEntry(tenantId)[0];
+        return record;
+    }
+
+    /**
+     * Same cached fetch as {@link #dashboardConfig}, additionally exposing the cache entry's
+     * {@code expiresAtMs} as its generation id ({@link #shouldWarnTimeZoneFallback} needs it to
+     * tell "still the same TTL window" apart from "config was just re-fetched"). Returns
+     * {@code Object[]{Map<String,Object> record-or-null, Long expiresAtMs}}.
+     */
+    private Object[] dashboardConfigEntry(String tenantId) {
+        String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long now = configClock.getAsLong();
+        Object[] cached = dashboardConfigCache.get(stateRoot);
+        if (cached != null && (Long) cached[1] > now) return cached;
+
+        List<Map<String, Object>> records =
+                fetchMaster(stateRoot, MASTER_CONFIG, new TypeReference<List<Map<String, Object>>>() {});
+        Map<String, Object> selected = selectDashboardConfigRecord(records);
+        // Unmodifiable: this same Map instance is cached and handed to every caller/thread until the
+        // TTL expires, so a caller mutating it (however unlikely today) must never corrupt the cache.
+        Map<String, Object> record = selected == null ? null : Collections.unmodifiableMap(selected);
+        Object[] entry = new Object[]{record, now + configCacheTtlMs()};
+        dashboardConfigCache.put(stateRoot, entry);
+        return entry;
+    }
+
+    /**
+     * Deterministic dashboard-config record selection when MDMS returns more than one active
+     * {@code dss.DashboardConfig} record for a state root (duplicate/malformed data) — the same
+     * rule applied by the {@code pgr_dashboard_tenant_timezone} SQL view (ORDER BY) and the FE's
+     * {@code useDashboardConfig.js}, so every layer picks the identical record from identical
+     * data. Depends only on fields present in the MDMS data object itself:
+     * <ol>
+     *   <li>the record whose (trimmed) {@code id} equals {@code "default"} wins;</li>
+     *   <li>else the record with the lexicographically smallest nonblank (trimmed) {@code id};</li>
+     *   <li>else the first record in API response order (stable — no reordering).</li>
+     * </ol>
+     * Deliberately does NOT consult API ordering guarantees or audit metadata
+     * (lastModifiedTime etc.) unavailable on this Java data map. Returns {@code null} for an
+     * empty list; a single record is always returned unchanged.
+     */
+    static Map<String, Object> selectDashboardConfigRecord(List<Map<String, Object>> records) {
+        if (records == null || records.isEmpty()) return null;
+        if (records.size() == 1) return records.get(0);
+
+        for (Map<String, Object> r : records) {
+            if ("default".equals(trimmedId(r))) return r;
+        }
+
+        Map<String, Object> smallest = null;
+        String smallestId = null;
+        for (Map<String, Object> r : records) {
+            String id = trimmedId(r);
+            if (id == null || id.isEmpty()) continue;
+            if (smallestId == null || id.compareTo(smallestId) < 0) {
+                smallestId = id;
+                smallest = r;
+            }
+        }
+        return smallest != null ? smallest : records.get(0);
+    }
+
+    private static String trimmedId(Map<String, Object> record) {
+        Object id = record == null ? null : record.get("id");
+        return id instanceof String ? ((String) id).trim() : null;
     }
 
     /**

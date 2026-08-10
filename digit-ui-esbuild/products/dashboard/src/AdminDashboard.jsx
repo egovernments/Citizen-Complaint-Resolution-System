@@ -24,6 +24,7 @@ import DashboardLogin, {
 } from "./components/DashboardLogin";
 import { useDashboardConfig } from "../useDashboardConfig";
 import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
+import { resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -176,6 +177,10 @@ const AdminDashboard = ({ embedded = false }) => {
   const { config: dashboardConfig, loading: dashboardConfigLoading } =
     useDashboardConfig();
   setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
+  // Resolved once dashboardConfig settles (dashboardConfigLoading gates AdminDashboardInner's
+  // mount below), then threaded explicitly through every default-date consumer — no
+  // module-global mutable timezone state, unlike the numberFormat mask above.
+  const timeZone = resolveConfiguredTimeZone(dashboardConfig);
 
   const handleLogin = useCallback(() => {
     window.location.reload();
@@ -190,7 +195,13 @@ const AdminDashboard = ({ embedded = false }) => {
   if (dashboardConfigLoading) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
-  return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
+  return (
+    <AdminDashboardInner
+      embedded={embedded}
+      onSignOut={embedded ? undefined : handleSignOut}
+      timeZone={timeZone}
+    />
+  );
 };
 
 /* -------------------------------------------------------------------------- */
@@ -373,7 +384,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* Inner dashboard                                                             */
 /* -------------------------------------------------------------------------- */
 
-const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+const AdminDashboardInner = ({ onSignOut, embedded = false, timeZone }) => {
   // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount.
   useState(() => {
     dashboardMetrics.beginLoad();
@@ -382,7 +393,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
-    useDashboardFilters();
+    useDashboardFilters(timeZone);
   const { options: filterOptions, loading: filterOptionsLoading } =
     useFilterOptions();
   const tenantId = useMemo(() => getTenantId(), []);
@@ -425,6 +436,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     results: {},
     errors: null,
     partial: false,
+    asOf: null,
+    calendar: null,
   });
   const reqIdRef = useRef(0);
 
@@ -689,7 +702,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   useEffect(() => {
     if (!pack || !tiles.length) {
-      setBatch({ loading: false, results: {}, errors: null, partial: false });
+      setBatch({ loading: false, results: {}, errors: null, partial: false, asOf: null, calendar: null });
       return;
     }
     const refs = buildRefs(tiles, kpis, filters, hierOverrides);
@@ -705,6 +718,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           results: res?.results || {},
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
+          // Batch authority for "Last updated" (#29): the response's own top-level
+          // asOf/calendar, never a fresh client-side clock reading.
+          asOf: typeof res?.asOf === "number" ? res.asOf : null,
+          calendar: res?.calendar || null,
         });
         dashboardMetrics.markAllWidgetsReady(
           countErrorWidgets(res?.errors, tiles.length),
@@ -718,6 +735,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           results: {},
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
+          asOf: null,
+          calendar: null,
         });
         dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
@@ -725,16 +744,21 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refsKey, pack, tenantId]);
 
-  const lastUpdatedLabel = useMemo(
-    () =>
-      new Date().toLocaleString(language?.replace("_", "-"), {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-    [batch.results, language]
-  );
+  // "Last updated" reads the batch's OWN echoed asOf/calendar (#29) — the single
+  // clock reading every tile in this batch was judged against — never a fresh
+  // new Date() at render time, which would drift from what's actually on screen.
+  // No stamp (rather than a fabricated "now") when the batch hasn't supplied one.
+  const lastUpdatedLabel = useMemo(() => {
+    if (batch.asOf == null) return null;
+    const zone = batch.calendar?.timeZone || timeZone;
+    return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      ...(zone ? { timeZone: zone } : {}),
+    });
+  }, [batch.asOf, batch.calendar, timeZone, language]);
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
@@ -849,6 +873,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       filters={filters}
       onFilterChange={handleFilterChange}
       onClearFilters={handleClearFilters}
+      timeZone={timeZone}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
@@ -937,7 +962,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   {removeBtn}
                   {renderTile(item.i)}
                   {ignoredNote}
-                  <CardUpdatedStamp label={lastUpdatedLabel} />
+                  {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
                 </div>
               );
             }
@@ -999,7 +1024,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   {renderTile(item.i, groupBy.info)}
                 </div>
                 {ignoredNote}
-                <CardUpdatedStamp label={lastUpdatedLabel} />
+                {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
                 <ResizeGrip />
               </section>
             );
