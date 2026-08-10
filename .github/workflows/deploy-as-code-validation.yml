@@ -109,3 +109,74 @@ jobs:
             devops/deploy-as-code/charts/environments/env-secrets.yaml \
             devops/deploy-as-code/charts/monitoring/values/ \
             devops/deploy-as-code/digit-helmfile.yaml
+
+  helmfile-template:
+    name: every release must render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The values-path guard above compares key PATHS against a chart's
+      # values.yaml. It cannot see a chart that REJECTS the values it is given.
+      #
+      # PR #1668 is the case that motivated this: the opentelemetry-collector
+      # chart ships a values.schema.json with additionalProperties:false, and
+      # every release here is handed the whole env.yaml tree via
+      # `{{ .Values | toYaml }}`. Helm refused the install outright, listing ~30
+      # env.yaml keys as "not allowed". Nothing caught it -- the guard sees no
+      # mis-path, and no job renders these files -- so it was found by deploying
+      # to a cluster by hand. `helmfile template` reproduces it in seconds.
+      #
+      # This also catches template syntax errors, `fail` calls, and missing
+      # required values, none of which the key-path check can see.
+      - name: install helm and helmfile
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          # Pinned to the version digit_install.yml deploys with. helmfile v1
+          # rejects these files outright, so this must not float.
+          curl -fsSL -o /usr/local/bin/helmfile \
+            https://github.com/roboll/helmfile/releases/download/v0.140.0/helmfile_linux_amd64
+          chmod +x /usr/local/bin/helmfile
+          helmfile --version
+
+      # `<domain_name>` is a placeholder, not a hostname. Rendering is the point
+      # here, not validating the operator's substitution, so give it something
+      # syntactically valid and deterministic.
+      - name: substitute the domain placeholder
+        run: |
+          sed -i 's|<domain_name>|ci.example.com|g' \
+            devops/deploy-as-code/charts/environments/env.yaml
+
+      - name: render every helmfile
+        run: |
+          cd devops/deploy-as-code
+          failed=0
+          for f in charts/*/*helmfile*.yaml; do
+            printf '%-62s ' "$f"
+            # A helmfile with no `environments:` block has no `env` to select,
+            # and helmfile exits non-zero on "no releases found". The only file
+            # in that state is charts/backbone-services/nginx-helmfile.yaml, an
+            # 11-line stub that digit-helmfile.yaml does not include and whose
+            # `values:` path is truncated mid-word. It is dead, not deployed --
+            # skipped here rather than silently failing the guard. If it is ever
+            # revived it gains an environments block and starts being checked.
+            if ! grep -q '^environments:' "$f"; then
+              echo 'SKIPPED (no environments block; not included by digit-helmfile.yaml)'
+              continue
+            fi
+            if helmfile -f "$f" -e env template >/dev/null 2>/tmp/render.err; then
+              echo 'OK'
+            else
+              echo 'FAILED'
+              sed 's/^/      /' /tmp/render.err | tail -25
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo
+            echo 'A release above does not render. That is a deploy failure, not a style issue:'
+            echo 'helmfile sync would fail the same way, so this cannot reach a cluster.'
+            exit 1
+          fi
