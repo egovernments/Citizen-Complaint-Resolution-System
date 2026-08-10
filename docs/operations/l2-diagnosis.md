@@ -202,17 +202,42 @@ escalation, and **traces are kept for 24 hours only**.
 
 > ### If this dashboard is empty
 >
-> Host metrics come from a `node-exporter` container added to the platform on
-> **2026-07-22**. Deployments installed before that date do not have it. Check with:
+> Start with:
 >
 > ```promql
 > up
 > ```
 >
-> If the only result is `job="otel-collector"`, node-exporter isn't running; `job="node"`
-> alongside it means you have host metrics. Enabling it is a redeploy, not a manual step —
-> see [alerts-setup.md § Prerequisite](alerts-setup.md#prerequisite--turn-on-host-metrics).
-> Until then, `df -h` over SSH is your only disk view.
+> `job="node"` alongside `job="otel-collector"` means host metrics are fine and the problem
+> is elsewhere. If only `otel-collector` comes back, work out which of the two causes you
+> have — **check the cheap one first:**
+>
+> ```bash
+> sudo docker ps --filter 'name=node-exporter' --format '{{.Names}}\t{{.Status}}'
+> sudo grep -n 'job_name' /opt/digit/otel/prometheus.yml
+> ```
+>
+> **Container up and `job_name: node` present** → Prometheus is running an older copy of its
+> config. The file is bind-mounted, so it can change under a running Prometheus without it
+> re-reading. Reload it in place — no restart, no downtime (`--web.enable-lifecycle` is
+> already enabled):
+>
+> ```bash
+> sudo docker exec digit-grafana curl -sS -XPOST http://prometheus:9090/-/reload
+> ```
+>
+> Give it a few seconds, then re-run `up`. Confirm the target is actually healthy rather than
+> merely configured:
+>
+> ```bash
+> sudo docker exec digit-grafana curl -sS 'http://prometheus:9090/api/v1/targets?state=active'
+> ```
+>
+> **No container and no `node` job** → `node-exporter` genuinely isn't installed. It was added
+> to the platform on **2026-07-22**; older deployments that were never re-converged lack it.
+> That is a redeploy, not a manual step — see
+> [alerts-setup.md § Prerequisite](alerts-setup.md#prerequisite--turn-on-host-metrics).
+> Until it's done, `df -h` over SSH is your only disk view.
 
 | Panel | Concerning | Why it breaks things |
 |---|---|---|

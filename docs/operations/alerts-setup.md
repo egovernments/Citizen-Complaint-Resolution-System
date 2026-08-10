@@ -79,15 +79,26 @@ up
 | Result | Meaning |
 |---|---|
 | `job="otel-collector"` **and** `job="node"` | Host metrics available. Skip to the next section. |
-| `job="otel-collector"` only | **No host metrics.** The `Node Exporter Full` dashboard will be empty and the host alerts below cannot be created. |
+| `job="otel-collector"` only | **No host metrics right now.** The `Node Exporter Full` dashboard will be empty and the host alerts below cannot be created. Two different causes — see below. |
 
-`node-exporter` was added to the platform on **2026-07-22**. Deployments installed before
-that date do not have it, and it is not something you can add by hand safely — it needs the
-monitoring overlay wired into the Compose stack and a Prometheus scrape job.
+**Missing `node` has two causes, and they need different fixes.** Check them in this order,
+because the second is a one-minute fix and the first is a redeploy:
 
-**Ask us to enable it.** It is a redeploy with `docker-compose.monitoring.yml` layered in,
-plus the `node` scrape job in `otel/prometheus.yml`; both already ship with the platform.
-Reference them by name when you raise the request and it will be quick.
+1. **Prometheus is running an older copy of its configuration.** The scrape job is in the
+   file on disk, but Prometheus has not re-read it since it was added. This is easy to hit,
+   because the config is bind-mounted — the file can change under a running Prometheus
+   without it noticing. **Confirm:** the file `/opt/digit/otel/prometheus.yml` contains a
+   `job_name: node`, and `docker ps` shows a `node-exporter` container up. If both are true,
+   this is your case. **Fix:** L2 reloads the config in place, no restart and no downtime —
+   see [l2-diagnosis.md](l2-diagnosis.md#the-host-itself-cpu-ram-disk).
+2. **`node-exporter` genuinely isn't there.** It was added to the platform on
+   **2026-07-22**; deployments installed before that date and never re-converged do not have
+   it. **Confirm:** no `node-exporter` container in `docker ps -a`, and no `node` job in the
+   config file. **Fix:** ask us — it is a redeploy with `docker-compose.monitoring.yml`
+   layered in, plus the `node` scrape job in `otel/prometheus.yml`; both already ship with
+   the platform. Naming them in the request makes it quick.
+
+Re-run `up` after either fix; `job="node"` at value `1` means you are done.
 
 Until then you have the **service, application and synthetic alerts only**: service crashes, OOM, restarts, error rates and
 latency — which is still most of what actually pages you. Disk filling up, however, is the

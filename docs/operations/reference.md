@@ -236,11 +236,12 @@ and above all **disk space** — as opposed to the individual services.
 
 **Who uses it:** L2.
 
-> **If this dashboard is completely empty, that is expected on some deployments and is not a
-> fault.** The component that reports machine statistics (`node-exporter`) was added to the
-> platform on **2026-07-22**; installations older than that do not have it, so there is
-> nothing for the dashboard to draw. Do not raise it as an incident — it is a known gap that
-> needs a redeploy to close. See
+> **If this dashboard is completely empty, that is not a fault and not an incident.** Either
+> the component that reports machine statistics (`node-exporter`) isn't installed — it was
+> added to the platform on **2026-07-22**, so older installations lack it — or it is running
+> and the collector simply hasn't picked it up yet. Both are known, both are for L2 to sort
+> out, and neither is worth a ticket on its own. Mention it if you were asked to check CPU,
+> memory or disk and couldn't. See
 > [alerts-setup.md](alerts-setup.md#prerequisite--turn-on-host-metrics).
 
 When it does have data, the readings that matter:

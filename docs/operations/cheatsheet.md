@@ -46,7 +46,7 @@ changes state. Step 5 onward is [diagnosis](l2-diagnosis.md).
     ▼
  5. DEEPER    Layer model, slow-vs-failing, DB pool, Kafka lag, traces  → l2-diagnosis.md
  6. HOST      Grafana → Node Exporter Full   (CPU / RAM / disk)
-              Empty dashboard = host metrics not installed. Not a fault.
+              Empty dashboard = host metrics not being collected. Not a fault — tell L2.
 ```
 
 ---

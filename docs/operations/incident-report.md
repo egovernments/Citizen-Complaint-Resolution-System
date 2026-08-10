@@ -112,7 +112,7 @@ Filled in by whoever works [l2-diagnosis.md](l2-diagnosis.md).
 
 22. Host state:
     [ ] normal  [ ] CPU ____  [ ] RAM ____  [ ] disk ____
-    [ ] node-exporter not installed, host metrics unavailable
+    [ ] host metrics unavailable (no `node` job — see l2-diagnosis.md)
 
 23. Database pool (db_client_connections_pending_requests / timeouts):
 

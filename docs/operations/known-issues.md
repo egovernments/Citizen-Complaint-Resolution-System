@@ -76,7 +76,7 @@ Worth knowing so nobody spends an hour on them.
 
 | Looks like | Actually |
 |---|---|
-| `Node Exporter Full` dashboard is completely empty | `node-exporter` isn't installed on deployments made before 2026-07-22. Not a fault; see [alerts-setup.md](alerts-setup.md#prerequisite--turn-on-host-metrics) |
+| `Node Exporter Full` dashboard is completely empty | Either `node-exporter` isn't installed (deployments made before 2026-07-22), **or** it is running and Prometheus simply hasn't re-read its config. Not an incident either way — L2 tells them apart in one minute, and the second is fixed by a config reload with no downtime. See [alerts-setup.md](alerts-setup.md#prerequisite--turn-on-host-metrics) |
 | A log search for "OutOfMemoryError" returns a hit from `grafana` or `loki` | Those tools log your search text back into the log stream. Filter them out |
 | Elasticsearch logs mention "out of memory" | Routine circuit-breaker messages, not a crash |
 | Every service restarts at the same time overnight | A scheduled redeploy, if this deployment has one. Confirm the window before treating it as an incident |
