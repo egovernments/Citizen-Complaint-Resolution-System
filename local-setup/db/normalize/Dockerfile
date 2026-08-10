@@ -1,7 +1,7 @@
 # db-history-normalize — see docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
 #
 # postgres:16 gives us psql; it does NOT ship python3, so install it.
-ARG POSTGRES_IMAGE=registry.preview.egov.theflywheel.in/postgres:16
+ARG POSTGRES_IMAGE=egovio/postgres:16
 FROM ${POSTGRES_IMAGE}
 
 RUN apt-get update \
