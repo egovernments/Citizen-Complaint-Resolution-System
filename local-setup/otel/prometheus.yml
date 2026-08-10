@@ -44,3 +44,19 @@ scrape_configs:
     metrics_path: /public_metrics
     static_configs:
       - targets: ['redpanda:9644']
+  # Database metrics (#1615) from postgres_exporter, added by the same
+  # docker-compose.monitoring.yml overlay as node-exporter. Feeds the
+  # "PostgreSQL Database" Grafana dashboard.
+  #
+  # It connects to postgres-db (the database), NOT the `postgres` alias, which
+  # is PgBouncer — see the comment on the service definition. Connection-pool
+  # saturation is the metric this exists for, and the pooler's own view of it
+  # would be the wrong answer.
+  #
+  # The job is named after the exporter, not `postgres`, for the same reason:
+  # `postgres` is the pooler's alias in this stack, so a job by that name would
+  # re-introduce exactly the ambiguity the comment above warns about for anyone
+  # filtering by job= in Prometheus or Grafana later.
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ['postgres-exporter:9187']
