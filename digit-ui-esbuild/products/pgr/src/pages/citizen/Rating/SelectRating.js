@@ -15,6 +15,7 @@ import {
 
 import { updateComplaints } from "../../../redux/actions/index";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
+import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
 
 // i18n fallback — when a translation key is unavailable, surface the
 // English copy instead of leaving a raw constant on screen.
@@ -180,21 +181,28 @@ const SelectRating = ({ parentRoute }) => {
       complaintDetails.service.additionalDetail,
       { ratingFeedback: selections.join(",") }
     );
-    // CCSD-2167: the ticket asked for RATE to assign the complaint to the Case
-    // Manager. That is NOT achievable via the workflow: RATE transitions to a
-    // TERMINAL state (CLOSEDAFTERRESOLUTION / CLOSEDAFTERREJECTION), and
-    // egov-workflow-v2 rejects ANY assignee on a terminal transition —
-    // verified live on cms-pilot: sending the case-manager uuid returned
-    // 400 INVALID_ASSIGNEE ("Cannot assign to the user: <uuid>"), which would
-    // block the citizen's rating. So RATE sends no assignes (unchanged from
-    // pre-2167). Routing a rating to the Case Manager needs a backend change
-    // (allow an assignee on the RATE transition, or record it off-workflow) —
-    // tracked back to the ticket owner. The Reopen -> Supervisor half works and
-    // stays. See utils/workflowAssignee.js (still used by reopen).
+    // CCSD-2167: RATE routes the complaint to the CASE MANAGER who last handled
+    // it — the FE's job is to PASS that user id. Found by walking the workflow
+    // history for CMS_CASE_MANAGER (utils/workflowAssignee); omitted when none
+    // is found (a complaint with no case manager, or the non-CMS workflow), so
+    // the payload matches pre-2167 in that case. hrmsAssignes mirrors assignes,
+    // as the employee ASSIGN payload does (PGRDetails.js).
+    //
+    // KNOWN BACKEND GAP (owned by the backend team, per product decision):
+    // RATE currently transitions to a TERMINAL state (CLOSEDAFTERRESOLUTION /
+    // CLOSEDAFTERREJECTION) and egov-workflow-v2 rejects an assignee on a
+    // terminal transition — verified: 400 INVALID_ASSIGNEE. The FE sends the id
+    // as required; the backend will be changed to accept the assignee on the
+    // RATE transition. Until that lands, rating a complaint that HAS a case
+    // manager in history will 400 on this env — expected and tracked.
+    const stateCode = Digit.ULBService.getStateId();
+    const businessId = complaintDetails?.service?.serviceRequestId || id;
+    const caseManagerUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_CASE_MANAGER");
     complaintDetails.workflow = {
       action: "RATE",
       comments,
       verificationDocuments: [],
+      ...(caseManagerUuid ? { assignes: [caseManagerUuid], hrmsAssignes: [caseManagerUuid] } : {}),
     };
 
     try {
