@@ -282,7 +282,7 @@ const PGRSearchInbox = () => {
           align-self: stretch;
           height: 100%;
           box-sizing: border-box;
-          padding: 1.5rem 1rem;
+          padding: 1.5rem 1rem 1.5rem 0;
           display: flex;
           flex-direction: column;
           justify-content: center;
