@@ -723,18 +723,23 @@ notifiers: {}
 #      editable: true
 #      options:
 #        path: /var/lib/grafana/dashboards/default
-dashboardProviders:
-  dashboardproviders.yaml:
-    apiVersion: 1
-    providers:
-    - name: 'grafana-dashboards-kubernetes'
-      orgId: 1
-      folder: 'Kubernetes'
-      type: file
-      disableDeletion: true
-      editable: true
-      options:
-        path: /var/lib/grafana/dashboards/grafana-dashboards-kubernetes
+# dashboardProviders is deliberately UNSET (#1650).
+#
+# It used to declare a `grafana-dashboards-kubernetes` provider pointing at
+# /var/lib/grafana/dashboards/grafana-dashboards-kubernetes. That directory only
+# ever existed because the `dashboards:` block below fetched the boards into it
+# at pod start -- and that block is gone, replaced by ConfigMaps rendered from
+# charts/monitoring/dashboards.
+#
+# Leaving the provider behind is not inert. Verified on a cluster: Grafana logs
+#   level=error msg="Cannot read directory" error="stat /var/lib/grafana/dashboards/grafana-dashboards-kubernetes: no such file or directory"
+# every 10 seconds, indefinitely, and the folder that provider named is never
+# created -- so all 8 boards landed in `General` instead. The chart's own note
+# below says the two are a pair: "To use dashboards you must also
+# enable/configure dashboardProviders". Half a pair is worse than neither.
+#
+# The sidecar declares its own provider (sidecar.dashboards.provider), which is
+# what actually loads the ConfigMaps; the folder is set there instead.
 
 
 ## Configure grafana dashboard to import
@@ -1000,7 +1005,12 @@ sidecar:
       # orgid as configured in grafana
       orgid: 1
       # folder in which the dashboards should be imported in grafana
-      folder: ''
+      #
+      # 'Kubernetes' (#1650) so the vendored boards keep the grouping the
+      # removed dashboardProviders entry used to give them. With '' they all
+      # land in `General`, which is where they ended up once that provider was
+      # deleted -- confirmed on a cluster before setting this.
+      folder: 'Kubernetes'
       # type of the provider
       type: file
       # disableDelete to activate a import-only behaviour
