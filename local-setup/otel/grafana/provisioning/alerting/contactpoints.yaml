@@ -1,0 +1,37 @@
+# Grafana alerting contact point (#1611).
+#
+# Where alerts go. Deliberately the SAME Slack webhook Gatus uses (#1609) --
+# the channel is decided once, when someone mints the webhook, and both
+# alerting engines post to it. Nothing in this repo names a channel.
+#
+# WHY THE URL IS NEVER EMPTY HERE
+# Grafana interpolates $GRAFANA_SLACK_WEBHOOK_URL with plain os.ExpandEnv
+# semantics: no `${VAR:-default}` support, and an unset variable becomes an
+# EMPTY STRING. Unlike Gatus -- which shrugs off a broken provider and keeps
+# running -- a provisioning file Grafana cannot validate is FATAL at startup.
+# An empty webhook here would therefore risk crash-looping Grafana on every
+# deployment that has not configured Slack, which is most of them.
+#
+# So the default is supplied one level up, by the compose `environment:` block,
+# which does support `:-` defaults and substitutes an unreachable placeholder
+# under the .invalid TLD (reserved by RFC 2606, so it can never resolve). The
+# result: provisioning always validates, Grafana always starts, and an
+# unconfigured deployment simply logs a DNS failure if a rule ever fires --
+# a visible, self-describing symptom rather than a silent one.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack
+    receivers:
+      - uid: slack-webhook
+        type: slack
+        # Interpolated by Grafana from the environment. Never a literal: anyone
+        # holding this URL can post into the channel.
+        settings:
+          url: $GRAFANA_SLACK_WEBHOOK_URL
+          title: '{{ template "default.title" . }}'
+          text: '{{ template "default.message" . }}'
+        # Send the recovery notification too. An alert with no all-clear leaves
+        # people checking by hand to find out whether it is still broken.
+        disableResolveMessage: false

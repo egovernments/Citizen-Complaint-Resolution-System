@@ -67,6 +67,18 @@ services:
       GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-api.egov.theflywheel.in}
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://api.egov.theflywheel.in/grafana/}
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Slack webhook for the provisioned alert rules (#1611). Same webhook as
+      # Gatus uses -- one channel decision, not two.
+      #
+      # The default is an UNREACHABLE placeholder rather than an empty string,
+      # and that matters: Grafana expands $VAR with os.ExpandEnv (no ":-"
+      # defaults, unset becomes empty), and a provisioning file it cannot
+      # validate is FATAL at startup -- an empty webhook would risk
+      # crash-looping Grafana on every deployment that has not set up Slack.
+      # .invalid is reserved by RFC 2606 and can never resolve, so an
+      # unconfigured deployment logs a clean DNS failure if a rule ever fires
+      # instead of silently pretending to deliver.
+      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL:-https://example.invalid/grafana-slack-webhook-not-configured}
     volumes:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
