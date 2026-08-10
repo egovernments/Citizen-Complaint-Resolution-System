@@ -262,3 +262,12 @@ digit_ui_esbuild_branch: main
 # single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
 # does). Set to "" in host_vars to force an on-host build even if this is on.
 # digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
+
+# Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
+# the default for every tenant: gatus warns about the unusable provider and
+# carries on, so nothing changes for deployments that do not want alerts.
+#
+# Set it per tenant in host_vars to switch alerting on. Treat it as a SECRET --
+# anyone holding the URL can post into the channel -- so prefer pulling it from
+# OpenBao via secrets_path rather than committing it here.
+gatus_slack_webhook_url: ""

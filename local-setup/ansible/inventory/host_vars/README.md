@@ -17,6 +17,7 @@ deploy-sensitive values:
 | `domain` | Maps a tenant to a public hostname |
 | `bootstrap_secrets.*` | Initial DB / MinIO / encryption passwords seeded into OpenBao |
 | `secrets_path` | Identifies where in OpenBao the tenant's secrets live |
+| `gatus_slack_webhook_url` | Anyone holding the URL can post into the alert channel (#1609) |
 
 Each operator (or each deploy environment) keeps their own files
 locally. Nothing about your specific tenant should land in this
