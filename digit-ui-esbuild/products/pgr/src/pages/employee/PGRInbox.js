@@ -289,6 +289,21 @@ const PGRSearchInbox = () => {
         }
         .v2-pgr-inbox .digit-inbox-search-links-header { justify-content: center; text-align: center; margin-bottom: 0; }
         .v2-pgr-inbox .digit-inbox-search-links-header-text { text-align: center; }
+        /* When there's no logo icon the logo span is empty but still reserves
+           2rem, shoving the centred title ~11px right of the link below it.
+           Collapse it when empty so title and link share the same centre. */
+        .v2-pgr-inbox .digit-inbox-search-links-header-logo:empty { display: none; }
+        /* Centre the quick-links (e.g. "New Complaint") too — the header was
+           centred but the links list defaulted to left-aligned, so title and
+           link were mismatched. :not(:empty) keeps a gap below the title ONLY
+           when links actually render (empty otherwise on roles without them,
+           preserving the pure-title vertical centring). */
+        .v2-pgr-inbox .digit-inbox-search-links-contents { align-items: center; text-align: center; }
+        .v2-pgr-inbox .digit-inbox-search-links-contents:not(:empty) { margin-top: 1rem; }
+        /* Page title sat flush in the top-left corner (header padding 12px 0 8px
+           — no left gutter), 24px left of the card content below it. Give it a
+           left gutter that lines up with the card and a little more top room. */
+        .v2-pgr-inbox .v2-employee-page-header { padding: 1rem 1.5rem 0.75rem; }
       `}</style>
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
