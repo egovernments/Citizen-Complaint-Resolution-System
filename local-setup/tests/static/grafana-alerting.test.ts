@@ -118,12 +118,28 @@ describe('grafana alert rule provisioning', () => {
   /**
    * Gatus owns up/down (#1609). A second engine alerting on the same outage
    * means two messages per incident, which teaches people to ignore both.
+   *
+   * The guard is on the METRIC, not on one spelling of the comparison. `up == 0`
+   * is merely the most obvious phrasing: `count(up) == 0`, `absent(up{job="x"})`,
+   * `min by (job) (up) < 1` and Blackbox's `probe_success == 0` are the same
+   * alert wearing a different hat, and a `/\bup\s*==\s*0/` regex lets every one
+   * of them through. Since no capacity or error-trend rule has any reason to
+   * read an availability metric, referencing one at all is the failure -- which
+   * is both stricter and simpler than trying to enumerate the comparisons.
+   *
+   * Label VALUES are stripped before matching, so a legitimate `{job="up-sync"}`
+   * is not mistaken for the `up` metric. Word boundaries keep `group_right()`
+   * and `sum by (redpanda_group)` clear: the "up" inside them is preceded by a
+   * word character, so `\bup\b` does not match.
    */
+  const AVAILABILITY_METRIC = /\b(up|probe_success)\b/;
+  const stripLabelValues = (expr: string): string => expr.replace(/"[^"]*"|'[^']*'/g, '""');
+
   it('does not duplicate Gatus by alerting on service availability', () => {
     for (const r of allRules) {
       for (const d of r.data) {
         if (d.datasourceUid === '__expr__') continue;
-        expect(d.model.expr ?? '').not.toMatch(/\bup\s*==\s*0/);
+        expect(stripLabelValues(d.model.expr ?? '')).not.toMatch(AVAILABILITY_METRIC);
       }
     }
   });

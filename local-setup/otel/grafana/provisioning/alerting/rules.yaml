@@ -217,6 +217,19 @@ groups:
       # 10k for 15m, not a tighter bound: bulk seeding and migrations move real
       # backlogs through legitimately, and they drain. Sustained 15m above 10k
       # is not a burst.
+      #
+      # DEPENDS ON #1628 FOR ITS DATA. The redpanda_* series come from the
+      # Redpanda scrape job that #1628 adds to otel/prometheus.yml; this branch's
+      # prometheus.yml still scrapes only otel-collector and node. Until #1628 is
+      # in, this rule evaluates an empty vector and -- by the file-wide
+      # noDataState: OK above -- reports a healthy "ok" that is indistinguishable
+      # from "lag is fine" when it really means "nothing is being measured".
+      # It is left unpaused deliberately, so that it starts working the moment
+      # the scrape job lands rather than waiting on someone remembering to
+      # unpause it; the two are separate stacks off monitoring-fix and both are
+      # bound for it. If this one merges first, that window is the cost.
+      # The "DIGIT Kafka Consumer Lag" dashboard named in the description below
+      # arrives with #1678, which is stacked on #1628.
       - uid: digit-kafka-consumer-lag
         title: Kafka consumer lag high
         condition: C
