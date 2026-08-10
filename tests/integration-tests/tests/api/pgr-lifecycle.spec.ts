@@ -13,6 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
 import { getPrincipal } from '../utils/employee-ui';
+import { resolvePersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
@@ -143,13 +144,50 @@ First link in a serial chain — every later step skips if this fails.`,
     // may live at the CITY tenant (e.g. EMP001 on mz.maputo), not the root
     // where ADMIN lives — so authenticate via getPrincipal, which probes
     // CITY→ROOT and returns null only when neither tenant accepts them.
-    const gro = await getPrincipal(GRO_USER, GRO_PASS);
-    expect(gro, `GRO user ${GRO_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    // ASSIGN requires the ACTOR to carry an HRMS department: pgr-services
+    // resolves the assigner's department to route the complaint and returns
+    // 400 DEPARTMENT_NOT_FOUND without one (probed directly — ADMIN has
+    // roles=[...GRO...] but depts=none, so the bare GRO role is not enough).
+    // The suite already models this as its own persona precisely because the
+    // two differ; prefer it, and fall back to GRO_USER on deployments where
+    // no departmented GRO exists so the failure stays legible.
+    const groPersona = await resolvePersona('gro-with-department').catch(() => null);
+    const gro = groPersona ?? (await getPrincipal(GRO_USER, GRO_PASS));
+    expect(
+      gro,
+      `a GRO must log in (tried persona 'gro-with-department', then ${GRO_USER} on CITY + ROOT)`,
+    ).toBeTruthy();
     groToken = gro!.token;
     groUserInfo = gro!.userInfo;
 
-    const lme = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
-    expect(lme, `LME user ${EMPLOYEE_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    // The ASSIGNEE must carry an HRMS department too — pgr-services rejects the
+    // ASSIGN with 400 DEPARTMENT_NOT_FOUND naming the ASSIGNEE's uuid, not the
+    // actor's. Probed both directions to be sure:
+    //   actor=PGGRO1 (DEPT_3), assignee=PGGRO1 -> 200
+    //   actor=PGGRO1 (DEPT_3), assignee=ADMIN  -> 400 DEPARTMENT_NOT_FOUND [ADMIN uuid]
+    // EMPLOYEE_USER defaults to ADMIN, which holds PGR_LME but no department, so
+    // the bare 'lme' persona is not sufficient to be assigned work.
+    const lmePersona = await resolvePersona('lme').catch(() => null);
+    const departmented = (p: { departments?: string[] } | null) => (p?.departments?.length ?? 0) > 0;
+    // Fall back to the departmented GRO only when it can actually do the LME's
+    // job (it must still hold PGR_LME to RESOLVE later in this chain).
+    const lmeFallback = departmented(groPersona) && (groPersona?.roles ?? []).includes('PGR_LME')
+      ? groPersona
+      : null;
+    const lme = departmented(lmePersona)
+      ? lmePersona
+      : (lmeFallback ?? (await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS)));
+    expect(
+      lme,
+      `an LME must log in (tried persona 'lme', a departmented GRO, then ${EMPLOYEE_USER})`,
+    ).toBeTruthy();
+    expect(
+      departmented(lme as { departments?: string[] }),
+      `the assignee must carry an HRMS department — pgr-services returns 400 ` +
+        `DEPARTMENT_NOT_FOUND otherwise. Resolved '${(lme as { username?: string })?.username ?? EMPLOYEE_USER}' ` +
+        `with departments=[${((lme as { departments?: string[] })?.departments ?? []).join(',') || 'none'}]. ` +
+        `Point EMPLOYEE_USER at a departmented PGR_LME employee, or seed one.`,
+    ).toBe(true);
     lmeToken = lme!.token;
     lmeUserInfo = lme!.userInfo;
 
