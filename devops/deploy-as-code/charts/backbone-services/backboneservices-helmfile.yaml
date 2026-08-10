@@ -161,6 +161,22 @@ releases:
     # and corrupts the document.
     - controller:
         replicaCount: {{ index .Values "ingress-nginx" "controller" "replicas" | default 1 }}
+        # Roll the controller whenever the headers change.
+        #
+        # The `add-headers` ConfigMap is read by nginx when the controller
+        # builds its configuration, and the running process does not pick up
+        # later edits to it. Verified on a cluster: the ConfigMap was updated at
+        # 11:39:14 and the controller was still serving the OLD
+        # Access-Control-Allow-Origin at 11:41 -- it had even logged a RELOAD,
+        # for the main config, while the custom headers stayed stale. A restart
+        # applied them immediately.
+        #
+        # Without this annotation a `helmfile apply` that changes only these
+        # headers reports success and changes nothing that a browser can see --
+        # the same silent no-op this whole block exists to fix, one level up.
+        # The hash makes the pod template differ, so helm rolls it for us.
+        podAnnotations:
+          checksum/add-headers: {{ index .Values "ingress-nginx" "controller" "addHeaders" | toYaml | sha256sum }}
         # Rendered into its own ConfigMap and referenced by the controller's
         # `add-headers` key -- this is what actually applies X-Frame-Options,
         # nosniff and the CORS policy to every response.
