@@ -947,6 +947,8 @@ services:
       # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
       # enabled-var as true, which would make them red forever here.
       GATUS_OBSERVABILITY: "false"
+      GATUS_OBS_LOGS: "false"
+      GATUS_OBS_TRACES: "false"
     networks:
       - egov-network
 

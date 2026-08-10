@@ -682,7 +682,7 @@ data:
 
       - name: Loki
         group: Observability
-        enabled: ${GATUS_OBSERVABILITY}
+        enabled: ${GATUS_OBS_LOGS}
         url: "http://loki:3100/ready"
         interval: 60s
         conditions:
@@ -690,7 +690,7 @@ data:
 
       - name: Tempo
         group: Observability
-        enabled: ${GATUS_OBSERVABILITY}
+        enabled: ${GATUS_OBS_TRACES}
         url: "http://tempo:3200/ready"
         interval: 60s
         conditions:
@@ -782,6 +782,10 @@ spec:
               value: "https://localhost/"
             # No observability stack in this tier (#1618), so these checks stay off.
             # Declared rather than omitted: an unset enabled-var reads as true.
+            - name: GATUS_OBS_LOGS
+              value: "false"
+            - name: GATUS_OBS_TRACES
+              value: "false"
             - name: GATUS_OBSERVABILITY
               value: "false"
           resources:

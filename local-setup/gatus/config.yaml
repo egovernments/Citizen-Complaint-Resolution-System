@@ -693,7 +693,11 @@ endpoints:
 
   - name: Loki
     group: Observability
-    enabled: ${GATUS_OBSERVABILITY}
+    # Tier-scoped, not just ${GATUS_OBSERVABILITY}: at observability_level
+    # `metrics` the logs tier is torn down (#1657/#1666), and a check against a
+    # container that was deliberately not deployed sits red forever. A red
+    # square nobody can fix is how a dashboard gets ignored.
+    enabled: ${GATUS_OBS_LOGS}
     url: "http://loki:3100/ready"
     interval: 60s
     conditions:
@@ -701,7 +705,8 @@ endpoints:
 
   - name: Tempo
     group: Observability
-    enabled: ${GATUS_OBSERVABILITY}
+    # Tier-scoped — see the note on Loki above. Tempo is traces-only.
+    enabled: ${GATUS_OBS_TRACES}
     url: "http://tempo:3200/ready"
     interval: 60s
     conditions:
