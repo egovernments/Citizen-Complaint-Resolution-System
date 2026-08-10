@@ -5,6 +5,13 @@
 #
 # Set them in charts/environments/env.yaml under `monitoring:` -- see the
 # documented block there for what each one costs and what it gives you.
+#
+# Note on scope: several releases below pass the whole merged values tree into
+# their chart (`.Values | toYaml`), a long-standing pattern here rather than
+# anything new. It means the `monitoring:` toggle map is also handed to
+# loki-stack, kube-prometheus-stack, blackbox and kafka-ui, which ignore
+# unrecognised top-level keys. Harmless, but assume anything added under
+# `monitoring:` is visible to those charts' rendered values.
 environments:
   env:
     values:
@@ -35,9 +42,23 @@ environments:
 
        So: resolve the block once, tolerate its absence, and default each key to
        false individually. sprig's `dig` would express this in one call but does
-       not exist in helmfile v0.140.0, the version CI pins. */}}
+       not exist in helmfile v0.140.0, the version CI pins.
+
+       Absent is fine; present-but-not-a-map is not. `monitoring: true`, the
+       natural typo for "turn monitoring on", makes every `index $mon "..."`
+       below fail with "can't index item of type bool" — the same whole-file
+       parse failure this block exists to prevent. Silently treating it as an
+       empty map would be worse than the crash, though: the operator asked for
+       monitoring, and would instead get every component false, which on an
+       existing install means helmfile UNINSTALLS the stack. So fail loudly and
+       name the expected shape. */}}
 {{- $mon := dict }}
-{{- if hasKey .Values "monitoring" }}{{ $mon = .Values.monitoring }}{{ end }}
+{{- if hasKey .Values "monitoring" }}
+{{-   if not (kindIs "map" (index .Values "monitoring")) }}
+{{-     fail "`monitoring:` in charts/environments/env.yaml must be a map of component toggles (metrics/logs/dashboards/traces/probes/kafkaUi), not a single value" }}
+{{-   end }}
+{{-   $mon = .Values.monitoring }}
+{{- end }}
 repositories:
 - name: grafana
   url: https://grafana.github.io/helm-charts
