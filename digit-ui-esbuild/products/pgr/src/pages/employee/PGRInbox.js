@@ -273,6 +273,13 @@ const PGRSearchInbox = () => {
           text up when there are no links below it. */}
       <style>{`
         .v2-pgr-inbox .digit-inbox-search-links-container {
+          /* The links card (.digit-section.links) is a flex ROW item that the
+             sections grid stretches to match the search column's height, but
+             its default align-items:flex-start pins THIS container to the top
+             and percentage-height won't resolve against a grid-stretched
+             parent. align-self:stretch makes the container fill that height so
+             justify-content:center actually centres in the visible card. */
+          align-self: stretch;
           height: 100%;
           box-sizing: border-box;
           padding: 1.5rem 1rem;
