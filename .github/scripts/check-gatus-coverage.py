@@ -133,6 +133,15 @@ EXEMPT = {
     # registry.yml) and absent from docker-compose.yml and the k3s tier, so the
     # toggle is what keeps them from being red where they do not exist.
     "node-exporter": "observability plumbing: host-metrics exporter (#1335); no check because prometheus scrapes it directly -- a dead exporter surfaces as a stale `node` target, not a missing endpoint. Absent from k3s tier and docker-compose.yml",
+    # Added here rather than in #1629, which introduces the service, so that the
+    # guard survives either merge order. #1629 edits this dict in the same place
+    # this PR rewrites, so the two conflict whichever lands second, and a
+    # conflict resolved toward this side would silently drop the entry and fail
+    # CI on an UNMONITORED postgres-exporter. An EXEMPT key for a service that
+    # does not exist yet is inert -- the dict is only ever consulted via
+    # `name in EXEMPT` for services actually found in a compose file -- so this
+    # is safe to land first and needs no follow-up once #1629 arrives.
+    "postgres-exporter": "observability plumbing: database-metrics exporter (#1615), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml. The DATABASE it reads is already covered by the PostgreSQL check; this container going down costs metrics, not service.",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
