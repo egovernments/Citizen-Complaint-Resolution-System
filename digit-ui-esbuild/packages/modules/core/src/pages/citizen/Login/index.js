@@ -276,6 +276,8 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
         tenantId: stateCode,
         userType: getUserType(),
         ...name,
+        // Same country-code fix as selectMobileNumber / resendOtp.
+        ...(validationConfig.countryCode ? { countryCode: validationConfig.countryCode } : {}),
       };
       const [res, err] = await sendOtp({ otp: { ...data, ...TYPE_REGISTER } });
       if (res) {
