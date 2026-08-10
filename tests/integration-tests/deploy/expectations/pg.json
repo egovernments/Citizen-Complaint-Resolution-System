@@ -1,0 +1,25 @@
+{
+  "name": "pg-playground",
+  "_comment": [
+    "What the local `pg` (playground) deployment SHOULD have. The profile discovers what it DOES have; this file decides whether a gap is a bug (required -> FAIL) or legitimately N/A (absent -> SKIP).",
+    "pg is FLAT for testing: the PGR businessService and all complaint types live at the ROOT `pg`. pg.citya/citest/cityb/cityc exist as tenant rows but carry no PGR config."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "required",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "absent",
+    "locales.multi": "absent",
+    "tenant.citySubTenant": "absent"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. Currently absent from the dump \u2014 a real gap.",
+    "mdms.rejectionReasons": "Deliberate red, same call as bomet. RAINMAKER-PGR.RejectionReasons is absent from full-dump.sql entirely (0 rows, no schema). Marking it absent would hide a real gap behind a green run.",
+    "personas.gro-with-department": "Required: an ASSIGN-capable employee is the difference between the suite running and hard-failing at profile-setup.",
+    "personas.ward-scoped-csr": "Absent: no ward-scoped CSR is seeded, so boundary-jurisdiction-496 self-skips rather than asserting against another deployment's wards.",
+    "locales.multi": "Absent: the dump seeds en_IN only.",
+    "tenant.citySubTenant": "Absent: pg is targeted flat \u2014 the pg.* city rows carry no PGR config."
+  }
+}

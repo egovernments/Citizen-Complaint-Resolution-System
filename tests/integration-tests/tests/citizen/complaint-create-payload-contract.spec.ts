@@ -77,6 +77,21 @@ Pins the rationale in code so a future "standardize the regex" PR can't silently
     },
     tag: ['@area:pgr', '@ccrs:478', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:citizen'] }, () => {
     const LEGACY = /^[1-9][0-9]{5}$/i;
+    // This test only carries information on a deployment whose postal format
+    // DIFFERS from the legacy Indian PIN. On one that genuinely uses the Indian
+    // 6-digit shape (the `pg` playground tenant is Punjab, India — allowlist
+    // 143001..143010), the legacy pattern accepts the valid sample by
+    // definition, and "the legacy rule would have rejected it" is simply untrue.
+    // Asserting it anyway pinned a false claim and failed unconditionally.
+    //
+    // Skipping rather than inverting: the sibling test above already asserts the
+    // deployment's own pattern accepts its own sample, which is the real
+    // invariant. This one exists solely to document the non-India case, and here
+    // there is no such case to document.
+    test.skip(
+      LEGACY.test(POSTAL_CODE_VALID),
+      `deployment postal format is the legacy Indian shape (${POSTAL_CODE_VALID} matches ${LEGACY}) — nothing to contrast`,
+    );
     expect(LEGACY.test(POSTAL_CODE_VALID)).toBe(false);
   });
 
