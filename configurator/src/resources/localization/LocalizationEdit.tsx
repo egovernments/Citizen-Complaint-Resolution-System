@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { useGetList } from 'ra-core';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
+import { useLocalizationSaveRefresh } from './useLocalizationSaveRefresh';
 
 export function LocalizationEdit() {
   const { data } = useGetList('localization', {
@@ -9,6 +10,7 @@ export function LocalizationEdit() {
     sort: { field: 'module', order: 'ASC' },
   });
   const { locales } = useAvailableLocales();
+  const refreshAfterSave = useLocalizationSaveRefresh();
 
   const moduleChoices = useMemo(() => {
     if (!data || data.length === 0) {
@@ -21,7 +23,7 @@ export function LocalizationEdit() {
   const localeChoices = locales.map((l) => ({ value: l.value, label: l.label }));
 
   return (
-    <DigitEdit title="Edit Localization Message">
+    <DigitEdit title="Edit Localization Message" afterUpdate={refreshAfterSave}>
       <DigitFormInput source="code" label="Code" disabled />
       <DigitFormInput source="message" label="Message" validate={v.required} />
       <DigitFormSelect
