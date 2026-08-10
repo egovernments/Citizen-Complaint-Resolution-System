@@ -52,8 +52,13 @@ releases:
   chart: open-telemetry/opentelemetry-collector
   version: 0.108.0
   values:
-  # NO `{{ .Values | toYaml }}` passthrough on this release, unlike its
-  # siblings. This chart ships a values.schema.json with
+  # NO whole-values passthrough on this release, unlike its siblings -- the
+  # `.Values | toYaml` line every other release carries is deliberately absent
+  # here. (Written without the surrounding braces on purpose: helmfile renders
+  # this file as a Go template BEFORE parsing it as YAML, so an interpolation
+  # inside a comment is still expanded. Writing it literally here dumped the
+  # entire values tree into this line and broke the document, with a parse error
+  # pointing ~1500 lines away.) This chart ships a values.schema.json with
   # additionalProperties:false, and the passthrough hands every top-level
   # env.yaml key -- ~30 service blocks -- to whichever chart is being installed.
   # Helm rejects the lot:
