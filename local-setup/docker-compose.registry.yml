@@ -1621,7 +1621,12 @@ services:
       # true, which would leave a permanently-red check for a URL that does
       # not resolve.
       GATUS_TLS: "false"
-      GATUS_PUBLIC_URL: ""
+      # Non-empty on purpose. Gatus validates `url` on EVERY endpoint before it
+      # ever consults `enabled:`, so "" is not an inert placeholder -- it aborts
+      # startup with "you must specify an url for each endpoint" and takes the
+      # entire dashboard down with it. This value is only ever parsed by the
+      # config loader; the check is disabled, so it is never dialled.
+      GATUS_PUBLIC_URL: "https://localhost/"
     networks:
       - egov-network
 

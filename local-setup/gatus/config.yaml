@@ -495,11 +495,27 @@ endpoints:
   # GATUS_TLS is false unless the deployment sets it: it needs a real public
   # hostname AND the gatus container must be able to reach it from inside
   # (hairpin NAT is not universal). Ansible enables it only when tls_enabled.
+  #
+  # GATUS_PUBLIC_URL is always rendered non-empty, even when GATUS_TLS is false.
+  # Gatus validates `url` on EVERY endpoint before it consults `enabled:`, so an
+  # empty value here does not disable the check -- it aborts startup entirely
+  # ("you must specify an url for each endpoint") and takes the dashboard with it.
+  #
+  # [CONNECTED] == true is what separates the two ways this can go red. On any
+  # TLS failure -- SAN mismatch, broken chain, wrong cert -- the handshake never
+  # completes, so [CERTIFICATE_EXPIRATION] resolves to 0s and [STATUS] to 0. With
+  # only the two conditions below, "0s > 240h" would fail and read exactly like a
+  # cert about to expire, sending on-call to chase a renewal that is not the
+  # problem. [CONNECTED] fails too in that case and not in the expiry case, so
+  # which condition is red says which fault it is. (It also closes a real gap:
+  # 0 < 500 is TRUE, so [STATUS] alone stays green on a dead connection.)
+  # Upstream pairs these two conditions in its own certificate examples.
   - name: TLS Certificate
     group: Public Endpoint
     enabled: ${GATUS_TLS}
     url: "${GATUS_PUBLIC_URL}"
     interval: 5m
     conditions:
+      - "[CONNECTED] == true"
       - "[CERTIFICATE_EXPIRATION] > 240h"
       - "[STATUS] < 500"
