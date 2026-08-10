@@ -56,8 +56,20 @@ releases:
             params:
               module: [http_2xx]
             static_configs:
+              # /digit-ui/ and not the bare root: NOTHING in this tier serves
+              # `/`. Every ingress is a prefix on its own context
+              # (charts/common/templates/_ingress.yaml:48 renders
+              # `path: /<context>`) and the controller's defaultBackend is
+              # disabled (ingress-nginx/values.yaml:916), so a probe of `/`
+              # gets the controller's built-in 404 and probe_success is pinned
+              # at 0 forever -- a red panel that means nothing.
+              # /digit-ui/ is a real 2xx: the ingress passes the path through
+              # unrewritten (no rewrite-target annotation) and the SPA image's
+              # nginx serves `location /digit-ui` with
+              # `try_files $uri $uri/ /digit-ui/index.html`
+              # (frontend/micro-ui/web/docker/nginx.conf).
               - targets:
-                  - https://{{ .Values.global.domain }}/
+                  - https://{{ .Values.global.domain }}/digit-ui/
             relabel_configs:
               - source_labels: [__address__]
                 target_label: __param_target
@@ -131,11 +143,14 @@ releases:
     # never-resolving-name failure this issue exists to fix.
     - name: fullnameOverride
       value: prometheus-blackbox-exporter
-    # The chart's own comment: "set to true to add the release label so
-    # scraping of the servicemonitor with kube-prometheus-stack works out of
-    # the box". Same selector requirement as #1647 and #1648.
-    - name: releaseLabel
-      value: true
+    # NO releaseLabel here, unlike #1647 and #1648. Scraping is wired through
+    # the static additionalScrapeConfigs above, not through a ServiceMonitor:
+    # values/blackbox-exporter.yaml leaves both serviceMonitor.enabled and
+    # serviceMonitor.selfMonitor.enabled false with an empty `targets` list, so
+    # the chart emits no ServiceMonitor for the label to land on. And the label
+    # would be the wrong one anyway -- the chart writes
+    # `release: <.Release.Name>` (_helpers.tpl:43), which here is `blackbox`,
+    # not the `kube-prometheus-stack` the operator's selector matches.
 
 - name: kafka-ui
   installed: true

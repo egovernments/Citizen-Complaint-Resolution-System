@@ -184,12 +184,16 @@ additionalPrometheusRules:
        # could never select a probe series — this alert has never been able to
        # fire, independently of blackbox having been installed: false.
        #
-       # NOTE: 2 days of warning is very little for a certificate. cert-manager
-       # renews at two-thirds of lifetime, so a renewal that silently stops
-       # leaves ~30 days of runway that this would not surface until the last
-       # 48 hours. Raising it is a deliberate decision, left out of this change.
+       # 10 days, not the 2 this rule carried. cert-manager renews at two-thirds
+       # of a 90-day lifetime, so a renewal that silently stops leaves ~30 days
+       # of runway; at 2 days the alert surfaced that in the last 48 hours, when
+       # the fix may need a DNS or ACME-account change and the on-call engineer
+       # may not be at a desk. 10 days is the sibling tier's already-reasoned
+       # number -- Gatus uses `[CERTIFICATE_EXPIRATION] > 240h` in #1632 against
+       # certbot's 30-day renewal -- so this is parity rather than a fresh
+       # guess, and it still cannot fire on a healthy renewal cycle.
        - alert: SSLCertificateExpiring
-         expr: probe_ssl_earliest_cert_expiry{job="blackbox"} - time() < 2*24*3600
+         expr: probe_ssl_earliest_cert_expiry{job="blackbox"} - time() < 10*24*3600
          for: 1m
          labels:
            severity: warning
