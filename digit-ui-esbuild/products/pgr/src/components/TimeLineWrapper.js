@@ -138,7 +138,7 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     if (url && entry?.kind === "audio") {
                         return (
                             <audio key={i} src={url} controls preload="metadata" aria-label={label}
-                                style={{ width: 200, maxWidth: "100%" }} />
+                                style={{ width: 280, maxWidth: "100%" }} />
                         );
                     }
                     return (
