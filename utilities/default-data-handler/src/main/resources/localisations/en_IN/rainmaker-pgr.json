@@ -751,7 +751,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
-        "message": "Upload complaint photos or documents (Optional)",
+        "message": "Upload complaint photos or documents",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

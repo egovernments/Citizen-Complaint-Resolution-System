@@ -1585,7 +1585,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
-        "message": "Enviar fotos ou documentos da reclamação (Opcional)",
+        "message": "Enviar fotos ou documentos da reclamação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
