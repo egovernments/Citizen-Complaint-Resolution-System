@@ -83,8 +83,10 @@ services:
       - --storage.tsdb.retention.time=15d
       # NOTE: no --web.enable-lifecycle (#1608) — it exposes POST /-/reload
       # AND POST /-/quit unauthenticated. The Ansible deploy reloads by
-      # SIGHUP instead. (This root-level copy is separately tracked for
-      # removal or CI drift-checking in #1617.)
+      # SIGHUP instead. (This whole root-level file is deleted by #1637,
+      # which closes drift issue #1617. If #1637 lands first this hunk is
+      # moot; if it lands second, resolve the modify/delete by taking the
+      # delete. The live copy is local-setup/docker-compose.egov-digit.yaml.)
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
