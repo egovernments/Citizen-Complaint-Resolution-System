@@ -103,6 +103,28 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.workflow.id.email:complaints-email}")
     private String novuWorkflowEmail;
 
+    // ---- OTP delivery via Ozeki (independent of the PGR pass-through above) ----
+    // Empty (default) = OTP triggers plain, Novu's primary SMS integration
+    // delivers. "ozeki" = attach the Ozeki generic-sms overrides envelope
+    // (OzekiOverridesBuilder) to OTP triggers only — this is deliberately NOT
+    // wired into identifyThenTrigger, so PGR complaint SMS/WhatsApp keep using
+    // Twilio regardless of this flag; the two can never affect each other.
+    // Requires a generic-sms Novu integration whose identifier matches
+    // novu.bridge.ozeki.integration.identifier (see
+    // docs/Novu_Adapter/OZEKI-GENERIC-SMS-PROVIDER.md for the exact shape;
+    // Novu has no built-in "ozeki" provider — confirmed directly: setting an
+    // integration's providerId to "ozeki" and triggering fails "Sms handler
+    // for provider ozeki is not found" — generic-sms is the real provider id).
+    @Value("${novu.bridge.otp.sms.provider:}")
+    private String otpSmsProvider;
+
+    @Value("${novu.bridge.ozeki.integration.identifier:ozeki-sms}")
+    private String ozekiIntegrationIdentifier;
+
+    public boolean isOtpOzekiEnabled() {
+        return otpSmsProvider != null && "ozeki".equalsIgnoreCase(otpSmsProvider.trim());
+    }
+
     // ---- Subscriber identify (upsert) TTL cache ----
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;
