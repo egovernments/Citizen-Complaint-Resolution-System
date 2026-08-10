@@ -22,6 +22,8 @@ services:
     # prom/prometheus) — not the registry.preview mirror.
     image: prom/node-exporter:v1.8.2
     container_name: digit-node-exporter
+    # host metrics — part of the metrics tier (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     # A containerised node-exporter sees only the container's namespaces
     # unless pointed at the host's. pid:host + the read-only /proc, /sys and /
