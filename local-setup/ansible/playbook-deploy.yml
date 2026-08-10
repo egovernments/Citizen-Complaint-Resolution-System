@@ -1983,16 +1983,22 @@
     # live Prometheus keeps its old in-memory config and never picks up a newly
     # added scrape job (e.g. the `node` job for node-exporter) until it happens
     # to restart. A fresh deploy is unaffected — Prometheus boots with the new
-    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
-    # rereads the file in place. Best-effort: on a first deploy Prometheus may
-    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    # config.
+    #
+    # Reload is by SIGHUP, not POST /-/reload (#1608). The HTTP lifecycle
+    # endpoints are enabled by --web.enable-lifecycle, which also exposes
+    # POST /-/quit — an unauthenticated remote shutdown of the metrics store.
+    # SIGHUP is Prometheus's documented equivalent for re-reading config and
+    # carries no HTTP surface, so the flag is gone from the compose file.
+    # `docker kill` only DELIVERS the signal despite its name; HUP does not
+    # terminate the process.
+    #
+    # Best-effort: on a first deploy Prometheus may not be up yet (and has
+    # already loaded fresh config), so a failure here is fine.
     - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
-      ansible.builtin.uri:
-        url: http://127.0.0.1:19090/-/reload
-        method: POST
-        status_code: [200]
+      ansible.builtin.command: docker kill -s HUP digit-prometheus
       register: prometheus_reload
-      changed_when: prometheus_reload.status == 200
+      changed_when: prometheus_reload.rc == 0
       failed_when: false
 
     # ==================== digit-ui mode convergence ====================

@@ -118,7 +118,11 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
-      - --web.enable-lifecycle
+      # NOTE: no --web.enable-lifecycle (#1608). That flag exposes
+      # POST /-/reload AND POST /-/quit with no authentication — a remote
+      # shutdown for the metrics store. The deploy reloads config by sending
+      # SIGHUP instead (playbook-deploy.yml, "Reload Prometheus config"),
+      # which is Prometheus's documented equivalent and has no HTTP surface.
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
