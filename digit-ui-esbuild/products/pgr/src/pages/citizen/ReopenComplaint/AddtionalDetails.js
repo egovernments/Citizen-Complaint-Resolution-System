@@ -9,6 +9,7 @@ import { BackButton, Card, CardHeader, CardText, CardLabelError, TextArea, Submi
 import { updateComplaints } from "../../../redux/actions/index";
 import { LOCALIZATION_KEY } from "../../../constants/Localization";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
+import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
 
 const AddtionalDetails = (props) => {
   const history = useHistory();
@@ -51,13 +52,19 @@ const AddtionalDetails = (props) => {
     [dispatch, queryClient]
   );
 
-  const getUpdatedWorkflow = (reopenDetails, type) => {
+  // CCSD-2167: reopen routes the complaint back to the SUPERVISOR who handled
+  // it. `assignes` defaults to [] so a complaint with no supervisor in its
+  // history (e.g. rejected at the screening stage, or the standard non-CMS
+  // workflow) keeps the pre-2167 behaviour. hrmsAssignes mirrors assignes,
+  // matching the employee ASSIGN payload (PGRDetails.js).
+  const getUpdatedWorkflow = (reopenDetails, type, assignes = []) => {
     switch (type) {
       case "REOPEN":
         return {
           action: "REOPEN",
           comments: reopenDetails.addtionalDetail,
-          assignes: [],
+          assignes,
+          hrmsAssignes: assignes,
           verificationDocuments: reopenDetails.verificationDocuments,
         };
       default:
@@ -65,7 +72,7 @@ const AddtionalDetails = (props) => {
     }
   };
 
-  function reopenComplaint() {
+  async function reopenComplaint() {
     // CCSD-2082 Issue 3: require a non-empty explanation before reopening.
     if (!details || !details.trim()) {
       setError(true);
@@ -73,10 +80,16 @@ const AddtionalDetails = (props) => {
     }
     let reopenDetails = Digit.SessionStorage.get(`reopen.${id}`);
     if (complaintDetails) {
+      // CCSD-2167: find the Supervisor from the complaint's workflow history.
+      const stateCode = Digit.ULBService.getStateId();
+      const businessId = complaintDetails?.service?.serviceRequestId || id;
+      const supervisorUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_SUPERVISOR");
+      const assignes = supervisorUuid ? [supervisorUuid] : [];
       complaintDetails.workflow = getUpdatedWorkflow(
         reopenDetails,
         // complaintDetails,
-        "REOPEN"
+        "REOPEN",
+        assignes
       );
       // CCSD-2012: MERGE the reopen reason into additionalDetail instead of
       // replacing the object. Replacing dropped the `department` stamped at

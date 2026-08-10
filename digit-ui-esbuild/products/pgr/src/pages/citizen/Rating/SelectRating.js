@@ -15,6 +15,7 @@ import {
 
 import { updateComplaints } from "../../../redux/actions/index";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
+import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
 
 // i18n fallback — when a translation key is unavailable, surface the
 // English copy instead of leaving a raw constant on screen.
@@ -180,10 +181,20 @@ const SelectRating = ({ parentRoute }) => {
       complaintDetails.service.additionalDetail,
       { ratingFeedback: selections.join(",") }
     );
+    // CCSD-2167: a rating routes the complaint to the CASE MANAGER who last
+    // handled it, found by walking the workflow history for CMS_CASE_MANAGER.
+    // Omit assignes entirely when none is found (a complaint with no case
+    // manager in its history, or the standard non-CMS workflow) so the payload
+    // stays identical to the pre-2167 behaviour. hrmsAssignes mirrors assignes,
+    // matching the employee ASSIGN payload (PGRDetails.js).
+    const stateCode = Digit.ULBService.getStateId();
+    const businessId = complaintDetails?.service?.serviceRequestId || id;
+    const caseManagerUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_CASE_MANAGER");
     complaintDetails.workflow = {
       action: "RATE",
       comments,
       verificationDocuments: [],
+      ...(caseManagerUuid ? { assignes: [caseManagerUuid], hrmsAssignes: [caseManagerUuid] } : {}),
     };
 
     try {
