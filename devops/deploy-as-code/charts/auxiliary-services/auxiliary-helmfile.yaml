@@ -25,13 +25,16 @@ releases:
   # SSO redirect are commented out in pgadmin/values.yaml, and the SSO they
   # point at (`/oauth2/auth`, served by the oauth2-proxy chart) is in NO
   # helmfile and never deployed — so uncommenting them as-is would not protect
-  # it either. The only barrier is pgAdmin's own login, whose credentials ship
-  # in env-secrets.yaml as demo@demo.com / demo.
+  # it either. The only barrier is pgAdmin's own login, and that login used to
+  # ship in env-secrets.yaml as demo@demo.com / demo.
   #
   # Default OFF (#1642). It is an operator convenience, not a serving
   # dependency, so it should be a deliberate choice rather than something every
   # deployment inherits. Before setting this true:
-  #   1. change secrets.pgadmin.admin-password and read-password
+  #   1. fill in all four secrets.pgadmin fields in env-secrets.yaml. They now
+  #      ship blank, and blank means the `pgadmin` Secret is never created, so
+  #      enabling this release without setting them leaves the pod unable to
+  #      start rather than reachable with a known password.
   #   2. reach it through a tunnel or bastion, or deploy oauth2-proxy and
   #      uncomment the annotations in pgadmin/values.yaml
   - name: pgadmin
