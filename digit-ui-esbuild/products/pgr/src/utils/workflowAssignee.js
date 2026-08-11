@@ -40,8 +40,11 @@ export const findLatestAssigneeUuidByRole = async (stateCode, businessId, roleCo
   try {
     response = await WorkflowService.getByBusinessId(stateCode, businessId, {}, true);
   } catch (e) {
-    // Never block the citizen's reopen/rate on a history-fetch failure —
-    // fall back to no assignee (the pre-2167 behaviour).
+    // Never block the reopen/rate/reassign on a history-fetch failure — fall
+    // back to no assignee (the pre-2167 behaviour). But say so: this catch
+    // silently masked a broken URL (Urls.WorkFlowProcessSearch never existed)
+    // for days, making the whole derivation a no-op in every browser.
+    console.warn(`workflowAssignee: history fetch failed for ${businessId}; sending no assignee`, e);
     return null;
   }
   const instances = Array.isArray(response && response.ProcessInstances) ? response.ProcessInstances : [];

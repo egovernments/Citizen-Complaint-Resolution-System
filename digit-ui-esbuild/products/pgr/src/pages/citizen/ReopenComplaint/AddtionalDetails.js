@@ -81,9 +81,10 @@ const AddtionalDetails = (props) => {
     let reopenDetails = Digit.SessionStorage.get(`reopen.${id}`);
     if (complaintDetails) {
       // CCSD-2167: find the Supervisor from the complaint's workflow history.
-      const stateCode = Digit.ULBService.getStateId();
+      // Complaint's tenant, not the state root — see SelectRating.js note.
+      const wfTenant = complaintDetails?.service?.tenantId || Digit.ULBService.getStateId();
       const businessId = complaintDetails?.service?.serviceRequestId || id;
-      const supervisorUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_SUPERVISOR");
+      const supervisorUuid = await findLatestAssigneeUuidByRole(wfTenant, businessId, "CMS_SUPERVISOR");
       const assignes = supervisorUuid ? [supervisorUuid] : [];
       complaintDetails.workflow = getUpdatedWorkflow(
         reopenDetails,

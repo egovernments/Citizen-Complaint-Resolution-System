@@ -364,9 +364,12 @@ const PGRDetails = () => {
     const derivedRole = HISTORY_DERIVED_ASSIGNEE_ROLE[selectedAction.action];
     let assigneeUuid = pickedUuid;
     if (!pickedUuid && derivedRole) {
-      const stateCode = Digit.ULBService.getStateId();
+      // Search history at the COMPLAINT's tenant: its process instances live
+      // where it was filed (e.g. mz.ige), and a state-tenant search silently
+      // returns nothing there — the resolver then derived null every time.
+      const wfTenant = baseService?.tenantId || Digit.ULBService.getStateId();
       const businessId = baseService?.serviceRequestId;
-      assigneeUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, derivedRole);
+      assigneeUuid = await findLatestAssigneeUuidByRole(wfTenant, businessId, derivedRole);
     }
     // Parse (object OR stringified) so stamping never discards existing keys
     // like supervisorName / serviceName that older flows stored as a string.

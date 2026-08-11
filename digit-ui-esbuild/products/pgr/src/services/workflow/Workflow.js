@@ -39,7 +39,13 @@ export const WorkflowService = {
       },
       getByBusinessId: (stateCode, businessIds, params = {}, history = true) => {
         return Request({
-          url: Urls.WorkFlowProcessSearch,
+          // CCSD-2167: was `Urls.WorkFlowProcessSearch` — a key that has never
+          // existed in this module's urls.js (the real one is
+          // Urls.workflow.processSearch), so every call fetched `undefined` and
+          // callers that swallowed the error silently got nothing. This is why
+          // the history-derived assignee (reopen/rate/reassign) never reached
+          // the payload despite the logic being right.
+          url: Urls.workflow.processSearch,
           useCache: false,
           method: "POST",
           params: { tenantId: stateCode, businessIds: businessIds, ...params, history },
