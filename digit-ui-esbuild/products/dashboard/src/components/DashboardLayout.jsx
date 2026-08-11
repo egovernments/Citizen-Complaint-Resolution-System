@@ -47,7 +47,7 @@ const DashboardLayout = ({
       // it) and add the .dashboard-embedded modifier, whose CSS overrides
       // (appended in styles/input.css + dashboard.css) neutralize the
       // full-viewport shell so the page scrolls naturally in the host.
-      className={`dashboard-root${embedded ? " dashboard-embedded" : ""} tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground`}
+      className={`dashboard-root${embedded ? " dashboard-embedded" : ""}${publicMode ? " dashboard-public" : ""} tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground`}
       style={brandStyle}
     >
       {!embedded && !publicMode && <Sidebar onSignOut={onSignOut} />}

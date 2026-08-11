@@ -925,6 +925,36 @@
   }
 
   @media (max-width: 1023px) {
+    /* Public dashboards are read-only, so their configured desktop geometry
+       can become a normal responsive grid without sacrificing edit/drag
+       semantics. The backend still chooses the tiles and their source order;
+       the frontend owns fitting that content to the current viewport. */
+    .dashboard-root.dashboard-public .dashboard-grid-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+      gap: 1rem;
+      height: auto !important;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > .react-grid-item {
+      position: relative !important;
+      transform: none !important;
+      width: auto !important;
+      height: auto !important;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > .dashboard-kpi-widget {
+      min-height: 7.5rem;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > section.react-grid-item {
+      min-height: 20rem;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-widget-surface {
+      cursor: default;
+    }
+
     .dashboard-sidebar {
       position: fixed;
       left: 0;
