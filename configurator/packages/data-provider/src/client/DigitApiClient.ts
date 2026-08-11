@@ -202,6 +202,31 @@ export class DigitApiClient {
 
   // --- MDMS v2 ---
 
+  /** Default page size for DIGIT search APIs that omit a total. */
+  static readonly SEARCH_PAGE_SIZE = 100;
+
+  /**
+   * Walk offset/limit until a short page. MDMS v2 and boundary-hierarchy
+   * search do not return a total, so a single `limit: 100` (or 500) call
+   * silently truncates.
+   */
+  private async collectPages<T>(
+    fetchPage: (limit: number, offset: number) => Promise<T[]>,
+  ): Promise<T[]> {
+    const pageSize = DigitApiClient.SEARCH_PAGE_SIZE;
+    const all: T[] = [];
+    let offset = 0;
+    // Guard against an API that ignores offset and always returns a full page.
+    const maxPages = 200;
+    for (let i = 0; i < maxPages; i++) {
+      const page = await fetchPage(pageSize, offset);
+      all.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
+  }
+
   async mdmsSearch(tenantId: string, schemaCode: string, options?: {
     limit?: number; offset?: number; uniqueIdentifiers?: string[]; isActive?: boolean;
   }): Promise<MdmsRecord[]> {
@@ -218,6 +243,18 @@ export class DigitApiClient {
       RequestInfo: this.buildRequestInfo(), MdmsCriteria: criteria,
     });
     return data.mdms || [];
+  }
+
+  /** Every active (or unfiltered) MDMS row for a schema — successive pages, no 500 cap. */
+  async mdmsSearchAll(tenantId: string, schemaCode: string, options?: {
+    uniqueIdentifiers?: string[]; isActive?: boolean;
+  }): Promise<MdmsRecord[]> {
+    if (options?.uniqueIdentifiers?.length) {
+      return this.mdmsSearch(tenantId, schemaCode, options);
+    }
+    return this.collectPages((limit, offset) =>
+      this.mdmsSearch(tenantId, schemaCode, { ...options, limit, offset }),
+    );
   }
 
   async mdmsCreate(tenantId: string, schemaCode: string, uniqueIdentifier: string, recordData: Record<string, unknown>): Promise<MdmsRecord> {
@@ -329,12 +366,23 @@ export class DigitApiClient {
   }
 
   async boundaryHierarchySearch(tenantId: string, hierarchyType?: string): Promise<Record<string, unknown>[]> {
-    const criteria: Record<string, unknown> = { tenantId, limit: 100, offset: 0 };
-    if (hierarchyType) criteria.hierarchyType = hierarchyType;
-    const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
-      RequestInfo: this.buildRequestInfo(), BoundaryTypeHierarchySearchCriteria: criteria,
+    // A typed lookup fits on one page. Unscoped discovery must walk every
+    // page — Playwright onboarding leaves 200+ PW_* stubs that fill the
+    // first page and hide ADMIN.
+    if (hierarchyType) {
+      const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
+        RequestInfo: this.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, hierarchyType, limit: DigitApiClient.SEARCH_PAGE_SIZE, offset: 0 },
+      });
+      return data.BoundaryHierarchy || [];
+    }
+    return this.collectPages(async (limit, offset) => {
+      const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
+        RequestInfo: this.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, limit, offset },
+      });
+      return data.BoundaryHierarchy || [];
     });
-    return data.BoundaryHierarchy || [];
   }
 
   async boundaryCreate(tenantId: string, boundaries: { code: string; geometry?: Record<string, unknown> }[]): Promise<Record<string, unknown>[]> {

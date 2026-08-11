@@ -335,7 +335,7 @@ function clientPaginate(records: RaRecord[], page: number, perPage: number): RaR
 
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   const tenant = pickTenant(tenantId, filter);
-  const records = await client.mdmsSearch(tenant, config.schema!, { limit: 500 });
+  const records = await client.mdmsSearchAll(tenant, config.schema!);
   if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
 }
@@ -452,10 +452,9 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // hierarchy definitions are found.
   async function flatForTenant(t: string): Promise<RaRecord[]> {
     // Playwright onboarding specs leave hundreds of PW_* hierarchy stubs on
-    // live tenants (bomet ke has 214 types, 212 of them PW_*). Searching
-    // only the first page of those (limit 100, newest first) never reaches
-    // ADMIN, every stub tree is empty, and the dashboard shows 0 boundaries
-    // even though the real ADMIN tree has dozens of nodes.
+    // live tenants (bomet ke has 214 types, 212 of them PW_*). The client
+    // pages through every hierarchy definition; we still skip PW_* so we
+    // do not issue 200 empty tree queries. Always include ADMIN.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
     const discovered = (hierarchies as Record<string, unknown>[])
       .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
@@ -1005,15 +1004,16 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // `perPage` rows and reported `perPage + 1` when the page was full so
       // the paginator could enable Next. That number leaked into the list
       // badge: Departments with 10/page showed **11** ("1-10 of 11") even
-      // when the master had 33. Fetch the active set (capped) and paginate
-      // in memory so `total` is the real count. Masters (tenants / depts /
-      // designations) are nowhere near the cap.
+      // when the master had 33. Page until a short response, then paginate
+      // in memory so `total` is the real count — a 500-row cap still lied
+      // for schemas past that size. Dashboard cards pass perPage: 1 and
+      // read `total`; they do not consume the page payload.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: 500, offset: 0, isActive: true });
+          const raw = await client.mdmsSearchAll(tenant, config.schema!, { isActive: true });
           const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
           const sorted = clientSort(allActive, field, order);
           return { data: clientPaginate(sorted, page, perPage), total: sorted.length };

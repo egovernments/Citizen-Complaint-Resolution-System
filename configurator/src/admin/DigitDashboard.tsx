@@ -31,22 +31,20 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 /**
- * Page size for the card fetch. MDMS now returns an exact `total` (capped at
- * 500). Always DISPLAY `total`, never `data.length`: PGR `_search` is a page
- * while `_count` is the real number, and localization paginates a 7k+ pivot
- * down to this page size — using `data.length` made those two cards disagree
- * with their list pages.
+ * Cards only render `total`, never `data.length`. Keep perPage at 1 so PGR
+ * `_search` / other paged APIs do not pull a 500-row payload just to badge
+ * a count — MDMS v2 still walks every page inside getList because it has
+ * no total field.
  *
  * LocalizationList pins every AVAILABLE_LOCALES column, so the card must use
  * the same `locales` filter or it counts only en_IN and the list counts the
  * union across languages.
  */
-const DASHBOARD_COUNT_PAGE = 500;
 const LOCALIZATION_LOCALES = AVAILABLE_LOCALES.map((l) => l.locale);
 
 function ResourceCard({ resource }: { resource: string }) {
   const { total, isPending, error } = useGetList(resource, {
-    pagination: { page: 1, perPage: DASHBOARD_COUNT_PAGE },
+    pagination: { page: 1, perPage: 1 },
     sort: { field: 'id', order: 'ASC' },
     filter: resource === 'localization' ? { locales: LOCALIZATION_LOCALES } : {},
   });

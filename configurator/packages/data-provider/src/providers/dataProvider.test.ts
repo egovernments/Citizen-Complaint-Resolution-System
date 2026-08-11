@@ -306,9 +306,10 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }));
-    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number }) => {
-      assert.ok((opts?.limit ?? 0) >= 15, 'must fetch past the page size to know the total');
-      return rows;
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
     });
 
     const dp = createDigitDataProvider(client, 'ke');
@@ -320,5 +321,67 @@ describe('createDigitDataProvider', () => {
 
     assert.equal(result.total, 15);
     assert.equal(result.data.length, 10);
+  });
+
+  it('getList(departments) total is exact past 500 rows and with perPage 1', async () => {
+    // Dashboard cards pass perPage: 1. A 500-row cap would report 500 for a
+    // 550-row master. Page through offset until a short page.
+    const rows = Array.from({ length: 550 }, (_, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${String(i).padStart(3, '0')}`, name: `Dept ${i}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    let calls = 0;
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      calls += 1;
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 1 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 550);
+    assert.equal(result.data.length, 1);
+    assert.ok(calls >= 6, `should walk past a 500-row cap, got ${calls} pages`);
+  });
+
+  it('getList(boundaries) skips PW_* stubs and still queries ADMIN', async () => {
+    const stubs = Array.from({ length: 212 }, (_, i) => ({ hierarchyType: `PW_HIER_${i}` }));
+    mock.method(client, 'boundaryHierarchySearch', async () => [
+      ...stubs,
+      { hierarchyType: 'ADMIN' },
+      { hierarchyType: 'REVENUE' },
+    ]);
+    const queried: string[] = [];
+    mock.method(client, 'boundaryRelationshipSearch', async (_t: string, ht?: string) => {
+      queried.push(ht ?? '');
+      if (ht === 'ADMIN') {
+        return [{ tenantId: 'ke', hierarchyType: 'ADMIN', boundary: [{ code: 'KE', children: [] }] }];
+      }
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke.bomet');
+    const result = await dp.getList('boundaries', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result.data[0].id, 'KE');
+    assert.ok(!queried.some((ht) => /^PW_/i.test(ht)), 'must not query PW_* trees');
+    assert.ok(queried.includes('ADMIN'));
+    assert.ok(queried.includes('REVENUE'));
   });
 });

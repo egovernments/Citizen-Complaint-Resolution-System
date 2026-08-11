@@ -91,6 +91,61 @@ describe('DigitApiClient.mdmsCreate phantom-200', () => {
   });
 });
 
+describe('DigitApiClient.boundaryHierarchySearch pagination', () => {
+  it('walks offset until a short page when listing all types', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    const first = Array.from({ length: 100 }, (_, i) => ({ hierarchyType: `PW_${i}` }));
+    const second = [{ hierarchyType: 'ADMIN' }];
+    const offsets: number[] = [];
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, body: Record<string, unknown>) => {
+        const criteria = body.BoundaryTypeHierarchySearchCriteria as { offset: number; limit: number };
+        offsets.push(criteria.offset);
+        return { BoundaryHierarchy: criteria.offset === 0 ? first : second };
+      };
+
+    const result = await client.boundaryHierarchySearch('ke');
+    assert.equal(result.length, 101);
+    assert.deepEqual(offsets, [0, 100]);
+    assert.equal(result[100].hierarchyType, 'ADMIN');
+  });
+
+  it('does not page when looking up a single hierarchyType', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let calls = 0;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => {
+        calls += 1;
+        return { BoundaryHierarchy: [{ hierarchyType: 'ADMIN' }] };
+      };
+    const result = await client.boundaryHierarchySearch('ke', 'ADMIN');
+    assert.equal(calls, 1);
+    assert.equal(result[0].hierarchyType, 'ADMIN');
+  });
+});
+
+describe('DigitApiClient.mdmsSearchAll pagination', () => {
+  it('walks offset until a short page', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    const rows = Array.from({ length: 250 }, (_, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${i}` },
+      isActive: true,
+    }));
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, body: Record<string, unknown>) => {
+        const criteria = body.MdmsCriteria as { offset: number; limit: number };
+        return { mdms: rows.slice(criteria.offset, criteria.offset + criteria.limit) };
+      };
+
+    const result = await client.mdmsSearchAll('ke', 'common-masters.Department', { isActive: true });
+    assert.equal(result.length, 250);
+  });
+});
+
 describe('isSessionExpired', () => {
   it('matches InvalidAccessTokenException from access-control / Kong', () => {
     assert.equal(
