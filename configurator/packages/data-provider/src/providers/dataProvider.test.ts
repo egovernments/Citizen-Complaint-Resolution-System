@@ -266,4 +266,59 @@ describe('createDigitDataProvider', () => {
     assert.ok(captured, 'employeeUpdate should have been called');
     assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
   });
+
+  it('getList(localization) does not drop rows when the list pins locales[]', async () => {
+    // LocalizationList writes `{ locales: ['en_IN', 'hi_IN', …] }` as a fetcher
+    // control. Matching that array against a record field stringifies it to
+    // "en_in,hi_in,…" and, because no row has a `locales` column, clientFilter
+    // used to return []. Dashboard (filter: {}) kept the real count.
+    mock.method(client, 'localizationSearch', async (_tenant: string, locale: string) => {
+      if (locale === 'en_IN') {
+        return [{ code: 'HELLO', message: 'Hello', module: 'rainmaker-common', locale }];
+      }
+      return [{ code: 'HELLO', message: 'Bonjour', module: 'rainmaker-common', locale }];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('localization', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: { locales: ['en_IN', 'fr_FR'] },
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result.data.length, 1);
+    assert.equal(result.data[0].code, 'HELLO');
+    assert.equal((result.data[0] as { msg__en_IN: string }).msg__en_IN, 'Hello');
+    assert.equal((result.data[0] as { msg__fr_FR: string }).msg__fr_FR, 'Bonjour');
+  });
+
+  it('getList(departments) reports the real total, not perPage+1', async () => {
+    // 15 active rows, list page size 10. The old MDMS path fetched `limit: 10`
+    // and set total = 11 whenever the page was full, so the badge read 11
+    // ("1-10 of 11") instead of 15.
+    const rows = Array.from({ length: 15 }, (_, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${i}`, name: `Dept ${i}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number }) => {
+      assert.ok((opts?.limit ?? 0) >= 15, 'must fetch past the page size to know the total');
+      return rows;
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 10 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 15);
+    assert.equal(result.data.length, 10);
+  });
 });

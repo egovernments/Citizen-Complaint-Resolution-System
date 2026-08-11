@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DigitApiClient } from './DigitApiClient.js';
+import { isSessionExpired } from './errors.js';
 
 describe('DigitApiClient', () => {
   let client: DigitApiClient;
@@ -86,6 +87,21 @@ describe('DigitApiClient.mdmsCreate phantom-200', () => {
     await assert.rejects(
       () => client.mdmsCreate('pg', 'RAINMAKER-PGR.NotificationRouting', 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS', {}),
       /MDMS_DUPLICATE/,
+    );
+  });
+});
+
+describe('isSessionExpired', () => {
+  it('matches InvalidAccessTokenException from access-control / Kong', () => {
+    assert.equal(
+      isSessionExpired(400, [{ code: 'InvalidAccessTokenException', message: 'InvalidAccessTokenException' }]),
+      true,
+    );
+  });
+  it('does not match ordinary validation errors', () => {
+    assert.equal(
+      isSessionExpired(400, [{ code: 'INVALID_SEARCH', message: 'tenantId is required' }]),
+      false,
     );
   });
 });

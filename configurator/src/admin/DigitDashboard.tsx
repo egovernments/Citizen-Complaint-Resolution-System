@@ -3,6 +3,7 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
+import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import {
   Building2,
   MapPin,
@@ -29,11 +30,25 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'access-roles': Shield,
 };
 
+/**
+ * Page size for the card fetch. MDMS now returns an exact `total` (capped at
+ * 500). Always DISPLAY `total`, never `data.length`: PGR `_search` is a page
+ * while `_count` is the real number, and localization paginates a 7k+ pivot
+ * down to this page size — using `data.length` made those two cards disagree
+ * with their list pages.
+ *
+ * LocalizationList pins every AVAILABLE_LOCALES column, so the card must use
+ * the same `locales` filter or it counts only en_IN and the list counts the
+ * union across languages.
+ */
+const DASHBOARD_COUNT_PAGE = 500;
+const LOCALIZATION_LOCALES = AVAILABLE_LOCALES.map((l) => l.locale);
+
 function ResourceCard({ resource }: { resource: string }) {
-  const { total, isPending } = useGetList(resource, {
-    pagination: { page: 1, perPage: 1 },
+  const { total, isPending, error } = useGetList(resource, {
+    pagination: { page: 1, perPage: DASHBOARD_COUNT_PAGE },
     sort: { field: 'id', order: 'ASC' },
-    filter: {},
+    filter: resource === 'localization' ? { locales: LOCALIZATION_LOCALES } : {},
   });
 
   const navigate = useNavigate();
@@ -53,8 +68,13 @@ function ResourceCard({ resource }: { resource: string }) {
           </div>
           <div>
             <p className="text-2xl font-bold text-foreground">
-              {isPending ? '...' : (total ?? 0)}
+              {isPending ? '...' : error ? '—' : (total ?? 0)}
             </p>
+            {error ? (
+              <p className="text-xs text-destructive mt-0.5 truncate max-w-[14rem]" title={error instanceof Error ? error.message : String(error)}>
+                {error instanceof Error ? error.message : 'Error loading data'}
+              </p>
+            ) : null}
             <p className="text-sm text-muted-foreground">{label}</p>
           </div>
         </div>

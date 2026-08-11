@@ -305,7 +305,17 @@ function clientFilter(records: RaRecord[], filter: Record<string, unknown>): RaR
       // choose which locales to pivot; they are not record fields, so they must
       // not participate in record-level filtering (else every pivoted row, which
       // has msg__<locale> fields but no `locales`/`locale` field, gets dropped).
+      // `locales.0` etc. appear when an array filter is objectified by ra-core
+      // / flattenFilterSources; those must be skipped too.
       if (key === 'locale' || key === 'locale2' || key === 'locales') return true;
+      if (key.startsWith('locale.') || key.startsWith('locale2.') || key.startsWith('locales.')) return true;
+      // Sentinel from LocalizationList's "All modules" Select — never a real module.
+      if (key === 'module' && (value === '__all__' || value === '')) return true;
+      // Arrays/objects are fetcher control data (e.g. locales: ['en_IN', …]).
+      // Matching them against a missing record field stringifies to
+      // "en_in,hi_in,…" / "[object Object]" and drops every row — that's how
+      // /manage/localization showed 0 against a dashboard count of thousands.
+      if (value !== null && typeof value === 'object') return true;
       if (key === 'q' && typeof value === 'string') {
         const q = value.toLowerCase();
         return JSON.stringify(record).toLowerCase().includes(q);
@@ -441,11 +451,16 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // tree and left the Boundary picker blank). Falls back to "ADMIN" when no
   // hierarchy definitions are found.
   async function flatForTenant(t: string): Promise<RaRecord[]> {
+    // Playwright onboarding specs leave hundreds of PW_* hierarchy stubs on
+    // live tenants (bomet ke has 214 types, 212 of them PW_*). Searching
+    // only the first page of those (limit 100, newest first) never reaches
+    // ADMIN, every stub tree is empty, and the dashboard shows 0 boundaries
+    // even though the real ADMIN tree has dozens of nodes.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
-    const hierarchyTypes = (hierarchies as Record<string, unknown>[])
+    const discovered = (hierarchies as Record<string, unknown>[])
       .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
-      .filter(Boolean);
-    const types = hierarchyTypes.length > 0 ? hierarchyTypes : ['ADMIN'];
+      .filter((ht) => ht && !/^PW_/i.test(ht));
+    const types = Array.from(new Set(['ADMIN', ...discovered]));
     const treeLists = await Promise.all(
       types.map((ht) => client.boundaryRelationshipSearch(t, ht).catch(() => [])),
     );
@@ -588,22 +603,31 @@ async function pgrGetList(client: DigitApiClient, config: ResourceConfig, tenant
   });
 }
 
+/** Parse the localization list's `locales` control value into locale codes. */
+function parseLocalesFilter(raw: unknown): string[] {
+  if (raw == null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.map((l) => String(l).trim()).filter(Boolean);
+  // ra-core / flattenFilterSources may objectify an array into {0: 'en_IN', …}.
+  if (typeof raw === 'object') {
+    return Object.values(raw as Record<string, unknown>).map((l) => String(l).trim()).filter(Boolean);
+  }
+  return String(raw).split(',').map((l) => l.trim()).filter(Boolean);
+}
+
 async function localizationGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   // Side-by-side pivot of two locales. The list view picks the locales via
   // dropdowns and passes them as `locale` (left column) and `locale2` (right
   // column). localeB is empty until the user explicitly picks a second locale
   // so the right column starts as all-missing rather than defaulting to a
   // hardcoded locale that may not exist on the tenant.
-  const module = filter?.module ? String(filter.module) : undefined;
+  const module = filter?.module && filter.module !== '__all__' ? String(filter.module) : undefined;
   // Multi-locale pivot: when the caller passes `locales` (array or CSV) the
   // grid wants one editable column per locale (msg__<locale>) instead of the
   // 2-way message/message2 compare — so every language can be edited side by
   // side. Rows are keyed by code+module; a code present in one locale but not
   // another still appears (its missing columns stay empty).
-  const localesRaw = filter?.locales;
-  if (localesRaw) {
-    const locales = (Array.isArray(localesRaw) ? localesRaw : String(localesRaw).split(','))
-      .map((l) => String(l).trim()).filter(Boolean);
+  const locales = parseLocalesFilter(filter?.locales);
+  if (locales.length > 0) {
     const perLocale = await Promise.all(locales.map((l) => client.localizationSearch(tenantId, l, module)));
     const pivotN = new Map<string, Record<string, unknown>>();
     locales.forEach((loc, i) => {
@@ -977,26 +1001,22 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data, total: filtered.length };
       }
 
-      // MDMS resources without the leaf-adapter (all schemas except
-      // complaint-hierarchy): push limit/offset to the server when no
-      // client-side filter is active so the API is called with the actual
-      // page size instead of a fixed 500. MDMS v2 does not return a total
-      // count, so we use a heuristic: a full page means "there may be more"
-      // (next button enabled), a partial page means "last page".
+      // MDMS v2 does not return a total. A previous path fetched only
+      // `perPage` rows and reported `perPage + 1` when the page was full so
+      // the paginator could enable Next. That number leaked into the list
+      // badge: Departments with 10/page showed **11** ("1-10 of 11") even
+      // when the master had 33. Fetch the active set (capped) and paginate
+      // in memory so `total` is the real count. Masters (tenants / depts /
+      // designations) are nowhere near the cap.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const offset = (page - 1) * perPage;
-          // isActive:true so the server paginates over active rows only. The
-          // client-side .filter below stays as a defensive fallback for any MDMS
-          // that ignores the criterion (degrades to old behavior, never worse).
-          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset, isActive: true });
-          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const sorted = clientSort(data, field, order);
-          const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
-          return { data: sorted, total };
+          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: 500, offset: 0, isActive: true });
+          const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(allActive, field, order);
+          return { data: clientPaginate(sorted, page, perPage), total: sorted.length };
         }
       }
 
