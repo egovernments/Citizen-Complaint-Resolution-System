@@ -1659,7 +1659,12 @@ services:
       - "18443:8443"   # Proxy (HTTPS)
       - "18001:8001"   # Admin API
       - "18002:8002"   # Kong Manager GUI
-      - "18100:8100"   # Status endpoint
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
