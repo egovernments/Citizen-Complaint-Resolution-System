@@ -28,8 +28,21 @@ metadata:
   namespace: digit
 data:
   config.yaml: |
+    # Uptime history survives container restarts (#1610). emptyDir, not a PVC:
+    # it is tied to the pod, so a restart keeps history while a reschedule does
+    # not. That is the right trade while this tier runs nothing real — revisit
+    # with a PVC when it does (#1618).
+    #
+    # Retention is deliberately left unset: Gatus bounds it itself, per endpoint, at
+    # maximum-number-of-results 100 and maximum-number-of-events 50 (upstream
+    # storage/config.go, DefaultMaximumNumberOfResults / DefaultMaximumNumberOfEvents),
+    # and the SQL store prunes past those thresholds. gatus.db therefore settles at a
+    # steady-state size instead of growing forever. Set those keys here only if a
+    # deployment wants a different window -- and check the pinned image supports them,
+    # since Gatus rejects unknown config keys outright.
     storage:
-      type: memory
+      type: sqlite
+      path: /data/gatus.db
 
     ui:
       title: DIGIT Core Services - Health Dashboard
@@ -606,6 +619,72 @@ data:
           - "[STATUS] == 200"
         alerts:
           - type: slack
+
+      # ==================== Public endpoint (TLS) ====================
+      # Every other check in this file runs INSIDE the cluster network and never
+      # traverses the public ingress, so none of them presents the public
+      # certificate. An expired cert therefore leaves this whole dashboard green
+      # while every citizen and employee gets a browser security warning — the
+      # dashboard would actively mislead whoever is diagnosing the outage (#1622).
+      #
+      # This is also the only check that exercises the REAL public path end to
+      # end: DNS, firewall, TLS termination and routing through to the app.
+      #
+      # OFF in this tier: it has no ingress and no public hostname (see #1618).
+      # Defined here only to keep both catalogues identical, per the header.
+      #
+      # GATUS_PUBLIC_URL is still set to a non-empty placeholder on the Deployment
+      # below. Gatus validates `url` on EVERY endpoint before it consults
+      # `enabled:`, so an empty value here does not disable the check -- it aborts
+      # startup ("you must specify an url for each endpoint") and CrashLoopBackOffs.
+      #
+      # [CONNECTED] == true is what separates the two ways this can go red. On any
+      # TLS failure -- SAN mismatch, broken chain, wrong cert -- the handshake never
+      # completes, so [CERTIFICATE_EXPIRATION] resolves to 0s and [STATUS] to 0. With
+      # only the two conditions below, "0s > 240h" would fail and read exactly like a
+      # cert about to expire, sending on-call to chase a renewal that is not the
+      # problem. [CONNECTED] fails too in that case and not in the expiry case, so
+      # which condition is red says which fault it is. (It also closes a real gap:
+      # 0 < 500 is TRUE, so [STATUS] alone stays green on a dead connection.)
+      # Upstream pairs these two conditions in its own certificate examples.
+      - name: TLS Certificate
+        group: Public Endpoint
+        enabled: ${GATUS_TLS}
+        url: "${GATUS_PUBLIC_URL}"
+        interval: 5m
+        conditions:
+          - "[CONNECTED] == true"
+          - "[CERTIFICATE_EXPIRATION] > 240h"
+          - "[STATUS] < 500"
+        # Alerts on this one too (#1609). It was added by #1622 after this branch
+        # was written, so the textual merge left the newest -- and most public --
+        # check unable to page anyone. A silently unalertable cert-expiry check is
+        # the exact failure #1622 exists to prevent.
+        alerts:
+          - type: slack
+
+---
+# Backing store for the sqlite database (#1610). Without this the volume was an
+# emptyDir, which is destroyed with the pod -- so the uptime history this PR
+# exists to preserve was still lost on every rollout, drain or eviction.
+# Measured before the fix: after deleting the pod, the oldest row in the
+# database was timestamped one second after the new pod started.
+#
+# No storageClassName: k3s provisions this with local-path, the default. 1Gi is
+# generous -- Gatus stores one row per check per interval and prunes on read.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: digit
+  labels:
+    app: gatus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -616,6 +695,13 @@ metadata:
     app: gatus
 spec:
   replicas: 1
+  # Recreate, not the default RollingUpdate. The claim above is ReadWriteOnce
+  # and holds a sqlite file, so a rolling update would deadlock: the new pod
+  # cannot mount the volume until the old one releases it, and the old one is
+  # not terminated until the new one is ready. Recreate also keeps two Gatus
+  # processes off one sqlite file, which replicas: 1 assumes anyway.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: gatus
@@ -669,6 +755,19 @@ spec:
               value: "false"
             - name: GATUS_SMS_PORT
               value: "8080"
+            # No ingress and no public hostname in this tier (#1618), so the
+            # public TLS check stays off. Declared rather than omitted: Gatus
+            # reads an UNSET enabled-var as true, which would leave a
+            # permanently-red check against a URL that never resolves.
+            - name: GATUS_TLS
+              value: "false"
+            # Non-empty on purpose. Gatus validates `url` on EVERY endpoint
+            # before it consults `enabled:`, so "" is not an inert placeholder --
+            # it aborts startup with "you must specify an url for each endpoint"
+            # and CrashLoopBackOffs the pod. Only ever parsed; with GATUS_TLS
+            # false this endpoint is never dialled.
+            - name: GATUS_PUBLIC_URL
+              value: "https://localhost/"
           resources:
             limits:
               memory: 64Mi
@@ -690,10 +789,17 @@ spec:
             - name: gatus-config
               mountPath: /config/config.yaml
               subPath: config.yaml
+            # sqlite store (#1610). The config mount is a read-only ConfigMap,
+            # so the database needs a writable volume of its own.
+            - name: gatus-data
+              mountPath: /data
       volumes:
         - name: gatus-config
           configMap:
             name: gatus-config
+        - name: gatus-data
+          persistentVolumeClaim:
+            claimName: gatus-data
 ---
 apiVersion: v1
 kind: Service

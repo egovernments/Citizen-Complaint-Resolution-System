@@ -100,6 +100,14 @@
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      # GF_SECURITY_ADMIN_PASSWORD in the compose file is `${GF_ADMIN_PASSWORD:?}`
+      # (no default, on purpose — see the grafana service there). Compose
+      # interpolates for `down` too, so a box whose previous deploy aborted
+      # before .env got the real value would fail this teardown on an
+      # unresolvable variable. The value is irrelevant to `down`; feed it a
+      # placeholder rather than let a missing secret block a teardown.
+      environment:
+        GF_ADMIN_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -1200,6 +1208,44 @@
       synchronize:
         src: "{{ item.value }}/"
         dest: "{{ digit_dir }}/{{ item.key }}/"
+        # --inplace is load-bearing (#1683), not a performance tweak.
+        #
+        # rsync's default is to write a temp file and rename it over the
+        # destination. That REPLACES THE INODE. Several of these files are
+        # bind-mounted into containers individually (kong.yml, gatus/config.yaml,
+        # otel-collector-config.yaml, prometheus.yml, the nginx *-proxy.conf
+        # files), and a single-file bind mount is bound to the inode it was
+        # created with -- not to the path. Once rsync swaps the inode, the
+        # running container keeps reading the OLD file forever.
+        #
+        # This is a silent-success failure: the file on disk is correct, the
+        # playbook is green, and `kong reload` even reports success, while the
+        # gateway carries on serving the previous policy. It was found with Kong
+        # running an 11-day-old kong.yml -- still proxying routes that had been
+        # deleted -- because nothing recreates Kong when only kong.yml changes.
+        # Most other services self-heal only because they happen to be recreated
+        # by the "Recreate services with the new env" task below.
+        #
+        # --inplace writes into the existing file, so the inode survives and the
+        # container sees the update. Verified on a real box: default rsync
+        # changed the inode and the container never saw the new content;
+        # --inplace kept it (6665 -> 6665) and the container saw it immediately.
+        #
+        # The trade: an interrupted transfer can leave a partially-written
+        # config where the default would have left the previous file intact. For
+        # small text configs written by a deploy that health-checks afterwards,
+        # a config that is actually applied beats one that is atomically stale.
+        #
+        # delay_updates MUST be false alongside it. ansible's synchronize adds
+        # --delay-updates by default, and rsync refuses the combination outright:
+        #   "rsync: --inplace cannot be used with --delay-updates"
+        # which fails every item in this loop and aborts the deploy at this task.
+        # (--delay-updates is the very batch-then-rename behaviour we are
+        # removing, so turning it off is the point, not a workaround.)
+        delay_updates: false
+        rsync_opts:
+          - "--inplace"
+      register: config_sync
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
         digit_config_dirs:
@@ -1577,6 +1623,30 @@
       when:
         - build_digit_ui | default(false)
 
+    # ---- Grafana admin password BEFORE the first compose-up ----
+    # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
+    # ${GF_ADMIN_PASSWORD:?} — no default, so an unset variable aborts the whole
+    # compose invocation (that is the point: a `:-admin` default would ship
+    # admin/admin to anyone running the file standalone). But the authoritative
+    # value only exists further down, after the OpenBao bootstrap — which itself
+    # needs the stack up. Same ordering trap the KEYCLOAK/novu prep blocks below
+    # solve, and the same fix: put a value in .env before anything runs compose.
+    #
+    # It is random per run, not a fixed placeholder, because it IS the password
+    # Grafana seeds its admin row with on a first boot (GF_SECURITY_ADMIN_PASSWORD
+    # is only read when grafana_data is empty). If a deploy dies between here and
+    # the OpenBao block, the box is left with an unguessable admin password
+    # instead of admin/admin. The cost is that Grafana gets recreated once more
+    # per deploy, when the OpenBao value replaces this line further down.
+    - name: "Grafana prep — write a GF_ADMIN_PASSWORD into .env BEFORE compose-up"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+        create: true
+        mode: '0600'
+      no_log: true
+
     # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
     # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
     # secret is otherwise written to .env only AFTER it (the OpenBao block further
@@ -1820,6 +1890,75 @@
       until: kong_health.stdout == 'healthy'
       changed_when: false
 
+    # Kong is DB-less: it loads kong.yml once at startup and does not watch it.
+    # So a changed kong.yml is PRESENT but not APPLIED until Kong re-reads it,
+    # and nothing else in this playbook recreates Kong when only its config
+    # changed (unlike the app services, which the recreate task above covers).
+    #
+    # Without this, a tightened auth or RBAC rule silently does not take effect
+    # -- the file is right, the deploy is green, and the gateway keeps serving
+    # the previous policy (#1683).
+    #
+    # `kong reload` is used rather than a container recreate because it is
+    # Kong's documented zero-downtime path: workers are replaced gracefully, so
+    # in-flight API calls are not dropped. It only works because the --inplace
+    # sync above keeps the mounted file current; with the default rsync the
+    # reload re-reads a stale inode and reports success while changing nothing.
+    - name: "Kong — reload declarative config when kong.yml changed (#1683)"
+      ansible.builtin.command:
+        cmd: docker exec kong-gateway kong reload
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'kong')
+        | selectattr('changed', 'defined') | selectattr('changed')
+        | list | length > 0
+      changed_when: true
+
+    # Same failure mode as Kong, one hop further down (#1683). The OpenTelemetry
+    # Collector reads --config once at startup and does not watch the file, and
+    # nothing else recreates it on a routine redeploy: unlike gatus/grafana it
+    # declares no `environment:` at all, so the ".env changed" recreate above
+    # never selects it. Result: otel-collector-config.yaml now correctly lands
+    # on disk and inside the container -- and is still not applied.
+    #
+    # Gatus is deliberately NOT restarted here. It watches its config file and
+    # reloads itself, which the --inplace sync above is what makes possible: the
+    # watcher follows the mounted inode, so the old rename-over-the-top swap was
+    # invisible to it. A restart would also drop its uptime history for no gain.
+    # prometheus.yml is handled separately by its own SIGHUP reload (#1608).
+    #
+    # A restart, not a reload: the collector has no reload signal or admin
+    # endpoint. It is a few seconds of dropped telemetry, which is why the gate
+    # below is on the ONE file that matters rather than on the otel/ directory
+    # as a whole -- that directory also holds prometheus.yml, the Loki/Tempo/
+    # Promtail configs, the javaagent jar and every Grafana dashboard JSON, so a
+    # directory-level gate would bounce the collector on any dashboard tweak.
+    #
+    # synchronize's per-file itemized output is what makes the narrow gate
+    # possible: stdout_lines carries one rsync `>f.st...... <name>` line per
+    # changed file, and is empty when the dir is unchanged. Verified locally
+    # against ansible.posix.synchronize 2.2.2 + rsync 3.4.4: editing only
+    # prometheus.yml leaves this gate false while the item still reports
+    # changed=true; editing otel-collector-config.yaml flips it true.
+    - name: "OTEL Collector — restart when its config changed (#1683)"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-otel-collector$')" ]; then
+          echo "NOCHANGE collector not running"
+          exit 0
+        fi
+        docker restart digit-otel-collector
+      args:
+        executable: /bin/bash
+      register: otel_collector_restart
+      changed_when: "'NOCHANGE' not in otel_collector_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'otel-collector-config')
+        | list | length > 0
+
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
@@ -1844,16 +1983,22 @@
     # live Prometheus keeps its old in-memory config and never picks up a newly
     # added scrape job (e.g. the `node` job for node-exporter) until it happens
     # to restart. A fresh deploy is unaffected — Prometheus boots with the new
-    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
-    # rereads the file in place. Best-effort: on a first deploy Prometheus may
-    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    # config.
+    #
+    # Reload is by SIGHUP, not POST /-/reload (#1608). The HTTP lifecycle
+    # endpoints are enabled by --web.enable-lifecycle, which also exposes
+    # POST /-/quit — an unauthenticated remote shutdown of the metrics store.
+    # SIGHUP is Prometheus's documented equivalent for re-reading config and
+    # carries no HTTP surface, so the flag is gone from the compose file.
+    # `docker kill` only DELIVERS the signal despite its name; HUP does not
+    # terminate the process.
+    #
+    # Best-effort: on a first deploy Prometheus may not be up yet (and has
+    # already loaded fresh config), so a failure here is fine.
     - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
-      ansible.builtin.uri:
-        url: http://127.0.0.1:19090/-/reload
-        method: POST
-        status_code: [200]
+      ansible.builtin.command: docker kill -s HUP digit-prometheus
       register: prometheus_reload
-      changed_when: prometheus_reload.status == 200
+      changed_when: prometheus_reload.rc == 0
       failed_when: false
 
     # ==================== digit-ui mode convergence ====================
@@ -2273,6 +2418,58 @@
       register: bao_secrets
       no_log: true
 
+    # Grafana admin password. Tenants seeded BEFORE this key existed can't get
+    # it from the bootstrap seed above (that write is cas:0 — it only fires when
+    # no version exists yet), so generate one here and persist it. After the
+    # first run the stored value is reused, which keeps the password stable
+    # across deploys. Operators read it back with:
+    #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+    #
+    # `or`, not `ternary`. Jinja evaluates every filter argument before calling
+    # the filter, so `… | ternary(stored, lookup('password', …))` runs the
+    # generator on every deploy and throws the result away whenever OpenBao
+    # already has a value. `or` compiles to Python's `or` and short-circuits, so
+    # the lookup only runs when there is nothing stored — which is also what the
+    # task name claims. (default('', true) turns both "undefined" and "" into the
+    # falsey '' that `or` needs.)
+    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
+      ansible.builtin.set_fact:
+        grafana_admin_pw: >-
+          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      no_log: true
+
+    - name: "OpenBao — persist generated Grafana admin password"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        # The whole body is ONE template expression on purpose: Ansible preserves
+        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
+        # across YAML keys it would render as the string "5" and the CAS check
+        # would depend on server-side weak decoding.
+        #
+        # cas = the version we just read. Without it this is a blind overwrite of
+        # the entire secret: anything written between our read and this write (a
+        # concurrent deploy, an operator running `bao kv put`) is silently lost,
+        # because `data` is built from the snapshot we read. With cas, a racing
+        # write makes OpenBao reject ours (400) and the deploy stops rather than
+        # clobbering. No retry loop: deploys are serialised per tenant, so a
+        # conflict means something genuinely unexpected touched the secret and a
+        # human should look before we overwrite it.
+        #
+        # `data` merges, never replaces — a bare {grafana_admin_password: …}
+        # write would drop every other key in this tenant's secret.
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+        status_code: [200]
+      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      no_log: true
+
     - name: "OpenBao — write secrets into compose .env (idempotent block)"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
@@ -2291,6 +2488,21 @@
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    # GF_ADMIN_PASSWORD is the one OpenBao-backed value that is NOT in the block
+    # above: "Grafana prep" already wrote a pre-boot line for it before the stack
+    # came up (the compose file has no default for it), and appending a second
+    # line inside the block would leave two GF_ADMIN_PASSWORD entries in .env
+    # with the winner decided by file order. Replace the existing line in place
+    # instead, so .env always has exactly one — now the authoritative value.
+    - name: "OpenBao — put the stored Grafana admin password into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
+        create: false
+        mode: '0600'
       no_log: true
 
     # Keycloak-tier secrets — appended as a separate marked block so the
@@ -4145,6 +4357,66 @@
     - name: Show Loki health status
       debug:
         msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+
+    # GF_SECURITY_ADMIN_PASSWORD only seeds the admin user on the FIRST boot of a
+    # fresh grafana_data volume. Every box deployed before this change already has
+    # an admin row — from the era when the login form was disabled entirely — so
+    # without this reset they would keep unknown/legacy credentials and nobody
+    # could log in to the UI we just closed off.
+    - name: Wait for Grafana health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13000/api/health -o /dev/null
+      register: grafana_health
+      retries: 12
+      delay: 10
+      until: grafana_health.rc == 0
+      changed_when: false
+      ignore_errors: yes
+
+    # Fatal when it runs. Grafana is healthy at this point, so a failing reset is
+    # a genuine anomaly (wrong CLI path after an image bump, unwritable DB), and
+    # the failure mode it leaves behind is silent: the UI keeps whatever password
+    # the volume was seeded with, nobody can log in with the OpenBao value, and a
+    # `failed_when: false` would bury that in a 4000-line deploy log.
+    #
+    # --password-from-stdin, NOT the positional argument. As an argument the
+    # password lands in the host's process table and the container's argv, and
+    # /proc/<pid>/cmdline is world-readable — so every `no_log` on the Ansible
+    # side is undone for the lifetime of the exec by any local user running
+    # `ps aux`. The CLI reads one line off stdin instead (bufio.Scanner in
+    # pkg/cmd/grafana-cli/commands/reset_password_command.go; present in the
+    # pinned grafana 11.4.0), and `docker exec -i` is what forwards it.
+    #
+    # failed_when is explicit because a non-zero rc is not the only failure:
+    # resetPasswordCommand returns nil when the admin user cannot be found, so
+    # the CLI exits 0 after printing "Admin user cannot be found". Gate on the
+    # success line so that case is loud too.
+    - name: Grafana — align admin password with OpenBao (idempotent)
+      ansible.builtin.command: >-
+        docker exec -i digit-grafana
+        grafana cli admin reset-admin-password --password-from-stdin
+      args:
+        stdin: "{{ grafana_admin_pw }}"
+      register: grafana_pw_reset
+      changed_when: false
+      failed_when: >-
+        grafana_pw_reset.rc != 0
+        or 'Admin password changed successfully' not in grafana_pw_reset.stdout
+      no_log: true
+      when: grafana_health.rc == 0
+
+    # Grafana never came up. Non-fatal, matching the Loki gate above — the
+    # dashboards are not a serving dependency — but say so loudly, because the
+    # stored password has NOT been applied to the running instance.
+    - name: Show Grafana admin-password status
+      debug:
+        msg: >-
+          Grafana: {{ 'admin password aligned with OpenBao'
+                      if grafana_health.rc == 0
+                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or (piped, so the
+                            password stays out of ps aux):
+                            bao kv get -field=grafana_admin_password '
+                           ~ secrets_path ~
+                           ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's
