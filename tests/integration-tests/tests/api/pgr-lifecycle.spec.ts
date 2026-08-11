@@ -144,13 +144,20 @@ First link in a serial chain — every later step skips if this fails.`,
     // may live at the CITY tenant (e.g. EMP001 on mz.maputo), not the root
     // where ADMIN lives — so authenticate via getPrincipal, which probes
     // CITY→ROOT and returns null only when neither tenant accepts them.
-    // ASSIGN requires the ACTOR to carry an HRMS department: pgr-services
-    // resolves the assigner's department to route the complaint and returns
-    // 400 DEPARTMENT_NOT_FOUND without one (probed directly — ADMIN has
-    // roles=[...GRO...] but depts=none, so the bare GRO role is not enough).
-    // The suite already models this as its own persona precisely because the
-    // two differ; prefer it, and fall back to GRO_USER on deployments where
-    // no departmented GRO exists so the failure stays legible.
+    // The ACTOR only needs the GRO role — the department check does NOT apply
+    // to it. ServiceRequestValidator.validateDepartment resolves departments
+    // for request.getWorkflow().getAssignes(), i.e. the ASSIGNEE, so a bare-GRO
+    // actor does not by itself produce 400 DEPARTMENT_NOT_FOUND. (An earlier
+    // probe read it the other way round because actor and assignee were both
+    // ADMIN; the actor=PGGRO1/assignee=ADMIN probe recorded below disambiguates
+    // it.) The assignee guard is the `departmented(lme)` assertion further down.
+    //
+    // Still prefer the 'gro-with-department' persona: it is what the pg
+    // expectations require, and on a seeded tenant it is the same employee that
+    // must also be assignable. But do NOT hard-require it — a deployment with a
+    // departmented LME and a bare-GRO ADMIN legitimately passes ASSIGN, so
+    // falling back to GRO_USER keeps that case green rather than inventing a
+    // failure the service would not raise.
     const groPersona = await resolvePersona('gro-with-department').catch(() => null);
     const gro = groPersona ?? (await getPrincipal(GRO_USER, GRO_PASS));
     expect(

@@ -15,8 +15,8 @@
     "tenant.citySubTenant": "absent"
   },
   "_rationale": {
-    "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. Currently absent from the dump \u2014 a real gap.",
-    "mdms.rejectionReasons": "Deliberate red, same call as bomet. RAINMAKER-PGR.RejectionReasons is absent from full-dump.sql entirely (0 rows, no schema). Marking it absent would hide a real gap behind a green run.",
+    "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. This PR closes the gap \u2014 full-dump.sql now seeds the ESCALATE actions on the pg businessService, so the capability is present and the test runs for real.",
+    "mdms.rejectionReasons": "Required, same call as bomet. full-dump.sql now seeds the RAINMAKER-PGR.RejectionReasons schema plus five reason rows at pg; keeping this 'required' means a future dump that drops them goes red instead of silently self-skipping.",
     "personas.gro-with-department": "Required: an ASSIGN-capable employee is the difference between the suite running and hard-failing at profile-setup.",
     "personas.ward-scoped-csr": "Absent: no ward-scoped CSR is seeded, so boundary-jurisdiction-496 self-skips rather than asserting against another deployment's wards.",
     "locales.multi": "Absent: the dump seeds en_IN only.",
