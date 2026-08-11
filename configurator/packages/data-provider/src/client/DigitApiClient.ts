@@ -204,6 +204,8 @@ export class DigitApiClient {
 
   /** Default page size for DIGIT search APIs that omit a total. */
   static readonly SEARCH_PAGE_SIZE = 100;
+  /** Infinite-loop guard when offset is ignored. Hitting this with a full last page is an error, not a silent truncate. */
+  static readonly SEARCH_MAX_PAGES = 200;
 
   /**
    * Walk offset/limit until a short page. MDMS v2 and boundary-hierarchy
@@ -214,17 +216,20 @@ export class DigitApiClient {
     fetchPage: (limit: number, offset: number) => Promise<T[]>,
   ): Promise<T[]> {
     const pageSize = DigitApiClient.SEARCH_PAGE_SIZE;
+    const maxPages = DigitApiClient.SEARCH_MAX_PAGES;
     const all: T[] = [];
     let offset = 0;
-    // Guard against an API that ignores offset and always returns a full page.
-    const maxPages = 200;
+    let lastWasFull = false;
     for (let i = 0; i < maxPages; i++) {
       const page = await fetchPage(pageSize, offset);
       all.push(...page);
-      if (page.length < pageSize) break;
+      lastWasFull = page.length === pageSize;
+      if (!lastWasFull) return all;
       offset += pageSize;
     }
-    return all;
+    throw new Error(
+      `DIGIT search truncated after ${maxPages} pages (${all.length} rows); refusing to report a partial total`,
+    );
   }
 
   async mdmsSearch(tenantId: string, schemaCode: string, options?: {

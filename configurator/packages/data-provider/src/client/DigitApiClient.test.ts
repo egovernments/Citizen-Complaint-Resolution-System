@@ -144,6 +144,28 @@ describe('DigitApiClient.mdmsSearchAll pagination', () => {
     const result = await client.mdmsSearchAll('ke', 'common-masters.Department', { isActive: true });
     assert.equal(result.length, 250);
   });
+
+  it('throws rather than returning a truncated total when the page guard is hit', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let calls = 0;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => {
+        calls += 1;
+        return {
+          mdms: Array.from({ length: DigitApiClient.SEARCH_PAGE_SIZE }, (_, i) => ({
+            id: `id-${calls}-${i}`,
+            uniqueIdentifier: `ROW_${calls}_${i}`,
+            isActive: true,
+          })),
+        };
+      };
+
+    await assert.rejects(
+      () => client.mdmsSearchAll('ke', 'common-masters.Department'),
+      /truncated after 200 pages/,
+    );
+    assert.equal(calls, DigitApiClient.SEARCH_MAX_PAGES);
+  });
 });
 
 describe('isSessionExpired', () => {

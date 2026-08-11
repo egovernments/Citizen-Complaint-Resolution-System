@@ -384,4 +384,32 @@ describe('createDigitDataProvider', () => {
     assert.ok(queried.includes('ADMIN'));
     assert.ok(queried.includes('REVENUE'));
   });
+
+  it('getList(gender-types) uses server paging instead of fetching the whole master', async () => {
+    const calls: Array<{ limit?: number; offset?: number }> = [];
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      calls.push({ limit: opts?.limit, offset: opts?.offset });
+      return Array.from({ length: 10 }, (_, i) => ({
+        id: `id-${i}`,
+        tenantId: 'ke',
+        schemaCode: 'common-masters.GenderType',
+        uniqueIdentifier: `G_${i}`,
+        data: { code: `G_${i}` },
+        isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      }));
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('gender-types', {
+      pagination: { page: 2, perPage: 10 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], { limit: 10, offset: 10 });
+    assert.equal(result.data.length, 10);
+    assert.equal(result.total, 21);
+  });
 });

@@ -452,9 +452,10 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // hierarchy definitions are found.
   async function flatForTenant(t: string): Promise<RaRecord[]> {
     // Playwright onboarding specs leave hundreds of PW_* hierarchy stubs on
-    // live tenants (bomet ke has 214 types, 212 of them PW_*). The client
-    // pages through every hierarchy definition; we still skip PW_* so we
-    // do not issue 200 empty tree queries. Always include ADMIN.
+    // live tenants (bomet ke has 214 types, 212 of them PW_*).
+    // DigitApiClient.boundaryHierarchySearch paginates every page (not the
+    // first 100); we still skip PW_* so we do not issue 200 empty tree
+    // queries. Always include ADMIN.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
     const discovered = (hierarchies as Record<string, unknown>[])
       .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
@@ -1000,23 +1001,31 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data, total: filtered.length };
       }
 
-      // MDMS v2 does not return a total. A previous path fetched only
-      // `perPage` rows and reported `perPage + 1` when the page was full so
-      // the paginator could enable Next. That number leaked into the list
-      // badge: Departments with 10/page showed **11** ("1-10 of 11") even
-      // when the master had 33. Page until a short response, then paginate
-      // in memory so `total` is the real count — a 500-row cap still lied
-      // for schemas past that size. Dashboard cards pass perPage: 1 and
-      // read `total`; they do not consume the page payload.
+      // MDMS v2 does not return a total. Dedicated small masters (tenants /
+      // departments / designations / hierarchy definitions) page until a short
+      // response so dashboard cards and list badges get an exact `total`.
+      // Generic / large MDMS schemas stay on server paging (`limit`/`offset`)
+      // so a list page does not download the whole master.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const raw = await client.mdmsSearchAll(tenant, config.schema!, { isActive: true });
-          const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const sorted = clientSort(allActive, field, order);
-          return { data: clientPaginate(sorted, page, perPage), total: sorted.length };
+          if (config.dedicated) {
+            const raw = await client.mdmsSearchAll(tenant, config.schema!, { isActive: true });
+            const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+            const sorted = clientSort(allActive, field, order);
+            return { data: clientPaginate(sorted, page, perPage), total: sorted.length };
+          }
+          const offset = (page - 1) * perPage;
+          const raw = await client.mdmsSearch(tenant, config.schema!, {
+            limit: perPage,
+            offset,
+            isActive: true,
+          });
+          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const total = data.length < perPage ? offset + data.length : offset + perPage + 1;
+          return { data, total };
         }
       }
 
