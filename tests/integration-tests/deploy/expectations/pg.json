@@ -10,7 +10,7 @@
     "pgr.citizenCreate": "required",
     "ui.citizen.attachmentDetailRender": "required",
     "personas.gro-with-department": "required",
-    "personas.ward-scoped-csr": "absent",
+    "personas.ward-scoped-csr": "required",
     "locales.multi": "absent",
     "tenant.citySubTenant": "absent"
   },
@@ -18,7 +18,7 @@
     "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. This PR closes the gap \u2014 full-dump.sql now seeds the ESCALATE actions on the pg businessService, so the capability is present and the test runs for real.",
     "mdms.rejectionReasons": "Required, same call as bomet. full-dump.sql now seeds the RAINMAKER-PGR.RejectionReasons schema plus five reason rows at pg; keeping this 'required' means a future dump that drops them goes red instead of silently self-skipping.",
     "personas.gro-with-department": "Required: an ASSIGN-capable employee is the difference between the suite running and hard-failing at profile-setup.",
-    "personas.ward-scoped-csr": "Absent: no ward-scoped CSR is seeded, so boundary-jurisdiction-496 self-skips rather than asserting against another deployment's wards.",
+    "personas.ward-scoped-csr": "Required as of the PGWCSR4 seed: the dump now ships a fourth employee carrying the CSR role AND a jurisdiction BELOW the hierarchy root (ADMIN/Zone/PG_CITYA_Z1), which is what isWardScopedCsr() checks. It was 'absent' only because PGGRO1/PGLME2/PGLME3 all sit at PG_STATE (the root level) and the sole zone-scoped employee was a suite leftover with no CSR role. Kept 'required' deliberately so the capability cannot silently regress to a skip if that seed row is ever dropped.",
     "locales.multi": "Absent: the dump seeds en_IN only.",
     "tenant.citySubTenant": "Absent: pg is targeted flat \u2014 the pg.* city rows carry no PGR config."
   }
