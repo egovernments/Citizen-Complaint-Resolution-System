@@ -912,6 +912,13 @@ services:
         condition: service_healthy
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      # sqlite store (#1610) — the config above is mounted read-only, so
+      # the database needs its own volume. Without this /data does not
+      # exist in the container and gatus panics at startup with
+      # "unable to open database file (14)" (SQLITE_CANTOPEN), taking the
+      # whole compose project down. #1630 added the storage block to the
+      # SHARED gatus/config.yaml but the volume to only one of five files.
+      - gatus_data:/data
     ports:
       - "127.0.0.1:18889:8080"
     environment:
@@ -1007,5 +1014,6 @@ networks:
     driver: bridge
 
 volumes:
+  gatus_data:
   postgres_data: null
   minio_data: null
