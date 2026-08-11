@@ -940,15 +940,15 @@
       position: relative !important;
       transform: none !important;
       width: auto !important;
-      height: auto !important;
     }
 
     .dashboard-root.dashboard-public .dashboard-grid-layout > .dashboard-kpi-widget {
+      height: auto !important;
       min-height: 7.5rem;
     }
 
     .dashboard-root.dashboard-public .dashboard-grid-layout > section.react-grid-item {
-      min-height: 20rem;
+      height: 20rem !important;
     }
 
     .dashboard-root.dashboard-public .dashboard-widget-surface {
