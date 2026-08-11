@@ -7081,7 +7081,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Accepted formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MP3 (max 5 MB per file)",
+        "message": "Accepted formats: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4 (max 5 MB per file)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

@@ -1591,7 +1591,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Formatos aceitos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MP3 (máximo 5 MB por ficheiro)",
+        "message": "Formatos aceitos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4 (máximo 5 MB por ficheiro)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
