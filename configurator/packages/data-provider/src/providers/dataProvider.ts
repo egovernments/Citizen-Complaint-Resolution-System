@@ -430,10 +430,9 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // hierarchy definitions are found.
   async function flatForTenant(t: string): Promise<RaRecord[]> {
     // Playwright onboarding specs leave hundreds of PW_* hierarchy stubs on
-    // live tenants (bomet ke has 214 types, 212 of them PW_*). Searching
-    // only the first page of those (limit 100, newest first) never reaches
-    // ADMIN, every stub tree is empty, and the dashboard shows 0 boundaries
-    // even though the real ADMIN tree has dozens of nodes.
+    // live tenants (bomet ke has 214 types, 212 of them PW_*). The client
+    // pages through every hierarchy definition; we still skip PW_* so we
+    // do not issue 200 empty tree queries. Always include ADMIN.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
     const discovered = (hierarchies as Record<string, unknown>[])
       .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
