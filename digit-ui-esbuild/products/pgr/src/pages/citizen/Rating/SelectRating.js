@@ -195,9 +195,12 @@ const SelectRating = ({ parentRoute }) => {
     // as required; the backend will be changed to accept the assignee on the
     // RATE transition. Until that lands, rating a complaint that HAS a case
     // manager in history will 400 on this env — expected and tracked.
-    const stateCode = Digit.ULBService.getStateId();
+    // Search at the COMPLAINT's tenant (its process instances live where it
+    // was filed, e.g. mz.ige) — a state-tenant search silently finds nothing
+    // on city-tenanted complaints and the derivation becomes a no-op.
+    const wfTenant = complaintDetails?.service?.tenantId || Digit.ULBService.getStateId();
     const businessId = complaintDetails?.service?.serviceRequestId || id;
-    const caseManagerUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, "CMS_CASE_MANAGER");
+    const caseManagerUuid = await findLatestAssigneeUuidByRole(wfTenant, businessId, "CMS_CASE_MANAGER");
     complaintDetails.workflow = {
       action: "RATE",
       comments,
