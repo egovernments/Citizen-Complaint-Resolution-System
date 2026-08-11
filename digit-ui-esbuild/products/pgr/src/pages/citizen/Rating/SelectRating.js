@@ -211,10 +211,26 @@ const SelectRating = ({ parentRoute }) => {
     try {
       // Await — Response.js reads the redux slice on mount and a race
       // here used to leave it blank (CCRS#473).
-      await updateComplaint({
-        service: complaintDetails.service,
-        workflow: complaintDetails.workflow,
-      });
+      try {
+        await updateComplaint({
+          service: complaintDetails.service,
+          workflow: complaintDetails.workflow,
+        });
+      } catch (err) {
+        // KNOWN BACKEND GAP fallback: the backend still rejects an assignee on
+        // the terminal RATE transition (400 INVALID_ASSIGNEE). Sending the
+        // case-manager id is the requirement — but a citizen must NEVER be
+        // unable to rate because of it. Retry once without the assignee; when
+        // the backend change lands this branch simply stops firing.
+        if (!caseManagerUuid) throw err;
+        console.warn("RATE with assignee rejected by backend (terminal-state gap) — retrying without assignee", err);
+        const { assignes, hrmsAssignes, ...workflowNoAssignee } = complaintDetails.workflow;
+        complaintDetails.workflow = workflowNoAssignee;
+        await updateComplaint({
+          service: complaintDetails.service,
+          workflow: workflowNoAssignee,
+        });
+      }
       // Invalidate the cached complaint-details + complaints-list
       // queries so when the citizen navigates back to /complaint-
       // details the page refetches with the freshly-saved rating.
