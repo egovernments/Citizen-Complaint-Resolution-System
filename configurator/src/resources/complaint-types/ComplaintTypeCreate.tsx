@@ -1,12 +1,11 @@
 import type { RaRecord } from 'ra-core';
-import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormMultiSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { localizationService } from '@/api/services/localization';
 import { digitClient } from '@/providers/bridge';
 
 const defaultRecord = {
   active: true,
-  keywords: 'complaint',
   order: 0,
 };
 
@@ -56,22 +55,34 @@ export function ComplaintTypeCreate() {
     await localizationService.cacheBust();
   };
 
+  // `department` (the schema's single "primary" field, used by backend
+  // routing/validation) is derived from the first checked entry in
+  // `departments` rather than collected separately — the schema itself says
+  // department is just "the primary of this list", so asking for both would
+  // just invite them to disagree.
+  const transform = (data: Record<string, unknown>) => {
+    const departments = Array.isArray(data.departments) ? (data.departments as string[]) : [];
+    return { ...data, department: departments[0] };
+  };
+
   return (
-    <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
+    <DigitCreate title="Create Complaint Type" record={defaultRecord} transform={transform} afterCreate={afterCreate}>
       {/* The grouping key is the parent node's code in the ComplaintHierarchy
           tree (replaces the old free-text menuPath). Optional here — leaves
           created standalone sit ungrouped until parented. */}
       <DigitFormInput source="parentCode" label="Parent (group code)" />
-      <DigitFormSelect
-        source="department"
-        label="Department"
+      <DigitFormMultiSelect
+        source="departments"
+        label="Departments"
         reference="departments"
-        placeholder="Select department..."
         validate={v.required}
+        help="First one checked becomes the primary department (used for routing)."
       />
       <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
       <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
       <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
+      <DigitFormInput source="keywords" label="Keywords" help="Comma-separated search keywords." />
+      <DigitFormInput source="order" label="Display order" type="number" />
     </DigitCreate>
   );
 }

@@ -1,23 +1,34 @@
-import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitEdit, DigitFormInput, DigitFormMultiSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { BooleanInput } from '@/admin/widgets';
 
+// `department` (the schema's single "primary" field, used by backend
+// routing/validation) is derived from the first checked entry in
+// `departments` — records saved before `departments` existed only carry
+// `department`, so this keeps working for them once re-saved here.
+function transform(data: Record<string, unknown>) {
+  const departments = Array.isArray(data.departments) ? (data.departments as string[]) : [];
+  return { ...data, department: departments[0] };
+}
+
 export function ComplaintTypeEdit() {
   return (
-    <DigitEdit title="Edit Complaint Type">
+    <DigitEdit title="Edit Complaint Type" transform={transform}>
       <FieldSection title="Details">
         <div className="space-y-4">
           {/* Grouping key — parent node code in the ComplaintHierarchy tree
               (replaces the old free-text menuPath). */}
           <DigitFormInput source="parentCode" label="Parent (group code)" />
-          <DigitFormSelect
-            source="department"
-            label="Department"
+          <DigitFormMultiSelect
+            source="departments"
+            label="Departments"
             reference="departments"
-            placeholder="Select department..."
+            validate={v.required}
+            help="First one checked becomes the primary department (used for routing)."
           />
           <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-          <DigitFormInput source="keywords" label="Keywords" />
+          <DigitFormInput source="keywords" label="Keywords" help="Comma-separated search keywords." />
+          <DigitFormInput source="order" label="Display order" type="number" />
           {/* The active flag was previously omitted from this dedicated
               edit form, so operators had no way to enable/disable a
               complaint type — `ComplaintTypeList` rendered a Status
