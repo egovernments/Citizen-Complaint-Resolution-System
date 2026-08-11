@@ -1065,6 +1065,16 @@
       width: 100%;
     }
 
+    .dashboard-root.dashboard-public .dashboard-header-top {
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-header-controls {
+      width: auto;
+      flex-shrink: 0;
+    }
+
     .dashboard-header-subtitle {
       width: 100%;
       overflow-wrap: anywhere;

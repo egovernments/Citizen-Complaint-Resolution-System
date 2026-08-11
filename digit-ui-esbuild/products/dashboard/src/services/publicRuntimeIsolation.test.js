@@ -113,4 +113,5 @@ test("public grid reflows instead of squeezing desktop columns on small screens"
   assert.match(css, /\.dashboard-root\.dashboard-public \.dashboard-grid-layout\s*\{[^}]*display:\s*grid;/s);
   assert.match(css, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*18rem\),\s*1fr\)\);/);
   assert.match(css, /> \.react-grid-item\s*\{[^}]*position:\s*relative\s*!important;[^}]*transform:\s*none\s*!important;/s);
+  assert.match(css, /\.dashboard-root\.dashboard-public \.dashboard-header-controls\s*\{[^}]*width:\s*auto;[^}]*flex-shrink:\s*0;/s);
 });
