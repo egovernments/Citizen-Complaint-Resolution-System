@@ -127,6 +127,22 @@ public class PGRConfiguration {
     @Value("${egov.mdms.search.endpoint}")
     private String mdmsEndPoint;
 
+    // Access-control policy source
+    @Value("${egov.accesscontrol.host}")
+    private String accessControlHost;
+
+    @Value("${egov.accesscontrol.actions.mdms.get.path}")
+    private String accessControlActionsMdmsGetPath;
+
+    @Value("${egov.accesscontrol.actions.master}")
+    private String accessControlActionsMaster;
+
+    @Value("${egov.accesscontrol.connect.timeout.millis}")
+    private Long accessControlConnectTimeoutMillis;
+
+    @Value("${egov.accesscontrol.read.timeout.millis}")
+    private Long accessControlReadTimeoutMillis;
+
     //HRMS
     @Value("${egov.hrms.host}")
     private String hrmsHost;

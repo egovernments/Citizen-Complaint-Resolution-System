@@ -1,10 +1,17 @@
 package org.egov.pgr.policy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.core.read.ListAppender;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpServerErrorException;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -128,6 +135,50 @@ class AccessPolicyRegistryTest {
 
         assertEquals(PolicyResolution.Status.SOURCE_UNAVAILABLE, first.status());
         assertEquals(PolicyResolution.Status.SOURCE_UNAVAILABLE, second.status());
+        assertEquals(2, calls.get());
+    }
+
+    @Test
+    void anHttpFailureDoesNotLeakItsResponseBodyIntoRegistryLogs() {
+        String sensitiveBody = "policy-secret-that-must-not-be-logged";
+        AccessPolicyRegistry registry = new AccessPolicyRegistry((tenantId, method, url, roleCodes) -> {
+            throw HttpServerErrorException.create(HttpStatus.SERVICE_UNAVAILABLE, "unavailable",
+                    HttpHeaders.EMPTY, sensitiveBody.getBytes(StandardCharsets.UTF_8),
+                    StandardCharsets.UTF_8);
+        });
+        Logger logger = (Logger) LoggerFactory.getLogger(AccessPolicyRegistry.class);
+        ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            PolicyResolution result = registry.resolve(request("EMPLOYEE"), TENANT, "POST", URL);
+
+            assertEquals(PolicyResolution.Status.SOURCE_UNAVAILABLE, result.status());
+            String logs = appender.list.stream()
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .reduce("", (left, right) -> left + right);
+            assertFalse(logs.contains(sensitiveBody));
+            assertTrue(logs.contains(HttpServerErrorException.ServiceUnavailable.class.getName()));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
+    void aMalformedSuccessfulSourceResponseIsInvalidPolicyAndIsNotCached() {
+        AtomicInteger calls = new AtomicInteger();
+        AccessPolicyRegistry registry = new AccessPolicyRegistry((tenantId, method, url, roleCodes) -> {
+            calls.incrementAndGet();
+            throw new MalformedPolicySourceResponseException("actions must be an array");
+        });
+
+        PolicyResolution first = registry.resolve(request("EMPLOYEE"), TENANT, "POST", URL);
+        PolicyResolution second = registry.resolve(request("EMPLOYEE"), TENANT, "POST", URL);
+
+        assertEquals(PolicyResolution.Status.INVALID_POLICY, first.status());
+        assertEquals(PolicyResolution.Status.INVALID_POLICY, second.status());
         assertEquals(2, calls.get());
     }
 

@@ -90,9 +90,15 @@ public class AccessPolicyRegistry {
         List<PolicyAction> actions;
         try {
             actions = source.findActions(tenantId, canonicalMethod, url, roleCodes);
+        } catch (MalformedPolicySourceResponseException e) {
+            log.error("Access-policy source returned malformed policy data for tenant='{}' method='{}' url='{}'; denying",
+                    tenantId, canonicalMethod, url);
+            return PolicyResolution.invalidPolicy();
         } catch (Exception e) {
-            log.error("Access-policy source failed for tenant='{}' method='{}' url='{}'; denying",
-                    tenantId, canonicalMethod, url, e);
+            // Do not log exception messages or response bodies: HTTP clients commonly include the
+            // complete upstream body in both, and that body may itself contain policy data.
+            log.error("Access-policy source failed for tenant='{}' method='{}' url='{}' with {}; denying",
+                    tenantId, canonicalMethod, url, e.getClass().getName());
             return PolicyResolution.sourceUnavailable();
         }
 
