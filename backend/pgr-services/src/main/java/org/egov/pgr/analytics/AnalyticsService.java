@@ -119,9 +119,12 @@ public class AnalyticsService {
         out.put("scope", scopeInfo(scope));
 
         if (body.has("queries") && body.get("queries").isObject()) {
-            // batch dict form: { name -> queryNode } => { results: { name -> result }, partial }
+            // Batch dict form. Error entries stay inline under results for wire compatibility,
+            // and are also indexed under the additive top-level errors map consumed by the
+            // dashboard. This lets old callers keep working while data and errors have an
+            // unambiguous transport seam for new callers.
             Map<String,Object> results = new LinkedHashMap<>();
-            boolean partial = false;
+            Map<String,Object> errors = new LinkedHashMap<>();
             Iterator<Map.Entry<String,JsonNode>> it = body.get("queries").fields();
             while (it.hasNext()) {
                 Map.Entry<String,JsonNode> e = it.next();
@@ -131,20 +134,22 @@ public class AnalyticsService {
                     // Public floor: only published PUBLIC-eligible KPIs, by reference. No inline (an
                     // inline body bypasses the catalog's PUBLIC opt-in + publish-time PII check).
                     if (publicFloor && !queryNode.has("kpiId")) {
-                        partial = true;
-                        results.put(name, Map.of("error", "kpi_forbidden",
+                        putBatchError(results, errors, name, Map.of("error", "kpi_forbidden",
                                 "message", "public access is limited to published PUBLIC KPIs"));
                         continue;
                     }
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
                     Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name);
-                    if (composed != null) { results.put(name, composed); continue; }
+                    if (composed != null) {
+                        results.put(name, composed);
+                        if (isErrorResult(composed)) errors.put(name, composed);
+                        continue;
+                    }
 
                     List<String> paramsIgnored = new ArrayList<>();
                     JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
                     if (actualQueryNode == null) {
-                        partial = true;
-                        results.put(name, Map.of("error", "kpi_forbidden",
+                        putBatchError(results, errors, name, Map.of("error", "kpi_forbidden",
                                 "message", "KPI not found or not authorized for role set"));
                         continue;
                     }
@@ -152,8 +157,7 @@ public class AnalyticsService {
                     // body (no kpiId) bypasses that, so block inline projection of officer-PII dimensions
                     // unless the caller holds an officer-PII-authorized role.
                     if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles)) {
-                        partial = true;
-                        results.put(name, Map.of("error", "pii_forbidden",
+                        putBatchError(results, errors, name, Map.of("error", "pii_forbidden",
                                 "message", "inline query projects officer-PII dimension(s); role not authorized"));
                         continue;
                     }
@@ -161,12 +165,12 @@ public class AnalyticsService {
                     if (!paramsIgnored.isEmpty()) result.put("paramsIgnored", paramsIgnored);
                     results.put(name, result);
                 } catch (Exception ex) {
-                    partial = true;
-                    results.put(name, err(ex));
+                    putBatchError(results, errors, name, err(ex));
                 }
             }
             out.put("results", results);
-            out.put("partial", partial);
+            out.put("errors", errors);
+            out.put("partial", !errors.isEmpty());
         } else if (body.has("query")) {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
@@ -658,6 +662,18 @@ public class AnalyticsService {
         String code = msg.contains(":") ? msg.substring(0, msg.indexOf(':')) : "query_failed";
         m.put("error", code); m.put("message", msg);
         return m;
+    }
+
+    /** Retain the legacy inline entry while also publishing the canonical batch error index. */
+    private void putBatchError(Map<String,Object> results, Map<String,Object> errors,
+                               String name, Map<String,Object> error) {
+        results.put(name, error);
+        errors.put(name, error);
+    }
+
+    /** Backend-composed KPI resolution can itself return the same per-entry error envelope. */
+    private boolean isErrorResult(Map<String,Object> result) {
+        return result != null && result.get("error") instanceof String;
     }
 
     /**
