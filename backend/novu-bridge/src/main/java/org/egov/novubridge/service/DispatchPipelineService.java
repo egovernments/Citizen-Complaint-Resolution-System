@@ -285,8 +285,8 @@ public class DispatchPipelineService {
         }
 
         String subscriberId = event.getTenantId() + ":" + formattedMobile;
-        String body = "DIGIT: Your one-time login code is " + otp
-                + ". It expires in 10 minutes. Do not share this code.";
+        String body = "Seu código de login de uso único é \"" + otp 
+        + "\". Ele expira em 10 minutos. Não compartilhe este código.";
         Map<String, Object> payload = new HashMap<>();
         payload.put("otp", otp);
         payload.put("mobile", formattedMobile);

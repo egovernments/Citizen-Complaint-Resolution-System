@@ -125,6 +125,21 @@ public class NovuBridgeConfiguration {
         return otpSmsProvider != null && "ozeki".equalsIgnoreCase(otpSmsProvider.trim());
     }
 
+    // ---- PGR pass-through SMS delivery via Ozeki (independent of the OTP flag above) ----
+    // Empty (default) = plain complaint SMS delivers via whatever's primary for the Novu
+    // sms channel (Twilio). "ozeki" = attach the same Ozeki generic-sms overrides envelope
+    // to identifyThenTrigger's SMS-channel trigger only. WhatsApp is unaffected: it always
+    // carries its own providers.twilio override (buildProviderTemplateOverrides), which is
+    // keyed to a different provider id (twilio, not generic-sms) and returns before this
+    // flag is ever checked. Reuses ozekiIntegrationIdentifier above — same Ozeki integration
+    // serves both OTP and PGR complaint SMS.
+    @Value("${novu.bridge.sms.provider:}")
+    private String smsProvider;
+
+    public boolean isSmsOzekiEnabled() {
+        return smsProvider != null && "ozeki".equalsIgnoreCase(smsProvider.trim());
+    }
+
     // ---- Subscriber identify (upsert) TTL cache ----
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;

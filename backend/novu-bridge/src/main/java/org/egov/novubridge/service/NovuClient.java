@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.provider.OzekiOverridesBuilder;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.*;
@@ -83,6 +84,15 @@ public class NovuClient {
         // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
         if (StringUtils.hasText(templateId)) {
             Map<String, Object> overrides = buildProviderTemplateOverrides(templateId, contentVariables);
+            return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
+        }
+
+        // Plain complaint SMS via Ozeki: only reached when channel is SMS (WhatsApp always
+        // has a templateId and returns above) and the flag is on. Pins this trigger to the
+        // Ozeki generic-sms integration instead of falling through to whatever's primary.
+        if ("SMS".equalsIgnoreCase(channel) && config.isSmsOzekiEnabled()) {
+            Map<String, Object> overrides = OzekiOverridesBuilder.build(
+                    config.getOzekiIntegrationIdentifier(), transactionId, phone, renderedBody);
             return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
         }
 
