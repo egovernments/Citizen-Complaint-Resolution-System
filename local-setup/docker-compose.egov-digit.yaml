@@ -1690,6 +1690,9 @@ services:
         condition: service_healthy
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      # sqlite store (#1610) — uptime history survives redeploys. The config
+      # above is mounted read-only, so the database needs its own volume.
+      - gatus_data:/data
     ports:
       - "127.0.0.1:18889:8080"
     environment:
@@ -2577,3 +2580,4 @@ volumes:
   keycloak_postgres_data: null
   openbao_data: null
   novu_mongo_data: null
+  gatus_data: null
