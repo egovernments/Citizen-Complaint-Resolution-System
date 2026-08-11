@@ -148,5 +148,10 @@ test("public pack includes only aggregate PUBLIC KPIs and their configured layou
     assert.ok(definition, `${kpiId} must exist in the KPI catalog`);
     assert.equal(definition.viz?.pii, false, `${kpiId} must remain aggregate-only`);
     assert.ok(definition.rbac?.visibleTo?.includes("PUBLIC"), `${kpiId} must remain PUBLIC`);
+    if (expectedInsights.includes(kpiId)) {
+      const windowParam = definition.params?.find(({ name }) => name === "window");
+      assert.equal(definition.query?.window?.name, "last_30d", `${kpiId} query must cover 30 days`);
+      assert.equal(windowParam?.default, "last_30d", `${kpiId} default must cover 30 days`);
+    }
   }
 });

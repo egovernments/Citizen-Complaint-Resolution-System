@@ -1158,7 +1158,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
@@ -1300,7 +1300,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
@@ -2088,7 +2088,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "query": {
       "grain": "facts",
       "window": {
-        "name": "last_7d",
+        "name": "last_30d",
         "timeRole": "filed_at"
       },
       "dimensions": [
@@ -2181,7 +2181,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
