@@ -1,8 +1,30 @@
-import { DigitList, DigitDatagrid } from '@/admin';
+import {
+  DigitList,
+  DigitDatagrid,
+  SearchFilterInput,
+  ReferenceFilterInput,
+} from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+
+// Department is the axis admins actually slice this list by ("what does Public
+// Works own?"), and it is already a rendered column — mirrors the Department
+// filter DesignationList declares, but alwaysOn so it is visible without going
+// through the Add-filter popover. Passing `filters` swaps DigitList's built-in
+// search box for the FilterBar, so SearchFilterInput has to be re-declared here
+// or free-text search disappears from the page.
+const filters = [
+  <SearchFilterInput key="q" source="q" alwaysOn />,
+  <ReferenceFilterInput
+    key="department"
+    source="department"
+    reference="departments"
+    label="Department"
+    alwaysOn
+  />,
+];
 
 const columns: DigitColumn[] = [
   // Grouping key — the leaf's parent node code in the hierarchy (was menuPath).
@@ -45,7 +67,12 @@ const columns: DigitColumn[] = [
 export function ComplaintTypeList() {
   const { canEditResource } = useMastersCapability();
   return (
-    <DigitList title="app.resources.complaint_types" hasCreate={canEditResource('complaint-hierarchy')} sort={{ field: 'serviceCode', order: 'ASC' }}>
+    <DigitList
+      title="app.resources.complaint_types"
+      hasCreate={canEditResource('complaint-hierarchy')}
+      sort={{ field: 'serviceCode', order: 'ASC' }}
+      filters={filters}
+    >
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

@@ -18,7 +18,7 @@
  *  - /access-control/v1/actions/mdms/_get returns 404 at `ke` (pre-existing;
  *    see DEV-LOG §13). Not on the critical create/edit path.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
@@ -65,6 +65,13 @@ let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
 let SEED_HIERARCHY = process.env.SEED_HIERARCHY || 'ADMIN';
 let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || 'County';
 
+// Tracks whether resolveSeedFks() found a live employee to derive FKs from.
+// Tests that API-seed employees (4a/5/6) need a real boundary/dept/designation
+// combo; without live resolution AND without an explicit env override they'd
+// silently fall back to the Kenya literals above, which fail (or worse,
+// silently mis-seed) on any non-Kenya tenant. See B6 in ADMIN-SUITE-PLAN.md.
+let seedFksResolved = false;
+
 /**
  * Derive boundary / department / designation FKs from a real employee on the
  * deployment so HRMS _create seeds validate. Env overrides take precedence;
@@ -88,6 +95,7 @@ async function resolveSeedFks(): Promise<void> {
         if (!process.env.SEED_BOUNDARY_TYPE) SEED_BOUNDARY_TYPE = boundaryType;
         if (!process.env.SEED_DEPT) SEED_DEPT = dept;
         if (!process.env.SEED_DESIG) SEED_DESIG = desig;
+        seedFksResolved = true;
         return;
       }
     }
@@ -201,24 +209,55 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/employees', () => {
-  test('1. list renders, search narrows, status filter applies', {
+  test('1. list renders; search narrows to the matching row; Status filter partitions the list', {
     annotation: {
       type: 'description',
-      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Employee Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
+      description: `Smoke check for /manage/employees that actually proves the two filters NARROW.
+
+The previous version could not fail. It asserted \`filtered <= initial\` — a
+narrowing filter can never *increase* a row count, and the grid's debounce
+(DigitList.tsx handleSearchChange -> setFilters(..., undefined, true), ~750ms
+measured) made the two reads identical anyway — and \`inactiveCount >= 0\`,
+a pure tautology. Worse, the Status branch was guarded by
+\`getByLabel(/^Status$/i)\`, which matches NOTHING: the filter is a Radix
+SelectTrigger with no <label>, so the tautology never even ran. This rewrite
+asserts the expected *rows*, and every read goes through an auto-retrying
+poll so the debounce cannot fake a pass.
 
 Steps:
-1. Navigate to /configurator/manage/employees.
-2. Assert role=table is visible.
-3. For each header in ['Employee Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
-4. Read initial row count; assert > 1.
-5. Type 'zzz_no_such_employee' in the search input; wait networkidle.
-6. Read filtered count; assert filtered <= initial.
-7. Clear search; wait networkidle.
-8. If Status filter visible, click it, pick Inactive, wait networkidle, assert count >= 0.
+1. Pick a needle from live HRMS: the alphabetically-first employee code that
+   occurs in exactly ONE record. Derived, not hardcoded — and uniqueness is
+   checked because the grid's quick-search matches the whole record, so a code
+   like ADMIN also matches every employee whose jurisdiction hierarchy is
+   MAPUTO_ADMIN (measured: 65 of 65 rows on the local stack).
+2. Navigate to the list; assert role=table + the four expected columnheaders.
+3. Read the grid's own "Showing a-b of N" footer for the unfiltered total N;
+   assert N > 1 (otherwise nothing can be narrowed and the test skips).
+4. Type the needle; poll the footer until the total is exactly 1, and assert
+   the single rendered row's Employee Code cell IS the needle.
+5. Type a nonsense term; poll the total to 0 and assert the "No records found"
+   empty state renders (the footer is not rendered at total=0).
+6. Clear the search; poll the total back to N — the filter is reversible.
+7. Status filter (located as the filter bar's only combobox, since Radix gives
+   it no accessible name): select Inactive, then Employed. For each, assert
+   EVERY rendered Status cell carries that status, and record the total.
+8. Assert totalInactive + totalEmployed === N. A filter that is silently
+   ignored returns the full list under both, so the sum would be 2N; a filter
+   that over-narrows makes the sum fall short. Employed/Inactive are the only
+   choices the UI offers, so they must partition the list.
 
-Multi-purpose smoke that exercises the major surface in one pass.`,
+Mutation-tested: deleting the \`search.fill(needle)\` line turns step 4 red
+("expected 1, received 65").`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    // Derived from the deployment, never hardcoded: the first code (in a
+    // deterministic order) that identifies exactly one employee.
+    const needle = await pickUniqueEmployeeCode();
+    test.skip(
+      !needle,
+      'no employee code on this deployment identifies exactly one record — nothing unambiguous to search for',
+    );
+
     await page.goto(LIST_PATH);
 
     const table = page.getByRole('table');
@@ -231,28 +270,76 @@ Multi-purpose smoke that exercises the major surface in one pass.`,
       ).toBeVisible();
     }
 
-    const dataRows = page.getByRole('row');
-    const initialCount = await dataRows.count();
-    expect(initialCount).toBeGreaterThan(1);
+    // Data rows only — getByRole('row') also counts the header row, which is
+    // how "11 rows" used to stand in for "10 employees".
+    const dataRows = table.locator('tbody tr');
+    const baselineTotal = await settledTotal(page);
+    test.skip(
+      baselineTotal < 2,
+      `only ${baselineTotal} employee(s) on this deployment — a narrowing filter cannot be observed`,
+    );
 
-    // Narrow via search — expect row count to drop or empty state to appear.
+    // ── search narrows to exactly the matching row ──────────────────────────
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill('zzz_no_such_employee');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const filteredCount = await dataRows.count();
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
+    await search.fill(needle!);
+    // expect.poll, not a bare read: the grid debounces the filter, so an
+    // immediate count still shows the UNFILTERED page.
+    await expect
+      .poll(() => readTotal(page), {
+        timeout: 20_000,
+        message: `search for '${needle}' must narrow the grid to that one employee`,
+      })
+      .toBe(1);
+    await expect(dataRows).toHaveCount(1);
+    await expect(dataRows.first().locator('td').first()).toHaveText(needle!);
 
-    // Reset and flip Status → Inactive.
+    // ── a term that matches nothing empties the grid ────────────────────────
+    await search.fill('zzz_no_such_employee');
+    await expect
+      .poll(() => readTotal(page), { timeout: 20_000, message: 'a non-matching search must empty the grid' })
+      .toBe(0);
+    await expect(dataRows).toHaveCount(0);
+    await expect(page.getByText(/No records found/i)).toBeVisible();
+
+    // ── clearing restores the full list ─────────────────────────────────────
     await search.fill('');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const statusFilter = page.getByLabel(/^Status$/i);
-    if (await statusFilter.isVisible().catch(() => false)) {
+    await expect
+      .poll(() => readTotal(page), { timeout: 20_000, message: 'clearing the search must restore every row' })
+      .toBe(baselineTotal);
+
+    // ── Status filter ───────────────────────────────────────────────────────
+    // The filter bar's Status control is a Radix SelectTrigger with no <label>
+    // and no aria-label, so getByLabel(/^Status$/) matches nothing — that is
+    // exactly how the old assertion went unexecuted. It is the only combobox
+    // inside FilterBar's <form>, and it keeps that identity after selection
+    // (its rendered text becomes the chosen value).
+    const statusFilter = page.locator('form').getByRole('combobox').first();
+    await expect(statusFilter, 'the filter bar combobox must be the Status filter').toHaveText(/^Status$/i);
+
+    const statusCells = dataRows.locator('td:nth-child(4)');
+    const totals: Record<string, number> = {};
+    for (const [option, cellText] of [['Inactive', 'INACTIVE'], ['Employed', 'EMPLOYED']] as const) {
       await statusFilter.click();
-      await page.getByRole('option', { name: /Inactive/i }).click();
-      await page.waitForLoadState('networkidle').catch(() => {});
-      expect(await dataRows.count()).toBeGreaterThanOrEqual(0);
+      await page.getByRole('option', { name: new RegExp(`^${option}$`, 'i') }).click();
+      await expect(statusFilter).toHaveText(new RegExp(`^${option}$`, 'i'));
+      // Auto-retrying, so it also absorbs the debounce: no rendered row may
+      // carry a status other than the one selected.
+      await expect(
+        statusCells.filter({ hasNotText: cellText }),
+        `every row under Status='${option}' must show ${cellText}`,
+      ).toHaveCount(0);
+      totals[option] = await settledTotal(page);
     }
+
+    // The two choices the UI offers are the whole vocabulary, so they must
+    // partition the list. A filter that is silently ignored yields the full
+    // list under both (sum = 2N); one that over-narrows falls short.
+    expect(
+      totals.Inactive + totals.Employed,
+      `Status filter must partition the ${baselineTotal} employees — got ` +
+        `${totals.Inactive} Inactive + ${totals.Employed} Employed`,
+    ).toBe(baselineTotal);
   });
 
   test('2. single create — happy path derives code + username, employee lands', {
@@ -288,17 +375,25 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     await page.goto(`${LIST_PATH}/create`);
 
     // --- Pre-assertions (CCRS#404 / #419 + CCRS#416) ---
-    // CCRS#404 / #419: DOB must be marked required on the Create form. We
-    // prefer the HTML `required` attribute because the red-asterisk copy
-    // depends on a FormLabel CSS class that can shift across shadcn upgrades.
+    // CCRS#404 / #419: DOB must be marked required on the Create form.
+    // DigitFormInput never sets the HTML `required` attribute — required-ness
+    // renders as the label's `aria-label="required"` asterisk marker instead
+    // (configurator/src/admin/DigitFormInput.tsx:69-73). Assert that marker.
     const dobInput = page.getByLabel(/^Date of Birth/i);
     await expect(dobInput).toBeVisible();
-    await expect(dobInput).toHaveAttribute('required', '');
+    const dobLabel = page.locator('label', { hasText: /^Date of Birth/i }).first();
+    await expect(dobLabel.locator('[aria-label="required"]')).toBeVisible();
 
     // CCRS#416 (UI): Tenant picker is present on Create and defaults to the
     // session tenant. We accept either a native input (read via `value`) or a
     // combobox trigger whose rendered text contains the tenant code.
-    const tenantField = page.getByLabel(/^Tenant$/i).first();
+    // Tenant is required (v.codeRequired), so its Label's computed accessible
+    // name includes the aria-label="required" asterisk marker's text
+    // ("Tenant required", not a bare "Tenant") — anchoring with a trailing
+    // `$` (as employees#1's Status label does, where the field is optional
+    // and unmarked) never matches. Use a prefix match like every other label
+    // lookup in this spec (Name, Mobile Number, Date of Birth, ...).
+    const tenantField = page.getByLabel(/^Tenant/i).first();
     await expect(tenantField).toBeVisible();
     const tenantTag = await tenantField.evaluate((el) => el.tagName.toLowerCase());
     if (tenantTag === 'input' || tenantTag === 'select') {
@@ -320,6 +415,23 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     await page.getByLabel(/^Email/i).fill(`${code.toLowerCase()}@example.com`);
     await page.getByLabel(/^Date of Birth/i).fill('1990-05-14');
     await page.getByLabel(/^Date of Appointment/i).fill('2026-01-15');
+
+    // Follow-on locator gap surfaced once the DOB pre-assertion (above) was
+    // fixed and the flow could actually reach Create: HRMS's _create rejects
+    // employees with zero roles (ERR_HRMS_MISSING_ROLES) and the create
+    // form's default is an empty user.roles array — nothing auto-selects
+    // one. Pick EMPLOYEE via the RolesEditor combobox (same pattern as
+    // test 4a's CITIZEN pick) so the happy path actually reaches HRMS.
+    const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
+    await roleCombobox.click();
+    await roleCombobox.fill('EMPLOYEE');
+    // The option's accessible name concatenates code + name with no
+    // separator ("EMPLOYEEEmployee") so a `\b`-anchored regex never finds a
+    // word boundary there — match on the code PREFIX only. The query also
+    // substring-matches on role name (e.g. "Auto Escalation Employee"), so a
+    // plain "contains" match would be ambiguous; anchoring at `^` picks only
+    // the row whose code itself starts with EMPLOYEE.
+    await page.getByRole('option', { name: /^EMPLOYEE/i }).first().click();
 
     // Submit. List path is `/configurator/manage/employees`.
     await Promise.all([
@@ -381,8 +493,19 @@ Pairs with the happy-path test (#2) — together they bracket valid + invalid mo
     // The validator error copy is sourced from HRMS clamping the MDMS rule.
     // Assert on the rule.errorMessage substring (escaped for regex) with a
     // loose fallback to tolerate minor copy variants across HRMS releases.
+    //
+    // The live form's own useMobileValidator (configurator/src/admin/hrms/
+    // useMobileValidator.ts buildErrorMessage) composes a DIFFERENT string
+    // than this test util's mdms-mobile.ts errorMessage: the app renders
+    // "Please enter a valid mobile number (9 digits, starting with 8)"
+    // (base phrase + parenthetical), not "Please enter a valid 9-digit
+    // mobile number". The two also punctuate the digits/starting clause
+    // differently ("9 digits, starting with 8" has a comma the old
+    // `digits starting` alternative didn't tolerate). Add both a
+    // comma-tolerant variant and the app's own generic (deployment-agnostic
+    // — no tenant literal) base phrase as fallbacks.
     const ruleMsgRe = new RegExp(
-      `${escapeRegex(mobileRule.errorMessage)}|MobileNumber|must be \\d+|digits starting`,
+      `${escapeRegex(mobileRule.errorMessage)}|MobileNumber|must be \\d+|digits,?\\s*starting|valid mobile number`,
       'i',
     );
     const errorText = page.getByText(ruleMsgRe).first();
@@ -422,6 +545,15 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     await codeInput.fill(code);
     await page.getByLabel(/^Mobile Number/i).fill(mobile);
     await page.getByLabel(/^Date of Birth/i).fill('1985-07-20');
+    // Date of Appointment is required (v.required, EmployeeCreate.tsx) — was
+    // missing here, which silently blocked the form from ever submitting.
+    await page.getByLabel(/^Date of Appointment/i).fill('2026-01-15');
+    // HRMS _create rejects a zero-role employee (ERR_HRMS_MISSING_ROLES) —
+    // see test 2's comment for the full explanation.
+    const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
+    await roleCombobox.click();
+    await roleCombobox.fill('EMPLOYEE');
+    await page.getByRole('option', { name: /^EMPLOYEE/i }).first().click();
 
     await Promise.all([
       page.waitForURL(LIST_PATH, { timeout: 45_000 }),
@@ -441,9 +573,15 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     const dobInput = page.getByLabel(/^Date of Birth/i);
     await expect(dobInput).toHaveValue('1985-07-20');
 
-    // Code + Username are disabled on edit.
+    // Code + Username are write-once. Employee Code is disabled on edit;
+    // Username has no separate field at all any more (CCRS#460 —
+    // EmployeeShow.tsx:39-41 documents that HRMS always overwrites userName
+    // with the employee code, so a distinct "Username" input/display would
+    // just duplicate Employee Code under a misleading label). Its absence
+    // from the DOM is an even stronger write-once guarantee than `disabled`
+    // would be, so assert that instead of a stale `toBeDisabled()`.
     await expect(page.getByLabel(/^Employee Code/i)).toBeDisabled();
-    await expect(page.getByLabel(/^Username/i)).toBeDisabled();
+    await expect(page.getByLabel(/^Username/i)).toHaveCount(0);
 
     // Mutate name + save; verify via API.
     await page.getByLabel(/^Name/i).fill(`PW Edited ${uniq}`);
@@ -459,28 +597,41 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     expect((emp.user as any)?.name).toMatch(/PW Edited/);
   });
 
-  test('4a. edit — add CITIZEN role round-trips without JsonMappingException (CCRS#439)', {
+  test('4a. edit — add GRO role round-trips without JsonMappingException (CCRS#439)', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#439: adding a CITIZEN role to an existing employee through the RolesEditor used to surface a JsonMappingException because the configurator sent the role array in a shape egov-hrms couldn't deserialize. Post-fix the round-trip succeeds and HRMS reflects the new role within 5s.
+      description: `Catches CCRS#439: adding a role to an existing employee through the RolesEditor used to surface a JsonMappingException because the configurator sent the role array in a shape egov-hrms couldn't deserialize. Post-fix the round-trip succeeds and HRMS reflects the new role within 5s.
+
+Uses GRO (a PGR employee role — EMP001 already carries it) rather than the
+original repro's CITIZEN: this deployment's egov-hrms now enforces
+ERR_HRMS_INVALID_ROLE for CITIZEN on a type=EMPLOYEE user (probe-verified
+directly against /egov-hrms/employees/_create — same 400 regardless of client
+payload shape), which is a legitimate role/type compatibility rule, not the
+JsonMappingException deserialization bug #439 targets. GRO exercises the same
+"add a not-yet-present role via RolesEditor, Save, no crash, HRMS reflects it"
+path without tripping that unrelated validation.
 
 Steps:
-1. Generate a unique code + Kenya mobile; track for cleanup.
+1. Generate a unique code + tenant-valid mobile; track for cleanup.
 2. Seed a fresh employee via API with ONLY [EMPLOYEE] role.
-3. Confirm the seed has no CITIZEN role yet (assert preRoles.some code === CITIZEN === false).
+3. Confirm the seed has no GRO role yet (assert preRoles.some code === GRO === false).
 4. Open Edit via list-row click.
-5. Locate the Roles combobox by role + name; click; type "CITIZEN"; click the matching option.
+5. Locate the Roles combobox by role + name; click; type "GRO"; click the matching option.
 6. Click Save.
 7. Assert no role=status toast OR body text contains 'JsonMappingException' (count === 0 for both).
-8. expect.poll on HRMS: within 5s, the user.roles array should contain CITIZEN.
+8. expect.poll on HRMS: within 5s, the user.roles array should contain GRO.
 
 Hermetic: doesn't rely on tenant content — seeds and verifies its own employee. Cleanup is via afterAll's softDeleteEmployee; role removal is a known TODO since the helper soft-deactivates the whole employee.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@ccrs:439', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     // Create a fresh employee via API so we own it + know it has only EMPLOYEE
-    // role (no CITIZEN yet). This keeps the test hermetic instead of relying
+    // role (no GRO yet). This keeps the test hermetic instead of relying
     // on fishing a suitable victim out of the shared tenant.
     const code = testCode(testInfo, 'EMP_ROLE');
     const uniq = code.split('_').pop() || '44444';
@@ -505,7 +656,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
       }],
     });
 
-    // Confirm the seed employee has no CITIZEN role yet — if it somehow does
+    // Confirm the seed employee has no GRO role yet — if it somehow does
     // (roles seeded server-side?), skip rather than produce a misleading pass.
     const preSearch = await postJson(auth,
       `${HRMS_SEARCH}?tenantId=${TENANT_CODE}&codes=${encodeURIComponent(code)}&limit=1&offset=0`,
@@ -513,7 +664,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     const preEmp = ((preSearch.Employees as HrmsEmployee[]) || [])[0];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const preRoles = ((preEmp?.user as any)?.roles || []) as Array<{ code?: string }>;
-    expect(preRoles.some((r) => r.code === 'CITIZEN')).toBe(false);
+    expect(preRoles.some((r) => r.code === 'GRO')).toBe(false);
 
     // Open Edit via list-row click (same entry-point as test 4).
     await page.goto(LIST_PATH);
@@ -522,15 +673,18 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
 
-    // Roles section — RolesEditor is a combobox. Typing "CITIZEN" should
+    // Roles section — RolesEditor is a combobox. Typing "GRO" should
     // surface a match; click the first option. We key on `combobox` role
     // rather than label text because the label copy varies ("Roles" vs
-    // "Assign roles") across tenants.
+    // "Assign roles") across tenants. The option's accessible name
+    // concatenates code+name with no separator, and the query substring-
+    // matches on role name too (e.g. "DGRO" also contains "gro"), so anchor
+    // at `^` to pick only the row whose code itself starts with GRO.
     const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
     await expect(roleCombobox).toBeVisible({ timeout: 10_000 });
     await roleCombobox.click();
-    await roleCombobox.fill('CITIZEN');
-    await page.getByRole('option', { name: /CITIZEN/i }).first().click();
+    await roleCombobox.fill('GRO');
+    await page.getByRole('option', { name: /^GRO/i }).first().click();
 
     await page.getByRole('button', { name: /^Save$/i }).click();
 
@@ -541,7 +695,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     const errorBanner = page.getByText(/JsonMappingException/i);
     await expect(errorBanner).toHaveCount(0);
 
-    // Within 5s, the mutation is visible server-side — CITIZEN is now in the
+    // Within 5s, the mutation is visible server-side — GRO is now in the
     // user's roles array. We poll HRMS rather than DOM because the list may
     // re-render without showing roles inline.
     await expect.poll(async () => {
@@ -551,7 +705,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
       const emp = ((res.Employees as HrmsEmployee[]) || [])[0];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const roles = ((emp?.user as any)?.roles || []) as Array<{ code?: string }>;
-      return roles.some((r) => r.code === 'CITIZEN');
+      return roles.some((r) => r.code === 'GRO');
     }, { timeout: 5_000 }).toBeTruthy();
 
     // TODO: role-removal cleanup — afterAll soft-deactivates the employee,
@@ -581,6 +735,10 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     const code = testCode(testInfo, 'EMP_DEACT');
     const uniq = code.split('_').pop() || '22222';
     const mobile = generateValidMobile(mobileRule);
@@ -675,6 +833,10 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     const code = testCode(testInfo, 'EMP_PWD');
     const uniq = code.split('_').pop() || '33333';
     const mobile = generateValidMobile(mobileRule);
@@ -725,7 +887,7 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
   test('7. bulk import — 3 valid + 2 invalid rows, create 3 lands', {
     annotation: {
       type: 'description',
-      description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile + bad date; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Optionally exercises the credentials CSV download.
+      description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Optionally exercises the credentials CSV download.
 
 Steps:
 1. Generate 3 valid + 2 invalid codes; track only valid for cleanup.
@@ -739,7 +901,25 @@ Steps:
 9. For each valid code, POST HRMS _search; assert exactly 1 result, isActive !== false.
 10. If "credentials CSV" download button is visible, click it and confirm the download path is non-empty.
 
-The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee/Employees/EmployeeMaster/HRMS/employee).`,
+The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee/Employees/EmployeeMaster/HRMS/employee).
+
+No \`jurisdictions\` column is populated: EmployeeBulkImport.tsx treats it as
+fully optional (parse-time: a warning, not a blocking error; validateRow:
+skipped entirely when falsy) — and on this deployment the ROOT tenant (where
+this spec manages employees) has zero boundary-hierarchy nodes at all
+(same fact employee-create-tenant-459 documents), so ANY jurisdiction code
+would fail the row-level "Boundary not found" check regardless of which
+code was chosen. Omitting the column sidesteps a tenant-shape dependency
+this test was never actually about.
+
+Invalid row 1 uses a syntactically well-formed DOB (only the mobile is
+short) rather than mobile+DOB both broken: excelParser.ts's parseEmployeeExcel
+treats a malformed DOB as a parse-time failure and drops the row from the
+returned data array entirely (never reaches the preview table at all), which
+would silently shrink "Total" from 5 to 4 and defeat this test's own "preview
+marks 2 errors" contract. A bad mobile alone still fails validateRow's
+per-tenant MDMS length/pattern check and shows as an Error row, which is what
+the test is actually asserting.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -758,7 +938,9 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
     ).toBeVisible({ timeout: 30_000 });
 
     const rows = [
-      // Valid trio — PW_ codes, 10-digit 07-prefix mobiles, real dept/desig/boundary.
+      // Valid trio — PW_ codes, tenant-valid mobiles, real dept/desig. No
+      // jurisdictions column (see annotation — optional, and unusable at
+      // this spec's ROOT tenant which has no boundary hierarchy at all).
       ...validCodes.map((c, i) => ({
         employeeCode: c,
         name: `PW Bulk ${i + 1}`,
@@ -771,10 +953,13 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         department: SEED_DEPT,
         designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '2026-02-01',
       })),
-      // Invalid row 1 — mobile too short, DOB malformed.
+      // Invalid row 1 — mobile too short. DOB is well-formed on purpose: a
+      // malformed DOB makes excelParser.ts drop the row at PARSE time (never
+      // reaches the preview table), which would silently shrink this test's
+      // "5 rows, 2 errors" contract to 4 rows — see annotation.
       {
         employeeCode: invalidCodes[0],
         name: 'PW Bulk Bad1',
@@ -782,11 +967,11 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         mobileNumber: '99999',
         emailId: '',
         gender: 'MALE',
-        dob: 'not-a-date',
+        dob: '1988-04-10',
         department: SEED_DEPT,
         designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '',
       },
       // Invalid row 2 — unknown department + unknown role code.
@@ -802,7 +987,7 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         department: 'NO_SUCH_DEPT',
         designation: SEED_DESIG,
         roles: 'NO_SUCH_ROLE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '',
       },
     ];
@@ -828,7 +1013,11 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
     await createBtn.click();
 
     // Completion page — 3 landed, download-credentials CTA surfaces.
-    await expect(page.getByText(/3\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 3 employees" (number AFTER the word),
+    // not "3 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+3|3\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 90_000,
     });
 
@@ -855,6 +1044,80 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
 });
 
 // --- Helpers local to this spec ---
+
+/**
+ * The grid's own record count, read from its "Showing 1-10 of 65" footer.
+ *
+ * The footer is the only honest total on the page: the visible row count is
+ * capped by the page size (10), so a filter that narrows 65 -> 40 changes no
+ * row count at all. DigitDatagrid renders the footer only when total > 0, so an
+ * absent footer plus the empty state means a real zero; an absent footer with
+ * no empty state means the grid is mid-refetch (react-query unmounts the table
+ * while a new filter's query is pending) and the caller must retry.
+ */
+async function readTotal(page: Page): Promise<number | null> {
+  const footer = page.getByText(/Showing\s+\d+\s*[-–]\s*\d+\s+of\s+\d+/i).first();
+  if ((await footer.count()) > 0) {
+    const text = await footer.textContent({ timeout: 2_000 }).catch(() => null);
+    const m = text?.match(/of\s+(\d+)/i);
+    if (m) return Number(m[1]);
+  }
+  if ((await page.getByText(/No records found/i).count()) > 0) return 0;
+  return null;
+}
+
+/**
+ * readTotal() once the grid has stopped moving.
+ *
+ * For a total we can predict, prefer `expect.poll(() => readTotal(page))` —
+ * it retries a stale read away. This exists for the reads whose expected value
+ * is exactly what we are measuring (the per-status totals), where a stale read
+ * would otherwise be indistinguishable from a settled one. The grid debounces
+ * filter changes (~750ms measured), so we wait past that before sampling and
+ * then require two consecutive identical readings.
+ */
+async function settledTotal(page: Page, opts?: { settleMs?: number; timeoutMs?: number }): Promise<number> {
+  const settleMs = opts?.settleMs ?? 2_000;
+  const deadline = Date.now() + (opts?.timeoutMs ?? 20_000);
+  await page.waitForTimeout(settleMs);
+  let previous: number | null = null;
+  while (Date.now() < deadline) {
+    const current = await readTotal(page);
+    if (current !== null && current === previous) return current;
+    previous = current;
+    await page.waitForTimeout(400);
+  }
+  throw new Error(
+    `the employee grid never settled on a record count (last read: ${previous ?? 'none — no footer and no empty state'})`,
+  );
+}
+
+/**
+ * An employee code that identifies exactly ONE record on this deployment.
+ *
+ * The quick-search filter matches the whole serialized record
+ * (dataProvider clientFilter: `JSON.stringify(record).includes(q)`), not just
+ * the code column, so plenty of real codes are useless as a narrowing probe:
+ * searching `ADMIN` on the local stack returns all 65 rows, because every
+ * employee's jurisdiction hierarchy is `MAPUTO_ADMIN`. Uniqueness is checked
+ * against the same record set the grid itself lists (HRMS at TENANT_CODE,
+ * limit 500 — the page size hrmsGetList uses), and candidates are walked in
+ * sorted order so the choice is deterministic across runs.
+ */
+async function pickUniqueEmployeeCode(): Promise<string | null> {
+  const auth = loadAuth();
+  const employees = await employeeSearch(auth, TENANT_CODE, { limit: 500 });
+  const serialized = employees.map((e) => JSON.stringify(e).toLowerCase());
+  const codes = employees
+    .map((e) => String(e.code ?? ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  for (const code of codes) {
+    const needle = code.toLowerCase();
+    if (serialized.filter((s) => s.includes(needle)).length === 1) return code;
+  }
+  return null;
+}
 
 interface BulkRow {
   employeeCode: string;

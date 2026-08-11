@@ -1,4 +1,13 @@
 import { withTraceHeaders, recordApiCall } from "./dashboardMetrics";
+import {
+  authFetch,
+  buildRequestInfo,
+  getTenantId,
+  toRequestError,
+} from "./authService";
+
+// Re-exported for existing importers; authService is the definition.
+export { getTenantId };
 
 /** Browser-facing analytics API base (relative path or absolute URL). */
 export function getAnalyticsBase() {
@@ -10,85 +19,34 @@ export function getAnalyticsBase() {
 
 const ANALYTICS_BASE = getAnalyticsBase();
 
-function parseJson(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function getEmployeeToken() {
-  const raw = window.localStorage?.getItem("Employee.token");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-function getEmployeeInfo() {
-  const raw = window.localStorage?.getItem("Employee.user-info");
-  return raw && raw !== "undefined" ? parseJson(raw) : null;
-}
-
-export function getTenantId() {
-  return (
-    window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
-    process.env.REACT_APP_STATE_LEVEL_TENANT_ID ||
-    "ke"
-  );
-}
-
-export function hasAuth() {
-  return Boolean(getEmployeeToken());
-}
-
-/**
- * Stable identity of the signed-in employee (user uuid), or null when no
- * session exists. Used to scope per-user client state (e.g. the dashboard
- * layout storage key) — NOT for authorization, which stays server-side.
- */
-export function getUserUuid() {
-  const info = getEmployeeInfo();
-  return info && typeof info === "object" ? info.uuid || null : null;
-}
-
-function buildRequestInfo() {
-  const authToken = getEmployeeToken();
-  const userInfo = getEmployeeInfo();
-  return {
-    apiId: "Rainmaker",
-    ver: ".01",
-    ts: Date.now(),
-    action: "_search",
-    msgId: `dashboard-${Date.now()}`,
-    ...(authToken && { authToken }),
-    ...(userInfo && { userInfo }),
-  };
-}
-
 async function postAnalytics(path, body) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const response = await fetch(`${ANALYTICS_BASE}${path}`, {
-    method: "POST",
-    // Per-load W3C traceparent + x-trace-id (dashboardMetrics) — Kong's otel
-    // plugin and the pgr javaagent continue the browser's trace id end-to-end.
-    headers: withTraceHeaders({ "Content-Type": "application/json" }),
-    credentials: "omit",
-    body: JSON.stringify({
-      RequestInfo: buildRequestInfo(),
-      ...body,
-    }),
-  });
+  // The analytics API is the dashboard's primary data path, so it is the one
+  // surface allowed to conclude the session is dead (sessionCritical defaults
+  // to true). Trace headers are preserved through the wrapper.
+  // authFetch THROWS on every terminal 401 verdict, which would skip the
+  // recordApiCall below — so during an auth incident the metrics would show zero
+  // failed analytics calls while users stared at error banners, hiding exactly
+  // the outage this module is meant to surface. Record, then rethrow.
+  let response;
+  try {
+    response = await authFetch(`${ANALYTICS_BASE}${path}`, {
+      headers: withTraceHeaders({}),
+      buildBody: () => ({
+        RequestInfo: buildRequestInfo("dashboard"),
+        ...body,
+      }),
+    });
+  } catch (error) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
+    throw error;
+  }
 
   if (!response.ok) {
     const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
-    const error = new Error(`Analytics request failed (${response.status})`);
-    error.status = response.status;
-    try {
-      error.payload = await response.json();
-    } catch {
-      error.payload = await response.text();
-    }
-    throw error;
+    throw await toRequestError(response, "Analytics request");
   }
 
   return response.json();

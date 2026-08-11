@@ -22,6 +22,7 @@ public class AnalyticsPlanner {
     private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");           // UTC+3
     private static final Pattern ALIAS = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]{0,63}$");
     private static final Set<String> BUCKETS = new HashSet<>(Arrays.asList("day","week","month","quarter","year"));
+    private static final Pattern LAST_N_DAYS = Pattern.compile("^last_(\\d+)d$");
     private static final int MAX_LIMIT = 1000;
 
     private final AnalyticsCatalog catalog;
@@ -282,6 +283,35 @@ public class AnalyticsPlanner {
     }
 
     // ---------- window ----------
+
+    /**
+     * Resolve a named window to its inclusive start instant (epoch-ms) in EAT. Every window ends at
+     * {@code now}, so the name alone fixes the interval {@code [start, now)}.
+     *
+     * <p>Returns {@code null} for the boundless names ({@code all}) and for {@code live}, which is a
+     * state predicate rather than a time interval — callers handle those before asking.
+     *
+     * <p>Shared with {@link KpiQueryComposer}, which needs the same start instant to decide whether a
+     * pinned window overlaps the dashboard's selected date range. Keeping one implementation means a
+     * window can never mean one thing when planned and another when range-checked.
+     */
+    static Long windowStartMs(String name, long now){
+        if (name == null || name.equals("all") || name.equals("live")) return null;
+        ZonedDateTime nowEat = Instant.ofEpochMilli(now).atZone(EAT);
+        java.util.regex.Matcher lastN = LAST_N_DAYS.matcher(name);
+        if (lastN.matches()) return now - Long.parseLong(lastN.group(1)) * 86400000L;
+        switch (name) {
+            // dtd — day-to-date: the CALENDAR day in EAT, i.e. "today". Distinct from last_1d, which
+            // is a rolling 24h and drifts across midnight (#1462).
+            case "dtd": return nowEat.toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+            case "wtd": return nowEat.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+            case "mtd": return nowEat.withDayOfMonth(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+            case "qtd": return nowEat.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L).atStartOfDay(EAT).toInstant().toEpochMilli();
+            case "ytd": return nowEat.withDayOfYear(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+            default: throw new IllegalArgumentException("invalid_param: unknown window '" + name + "'");
+        }
+    }
+
     private void applyWindow(JsonNode window, Grain g, String timeCol, List<String> conj, List<Object> params){
         if (window == null || !window.hasNonNull("name")) return;
         String name = window.get("name").asText();
@@ -291,18 +321,8 @@ public class AnalyticsPlanner {
             params.add(true); return;
         }
         long now = System.currentTimeMillis();
-        ZonedDateTime nowEat = Instant.ofEpochMilli(now).atZone(EAT);
-        Long fromMs;
-        java.util.regex.Matcher lastN = Pattern.compile("^last_(\\d+)d$").matcher(name);
-        if (lastN.matches()) {
-            fromMs = now - Long.parseLong(lastN.group(1)) * 86400000L;
-        } else switch (name) {
-            case "wtd": fromMs = nowEat.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            case "mtd": fromMs = nowEat.withDayOfMonth(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            case "qtd": { LocalDate d = nowEat.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L); fromMs = d.atStartOfDay(EAT).toInstant().toEpochMilli(); break; }
-            case "ytd": fromMs = nowEat.withDayOfYear(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            default: throw new IllegalArgumentException("invalid_param: unknown window '" + name + "'");
-        }
+        Long fromMs = windowStartMs(name, now);
+        if (fromMs == null) return;
         if (g.isEpochMs(timeCol)) {
             conj.add(timeCol + " >= ?"); params.add(fromMs);
             conj.add(timeCol + " < ?");  params.add(now);

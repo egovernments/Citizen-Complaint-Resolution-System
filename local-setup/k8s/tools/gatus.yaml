@@ -427,6 +427,18 @@ data:
         conditions:
           - "[STATUS] == 200"
 
+      # Configurator (DIGIT Studio) — tenant onboarding admin console. Defined
+      # here for tier parity; no configurator manifest exists under
+      # local-setup/k8s/ yet, so it is switched OFF via GATUS_CONFIGURATOR in
+      # the Deployment env below. Flip that to "true" when the manifest lands.
+      - name: Configurator
+        group: Application
+        enabled: ${GATUS_CONFIGURATOR}
+        url: "http://configurator:80/configurator/"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+
       # ==================== API Functionality Tests ====================
       - name: MDMS API - Tenant Search
         group: API Tests
@@ -505,6 +517,9 @@ spec:
             # k3s has no manifests for the optional stacks, so every toggle is off.
             # Flip one to "true" only once the matching manifests land under
             # local-setup/k8s/ -- keep it in step with the compose tier.
+            # No configurator Deployment in the k3s tier yet.
+            - name: GATUS_CONFIGURATOR
+              value: "false"
             - name: GATUS_PROFILE_OTP
               value: "false"
             - name: GATUS_PROFILE_SEARCH

@@ -119,7 +119,7 @@ DB_NAME="${DB_NAME:-egov}"                                # db name
 
 # Compose file set. NAME SERVICES EXPLICITLY on every up — a bare `up -d` revives
 # default-data-handler, which re-seeds MDMS.
-COMPOSE_FILES="${COMPOSE_FILES:-docker-compose.egov-digit.yaml docker-compose.fast-path.yml docker-compose.migrations.yml docker-compose.migrations.ansible.yml}"
+COMPOSE_FILES="${COMPOSE_FILES:-docker-compose.egov-digit.yaml docker-compose.fast-path.yml docker-compose.migrations.yml}"
 KONG_CONTAINER="${KONG_CONTAINER:-kong-gateway}"          # Kong container to restart after a bridge recreate (DNS cache flush)
 
 # Step 5 ingress: auto | true | false. auto = validate only, mutate nothing.

@@ -820,36 +820,6 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_1_3",
-    "message": "1–3",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_11_13",
-    "message": "11–13",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_14_15",
-    "message": "14–15",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_4_5",
-    "message": "4–5",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_6_8",
-    "message": "6–8",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_9_10",
-    "message": "9–10",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_MAP_LEGEND_EXPAND",
     "message": "Expand legend",
     "module": "rainmaker-dashboard"
@@ -897,6 +867,46 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_MAP_LEGEND_PCT_LTE_20",
     "message": "≤ 20%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF",
+    "message": " of ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+    "message": " shown on the map (rest have no location)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_CREATED",
+    "message": "Pins: complaints filed",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN",
+    "message": "Pins: complaints still open",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+    "message": "Pins: complaints still open — pins do not follow this layer",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_RESOLVED",
+    "message": "Pins: complaints resolved",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
+    "message": "Showing the most recent 1,000 only",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "message": " complaints have no ward and are not mapped",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2404,36 +2414,6 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_1_3",
-    "message": "1–3",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_11_13",
-    "message": "11–13",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_14_15",
-    "message": "14–15",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_4_5",
-    "message": "4–5",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_6_8",
-    "message": "6–8",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_MAP_LEGEND_COUNT_9_10",
-    "message": "9–10",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_MAP_LEGEND_EXPAND",
     "message": "Expandir legenda",
     "module": "rainmaker-dashboard"
@@ -2481,6 +2461,46 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_MAP_LEGEND_PCT_LTE_20",
     "message": "≤ 20%",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF",
+    "message": " de ",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
+    "message": " apresentados no mapa (os restantes não têm localização)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_CREATED",
+    "message": "Marcadores: reclamações registadas",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN",
+    "message": "Marcadores: reclamações ainda em aberto",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY",
+    "message": "Marcadores: reclamações ainda em aberto — os marcadores não acompanham esta camada",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_RESOLVED",
+    "message": "Marcadores: reclamações resolvidas",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
+    "message": "A mostrar apenas as 1000 mais recentes",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "message": " reclamações não têm bairro e não são mapeadas",
     "module": "rainmaker-dashboard"
   },
   {

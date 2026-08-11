@@ -3108,6 +3108,9 @@ dashboard-config-data-002	pg	default	dss.DashboardConfig	{"id": "default", "allo
 2cade399-9d00-4423-8ddf-eda05af5c904	pg.citya	common-masters.Department.DEPT_2	common-masters.Department	{"code": "DEPT_2", "name": "Roads & Public Works", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 07da774b-1bc0-4154-b542-0ad17b645374	pg.citya	common-masters.Department.DEPT_3	common-masters.Department	{"code": "DEPT_3", "name": "Health & Sanitation", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 9c2e1397-8a1e-49ac-83c0-50c784db5133	pg.citya	common-masters.Department.DEPT_4	common-masters.Department	{"code": "DEPT_4", "name": "Water Supply & Sewerage", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+form-validations-email-001	pg	email	common-masters.FormValidations	{"regex": "^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$", "fieldType": "email"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-name-001	pg	name	common-masters.FormValidations	{"regex": "^(?!.*[ _-]{2})(?!^[\\\\s_-])(?!.*[\\\\s_-]$)(?=^[\\\\p{L}][\\\\p{L}\\\\p{N} _\\\\-\\\\(\\\\)]{0,29}$)^.*$", "fieldType": "name"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-postalcode-001	pg	postalCode	common-masters.FormValidations	{"regex": "^[0-9]{5}$", "fieldType": "postalCode"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 complaint-hierarchy-definition-data	pg	PGR	RAINMAKER-PGR.ComplaintHierarchyDefinition	{"hierarchyType": "PGR", "active": true, "levels": [{"levelCode": "CATEGORY", "order": 1, "parentLevel": null, "isFreeText": false, "isLeafServiceCode": false, "label": "Category"}, {"levelCode": "SUB_TYPE", "order": 2, "parentLevel": "CATEGORY", "isFreeText": false, "isLeafServiceCode": true, "label": "Sub-Type"}]}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-001	pg	PGR.Garbage	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "CATEGORY", "code": "Garbage", "parentCode": null, "name": "Garbage", "order": 1, "active": true, "path": "Garbage"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-002	pg	PGR.StreetLights	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "CATEGORY", "code": "StreetLights", "parentCode": null, "name": "Street Lights", "order": 2, "active": true, "path": "StreetLights"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
@@ -3169,6 +3172,7 @@ ad6bdc36-6445-4608-9a06-1786eb300e91	pg	CRS-ADMIN-CONSOLE.adminSchema	CRS Admin 
 16496067-588a-4d1c-871b-2955cea9e8d8	pg.citya	CMS-BOUNDARY.HierarchySchema	Configuration to show boundary hierarchy levels in CMS UI	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["moduleName", "department", "hierarchy", "highestHierarchy", "lowestHierarchy"], "x-unique": ["moduleName", "department"], "properties": {"hierarchy": {"type": "string"}, "department": {"type": "string"}, "moduleName": {"type": "string"}, "lowestHierarchy": {"type": "string"}, "highestHierarchy": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system	system	1781074295688	1781074295688
 f9ac4504-91dc-4e53-b8bf-dc25e4460687	pg.citya	CRS-ADMIN-CONSOLE.adminSchema	CRS Admin Console Schema for boundary management	{"type": "object", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["title", "campaignType"], "x-unique": ["title"], "properties": {"title": {"type": "string", "maxLength": 200, "minLength": 1}, "properties": {"type": "object", "properties": {"numberProperties": {"type": "array"}, "stringProperties": {"type": "array"}}, "additionalProperties": false}, "campaignType": {"type": "string", "maxLength": 100, "minLength": 1}}, "x-ref-schema": [], "additionalProperties": false}	t	system	system	1781074295688	1781074295688
 dashboard-config-schema-002	pg	dss.DashboardConfig	Dashboard nav/route role gate (allowedRoles)	{"$schema": "http://json-schema.org/draft-07/schema#", "title": "DashboardConfig", "type": "object", "required": ["id", "allowedRoles"], "properties": {"id": {"type": "string", "description": "Config record key; the UI reads the \\"default\\" record (single-record master)"}, "allowedRoles": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "description": "Role codes allowed to see the dashboard home card and open /employee/dashboard. Nav/route gate only — NOT a security boundary: the data plane is enforced server-side by the analytics catalog + scope RBAC. Absent record → the UI falls back to its built-in DASHBOARD_ROLES list."}}, "x-unique": ["id"]}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-schema-001	pg	common-masters.FormValidations	Form field validation patterns (one row per field type, e.g. email, name, postalCode)	{"$schema": "http://json-schema.org/draft-07/schema#", "title": "Form Validations", "type": "object", "required": ["fieldType", "regex"], "x-unique": ["fieldType"], "properties": {"fieldType": {"type": "string", "description": "Which user field this pattern validates, e.g. \\"email\\" or \\"postalCode\\". Frontends fall back to their built-in pattern when a fieldType row is absent. NOTE for postalCode: no row is seeded by default — the per-tenant pattern normally comes from host_vars core_postal_configs (globalConfigs CORE_POSTAL_CONFIGS); an authored postalCode row deliberately outranks it, in DIGIT Studio and the PGR create-complaint flows alike."}, "regex": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 common-masters-mobilenumbervalidation-schema	pg	common-masters.MobileNumberValidation	Mobile Number Validation Configuration	{"$schema": "http://json-schema.org/draft-07/schema#", "title": "Mobile Number Validation", "type": "object", "required": ["countryCode", "mobileNumberRegex"], "x-unique": ["countryCode"], "properties": {"countryCode": {"type": "string"}, "mobileNumberRegex": {"type": "string"}, "default": {"type": "boolean", "default": false}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1770614667000	1770614667000
 complaint-hierarchy-definition-schema	pg	RAINMAKER-PGR.ComplaintHierarchyDefinition	Declares the ORDERED, CONFIGURABLE levels of a complaint-type hierarchy for a tenant.	{"type": "object", "title": "Complaint Hierarchy Definition", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["hierarchyType", "levels"], "x-unique": ["hierarchyType"], "properties": {"hierarchyType": {"type": "string"}, "active": {"type": "boolean"}, "levels": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["levelCode", "order"], "properties": {"levelCode": {"type": "string"}, "order": {"type": "number"}, "parentLevel": {"type": ["string", "null"]}, "isFreeText": {"type": "boolean"}, "isLeafServiceCode": {"type": "boolean"}, "label": {"type": "string"}}, "additionalProperties": false}}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-schema	pg	RAINMAKER-PGR.ComplaintHierarchy	Single adjacency-list master for the whole complaint-type tree: interior level nodes and leaf sub-types in one table.	{"type": "object", "title": "Complaint Hierarchy", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["hierarchyType", "levelCode", "code", "name"], "x-unique": ["hierarchyType", "code"], "properties": {"hierarchyType": {"type": "string"}, "levelCode": {"type": "string"}, "code": {"type": "string"}, "parentCode": {"type": ["string", "null"]}, "name": {"type": "string"}, "order": {"type": "number"}, "active": {"type": "boolean"}, "path": {"type": "string"}, "department": {"type": "string"}, "departments": {"type": "array", "items": {"type": "string"}}, "slaHours": {"type": "number"}, "keywords": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
@@ -3670,94 +3674,6 @@ COPY public.mdms_v2_schema (installed_rank, version, description, type, script, 
 --
 
 COPY public.message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
-1cb9d62c-2800-4674-8d50-d2c5d85db269	en_IN	WBH_MDMS_MASTER_TRADELICENSE	TradeLicense	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-3d24aa56-ec80-46a5-ac9b-a565d082b941	en_IN	WBH_MDMS_TRADELICENSE_CALCULATIONTYPE	CalculationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-7d3237b1-9667-4105-9f07-b8c9bb04c8e3	en_IN	SCHEMA_TRADELICENSE_CALCULATIONTYPE	CalculationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-e672b84d-de12-4779-8d73-51f1b11c7140	en_IN	TRADELICENSE_CALCULATIONTYPE_ACCESSORY	accessory	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9ca8ad30-cbc4-4a3d-a79b-7cb699486d20	en_IN	TRADELICENSE_CALCULATIONTYPE_FINANCIALYEAR	financialYear	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-db7e236f-d8f9-462e-962f-aa1ca6654351	en_IN	TRADELICENSE_CALCULATIONTYPE_ACTIVE	active	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-a9039698-16a8-4bb5-ad29-07ec9d96b854	en_IN	TRADELICENSE_CALCULATIONTYPE_TRADETYPE	tradeType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-58ca58d7-4a23-4377-b5eb-26b027125612	en_IN	WBH_MDMS_TRADELICENSE_TRADETYPE	TradeType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-7401cae9-bc18-4132-8f1a-22f559a71a51	en_IN	SCHEMA_TRADELICENSE_TRADETYPE	TradeType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-fe2eec61-6edd-489e-b0b2-72899ce2cfd4	en_IN	TRADELICENSE_TRADETYPE_VALIDITYPERIOD	validityPeriod	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-aed31778-357a-42bf-bdfd-e87adc6efd63	en_IN	TRADELICENSE_TRADETYPE_ACTIVE	active	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-98ee80f7-93f4-4763-ba46-4a80ea33f5da	en_IN	TRADELICENSE_TRADETYPE_NAME	name	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-51247705-385f-4191-9988-17aa16d766eb	en_IN	TRADELICENSE_TRADETYPE_CODE	code	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-4eaeb47f-e297-4a91-a5e6-b21d5bd3e4eb	en_IN	TRADELICENSE_TRADETYPE_APPLICATIONTYPE	applicationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-f94022fb-8055-4eb4-b8ce-ed110e624249	en_IN	TRADELICENSE_TRADETYPE_VERIFICATIONDOCUMENT	verificationDocument	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-1de44c1b-cda9-4d75-a5df-beefd92f8a17	en_IN	TRADELICENSE_TRADETYPE_DOCUMENTLIST	documentList	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-434ebe42-6d00-4be3-8f5e-c97c0faba416	en_IN	TRADELICENSE_TRADETYPE_APPLICATIONDOCUMENT	applicationDocument	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-86ae1b08-39ea-4f54-9e6b-00951481b80e	en_IN	TRADELICENSE_TRADETYPE_TYPE	type	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-82793434-eaa3-4234-9317-7783743cc8d6	en_IN	TRADELICENSE_TRADETYPE_UOM	uom	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-1ba5474c-a703-42f0-82bb-109c9b81828c	en_IN	WBH_MDMS_TRADELICENSE_ACCESSORIESCATEGORY	AccessoriesCategory	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9f4907dd-3621-4dcc-ae36-3d204abaf1b9	en_IN	SCHEMA_TRADELICENSE_ACCESSORIESCATEGORY	AccessoriesCategory	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-b84b698b-25a8-469a-92ed-3bc89cc5f11c	en_IN	TRADELICENSE_ACCESSORIESCATEGORY_ACTIVE	active	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-cf89dbe4-9882-4fdd-8a3e-5556655ee809	en_IN	TRADELICENSE_ACCESSORIESCATEGORY_CODE	code	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-f4c1961f-449c-4747-9205-e7063085c1de	en_IN	TRADELICENSE_ACCESSORIESCATEGORY_UOM	uom	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-33492b12-ad97-4916-a5db-787dbd46bf1f	en_IN	WBH_MDMS_TRADELICENSE_COMMONFIELDSCONFIG	CommonFieldsConfig	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9dc5b21f-ee2f-478c-a43d-8e1e3952a50c	en_IN	SCHEMA_TRADELICENSE_COMMONFIELDSCONFIG	CommonFieldsConfig	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-6a161a71-a8fa-4dea-bd38-445ad9aa82c9	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_BODY	body	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-628d7784-0038-4335-aac6-8422221ba159	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_HEADER	header	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-35c0276b-8a69-4965-b8e8-9ff7ecbaad1d	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_HIDEINEMPLOYEE	hideInEmployee	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-f89a4bd0-4647-49d5-b871-b43591bfb92b	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_HEADERCAPTION	headerCaption	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-076cd703-c5be-4816-a027-c87d0d09dbcc	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_KEY	key	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-2295d05e-ffe8-48bd-946d-a545bbaa6d79	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_SUBMITBARLABEL	submitBarLabel	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-4e1cf5ba-8f25-4943-9428-b412dda5d92c	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_NEXTSTEP	nextStep	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-b68b9a81-915d-4188-877d-8c9c8b73dbc2	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_CARDTEXT	cardText	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-ec4b44fd-6d04-43ac-bba0-ce811091709c	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_SKIPTEXT	skipText	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-20595eb6-758a-4fdb-8882-4751810ef197	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_ROUTE	route	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9b99d7a4-fcf4-4b4c-8614-916b8410e3e6	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_COMPONENT	component	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9077c61b-cb20-477e-b7c0-56c9f6304865	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_TYPE	type	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-a7ff1d11-c8ba-4094-affb-9cf79e4acc52	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_TEXTS	texts	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-1d354347-d39b-4c54-bddc-d0f936058085	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_ISMANDATORY	isMandatory	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-10508235-82ba-453c-aeff-26cd528db509	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_HEAD	head	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-601da028-113c-48ff-a6b9-7040c6d91cf3	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_WITHOUTLABEL	withoutLabel	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-0dee605b-d2a8-49ad-b13b-efcbf8883d32	en_IN	WBH_MDMS_TRADELICENSE_DOCUMENTOBJ	documentObj	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-86383aee-e47a-4fba-adc8-91275d25821c	en_IN	SCHEMA_TRADELICENSE_DOCUMENTOBJ	documentObj	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-af6d172f-e41e-497e-9435-142a0b0c8038	en_IN	TRADELICENSE_DOCUMENTOBJ_ALLOWEDDOCS	allowedDocs	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-52617b05-0598-4837-bd21-48bed3cf1ba0	en_IN	TRADELICENSE_DOCUMENTOBJ_REQUIRED	required	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-4549daa0-efd2-4551-841a-78e9acfd6d11	en_IN	TRADELICENSE_DOCUMENTOBJ_APPLICATIONTYPE	applicationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-7842ee29-8ab6-4070-a988-9a89d2158d95	en_IN	TRADELICENSE_DOCUMENTOBJ_DOCUMENTTYPE	documentType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9c93d668-0ed5-4f4f-986b-c1d2f5af7724	en_IN	TRADELICENSE_DOCUMENTOBJ_TRADETYPE	tradeType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-c9cc1b43-c558-4ff9-82c4-86e1730c035e	en_IN	WBH_MDMS_TRADELICENSE_REMINDERPERIODS	ReminderPeriods	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-5f7f4e4e-0e66-49de-ad54-2b963a5df2c7	en_IN	SCHEMA_TRADELICENSE_REMINDERPERIODS	ReminderPeriods	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-90a80ac4-0929-4307-97c6-91c143f17533	en_IN	TRADELICENSE_REMINDERPERIODS_TENANTID	tenantId	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-cfa2b33e-568d-48f9-a39c-3d6ec6cdca12	en_IN	TRADELICENSE_REMINDERPERIODS_REMINDERINTERVAL	reminderInterval	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-e52bbbf8-bd0c-48b8-a652-230011228a78	en_IN	WBH_MDMS_TRADELICENSE_PENALTY	Penalty	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-c0166034-b852-44f0-97f9-e9c22c7d46e0	en_IN	SCHEMA_TRADELICENSE_PENALTY	Penalty	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-84538a69-6e66-423e-bba3-767302516e72	en_IN	TRADELICENSE_PENALTY_RATE	rate	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-aaa6ae3b-e276-4ccf-b4de-8be6e4a1d377	en_IN	TRADELICENSE_PENALTY_FLATAMOUNT	flatAmount	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-f0809869-a6b3-42d5-943f-74be021fa1ff	en_IN	TRADELICENSE_PENALTY_STARTINGDAY	startingDay	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-2b68e634-a81d-42f8-a768-8f818525df9b	en_IN	TRADELICENSE_PENALTY_FROMFY	fromFY	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-38f83441-29a1-47c6-941c-7895f4efdd06	en_IN	TRADELICENSE_PENALTY_MINAMOUNT	minAmount	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-4dc94320-9f8d-400f-8713-334436e38c34	en_IN	WBH_MDMS_TRADELICENSE_DOCUMENTS	Documents	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-7c225e3a-7342-40f2-9d67-90489785e9f6	en_IN	SCHEMA_TRADELICENSE_DOCUMENTS	Documents	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-237fcacf-affc-412c-ad61-613b3213a126	en_IN	TRADELICENSE_DOCUMENTS_ACTIVE	active	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-dd5b6305-8c3e-490b-8913-dc32586915bc	en_IN	TRADELICENSE_DOCUMENTS_REQUIRED	required	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-952853af-08fa-44f4-855a-181b254982f3	en_IN	TRADELICENSE_DOCUMENTS_CODE	code	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-90717eb0-116f-4137-845b-1dbd3eca8564	en_IN	TRADELICENSE_DOCUMENTS_DROPDOWNDATA	dropdownData	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-30500c12-c7fe-41b2-966a-095c86a0ffbf	en_IN	TRADELICENSE_DOCUMENTS_DOCUMENTTYPE	documentType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-25e54b8b-472b-49d8-9568-2e6d2af9b5ee	en_IN	TRADELICENSE_DOCUMENTS_DESCRIPTION	description	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9ee3eacb-3c0e-4698-9b74-c0c602492e18	en_IN	WBH_MDMS_TRADELICENSE_APPLICATIONTYPE	ApplicationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-5da00d40-5ed8-4ea2-992d-c5168fc4b9ac	en_IN	SCHEMA_TRADELICENSE_APPLICATIONTYPE	ApplicationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-afe327ea-aafe-4258-8bfe-9b2770515144	en_IN	TRADELICENSE_APPLICATIONTYPE_CODE	code	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-ccd41d14-fcec-4538-890f-56183b6d03ca	en_IN	TRADELICENSE_APPLICATIONTYPE_ACTIVE	active	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-11d82cdc-8191-4f62-a809-51eb5db2e2f9	en_IN	WBH_MDMS_TRADELICENSE_TRADERENEWAL	TradeRenewal	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-596459ea-8dc6-47fe-a0d8-e5000b864ff5	en_IN	SCHEMA_TRADELICENSE_TRADERENEWAL	TradeRenewal	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-ac937710-a635-4b90-beaf-313cc591d579	en_IN	TRADELICENSE_TRADERENEWAL_RENEWALPERIOD	renewalPeriod	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-88b75b82-b1d2-4a03-848a-efdd7083145e	en_IN	WBH_MDMS_TRADELICENSE_REBATE	Rebate	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-424b8ec9-b4a3-4a06-ab5f-6feddd53d23d	en_IN	SCHEMA_TRADELICENSE_REBATE	Rebate	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-45c1894b-b03b-4cbb-b6d0-5311f74d6e6f	en_IN	TRADELICENSE_REBATE_RATE	rate	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-8c41f068-c13a-4065-a53a-4c9137e3781b	en_IN	TRADELICENSE_REBATE_FLATAMOUNT	flatAmount	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-9a289ebc-1bb0-496f-8cb9-444a5dfbeee3	en_IN	TRADELICENSE_REBATE_ENDINGDAY	endingDay	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-59853486-eaeb-4a12-a58d-df10d10d675b	en_IN	TRADELICENSE_REBATE_FROMFY	fromFY	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-54bf6d1e-b10d-40b0-a1cb-90c6349d2efa	en_IN	TRADELICENSE_REBATE_MAXAMOUNT	maxAmount	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-365046c4-be4c-4789-be90-e432ef78f279	en_IN	TRADELICENSE_TRADELICENSE_ALLOWEDDOCS	allowedDocs	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-acc93b4b-a4d4-4243-b7e7-1be38bb3568e	en_IN	TRADELICENSE_TRADELICENSE_BODY	body	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-aff819bb-80c7-4ea9-85c8-ef4a27f1c10a	en_IN	TRADELICENSE_TRADELICENSE_APPLICATIONTYPE	applicationType	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-acd4c0e9-ea0d-4cce-b660-6858c5c20c28	en_IN	TRADELICENSE_TRADELICENSE_DOCUMENTLIST	documentList	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-1ab03683-e3f3-4d10-914c-443cb969b27b	en_IN	TRADELICENSE_TRADELICENSE_DROPDOWNDATA	dropdownData	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
-b6a96571-24a3-4f8d-af77-0de1a0e140f5	en_IN	TRADELICENSE_TRADELICENSE_APPLICATIONDOCUMENT	applicationDocument	pg	rainmaker-workbench	1	2026-02-09 05:25:03.639848	1	2026-02-09 05:25:03.639848
 71d56f31-61b0-4cc5-8104-e5d0af1eeb89	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_1002	engineer	pg	rainmaker-common	1	2026-05-13 06:54:26.653	1	2026-05-13 08:00:49.978
 c23028f5-8bfc-4bd1-b40f-6eed6a0d35dc	en_IN	SERVICEDEFS_TABBROKEN	tab broken	pg	rainmaker-pgr	1	2026-05-13 06:54:27.142	1	2026-05-13 08:41:42.287
 5e42234f-421b-474d-944b-8e3a76a1a391	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_38	CI_SCOPE_DEPT_55272	pg	rainmaker-common	1	2026-05-13 06:54:32.818	\N	\N
@@ -3778,6 +3694,2051 @@ b08bd90e-55f0-4948-983e-880daea03553	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_36	WAT
 5b360c5b-de3b-47e8-85c4-264a278fd06b	en_IN	COMMON_MASTERS_DESIG_1003	LME	pg.citest	rainmaker-common	29	2026-05-13 09:27:26.753	\N	\N
 ab210868-6c64-48ce-9788-6b3b4e5506ff	en_IN	SERVICEDFS.WATERNOTCOMING	Water not coming	pg.citest	rainmaker-pgr	29	2026-05-13 09:27:27.163	\N	\N
 9747bd00-2eb4-4776-8939-889ec0603737	en_IN	SERVICEDFS.TABBROKEN	tab broken	pg.citest	rainmaker-pgr	29	2026-05-13 09:27:27.163	\N	\N
+4a9d154e-a551-402d-833f-65178e5b8f2a	en_IN	TENANT_TENANTS_PG	PG	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1c2c8de9-6a10-40fa-9946-7165e9d01d03	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER	Complaint Viewer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2ead2471-82e3-41c2-86d9-3394e19a3179	en_IN	ACTION_TEST_9HRMS	HRMS	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bd92853c-c021-416d-a202-222a6bbb6b6e	en_IN	ACTION_TEST_COMPLAINTS	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6472bb87-be92-46ff-a17d-f9fa182a9fab	en_IN	ACTION_TEST_COMPLAINT_TYPES	Complaint Types	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dfb01257-68e3-4b87-bc44-cdcd1d36e4b7	en_IN	ACTION_TEST_CREATE_COMPLAINT	Create Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d254e8e0-0e46-4d54-994a-e02c4d9c42e6	en_IN	ACTION_TEST_HOME	Home	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d97c3c0-ca9e-40f7-ba8a-c13b0690edf6	en_IN	ACTION_TEST_HRMS	HRMS	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fece8362-593d-4c6a-baca-3fb020fd7c08	en_IN	ACTION_TEST_MDMS	Manage Master Data	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a389d80d-b126-40da-9ad9-1664f21151b2	en_IN	ACTION_TEST_PGR	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e5020b7-6c50-4954-91ee-12068323e24c	en_IN	ACTION_TEST_SEARCH	Search	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a49ce74f-e096-4e08-b8ef-6333bbd939c1	en_IN	ACTION_TEST_SEARCH_COMPLAINT	Search Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+be890a6d-d0b6-4285-bed0-3dbcf720fbe3	en_IN	APPROVED	Approved	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e8fce721-87be-4ce4-89c8-6035f08ead20	en_IN	BUSINESS_SERVICE	Business Service	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bcc5e838-067b-4e26-a34f-2ab7a025924a	en_IN	CALL_CENTER_HELPLINE	Call Center / Helpline	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc2eb674-acc3-40bf-806a-cb571ee09832	en_IN	CANCELLED	Cancelled	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ac3cb488-90d1-4343-a810-90e8134b91e7	en_IN	CARD	Card	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cfe512df-b957-4818-b7af-600238d06fcc	en_IN	CASH	Cash	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6e8aeb1b-7ef5-4edf-a18d-de4eece33a11	en_IN	CE_DCOUMENT_UPLOADED_ON	Uploaded on	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+21cb7801-52eb-4950-a612-e2dc799b50d8	en_IN	CE_DOCUMENTS_NOT_FOUND	No Documents found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a69de86-fa83-45f8-b882-5dc1e7882f0e	en_IN	CE_DOCUMENT_DETAILS	Document Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+162f689e-3621-42f0-b46e-7761a41c4e6d	en_IN	CE_DOCUMENT_DOWNLOAD_LINK	Download	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6ee5f142-c604-4520-be2a-2917de73db1a	en_IN	CE_DOCUMENT_OPEN_LINK	Link	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7ce6460e-ab67-4ca4-90ad-d43dbe7e7377	en_IN	CE_DOCUMENT_VIEW_LINK	View	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+26f2204a-c68e-46bd-9e45-810c9ed31e8c	en_IN	CE_SERACH_DOCUMENTS	Search documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+31ebf185-4a73-4a12-9f25-983e0261a827	en_IN	CE_TABLE_DOCUMENT_LINK	Attachment/Link	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39f8d8f0-b3c0-4118-8b2c-ac08471d8766	en_IN	CE_TABLE_DOCUMENT_NAME	Document Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87445bed-4ec9-446d-9154-da5516c81163	en_IN	CE_TABLE_DOCUMENT_POSTED_BY	Posted By	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a5752993-6688-436a-b0b4-1533d65648d9	en_IN	CHECKBOX_ANSWER_TYPE	Check boxes	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+96520439-d6f0-41bd-ba7a-ac9e64fde4e9	en_IN	CHEQUE	Cheque	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5ca50661-b132-4fb1-9294-bc6c8975085f	en_IN	CITIZEN	Online	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11fc11b1-9d8e-47b7-ace9-4c9229b4aa7a	en_IN	CITIZEN_FAILURE_COMMON_PAYMENT_MESSAGE	Payment Failed	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6b5a9d3-049b-4f9d-ba23-93da225c7c2c	en_IN	CITIZEN_FEEDBACK_PENDING	Pending for Citizen Feedback	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d576276-2854-45c3-bf32-c49c05383a04	en_IN	CITIZEN_SERVICE_CENTER	Citizen Service Center	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+143b1af0-1dac-4e17-9eb4-558d7be8f1fb	en_IN	CMN_NOOPTION	No Options	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c19ac7e0-cdea-4615-93b9-43e63c9f1696	en_IN	COMMON_ALL	All	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2049b598-2d8b-4eea-90a8-1d5c8e75c325	en_IN	COMMON_ARREARS	Arrears	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+858f204d-4349-4ed9-86c0-428b492039bb	en_IN	COMMON_ARREARS_TOTAL	Arrears	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5fa2f901-1d19-4af7-9d22-26e80c84b9cb	en_IN	COMMON_BOTTOM_NAVIGATION_HOME	Home	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e356092a-6007-4447-a035-2774a14678c4	en_IN	COMMON_CERTIFY_ONE	I certify that appropriate amount of work has been completed. Muster roll has been verified against Measurement Book.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0939f3d-3313-46fd-bc9b-74086a5faa25	en_IN	COMMON_CERTIFY_TWO	: Once approved Payment Advice will be generated and send to JIT-FS for payment processing.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0649da01-05f0-408e-a9b8-d4874cd3188d	en_IN	COMMON_DAY	day	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6f95ddc1-e5b1-4986-b7b9-f885a4970136	en_IN	COMMON_DAYS	days	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+79a60c89-6c9f-4dd9-a7d7-f21e350825da	en_IN	COMMON_DOC_DATA_NOT_FOUND	Document not found!	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bf24e290-8a53-4c7e-9690-dbec7acd3a3d	en_IN	COMMON_DOWNLOAD	Download	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+238aafa5-9c14-4b9b-a181-a82ee7af8e21	en_IN	COMMON_DOWNLOAD_RECEIPT	DOWNLOAD / VIEW RECEIPT	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ef308cd7-a037-4b0d-b745-6f358702850c	en_IN	COMMON_EDIT	Edit	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1beafab2-bb75-4900-880c-c1454030f80d	en_IN	COMMON_GENDER_FEMALE	Female	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+14f79f8e-ece4-4dfd-a2fd-cb10482758cf	en_IN	COMMON_GENDER_MALE	Male	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f65bc114-d0d4-4fd6-b766-f398357d236a	en_IN	COMMON_GENDER_TRANSGENDER	Transgender	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f4000cd-3772-4d20-b71c-7e96435ff0b0	en_IN	COMMON_INBOX_NO_DATA	No results found !	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7b74e6c0-68ae-406a-b8a9-21281b97ee9c	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_1	Street Lights	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fcdeeebd-c12e-4877-a4bc-0a86f7bdec19	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_2	Building & Roads	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f31635d-9cb1-412e-b84d-1d646b2f2052	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_3	Health & Sanitation	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f7fb40b-a9b8-48da-bdb1-9f4b04e0352f	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_4	Operation & Maintenance	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc1fe97c-312f-46ea-9ceb-8d908edfe2b1	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_5	Hotriculture	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5e7ca518-3017-4dc8-aebd-0b5119ae93eb	en_IN	COMMON_MASTERS_DESIGNATION_AO	Accounts Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+43487ff6-34c6-444f-9fdb-c703cb9a5944	en_IN	COMMON_MASTERS_DESIGNATION_COMM	Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c24804c7-40dc-4dce-b11c-732013010184	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_100	Computer Opertor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e4c6a8cc-bfab-4e69-a895-1c405f84d22e	en_IN	COMMON_MASTERS_PAYMENTMODE_CASH	Cash	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9982bf66-5e9b-4d72-b746-ff78c3d140b9	en_IN	COMMON_MASTERS_PAYMENTMODE_CHEQUE	Cheque	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32c27404-73ad-4a3e-88af-416da5971aa9	en_IN	COMMON_MASTERS_PAYMENTMODE_CREDIT/DEBIT CARD	Credit/Debit Card	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aaeb7059-2e46-4142-a75b-9519c3fb5aa2	en_IN	COMMON_NA	NA	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+00cb5292-9292-40f8-b042-cebf3c18e277	en_IN	COMMON_NO_RESULTS_FOUND	No Results Found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b254f76d-d211-462d-8ec1-50655042f6c1	en_IN	COMMON_OTHER	Other	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fed419ae-0e4c-4e69-a247-f81dfd693383	en_IN	COMMON_OWNER	Owner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+75d1b9ba-b77e-46e6-a2f9-b964cf85c5bf	en_IN	COMMON_PATTERN_ERR_MSG_MUSTER_ID	Please enter valid Muster Id	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d2901a8-325f-4f08-8776-bafe6a98df02	en_IN	COMMON_PAYMENT_HEAD	Payment	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d7fd4647-79e2-4b6a-8c7d-2b42eaa22e99	en_IN	COMMON_PAY_SCREEN_HEADER	Payment Information	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bd241366-f4f4-4e8c-b88b-32cdaf536a01	en_IN	COMMON_SELECTED	Selected	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+632f55f5-b537-4db0-a492-5b0850e5f761	en_IN	COMMON_SELECT_WARD	Select Ward	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+513a4636-21e0-4c59-914f-a371e8ed3d2b	en_IN	COMMON_TABLE_NO_RECORD_FOUND	Sorry, no matching records found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66d980fe-ee9c-4c24-ad38-ea432c82ea29	en_IN	COMMON_TABLE_SEARCH	Search	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f04db41-3cc2-49be-b7c9-7d06332881a9	en_IN	COMMON_TABLE_SORT	Sort	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13e202ff-59b2-40df-8621-58d78d853156	en_IN	COMMON_TOTAL	Total	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+884866bc-5f1c-459a-ba57-a9b1ceb16832	en_IN	COMMON_VALIDITY	Validity	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1347874d-ab78-43b8-96b4-1db3aba91a54	en_IN	COMMON_WARD	Ward	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+610bdce7-0fa8-478b-b71b-4574cae1ff32	en_IN	COMMON_WORKFLOW_STATES	Workflow State	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe939b53-29f2-4a92-abba-7a633a26ac78	en_IN	COMPLETED	Completed	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+41f32aa8-be4d-41f9-b353-6051688e5a39	en_IN	CONFIRM_DELETE_DOC	Confirm Delete Document	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9ccd8bb8-8549-4336-8e19-b026a58de70f	en_IN	CONFIRM_DELETE_MSG	Please confirm is you want to delete the 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9971b03e-e58d-441f-afe7-165e66733dc0	en_IN	CORE_COMMON_APPLICANT_ADDRESS_INVALID	Invalid Address	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d88d00b2-1130-482c-a7cc-7ebff9d89eca	en_IN	CORE_COMMON_APPLICANT_MOBILE_NUMBER_INVALID	Invalid Mobile Number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d62134e7-7721-40fd-8ff1-bcf68bedff8a	en_IN	CORE_COMMON_APPLICANT_NAME_INVALID	Please provide a valid name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15edbbb4-5f5b-4ac8-afd3-5b7ce16cd137	en_IN	CORE_COMMON_CANCEL	Cancel	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe8309f3-41e7-42e2-80b6-14f2428a8b90	en_IN	CORE_COMMON_CHANGE_PASSWORD	Change Password	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84bf8de4-6cd2-4738-958e-9fd6ebc40c77	en_IN	CORE_COMMON_CITY	City	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d2e521a4-b7b1-49a7-b1bf-0413afe35035	en_IN	CORE_COMMON_CONTINUE	Continue	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+43870490-f08e-48e4-b530-6e98e498682c	en_IN	CORE_COMMON_EMAIL	Email	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc4a79dd-17fc-484c-bf9a-238745504555	en_IN	CORE_COMMON_FORGOT_PASSWORD	Forgot Password?	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+abb6c63c-0762-42b8-b45d-256e78baad9c	en_IN	CORE_COMMON_FORGOT_PASSWORD_LABEL	Forgot Password?	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8045e5db-1fed-4ca8-9cd7-ce0e2e2f007b	en_IN	CORE_COMMON_GENDER	Gender	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d4cccf5d-52f1-497e-bff8-76947fb35266	en_IN	CORE_COMMON_GO_TO_HOME	Go back to home page	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13899ea5-8ffe-4074-8a1e-acebec3e8d87	en_IN	CORE_COMMON_LOGIN	Login	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+771f68e5-47b1-4124-94e4-241d25c8e2bf	en_IN	CORE_COMMON_LOGOUT	Logout	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8900842-c9b9-4fc9-af1a-d687ca5a612a	en_IN	CORE_COMMON_MOBILE_ERROR	Please provide a valid mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1a11d95-eb15-4856-9eea-12d9db44882d	en_IN	CORE_COMMON_MOBILE_NUMBER	Mobile Number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c854aaed-9ab3-4d78-bea8-89498cdb369c	en_IN	CORE_COMMON_NAME	Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e42dd852-43f0-4d21-a898-499936c43dcf	en_IN	CORE_COMMON_NAME_VALIDMSG	Please enter a valid Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a2c4137-c1d9-44cf-b002-aeba117b5afa	en_IN	CORE_COMMON_PHONENO_INVALIDMSG	Invalid Mobile Number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a6b0eda-a567-4624-a218-f37964bc49cc	en_IN	CORE_COMMON_PINCODE	Pincode	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb68aed6-722f-4215-bd55-5954fb88b847	en_IN	CORE_COMMON_PINCODE_INVALID	Please provide a valid pincode	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d30b178-d6cf-4384-93db-1158daac4a32	en_IN	CORE_COMMON_PROFILE_CITY	City	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+93eb657c-647c-41b6-b8e2-76c299e1dba2	en_IN	CORE_COMMON_PROFILE_CONFIRM_PASSWORD	Confirm New Password:	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe039b69-98c4-4cb8-b1c0-b2268620b7ca	en_IN	CORE_COMMON_PROFILE_CURRENT_PASSWORD	Current Password:	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a6b37048-ef2b-4093-b0ff-6c4862e877e5	en_IN	CORE_COMMON_PROFILE_EMAIL	Email	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bdb49516-2ab9-4ed6-b543-8349a7164287	en_IN	CORE_COMMON_PROFILE_EMAIL_INVALID	Invalid Email	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2bb55831-d0f9-4f95-b219-b380339f01e0	en_IN	CORE_COMMON_PROFILE_ERROR_PASSWORD_NOT_MATCH	Passwords dont match	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e764a94f-2dbe-4191-ab9f-1dee124432a0	en_IN	CORE_COMMON_PROFILE_FILE_UPLOAD_ERROR	An error occurred while uploading the file	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c32bdaf7-664c-4f75-9b70-ad68040acabc	en_IN	CORE_COMMON_PROFILE_GENDER	Gender	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+de5385a2-7655-40ef-864c-02d5c2284952	en_IN	CORE_COMMON_PROFILE_INVALID_FILE_INPUT	Please upload a valid file to upload	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+205866a0-b6f0-48ad-8853-8117fbefbc9c	en_IN	CORE_COMMON_PROFILE_MAXIMUM_UPLOAD_SIZE_EXCEEDED	Please upload a file less than 1 MB	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd025b7a-3120-4942-8766-0fae2300d11a	en_IN	CORE_COMMON_PROFILE_MOBILE_NUMBER	Mobile no.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6cf7c141-063b-4520-8d30-0bb003d39a12	en_IN	CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID	Please enter a valid mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c2afc9a5-2484-4766-8945-7be33da41939	en_IN	CORE_COMMON_PROFILE_NAME	Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4bcabdca-0f68-49a1-8d20-3e21a284f8fa	en_IN	CORE_COMMON_PROFILE_NAME_INVALID	Please enter a valid name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bfa5a6df-d662-4d56-9814-2dc4e2d27a32	en_IN	CORE_COMMON_PROFILE_NEW_PASSWORD	New Password:	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+143bbdf0-8903-44b1-80e5-4cae17b4585e	en_IN	CORE_COMMON_PROFILE_PASSWORD_INVALID	Invalid password	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9786559-cb9a-4c65-9bab-bc508f5a9474	en_IN	CORE_COMMON_PROFILE_PASSWORD_MISMATCH	Passwords don't match	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d6163758-184e-4d05-9cd9-4a774099dbc3	en_IN	CORE_COMMON_PROFILE_UPDATE_ERROR_WITH_PASSWORD	Password must be 8 to 15 characters long and can include alphanumeric characters (a-z, A-Z, 0-9) along with the special characters @, #, $, and %.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b89ff5c5-01e1-4cfb-8d7f-3d92098e1723	en_IN	CORE_COMMON_PROFILE_UPDATE_SUCCESS	Profile updated successfully	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+27760335-574a-497a-84da-3587301b4e78	en_IN	CORE_COMMON_PROFILE_UPDATE_SUCCESS_WITH_PASSWORD	Profile and password updated successfully	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee1ed028-e1b2-4f55-b633-789055aa91f5	en_IN	CORE_COMMON_REQUIRED_ERRMSG	Required	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f723d7e-20b0-4a94-8095-595543701de6	en_IN	CORE_COMMON_RESET_PASSWORD_LABEL	Reset Password	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+51b5a44f-dd77-455b-a6d0-eb48109eb60b	en_IN	CORE_COMMON_SAVE	Save	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+576ee6bb-a77a-4669-853d-e18c3fe52590	en_IN	CORE_COMMON_SKIP_CONTINUE	Skip And Continue	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+353495c4-f748-4e94-ae25-ae7e754703a0	en_IN	CORE_COMMON_SUBMIT	Submit	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20b19925-bc97-47e1-9380-9ee3863b0e51	en_IN	CORE_EMPLOYEE_OTP_CHECK_MESSAGE	Please check your messages for the OTP & then set a new password.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+316982f0-2163-4744-80b8-c42524660c69	en_IN	CORE_LOGIN_CONFIRM_NEW_PASSWORD	Confirm New Password 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11818b62-421b-40c0-a2ed-859bebc8266b	en_IN	CORE_LOGIN_NEW_PASSWORD	New Password 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9430983a-983b-40ef-955e-a9e6b38c3e84	en_IN	CORE_LOGIN_PASSWORD	Password	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+47738c57-1686-4f1e-952d-49564ad05e81	en_IN	CORE_LOGIN_USERNAME	User Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b15628c-7d52-4710-8c0f-6faf91397d40	en_IN	CORE_LOGOUTPOPUP_CANCEL	CANCEL	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5d8d30ae-bbef-470b-a886-ee0997476610	en_IN	CORE_LOGOUT_CANCEL	Cancel	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+070542ca-06f6-417b-be40-b384ff452192	en_IN	CORE_LOGOUT_MESSAGE	Logout	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+915175cf-9d9e-4a65-9adb-f19d97ba24f6	en_IN	CORE_LOGOUT_WEB_CONFIRMATION_MESSAGE	Are you sure you want to	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+803bd2fc-8e37-4a83-8eee-ea931d23dc87	en_IN	CORE_LOGOUT_WEB_HEADER	Logout	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+55bfa06e-4af3-4d8c-9485-ab042a6db636	en_IN	CORE_LOGOUT_WEB_YES	Yes, Logout	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4d932f6-16dd-412a-86e3-c4489f2c29a8	en_IN	CORE_OTP_OTP	OTP	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ccc8c46-9312-4de8-add1-7afcb048024b	en_IN	CORE_OTP_RESEND	RESEND	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fab21624-5781-4b4e-97cb-6840f4810ada	en_IN	CORE_OTP_SENT_MESSAGE	An OTP has been sent to :	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+016a6ff1-ee3f-4d3b-b5d8-546be350f539	en_IN	CORE_SOMETHING_WENT_WRONG	Something went wrong	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da16080d-d39b-432e-9718-4ce4d957f561	en_IN	CORE_UNDER_MAINTENANCE	Under Maintenance!	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ec30a8c2-b8c3-4582-9689-b7f71c86e6f3	en_IN	CREATED	Application Created	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c49dfd1b-a96d-475b-9a11-4206649ec26e	en_IN	CREATED_FROM_DATE	Created from Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a32499ab-38ce-46f4-a48d-ef04ed017f36	en_IN	CREATED_TO_DATE	Created to Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ccdf7768-2795-449d-b07a-4e2ddb6348d7	en_IN	CS_ACTION_FILEUPLOADED	File Uploaded	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85cc383a-c0cd-434d-9535-ca5ed9bccd87	en_IN	CS_ACTION_NO_FILEUPLOADED	No File Uploaded	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+331cd516-91a3-48b7-943d-30795c8db5c3	en_IN	CS_ADDCOMPLAINT_COMPLAINT_LOCATION	Complaint's Location	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2e0bebd-5ddd-4ad2-a948-f1ff1bf307d2	en_IN	CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER	Pin Property Location	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+51c9b3f4-a996-4af4-a50b-88ac76ddf989	en_IN	CS_ARREARS_DETAILS	Arrear Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1781af2d-9db5-41ea-b249-05c6ea0fbbc4	en_IN	CS_BILL_DUEDATE	Due Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c458288c-6f87-4919-ac61-c15480b26083	en_IN	CS_BILL_NO	Bill No	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9a750c4c-c727-4a79-a39f-985c7cb38e9c	en_IN	CS_BILL_NOT_FOUND	Bill Not Found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+012e4423-fd57-45f5-826f-320513663001	en_IN	CS_BILL_PERIOD	Billing Period	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1755933c-7445-4ea6-aabb-8c2bc6c51865	en_IN	CS_COMMONS_NEXT	Next	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+03dcfccf-ca73-44c2-a4ff-69fbf4eb64bb	en_IN	CS_COMMON_ACTION	Action	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+36e74ae1-0ec6-4d91-bdd6-b4581aa96034	en_IN	CS_COMMON_ASSIGN	Assign	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6510c1b-6218-4635-91d5-d0fb8ff24289	en_IN	CS_COMMON_ATTACHMENTS	Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10febf9c-b660-4600-862f-ea67b765d132	en_IN	CS_COMMON_BACK	Back	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+403ab381-591d-48d6-807b-6d2c5e9774bf	en_IN	CS_COMMON_CANCEL	Cancel	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+60f5a527-237c-4241-af0c-aecb1740c5e8	en_IN	CS_COMMON_CHOOSE_FILE	Choose File	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2397b9f6-c741-4584-a6e3-66fea503ee17	en_IN	CS_COMMON_CHOOSE_LANGUAGE	Choose your language	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28687c03-8e03-45c5-9aa3-6b53bf7eb533	en_IN	CS_COMMON_CHOOSE_LOCATION	Choose your location	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+25ea30a4-cfe2-43d4-9d39-b71f72c39789	en_IN	CS_COMMON_CLEAR_SEARCH	Clear search	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+93d869e7-b26e-456a-a327-21a02d889179	en_IN	CS_COMMON_COMPLAINT_RESOLVED	Resolved	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e73751a0-f9e4-4570-ab22-e7ca42fe5de2	en_IN	CS_COMMON_DASHBOARD_INFO_UPDATES	Information and Updates	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e7e42cb-d212-4332-8763-ad7c97708e58	en_IN	CS_COMMON_DOCUMENTS	Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3645e148-ebf5-4e7a-866e-af70e61cadad	en_IN	CS_COMMON_DOWNLOAD	Download	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3d05afd-399b-458e-9a36-8634457b97f7	en_IN	CS_COMMON_FILE_A_COMPLAINT	File a Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7988151f-6954-4368-b440-daa030102145	en_IN	CS_COMMON_GET_DIRECTIONS	Get Directions	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dd3c13ac-eb5d-4627-afc8-c0c5364a6451	en_IN	CS_COMMON_HELP	Help	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+97ba009b-030e-4358-ada3-b0d810c7490c	en_IN	CS_COMMON_HELPLINE	HELPLINE	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0cae908e-c88a-45f4-a0a7-0b72739b778e	en_IN	CS_COMMON_HOME_COMPLAINTS	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32d51bd3-c08d-4780-b1cd-b9005073c80e	en_IN	CS_COMMON_INFO	Info	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5851d8d0-5082-4176-b1c0-5efdbbfae873	en_IN	CS_COMMON_LOCATION_SELECTION_ERROR	Please select your Location	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+abc6dba5-7d4e-4988-b035-9fd35271aca9	en_IN	CS_COMMON_NEW_SURVEY	Add New Survey	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c75308aa-33a7-4a6f-a015-1d27c4a5efe6	en_IN	CS_COMMON_NEXT	Next	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30de0d6b-fecd-4fce-8599-bbdbdc1790c3	en_IN	CS_COMMON_OR	OR	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a666a13-170f-4782-a775-c79eeaceae81	en_IN	CS_COMMON_PAYMENT_AMOUNT	Payment Amount	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3cf411bf-aba0-471a-9c97-1ee04fd0516b	en_IN	CS_COMMON_PAYMENT_COMPLETE	Payment Complete	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77c15ebb-3974-48dc-937b-fe9e1a8355ad	en_IN	CS_COMMON_PRINT_CERTIFICATE	Print Certificate	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ef8c74b-2b5d-42fa-bbeb-e87f39b53ed6	en_IN	CS_COMMON_PRINT_RECEIPT	Print Receipt	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a1bd18d3-c0fd-4a05-a529-9d8b5ba34887	en_IN	CS_COMMON_PROCEED_TO_PAY	Proceed To Pay	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7c3f13c7-8379-4873-bc59-d32cb9ac7975	en_IN	CS_COMMON_RECIEPT_NO	Reciept No.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32c83299-c64d-4538-a44c-cca14fa6bc69	en_IN	CS_COMMON_REOPEN	Re-open	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bcbe820d-fdeb-4589-8223-c4d45bbf99f6	en_IN	CS_COMMON_REQUIRED	Required	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24676d64-16b7-4d8f-b36b-6efd83ef8747	en_IN	CS_COMMON_RETRY	Retry	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+444357c4-18ed-4d45-9e34-cd25e4301a37	en_IN	CS_COMMON_ROWS_PER_PAGE	Rows per page	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+56e4838d-aca6-42fd-94a1-073ae9573223	en_IN	CS_COMMON_SEARCH_PLACEHOLDER	Search here	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28d0b66f-be1f-40b6-94b4-b16b0e40623d	en_IN	CS_COMMON_SKIP	Skip and Continue	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bde6a411-20eb-49ed-b2c1-8020b28886a2	en_IN	CS_COMMON_SUBMIT	Submit	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1401ff3b-18fb-49d7-b3a6-aa7bd58df7b8	en_IN	CS_COMMON_SURVEYS	Surveys	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7107dc2-7fba-45d1-a887-7cf8466b8013	en_IN	CS_COMMON_THANK_YOU	Thank You	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10e5b60b-3c84-4811-9066-2448abb9267b	en_IN	CS_COMMON_VIEW	View	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e8004de-436c-4737-8b42-ca52ac96a407	en_IN	CS_DOWNLOAD_RECEIPT	Download Receipt	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9439b22b-e090-4433-9dfd-efa3042a1d8d	en_IN	CS_FILE_APPLICATION_INFO_LABEL	Info	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e95d4563-8f5a-4376-95fd-5f71b1b62fab	en_IN	CS_FILE_APPLICATION_PINCODE_LABEL	Do you know the pincode ?	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fac2203-91eb-4f82-9670-47f33c46c162	en_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE	Provide Landmark	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05a75114-0776-4656-bc57-0c8a9acf8e5a	en_IN	CS_FILE_UPLOAD_ERROR	Invalid File	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bbd3d642-f5cc-4743-aa50-4d571b65dec2	en_IN	CS_HEADER_MYCITY	My City	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0fb30ad-3161-4088-b3d7-c1749e0cf95b	en_IN	CS_HEADER_NOTIFICATIONS	Notifications	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f810291-5c96-4e78-98e2-fd5e9ee691cb	en_IN	CS_HEADER_WHATSNEW	What’s New	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+61be9e4a-7f46-45ed-bfbd-733885a34089	en_IN	CS_HIDE_CARD	Hide Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+96c0b68c-64f2-4b68-9e50-6f32be2e0f80	en_IN	CS_HOME_MY_COMPLAINTS	My Complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+adedf07c-800e-463b-85ea-49c4adab96b6	en_IN	CS_INBOX_STATUS_FILTER	Status	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b4b64a91-97f3-42aa-af25-f997aecf5749	en_IN	CS_INFO_DELETE	Delete	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6f3506b-be5d-483f-88a9-d65ff9e7d91a	en_IN	CS_INVALID_OTP	Invalid OTP	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+55c43b36-b678-4572-9c43-c9fdc9285da4	en_IN	CS_LINK_DSO_DASHBOARD	DSO Login/ Dashboard	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+075359c0-a438-4130-a6eb-4f0044f1674b	en_IN	CS_LINK_LOGIN_DSO	DSO Login	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4860874c-b6b1-4684-aec7-f82cdd048233	en_IN	CS_LOGIN_NAME_TEXT	Provide the name of the person to make your experience more personalised	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1249decc-3cab-4350-9b40-fa8ac64236a0	en_IN	CS_LOGIN_OTP	OTP Verification	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8255eef-c443-4f4d-b4fe-23cbf82eeda7	en_IN	CS_LOGIN_OTP_TEXT	Enter the OTP sent to	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8a8dab6c-218c-4d9d-8d86-8a6cab498d01	en_IN	CS_LOGIN_PROVIDE_MOBILE_NUMBER	Provide your mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df594cb6-1db0-4cec-b46f-e9334c56b754	en_IN	CS_LOGIN_PROVIDE_NAME	Provide your Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+08ac5e12-d49b-4d0c-8f12-3edd3fbf38d4	en_IN	CS_LOGIN_TEXT	All the communications regarding the application will be sent to this mobile number.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10f65ea9-0981-4464-8563-30313d80147e	en_IN	CS_MAXIMUM_UPLOAD_SIZE_EXCEEDED	Upload file size less than 5MB	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10fe9680-6082-4973-bcdf-0fb3a036c860	en_IN	CS_MYAPPLICATIONS_NO_APPLICATION	No Applications found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0c403f5-a765-49d9-8301-86b8286d1cff	en_IN	CS_NA	NA	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab29c993-9c4a-4e99-8c41-cd853b228ab0	en_IN	CS_PROFILE_EMAIL_ERRORMSG	Invalid Email Id	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0c0e4a9e-8d17-4920-ac57-1a55dd7fe077	en_IN	CS_RESEND_ANOTHER_OTP	Resend another OTP	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a19cd81-934e-4120-9f6d-037d298414b4	en_IN	CS_RESEND_OTP	Resend OTP	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a392077-4fd0-4530-9e28-88b514c8e21a	en_IN	CS_RESEND_SECONDS	secs	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d255c696-c824-4dee-b325-3c82c6afc970	en_IN	CS_REVIEW_AND_FEEDBACK	Rate us	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c425e3d0-39f9-4739-ace3-34c146775807	en_IN	CS_SEARCH	search	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8e4f949-23c2-4366-a12b-9b297cbaaeb0	en_IN	CS_SELECTED_TEXT	ULB	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+42ba87af-230b-4e81-afdf-96571365648c	en_IN	CS_SHOW_CARD	View Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6ed14009-7bae-443d-ad7c-5bc521738d67	en_IN	CS_SKIP_CONTINUE	Skip and Continue	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+145b9d95-d409-4679-82fb-031c14cd6580	en_IN	CS_SLA_DAY	days ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0f7396ac-7421-4f6d-997d-a20f46054439	en_IN	CS_SLA_NOW	Now	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1b27c31a-f969-498f-8f27-037208c95a9b	en_IN	CS_SURVEY_RESPONDED	Already Responded	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+06094e00-37ef-46b2-aa27-d8a89787356d	en_IN	CS_SURVEY_RESULTS	Survey results	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9c1254e0-9745-4410-b544-6e2b083e316e	en_IN	CS_TITLE_MY_BILLS	My Bills	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+690ba136-8272-4dc2-bfd1-5a35a0c12526	en_IN	CS_TO	to	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f44e4fd7-671d-43f7-a691-19367ce0ce78	en_IN	Code	code	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ceafceb6-98e7-41f3-be4e-e2fde48d7085	en_IN	DASHBOARD_CITIZEN_SERVICES_LABEL	Citizen Services	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ffa68f4b-66ef-4944-b431-33da31e7d8aa	en_IN	DASHBOARD_VIEW_ALL_LABEL	VIEW ALL	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4449f461-7b92-4c34-9c79-e8dc6b16a77e	en_IN	DASHBOARD_WHATS_NEW_LABEL	What’s New	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+050131ad-b7e4-4fed-ad1d-25e780574121	en_IN	DATE_ANSWER_TYPE	Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+67ce7517-8b73-4f31-8cbe-830d1e2bd657	en_IN	DATE_VALIDATION_MSG	To date should be greater then from date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+79e9e194-c80a-4470-a195-04967328c85f	en_IN	DCOUMENT_DESCRIPTION	Document Description	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f536d63-741b-4570-8f30-6279f76de9f4	en_IN	DESIGNATION	Designation	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+08050a5b-d2e3-4477-9d65-35769e8790a7	en_IN	DIGIT_I_ACCEPT	I accept	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+271bdc8a-2c8e-45b0-8ef1-55df9c1025dc	en_IN	DIGIT_I_DO_NOT_ACCEPT	I do not accept	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a0a24445-ee80-4dd9-84ee-081daa651b64	en_IN	DIGIT_TABLE_OF_CONTENTS	Privacy Policy	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30391a39-3034-4395-a4dd-29de0cd2b948	en_IN	DISABLED	Disabled	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+420ee0b2-b8a3-487a-9275-9acd777d906a	en_IN	DISPOSAL_IN_PROGRESS	Disposal in Progress	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10ff5935-84f5-40bc-9a4b-8c54a4ff26aa	en_IN	DOCUMENTS_ATTACH_RESTRICTIONS_SIZE	Only jpg, png, doc and pdf files. 5MB max file size.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6586c107-22b7-4ed7-9a9e-ae757c613a20	en_IN	DOCUMENTS_CATEGORY_CARD_LABEL	Document Category	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5d6c88e5-3e15-404d-bc34-9b7642d20080	en_IN	DOCUMENTS_DOCUMENT_HEADER	Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b14bb66e-46ec-4b05-9227-2803e560ca39	en_IN	DOCUMENTS_EDIT_HEADER	Edit	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+48f41dd0-9e65-44c8-bdb5-1d6f5ac13017	en_IN	DOCUMENT_CATEGORY	Document Category	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c473721e-a675-46cd-a58a-b908d14fc43c	en_IN	DOCUMENT_NAME	Document Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6ce3bbeb-8321-47f2-877f-217b106f5219	en_IN	EDIT_NEW_PUBLIC_MESSAGE	Edit Public Message	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24c5cbc4-e29a-44fb-b942-3ae6cbb76d57	en_IN	EDIT_PROFILE	Edit Profile	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7ba6f288-6245-4909-8f0c-48472dbe99db	en_IN	ES_BY_CLICKING	I agree to the DIGIT's	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc571dfc-181c-400c-94b2-8c1701441612	en_IN	NEW_DOCUMENT	Document	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f9cdef43-1331-43f1-aae9-054af8876d09	en_IN	PGR	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a314d7f2-7e5b-4531-b8e8-e49b57645021	en_IN	PGR_CREATE_ANOTHER_COMPLAIN	Create Another Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3c093610-3a47-4d0c-a5dc-143edd35f4d6	en_IN	PGR_INBOX	Inbox	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4bdc0b37-4b21-4392-af49-29f5587a3fa2	en_IN	PGR_SEARCH_RESULTS_HEADING	Search Citizen Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88d0543a-196c-4da1-8e56-94eeaac0f91a	en_IN	PLUMBER	Plumber	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aa2d3ee7-aea9-4942-be2f-9555444a0838	en_IN	PRIVACY_AUDIT_REPORT	Privacy Audit Report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0a9cd433-8491-48a1-b762-bfae33e23587	en_IN	PROFILE_UPDATED	Profile updated successfully	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fec52faa-05dd-4c38-bde1-47dcdcfaa116	en_IN	SERVICE_TYPE	Service Type	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+21c749c1-4c10-4b3a-86bb-ea049038b922	en_IN	SORT_BY	Sort By	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d1887cce-efbe-4b95-aea8-75eca1b187cc	en_IN	STATUS	Status	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9fc7070a-8d1e-4305-8612-54ecc04539f2	en_IN	SUBMITTED	Submitted	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aa0e2408-1729-47eb-a30c-ee82c41e2e3b	en_IN	SURVEY_INFO_HEADER	Note	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1dda28bf-3a9b-4755-94a9-8f43c8cccd96	en_IN	SURVEY_INFO_LABEL	For Active surveys only end date/time and survey description can be edited.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f5e9ecd3-0b19-4ed1-88cc-84167a4e23b1	en_IN	SURVEY_QUESTIONS	Questions	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c238b933-5150-4929-a237-e6cbad00fa8d	en_IN	SURVEY_REPORT	Report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20a70ef0-90df-4085-a8ad-40d05990645e	en_IN	SURVEY_STATUS_TOOLTIP	Active Status represents that survey is actively collecting responses. Inactive status fall pre and post active collection dates	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+04568cd4-96ec-41cb-9187-20e25f6358f2	en_IN	TOTAL_CHALLANS	Total Challans	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+967f66b1-6285-4d8e-b775-34e6fdcd1f53	en_IN	TOTAL_CHALLANS 	Total Challans	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46bb3eca-bf52-465c-87a0-50e52dcc4e1a	en_IN	TOTAL_DOCUMENTS	Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7bb2ab7e-5598-41ee-afb4-45e9c14ab109	en_IN	TOTAL_EMPLOYEES	Total Employees	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6cde63aa-3966-4cd7-8a4f-19b5350b969d	en_IN	TOTAL_EVENTS	Events	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3179b73f-5ee9-4cb1-b4a7-9f6ce3470cd0	en_IN	TOTAL_MESSAGES	Messages	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66d8fa68-a82b-4af2-bfb0-872714338b4b	en_IN	TOTAL_NEARING_SLA	Nearing SLA	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f356f2e-3e1b-426c-a00b-36e662e0e391	en_IN	TOTAL_PGR	Total	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8b13ec3b-c54d-4f05-992e-ddd134f32edf	en_IN	TRANSGENDER	Transgender	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+83942f96-3ff9-4016-a6a2-d3c3455756f1	en_IN	UNKNOWN_ERROR	Unknown error	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e221a957-3af3-4cf7-b661-768d15883e18	en_IN	VERIFIED	Verified	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a3abe81-c683-4d5e-9936-e1ac04ad5afa	en_IN	VIEW_ON_MAP	View on Map	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa4d526c-cf43-4849-a2e9-642ecd21d25a	en_IN	WF_ACTION_CANCELLED	Action has been cancelled	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d83ea32a-e82a-46fd-ab9d-934efec48277	en_IN	WF_APPROVAL_UPLOAD_HEAD	Supporting Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9c7c9c3d-f12d-4d09-bc93-9774999d0f56	en_IN	WF_ASSIGNEE_NAME_LABEL	Assignee Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb3fe605-c1f4-40d8-bf4d-d42d4b5e01bd	en_IN	WF_ASSIGNEE_NAME_PLACEHOLDER	Select assignee Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1234e97-5df7-469a-b5e3-e6b53daf859d	en_IN	WF_INBOX_HEADER_CURRENT_OWNER	Current Owner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8618ab56-ffc0-4878-a5b6-16fc98e0e975	en_IN	WF_INBOX_HEADER_LOCALITY	Locality	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10df6470-59cb-4f74-a1f3-29cfb98479fc	en_IN	WF_INBOX_HEADER_SLA_DAYS_REMAINING	SLA (Days Remaining)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5d72e4dc-93ed-4346-ae0e-619d129332f6	en_IN	WF_MODAL_APPROVER	Assignee Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+502be6b4-07b9-4b22-af17-6ea5b476fb30	en_IN	WF_MODAL_CANCEL	Cancel	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05eda1a9-cbf1-4a72-a49b-15355ceb0474	en_IN	WF_MODAL_COMMENTS	Comments	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a55ae6ff-9a35-45d8-9c56-80ef8dce4289	en_IN	WF_TAKE_ACTION	TAKE ACTION	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a19f789f-8f51-4a1e-9651-7fba51d74ce2	en_IN	ERR_INVALID_MOBILE_NUMBER	Please enter a valid mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+138140ba-3a3e-4b94-b94a-5de41ba157b4	en_IN	MOBILE_VALIDATION_DIGITS	digits	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ec39e08-04a5-4796-80d0-9441d6f8efac	en_IN	MOBILE_VALIDATION_AT_LEAST	at least	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+007e97aa-fa16-4b8e-bf06-2a2f34992eb8	en_IN	MOBILE_VALIDATION_STARTING_WITH	starting with	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b55839af-a59f-4a5c-98c4-2fa8f2115386	en_IN	MOBILE_VALIDATION_OR	or	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20386a02-99e3-4e82-ae6a-b2d475f5552b	en_IN	EVENTS_DATERANGE_LABEL	Date Range	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a5c5d81d-155c-432f-9f22-78bb33b78146	en_IN	ES_CLEAR_ALL	Clear All	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+86548d97-bb2e-4fb9-94ab-62472c409b79	en_IN	ES_COMMON_APPLY	Apply	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+927241f1-e779-447b-8003-46319d3fcae5	en_IN	ES_COMMON_CONTACT_DETAILS	Contact Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d9157e0b-49d3-43f8-a786-1d7c9a2f00c5	en_IN	ES_COMMON_HOME	Home	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0a150ff-af8d-4c84-b4c4-9705ea6de1fe	en_IN	ES_PRIVACY_POLICY	Privacy Policy	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7d41f57f-5c4b-4f52-8762-18cdd4974961	en_IN	ES_FORGOT_PASSWORD_DESC	Please enter your user name to reset password.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6863c108-e38f-4c5b-a0ed-0af3db6e428a	en_IN	TL_APPROVAL_UPLOAD_HEAD	Supporting Documents	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c1bd92dd-6141-44af-8847-402b6115f776	en_IN	HR_COMMON_CREATE_EMPLOYEE_HEADER	Create Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ab6cab3-ef1d-4749-8a46-524d77aa6427	en_IN	HR_HOME_SEARCH_RESULTS_HEADING	Search Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a62a6fcd-f707-479c-8420-567cf5cdb5d4	en_IN	ACTIVE_EMPLOYEES	Active Employees	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e61211d8-0782-4637-b26a-52bc312ee5fa	en_IN	ACTION_TEST_WORKBENCH	Workbench	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0e573c5a-1f86-4194-809f-65c7eac21700	en_IN	ACTION_TEST_LOCALISATION	Manage Localisation	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9bc364b6-5b8b-41ae-8ec8-d002f9b98f1d	en_IN	ADMIN_BLOCK	Block	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa3f550d-6b55-451b-b7b1-587b3649b5bb	en_IN	ADMIN_LOCALITY	Locality	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e60f0160-98e4-48d3-97f5-33b439758886	en_IN	ADMIN_ZONE	Zone	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2740db48-63bc-4ff7-b3a2-4c853bed9cee	en_IN	ADMIN_CITY	City	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+003ae49f-1407-4e8f-b33b-a38a88dab843	en_IN	ES_PGR_INBOX	Inbox	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b58ffa1-ed61-4270-baed-79a7117f3c03	en_IN	ES_PGR_HEADER_COMPLAINT	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11f4311f-caf2-47ac-9ef8-a1492020ba54	en_IN	ES_PGR_NEW_COMPLAINT	New Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3da09269-3dd3-4aa4-863c-7b63c68e46b5	en_IN	ES_INBOX_LOCALITY	Locality	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4658fedc-6cfe-475d-ad55-4950d0b42537	en_IN	ES_INBOX_STATUS	Status	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2fbd8706-f230-4dff-ad74-66057159c782	en_IN	ES_COMMON_INBOX	Inbox	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+439b2742-73e9-49eb-ae85-ac84407c248e	en_IN	ES_TITLE_INBOX	Inbox	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+802c4f1a-a411-4edc-a3b5-122213159a9d	en_IN	EV_SLA_DAY_ONE	day ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+abdf09f7-d928-4a3a-a1e1-c5b67dae942e	en_IN	EV_SLA_MINUTE	Minutes ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b301cd5-c1a9-489a-b4f8-33af93dd255f	en_IN	EV_SLA_MINUTE_ONE	minute ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6a5e5fa4-2baa-41f6-811b-fd67e29db541	en_IN	EV_SLA_MONTH	Months ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d75e349-92c7-44a6-9b67-87daf6a4b989	en_IN	EV_SLA_MONTH_ONE	month ago 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+97123c99-081e-4cef-a7d7-9d4670c4e747	en_IN	EV_SLA_TIME	hrs ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+850b5689-f0da-4622-91c1-8547bd0e071d	en_IN	EV_SLA_TIME_ONE	hr ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+905168e7-c839-44d0-ac6e-318f2e6bdf52	en_IN	EV_SLA_WEEK	Weeks ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+daa22343-6386-4ce4-b753-a8bb30c72a05	en_IN	EV_SLA_WEEK_ONE	Week ago	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a13dfd3b-3bd7-4793-8fb1-9c22c4737a1e	en_IN	ES_COMMON_PLEASE_ENTER_ALL_MANDATORY_FIELDS	Please enter all mandatory fields	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2856198f-82c3-4447-a92c-9aae9ae1c634	en_IN	ES_COMMON_NO_DATA	No Data Found	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49480b88-7aea-4ff6-95f5-ccc82a92e08c	en_IN	ES_COMMON_SEARCH	Search	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+335fa503-1f92-4da8-89a2-95df003c09ee	en_IN	ES_COMMON_FILTER	Filter	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bebc56d5-8aff-4431-9d0b-85552b086ffa	en_IN	ES_COMMON_FILTER_BY	FILTER BY	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+243b40e1-72b7-4760-8004-be41edd4aee3	en_IN	ES_COMMON_CLEAR_ALL	CLEAR ALL	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8479cd94-a933-463e-90eb-8192d6973b3a	en_IN	ES_COMMON_CLEAR_SEARCH	CLEAR SEARCH	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85d6b535-70c4-468e-a8d7-064ba6f17d25	en_IN	ES_COMMON_TAKE_ACTION	Take action	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05cd0ea7-be75-4d79-bd2d-a91ef597a2b7	en_IN	ES_COMMON_VIEW_DETAILS	View Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a71b209-f6fa-4d61-a4f5-14a65ac04216	en_IN	ES_COMMON_HIDE_DETAILS	Hide Details	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11b60434-7d44-4869-b77e-c7019198e868	en_IN	ES_COMMON_UPDATE	Update	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dd72effc-9fbd-4f7c-9035-96db35e40840	en_IN	ES_COMMON_NA	NA	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9232cce3-03f0-41d4-8e23-3f6f3667f3e5	en_IN	ES_COMMON_ULB	ULB	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2a4dfb3-4bae-4bc3-9140-eb563f334eac	en_IN	ES_COMMON_NOTE	Note	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecb6a35e-187f-4850-9231-aa4f9dfe60b5	en_IN	ES_COMMON_SEARCH_BY	Search By	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bff01e5b-9d85-40e2-b9aa-dcaab6651e16	en_IN	ES_COMMON_APPLICATION_SUBMIT	Submit	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ddabb111-2117-4441-9e26-7ccaadd25ead	en_IN	ES_COMMON_MIN_SEARCH_CRITERIA_MSG	Please enter minimum 1 search criteria	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+331f2ba8-202e-4f43-9ba6-30269fe7a502	en_IN	ES_COMMON_ENTER_DATE_RANGE	Enter valid date range	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c066f47d-df9a-48a9-8116-9b4bf72aeee8	en_IN	ES_COMMON_Y_DEL	Yes, Delete	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a0b1dcfb-b2a7-40ae-a93a-872a202fb7b6	en_IN	ES_COMMON_USER_ULBS	User Ulb(s)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e17212ca-cbd9-4a03-bd42-6744af3bbb65	en_IN	ES_COMMON_INFO	Info	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a2aefd78-6350-434d-bb5f-3efd704f8cd5	en_IN	ES_COMMON_DOC_CATEGORY	Document Category	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28116d9b-6f2d-49ab-89f3-464994af48b8	en_IN	ES_COMMON_DOC_DESCRIPTION	Document Description	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3c41950f-2561-4b55-b560-6bee57c3373f	en_IN	ES_COMMON_DOC_DOCUMENT	Document	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+57de038c-2915-4c39-afd7-0f0ccbd094a9	en_IN	ES_COMMON_DOC_FILENAME	File Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91a256be-2f23-43e6-9892-1cc798954f31	en_IN	ES_COMMON_DOC_NAME	Document Name	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9776e8b5-24ae-455a-811b-69c0400bde22	en_IN	ERR_DEFAULT_INPUT_FIELD_MSG	Invalid Input	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+915dfc90-510d-44bf-9a02-11fcab807207	en_IN	ERR_HRMS_INVALID_MOB_NO	Invalid mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+38101986-fa10-45c7-887c-33771cf94e49	en_IN	ERR_HRMS_INVALID_CITY	Invalid City	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+31c2b732-4396-4b66-b066-04a8c4294be5	en_IN	ERR_PASSWORD_DO_NOT_MATCH	Password do not match	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d150f4e5-2ee5-4374-b09a-c0c42f863970	en_IN	ES_SEARCH_APPLICATION_MOBILE_INVALID	Please provide a valid mobile number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f79c2a0-ed32-4b40-8e01-ccaf6a9893dd	en_IN	WF_COMMON_COMMENTS	Comments	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+480af594-858f-4d77-b9f2-31967ea3590a	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR_VIEWER	Complaints Viewer	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4dd53499-2f45-40f8-b6c7-0258adfeb783	en_IN	ADMIN	Admin	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4228b0e1-478e-4cb4-81d6-df7a4f9ebd31	en_IN	CONTRACT	Contract	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+516e40cd-c9fe-4076-b985-f3b9d50d0601	en_IN	CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE	Complaint Sub-Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+de2f7d4a-fee9-404f-a1ea-af4b5785c6ee	en_IN	DAILYWAGES	Dailywages	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05066444-ea4d-4b19-ac8c-155e561d8be4	en_IN	DEPUTATION	Deputation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+091989b8-f51d-4e38-b969-886d05d2e181	en_IN	ERR_ALL_MANDATORY_FIELDS	Enter data in all mandatory fields	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c2cdf480-f477-400c-bdf7-53b5df537dbd	en_IN	ERR_BASE_TENANT_MANDATORY	Atleast one Jurisdiction should be selected in Parent city	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3bfd69bd-ca0e-4f12-9152-07f88ad457b3	en_IN	ERR_HRMS_INVALID_DATE_OF_APPOINTMENT	Invalid employee date of appointment entered by the user.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4f4b629-b2de-47c1-970a-f84980f59cb6	en_IN	ERR_HRMS_INVALID_DEACT_REASON	Employee deactivation reason is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1baed27b-6fd2-4342-9654-d2fece0f404e	en_IN	ERR_HRMS_INVALID_DEPT	Invalid department of employee entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bbd7cd14-9db3-4cb2-bcbf-b20a18ae1e0b	en_IN	ERR_HRMS_INVALID_MOB_NO	Invalid mobile number entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+31213c9d-ffb1-44e4-8803-a95a0b132ad4	en_IN	ERR_HRMS_INVALID_ROLE	Invalid role assigned to the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0026babf-dfc4-4c11-b71c-55df8d572bab	en_IN	ERR_HRMS_USER_CREATION_FAILED	User creation failed at the user service.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ff3b3d63-d4e3-4120-b56c-e88b1b634536	en_IN	ERR_HRMS_USER_EXIST_MOB	User already exists for the entered mobile number. Use a different mobile number to proceed.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+25896515-dab2-4c18-a511-577cda76e73b	en_IN	ERR_HRMS_USER_EXIST_USERNAME	User already exists for the entered user name.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3480b562-972f-4664-8136-fd5ca1822baa	en_IN	ES_COMMON_SEARCH_BY	SEARCH BY:	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+50fadc50-5972-468f-9e22-8c2bb8f9b5d0	en_IN	ES_SEARCH_APPLICATION_MOBILE_INVALID	Please provide a valid mobile number	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6a33d6e3-9a2f-4231-961d-7fdbaa4748a9	en_IN	HRMS_CREATE_EMPLOYEE_INFO	The login credentials have been shared with the employee via SMS on the registered mobile number.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+99fcc928-c429-4f9d-90d0-14d5bbccc0b1	en_IN	HRMS_CREATE_EMPLOYEE_RESPONSE_MESSAGE	Employee Created Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b59c4ac2-af11-48b7-8d8e-50b3e4618c0a	en_IN	HRMS_UPDATE_EMPLOYEE_RESPONSE_MESSAGE	SUCCESS	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3fc30c6b-f14b-4914-ab69-67e97fb2cbed	en_IN	HR_ACTION_NO_FILEUPLOADED	No File Selected	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c3a7fcb2-f057-4446-bc69-8e2ace14a1b7	en_IN	HR_ACTIVATE_EMPLOYEE_HEAD	Activate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f08445c0-3c74-469d-b772-9860c28c5591	en_IN	HR_ACTIVATE_HEAD	Active	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24d89835-737c-4ac6-adf9-1174ee0ddbf8	en_IN	HR_ACTIVATION_REASON	Reason for Re-activation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8c3c8b4-23ae-4fe8-a8e8-9af11e6e8c9e	en_IN	HR_ADD_ASSIGNMENT	ADD ASSIGNMENT	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+50d2a7dd-9a05-4279-94d9-9e48bbf20757	en_IN	HR_ADD_JURISDICTION	ADD JURISDICTION	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c3cc3d57-83d8-4c5c-8d0e-5110d5b4141a	en_IN	HR_APPOINTMENT_DATE_LABEL	Date of Appointment	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1018c245-f152-442f-baa4-0452936f99ff	en_IN	HR_APPROVAL_UPLOAD_HEAD	Supporting Documents	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e8b31e6-7d47-49c3-ac69-cb9b9f8418b0	en_IN	HR_ASMT_FROM_DATE_LABEL	Assigned From Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c4950d40-ad86-422a-8f71-538d3e13f172	en_IN	HR_ASMT_TO_DATE_LABEL	Assigned To Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae57e0a2-3370-4b6c-b081-6814a72629f6	en_IN	HR_ASSIGNMENT	Assignment	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5256962d-876d-42e7-8006-2615213baddd	en_IN	HR_ASSIGN_DET_HEADER	Assignment Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8a4ded71-b67c-4c05-99e3-be3223db1daf	en_IN	HR_ASSIGN_DET_SUB_HEADER	Verify entered details before submission. Assignment details cannot be edited once submitted.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae950a69-a442-4264-b051-2633d92bd1df	en_IN	HR_BIRTH_DATE_LABEL	Date of Birth	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5e05e0d4-a36a-428d-b1d2-b32865c77f01	en_IN	HR_BOUNDARY_LABEL	Boundary	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cef45b2f-bbd0-4a30-b761-4130294d37fe	en_IN	HR_BOUNDARY_TYPE_LABEL	Boundary Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b7c3dac-f70b-4b89-b1c9-e05f125a3941	en_IN	HR_COMMON_APPLY	Apply	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7623b8ea-9639-4c13-83e4-7ece53286d46	en_IN	HR_COMMON_BUTTON_HOME	Home	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87c713d0-01f2-4817-b42c-e356796d4fa7	en_IN	HR_COMMON_BUTTON_SUBMIT	Submit	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee731ef2-82bc-4720-876c-13223fa3d12e	en_IN	HR_COMMON_CLEAR_SEARCH	Clear Search	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49c2831a-5996-4aee-bc72-964c84cbbb21	en_IN	HR_COMMON_CREATE_EMPLOYEE_HEADER	Create Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3b0539bc-2e05-41af-8268-ce555fef8b27	en_IN	HR_COMMON_EDIT_EMPLOYEE_HEADER	Edit Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f5aa6bc-4b28-444c-936c-223f5c31e584	en_IN	HR_COMMON_FILTER	Filter By	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ac278836-7101-48aa-8b8d-10a3ad18a60d	en_IN	HR_COMMON_HEADER	Employee Management	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ec9003c8-fc01-46b5-a1f1-cd1b56dccb67	en_IN	HR_COMMON_SEARCH	Apply	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d1900d09-f1c4-4990-9296-92b2e88ecbe6	en_IN	HR_COMMON_TABLE_COL_DEPT	Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa3d5ff9-2740-4fd0-89d2-f2b5f5189cc9	en_IN	HR_COMMON_TABLE_COL_ROLE	Role	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+167fbde4-37ac-42b8-8216-9f6de0d5b6f1	en_IN	HR_COMMON_TAKE_ACTION	Take Action	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+61d9e293-bbcc-4830-acdf-baceee3cc950	en_IN	HR_CORRESPONDENCE_ADDRESS_LABEL	Correspondence Address	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+974aca48-b3e1-4166-ae4f-5a3916ef15bf	en_IN	HR_CURRENTLY_ASSIGNED_HERE_SWITCH_LABEL	Currently Assigned Here	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+daf6afa3-c607-4763-ba1c-1d67ee849471	en_IN	HR_DEACTIVATE_EMPLOYEE_HEAD	Deactivate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+36c1a0d2-988e-4c9a-af73-d2ac1d52da57	en_IN	HR_DEACTIVATE_HEAD	Inactive	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d1e1ef4-e99c-4e7d-9fc9-7da2914a8da5	en_IN	HR_DEACTIVATION_REASON	Reason for Deactivation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c22dde92-f0c7-4cc3-926a-ff925bd25dfd	en_IN	HR_DEPT_LABEL	Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+441ab595-a5fd-4a38-b4c9-02fd5a2551eb	en_IN	HR_DESG_LABEL	Designation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e26eded-483d-44cb-af80-e98bb79a13f7	en_IN	HR_EFFECTIVE_DATE	Effective Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+189f943f-3fa7-4ac6-984d-d20d45fdb303	en_IN	HR_EMAIL_LABEL	Email	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e4eaa2b-33e6-43c9-892b-c05c07e46d6e	en_IN	HR_EMPLOYEE_ID_LABEL	Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f039d3e4-a316-4956-af82-011af3954bbc	en_IN	HR_EMPLOYMENT_TYPE_LABEL	Employement Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb3e0422-4074-4978-94d8-f452af144a1a	en_IN	HR_EMP_ID_LABEL	Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+16a2da97-367c-44e9-9e71-00a830c640d2	en_IN	HR_EMP_ID_MESSAGE	ID assigned to employee by the municipality. Incase there is no ID assigned, leave the column blank for the system to generate the Employee ID.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+38a76ea9-cb9f-45f9-b0b8-1736b95d5584	en_IN	HR_EMP_NAME_LABEL	Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2f13cb3-1d02-49f7-a12e-64b201093429	en_IN	HR_EMP_STATUS_LABEL	Employment Status	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a1f27c0-a652-4194-8e97-abfb7164a3fc	en_IN	HR_GENDER_LABEL	Gender	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7bad2463-2c95-4e23-898b-6ea0c274874a	en_IN	HR_HIERARCHY_LABEL	Hierarchy	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a0b3ca5f-de05-4abc-bcfd-a8ed21eb4803	en_IN	HR_HOME_SEARCH_RESULTS_HEADING	Search Employe	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68cac256-af0e-4776-8f3d-71b0448ebb14	en_IN	HR_JURISDICTION	Jurisdiction	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a946914-9e66-4d82-9524-bacf4a8bfe5d	en_IN	HR_JURISDICTION_DETAILS_HEADER	Jurisdiction Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88ad38df-f1f3-499c-9f8c-03beada764b1	en_IN	HR_JURIS_DET_HEADER	Jurisdiction Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b5fb8ce5-bb1d-44a2-bab8-2e6030bd8197	en_IN	HR_MOB_NO_LABEL	Mobile Number	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c5ec3a2d-824e-48a5-af63-762fb64d3d7f	en_IN	HR_NAME_LABEL	Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc70fd9c-f88d-46d4-93ef-33ab6f2d7f67	en_IN	HR_NEW_EMPLOYEE_FORM_HEADER	Employee Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9ba5e5f9-efb4-44e6-afb3-52636ce351cc	en_IN	HR_ORDER_NO	Order No.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8104d60-bec5-480f-80b0-0fcde0aa0d23	en_IN	HR_PERSONAL_DETAILS_FORM_HEADER	Personal Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f20fe31a-2eae-49da-8987-80a29e9a1103	en_IN	HR_REMARKS	Remarks	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+afea9464-0967-4025-bdf9-3827263e5d97	en_IN	HR_ROLE_LABEL	Role	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6d3c0975-32f1-49c8-a4a1-fcc0091e9def	en_IN	HR_ROLE_NO_LABEL	No of Roles	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+abacf41d-7e17-4456-952a-b0a3e3cd3d69	en_IN	HR_STATUS_LABEL	Status	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fda0c2d-891e-4f2a-afbc-728034b26e1e	en_IN	HR_ULB_LABEL	Locality	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ba6175a1-e063-4e26-9728-40c5a9571fa3	en_IN	PERMANENT	Permanent	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+473c9f4a-9165-42ea-a523-5fa8628d7969	en_IN	REVENUE	Revenue	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+93850109-fc20-4c9c-bb38-9c66db29a11a	en_IN	TEMPORARY	Temporary	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a05850ff-8c91-4872-9732-9bc79c8634a7	en_IN	ANOTHER_USER	Another User	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8dcc2f1a-53f4-4906-9be9-d0e8f0f8e286	en_IN	ASSIGN	Assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+16367460-a4c1-4309-ac42-bd2311edcfc7	en_IN	ASSIGNED_TO_ALL	Assigned to All	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d502787-08ac-4f19-af79-703aa4ed7071	en_IN	ASSIGNED_TO_ME	Assigned to Me	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecfaee34-1402-4345-a4d6-b260e9b694ef	en_IN	ASSIGN_SUCCESSFULLY	Assigned Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a275073-a67c-4a0d-aca2-ef314b50e38f	en_IN	COMPLAINTS_COMPLAINANT_CONTACT_NUMBER	Complainant Phone No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ddceaec9-41e3-4cef-a133-b41b53e37b39	en_IN	COMPLAINTS_COMPLAINANT_NAME	Complainant Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+125350af-c857-443d-b204-d18605183f2f	en_IN	CORE_COMMON_CLOSE	CLOSE	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f9f1496-2e84-4c82-8327-d33191c4770d	en_IN	CORE_COMMON_NAME_VALIDMSG	Please enter a valid Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77456774-0cd1-4d4e-a014-1245169d0caf	en_IN	CORE_COMMON_PHONENO_INVALIDMSG	Invalid Mobile Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+613b24e7-655b-4c61-b7a1-007439fd396c	en_IN	CORE_COMMON_PINCODE	Pincode	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2c2cd228-6e06-40f2-bc7b-709413e23318	en_IN	CORE_COMMON_PINCODE_INVALID	Provide Valid Pin code	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a87afe87-d06e-4272-9675-3a86b918cfe0	en_IN	CORE_COMMON_REQUIRED_ERRMSG	Required	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e18ed15-50b0-4f8b-bbab-88090844d273	en_IN	CORE_COMMON_SKIP_CONTINUE	Skip and continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+29d74cb3-2ba5-4009-adb9-2f4774de6100	en_IN	CORE_EMPLOYEE_OTP_CHECK_MESSAGE	Please check your messages for the OTP & then set a new password.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fbd9ca73-7843-4461-94a3-7207cf0acc7b	en_IN	CORE_LOGIN_CONFIRM_NEW_PASSWORD	Confirm New Password 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+72d19aa3-095a-40eb-b9f1-390a2d70d064	en_IN	CORE_LOGIN_NEW_PASSWORD	New Password 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e7d7ebc3-60f0-4108-a48f-36397659de20	en_IN	CORE_LOGIN_PASSWORD	Password	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fcc918ac-86d2-4b8f-a312-834bdf302416	en_IN	CORE_LOGIN_USERNAME	User Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fde233ea-b981-4a30-930e-f032d15d4b59	en_IN	CORE_LOGOUTPOPUP_CANCEL	CANCEL	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+680d49c4-ce88-41b4-8dfa-6c1dc67df248	en_IN	CORE_OTP_OTP	OTP	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b23ec6f1-ff52-40c6-bf8c-86be07fcdfe3	en_IN	CORE_OTP_RESEND	RESEND	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+03987d6e-2a89-4cb6-8e12-4323a58749be	en_IN	CORE_OTP_SENT_MESSAGE	An OTP has been sent to :	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9fbbc899-766a-47e0-8528-b7139ac7d444	en_IN	CS_ACTION_ASSIGN	Assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+02aa7a24-cb8c-41b3-b241-245b1af7e206	en_IN	CS_ACTION_FILEUPLOADED	File Uploaded	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fb00b4d6-cbf9-4c02-95ca-ffb222f1a2fe	en_IN	CS_ACTION_NO_FILEUPLOADED	No file uploaded	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+204aca20-90c1-4a31-916e-79f05f2aec89	en_IN	CS_ACTION_REASSIGN	Re-assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ec262fef-daea-4ea4-9fec-59bfde61d24c	en_IN	CS_ACTION_REJECT	Reject Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c002cdfd-d69f-4c6b-adc2-0cfce7e2f65b	en_IN	CS_ACTION_REOPEN	Re-open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13673f98-989a-41d0-8028-f0f9903736a4	en_IN	CS_ACTION_SUPPORTING_DOCUMENTS	Supporting Documents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+16b37fef-ff94-46fa-9532-220df88c7bdd	en_IN	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS	Additional Address Information	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8246b34-9b6b-471e-971d-f9f02e8b683b	en_IN	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_SUBMIT_COMPLAINT	Submit Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+64b00a29-e61f-4ac0-80a5-275da50ef954	en_IN	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT	If you think apart from information provided till now additional details are required to resolve complaint, provide it below:	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2ea7053d-02d8-4c11-aa17-ad30aa697fde	en_IN	CS_ADDCOMPLAINT_CHANGE_PINCODE_TEXT	If you know the pincode of the complaint address, provide below. It will help us identify complaint location easily or you can skip and continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+657ef361-a3b7-4625-b7c2-19eae4080272	en_IN	CS_ADDCOMPLAINT_CITY_MOHALLA_TEXT	Choose the locality of the complaint from the list given below.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+89b2c160-621d-4810-b5de-d19fa176064d	en_IN	CS_ADDCOMPLAINT_COMPLAINT_LOCATION	Complaint's Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5261bd32-c51f-4911-837b-edb8830535ec	en_IN	CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE_PLACEHOLDER	Choose Complaint Sub-Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6863dc87-16eb-46f4-b035-64e31d8f3793	en_IN	CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE	Complaint Sub-Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+babc9a19-8856-42f8-a21a-df26584987ed	en_IN	CS_ADDCOMPLAINT_COMPLAINT_TYPE	Complaint Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+48bfb650-8189-4138-853f-1db98af958e5	en_IN	CS_ADDCOMPLAINT_COMPLAINT_TYPE_PLACEHOLDER	Select complaint type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b841cb3f-8105-4f6a-8124-c8c2d304fb72	en_IN	CS_ADDCOMPLAINT_LANDMARK	Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2af06477-1dbc-4db5-810a-47e0c286f333	en_IN	CS_ADDCOMPLAINT_LOCATION	Complaint Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+030bda3a-1f21-477d-ba20-a996dd09d2bf	en_IN	CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS	Provide Additional Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+59865149-818c-4d57-8d67-89e41b696033	en_IN	CS_ADDCOMPLAINT_PROVIDE_COMPLAINT_ADDRESS	Provide Complaint address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9672edaf-13cb-49bc-a190-4cc40cbc1704	en_IN	CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER	Pin Complaint Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e5554963-c1a4-4bfc-84b7-6bcaa3a1a0f4	en_IN	CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT	Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0bcdaff5-96b1-46f6-a440-c83588c1f83f	en_IN	CS_ADDCOMPLAINT_UPLOAD_PHOTO	Upload complaint photos	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e21c69e6-d830-4e9b-8ecb-d1fec27d32f7	en_IN	CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT	Click on the icon below to upload the complaint photos as evidence. You can capture photos directly through your camera or upload from your Gallery. If you do not have complaint photo, you can skip the continue for next step.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+09c63f10-5ac6-4af8-9333-d262ff548c54	en_IN	CS_ADDCOMPLAINT_YOU_RATED	You Rated 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+03bb8d50-da06-4285-ac53-06e577844f89	en_IN	CS_COMMON_ASSIGN	Assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+54c9faa0-fb1c-4025-830f-671c1e0ed417	en_IN	CS_COMMON_ATTACHMENTS	Attachments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aba67ff0-d5e5-477f-936a-45d685cb26d9	en_IN	CS_COMMON_BACK	Back	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+82514138-90c2-42a3-b6b5-faef7a952321	en_IN	CS_COMMON_CANCEL	Cancel	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11adf9a8-0b58-4cc2-a04f-ed997e93b376	en_IN	CS_COMMON_CHOOSE_FILE	Choose File	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bd7d870f-f58d-4317-a4d9-fc6fd7a35b89	en_IN	CS_COMMON_CLEAR_SEARCH	CLEAR SEARCH	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c7caf0d1-d5d8-4496-ba70-51b70ae0daf1	en_IN	CS_COMMON_CLOSED	Closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4640e245-6695-4130-b589-f0f9b963393b	en_IN	CS_COMMON_COMMENTS	Comments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1bae7da-ad00-4fe7-99fc-cc59364ca12c	en_IN	CS_COMMON_COMPLAINT	Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11686459-a58f-4253-a844-c76d86e73c05	en_IN	CS_COMMON_COMPLAINT_FILED	Complaint filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+96b5cbb2-a3e8-447d-81f5-7326a127b636	en_IN	CS_COMMON_COMPLAINT_NO	Complaint No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e2c5ce17-8ee2-4b5d-bca5-fcdcf1ae1273	en_IN	CS_COMMON_COMPLAINT_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e73f15ae-751d-4ec8-853e-ac6bc878249f	en_IN	CS_COMMON_COMPLAINT_REOPENED	Complaint Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc606169-a6db-4d8c-8691-34da23e96a28	en_IN	CS_COMMON_COMPLAINT_RESOLVED	Complaint resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f60e963c-c680-4547-8192-6cbd033e007f	en_IN	CS_COMMON_COMPLAINT_SUBMITTED	Complaint Submitted	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46555072-0d53-4058-b727-bb3a7103cb71	en_IN	CS_COMMON_DAY	day	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39b0454a-e13a-4a9d-ab38-134f16eaa1fe	en_IN	CS_COMMON_DAYS	days	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aca700c0-e125-4c63-8eb2-64b55f64e5da	en_IN	CS_COMMON_EMPLOYEE_COMMENTS	Comments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3f9aa69-cb2e-4f93-957a-49831126e3c3	en_IN	CS_COMMON_EMPLOYEE_NAME	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7e6867d3-5780-4f13-a32c-783ff3604ee0	en_IN	CS_COMMON_ERROR_LOADING_RESULTS	Error while loading results	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4197fa79-8db9-4b28-8e5a-a28fc70c90f4	en_IN	CS_COMMON_FILE_A_COMPLAINT	File a Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49c22e12-09cd-487b-be55-bbe3b089b95d	en_IN	CS_COMMON_FILTER	Filter	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39a2cbd7-e626-4758-a1e7-2abb2ba980c8	en_IN	CS_COMMON_HOME	Home	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae49ac75-96a7-46e4-ab74-c26ab9d894ce	en_IN	CS_COMMON_INBOX	Inbox	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+430f0ecd-1fac-40e3-a9d5-27f9c82774dd	en_IN	CS_COMMON_MOBILE_NO	Mobile No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5437079a-3313-48a6-bdda-b3e57b82bff6	en_IN	CS_COMMON_NEXT	Next	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1668de73-9861-4693-a15e-50a1da1885ed	en_IN	CS_COMMON_OPEN	Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b5337311-de30-4178-8f05-b370e4202e09	en_IN	CS_COMMON_PENDINGATLME	Pending at LME	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+587ab442-cca1-4dcc-ae0b-633a8403e550	en_IN	CS_COMMON_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5fadce20-585c-4ec2-aad3-522e79704566	en_IN	CS_COMMON_PINCODE_NOT_SERVICABLE	Sorry we are not providing service in this city	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+179cd06f-fd3c-42cd-87eb-bcc16c8f61fb	en_IN	CS_COMMON_RATING_SUBMIT_TEXT	By making your voice heard, you help us improve mSeva.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e74a7355-4f52-4db9-82e3-4f7e8d5edb6d	en_IN	CS_COMMON_REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+023a7e3f-7101-4f9e-b1b5-a73555952cb6	en_IN	CS_COMMON_REQUIRED_FIELDS_MISSING	Required fields missing	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b23b70dc-5425-47da-b52f-8d23f3ee6117	en_IN	CS_COMMON_RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+93629ebe-92e0-4181-bffd-7f525876725f	en_IN	CS_COMMON_SEARCH_BY	SEARCH BY	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f257e790-d35c-458f-84b8-f8114a84a2f4	en_IN	CS_COMMON_SELECT_EMPLOYEE	Select Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8b730fdc-5ce7-4e49-8d7a-c5d320c271b9	en_IN	CS_COMMON_SKIP	Skip and Continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d1acd420-b871-417c-89d4-6784b5d2cabe	en_IN	CS_COMMON_SUBMIT	SUBMIT	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6d48c642-5daa-4a90-836c-9435c97dc3d4	en_IN	CS_COMMON_THANK_YOU	Thank You	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a003f5fd-d64d-4cab-a48c-6ba0fa44e42c	en_IN	CS_COMMON_TRACK_COMPLAINT_TEXT	The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88f27275-f1a8-4f47-9af7-2a866d8a92a9	en_IN	CS_COMPLAINT_ADDTIONAL_DETAILS	Additional Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+454db6d5-7cdf-4128-acaa-9de195f56b3c	en_IN	CS_COMPLAINT_COMMENT_SUCCESS	Comment Successful	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0cbd0a8b-9371-4614-8c3e-4a5240968b38	en_IN	CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS	Additional Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f776c78e-b694-4232-adb8-676481622900	en_IN	CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION	Description	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3c51989d-0e49-4161-9606-525aaaaedf32	en_IN	CS_COMPLAINT_DETAILS_ADDRESS_1_DETAILS	Address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20989aab-09d0-4752-a642-7800295cd3f7	en_IN	CS_COMPLAINT_DETAILS_ADDRESS_2_DETAILS	Address Line 1	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da85b46f-f5c2-4e76-84f8-750d3849ea0a	en_IN	CS_COMPLAINT_DETAILS_APPLICATION_STATUS	Application Status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cf0cd63f-4f66-42eb-9294-452262fbdd45	en_IN	CS_COMPLAINT_DETAILS_AREA	Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91dd21f7-138f-4385-9f84-0eca143369c1	en_IN	CS_COMPLAINT_DETAILS_CITY	City	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+612041c6-b0c7-41ca-8ac3-729854924024	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_DATE	Complaint Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5acf8182-8283-411f-a1ef-cee9141e7f65	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_DESCRIPTION	Complaint Description	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d1224fe-8b08-4a08-ab30-741002fe7a5a	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS	Complaint Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+acedd701-32d3-4fb9-8ee3-3df0da8d488a	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_NO	Complaint No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ca9f636e-ac1c-4400-8d13-1cebd4e46787	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE	Complaint Subtype	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ac38a2f-582a-4378-8ec3-7f944f5988bd	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE	Complaint Timeline	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6a5bad8b-2e8f-4ecf-a608-025a8c7f7fdf	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_TYPE	Complaint Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+31931f2a-415b-470b-b20d-915b0ab36835	en_IN	CS_COMPLAINT_DETAILS_CURRENT_STATUS	Current Status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+80576ddb-4cbc-4dc8-8386-84f6334b11d1	en_IN	CS_COMPLAINT_DETAILS_GEOLOCATION	Geolocation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae3e8e4f-11cc-437e-9266-5fac0cedb506	en_IN	CS_COMPLAINT_DETAILS_LANDMARK	Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f806d8c2-837e-4a15-95df-be7e40d688b1	en_IN	CS_COMPLAINT_DETAILS_LOCALITY	Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e383f1c-6c08-47e9-9e8a-a864dff67f3f	en_IN	CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE	Complaint Sub-Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01e00820-fc63-4580-82bd-5c938b4708cf	en_IN	CS_COMPLAINT_FILED_DATE	Filed Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+edcdbf19-3b12-4510-8138-41d55663ef6e	en_IN	CS_COMPLAINT_LANDMARK__DETAILS	Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+79ced362-7d9e-404f-929b-6577d6200ca2	en_IN	CS_COMPLAINT_LOCATION_DETAILS	Location Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+440d4a6a-8f39-49c6-aab4-5060fb85db47	en_IN	CS_COMPLAINT_LOCATION	Complaint's Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+537b637c-9e83-4aa4-8274-f122355de478	en_IN	CS_NAVIGATE	Open in Maps	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84d58a2a-7e07-4422-8589-588420d350b6	en_IN	CS_COMPLAINT_POSTALCODE__DETAILS	Postal Code	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+829c59b7-763e-47d6-8650-d804bc5ce0a3	en_IN	CS_COMPLAINT_RATE_HELP_TEXT	How would you rate your experience with us?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da81e265-36b0-4d35-bda4-408af10339db	en_IN	CS_COMPLAINT_RATE_TEXT	How would you rate your experience with us?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+711af4fc-f215-4f53-beb9-dcd03a2e5393	en_IN	CS_COMPLAINT_SUBTYPE_TEXT	The complaint type you have chosen has following complaint sub-types. Select the option of your choice from the list given below.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+452ae8b2-f5a2-4dcb-9bb8-e365092dba91	en_IN	CS_COMPLAINT_TYPE_OTHERS	Others	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+938da9bc-c44d-4684-b867-8bba0381ce35	en_IN	CS_COMPLAINT_TYPE_TEXT	Select the option related to your complaint from the list given below. If the complaint type you are looking for is not listed select others.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ab1af2f-b5b3-47ef-9120-4994498d1ec3	en_IN	CS_CREATECOMPLAINT_MOHALLA	Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e19e0e48-a576-4dec-a911-487b801babd9	en_IN	CS_FEEDBACK_ENTER_RATING_ERROR	Please rate your experience between 1-5 stars	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1c100909-a139-4fc3-9dc9-2ac9e2f5f0f6	en_IN	CS_FEEDBACK_OTHERS	Others	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+316ef44d-f71c-4c0c-85f9-30e61df0fb69	en_IN	CS_FEEDBACK_QUALITY_OF_WORK	Quality of Work	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e40c596-2ccd-499f-8eb9-3be06f09e0b8	en_IN	CS_FEEDBACK_RESOLUTION_TIME	Resolution Time	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee22cd63-cb5e-4044-82cb-3d4fe88ab853	en_IN	CS_FEEDBACK_SERVICES	Services	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2c486a55-4b7a-44c7-94e9-6f7cd499d311	en_IN	CS_FEEDBACK_WHAT_WAS_GOOD	What was good ?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46d36640-7925-4c23-82bd-b64722db1c7b	en_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE_TEXT	Provide the landmark to help us reach the complaint location easily.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3cf6453e-9e87-468d-b4fd-01295094be79	en_IN	CS_HEADER_COMPLAINT_SUMMARY	Complaint Summary	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32eadc0f-f419-4dac-ad82-0b16df886e52	en_IN	CS_HOME_MY_COMPLAINTS	My Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c4bf1894-ac17-40b6-bd07-c876c4eac2a7	en_IN	CS_MANDATORY_COMMENTS	Comments are mandatory	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6d7ca3b4-007b-48c3-8585-02987518f4d5	en_IN	CS_MYCOMPLAINTS_NO_COMPLAINTS	You haven't logged any complaints yet. \nStart with one, make a change.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+516e6974-5923-40f7-bcf9-66f7a67acd0b	en_IN	CS_MYCOMPLAINTS_NO_COMPLAINTS_EMPLOYEE	No Records Found	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1491f474-a09f-4db1-819b-6bfb96cd1bee	en_IN	CS_PGR_COMPLAINT_DETAILS	Complaint Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ebbbdcd2-0ba4-4b58-b87f-4151ffe18c02	en_IN	CS_PGR_COMPLAINT_NUMBER	Complaint No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f5b6af3-9037-40e9-b27d-e23bc57fd89e	en_IN	CS_PGR_CREATE_COMPLAINT	Create Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+64727848-7a6d-4076-8cf1-c6fc685e3526	en_IN	CS_PGR_LOCALITY	Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1395873f-dd0e-4d31-bd16-729f3bf85f67	en_IN	CS_PGR_RESPONSE	Response	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a861a9ba-55ac-4d0f-86ab-3e2a0144c631	en_IN	CS_PGR_SEND_COMMENT	Send	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+116a58c5-fae1-4535-a905-2d9743b030d9	en_IN	CS_PROFILE_EMAIL_ERRORMSG	Invalid Email Id	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f14f2de8-330c-46ec-acc3-eb82bb64d036	en_IN	CS_REJECT_COMPLAINT	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc73a3d3-185f-4cfa-b189-0e1167b5d246	en_IN	CS_REOPEN_COMPLAINT	Choose Reason to Re-open the Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5edbb7e6-f877-4816-9876-163bfdbf60f5	en_IN	CS_REOPEN_OPTION_FOUR	No permanent solution	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+705d5d74-c02d-4471-8188-21797a98faf4	en_IN	CS_REOPEN_OPTION_ONE	No work was done	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6437e1b-982d-46f0-885e-11f13a724517	en_IN	CS_REOPEN_OPTION_THREE	Employee did not turn up	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d6baafeb-4269-4937-a8f9-ae0d6b5fb338	en_IN	CS_REOPEN_OPTION_TWO	Only partial work was done	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9df2a6b9-40a1-470e-b7d1-7c6375fee828	en_IN	CS_UPLOAD_RESTRICTIONS	**Upload restrictions	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c11c2786-93b4-4c24-9c23-d1db7b709140	en_IN	DASHBOARD_CITIZEN_SERVICES_LABEL	Citizen Services	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f4907bf7-82fe-4ddf-bffc-2f9a7915d740	en_IN	DASHBOARD_WHATS_NEW_LABEL	Whats New	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bd6f70e9-01bd-4bab-be9c-a3cefcf0c2b0	en_IN	DEPT_1	Street Lights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d638dbd-2a87-4f33-bdd5-34404fc1372a	en_IN	DEPT_3	Garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4348ecf0-ccda-4208-a324-d50da8028503	en_IN	ES_COMMON_CLEAR_SEARCH	Clear Search	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a487fa8b-e40a-4d9e-a23c-3b8d98e0a48f	en_IN	ES_COMMON_FILTER	Filter By	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39100ba5-e92f-4588-a15f-bc673fd9ec13	en_IN	ES_COMMON_FILTER_BY	Filter By	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cb880326-d240-4a3b-b238-fb3c6f97aa86	en_IN	ES_COMMON_INBOX	Inbox	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e9ec5595-50db-4649-958c-c15e6264a706	en_IN	ES_COMMON_SEARCH	Search	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b76009dd-e8fe-4c85-b584-5d5ded96a21b	en_IN	ES_COMMON_TRACK_COMPLAINT_TEXT	The notification along with complaint number is sent to your applicant’s mobile number. Applicant can track the complaint status using mobile or web app.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+432ae227-f9b8-4e87-9341-8ec2b0c3f5cb	en_IN	ES_CREATECOMPLAINT_ADDRESS	Address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b57d42b-1fd5-440a-86c1-edc79e539845	en_IN	ES_CREATECOMPLAINT_COMPLAINT_NAME	Citizen Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4c76b5cf-29c6-4228-acd4-23cc77c374c0	en_IN	ES_CREATECOMPLAINT_FOR	Complaint For	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2181b069-61b6-43d3-99cf-e13cbd283068	en_IN	ES_CREATECOMPLAINT_MOBILE_NUMBER	Citizen Mobile No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f6620ea-5860-483b-821b-c6f2fd627216	en_IN	ES_CREATECOMPLAINT_NEW_COMPLAINT	New Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+74e83e00-b5f6-41d3-93c8-3ceaef583972	en_IN	ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS	Complainant Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+073fd281-48dc-44a7-806c-935f14961607	en_IN	ES_PGR_FILTER_STATUS	Status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+984f3829-11ef-4e61-b4a7-5ed356306bb9	en_IN	ES_PGR_HEADER_COMPLAINT	Citizen Complaint Resolution System	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d4b411e-c84c-47cb-8fb5-46c411551c8a	en_IN	ES_PGR_INBOX	Inbox	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+03426a1f-d751-4945-8ecf-dd2bdaae4a84	en_IN	ES_PGR_NEW_COMPLAINT	New Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+79fbb8fe-05f9-45c1-9a28-9be90cfc2561	en_IN	ES_SEARCH_BOTTON	SEARCH	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d08ca0d8-996b-4df4-82a5-41a205aa3b73	en_IN	FAILED_TO_UPDATE_COMPLAINT	Failed to update the complaint, please try again later.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+865d11b2-1a74-4fd7-83ba-555b1575d424	en_IN	HR_COMMON_TABLE_COL_DEPT	Department	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+232a767a-1394-4c88-ab2c-feb035e09bda	en_IN	MYSELF	Myself	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+34ee904f-8b5e-4b58-8b86-50f1d82e5652	en_IN	NO_RESULTS_FOUND	No Results Found	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f840a21e-505a-407c-8e4e-b2e6acf94ddb	en_IN	PGR_ACTION_REJECT	Reject Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+02c554c8-58e9-41c5-9e6a-10e0ed9f0da9	en_IN	PGR_ACTION_RESOLVE	Resolve Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b2e34bb6-aeea-4f07-a123-a21c4a0bee8b	en_IN	PGR_CITIZEN_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+50dbd1a9-d440-4a7b-a7f6-22b4ad6974be	en_IN	PGR_CITIZEN_ASSIGN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0a16b42b-3a91-43d2-bfd5-2d7a167ba66d	en_IN	PGR_CITIZEN_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ffb70904-e336-45d5-9421-30290b1c6fec	en_IN	PGR_CITIZEN_REJECT_REJECTED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ea1b165f-bcc7-480e-b128-704eb22fdb5b	en_IN	PGR_CITIZEN_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b9d1e1c-622a-4496-ae3d-6127fd17bbe1	en_IN	PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+07606a4e-5713-4779-8971-7556d7ac1829	en_IN	PGR_EMPLOYEE_ASSIGN_PENDINGATLME_SMS_MESSAGE	Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1862e8b4-02fb-41c3-8643-77f1c2e0fe58	en_IN	PGR_EMPLOYEE_RATE_CLOSEDAFTERREJECTION_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87783dec-81a4-4f11-b09f-c9efa90bf81b	en_IN	PGR_EMPLOYEE_RATE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bbd47790-5f63-4d05-aa42-cd7add5b3b6f	en_IN	PGR_EMPLOYEE_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f09d4e1-671f-4871-b267-83197925e811	en_IN	PGR_EMPLOYEE_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+35b0ed70-51e9-4fd6-8745-8084b664d975	en_IN	PROFILE_UPDATED	Profile is successfully updated	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+311d9eb7-5e0d-4949-a899-8f51aec1b47a	en_IN	REASSIGN	Re-assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7eebaa38-7526-4747-a415-19dea9f6a419	en_IN	REASSIGN_SUCCESSFULLY	Re-assigned Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a3be1dc-17a2-48d3-8219-dd6bdbb82f33	en_IN	REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+35671cc3-6ad0-4209-a2cf-2b19a59fbb63	en_IN	REJECT_SUCCESSFULLY	Rejected Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e141393b-abc8-4b31-9215-0c779261a9ae	en_IN	REOPEN	Re-Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+930149a2-70bd-4b9c-9729-8a69175f2cb1	en_IN	REOPEN_SUCCESSFULLY	Reopened Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3b369ca-6c93-4758-9b38-8b11cc1eab45	en_IN	RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c40a4635-5175-4126-a458-549bb842798d	en_IN	RESOLVE_SUCCESSFULLY	Resolved Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8b636f9f-3890-4520-8c55-b99fb8e4956f	en_IN	CS_COMPLAINT_DETAILS_PIN_LOCATION	Pin Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+69339a66-c165-4a99-9749-f1054745f9a3	en_IN	PGR_INBOX_TAB_MY	My Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+21640cd8-974f-4acd-b89d-39a3b0a587db	en_IN	PGR_INBOX_TAB_ALL	All Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+010db89a-459f-4ee6-9fe1-224a45cfa9c5	en_IN	CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE	The window for reopening this complaint has closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+767980b1-5a6a-4310-be1a-71ddc67539a7	en_IN	ACTION_TEST_LOCALISATION	Manage Localisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7d63b1af-17a6-4cc9-8f9a-0fe02130cfe6	en_IN	ACTION_TEST_MDMS	Manage Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ad95b7d4-1ea3-4f72-813c-776b6b90f817	en_IN	ACTION_TEST_UPLOAD_BOUNDARY	Manage Boundary Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30f8657c-bc3a-4b32-8c06-b0737c012f84	en_IN	ACTION_TEST_WORKBENCH	Workbench	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5ad48912-bc42-4ffd-909a-be1fc6ff3e24	en_IN	ADD_NEW_ROW	Add Row	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+58d87053-c765-4e9b-96e5-4388e50f720d	en_IN	CLEAR_LOC_TABLE	Clear	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dfdffe40-33c3-4be1-9d4c-acd287bf0e0f	en_IN	COMMON_CORE_COLLAPSE	Collapse	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2103070a-6d38-48ab-94c2-545a0dc40705	en_IN	COMMON_CORE_EXPAND	Expand	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32f4390e-c1c9-463b-bd35-6ba78def3421	en_IN	CORE_COMMON_SAVE	Save	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd7da0cb-275c-4f09-9bc7-bacb0138c48e	en_IN	CS_COMMON_ACTION	Action	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c616e8e8-dbcb-46b1-b6b2-40a986393016	en_IN	DUPLICATE_RECORD	Duplicate Record	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9ef716ba-7eb3-4e56-ad4b-1dd4d5df11a9	en_IN	ES_COMMON_CLEAR_SEARCH	Clear Search	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7e4d2e2b-2396-4384-99c3-73f80df75e9e	en_IN	ES_COMMON_ENTER_DATE_RANGE	Enter date range	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae869e64-7a79-4436-9481-af9c1bacdef0	en_IN	ES_COMMON_NA	NA	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bac03644-feca-4372-8b6f-8492e6fdbd1d	en_IN	ES_COMMON_SEARCH	Search	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e85ae0d-df39-4154-b472-f1a839b2a837	en_IN	LOCALISATION_SEARCH	Manage Localisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc7aca9b-7026-497f-8183-e9a709cdb650	en_IN	MDMS_VIEW	View Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1eff1dbb-97ce-4780-8164-8f8f97c0328a	en_IN	UNIQUE_IDENTIFIER_EMPTY_ERR	Unique fields cannot be empty.	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0c29be37-969d-489f-bc42-d3f01b066a29	en_IN	WBH_ADD	Add	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+33e4d79c-5e15-4ea6-9f3a-13b3963d592d	en_IN	WBH_ADD_LOCALISATION	Add New	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+26a35ade-df8e-4241-81ad-de299b4c0d6e	en_IN	WBH_ADD_MDMS	Add Master data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7c79e82f-4f7e-408c-9b71-7bac14ebb2a8	en_IN	WBH_ADD_MDMS_ADD_ACTION	Add data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+697ce72c-2347-4e50-b8c8-eb630e3f889a	en_IN	WBH_ADD_MDMS_UPDATE_ACTION	Update	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4761fd10-9c6c-4a15-9b71-1435afe86ae9	en_IN	WBH_BOOLEAN_VALUE_FALSE	FALSE	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9936ae84-58d0-4206-8442-9959f483014a	en_IN	WBH_BOOLEAN_VALUE_TRUE	TRUE	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a94bbf07-6cd1-4977-9dda-ddedf364e205	en_IN	WBH_BULK_BROWSE_FILES	bulk upload files	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+86b76c38-ab24-4521-9fb2-d49b633ac40c	en_IN	WBH_BULK_UPLOAD	Upload	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+344c159b-c64a-4455-8678-d7a4fa1659db	en_IN	WBH_BULK_UPLOAD_HEADER	Bulk Upload	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+89677165-13ac-462b-adea-ad82a17dd34a	en_IN	WBH_BULK_UPLOAD_SUBMIT	Submit	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15e319df-72a3-42cb-a1b7-3547cb56eef2	en_IN	WBH_CANCEL	Cancel	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecd223c3-47f3-44e0-9301-748f4c65a82f	en_IN	WBH_COMMON_ALL	All	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a6877583-f7b8-413f-ab7c-8ca48ff62408	en_IN	WBH_COMMON_NO	No	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05cb8513-8c2e-42f6-920a-1bbb896f3023	en_IN	WBH_COMMON_YES	Yes	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0723e0d8-a147-42cc-9d27-7454dfcbd66b	en_IN	WBH_CONFIRM	Confirm	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4118585f-8855-4880-b949-ce9d8a2dcb11	en_IN	WBH_DELETE_ACTION	Delete	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ba59393-be92-448f-b8de-9fb99906e08e	en_IN	WBH_DOWLOAD_TEMPLATE	Download Template	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c515a05f-4494-427b-ab68-74f602a44626	en_IN	WBH_DOWNLOAD_TEMPLATE	Download Template	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ce8df1f-122a-4574-82cc-2fec6cbed61c	en_IN	WBH_DRAG_DROP	Drag & drop	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9075b3a8-ebc0-4e83-ad11-0f9e662926a3	en_IN	WBH_EDIT_MDMS	Edit Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae2feece-f5b7-40c3-9293-3dd5d066ce94	en_IN	WBH_ERROR_MDMS_DATA	Error : Error	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fbebe2d3-f7fb-45c7-8024-75a834d01b72	en_IN	WBH_FIELD	Field	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+18dffb38-7bcf-408a-ab61-2174b97b24b5	en_IN	WBH_FIELD_VALUE	Value	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3698933f-b46a-4067-980d-94bedce97faa	en_IN	WBH_INFO	Info	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2ca425f0-c5ca-4b21-8ba9-76f4ed4e2a1e	en_IN	WBH_INFO_MESSAGE	Below is the list of localizations data. Please add or modify as needed.	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+072dc87d-e9ea-4f8e-9878-b90868743ff4	en_IN	WBH_ISACTIVE	Active (Yes/No)	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9df19243-36a5-4952-a267-093cfd9e0ff3	en_IN	WBH_LOCALISATION_SEARCH_HEADER	Localisation Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9cb58929-9b77-4499-a291-8bcf6a320583	en_IN	WBH_LOC_ADD	Add Localisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d10f9f38-3a38-4ac3-9bda-b9f172a8e7c1	en_IN	WBH_LOC_BULK_UPLOAD_XLS	Bulk Upload	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8622e0c-3fbc-4059-9765-8ff41d3d0a6d	en_IN	WBH_LOC_CODE	Keycode	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+89919227-76af-45c6-8d7e-22cef4e0a4d6	en_IN	WBH_LOC_DEFAULT_INFO_MESSAGE	Messages will also be upserted into default locale	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cffd2a1a-a4d3-40c9-9e8e-74cee6b9b190	en_IN	WBH_LOC_EDIT_LOCALISATION	Update Localisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb800c20-1ee8-47fb-b59a-6b5fa0e498c0	en_IN	WBH_LOC_EDIT_MODAL_CANCEL	Cancel	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+07e9dcdd-8244-4ec7-8912-87f72845e54b	en_IN	WBH_LOC_EDIT_MODAL_SUBMIT	Submit	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88387de5-bc08-4c2c-93b2-b3402bdc87f9	en_IN	WBH_LOC_EMPTY_KEY_VALUE_VALIDATION_ERR	Keycode/Text should not be empty	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8dd4e8d-0c73-4180-a421-3fd0be289a5f	en_IN	WBH_LOC_ENTER_VALID_MESSAGE	Please Enter Valid Text	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c3523420-8e86-4b70-8f76-68d553dc62b0	en_IN	WBH_LOC_HEADER_CODE	Keycode	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73e9421b-f7f7-4ac9-9ff0-7ecc05f51b67	en_IN	WBH_LOC_HEADER_DEFAULT	Default Value	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f208fb5-8ddc-46ad-b472-6a964732978d	en_IN	WBH_LOC_HEADER_MESSAGE	Text	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e72b32e5-f5d7-4ecf-96d5-7629b91f44e8	en_IN	WBH_LOC_HEADER_MODULENAME	Module Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8b66d59-acfd-4301-85ba-aeb156d33b4d	en_IN	WBH_LOC_KEYCODE	Keycode	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b26e3522-cbcb-489d-b9dc-b203aa0ec30d	en_IN	WBH_LOC_LANG	Language	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cce55224-493b-4dbd-84af-1cda6bfec45b	en_IN	WBH_LOC_LOCALE	Locale	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24287298-80e8-4671-ad15-53398ee504e4	en_IN	WBH_LOC_MESSAGE	Text	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5bc42566-b6f7-465e-8fd1-fe7ee84bbff6	en_IN	WBH_LOC_MESSAGE_VALUE	Text	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11f0923d-2b74-4a9a-9845-463ba07f6ad6	en_IN	WBH_LOC_MODULE	Module	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b66762b3-773e-4e36-a810-83606c3ee72d	en_IN	WBH_LOC_SELECT_LANG	Select Language	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a1447398-de20-484a-b8f1-72c3fc2474d2	en_IN	WBH_LOC_SELECT_MODULE	Select Module	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+02f5c7e9-a325-4c86-aae5-bb0eef84e9ef	en_IN	WBH_LOC_UPDATE_FAIL	Localisation Update Failed	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7687f117-4d15-4364-a1a3-05c9b4d18127	en_IN	WBH_LOC_UPDATE_SUCCESS	Successfully updated	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f86706c9-8d51-4ea0-8550-b79fe538961c	en_IN	WBH_LOC_UPSERT_FAIL	Localisation Upsertion Failed	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b90e1634-e528-4b5a-8656-7969f0136249	en_IN	WBH_LOC_UPSERT_SUCCESS	Localisation Upserted Succesfully	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90d414c3-b2a0-4995-af83-616aba98bf9f	en_IN	WBH_LOC_WARNING_LOCALE_MUST_BE_PRESENT	Language must be present	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+27f8df1c-8ae0-4675-bc8e-92dd28b2442b	en_IN	WBH_MANAGE_MASTER_DATA	Manage Master data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b33281d-a9fb-4c69-a290-8f5be32aa3ad	en_IN	WBH_MDMS_MASTER_ACCESSCONTROL_ACTIONS_TEST	ACCESSCONTROL-ACTIONS-TEST	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+12cd35c8-9c1c-403a-9361-198ca1add1a0	en_IN	WBH_MDMS_SEARCH_VALIDATION_FIELD_VALUE_PAIR	Please enter both field and value	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2889de39-5782-4e63-831c-0bafdf282bbd	en_IN	WBH_SEARCH_MDMS	Manage Master data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b3951f9-da93-4477-9f49-fee34c4807a5	en_IN	WBH_SHOW_JSON	Show JSON	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0a467568-501d-41c6-af87-f6c935aa7684	en_IN	WBH_SUCCESS_MDMS_MSG	Success : Data added Successfully with Id	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+00707d88-7705-4ea6-b933-4f08b7dc4878	en_IN	WBH_SUCCESS_UPD_MDMS_MSG	Data updated successfully with id	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc927826-3aaa-464f-a911-140d47969cd6	en_IN	WBH_UNIQUE_IDENTIFIER	Unique Identifier	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+44ba3bb4-8b35-4703-89c7-eb56c6f0f1fb	en_IN	WBH_VIEW_MDMS	View Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8feb9ea2-9f74-441a-9c33-54eeb790f498	en_IN	WORKBENCH_ACTIONS	Actions	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+54589392-000c-41f3-94d0-3cb4ad853a82	en_IN	WORKBENCH_HOME	Workbench	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a4b6d04-36c4-47e2-847a-11b4c178d3a9	en_IN	WORKBENCH_LABEL_SELECT	Select	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2cd8459d-6ddb-4d18-a0ee-a08f8d0decd2	en_IN	WORKBENCH_LABEL_VIEW_MORE	View more	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7b4a32fd-3ecc-4b24-89a9-e78524febe45	en_IN	ACTION_TEST_0HOME	Home	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+21e96fc3-0df5-4057-8eb6-e5341c957ee9	en_IN	ACTION_TEST_9MASTERDATA	Master Data	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+12e60d4e-07b9-49ba-909b-5e5a20fc3122	en_IN	ACTION_TEST_9MDMS	Manage Master Data	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49bb163b-aacc-437b-9a8c-69e7cbac66cc	en_IN	ACTION_TEST_9TEST	TEST	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95f0596e-ea8b-4c67-905a-30fa0bd87089	en_IN	ACTION_TEST_ADMINISTRATION	Administration	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+27bfa534-50d1-4481-81ee-eb326ca282be	en_IN	ACTION_TEST_ALL_COMPLAINTS	All Complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+202a9df7-bf16-4389-b9e2-e3aa8a94ae6e	en_IN	ACTION_TEST_APPLICATION	Application	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1a6b0d5-3516-4bbb-bd7a-2d68254c7bc6	en_IN	ACTION_TEST_APPLICATION_STATUS	Application Status	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fc60dc1-3e7b-4cda-adac-05ff4a39c904	en_IN	ACTION_TEST_APPLICATION_STATUS_REPORT	Appliction status report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9813ce07-8de8-4069-9be0-df78df89b39f	en_IN	ACTION_TEST_APPLY	Apply	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7cb28424-63ad-43ae-8dde-2d79760aba4c	en_IN	ACTION_TEST_COMMONMASTERDEPARTMENT	Department	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc57b30a-9dcc-482c-9114-69d1ef707355	en_IN	ACTION_TEST_COMPLAINTS_TYPE	Complaint Types	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+80a0fb65-b5b1-4ce9-95c1-058181a8ca1d	en_IN	ACTION_TEST_CREATE_EMPLOYEE	Create Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8a9424a7-9758-4993-99d5-dd33c8331a7f	en_IN	ACTION_TEST_DEPARTMENT	Department	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68b5a704-f0a2-40ee-9888-663d7b9aa89a	en_IN	ACTION_TEST_DEPARTMENTS	Departments	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39dffa33-2514-468a-8315-45334093000e	en_IN	ACTION_TEST_EMPLOYEE	Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9dbd420-2393-4686-ab3d-50d79af9e8ba	en_IN	ACTION_TEST_EMPLOYEEDIRECTORY	Employee Directory	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d82ddb2-d35b-4b13-9626-4b8e17b8936f	en_IN	ACTION_TEST_EMPLOYEEINBOX	Employee Inbox	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4945486d-6186-4d7b-b15a-d7986a6cd8d1	en_IN	ACTION_TEST_EMPLOYEE_REPORT	Employee Report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8016067-c3f6-459e-8895-cb3f0731bb1a	en_IN	ACTION_TEST_EVENTS	Events	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b9bf3627-3663-43da-a977-5b75e04fe613	en_IN	ACTION_TEST_FAQS	FAQs	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f17f1d3-e33e-46dc-a109-05c5b7cf1366	en_IN	ACTION_TEST_FILE_COMPLAINT	File Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b350bf4-9fc9-4d0b-80b8-b6b6280eb122	en_IN	ACTION_TEST_GRO_PERFORMANCE_REPORT	GRO Performance Report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9247c481-2ae9-447e-92c8-2e08b1462d62	en_IN	ACTION_TEST_IFRAME	iFrame	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a672348a-0154-4bf7-a89b-e218ea6b5600	en_IN	ACTION_TEST_LANGUAGE	Language	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc97db46-c28d-4965-b7e8-987fa48cb050	en_IN	ACTION_TEST_LANGUAGES	Language Selection	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9efba4e5-3790-4a83-b976-720c7e925e77	en_IN	ACTION_TEST_LME_PERFORMANCE_REPORT	LME Performance Report	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4aedcbde-04a5-47de-8c4c-dc723aebe099	en_IN	ACTION_TEST_LOCALIZATION	Localization	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77faf4ab-526d-46c3-be69-00ed97a7a5c9	en_IN	ACTION_TEST_MANAGE_DEPARTMENT_MASTER	Department Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e0903a03-5755-4e1f-955f-34e2431a8b78	en_IN	ACTION_TEST_MANAGE_EMPLOYEETYPE_MASTER	Employee Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+38accd84-a3e6-452f-9b2c-1eb80b29fb79	en_IN	ACTION_TEST_MANAGE_PGR_SERVICE_DEF_MASTER	CCRS Service Def Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10608cfd-e8fe-452e-9662-b6a312af30f4	en_IN	ACTION_TEST_MANAGE_UOM_MASTER	UOM Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+448d950c-042c-4aa0-93fa-4382dee8a39b	en_IN	ACTION_TEST_MYCOMPLAINTS	My Complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+478c88d5-9929-4d10-9176-251468478fff	en_IN	ACTION_TEST_OPEN_COMPLAINTS	Open Complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ad4c0a0a-23f0-424f-a8cc-42b06184ef36	en_IN	ACTION_TEST_OVERVIEW	Overview	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0781fda4-3d01-413b-b394-95e0d45d2e68	en_IN	ACTION_TEST_PGRSERVICEDEFS	Citizen Complaint Resolution System Services	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e451b26a-5db4-4e09-b324-e810760386f9	en_IN	ACTION_TEST_PGR_DASHBOARD	Citizen Complaint Resolution System Dashboard	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c5aba959-3c8f-4ef1-be2a-16f67968e351	en_IN	ACTION_TEST_PGR_REPORTS	Citizen Complaint Resolution System Reports	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3671dba6-7ba2-49ec-bd83-2d5a66989213	en_IN	ACTION_TEST_PGR_ULB_DASHBOARD	Citizen Complaint Resolution System ULB Dashboard	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5cb9aeff-464b-433e-b8fc-73a2968c8cc3	en_IN	ACTION_TEST_ROLEACTIONS	Role Action	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+62006222-502d-4bc9-b82a-3005c539f989	en_IN	ACTION_TEST_ROLES	Roles	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68cda8ef-0734-4cb7-8529-ca092e45ab18	en_IN	ACTION_TEST_SEARCHAPPLICATION	Search Application	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+40de3277-06cc-4c75-b46c-f3003ffcde89	en_IN	ACTION_TEST_SEARCH_COMPLAINTS	Search Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11a4b4e4-2755-4b28-8acd-6d0efcd849db	en_IN	ACTION_TEST_SEARCH_EMPLOYEE	Search Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cf34dbfb-56ab-4e47-bdc8-39b6fe09de4b	en_IN	ACTION_TEST_TENANT	Tenant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2d99e4b2-1044-41a1-9910-8193dc3e233b	en_IN	ACTION_TEST_UPDATE_DEPARTMENT_MASTER	Department Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c02807df-db16-4b03-b641-818ddd6e55c2	en_IN	ACTION_TEST_UPDATE_EMPLOYEETYPE_MASTER	Employee Type Master	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+56d06724-3e52-4bc8-9215-0701cf2c5457	en_IN	ACTION_TEST_UPLOADER	Uploader	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c7046f8c-318d-483d-a707-63aa7cfbb131	en_IN	ACTION_TEST_UPLOAD_BUDGET	Upload Budget	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30200ce3-33a0-44dd-9a02-356e80f49c74	en_IN	ACTION_TEST_CLOSED_COMPLAINTS	Closed Complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+22c068c3-a64f-4fac-a39a-3d716a7e886e	en_IN	ACTION_TEST_NATIONAL_PGR	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+991e6196-dcd6-45b2-8dcb-e712cc6fc7de	en_IN	ACTION_TEST_MANAGE_DEPARTMENT_MASTER	Manange Department Master	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15cc5f87-0391-42c8-9602-47b76f3fac6c	en_IN	ACTION_TEST_MANAGE_EMPLOYEETYPE_MASTER	Manage Employee Master	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+974bde89-95fe-4578-b66e-fa24a6850c2f	en_IN	hrms.employee.create.notification	Hi $employeename, Welcome to mSeva. Your profile has been successfully set-up : Username - $username Password - $password, Thank you.	pg	egov-hrms	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f779d78-8dcb-4030-9665-9f608c3e9c94	en_IN	hrms.employee.reactivation.notification	Dear <Employee Name>,\nYour profile with employee Username <Username>has been activated on <date>.	pg	egov-hrms	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c7895377-72a1-4d3f-b696-7a5a9ffd241c	en_IN	ACCESSCONTROL_ROLES_ROLES_CEMP	Counter Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84f8fcdf-7781-416f-a116-c09c19677484	en_IN	ACCESSCONTROL_ROLES_ROLES_EMPLOYEE	Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6eda3f93-cfdf-442c-9653-c3c01312951b	en_IN	ACCESSCONTROL_ROLES_ROLES_EMPLOYEE_ADMIN	EMPLOYEE ADMINr	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4776c0c-56a8-4199-82dc-981678be7ce3	en_IN	ACCESSCONTROL_ROLES_ROLES_GO	Grievance Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+740e55ab-e5c6-4d90-9b9b-324edd1f70ff	en_IN	ACCESSCONTROL_ROLES_ROLES_GRO	Grievance Routing Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6fb86ec2-0d44-44af-b5b4-134e1fa2a03a	en_IN	ACCESSCONTROL_ROLES_ROLES_HRMS_ADMIN	HRMS ADMIN	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+23a5043c-3e09-49fc-894f-7cef6480c7df	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR-ADMIN	PGR Administrator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+58f98493-a7f3-4f4e-b9d7-7426f31d6183	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR_ADMIN	CCRS Administrator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe997f1c-9268-420c-8eea-afd115fd11f9	en_IN	ACCESSCONTROL_ROLES_ROLES_PGR_LME	CCRS Last Mile Employee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9afdc1ae-fb19-43a4-80ff-1b2a736b0908	en_IN	CATEGORIES_OF_COMPLAINT_TYPES_CAN_BE_SUBMITTED_ON_GRIEVANCE_PORTAL	categories of complaint types can be submitted on grievance portal. 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d83ed1b-d646-4f36-bd54-ef75b29fd3f5	en_IN	CCF_COLLECT_THIS_DATA_INFO_LABEL	We collect data directly from you (when you use our services) as and when you register and login into the app/website. We may also collect data from Union, State, and Local governments, including their agents/employees, as well as receive data that is available openly for public use.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+234baa93-5b02-4a35-a0c6-1563611bbc0f	en_IN	CCF_PP_DO_WE_COLLECT_THIS_DATA_INFO_LABEL	We collect data directly from you (when you use our services) as and when you register and login into the app/website. We may also collect data from Union, State, and Local governments, including their agents/employees, as well as receive data that is available openly for public use.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+effb8c94-7c91-4b62-b57c-d2ecc46c1d54	en_IN	CCF_PP_GRIEVANCES_INFO_LABEL	In case of any grievances, you may send your complaints for redressal over Grievance Portal available at 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a8fa841-ad33-4556-9592-b8995ec885bf	en_IN	CCF_PP_GRIEVANCES_INFO_LINK_LABEL	Link	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f31fcea-4f8b-417f-b787-7947248604b5	en_IN	CCF_PP_GRIEVANCES_LABEL	GRIEVANCES	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3051f789-05fa-4ca0-9ec2-b9a4e15e1e20	en_IN	CCF_PP_HOW_DO_WE_PROCESS_INFO_1_LABEL	We use this data to serve you with the best civic experience, such as providing digital grievance redressal systems, efficient service delivery, creating dashboards of ULB activities, etc. Data is only processed on the basis of a legal mandate and for a legitimate and necessary purpose (to deliver to you the services you are requesting, and to make improvements in service delivery and administration, as well as any other purposes specified by law).	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3d840cff-7bd2-44fd-b91a-a0ffcfd60809	en_IN	CCF_PP_HOW_DO_WE_PROCESS_INFO_4_LABEL	We may disclose or share this data to/with employees and/or contractors of the urban local body, state government, or other government agencies, service providers, whose role requires them to view or use this information in order to perform their official duties, including providing you the service(s) you are requesting.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4462926c-6a2a-4797-854d-85023c1d3366	en_IN	CCF_PP_REFERS_LABEL	Through PROGRAM NAME, you can access and avail services offered by STATE OR ULB NAME Government departments, Central Government department, Local bodies & their agencies and corporate/private bodies (utility services) (Service Providers). You can use PROGRAM NAME website / application / services in different ways such as, service discovery, availing services, registering grievances, and so on.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ded0df3d-891d-4a78-ad40-1473ef3d4b32	en_IN	CCF_PROCESS_DISCLOSE_SHARE_EMPLOYEES_LABEL	We may disclose or share this data to/with employees and/or contractors of the urban local body, state government, or other government agencies, service providers, whose role requires them to view or use this information in order to perform their official duties, including providing you the service(s) you are requesting. 	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2cc048fc-374d-469c-8d7a-d7dfd95afc3b	en_IN	CCF_PROCESS_DISCLOSE_SHARE_INFO_LABEL	We use this data to serve you with the best civic experience, such as providing digital grievance redressal systems, efficient service delivery, creating dashboards of ULB activities, etc. Data is only processed on the basis of a legal mandate and for a legitimate and necessary purpose (to deliver to you the services you are requesting, and to make improvements in service delivery and administration, as well as any other purposes specified by law).	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49bf29ae-e4e2-47ad-b92f-2c2ef0308c7c	en_IN	CITIZEN_CONSENT_FORM_PP_ACCESS_AVAIL_LABEL	Through PROGRAM NAME, you can access and avail services offered by STATE OR ULB NAME Government departments, Central Government department, Local bodies & their agencies and corporate/private bodies (utility services) (Service Providers). You can use PROGRAM NAME website / application / services in different ways such as, service discovery, availing services, registering grievances, and so on.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d0d1dba-0e55-4013-a0a1-808add10a53b	en_IN	COMMON_ASSIGNEE	Assignee	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1941bf31-06c1-4dec-b142-5007c5c56b8c	en_IN	COMMON_DESGN_OF_OFFICER_IN_CHARGE	Designation of officer In-charge	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+671acedc-3e80-449b-9004-a35494fb238b	en_IN	COMMON_INBOX_ASSIGNED_TO_ALL	Assigned to all	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d15d023-8bfb-4e5b-a426-45f40608b638	en_IN	COMMON_INBOX_ASSIGNED_TO_ME	Assigned to me	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7b736510-459f-4429-9ef4-33b12d547da2	en_IN	COMMON_INBOX_TAB_ASSIGNED_TO_ME	Assigned to me	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+089a9021-b01b-453a-aa57-b80a1cd2b713	en_IN	COMMON_MASTERS_DEPARTMENT_ACC01	ACCOUNTS	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a374d9c4-9df1-40bc-a361-98b3b2dabd5d	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_10	Help Desk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc7933c9-3383-495e-a3ef-844c5d93b7cd	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_11	Housing and Urban Development	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7e44fd1c-8cfb-4415-a22d-4f5f8b9a112c	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_12	Birth and Death Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+51a7451d-45a8-4119-9bfe-36cd95e8e698	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_13	Tax Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+36573aa3-a024-49d0-bca2-2a5c502460b4	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_14	Civil	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d2851c8f-0876-49d0-91da-6c8ae74903e2	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_15	Engineering Branch (O&M - W&S)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b5e28b2-471f-492a-a49f-5738ddddddfa	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_16	Health Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a64b3084-eedb-4a5b-8d6c-0601e7f097e9	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_17	Tehbezari branch (Encroachments)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+565120fe-dd8f-475c-beed-f7db17548ec1	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_18	Engineering Branch (Electrical)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d5c1985-21d1-4cca-9616-b9b28bc573c4	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_19	Advertisment Tax Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+72d3941b-f47f-4837-82cb-dc9abce237fb	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_20	Complaint Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d7e64b3f-17f5-4faf-8046-54c0f6bcda9d	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_21	Sanitation Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+529ff5d0-a038-4ff4-b429-4b44bab5e8c5	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_22	Engineering Branch (Mechanical)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7ee74b40-a0a1-47fa-9d64-9febc2605f7d	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_23	Tehbazari	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4da8ac1c-5790-4163-b55c-9ba50becdd9b	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_24	Fire Brigade	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+020557b1-5d09-43fd-b17f-f61d2f67b17d	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_25	Accounts Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e508b89c-5f4a-46af-be7b-36857d597010	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_26	Rent	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+54775a01-0f9b-459a-ab6f-706e2aaed0be	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_27	License Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+053aa9f8-1f41-41ea-8407-5bdc888769b8	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_28	Property Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6afc83a8-8007-4206-9602-bf514b3ea1c9	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_29	Receipt and Dispatch Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b771d1c-65d4-4225-a7f0-9b9fb6101d63	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_30	Tehbazari and Property Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7ddde181-e3d2-41f0-a171-d0eb45953d5b	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_31	Pension and HFA etc	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ce7e5546-fc3a-40ed-860a-2a2ace482804	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_32	Land Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e9bec0e9-48d3-4a04-ad5f-2e2caaa1f62b	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_33	Property Tax Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ebb4624b-56e4-4e91-8a7c-a7475e7a2f40	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_34	Establishment Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ebc7a2e9-b9b7-4877-8c35-9f49322b9874	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_35	Works Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+573480ee-4d7b-4fb0-8ec2-1a21e3bbbfc9	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_41	Water Supply and Sewerage	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1451d94e-c217-4082-a041-d7ea6fc3a8f2	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_42	Executive Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+62647478-469c-4796-9e10-7d18d7883423	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_43	Property and House Tax	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5c9b9bef-f08f-49b7-a174-99430575f2e5	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_44	Purchaser Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d3c13f5-54b3-4120-a8cd-11534db6ae96	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_45	Engineering Branch (Civil - B&R	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6568a023-3c18-4f73-a0e5-f65501933d07	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_47	Property Tax & Rent & Tehbazari	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6acba763-307a-4f31-9bc2-b6fc5efc0e53	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_49	BPL	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+588de9ed-d028-450b-aa8e-8bb692473349	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_51	Executive Agency	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ffa5e73-a87d-4b32-97f7-c0fbb0d2bcb1	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_52	Library	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84a0fb7a-b143-4e1d-ba20-17f0e6ae48b2	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_6	Building Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+005d01ac-8e29-4ffc-b6ca-c0bcb7a8ac45	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_7	Citizen service desk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fed69d3-30a5-4111-b6fb-560d716d6e02	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_8	Complaint Cell	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+be3db2af-0cac-4a53-a9fe-e39ca2608c64	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_9	Secretary/General Administration Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c6f0353c-7fa9-4719-a732-929b5aa95eec	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_LG	Legal Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73764673-703f-4261-aafd-2a04d9a1d86e	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_TP	Town Planning	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+593a9701-b81a-4080-a1ab-185293c7027d	en_IN	COMMON_MASTERS_DEPARTMENT_ENG	Accounts Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87a54293-9a60-4baa-be37-3a8d1115afe9	en_IN	COMMON_MASTERS_DEPARTMENT_PHS01	PUBLIC HEALTH AND SANITATION	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7415d54-cc12-4784-9dbb-272bbaad7d5b	en_IN	COMMON_MASTERS_DEPARTMENT_PWSSB	PWSSB	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a877c11-605a-43c0-89a4-49bf9b249544	en_IN	COMMON_MASTERS_DEPARTMENT_REV01	REVENUE	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8fa5247-dc93-4f91-ae4c-1a4edfbec4fd	en_IN	COMMON_MASTERS_DEPARTMENT_TP01	TOWN PLANNING	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5c8c5f99-5e06-4f4c-88db-5e3180e0e4ee	en_IN	COMMON_MASTERS_DESIGNATION_ACC_AO	Accounts Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e23f8ce-fc8d-46b9-8ec8-e75b8e7bbd03	en_IN	COMMON_MASTERS_DESIGNATION_ACC_JAO	Junior Accounts Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+17d9e0ef-8fbe-405b-8d1d-6ccdbecab51a	en_IN	COMMON_MASTERS_DESIGNATION_ADM_ADMC	Additional Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc6b5554-c672-44a8-9211-b4d3cd9baef5	en_IN	COMMON_MASTERS_DESIGNATION_ADM_AEO	Assistant Executive Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d2334a9-9a89-4f01-babc-3ea921631fee	en_IN	COMMON_MASTERS_DESIGNATION_ADM_AMC	Assistant Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6d1c06cf-886e-45b2-9887-ab9cbd0ce11d	en_IN	COMMON_MASTERS_DESIGNATION_ADM_DMC	Deputy Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb9a5a16-a650-4a69-ab76-bc62823c8a88	en_IN	COMMON_MASTERS_DESIGNATION_ADM_EO	Executive Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+afb87014-13fb-4b1d-8043-fb63f9731b36	en_IN	COMMON_MASTERS_DESIGNATION_ADM_MC	Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a2e599c5-0ff4-4b33-bf8d-8c4f7489de35	en_IN	COMMON_MASTERS_DESIGNATION_ADP01	Assistant Director, Planning	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc784286-69fa-468a-ac75-4262bccb4dd1	en_IN	COMMON_MASTERS_DESIGNATION_AE01	Assistant Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f5149bff-6f74-4362-91f4-d7e23ea08ede	en_IN	COMMON_MASTERS_DESIGNATION_AHDO01	Assistant Horticulture Development Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9cca74dd-4c03-4850-9025-ba4cce0cd4ae	en_IN	COMMON_MASTERS_DESIGNATION_AHO01	Assistant Health Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bf6f5176-8c2d-4f3b-9316-8791668e1cb0	en_IN	COMMON_MASTERS_DESIGNATION_AHO02	Animal Husbandry Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5678c8e8-27e4-4b91-adfa-adf56ead062a	en_IN	COMMON_MASTERS_DESIGNATION_AME01	Amen	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ed221f57-bca8-4d76-ab78-b0a2a3585625	en_IN	COMMON_MASTERS_DESIGNATION_AO01	Accounts Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab9298cf-c109-4728-92bb-00cca85ece7f	en_IN	COMMON_MASTERS_DESIGNATION_AVEO01	Assistant Vigilance and Enforcement Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c7b1e53c-4f62-4754-b53c-6cf1a4d2ee75	en_IN	COMMON_MASTERS_DESIGNATION_CCI01	Chief Cleanliness Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a091960-17ba-4067-a593-faca538ca2ec	en_IN	COMMON_MASTERS_DESIGNATION_CE	Chief Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+71bd9b37-1fc3-4f22-976b-fd75a9751796	en_IN	COMMON_MASTERS_DESIGNATION_CI01	Cleanliness Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+72bbb4a4-aaa1-4571-9182-5b5b3ef86f19	en_IN	COMMON_MASTERS_DESIGNATION_CLERK	Clerk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da6f9808-cf01-4efc-9a82-3d8c33c5e73d	en_IN	COMMON_MASTERS_DESIGNATION_CMFA01	Chief Municipal Finance and Accounts Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9cfff39b-3556-4cbb-ad93-df2ed010175c	en_IN	COMMON_MASTERS_DESIGNATION_DDPA01	Deputy Director, Planning and Architecture	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7ca7ff46-119b-4f08-8d09-49919223fcdb	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_01	Superintending Engineer ( B&R)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa8a4478-fc36-4524-bc59-d63e9bdd083e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_02	Corporation Engineer (B&R)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+eee8b2b0-bd46-4f07-b687-721c1be4f3a6	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_03	Asst. Engineer ( B&R)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+315820fb-21e3-4264-98da-7d53f2c15f08	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_04	Junior Engineer ( B&R)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f5a120a5-b5f1-42c2-b808-301bf1860372	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_05	Land Scape Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+594b230b-0d56-491c-aac5-0fc776066f60	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_06	Superintending Engineer ( O&M)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+97d6cd9c-781d-444d-8193-71708a7d83e3	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_07	Corporation Engineer (O&M)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f54df226-1c2b-45e8-895a-48afa4bbed7e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_08	Asst. Engineer ( O&M)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+63ac5802-a923-42e5-a629-72303f5bcefc	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_09	Junior Engineer ( O&M)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+48f32cc6-3000-4cf1-89b1-18a1826dac4b	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_10	Superintending Engineer ( Light)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1413882b-7636-458e-8d04-7c835b573ebd	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_1001	Deputy Controller Finance and Accounts	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6e2ffeed-7916-437c-a8b5-c4aaeeb0a28a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_101	Steno	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5cc18113-c63b-46d1-a32f-06d157793731	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_102	Plumber	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+baae92c7-bf42-49e2-9915-92d13a82a456	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_103	Pump Operator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d66e65a3-6db0-4e78-aa41-2108d3dc48a2	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_104	Court Clerk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+961d547c-dcc9-4df1-833d-db537b3765fc	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_105	Fitter Coolie	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e21146e-d939-485a-8c53-bc6c96aacf88	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_106	Sub Divisional Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5542187f-0d09-490d-a9c4-ed5cccf04204	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_107	Sub Fire Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66e346ef-306a-4e13-b16f-ad6fd65b360a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_108	Restorar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2007fa90-83a0-42c8-b5d2-0c9072fae764	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_109	Senior Scale Stenographer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aa237b83-e02c-47e6-bb54-dfe7e2d652d5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_11	Corporation Engineer (Light)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d2aed353-e520-4e3f-8441-d5674dbb78c1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_110	Mali-Cum-Chounkidar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3bf3b449-40c7-4813-b69e-6cb5ece1a3fb	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_111	Mali	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ddbca80-2c95-4994-8815-6f0bb903b015	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_112	Beldar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+76d562ee-93ab-4e63-b839-b165a8506fa6	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_113	Sanitory Supervisor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+97b0cd15-8a97-4355-b62e-3d21ae1e5738	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_114	Fiter Cooli	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8dd674ce-4f70-4e3a-9a0b-cec6ff87e2e5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_115	Junior Technician	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d289f9e9-87f9-4366-8069-b14786d8987c	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_116	Sewerman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f531168-deb7-4442-9565-8f2f669f4f07	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_117	Steno/Personal Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df85eb49-b38c-4abe-a2d1-e9e551baa8fe	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_118	Architect	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b046b34-89fc-45ff-97af-9fb2ef7685da	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_119	Site Engineer/Contractor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+57262be2-620f-40f9-bf00-12cc5399f747	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_12	Junior Engineer ( Light)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bcf2518f-6be5-44c9-b282-8a459bd70ec1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_120	Tractor Driver	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6baa8ae1-9d99-463a-8fdc-f1823403b9ba	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_121	Trolley Man	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae529290-3836-4767-b0c9-e94cad3053c5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_123	peon	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+97009898-9525-40d7-8d4a-3348807e3142	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_124	Bill Distributor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+58d9923a-c5d1-4aed-8d7f-32e635239cd3	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_125	Sewadar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+813fdfd5-a162-4abf-ba4c-e1bc0779053e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_13	Health Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bfdee657-b884-4b14-b978-6ef5855a9d6a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_14	Medical Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24bf947d-0696-40af-a68d-544c7eaa1d70	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_15	Chief Sanitary Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fb554fb3-e3df-4132-8e50-fcbb54a40a6c	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_16	Sanitary Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+67b3d7f7-4143-4d30-8c16-5a7fb8431098	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_17	Sanitary Supervisor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bdbc632a-e605-4822-9e99-0bf10bf4c177	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_18	Senior Town Planner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8f7802a6-1db4-48ae-8c2b-90e26b520f02	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_19	Municipal Town Planner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+96d0bb23-e11a-40ce-8c18-522281fda65e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_20	Asst. Town Planner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c48721b6-b8ee-4494-ad02-439168dffb65	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_21	Building Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cce79b4f-3f7e-4d7e-86fb-f3bca745cc96	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_22	Junior Enginer ( Horticulutre)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+875484a3-246a-438b-bd6c-1ca4e00d188a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_23	Citizen service representative	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+042dbd7c-aa00-4302-ac44-73d1e67dd7c1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_24	Assistant Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fb7715f5-ea5e-42fd-bd1c-7c012cc99bd5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_25	Assistant Engineer (Light)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af5be5a3-d8a4-46ae-aac9-1cc74798b64e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_26	Secretary	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68a717fe-b9f4-4552-97ab-1cc2fe2f3110	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_27	Computer Operator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a32b6e96-605b-48ad-92f6-f580d92433b5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_28	In Charge/DBA	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3eddb52-7026-44de-8887-3688f4df47a1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_33	Baildar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b2c37f6-b945-414a-8201-3a70ad23d132	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_34	Junior Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13c217fc-ec37-4653-88ba-13509aa38994	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_35	Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+50c52a49-6fea-4497-8c5a-1c2491d971d8	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_36	Assistant Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a43e0366-fab9-418f-874f-8f4ee5764aa0	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_37	Surveyor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c28241bd-9ac6-4a28-a083-f24c397e7cb2	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_38	Assistant Corporation Engg.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1d0bdd0-578a-4051-9a12-750d0e765be5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_39	Head Draftsman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1739558c-6d49-47ff-aefc-ea205cc198b2	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_40	General Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d1b8209-d46e-4094-adce-7f0614a054db	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_41	Draftsman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+588f507f-105c-49b6-a12e-171ef4330b04	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_42	Superintending Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e49d0bf0-fc61-47b5-9bfa-829726727a7c	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_43	Superitendent	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7434d273-c282-4e29-9d7c-9487374b937e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_44	Junior Draftsman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73f5979b-86df-4512-9766-ab8b7dcef69a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_45	Assistant Town Planner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9a9e0b9c-afdf-4b28-b2e4-e1cee5bb3c03	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_46	Building inspector(Technical)/Draftsman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dd506d43-e2b3-4d16-b919-21c379b96c9e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_47	Superintendent	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+271b8e1d-7d68-42c0-8d0d-1cdb88a4e655	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_48	Data entry operator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+eb1edd13-bbfb-4396-9b7d-0859977d9b1e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_49	Assistant Municipal Engineering	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d5f8f64a-08c7-4efd-b7b6-31f4b77cec71	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_50	Sanitary Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3702319d-2bac-4d21-b760-c6caa86e1319	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_51	Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7776af17-22f9-4833-8d24-8f3b633d6ec4	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_52	Municipal Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d4897e98-73f5-46a4-9aa5-402cd475a236	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_53	Executive Engineer/Municipal Engineer/Corporation Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+94e79426-7ed1-4e3f-9b27-d608bdd2a10a	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_54	Junior.Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e35ac7d5-f58d-4ee2-9c8a-56ed63f89943	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_55	Fireman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b16d0a0d-9e1d-468a-90b7-4c5b17839b26	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_56	Deputy Controller (Finance & Accounts)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+036a1b67-7093-4dfc-b4ee-fb98e74268f8	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_57	Corporation Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f1ae075-21ff-4458-aa58-b9b9f354cad1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_58	Accountant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ff93d900-5882-44dc-a7d7-0afa059e92a1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_59	Sanitary Supervisor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7f542d6-1a68-4f45-aebe-b6484cdbd7b3	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_60	Draftman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f879724-6379-470b-960b-d4cb9435d205	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_61	Data Entry Operator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+52f2b969-c376-48de-8210-4ab134ead15d	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_62	Inspector/Senior Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d361fe93-c967-417a-9350-6dbd6b3fcbc4	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_63	Fire Station Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+62734f4e-37b4-47a3-9bc6-bf0f192efe79	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_64	INSPECTOR	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+893fa114-30ff-4bc3-a260-ba5fb444ef5d	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_65	Assistant Corporation Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8999521f-ccdc-4a67-af72-dbab4c18818c	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_66	Computer Programmer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85cbd413-dfdb-4938-9a67-8c4118f4b4bc	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_67	Corporation Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6755b9ff-6e1a-4a7c-8d79-7121a7b87146	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_68	Asistant Commisstioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3885977-2d68-46e8-b7a2-b587c94f90b4	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_69	Executive officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa9fb208-a0ae-48b2-8890-06526b0cc6f9	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_70	ALM (Assistant Line Man)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7b3e65ef-b200-4306-a42e-ccab50a76ec1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_71	Sub-Divisional Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10d34b4f-e8d0-48c7-a9a6-273644e52efd	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_72	Supervisor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+27b762b2-2024-4800-8a77-ceec2519b26d	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_73	GIS EXPERT	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8e300f5-dd21-47d8-aef3-9d8be0459b8b	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_74	Local Registrar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+44f6f2a0-1704-451f-8112-61b2bbc112f8	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_75	Tax Collector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fdd7345-d533-4fff-ad77-776f9945315d	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_76	Building Superintendent	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5acf9fb9-9adb-4645-8889-590a86800209	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_77	Sanitory Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3280b9f1-c340-492e-8ef1-257a2bd253b7	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_78	Additional Local Registrar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+125c103d-3eca-4f3b-ac19-d48cac09fd6e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_79	Superintendent Engineer (Councils)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2cfa8f41-6b4d-4e61-9fa4-c2e025818c03	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_80	Senior Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a976adf6-a758-4b01-a97a-a45ce380dccf	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_81	Chief Sanitory Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4143c980-e5ea-4430-b2d9-02c0437a66c5	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_82	Sub Registrar	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1a761030-0e33-465e-9b64-0775a0160fe1	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_83	Legal Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85d2382a-ed16-4c05-bf51-cdde3258515b	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_84	Electrician	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e07e45b7-dc64-4cd0-b9c6-06511958a90f	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_85	Assistant Municipal Engineer ( Civil )	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+89f265c3-7561-475e-aa17-ee794cf2c24b	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_86	Junior Engineer (Building)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88ee3f68-b376-4ca0-956b-572398424bf0	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_87	Computer in Birth and Death Branch	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+25aa7881-75ac-4527-92d0-81489cbcf0e4	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_88	Junior Engineer (Electrical)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a6ded2d1-d84d-4465-be7c-895ba3fff8c8	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_89	Executive Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f3401d2d-5d30-4958-a1d7-86790df3c0c7	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_90	Peon	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0044f772-5a49-4a77-ad3f-a86ef75f20f6	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_91	Municipal Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+aa5790a3-eb2f-43ed-b18b-084df0437111	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_92	Driver	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2ddad354-774b-4ee0-87c7-0b5e5a9e673e	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_93	Sectional Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db215fcf-257c-40f3-9206-216b6aa08293	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_94	Sweeper	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ac4a5a95-9a51-4045-8aad-2103e5e9a191	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_95	Watchman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6f636184-5905-4f67-a44e-5c1fab3f0cb8	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_96	Pump Opertor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0f9ff504-d1bf-4dc4-908f-23d468fed5e9	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_97	Clerk-cum- computer opertor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+49faf763-83f1-4155-b9a8-bf0fd79b3b8f	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_98	Assistant Municipal Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3cb1126-d083-4501-bc76-85899b0c3ea2	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_99	Assistant Pump Operator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9c9ae88d-0fcb-46ae-a60e-c2a83209c7b8	en_IN	COMMON_MASTERS_DESIGNATION_DPA01	Director, Planning and Architecture	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e33346c6-0fec-49de-8083-26c663222ce7	en_IN	COMMON_MASTERS_DESIGNATION_DRAFT01	Draftsman	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+346a4b90-2db8-4699-97df-66e9961ef4cc	en_IN	COMMON_MASTERS_DESIGNATION_EO01	Enforcement Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+43cf81e3-049b-436e-bfcf-48ffefbc83f4	en_IN	COMMON_MASTERS_DESIGNATION_EO02	Executive Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28c6be64-46d1-45d3-824c-1704a7c04412	en_IN	COMMON_MASTERS_DESIGNATION_FO01	Finance Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bde39719-0d14-4a45-8898-7fda6bda61e9	en_IN	COMMON_MASTERS_DESIGNATION_HC01	Head Clerk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+851b6968-d4ba-4496-ae08-1430fc1871ad	en_IN	COMMON_MASTERS_DESIGNATION_JE01	Junior Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0f63acf-0250-4818-8fdb-ec5adc644ad6	en_IN	COMMON_MASTERS_DESIGNATION_JE_PWSSB	Junior Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e1d3c3f-4a7b-4a90-9a1d-43ec6cb981f0	en_IN	COMMON_MASTERS_DESIGNATION_JMC01	Joint Municipal Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84ff6936-7c78-4303-9940-a7214f7c191a	en_IN	COMMON_MASTERS_DESIGNATION_LDC01	Lower Division Clerk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5bc1237c-1914-4787-a46c-be4315c56496	en_IN	COMMON_MASTERS_DESIGNATION_MA01	Municipal Administrator	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+839cc2e3-094c-4238-bd17-a7c238c651f7	en_IN	COMMON_MASTERS_DESIGNATION_MCS01	Municipal corporation Secretary	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+62c3a8ba-1ff5-4362-a5b3-c044fd8762ef	en_IN	COMMON_MASTERS_DESIGNATION_MS01	Municipal Secretary	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3dc542e9-cc34-4d3c-84ee-6200db1dd91e	en_IN	COMMON_MASTERS_DESIGNATION_OS01	Offices Superintendent	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6bc7a078-338b-46f2-9c09-12b01d043db5	en_IN	COMMON_MASTERS_DESIGNATION_RI01	Revenue Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+403c2d5c-e5e1-4983-821b-2c46a55445e0	en_IN	COMMON_MASTERS_DESIGNATION_RO01	Revenue Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05c09247-3657-4619-bac9-6480cd328e32	en_IN	COMMON_MASTERS_DESIGNATION_SAMC01	Senior Additional Municipal Commissioner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+de792049-9699-42d0-9d7f-8dfdddcbe29c	en_IN	COMMON_MASTERS_DESIGNATION_SDO_PWSSB	Sub Division Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5805f30d-07a9-4bc4-8d83-6968b109e517	en_IN	COMMON_MASTERS_DESIGNATION_SK01	Store Keeper	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73ec5914-be83-4aca-a6bb-ca495df3051b	en_IN	COMMON_MASTERS_DESIGNATION_SUR01	Surveyor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+012bc3a9-3e79-4087-ad30-9ba89517c8aa	en_IN	COMMON_MASTERS_DESIGNATION_TA01	Town Architect	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ccd597df-6541-462f-84a8-a2e027b0115a	en_IN	COMMON_MASTERS_DESIGNATION_Tax	Ward Officer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7892e6d-7292-4663-ba91-25963f9ea941	en_IN	COMMON_MASTERS_DESIGNATION_UDC01	Upper Division Clerk	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+019823e0-3cee-40d5-85a3-fcfc5ff7abe5	en_IN	COMMON_MASTERS_DESIGNATION_WIR	WIR	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db686521-27ee-48c0-a8b4-374b4aab6a55	en_IN	COMMON_MASTERS_DESIGNATION_WRK_ACCE	Account Expert (MUKTA)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d4f2fe9-7d89-401e-8a40-7e53e26a47f5	en_IN	COMMON_MASTERS_DESIGNATION_WRK_AE	Assistant Enginner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f228978b-4390-49a0-ab8f-0bcd2a387ed4	en_IN	COMMON_MASTERS_DESIGNATION_WRK_AEE	Assistant Executive Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b89b2c6-ae4f-4750-86a8-904ffb342b3b	en_IN	COMMON_MASTERS_DESIGNATION_WRK_AM	Ameen	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5b29005b-a343-4006-9942-b43437d5b138	en_IN	COMMON_MASTERS_DESIGNATION_WRK_CE	City Enginner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5ee6766a-4f25-463f-b1bf-f20687296bba	en_IN	COMMON_MASTERS_DESIGNATION_WRK_DA	Dealing Assistant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+caedc114-8352-499e-a480-b23736e9a7dd	en_IN	COMMON_MASTERS_DESIGNATION_WRK_DEE	Deputy Executive Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a5f9e3d2-bd7d-419e-86c2-76fd367fc1ad	en_IN	COMMON_MASTERS_DESIGNATION_WRK_EE	Executive Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d87169c5-5c18-443e-82c9-fb424b5d66db	en_IN	COMMON_MASTERS_DESIGNATION_WRK_IE	Implementation Expert (MUKTA)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2725845-a127-44b3-a44b-1e61adcf602c	en_IN	COMMON_MASTERS_DESIGNATION_WRK_JE	Junior Enginner	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30d5aa64-92bb-4ca2-a014-da0950550c3a	en_IN	COMMON_MASTERS_DESIGNATION_WRK_ME	Municipal Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ac2b002-3768-4f37-b0c4-5dae83af86ba	en_IN	COMMON_MASTERS_DESIGNATION_WRK_PC	Program Coordinator (MUKTA)	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3a812a7-49ee-4f4d-a459-b0ebb85347cb	en_IN	COMMON_MASTERS_DESIGNATION_WRK_RI	Revenue Inspector	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+775d1eac-78cb-48f6-b97d-115e62441ed1	en_IN	COMMON_MASTERS_DESIGNATION_XEN_PWSSB	Executive Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30c62cb1-5e73-4ec9-b3cc-e7bdfe2ca61f	en_IN	COMMON_MASTERS_OWNERSHIPCATEGORY_INSTITUTIONALSOCIETY_SELFHELPGROUP	Self Help Group	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f17116da-cc74-48e9-a1ef-1172dc9fcaba	en_IN	COMMON_MASTERS_OWNERSHIPCATEGORY_SOCIETY_SELFHELPGROUP	Self Help Group	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+59f8bb77-f197-4bdf-adc4-39144d91bb90	en_IN	COMMON_MASTER_DESIGNATION_WRK_EE	Executive Engineer	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0fd972a2-3aac-434d-bcb7-7c8b71eb5bfe	en_IN	COMPLAINTS_RESOLVED_IN_LAST_30_DAYS	 complaints resolved in the last 30 days	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a3d42a1-5500-4461-88bc-4fc0567c6828	en_IN	CORE_COMMON_SEARCH_COMPLAINT	Search Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+be8fa8d5-ddef-4bf4-b843-6ebb78d3fbc0	en_IN	CORE_LOGIN_USERNAME_PLACEHOLDER	Enter your Employee ID	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ddb54d9f-47df-4849-b0ef-e729b0fcf800	en_IN	CS_ACTION_ASSIGNEDBYAUTOESCALATION	Assigned by auto escalation	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+30abbe36-9a0d-4fc6-abdc-f69bc5d942f4	en_IN	CS_ACTION_CLOSERESOLVEDCOMPLAIN	Close resolved complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+75b46c48-6de6-4a59-8da5-8f36650c6951	en_IN	CS_COMMON_EMPLOYEEOTP_CHANGED_PASSWORD_SUCCESS	Password changed successfully!	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ffe0f22-ab1b-443a-9dd5-2dfc161ef63a	en_IN	CS_COMMON_INBOX_PGR	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85abe39b-8ac0-4af3-b9b3-84dfcf5b46bf	en_IN	CS_HEADER_MDMS_COMMON	MDMS	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bf8d11cc-28e8-4d13-bca6-d06130e7329c	en_IN	CS_HOME_FILE_COMPLAINT	File Complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2493061a-9f06-415b-816b-785df8cb0c1d	en_IN	CS_HOME_HEADER_LOCALIZATION	Localization	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c4937cfe-f40e-411f-9bcc-a85bebebbf0d	en_IN	CS_INBOX_MDMS_FETCH_ERROR	Session Expired Login Again	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a66ba7e8-c936-4273-9f78-7ec1cba32c14	en_IN	CS_LANDING_PAGE_COMPLAINTS_DESCRIPTION	DIGIT Complaints offers an easy to use interface which enables you to lodge civic works related complaints. It also lets you track the status of your complaint and facilitates direct interaction with your municipality till its resolution.	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae16b02f-93ea-42c9-8347-3803cd45ab0e	en_IN	CS_MYCOMPLAINTS_TRACK	TRACK	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3af63df-bc55-4cbd-af5a-e3680724fbdc	en_IN	DEPT_REG_NO	Department Registration number	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2655c15b-2c57-4fcf-965a-324a7b33c10b	en_IN	EGOV_LOCATION_BOUNDARYTYPE_BLOCK	BLOCK	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66469999-a8ba-4319-9c7f-86eb1e04e6f8	en_IN	EGOV_LOCATION_BOUNDARYTYPE_CITY	CITY	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e5e74ca1-a3dc-4ceb-a85e-5ce1acb08767	en_IN	EGOV_LOCATION_BOUNDARYTYPE_LOCALITY	LOCALITY	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+80d1c019-f5b5-4ffc-8e4f-8646018806ba	en_IN	EGOV_LOCATION_BOUNDARYTYPE_ZONE	ZONE	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+121ca446-1d8f-410b-b5dd-ab3f9748f812	en_IN	EGOV_LOCATION_TENANTBOUNDARY_ADMIN	ADMIN	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e78b1317-3c33-457a-90cc-49b7d6e4f6ba	en_IN	EGOV_LOCATION_TENANTBOUNDARY_BLOCK	BLOCK	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6b421fa-aab1-4439-ae19-41031db8cbb7	en_IN	EGOV_LOCATION_TENANTBOUNDARY_CITY	CITY	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d51370b3-5e9c-4ace-94f1-353c1ce5deb9	en_IN	EGOV_LOCATION_TENANTBOUNDARY_LOCALITY	LOCALITY	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8cc5914-98c9-4e7c-9331-4217e8813256	en_IN	EGOV_LOCATION_TENANTBOUNDARY_REVENUE	REVENUE	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+18d8f5ad-e75e-454e-8f55-1bb5e7a043ad	en_IN	EGOV_LOCATION_TENANTBOUNDARY_ZONE	ZONE	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87d8e03f-05ce-4718-af55-30dcaa4e3af8	en_IN	WF_INBOX_HEADER_ASSIGNED_BY	Assigned By	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d3122c58-237a-4da4-ab6c-669b65564007	en_IN	WF_INBOX_HEADER_ASSIGNED_TO	Assigned To	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cb2bd3bb-17d3-4d37-a4ba-435ebf47e71e	en_IN	WF_PGR_CLOSEDAFTERRESOLUTION	Close After Resolution	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5abc0791-32c0-405d-bada-8002ec84658d	en_IN	WF_PGR_PENDINGATLME	Pending at LME	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4c49610a-1976-413a-b2e6-2f90b79dc253	en_IN	WF_PGR_PENDINGATSUPERVISOR	Pending at Supervisor	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6fcc7c9e-9753-4c02-8ae2-1d53fdccf036	en_IN	WF_PGR_PENDINGFORASSIGNMENT	Pending for Assignement	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9a928d3-fc20-4027-95ec-afa008a5518c	en_IN	WF_PGR_PENDINGFORREASSIGNMENT	Pending for Reassignment	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01160c84-6f8c-49e7-88d2-21ab12afb907	en_IN	WF_PGR_REJECTED	Rejected	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+52477a5d-5917-4a25-bd45-01ee8aec7208	en_IN	WF_PGR_RESOLVED	Resolved	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4353215f-02af-44d6-82bb-ece6f8cb0cf4	en_IN	WHATSAPP_SCAN_QR_CODE	Scan the QR code to file/track complaints	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+18c2a68b-ab9e-49b7-bef0-a7588dbbe70e	en_IN	ES_INBOX_ASSIGNED_TO_ALL	Assigned to All	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f889b2f8-895e-4a92-a532-e1450d578706	en_IN	ES_INBOX_ASSIGNED_TO_ME	Assigned to Me	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+992edf9d-f52e-4ae7-92b4-f15aed8cc693	en_IN	ES_COMPLAINT_RESOLVED_SUCCESS_MESSAGE	You have marked the complaint as	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6fc99489-1c8a-4574-99b1-e0ce8552aa25	en_IN	ERR_COMPLAINT_NUMBER_SEARCH	Complaint No. should be at least 6 digits	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f75b3193-9234-43a5-b21e-c9cf37de78e5	en_IN	CS_PGR_REPORTS_HEADER	Reports	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+737efe1e-310f-4218-bfd6-a89119e51a87	en_IN	MODULE_PGR	Citizen Complaint Resolution System	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+74337d59-0c2e-491f-88f7-e07c3345f05a	en_IN	reports.pgr.datefrom	From Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fd98832c-5c23-4cd7-8f1c-d0f967bbb401	en_IN	reports.pgr.dateto	To Date	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+302b9eb2-0af6-4c75-80f0-ca56df7a82f9	en_IN	reports.pgr.dept.name	Department	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+45496d31-7a85-45c7-aa27-fc9c37bc91ca	en_IN	reports.pgr.status	Nature of complaint	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b2945e5-2b8c-4274-a64b-66b6f261d60b	en_IN	IS_AVG_COMPLAINT_RESOLUTION_TIME	is the average complaint resolution time	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+797bd0ee-44b6-478c-bd06-058cb017b3ce	en_IN	ERR_NO_ADMIN_BOUNDARY_FOR_TENANT	There is no admin boundary data available for this tenant	pg	rainmaker-common	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b65c621-58b6-48d2-ac09-f54326626be7	en_IN	ACCESSCONTROL_ROLES_ROLES_LOC_ADMIN	Localization Admin	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7d815a75-c9d4-4ca3-949d-eadd83b94081	en_IN	ACCESSCONTROL_ROLES_ROLES_MDMS_ADMIN	Workbench MDMS Admin	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01dd7d12-e345-425e-9169-8b88a4b59aa5	en_IN	ACCESSCONTROL_ROLES_ROLES_PT_CEMP	Property Tax Counter Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95c82a59-2549-4501-9f7c-8d332e24c5bf	en_IN	ACCESSCONTROL_ROLES_ROLES_SW_CEMP	SW Counter Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f4a81747-dca8-4620-9299-66e0b4d2afd2	en_IN	ACCESSCONTROL_ROLES_ROLES_WS_CEMP	WS Counter Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+313fa475-fcde-4952-8ec6-8fb1c66bbb2f	en_IN	ACTIVATE EMPLOYEE	Activate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f251567-7e5b-43f8-b2bb-82374e938d21	en_IN	COMMON_MASTERS_DEPARTMENT_ACC	Accounts	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+009a9a68-a14d-4f66-b538-e1d8620b9a08	en_IN	COMMON_MASTERS_DEPARTMENT_ADM	Administration	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5076cc33-efb6-41d3-b9cb-39c72343c546	en_IN	COMMON_MASTERS_DEPARTMENT_NULM	National Urban Livelihood Mission	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d43b3bff-8385-4306-8527-7dde1dea2a83	en_IN	COMMON_MASTERS_DEPARTMENT_PHS	Public Health and Sanitation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da1b3888-8a6b-407b-a531-dd5a9921f8b6	en_IN	COMMON_MASTERS_DEPARTMENT_PR	Public Relations	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c5284c0f-4b7a-4b15-89d0-42daaba70b1e	en_IN	COMMON_MASTERS_DEPARTMENT_REV	Tax	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0bb0d9c1-7f1a-4386-beb1-1347df2d6671	en_IN	COMMON_MASTERS_DEPARTMENT_TWP	Town Planning	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0f0be52d-099d-453d-a2a0-0a60b2f2059f	en_IN	COMMON_MASTERS_DEPARTMENT_WRK	Works	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ae0640e-c33a-4419-bb6e-eadfd2a3ad6d	en_IN	CS_COMPLAINT_LOCALITY	Locality	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4ac9b1d8-3587-46a9-86c8-4f3ffdf8953d	en_IN	CS_COMPLAINT_SELECT_CITY	City	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a2e40d78-3b11-446d-94ea-6ffa4b8fcee6	en_IN	EGOV_HRMS_DEACTIVATIONREASON_ORDERBYCOMMISSIONER	Order by Commissioner	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7e6ccc21-7f27-4cc9-a705-0d9a1aac2727	en_IN	EGOV_HRMS_DEACTIVATIONREASON_OTHERS	Others	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20e88b9b-43f4-46d3-9d18-1f84097d115b	en_IN	EGOV_HRMS_DEGREE_10+2_EQUIVALENTDIPLOMA	10+2/EQUIVALENTDIPLOMA	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e035ba74-415d-46b4-b492-f3bf0e71c876	en_IN	EGOV_HRMS_DEGREE_B_A_B_SC__B_COM_BBA	B.A/B.SC./B.COM/BBA	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+71033606-7299-4fd8-b973-fbbfb726746a	en_IN	EGOV_HRMS_DEGREE_B_E_B_TECH_	B.E/B.TECH.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+826c8983-89f9-43b8-835e-1101a469ecbb	en_IN	EGOV_HRMS_DEGREE_DOCTORATE	DOCTORATE	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f5c8c2d-69e8-4d94-8dc4-0c8c970aa787	en_IN	EGOV_HRMS_DEGREE_LLB_LLM	LLB/LLM	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+afca732e-bf5c-4fa2-8d10-130cbafa064f	en_IN	EGOV_HRMS_DEGREE_MATRICULATION	MATRICULATION	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+544a8d0c-923e-4f22-8102-fe2f4a86872b	en_IN	EGOV_HRMS_DEGREE_MBA_PGDM	MBA/PGDM	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+14a49418-d6bd-4e94-87cb-91307feef02b	en_IN	EGOV_HRMS_DEGREE_M_A_M_COM__M_SC_	M.A/M.COM./M.SC.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1880600-e5b1-4cbd-879f-ce0828782eba	en_IN	EGOV_HRMS_DEGREE_M_E_M_TECH_	M.E/M.TECH.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0b8bdf26-5d43-41d0-912d-26e0e87be3d3	en_IN	EGOV_HRMS_DEGREE_OTHER	OTHER	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+63394d12-c89f-4c77-b3e9-7559cea84d66	en_IN	EGOV_HRMS_EMPLOYEESTATUS_DECEASED	DECEASED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+22248857-24ba-4017-ab7a-17be141d6395	en_IN	EGOV_HRMS_EMPLOYEESTATUS_EMPLOYED	EMPLOYED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+517668dd-643f-436d-8069-77676a1e14c1	en_IN	EGOV_HRMS_EMPLOYEESTATUS_RESIGNED	RESIGNED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3b765d81-d7aa-4123-9b3a-73c3478d3b54	en_IN	EGOV_HRMS_EMPLOYEESTATUS_RETIRED	RETIRED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a0505ef7-0cf6-4f61-9e9e-415bd55882bc	en_IN	EGOV_HRMS_EMPLOYEESTATUS_SUSPENDED	SUSPENDED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1d20172-06c9-4a8a-827d-2c9cb4ecef23	en_IN	EGOV_HRMS_EMPLOYEESTATUS_TERMINATED	TERMINATED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7892b30e-0f65-44bc-9364-f14951339a68	en_IN	EGOV_HRMS_EMPLOYEESTATUS_TRANSFERRED	TRANSFERRED	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3aca1be-a527-4099-9ac2-25a7e68879d9	en_IN	EGOV_HRMS_EMPLOYEETYPE_CONTRACT	CONTRACT	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+001f2f88-439d-4f47-81f6-e196c3a02e8d	en_IN	EGOV_HRMS_EMPLOYEETYPE_DAILYWAGES	DAILYWAGES	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d8880c50-520d-49fd-9c01-12e7de72d664	en_IN	EGOV_HRMS_EMPLOYEETYPE_DEPUTATION	DEPUTATION	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+58562bd2-3cd1-427a-a3b4-db250e293b78	en_IN	EGOV_HRMS_EMPLOYEETYPE_PERMANENT	PERMANENT	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+329077ce-01ff-4f83-8524-c4ebe8604579	en_IN	EGOV_HRMS_EMPLOYEETYPE_TEMPORARY	TEMPORARY	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a210e30-d879-4f5d-b815-77feac226aa9	en_IN	EGOV_HRMS_EMPLOYMENTTEST_APTITUDETEST	APTITUDE TEST	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cda45409-e7bf-43ac-9820-bbf4d72426e8	en_IN	EGOV_HRMS_EMPLOYMENTTEST_MAINS	MAINS	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7039d0e-82be-47f5-b125-514b2bddcb11	en_IN	EGOV_HRMS_EMPLOYMENTTEST_PRELIMS	PRELIMS	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8f8a06ee-8bd7-4e4f-9c2e-1e873a684a42	en_IN	EGOV_HRMS_SPECALIZATION_ARTS	Arts	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e2c4b52-eda0-492b-8c60-a0ab5020d762	en_IN	EGOV_HRMS_SPECALIZATION_SCIENCE	Science	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d35ce27-dcc4-4eda-b31e-4f94353b6b80	en_IN	EMPLOYEE_RESPONSE_ACTIVATION_ACTION	Employee Reactivated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f259af8c-8178-458b-b7c1-dc1c0abc05b0	en_IN	EMPLOYEE_RESPONSE_CREATE_ACTION	Employee Created Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+748d3128-7d85-4f19-a873-c1b3a50b4a0a	en_IN	EMPLOYEE_RESPONSE_CREATE_ACTION_ERROR	Employee Creation Failed	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2426b664-9b7e-41b3-a15c-f082d7da4f3b	en_IN	EMPLOYEE_RESPONSE_CREATE_LABEL	Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28c0f8fe-573a-4198-8b56-d1e41ea289e5	en_IN	EMPLOYEE_RESPONSE_DEACTIVATION_ACTION	Employee Deactivated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db1d77f2-ec9e-492b-91b2-b87133cbb0e2	en_IN	EMPLOYEE_RESPONSE_DEACTIVATION_ACTION_ERROR	Employee Deactivation Failed	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a9dc5b3-83a1-4496-bfb0-995113df351f	en_IN	EMPLOYEE_RESPONSE_UPDATE_ACTION	Employee Details Updated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8cb1d31-59b6-4931-8a17-edbee677dbcb	en_IN	EMPLOYEE_RESPONSE_UPDATE_ACTION_ERROR	Employee Details Update Failed	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bfc4f45c-ae66-4cc5-933e-6bf796e2ed6e	en_IN	ERR_HRMS_BULK_CREATE_DUPLICATE_EMPCODE	Bulk request has duplicate employee code	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ffdab525-bb91-4329-8693-7a18e6730735	en_IN	ERR_HRMS_BULK_CREATE_DUPLICATE_MOBILE	Bulk request has duplicate mobile number	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9c98c5c9-d000-4829-8756-19438a0bbe13	en_IN	ERR_HRMS_GENERATE_ID_ERROR	Unable to create ids	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a6138fb9-4a1f-438b-8486-90797aca9d61	en_IN	ERR_HRMS_INVALID_ASSIGNMENT_CURRENT_TO_DATE	To Date field should be blank for current assignment of the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8cda8663-3f37-4f5f-b868-f41558db7e72	en_IN	ERR_HRMS_INVALID_ASSIGNMENT_DATES	Employee period of assignment (From Date or To date) can not be before date of birth.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8cd0c7bc-e765-460b-8556-6324499be949	en_IN	ERR_HRMS_INVALID_ASSIGNMENT_DATES_APPOINTMENT	Employee period of assignment (From Date or To date) can not be before date of appointment.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ef14d8dc-7e38-45ff-863d-3dc2b1a1dbcf	en_IN	ERR_HRMS_INVALID_ASSIGNMENT_NOT_CURRENT_TO_DATE	To date field should not be blank for non current assignment of the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e312ed16-8733-4757-9a15-e3b0401964f5	en_IN	ERR_HRMS_INVALID_ASSIGNMENT_PERIOD	Invalid period of assignment (From date - To date).	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d1e496e-869b-4a6b-93c9-5cf3c825a31f	en_IN	ERR_HRMS_INVALID_BOUNDARY_TYPE_HEIRARCHY	Jurisiction boundary type value is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+51265c17-9b70-4873-a210-fa0a516ebad9	en_IN	ERR_HRMS_INVALID_CURRENT_ASSGN	There should be exactly one current assignment for the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13ac622b-c45a-452c-b770-7b14733f41e6	en_IN	ERR_HRMS_INVALID_DATE_OF_APPOINTMENT_DOB	Employee date of appointment can not be before date of birth.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4abdf901-2a10-4e25-a84a-0853c7a327e4	en_IN	ERR_HRMS_INVALID_DEACT_REQUEST	Employee active flag should be set as false during deactivation.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0b10fa4b-dcf3-4277-ac3d-7595770d05a8	en_IN	ERR_HRMS_INVALID_DEPARTMENTAL_TEST	Departmental evaluation test of the employee is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d2d48a47-3f22-4a2e-93d3-66e42b0700c8	en_IN	ERR_HRMS_INVALID_DEPARTMENTAL_TEST_PASSING_YEAR	Departmental evaluation test passing year of the employee can not be before date of birth.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8ba0e5de-c301-4a77-828c-d96f06b63523	en_IN	ERR_HRMS_INVALID_DESG	Invalid designation of employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f3cee8a0-87ad-46cf-9e09-7881833f092d	en_IN	ERR_HRMS_INVALID_DOB	Invalid date of birth entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bfaa5a8b-020b-4372-aaba-7dd7b8d2c583	en_IN	ERR_HRMS_INVALID_EDUCATIONAL_PASSING_YEAR	Education year of passing of the employee can not be before date of birth.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d890146-98d4-41ec-987b-2587785ff080	en_IN	ERR_HRMS_INVALID_EDUCATIONAL_STREAM	Education stream of the employee is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+095fac6f-62a5-4af0-95d1-09c60b138ff7	en_IN	ERR_HRMS_INVALID_EMP_STATUS_ROLE	Invalid employment status entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8ac60a31-7a40-4632-9987-d376b4bdb333	en_IN	ERR_HRMS_INVALID_EMP_TYPE	Invalid employee type entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bef12aed-fb80-4206-98f5-5ffe47955e23	en_IN	ERR_HRMS_INVALID_JURISDICTION_ACTIIEV_NULL	Jurisiction should have atleast 1 active data	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+770d6844-2507-4c3c-beac-914647fbb473	en_IN	ERR_HRMS_INVALID_JURISDICTION_BOUNDARY	Jurisiction boundary value is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cb8e151a-a3b3-49ca-8184-cf08d24fa3fe	en_IN	ERR_HRMS_INVALID_JURISDICTION_HEIRARCHY	Jurisiction hierarchy value is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b26bc25b-ccf1-45af-87c7-bf67e4b2a4ff	en_IN	ERR_HRMS_INVALID_QUALIFICATION	Qualification of the employee is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d184838c-8ab4-443d-82a6-df5dd502c6e2	en_IN	ERR_HRMS_INVALID_SEARCH_AOD	Along with as on date, atleast one department and designation need to be passed as search criteria.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe541a26-2d32-4f78-8b50-b9e3e10fd9bd	en_IN	ERR_HRMS_INVALID_SEARCH_REQ	Open search is disabled for this user.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+59302f7e-6242-4a35-b20d-4ae9ee01e0e0	en_IN	ERR_HRMS_INVALID_SEARCH_ROLES	For search based on roles, passing of tenant id is mandatory.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24aa03ff-6894-4965-86fe-96e782d5e8dc	en_IN	ERR_HRMS_INVALID_SEARCH_USER	For search based on phone number and name, passing of tenant id is mandatory.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01d265e9-4664-48ef-90bb-0f1a87052bf4	en_IN	ERR_HRMS_INVALID_SERVICE_ASSGN	There should be maximum one currently working service for the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a4b4634-c4b8-4873-9565-f61b8b6fc456	en_IN	ERR_HRMS_INVALID_SERVICE_CURRENT_TO_DATE	To Date of service period should be blank for currently working employees.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e458b6d2-3c24-46ae-b6cd-1ecf9f466b7f	en_IN	ERR_HRMS_INVALID_SERVICE_DATES	Employee service period (From date or To date) can not be before date of birth.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af84692c-6c0e-41ae-8c5c-6748603dfa2f	en_IN	ERR_HRMS_INVALID_SERVICE_NOT_CURRENT_TO_DATE	To Date of service period should not be blank for currently non working employees.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7c6636ba-8c14-4d8c-95c8-269645aaa79e	en_IN	ERR_HRMS_INVALID_SERVICE_PERIOD	Service period (From date or To date) of employee is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e4a943f1-2a6a-4398-93c8-c6531308bfa3	en_IN	ERR_HRMS_INVALID_SERVICE_STATUS	Service stataus of employee is invalid.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab1ebf26-cb23-431d-9254-fe5481f009ac	en_IN	ERR_HRMS_MISSING_ROLES	Invalid mobile number entered.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e8be7d74-0869-4e65-be17-9dbd0f7141f0	en_IN	ERR_HRMS_OVERLAPPING_ASSGN	There should not be overlapping period of assignments for the employee.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a71cc616-d3c1-46e3-a720-306c096dd6de	en_IN	ERR_HRMS_OVERLAPPING_ASSGN_CURRENT	Period of assignements of employee should not be after current assignment.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+02f56889-51b3-4c6c-9ad3-86aaacd0f11d	en_IN	ERR_HRMS_OVERLAPPING_SERVICEHISTORY_CURRENT	Period of service details of employee should not be after current assignment!	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1495fdde-ae3f-408c-8423-90eafe252010	en_IN	ERR_HRMS_UPDATE_ASSIGNEMENT_INCOSISTENT	Assignment data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cb9d7cda-0cd7-4d1f-9048-9b1140442f7f	en_IN	ERR_HRMS_UPDATE_DEACT_DETAILS_INCORRECT_EFFECTIVEFROM	Employee deactivation effective date should not be future date.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39a54e97-3886-47d2-a0ad-add5a7efcf3a	en_IN	ERR_HRMS_UPDATE_DEACT_DETAILS_INCOSISTENT	Employee deactivation data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e1d762f-b1ee-4e11-9946-59c1fb2a7205	en_IN	ERR_HRMS_UPDATE_DOCUMENT_INCOSISTENT	Employee document data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9c600d7-27cc-4b52-a748-efa6a221120a	en_IN	ERR_HRMS_UPDATE_EDUCATION_INCOSISTENT	Education data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0b87e932-35a4-46ca-8f7f-54a3078e0dbd	en_IN	ERR_HRMS_UPDATE_EMPLOYEE_CODE_CHANGE	Employee code can not be changed in an update request.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ce681678-5015-4ff9-87d2-c5bbfa90042e	en_IN	ERR_HRMS_UPDATE_EMPLOYEE_NOT_EXIST_CODE	No employee found for given UUID.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8dfdbebd-14bd-4bca-90aa-d430b9345a25	en_IN	ERR_HRMS_UPDATE_EXISTING_MOBNO	User exist for given mobile no	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a456f8fd-e5b5-4179-bba6-169c02987fbe	en_IN	ERR_HRMS_UPDATE_JURISDICTION_INCOSISTENT	Jurisdiction data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+06d27873-391e-4f46-ac67-7f4ef31898f6	en_IN	ERR_HRMS_UPDATE_NULL	Employee Code in an update request should not be null.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+630f9bc2-d4ca-4b6a-b9ed-4ecdcf6c4347	en_IN	ERR_HRMS_UPDATE_NULL_ID	Employee ID in an update request should not be null.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c47893ba-252f-47d2-9866-ff1a9a044d7d	en_IN	ERR_HRMS_UPDATE_NULL_UUID	Employee UUID in an update request should not be null.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+92060933-4c2e-433e-af8d-630f13744376	en_IN	ERR_HRMS_UPDATE_SERVICE_HISTORY_INCOSISTENT	Service history data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f24228b-c173-43a9-aee5-44eee52c1165	en_IN	ERR_HRMS_UPDATE_TESTS_INCOSISTENT	Employee evaluation test data in an update request should contain all previously entered data.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af7e290b-d356-4b70-9112-d10c93cc077b	en_IN	ERR_HRMS_USER_UPDATION_FAILED	User updation failed at the user service.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d0120f7-0b1f-422b-a4ea-7e2a20701ca6	en_IN	HE_NEW_EMPLOYEE_CITY_LABEL	New Employee Locality	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ca11d442-b784-4e00-9c81-373a55920b56	en_IN	HE_NEW_EMPLOYEE_CITY_LABEL 	New Employee Locality	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+529db979-3793-4b50-a046-866a969485b9	en_IN	HRMS_SEARCH_RESET_BUTTON	Reset	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9279cee2-c017-4a0c-8e9c-330baac7998c	en_IN	HR_ACTIVATE_EMPLOYEE_LABEL	Activate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+61aed9f2-e69f-46f1-8065-ec419f9f03eb	en_IN	HR_ADD_NEW_EMPLOYEE_BUTTON	Add Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d57d9854-f4e2-443f-8901-9d641a5b404c	en_IN	HR_ASMT_FROM_DATE_PLACEHOLDER	Assigned From Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ba2bf527-4a28-41ee-96ff-e5b50340eaaa	en_IN	HR_ASMT_TO_DATE_LABEL_PLACEHOLDER	Assigned To Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3445ef44-922b-43d6-98da-83182290c385	en_IN	HR_ASMT_TO_DATE_PLACEHOLDER	Assigned To Date	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c12df103-c292-4cd9-a9bd-17af862fef13	en_IN	HR_BOUNDARY_PLACEHOLDER	Select Boundary	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68efc2fb-650a-4fca-9fea-cde9ccf744c6	en_IN	HR_BOUNDARY_TYPE_PLACEHOLDER	Select Boundary Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b2a83544-2737-4e19-9355-84dc19ac3def	en_IN	HR_COMMON_APPL_NEW_HEADER	Create New Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a6ce207-46d5-4acc-895e-b87daee281c0	en_IN	HR_COMMON_DEACTIVATED_EMPLOYEE_HEADER	Deactivate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+991d2c30-7471-40dc-9b18-f2d0c7424c5b	en_IN	HR_COMMON_REACTIVATED_EMPLOYEE_HEADER	Reactivate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a27b969-326d-45e1-936d-a2abcb27ecb3	en_IN	HR_COMMON_TABLE_COL_DESG	Designation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c21e5dfe-1364-4f98-b5de-7d7df978b8b3	en_IN	HR_COMMON_TABLE_COL_EMP_ID	Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+919bf463-c32d-4543-928b-7baebc292e90	en_IN	HR_COMMON_UPDATE_EMPLOYEE_HEADER	Employee Update	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5e143e8d-5f9e-4200-adb6-982a058a60f6	en_IN	HR_CREATE_SUCCESS_MESSAGE	Employee Created Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e18af82-d3d1-45e0-bf65-29bdeb21c3fe	en_IN	HR_CREATE_SUCCESS_SUBHEADER	A notification has been sent to the created Employee at registered Mobile No.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5bac8c5a-16c4-4845-9f45-f3850b5cb1d8	en_IN	HR_CURR_ASSIGN_LABEL	Currently Assigned Here	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b175819-12c6-466c-9c83-1ed7ffed1a63	en_IN	HR_DEACTIVATE_EMPLOYEE_BUTTON_TEXT	Deactivate Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3e69a861-b8a1-4b7f-8b4a-a0e5079e6d84	en_IN	HR_DEACTIVATE_EMPLOYEE_LABEL	DEACTIVATE EMPLOYEE	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+492eb77c-aeeb-414c-b129-4f5f394690e2	en_IN	HR_DEACTIVATE_SUCCESS_MESSAGE	Employee Deactivated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ea92460a-650f-4d2f-871c-e21b6a55c704	en_IN	HR_DEPARTMENT_PLACEHOLDER	Select Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01138f9f-c1f0-459e-891d-36894190f677	en_IN	HR_DEPT_PLACEHOLDER	Select Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1aafba6e-88b5-49b6-9523-a9eda86ba2c9	en_IN	HR_DEPT_TEST_HEADER	Department Test Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7dd96f5-c847-42f3-9ee6-1f4186bcc9b4	en_IN	HR_DESIGNATION_PLACEHOLDER	Select Designation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+35cd7264-c260-411b-a459-2eda4f08e079	en_IN	HR_DESIG_PLACEHOLDER	Select Designation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+58c9282d-ff42-4b8e-ab9b-11664c26c027	en_IN	HR_EMPLOYEE_ID_PLACEHOLDER	Enter Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1bf8b49c-1a97-4c02-b0be-c5bdfd45acd8	en_IN	HR_EMP_ID_ERR_MSG	Invalid Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+59c4c5cb-1c36-4018-9a9c-9719ffe9c479	en_IN	HR_EMP_ID_PLACEHOLDER	Enter Employee ID	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8387dbc-ed48-4f27-a821-f589c1b1e423	en_IN	HR_EMP_MOBILE_LABEL	Employee Mobile No.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e98413c8-101d-4177-818f-d6df7a9524e8	en_IN	HR_EMP_MOBILE_PLACEHOLDER	Enter Employee Mobile No.	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+83e6785e-5e8e-43c9-bc7e-aa51ed94d015	en_IN	HR_EMP_NAME_PLACEHOLDER	Enter Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d7cc7bb-ce91-481f-931c-f9fb673a1442	en_IN	HR_EMP_TYPE_LABEL	Employee Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3d40a802-821a-4f8f-8eb7-8c5eea75900b	en_IN	HR_EMP_TYPE_PLACEHOLDER	Select Employee Type	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2fec5917-c724-42ee-a503-b043bf0f5d88	en_IN	HR_FATHER_HUSBAND_NAME_PLACEHOLDER	Enter Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+398a4fd6-04b8-41f6-a7ff-05870a320974	en_IN	HR_HOD_LABEL	Head of Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+901a72ed-db2c-4511-9488-39bd9168b03d	en_IN	HR_HOD_SWITCH_LABEL	Head Of Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ef853b80-4dff-4c2e-aa7c-39c3dc22d8cf	en_IN	HR_HOME_SEARCH_RESULTS_DESC	Provide at least one parameter to search for an employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+99ff2f54-0416-4e0e-b7cd-c41602bd70df	en_IN	HR_HOME_SEARCH_RESULTS_TABLE_HEADING	Search Results for Employee	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bed372f6-ab3e-41b5-bee3-161a9c81a072	en_IN	HR_NAME_PLACEHOLDER	Enter Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+033cb3b7-0fe6-4dcf-be0b-287256bc060d	en_IN	HR_NEW_EMP_NAME_PLACEHOLDER	Enter Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+672778d3-53c4-4c65-92f2-55b64fe8e245	en_IN	HR_PROFESSIONAL_DETAILS_FORM_HEADER	Employee Details	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dabf8ca7-ca28-45d5-ad19-824002e9ec6c	en_IN	HR_RACTIVATE_SUCCESS_MESSAGE	Employee Reactivated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d41a6fec-5207-4b0f-9e61-a04de149feb3	en_IN	HR_SUMMARY_HEADER	Create New Employee - Summary	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b25e4814-5b8e-40ac-b738-6bfcd1ab6cb7	en_IN	HR_UPDATE_SUCCESS_MESSAGE	Employee Updated Successfully	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3e4512a-dce9-46cf-a6ac-0559359128fd	en_IN	HR_VIEW_HEADER	View Employee Information	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+757e47d9-8791-47c5-9537-f7f7c3184442	en_IN	TL_ADD_ASSIGNMENT	ADD ASSIGNMENT	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9dd5e47a-4073-484c-8907-421008d64574	en_IN	TL_ADD_JURISDICTION	ADD JURISDICTION	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b369838b-5649-40bb-82cd-15293518a228	en_IN	reports.hrms.department	Employee Department	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c07094ce-1c88-4149-9bb1-486bae3502e3	en_IN	reports.hrms.designation	Employee Designation	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+583b3026-ddc6-426f-80cc-7ea5b5876990	en_IN	reports.hrms.id	Employee Id	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d4f54d65-4555-4058-952c-965c923583fd	en_IN	reports.hrms.name	Employee Name	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+edd795de-3c06-47e0-8dd9-411771b96f4d	en_IN	reports.hrms.role	Employee Roles	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+57f3dacc-bc09-4c49-a80a-c91dd5c2dc09	en_IN	reports.hrms.status	Employee Status	pg	rainmaker-hr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4deabb9b-caa6-4343-85bf-30a6a1db4067	en_IN	COMMON_BOTTOM_NAVIGATION_COMPLAINTS	Citizen Complaint Resolution System	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8755f241-ba99-40f8-baa2-df4fd5614031	en_IN	COMMON_MASTERS_DESIGNATION_AC01	Additional Commissioner	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bac3f959-1f13-4943-8f43-461479f815ac	en_IN	COMMON_MASTERS_DESIGNATION_AMO01	Asst. Medical Officer	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+40125c6c-155a-442b-bccc-a771aa5144ce	en_IN	COMMON_MASTERS_DESIGNATION_CM01	City manager	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ede39eed-3dbe-478d-bb2e-112824fe85cc	en_IN	COMMON_MASTERS_DESIGNATION_CME01	Chief Municipal Engineer	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fd34c8b4-cdfc-4dbc-a54f-ad23b5f7c243	en_IN	COMMON_MASTERS_DESIGNATION_DC01	Deputy Commissioner	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+72ffd4b1-6359-423b-b0f7-06bb9ad51970	en_IN	COMMON_MASTERS_DESIGNATION_HDC01	Higher Division Clerk	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1ddfe61-5c47-4f2f-a04c-ddda483a2173	en_IN	COMMON_MASTERS_DESIGNATION_HSI01	Head Sanitary Inspector	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e02d4cc9-cea0-4af0-badd-c3ad27160f25	en_IN	COMMON_MASTERS_DESIGNATION_MC01	Municipal Commissioner	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc130df9-ebaf-4298-8ddb-4ee3968e0558	en_IN	COMMON_MASTERS_DESIGNATION_SS01	Sanitory Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+94bb3282-d416-4f7e-a080-afa371cbfbfb	en_IN	COMMON_MASTERS_DESIGNATION_TC01	Tax Collector	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+81e196be-2c79-4bee-8d15-c786e62c84f1	en_IN	COMMON_MASTERS_DESIGNATION_TI01	Tax Inspector	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91a236a7-1438-425a-8f4b-d1a004b0c721	en_IN	COMPLAINTS_SUPERVISOR_CONTACT_NUMBER	Supervisor Contact No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f6018119-5686-430f-989b-b229676d22c8	en_IN	COMPLAINTS_SUPERVISOR_NAME	Supervisor Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e96bbca3-6361-455e-8344-4fa7815db8e7	en_IN	CORE_COMMON_SEARCH_COMPLAINT	Search Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8cdf46f-b2dd-4031-b2f8-b61a9cf6868b	en_IN	CORE_LOGIN_USERNAME_PLACEHOLDER	Enter your Employee ID	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+04060c23-3e45-4ce4-b31c-581a35fe3937	en_IN	CS_ACTION_ASSIGN_TEXT	Complaint Assigned Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+745f2cf1-9e69-4180-a07a-4d3f53630e6a	en_IN	CS_ACTION_REASSIGN_TEXT	Complaint Reassigned Succesfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fb6713a6-f3c7-4d6d-a980-7165005afd6d	en_IN	CS_ACTION_REJECT_TEXT	Complaint Rejected Succesfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+912d311e-86bb-4161-a3a6-078f74c824b5	en_IN	CS_ACTION_REOPEN_TEXT	Complaint Reopened Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b35a28dd-1415-4b7e-8f04-4b2b88c6777a	en_IN	CS_ACTION_RESOLVE_TEXT	Complaint Resolved Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1562fbff-49ab-46ac-8541-a824fd9c7eac	en_IN	CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER	Enter WARD and address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6cd8dd8a-df5d-4d41-9fd5-b0dd4fd48354	en_IN	CS_ADDCOMPLAINT_ADDRESSINFO	Address Info:	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95f2397e-42ce-4745-be32-08556be094cd	en_IN	CS_ADDCOMPLAINT_COMPLAINT_DETAILS	Complaint Additional Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13b5c4d2-1561-464a-aa64-68eddb777754	en_IN	CS_ADDCOMPLAINT_COMPLAINT_DETAILS_PLACEHOLDER	Enter Complaint additional details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc13ec61-7f60-4d56-a2fe-c9f24624f548	en_IN	CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE	Complaint Sub-Type 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+76a83475-7734-4cf2-bc2c-b977bccba4c0	en_IN	CS_ADDCOMPLAINT_ERROR_COMPLAINT_SUBTYPE	Select the complaint sub-type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+222cf1b3-49e4-4136-a198-a48056915160	en_IN	CS_ADDCOMPLAINT_ERROR_COMPLAINT_TYPE	Select the complaint type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d31d35b-2c79-403b-9346-5f499bf4c07d	en_IN	CS_ADDCOMPLAINT_ERROR_FAILURE	Sorry, there is a problem with the service. Try again later.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6edbfe74-83af-432c-a8e3-acd49547bd0a	en_IN	CS_ADDCOMPLAINT_ERROR_MESSAGE	Complaint Not Submitted	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1cfb686b-8985-458c-b1c7-9edb0c0cd4d2	en_IN	CS_ADDCOMPLAINT_ERROR_REOPEN_REASON	Select reason to re-open complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af790e5c-8eca-46fa-9fb8-92a65d30d087	en_IN	CS_ADDCOMPLAINT_HOUSE_NO	House No. and Street Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a351fb6-4e6a-41f7-a9a0-3160c4949549	en_IN	CS_ADDCOMPLAINT_HOUSE_NO_PLACEHOLDER	Enter House No. and Street Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+062a16b3-c610-4804-8301-b2a46546ef9f	en_IN	CS_ADDCOMPLAINT_LANDMARK_ERROR	Enter Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+afb55faa-42c6-4d4a-b4e2-5ca93aaa679e	en_IN	CS_ADDCOMPLAINT_LANDMARK_PLACEHOLDER	Enter landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e2c8e66-3552-48f3-8bff-a3f419801ed2	en_IN	CS_ADDCOMPLAINT_LOCATION_ERROR	Select City and Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9022faf1-4a65-468a-9317-3537371e1e9a	en_IN	CS_ADDCOMPLAINT_LOCATION_ERRORMSG	Address doesn’t exist	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+321f45a3-6dff-45a5-aa29-ff42840b8b9c	en_IN	CS_ADDCOMPLAINT_PINCODE	Do you know the pincode ?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+660f1f38-c1f3-43ec-b798-440051a89814	en_IN	CS_ADDCOMPLAINT_PIN_LOCATION	Pin Complaint location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d503285-2a85-4f1e-be9c-c41ceb23af67	en_IN	CS_ADDCOMPLAINT_PIN_LOCATION_TEXT	If you know the pincode of the complaint address, provide below. It will help us identify complaint location easily or you can skip and continue.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ea2d2b9b-efaf-4f21-8083-a3b73a238793	en_IN	CS_ADDCOMPLAINT_PROVIDE_LANDMARK	Provide Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+096d5244-c74e-4c3c-a83f-a4792cc8dca7	en_IN	CS_ADDCOMPLAINT_PROVIDE_LANDMARK_TEXT	Provide the landmark to help us reach the complaint location easily.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+791b03d2-4a43-4395-9e79-8b526afca145	en_IN	CS_ADDCOMPLAINT_UPLOAD_ERROR_MESSAGE	Upload Image	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6132d878-6759-468e-8c8a-546ff41a3fce	en_IN	CS_ADD_COMPLAINT_COMPLAINT_SUBMISSION	Complaint Submission	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+60308555-e51a-4895-83d0-d5747ac6c8e3	en_IN	CS_COMMON_ASSIGNED	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d6e8ae3-118b-48ef-88e5-c59ca56c8ebe	en_IN	CS_COMMON_ASSIGNED_TO	Assigned to 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+40c2c780-7fed-46cc-9d8c-2acba88f7a07	en_IN	CS_COMMON_CITIZEN_REQUEST_REASSIGN	Being Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7cdca4fa-add1-4500-8d88-d3cf2212be02	en_IN	CS_COMMON_COMPLAINT_ASSIGNED_TO	Complaint assigned to	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b4a95927-f085-4d14-aea5-7bdaa50dfb1f	en_IN	CS_COMMON_COMPLAINT_DATE	ComplaintDate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0163c136-eab2-45f6-adba-c7412ccc39cf	en_IN	CS_COMMON_COMPLAINT_PENDINGFORASSINMENT	Pending for Assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d31a4d9-32ae-41a6-8aeb-0c943fa082e0	en_IN	CS_COMMON_COMPLAINT_STATUS	Complaint status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b7e2f383-4072-4760-9338-4d99ce828fda	en_IN	CS_COMMON_PENDINGFORREASSIGNMENT	Pending for reassignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6cf2bbac-2c01-4c7b-9e42-ec42b90b462a	en_IN	CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION	Closed after rejection	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b826fe49-b2ec-4975-bde2-9fc6da5312f9	en_IN	CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION	Closed after resolution	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+23326425-8f99-497c-b7de-289e13b30896	en_IN	CS_COMMON_PGR_STATE_PENDINGATLME	Pending at last mile employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+41ce6041-de74-47bd-90ec-f91c2bc2fcf9	en_IN	CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+54838c55-4267-46e8-9c62-cf75e783a4c0	en_IN	CS_COMMON_PGR_STATE_PENDINGFORREASSIGNMENT	Pending for re-assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+14b5b418-970d-4d65-b165-776af69f0dfb	en_IN	CS_COMMON_PGR_STATE_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d0665fda-48c3-4040-9e68-6834a7a0a23b	en_IN	CS_COMMON_PGR_STATE_RESOLVED	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8ee935b-7968-420d-90ce-a2c6fda0dd9d	en_IN	CS_COMMON_RE-ASSIGN REQUESTED	Re-assign Requested	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+36da5b1d-569e-49a7-8f75-4a8f2605d2a1	en_IN	CS_COMMON_REASSIGNED	Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3989bb9a-1670-4a67-b6dd-5e7547555d75	en_IN	CS_COMMON_REASSIGNED_TO	Re-Assigned to 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+00369a12-9a8e-4d83-a7ff-918350426da5	en_IN	CS_COMMON_RE_ASSIGNED	Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6da806e-8215-4e35-bcdb-4ec08c039876	en_IN	CS_COMMON_STATUS_ASSIGNED	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6527f71-deb1-4f5a-ba26-8bfa33c90c7c	en_IN	CS_COMMON_STATUS_BEING_REASSIGNED	Complaint is being Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6ec8e8e8-fe6a-4112-9f14-f28b25d60c29	en_IN	CS_COMMON_STATUS_CLOSED	Your Complaint has been Closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b2d1343e-eaf4-411f-9517-d1f274f0dcc2	en_IN	CS_COMMON_STATUS_REASSIGNED	Your Complaint has been Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+029d7201-6e99-4d64-bcea-2150b19b0d55	en_IN	CS_COMMON_STATUS_REASSIGN_REQUESTED	Your Complaint is being Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fbfb68d7-4e08-4411-a897-f8155a205234	en_IN	CS_COMMON_STATUS_REJECTED	Your Complaint has been Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+67249869-0aa6-49ed-822d-eccf2e632a19	en_IN	CS_COMMON_STATUS_REOPENED	Your Complaint has been Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d74fe89-983c-473f-8c88-58c6acdff2d8	en_IN	CS_COMMON_STATUS_RESOLVED	Your Complaint has been Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d09c4057-2111-41c1-80f1-2216a2fc3c49	en_IN	CS_COMMON_STATUS_SUBMITTED	Your Complaint has been Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3b90862c-093d-4b1e-a9e6-073a14db41e4	en_IN	CS_COMMON_STATUS_UNASSIGNED	Unassigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+64254557-f3a8-4083-83ea-333bdd8bc48e	en_IN	CS_COMPLAINTDETAILS_HOUSE	House/Street No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46e1c997-e2cf-424d-af14-2032f60f6e36	en_IN	CS_COMPLAINTDETAILS_LANDMARK	Landmark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7a4ecad-deea-4100-a179-a5ba568a4f0b	en_IN	CS_COMPLAINTDETAILS_MOHALLA	Mohalla/City	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0a6633f7-81ca-4275-8b14-0e729776cf2d	en_IN	CS_COMPLAINT_COMPLAINT_ADDTIONAL_DETAILS	Additional Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7b386d76-d76b-4ae7-bff1-d48fde522a48	en_IN	CS_COMPLAINT_DETAILS_ACCUMULATION_LITTER	Accumulation of Litter	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5325cc7a-907d-4dd8-918b-383267152d0f	en_IN	CS_COMPLAINT_DETAILS_ADDRESS_DETAILS	Address Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+17deed4d-67f2-4e08-bcff-265fbb1a6e65	en_IN	CS_COMPLAINT_DETAILS_ASSIGN	Assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+193717b3-7051-4214-8a2f-3fd18c26101e	en_IN	CS_COMPLAINT_DETAILS_ASSIGNED	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4928b41b-d9ec-4a36-a6bc-ccf04907feae	en_IN	CS_COMPLAINT_DETAILS_ASSIGNED_TO	Assigned to 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee046b98-679b-4623-ba04-c32db4c032e7	en_IN	CS_COMPLAINT_DETAILS_ATTACHMENTS	Attachments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0f79d47b-6f8f-4f36-8710-1b4572ce6709	en_IN	CS_COMPLAINT_DETAILS_BACK	Back	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a74c60f5-aaef-4f8c-a38c-cf7ee5197bbb	en_IN	CS_COMPLAINT_DETAILS_BEING_REASSIGNED	Complaint is being re-assigned by	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e8f4fb14-4162-43e1-a540-10caa3236fc1	en_IN	CS_COMPLAINT_DETAILS_BLOCKAGE_OF_DRAINS	Blockage Of Drains	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a5127ba-ed76-49c4-b363-92c9f73e7f4a	en_IN	CS_COMPLAINT_DETAILS_BROKEN_FOOTPATHS	Broken Footpaths	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dab18d50-2cf5-460f-a48b-aecc98d09ef5	en_IN	CS_COMPLAINT_DETAILS_BUILDING_NAME	Build Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+009091c0-2e83-4d51-8ae4-950f49072c97	en_IN	CS_COMPLAINT_DETAILS_CALL_BUTTON	CALL	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1e7e4fe-06ec-42d8-b534-5e4336f66cbe	en_IN	CS_COMPLAINT_DETAILS_CANCEL	Cancel	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db831fea-de02-4ae4-868b-87e6e312eaf2	en_IN	CS_COMPLAINT_DETAILS_CANCELLED	Cancelled	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+046cfbce-dd88-48c5-aa88-5c4cf8f488c1	en_IN	CS_COMPLAINT_DETAILS_CHOOSE_FILE	Choose File	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+804892f4-27de-4ac5-93eb-2e9eb77e6c99	en_IN	CS_COMPLAINT_DETAILS_CITIZEN_FEEDBACK	Citizen Feedback	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+735604d5-a00c-4455-a783-96eae02bcd79	en_IN	CS_COMPLAINT_DETAILS_CITIZEN_REQUEST_REASSIGN	Being Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dfc5761a-e485-465f-810e-5dba65e1bb53	en_IN	CS_COMPLAINT_DETAILS_CLEAR_ALL	CLEAR ALL	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0928725f-848c-4079-b16a-ff192651ef17	en_IN	CS_COMPLAINT_DETAILS_CLEAR_SEARCH	CLEAR SEARCH	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+333b3530-171c-4be6-91c7-2c33d91453a7	en_IN	CS_COMPLAINT_DETAILS_CLOSED	Closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3622da1-080c-4faa-b484-a4ca369fbd34	en_IN	CS_COMPLAINT_DETAILS_CLOSEDAFTERREJECTION	Closed after rejection	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+166c46da-ea58-47e0-869e-2c402c42ecc2	en_IN	CS_COMPLAINT_DETAILS_CLOSEDAFTERRESOLUTION	Closed after resolution	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c8e7edf9-bd39-4106-b225-e9f2d039641b	en_IN	CS_COMPLAINT_DETAILS_CLOSED_UCASE	CLOSED	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e0b00a89-4050-4737-8b7e-a85bfe5d4e8d	en_IN	CS_COMPLAINT_DETAILS_COMMENTS	Too much garbage lying on the road, its very dificult to cross the area.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1a60acfc-ceff-4ed0-ab4e-52dbe3c2d5fd	en_IN	CS_COMPLAINT_DETAILS_COMMENTS_PLACEHOLDER	Type your comments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0570aba8-198e-4330-838e-da082d9e5673	en_IN	CS_COMPLAINT_DETAILS_COMMENTS_PLACEHOLDER2	Write your comments...	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f915c9e-f835-4b79-bfb7-6d92bbcb5f24	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT	Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77bca363-8ae5-405a-9496-7ac0cdf185f0	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_ASSIGNED_TO	Complaint assigned to	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f426459a-bf75-4f44-bfe1-b09b2a7e4dc4	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_FILED	Complaint Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9ff3bb9-c9a5-4a73-b1ea-f0f2f3418ca4	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_PENDINGFORASSINMENT	Pending for Assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d01c833f-4a4b-4454-aad6-1d6334049519	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0459eb66-bb61-44df-9fbd-5218c3562654	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_REOPENED	Complaint Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e81f2e84-c8e6-4eb5-be1f-33fc5758f24f	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_RESOLVED	Complaint Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c2399f83-5ff2-4444-ad0a-438bf4fe86ce	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_STATUS	Complaint status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8b8d3aad-34f0-4eca-b52e-3d14bcda71d5	en_IN	CS_COMPLAINT_DETAILS_COMPLAINT_SUBMITTED	Complaint Submitted	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d33726d9-67ff-472d-b554-df026db98050	en_IN	CS_COMPLAINT_DETAILS_DAY	day	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f9251e0-198a-4747-9803-962d82afa191	en_IN	CS_COMPLAINT_DETAILS_DAYS	days	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5c493c88-89cf-40a2-8f53-d2ab4ba1bbbc	en_IN	CS_COMPLAINT_DETAILS_DAYS_LEFT	days left	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a868dc37-e5fb-4667-9038-74ef7ca802ff	en_IN	CS_COMPLAINT_DETAILS_DAY_LEFT	day left	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2c393cc0-24ec-41c5-ba25-664bd212bf44	en_IN	CS_COMPLAINT_DETAILS_DOOR	Door	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5c127213-74ed-41e9-9ec6-99c46dd9ab23	en_IN	CS_COMPLAINT_DETAILS_EMPLOYEE_COMMENTS	Comments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1de6047d-76d4-44c6-9dd0-932b55b5b8e6	en_IN	CS_COMPLAINT_DETAILS_EMPLOYEE_NAME	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6e81a7aa-c345-4beb-af4d-ed59c37a6df7	en_IN	CS_COMPLAINT_DETAILS_ERROR_LOADING_RESULTS	Error while loading results	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90991f00-8006-4f4b-9e4a-279d289b3b33	en_IN	CS_COMPLAINT_DETAILS_ERROR_SCREEN_MESSAGE	The page you are looking for cannot be found	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10f23c92-d2bd-446a-844a-bd377d623bb0	en_IN	CS_COMPLAINT_DETAILS_FILE_A_COMPLAINT	File a Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd7abba1-32cf-4f04-9d0c-b6d9482d18e2	en_IN	CS_COMPLAINT_DETAILS_FILTER	Filter	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab008330-8eed-4b61-86b9-b50991bdd544	en_IN	CS_COMPLAINT_DETAILS_GARBAGE_BIN_ABSENT	Garbage Bin Absent	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+20ed5366-77de-4dc3-8dee-7e1b0c2a31e3	en_IN	CS_COMPLAINT_DETAILS_HOME	Home	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+47d2b053-bd39-47f7-bc8e-70a8544ef38d	en_IN	CS_COMPLAINT_DETAILS_INBOX	Inbox	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46fd8db6-f28b-46fa-acd6-e9a1b8311e1c	en_IN	CS_COMPLAINT_DETAILS_LOCATION	Enter Complaint Location	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+703ed9e0-8609-4f8e-abfd-092bf73edcee	en_IN	CS_COMPLAINT_DETAILS_LOGOUT	Logout	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+be3d724e-3b3e-4391-977a-92399bb2ce07	en_IN	CS_COMPLAINT_DETAILS_MOBILE_NO	Mobile No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8d801548-f394-49c7-bb8c-6021615645ae	en_IN	CS_COMPLAINT_DETAILS_MOBILE_NO.	Mobile No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+13302fc8-54d2-418c-9133-fe2a501fd29b	en_IN	CS_COMPLAINT_DETAILS_NEXT	Next	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b79a55a3-6040-4605-b72d-e54a0f795e36	en_IN	CS_COMPLAINT_DETAILS_OPEN	Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a94dd236-fdcf-4538-b721-ef5b34cb69c5	en_IN	CS_COMPLAINT_DETAILS_OPENED	Opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6c73081c-c209-441b-80c4-bb71286df2fd	en_IN	CS_COMPLAINT_DETAILS_OPEN_UCASE	OPEN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8cf1b78-78b9-4aeb-92a0-a52f05eb44bd	en_IN	CS_COMPLAINT_DETAILS_OVERDUE_BY	Overdue by	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+33fc1e7e-c064-4db3-8638-9cc39274aec8	en_IN	CS_COMPLAINT_DETAILS_OVERFLOWING_BINS	Overflowing Garbage Bins	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecb40850-8231-44cc-bd66-69132a01a646	en_IN	CS_COMPLAINT_DETAILS_PATHOLES	Patholes	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9eb86492-a4ff-4075-a4d4-8855331423df	en_IN	CS_COMPLAINT_DETAILS_PENDINGATLME	Pending at LME	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3c164143-e466-4582-ad62-37a77d0089ad	en_IN	CS_COMPLAINT_DETAILS_PENDINGATSUPERVISOR	Pending At Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a974a014-d507-4af4-9bce-eac4d318c72b	en_IN	CS_COMPLAINT_DETAILS_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db08874d-c8b5-4697-a210-e3699ddc6e9a	en_IN	CS_COMPLAINT_DETAILS_PENDINGFORREASSIGNMENT	Pending for reassignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8eb58479-17e7-4d17-89d6-f6f771907613	en_IN	CS_COMPLAINT_DETAILS_PENDING_STATUS	Complaint pending at GRO	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f66f1393-a3d4-4dd4-be54-24a78da3d50e	en_IN	CS_COMPLAINT_DETAILS_PINCODE_NOT_SERVICABLE	Sorry we are not providing service in this city	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0131b265-5f10-4980-b75f-6df0a07a7c50	en_IN	CS_COMPLAINT_DETAILS_PLOT_NO	Plot No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1bd72a91-763f-4cb5-8462-f7e70d4c52ac	en_IN	CS_COMPLAINT_DETAILS_RATE	RATE	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+06386a58-72b6-459e-a10a-2fb825029c12	en_IN	CS_COMPLAINT_DETAILS_RATING_SUBMIT_TEXT	By making your voice heard, you help us improve mSeva.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e19ad9c-8d08-4eb0-9aa2-7a777c987e88	en_IN	CS_COMPLAINT_DETAILS_RE-ASSIGN REQUESTED	Re-assign Requested	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c128477c-0fe7-4544-b88f-c4eef3316c1c	en_IN	CS_COMPLAINT_DETAILS_REASSIGNED	Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee426680-c694-49ea-9fbb-18d2c03987f6	en_IN	CS_COMPLAINT_DETAILS_REASSIGNED_TO	Re-Assigned to 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+41ae40ef-94bf-4994-b360-217a35dc343d	en_IN	CS_COMPLAINT_DETAILS_REASSIGN_REQUESTED	Re-Assign requested	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d40436cf-df81-41bf-ac57-8718aef4a04a	en_IN	CS_COMPLAINT_DETAILS_REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e272123-3418-451b-96c3-1f3889b80dae	en_IN	CS_COMPLAINT_DETAILS_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8967f92a-05c1-4686-adcf-7d02225ff1c3	en_IN	CS_COMPLAINT_DETAILS_REJECTED_UCASE	REJECTED	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+780fd220-acfe-4529-9212-609c7b2d11cf	en_IN	CS_COMPLAINT_DETAILS_REOPEN	RE-OPEN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d3c19363-d637-4c42-b839-e94ca8ae516a	en_IN	CS_COMPLAINT_DETAILS_REOPENED	Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a83f15f5-e81a-49a8-a6a6-46ebb80a7f00	en_IN	CS_COMPLAINT_DETAILS_RESOLUTION_EVIDENCE	Resolution Evidence	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b5347b13-af73-4788-be0d-af89d713f085	en_IN	CS_COMPLAINT_DETAILS_RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ac2aea0-ea84-470a-8f44-87bc0d3dc60a	en_IN	CS_COMPLAINT_DETAILS_RESOLVED	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+588fd8f2-c0d8-4995-87d7-16ce2c03bd23	en_IN	CS_COMPLAINT_DETAILS_RESOLVEDBYSUPERVISOR	Resolved By Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9fda76e5-7cc7-48cf-b83a-1fed7cc41803	en_IN	CS_COMPLAINT_DETAILS_RESOLVED_UCASE	RESOLVED	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5afaa981-8d39-428f-b991-56c29b0e5ae6	en_IN	CS_COMPLAINT_DETAILS_RE_ASSIGNED	Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc5f807f-6748-4a92-b837-48dc2eff2fb8	en_IN	CS_COMPLAINT_DETAILS_SEARCH_BY	SEARCH BY	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9511adc1-533c-4c28-846b-30a44f144315	en_IN	CS_COMPLAINT_DETAILS_SKIP	Skip and Continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+544833c1-0253-4735-a55e-85fbb7cd254b	en_IN	CS_COMPLAINT_DETAILS_STATUS_ASSIGNED	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3fe97152-8c21-408a-8127-7065c2f8a61b	en_IN	CS_COMPLAINT_DETAILS_STATUS_BEING_REASSIGNED	Complaint is being Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1488a8ad-70a7-49dc-ac07-71acfd293caf	en_IN	CS_COMPLAINT_DETAILS_STATUS_CLOSED	Your Complaint has been Closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f5340e5-2635-43b9-ba63-6c0447d0bc4c	en_IN	CS_COMPLAINT_DETAILS_STATUS_REASSIGNED	Your Complaint has been Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a0612f2-80e6-4dff-99d8-9b3c033aaa44	en_IN	CS_COMPLAINT_DETAILS_STATUS_REASSIGN_REQUESTED	Your Complaint is being Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9df4b1aa-75dd-4410-b7d8-c18ab6c63bc1	en_IN	CS_COMPLAINT_DETAILS_STATUS_REJECTED	Your Complaint has been Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+67df9575-376c-4f38-a741-900c557d3a11	en_IN	CS_COMPLAINT_DETAILS_STATUS_REOPENED	Your Complaint has been Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f6321481-c5dd-4d2b-a5d4-dc1d8c28612e	en_IN	CS_COMPLAINT_DETAILS_STATUS_RESOLVED	Your Complaint has been Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df02e985-d4af-46db-b28b-133e15d28924	en_IN	CS_COMPLAINT_DETAILS_STATUS_SUBMITTED	Your Complaint has been Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e19ae419-9ad8-4758-9ae9-813a7bdc0e5a	en_IN	CS_COMPLAINT_DETAILS_STATUS_UNASSIGNED	Unassigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+40931cf1-e679-42c4-90b4-108df74c28dc	en_IN	CS_COMPLAINT_DETAILS_STREET	Street	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d5f0b47-26d2-4132-9d5b-12f8e52fd5f8	en_IN	CS_COMPLAINT_DETAILS_SUBMISSION_DATE	Filed Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e2fa359c-6a78-4333-a114-569df8a183e7	en_IN	CS_COMPLAINT_DETAILS_SUBMIT	SUBMIT	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ad8b58c-043f-463d-94b0-3ef013bf0cc4	en_IN	CS_COMPLAINT_DETAILS_SUBMITTED	Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a6ef640-49c3-471f-9182-e1faf2847cbe	en_IN	CS_COMPLAINT_DETAILS_SWEEPERS_ABSENT	Absenteeism of Sweepers	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+69e89b5c-c597-4e64-a568-22c70fbf3b17	en_IN	CS_COMPLAINT_DETAILS_THANK_YOU	Thank You	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7e6f3c3-0b53-4aef-a19d-6cb8842cc793	en_IN	CS_COMPLAINT_DETAILS_TRACK_COMPLAINT_TEXT	The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f79e23f-7e87-4964-9d7d-ea39736b4306	en_IN	CS_COMPLAINT_DETAILS_UPLOAD_PHOTOS	UPLOAD PHOTOS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a15d28df-6837-4fed-abb1-017fd2b17399	en_IN	CS_COMPLAINT_LOCALITY	Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90421a64-c5a9-44bf-8585-6352d31a147f	en_IN	CS_COMPLAINT_NO_ERROR_TEXT	Complaint No should be minimum 6 digits	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11567adf-23e5-4af0-8e52-d535bfbabbf8	en_IN	CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT	Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a935385-0e37-4a96-9857-12e1815a6beb	en_IN	CS_COMPLAINT_SELECT_CITY	City	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d3dbadb3-84ee-444c-9f3a-82839c6b232b	en_IN	CS_COMPLAINT_SUBMITTED_COMPLAINT_NO	Complaint No.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c2e31a54-d188-4e8e-925f-5b8a75fa0ff8	en_IN	CS_COMPLAINT_SUBMITTED_LABEL1	Complaint Registered Successfully	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a05f99b8-ec22-4232-845a-baaffb379fae	en_IN	CS_COMPLAINT_SUBMITTED_LABEL2	You can track the status of your complaint on this app anytime!	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4ad185e9-fa9b-47c1-a4fc-207ed48ebf5e	en_IN	CS_COMPLAINT_SUBMITTED_THANKYOU	Thank You!	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+56463515-86de-40ee-80d1-ad514ee3e89c	en_IN	CS_COMPLAINT_TYPE_DRAINS	Drains	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e84615ca-fc67-48e1-b030-af62f16fe2d3	en_IN	CS_COMPLAINT_TYPE_GARBAGE	Garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90e41d64-3052-4c6f-bf4a-bdb62949cfdc	en_IN	CS_COMPLAINT_TYPE_PUBLIC_HEALTH_HYGIENE	Public Health & Hygiene	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fb283766-4fa8-4ef2-a98d-46c4e8d7740c	en_IN	CS_COMPLAINT_TYPE_PUBLIC_LAND_PROPERTY	Public Land & Property	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc7deda0-beb9-42bb-9291-30ed581a112b	en_IN	CS_COMPLAINT_TYPE_SEARCH_PLACEHOLDER	Search	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+38e63a5b-dcdd-4ab2-88e0-f897bcf7f5cc	en_IN	CS_COMPLAINT_TYPE_STREET_LIGHTS	Street Lights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae912244-0ecd-4ed2-bdd8-80f4608c268e	en_IN	CS_COMPLAINT_TYPE_WATER	Water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ca32217e-50d8-4ca7-866f-27b76053c03d	en_IN	CS_CREATECOMPLAINT_MOHALLA_PLACEHOLDER	Choose Locality	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+451cc071-91ca-4094-bd60-e9a535c13a93	en_IN	CS_HEADER_ADD_COMPLAINT	Add Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d446ec40-2d57-4c88-814e-00c899860442	en_IN	CS_HEADER_ALL_COMPLAINTS	All Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4c0284c1-03dd-4552-8f3a-8a2de61b9e30	en_IN	CS_HEADER_ASSIGN_COMPLAINT	Assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d834b511-418b-489c-ba45-53ee7539aa75	en_IN	CS_HEADER_COMPLAINT_SUBMITTED	Complaint Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2bc60f5f-5a81-40ea-84ed-ea6fb2a11ccc	en_IN	CS_HEADER_REASSIGN_COMPLAINT	Re-Assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8c1790f-84c2-4401-a6f9-bf547f058e07	en_IN	CS_HEADER_REOPEN_COMPLAINT	Reopen Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a6603871-73c4-450e-b97a-8ab916c0fd94	en_IN	CS_HEADER_REQUEST_REASSIGN	Request Re-Assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+78b57f7a-7d79-4da2-8b59-4b61c3287144	en_IN	CS_HOME_FILE_COMPLAINT	File Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b657c409-7781-41ed-969f-755c48550952	en_IN	CS_HOME_MY_COMPLAINTS_CARD_LABEL	My Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df2ec3d2-78e4-4037-8788-dbac367057e3	en_IN	CS_HOME_STATUS_PREFIX	Your complaint has been	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+140b9452-9bce-47c7-a3d5-373cfbf9d56e	en_IN	CS_HOME_STATUS_REASSIGN_PREFIX	Your complaint is	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95d7988b-d259-4555-963f-d3c913e962a7	en_IN	CS_HOME_UPDATES	Filed Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1343f024-17b3-4061-b7b7-c5723e62da01	en_IN	CS_HOWITWORKS_DESCRIPTION	We have made connecting with us easier than ever before. Once you raise the complaint, we will assign it to the responsible officer. You can track the status of your complaint on our web-site under “ My Complaints “ till your complaint is resolved.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7a27a72-7a60-445a-8279-8f262aafe7da	en_IN	CS_HOWITWORKS_RAISE_COMPLAINT	Raise a Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3356f1e6-f0e0-4c3d-bbdd-b7fb1feeaebb	en_IN	CS_LANDING_PAGE_COMPLAINTS_DESCRIPTION	mSeva Complaints offers an easy to use interface which enables you to lodge civic works related complaints. It also lets you track the status of your complaint and facilitates direct interaction with your municipality till its resolution.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a665de91-5502-44c9-9fe6-3a9dc7c2851d	en_IN	CS_MYCOMPLAINTS_CLOSED	Complaint Resolved. Please rate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90506be1-9c7f-4ac7-a391-3a17c3b59d0b	en_IN	CS_MYCOMPLAINTS_COMPLAINT_HEADER	ComplaintHeader	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab52a686-d077-4214-99b9-aaa49f08364e	en_IN	CS_MYCOMPLAINTS_COMPLAINT_PREFIX	Complaint has been	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c30f6bdc-48f4-4790-92c1-9bec812a4746	en_IN	CS_MYCOMPLAINTS_ESCALATED_TO	Escalated To:	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85781c59-c981-4ea4-86fb-194ed243df8d	en_IN	CS_MYCOMPLAINTS_RATE	. Please rate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+18346148-ebd1-40b0-aed2-54db5e440101	en_IN	CS_MYCOMPLAINTS_REASSIGN_MESSAGE1	requested for re-assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dd421646-ac87-4b52-8f6f-63bdfbaf2898	en_IN	CS_MYCOMPLAINTS_REASSIGN_MESSAGE2	You have	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+914c8d3c-8a11-48e9-9eb1-1a5746b1c59c	en_IN	CS_MYCOMPLAINTS_REJECTED	Complaint has been Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c7d50826-3414-4154-a62a-7794f603347c	en_IN	CS_MYCOMPLAINTS_RE_ASSIGNED	Complaint Re-assigned to	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b12efb4e-201b-4881-a249-e04a2636f173	en_IN	CS_MYCOMPLAINTS_TO	to	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d3830f71-67b5-4fa0-a57b-e90bf2dcac58	en_IN	CS_MYCOMPLAINTS_TRACK	TRACK	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5e2dedd6-67c4-48c7-aa80-569b2d148bcb	en_IN	CS_PGR_REPORTS_HEADER	Citizen Complaint Resolution System Reports	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2fd4e0ea-3b6c-4d2e-95c9-f436c814e05b	en_IN	CS_REOPEN_COMPLAINT_WHY	Why do you want to Re-Open your Complaint?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9a5ada42-348d-4c97-a89b-ceaab4ef4f13	en_IN	CS_REOPEN_SUCCESS_MESSAGE	Your complaint has been Re-opened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c49a9fd0-7ff9-4bf7-b22a-5dfb47c5e13e	en_IN	CS_SORT_OPTION_ONE	Complaint Date - Old to New	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d7ea3f72-ad28-42ca-952f-52738db8fab6	en_IN	CS_SORT_OPTION_TWO	Complaint Date - New to old	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fdadd117-1150-4991-b2fb-a18a2dd10522	en_IN	DASHBOARD_TITLE_PGR	Dashboard	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cdf14490-3941-4fd3-953c-fc52f6c315eb	en_IN	DEPARTMENT_DEPT_1	Street Lights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+89923eb2-fd7e-43df-9285-90fbde409e89	en_IN	DEPARTMENT_DEPT_3	Garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2d49b2f-d6f8-43c2-8aec-42a9c9ec23d4	en_IN	EMPLOYEE.ASSIGNMENT.TITLE	ASSIGNMENT DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d9c920df-db24-4c3a-a7a8-6396562a01c1	en_IN	EMPLOYEE.EMPLOYEE.TITLE	EMPLOYEE DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a2aa8f16-4837-433c-a70a-82087bf829d0	en_IN	EMPLOYEE.JURISDICTION.TITLE	JURISDICTION LIST	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c5699077-ddec-4e1d-8638-9b8d7a39582a	en_IN	EMPLOYEE.OTHER.TITLE	OTHER DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2fa7782a-a467-4a12-84d3-bd161c835022	en_IN	EMPLOYEE.SERVICE.TITLE	SERVICE SECTION	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc1405d9-cade-4249-98b5-056033d23dc3	en_IN	ERR_COMPLAINT_NUMBER_SEARCH	Enter at least last 6 digit of complaint No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ca681f21-c206-4761-9aaa-101176181b46	en_IN	ES_ALL_COMPLAINTS_ASSIGNED_TAB_LABEL	ASSIGNED	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a0ab8334-691c-480a-8dca-5cfa0a92d9f1	en_IN	ES_ALL_COMPLAINTS_ASSIGNED_TO	Assigned to:	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc77fcc0-aa53-4daf-ae38-8660e94ec2bc	en_IN	ES_ALL_COMPLAINTS_HEADER	All Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68b3bd68-bcfb-4b92-af42-f4bbdb3cefe2	en_IN	ES_ALL_COMPLAINTS_SUBMITTED_BY	Submitted By :	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8fc56f40-d803-4f22-a7be-4d610c54fd0d	en_IN	ES_ALL_COMPLAINTS_UNASSIGNED_TAB_LABEL	UNASSIGNED	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0462d3fb-fb5f-4046-96c2-6679746e5e39	en_IN	ES_ASSIGN_STATUS_ASSIGN	Choose Employee to assign complaint to from the list	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+14c0fbe5-1940-4fd8-b128-340c542ec7b5	en_IN	ES_ASSIGN_STATUS_REASSIGN	Choose Employee to Re-assign complaint to from the list	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+772a4845-fc13-4fd5-90f7-119e92298126	en_IN	ES_ASSIGN_TO_EMPLOYEE_HEADER	Assign to Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+011bd56e-47f5-48b6-81fa-409d2a68aef7	en_IN	ES_CLOSED_COMPLAINTS_HEADER	Closed Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5e29a0dd-f2ce-41ad-89cf-0f7a5f78acc4	en_IN	ES_COMMON_ASSIGN	ASSIGN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a26daf58-afb2-4e67-ab63-af67bff5d67e	en_IN	ES_COMMON_REASSIGN	RE-ASSIGN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e60f961-7b5a-4483-bed7-3e5c38da5b73	en_IN	ES_COMMON_SEARCH_COMPLAINT	Search Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+866c8901-4c6a-4021-a7f5-677018739d3b	en_IN	ES_COMMON_SEARCH_EMPLOYEE	Search Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f3cda1f9-050c-4f87-a656-bb0c4f8b6b61	en_IN	ES_COMPLAINTS_COUNT_RATIO_LABEL	Showing {0} of {1} complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8aa1eeac-128f-4c76-b01a-d0b492b0f50d	en_IN	ES_COMPLAINT_ASSIGNED_HEADER	Complaint Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+09bb15d0-9dc5-47ac-b78a-61681378aec8	en_IN	ES_COMPLAINT_DETAILS_ASSIGNED_BY	Assigned By	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9461d551-4bbd-4aa2-9725-e0bad3c225df	en_IN	ES_COMPLAINT_DETAILS_REASSIGNED_BY	Re-Assigned By	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+594e97a3-5cb6-4aa5-85b3-00dad5afc7d2	en_IN	ES_COMPLAINT_FILED_BY_CSR	Complaint Filed at Citizen Service Desk	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f9567f9-5980-46b5-98f5-cc0e8dc83640	en_IN	ES_COMPLAINT_REASSIGNED_HEADER	Complaint Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4212227f-c556-407f-aad5-97fbacede5f8	en_IN	ES_COMPLAINT_REJECTED_HEADER	Complaint Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87737efc-a4cc-4f14-9f5e-2cffad01d263	en_IN	ES_COMPLAINT_REJECT_SUCCESS_MESSAGE	You have Rejected this complaint.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e51af9f2-a8d9-40f8-b141-ceb18e82be32	en_IN	ES_COMPLAINT_RESOLVED_SUCCESS_MESSAGE	You have marked the complaint as	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fe7e15b0-52f6-4f45-9f90-eac13c373b24	en_IN	ES_COMPLAINT_SUCCESS_LASTLABEL	Please share the complaint no. with the citizen	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5bac63d6-0ebe-4dc6-908b-779d71b3f605	en_IN	ES_COMPLAINT_SUMMARY_MAP	MAP	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e516d324-7397-43ab-8da7-47eb6a4663fc	en_IN	ES_CREATECOMPLAINT_ADDITIONAL_DETAILS	Additional Complaint Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e5e488b4-3236-4ace-add3-d6a0e0d7079a	en_IN	ES_CREATECOMPLAINT_ADDITIONAL_DETAILS_PLACEHOLDER	Add complaint description	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+70c97b96-0939-4292-a5dd-f0bf34d4173d	en_IN	ES_CREATECOMPLAINT_ADDRESS_PLACEHOLDER	Enter complaint address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c4ba0d2b-7725-4392-ae33-0c4170434b7e	en_IN	ES_CREATECOMPLAINT_COMPLAINT_NAME_PLACEHOLDER	Enter citizen name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+beaea68a-81f5-48cd-9863-f7e850039f44	en_IN	ES_CREATECOMPLAINT_MOBILE_NUMBER_PLACEHOLDER	Enter citizen mobile no.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+43b660d7-dd43-4a0e-9bad-cfaae3720a69	en_IN	ES_CREATECOMPLAINT_MOHALLA	Mohalla	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a96e17f-f5d5-4060-a8d2-c33396aa34df	en_IN	ES_CREATECOMPLAINT_MOHALLA_PLACEHOLDER	Select your Mohalla	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1794880f-472b-4d3e-9267-3427684310b6	en_IN	ES_CREATECOMPLAINT_SELECT_PLACEHOLDER	Select	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a5f0a889-3444-4142-bc35-6fe2d1c4eb4b	en_IN	ES_CREATE_COMPLAINT	Create Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e68c815-552b-4c3f-8167-e69ba25ed51d	en_IN	ES_EMPLOYEE_DIRECTORY_HEADER	Employee Directory	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+74c80c88-d533-47fc-bc33-d64c9fb4aa45	en_IN	ES_MYCOMPLAINTS_CLEAR_SEARCH_BUTTON	CLEAR SEARCH	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da2f0b85-b134-4657-a14b-32adddbcb791	en_IN	ES_MYCOMPLAINTS_COMPLAINT_NO	Enter last 6 digits of Complaint No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+347bd398-9dc0-46a9-8d77-612bbcece21a	en_IN	ES_MYCOMPLAINTS_NO_ASSIGNED_COMPLAINTS	No assigned complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db8ad7ed-e530-450e-981d-2c58d0337105	en_IN	ES_MYCOMPLAINTS_NO_COMPLAINTS_ASSIGNED	No complaints to show	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2dad4316-dfcc-48ad-b5dc-31fbc718f573	en_IN	ES_MYCOMPLAINTS_NO_COMPLAINTS_TO_ASSIGN	No complaints to Assign	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4989b0f8-67eb-419b-88a7-7aac7b6b643e	en_IN	ES_MYCOMPLAINTS_SEARCH_BUTTON	SEARCH	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77f66a95-2be5-472a-bd4f-6f0c5e7e57e3	en_IN	ES_OPEN_COMPLAINTS_HEADER	Open Complaints	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+33b7d111-042e-4a6c-a8a3-955f6f068dd3	en_IN	ES_REASSIGN_OPTION_FOUR	Other	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5049bf15-379f-4cb7-85e1-ee5b1a746844	en_IN	ES_REASSIGN_OPTION_ONE	Not a valid complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e557bb90-4b52-46ac-bff2-4416d883b08d	en_IN	ES_REASSIGN_OPTION_THREE	Absent or on leave	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee381b7a-4195-4b74-9dd7-1dc33374ab11	en_IN	ES_REASSIGN_OPTION_TWO	Not my responsibility	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0542d8fb-d47b-4d8f-a796-745fc6199630	en_IN	ES_REASSIGN_REQUEST_QUESTION	Why do you want this complaint to be Re-Assigned?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+42cd4386-b72a-468d-93bc-787a0bec9474	en_IN	ES_REASSIGN_REQUEST_SUCCESS_MESSAGE	Your Re-Assign request has been sent.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+734e9163-d723-43e0-b7a1-6d46457ff08a	en_IN	ES_REASSIGN_TO_EMPLOYEE_HEADER	Re-Assign to Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+42d7c3d2-df83-4d16-bcf6-62b5f0fa0030	en_IN	ES_REJECT_COMPLAINT_QUESTION	Why do you want to Reject this Complaint?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3b5c0ac2-d6b5-49e1-81a0-dc42d1ce2cc8	en_IN	ES_REQUEST_REQUEST_RE_ASSIGN	REQUEST RE-ASSIGN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32efafbc-0f13-4dd3-b596-65ed39aaa94a	en_IN	HR_SUMMARY_DEPT_TEST_DEATILS_SUBHEADER	Department Test Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68b6291d-33a9-4093-8ff8-e204412133f4	en_IN	PGR_ACTION_ASSIGN	Assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a892cb0-ccfc-4c39-a6f9-5a279224114e	en_IN	PGR_ACTION_REASSIGN	Re-Assign Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cf095e8b-badf-4872-8e88-c2a998369c4a	en_IN	PGR_ACTION_REOPEN	Reopen Complaint	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8838254e-4f28-4deb-af2e-6bc6598f1e64	en_IN	PGR_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4c3caeba-0958-468a-b720-4cde7b0aa09e	en_IN	PGR_ASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ee62eec6-aabc-4270-9400-225820d413b0	en_IN	PGR_ASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c87335c0-60ac-4921-9767-c9a57f5ff63a	en_IN	PGR_CITIZEN_REASSIGN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal. \n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+04ed4081-aec5-4984-a010-2f78d766c777	en_IN	PGR_CLOSE_EMPLOYEE_CLOSEDAFTERRESOLUTION_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+340d9f10-1a16-4611-a21f-0e9c62b2555f	en_IN	PGR_DEFAULT_CITIZEN_SMS_MESSAGE	Your current complaint status is {status}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4ed719a-01ab-468d-8406-6dcabad1e0d8	en_IN	PGR_DEFAULT_SMS_MESSAGE	Your complaint has been {status}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91526ce9-3f9e-45f2-b23e-f069acfe88dd	en_IN	PGR_EMPLOYEE_REASSIGN_PENDINGATLME_SMS_MESSAGE	Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb} \n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4951b89d-7d0c-44fb-a58e-1f84141a3b7b	en_IN	PGR_REASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b5521af-e3bb-4251-a2a4-a2eb2351cb47	en_IN	PGR_REASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a408799-fa5d-419e-ba46-7d8e02782465	en_IN	PGR_REASSIGN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {reassign_emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bd6f9b73-ebad-43b6-9407-4a8866aa22a1	en_IN	PGR_REJECT_CITIZEN_REJECTED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {reason}, Additional Comments: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2200903c-9ea9-4094-97af-e563b390e830	en_IN	PGR_REJECT_REJECTED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {reason}, Additional Comments: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+636e7750-6119-487a-94f3-c6a8d22bed2c	en_IN	PGR_REOPEN_CITIZEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3de83070-49a5-4cad-b343-bdeb167323c7	en_IN	PGR_REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT_SMS_MESSAGE	Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e902283-fd0b-46ec-9429-bcf1b3cfd26a	en_IN	PGR_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d344da5c-ab96-4ffc-8076-16073bdfa73d	en_IN	PGR_RESOLVE_CITIZEN_RESOLVED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1061270e-8fc5-4bd1-9c24-67294c359ca0	en_IN	PGR_RESOLVE_RESOLVED_SMS_MESSAGE	Dear Citizen,\n Your complaint for <complaint_type> with ID <id> submitted on <date> has been resolved by <emp_name>. If you are not satisfied with service you can REOPEN complaint through web portal or by calling our CSR.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+68893ca3-6f7b-4171-b557-a8402bf68d8c	en_IN	SERVICEDEFS_BOUNDARYSTRUCTUREIDENTITY	Boundary, Structure & Identity	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bffceb9a-8d76-4051-9077-9eb6910d8056	en_IN	WF_PGR_APPLY	Applied	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5da26a44-88fa-4a55-b72f-3e95b52e6491	en_IN	WF_PGR_ASSIGN	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6487f7f5-a523-4597-be3a-449ee11683eb	en_IN	WF_PGR_RATE	Closed after rating	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f974f68a-d798-4dd1-aba3-0e3fffca7a14	en_IN	WF_PGR_REASSIGN	Re-Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b2dc19c-6b02-42dc-b8e8-48c5646e6bf6	en_IN	WF_PGR_REJECT	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+242734f8-ebb2-4db0-a08c-1b0ff1fd3532	en_IN	WF_PGR_REOPEN	Reopened	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc9bc32e-66cf-445d-a6bd-e17829e82fc7	en_IN	WF_PGR_RESOLVE	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b91d590e-8209-4daf-892b-017fbf3271cd	en_IN	chatbot.pgr.assigned	Assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8741cd80-b31e-4385-abc4-86309987d559	en_IN	chatbot.pgr.closed	Closed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3aeb498e-b6c5-4bac-9766-e2ced480fd43	en_IN	chatbot.pgr.open	Filed	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8194671-4558-4425-9411-98209bcf68f8	en_IN	chatbot.pgr.reassignrequested	Being Re-assigned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e77b1832-4142-404f-8356-dfcb26ba9d31	en_IN	chatbot.pgr.rejected	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3b4b4814-9260-4b7a-9417-24dd22854b83	en_IN	chatbot.pgr.resolved	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6321e301-da57-4a22-90cb-805ab7321339	en_IN	employee.Assignment.fields.department	Department	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ffb53ef4-4d7a-4f39-8406-c90cd625d751	en_IN	employee.Assignment.fields.designation	Designation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+10f0d987-a213-4a27-af5d-7c5209cccd6c	en_IN	employee.Assignment.fields.documents	Documents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88849954-855b-43da-828a-07644f88cda2	en_IN	employee.Assignment.fields.fromDate	From Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e8ef7b5-4a29-43a9-97a4-f3c6ad5547eb	en_IN	employee.Assignment.fields.function	Function	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecfdd58c-1df5-4dea-abcf-1c417990f4fb	en_IN	employee.Assignment.fields.functionary	Functionary	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc8b014c-798d-4c00-a733-bfca0def998f	en_IN	employee.Assignment.fields.fund	Fund	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1453bcdc-6391-40ca-8c2b-d1833d8f98f2	en_IN	employee.Assignment.fields.govtOrderNumber	Govt Order Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+98214202-2535-4770-aa6a-18dd272f1a96	en_IN	employee.Assignment.fields.grade	Grade	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+24f5a76c-a047-43e7-81b6-b8da11702a39	en_IN	employee.Assignment.fields.hod	If Hod	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f68a59c-102f-4037-a5a5-786d1f22075e	en_IN	employee.Assignment.fields.position	Position	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+36e4756b-89c3-4e6a-b0e0-5eaac1399751	en_IN	employee.Assignment.fields.primary	Is Primary	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a877dccf-8890-4878-903e-471083d522d0	en_IN	employee.Assignment.fields.toDate	To Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8ccc75bd-c58a-4e0e-99dd-ae6911dbad31	en_IN	employee.Assignment.title	ASSIGNMENT DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ece9c17-532d-4488-80f9-c5ad9dcbd13d	en_IN	employee.DepartmentalTest.fields.test	Test	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc2fc20b-816f-4f92-89d9-8ea1b0a86d84	en_IN	employee.DepartmentalTest.title	Departmental Test Details	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+845e9b68-4acb-4291-bbd5-2920709dc8d1	en_IN	employee.EducationalQualification.fields.documents	Doc Documents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f0f2235-b275-4e69-bee5-533d150f63a9	en_IN	employee.EducationalQualification.fields.majorSubject	Major Subject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+11374af2-2a17-4317-b346-360b1a61ca63	en_IN	employee.EducationalQualification.fields.qualification	Qualification	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ad1228a-1fe0-40d3-b305-c6d930de0a1f	en_IN	employee.EducationalQualification.fields.university	University/Board	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+435ac3c0-2ab7-4232-9e5f-dddb4b5ffeef	en_IN	employee.EducationalQualification.title	Educational Qualification	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df71acdf-1ba2-412b-8b61-ad210f4ebdc7	en_IN	employee.Employee.fields.EmployeePhoto	Employee Photo	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+348cc2a1-9ed1-4ee5-9d5b-d1070310ab73	en_IN	employee.Employee.fields.EmployeeSignature	Employee Signature	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+74a6d23d-47a6-4091-b73a-4d97416427eb	en_IN	employee.Employee.fields.OtherAttachments	Other Attachment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4305a7c3-fd85-433d-b8d6-083531e299c1	en_IN	employee.Employee.fields.User.aadhaarNumber	Aadhaar Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7fc17495-7003-4177-85b6-6a123dbd05bc	en_IN	employee.Employee.fields.User.birth	Native/Birth Place	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+644a2305-a1a4-4e12-99a5-41cf34a50781	en_IN	employee.Employee.fields.User.bloodGroup	Blood Group	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87204670-a3f1-429f-ab32-db33e0418cf7	en_IN	employee.Employee.fields.User.gender	Gender	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+09b6270c-7ba7-43f4-908e-f5ee3066fc4c	en_IN	employee.Employee.fields.User.mobileNumber	Phone Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a183efeb-b71c-48b1-890f-46ea3ada1f6c	en_IN	employee.Employee.fields.User.name	Employee Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dee6c62e-605b-4879-bad1-09f3dcfffb44	en_IN	employee.Employee.fields.User.userName	User Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+52448471-1997-4137-b929-7905f65e47dd	en_IN	employee.Employee.fields.bank	Bank	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e110f33b-ad85-43fb-9b78-e3929f0e8c12	en_IN	employee.Employee.fields.bankAccount	Account Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+630e5a62-c60a-4cd6-8ddd-a21bffcb3bf1	en_IN	employee.Employee.fields.bankBranch	Bank Branch	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f6f8fb4-4db9-4f3c-b994-8ad5cfff5754	en_IN	employee.Employee.fields.category	Category	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d3877c9-cf93-4276-86d4-7f53e542acae	en_IN	employee.Employee.fields.city	City	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ede58672-9847-4609-aaa3-7346f1804703	en_IN	employee.Employee.fields.code	Code	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e58b59fd-86d5-45a3-9b15-6bdbee24589e	en_IN	employee.Employee.fields.community	Community	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15270931-e7c3-4582-8ebb-8b1c44b9a812	en_IN	employee.Employee.fields.correspondenceAddress	Correspondence Address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6212d59a-e9ef-4571-b93e-f4c6e6191aab	en_IN	employee.Employee.fields.correspondencePinNumber	Correspondence Pin Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d2a0434-7287-4ead-a061-b3f50e7fc024	en_IN	employee.Employee.fields.dateOfAppointment	Date of Appointment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cbe610fb-a5e6-41dc-8dfc-d47942e2c401	en_IN	employee.Employee.fields.dateOfBirth	Date of Birth	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+116d0fc7-9d45-411c-abf9-f2ac305bca43	en_IN	employee.Employee.fields.dateOfJoining	Date of Joining/Deputation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db03f77b-44a8-456e-b133-0e58e9252062	en_IN	employee.Employee.fields.dateOfResignation	Date of Resignation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d36b407-ae97-4313-b1a4-1ae590d6adff	en_IN	employee.Employee.fields.dateOfRetirement	Date of Retirement	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f2700ce5-4821-4586-abc4-5b1f82bf58f9	en_IN	employee.Employee.fields.dateOfTermination	Date of Termination	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ecae9d49-1a2e-4201-86f0-2142553a64d5	en_IN	employee.Employee.fields.email	Email Id	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+109ab398-2158-4888-94a7-e191741fa4ff	en_IN	employee.Employee.fields.employeeStatus	Employee Status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b7be269-34f6-4312-855a-2ff7a12c638b	en_IN	employee.Employee.fields.employeeType	Employee Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a56c74d2-c759-4ec9-b4bb-3e07f6b1a389	en_IN	employee.Employee.fields.fatherSpouseName	Father's/Spouse Name	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8c09c644-0ae1-4897-a10b-43fe25cdb643	en_IN	employee.Employee.fields.gpfNo	Gpf No/CPS Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d753773b-0cb6-485f-a0d5-ddddb2c6c855	en_IN	employee.Employee.fields.group	Employee Group	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4245eb61-059f-4e0d-9f04-cdc740809486	en_IN	employee.Employee.fields.identification	Identification Mark	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f52185d-9ff2-4887-875d-7c2f0e4e2a03	en_IN	employee.Employee.fields.languagesKnown	Languages Known	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a669c91f-2269-4370-a0d5-e8aca3a492eb	en_IN	employee.Employee.fields.maritalStatus	Marital Status	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f1d406d-7848-4124-b6b9-30be7b1c1f55	en_IN	employee.Employee.fields.medicalReportProduced	Medical Report Produced?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+16551dc3-1dcd-4cae-8322-7b5298bec74a	en_IN	employee.Employee.fields.motherTongue	Mother Tongue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8034f6c3-c463-4ac4-963b-c3d5390ae52b	en_IN	employee.Employee.fields.pan	PAN	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f6ef548-ed0c-4326-a0e3-2e84cc030ec3	en_IN	employee.Employee.fields.parmanentPinNumber	Permanent Pin Number	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da3ea9e4-e99d-4742-bc35-4805c36d9406	en_IN	employee.Employee.fields.passportNo	Passport No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+44cda11a-4b46-4b41-b8d3-c788264a0c95	en_IN	employee.Employee.fields.permanentAddress	Permanent Address	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3f449c54-33ab-4293-9306-daa3f6335ebb	en_IN	employee.Employee.fields.physicallyDisabled	Is Physically Disabled?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+45921ab8-b9ea-4814-b26f-1d50934956a5	en_IN	employee.Employee.fields.recruitmentMode	Recruitment Mode	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+230e1ae6-654d-4463-b9b6-c2032b050195	en_IN	employee.Employee.fields.recruitmentQuota	Recruitment Quota	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+838b4aaf-4fb3-470c-8f61-7ee80475ae9d	en_IN	employee.Employee.fields.recruitmentType	Recruitment Type/Service Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b39b0d05-b83a-4f7d-9669-0f127949e574	en_IN	employee.Employee.fields.religion	Religion	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+141782ff-0098-4b67-8447-1df32edac31c	en_IN	employee.Employee.fields.retirementAge	Retirement Age	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4320345-5c16-47a9-8848-bcbcc3e5aea5	en_IN	employee.Employee.title	EMPLOYEE DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5426e93c-31b4-477b-ac11-b45119f14be1	en_IN	employee.Jurisdictions.title	JURISDICTION LIST	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f5c30328-0e2d-41be-a20e-218c8074103f	en_IN	employee.Probation.fields.declaredOn	Declared On	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+783dba3b-fdaa-4de8-b086-1123f0962d22	en_IN	employee.Probation.fields.documents	Documents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e5ac2b5-b31b-470f-9925-dcf8cd35b470	en_IN	employee.Probation.fields.orderDate	Order Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+975fe26e-17e7-48a2-9be6-d7a4a144a755	en_IN	employee.Probation.fields.orderNo	Order No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+21279e54-720c-4fb0-923b-00f165b150fe	en_IN	employee.Probation.fields.remarks	Remarks	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+64c3e658-8a06-4f59-81d2-798879323dbb	en_IN	employee.Probation.title	Probation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5445f9e9-fc9d-4e3a-b0c9-f6f46705d942	en_IN	employee.Regularisation.fields.declaredOn	Declared On Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39984785-916f-4edd-9b72-f4170737590f	en_IN	employee.Regularisation.title	Regularisation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+04e4c7fb-7e10-4606-8f8e-27eb00455c5c	en_IN	employee.ServiceHistory.fields.ServiceEntryDescription	Service Entry Description	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b3fc32a-ce1a-4c50-b883-8882af5bf30e	en_IN	employee.ServiceHistory.fields.date	Date	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b5440ea-a577-4ea9-8931-e73dce155f8c	en_IN	employee.ServiceHistory.fields.documents	Documents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+134f458e-bb5c-40aa-b588-9e6e63c6de81	en_IN	employee.ServiceHistory.fields.orderNo	Order No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6b8a7fab-3a9f-4133-b460-59cb7296b6a4	en_IN	employee.ServiceHistory.fields.remarks	Remarks/Comments	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e23caf18-7c76-413b-96b7-80801d29163e	en_IN	employee.ServiceHistory.title	Service History	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c122f087-60f7-4f06-8c7b-6c757e5c683a	en_IN	employee.TechnicalQualification.fields.grade	Grade	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d282d74a-9322-4a4a-b267-20852ae8ceb7	en_IN	employee.TechnicalQualification.fields.remarks	Remarks	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+85f33011-498d-4899-aeef-bc9ac8e31abe	en_IN	employee.TechnicalQualification.fields.skill	Skills	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ed2db58c-ef86-4a47-ad6e-92f6489ac96a	en_IN	employee.TechnicalQualification.fields.yearOfPassing	Year Of Completion	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bacd907f-caa7-4e9b-9dcc-d130c8fa382c	en_IN	employee.TechnicalQualification.title	Technical Qualification	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a1416a64-1de2-4612-a005-847fc4186a75	en_IN	employee.createPosition.groups.fields.outsourcepost.value1	Yes	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab2ad5da-8d9c-4d73-927f-a44d759a5afb	en_IN	employee.createPosition.groups.fields.outsourcepost.value2	No	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e34202f0-7be0-44ef-9006-fad2668412d0	en_IN	employee.fields.isUserActive	Is User Active?	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+023430e9-f390-42a3-9130-6c708b6440d6	en_IN	employee.jurisdiction.fields.boundary	Boundary	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e0f47540-8e96-44f3-8c27-23a1aae17a86	en_IN	employee.jurisdiction.fields.boundaryType	Boundary Type	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e8f477d0-7a2f-4688-af76-0efc4a97179b	en_IN	employee.other.title	OTHER DETAILS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e950b510-e234-40ff-af4d-4ed5d4b29c89	en_IN	employee.service.title	SERVICE SECTION	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+50c92f71-7bac-4741-b7b7-20b146fe760c	en_IN	pgr.complaint.category.ANIMALS	Animals	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a497d6af-3756-4ad7-a71e-543327185b0d	en_IN	pgr.complaint.category.BADSTREETLIGHT	Bad Streetlight	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d118a05-eac4-47da-b44b-c623a0edd1ec	en_IN	pgr.complaint.category.BADSUPPLY	Bad Supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8e96d44-ff65-4abd-91f8-875fcef7f9a7	en_IN	pgr.complaint.category.BADTRAFFICLIGHT	Bad Traffic Light	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f28b6b22-29ec-42ba-9180-886630ef1f75	en_IN	pgr.complaint.category.BINNOTEMPTY	Bin Not Empty	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d9516459-c9ad-4382-b722-bb0859a0768e	en_IN	pgr.complaint.category.BINS	Bins	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4f3f1ec8-48f5-4415-9005-bff88c3340df	en_IN	pgr.complaint.category.BLOCK/OVERFLOWINGSEWAGE	Block / Overflowing sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+80c9ca61-4d2e-4418-b335-cbb984cb0bb6	en_IN	pgr.complaint.category.BLOCKED	Blocked	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db6841fe-6a16-41e7-aeec-00423ce94794	en_IN	pgr.complaint.category.BLOCKEDDRAIN	Blocked Drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73caddd1-b8c0-48bf-b992-a09b9034cab4	en_IN	pgr.complaint.category.BLOCKOROVERFLOWINGSEWAGE	Block/Overflowing sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1904094d-0f60-4170-93db-10cdde64c390	en_IN	pgr.complaint.category.BLOCKOVERFLOWINGSEWAGE	Block/Overflowing sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+84f2075d-339f-4f6e-803e-2a91b5d3ec13	en_IN	pgr.complaint.category.BOUNDARYSTRUCTUREIDENTITY	Boundary, Structure & Identity	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+19eda849-f0ef-4a14-b803-f64e37c07f98	en_IN	pgr.complaint.category.BROKEN	Broken	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+28f71876-c052-4fdc-bc1e-8111e4453e7b	en_IN	pgr.complaint.category.BROKENBIN	Broken Bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+274486b0-bc45-408f-840e-e4169f30a1bb	en_IN	pgr.complaint.category.BROKENGARBAGEBIN	Broken Garbage Bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+65f20e1f-a551-433e-baca-86ac5edea77b	en_IN	pgr.complaint.category.BROKENGUARD	Broken Guard	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e316a7e-77e3-4b80-8ec7-a67512c20f9f	en_IN	pgr.complaint.category.BROKENHANDPUMP	Broken Handpump	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+723876c1-e3c0-42a9-b8fb-4290a626dc15	en_IN	pgr.complaint.category.BROKENORDAMAGEDPIPE	Broken Or Damaged Pipe	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+01cda4c9-b6fd-4dca-93a5-7646f7b41976	en_IN	pgr.complaint.category.BROKENORLEAKINGSEWAGEPIPE	Borken or Leaking Sewage pipe	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95040b80-2509-405d-90da-9634f479238b	en_IN	pgr.complaint.category.BROKENPIPEORTAP	Broken Pipe Or Tap	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8f73b35-de97-4da9-b325-66ac205b6211	en_IN	pgr.complaint.category.BROKENWATERPIPEORLEAKAGE	Broken water pipe / Leakage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1eae17a9-abbc-4838-8723-3a96b31d847f	en_IN	pgr.complaint.category.BROKENWATERPIPEORTAP	Broken Water Pipe or Tap	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4219a3dd-4e9e-4295-9226-8f08e38b173b	en_IN	pgr.complaint.category.BURNING	Burning	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1326ba00-8f7e-40af-9c0f-4b5bf8a15cb6	en_IN	pgr.complaint.category.BURNINGOFGARBAGE	Burning of garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d7a68efa-0822-411e-83dd-3a6b23027e01	en_IN	pgr.complaint.category.BlockOrOverflowingSewage	Block/Overflowing sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e3b0b5b-82ab-474d-9570-667a5a5cc052	en_IN	pgr.complaint.category.BoundaryStructureIdentity	Boundary, Structure & Identity	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e4c1cca-6ce5-4a7c-9e4d-502ed6c318f3	en_IN	pgr.complaint.category.BrokenWaterPipeOrLeakage	Broken water pipe / Leakage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a1b3be11-0f52-4657-8fd3-b0491d4fa4ce	en_IN	pgr.complaint.category.BurningOfGarbage	Burning of garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1da4880-228b-4987-9ade-ab50b49457bb	en_IN	pgr.complaint.category.COMPENSATION	Compensation(Redevelopment & Damaged Property)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5c9571f1-afe3-4657-92ca-2b3809335b12	en_IN	pgr.complaint.category.CONSTRUCTIONMATERIALLYINGONTHEROAD	Construction material lying on the road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bb9783d2-1aaf-43c5-a9bb-877c27307824	en_IN	pgr.complaint.category.CUSTOMS	Customs Duty	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+48443262-8807-452d-9da6-b4f377fbadde	en_IN	pgr.complaint.category.CUSTOMSDUTY	Customs Duty	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88c581d5-b0e4-41b6-b713-5ed9b4f5a8f1	en_IN	pgr.complaint.category.CUTTINGORTRIMMINGOFTREEREQUIRED	Cutting/trimming of tree required	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e120db62-6b15-45ea-878a-17510f41deaa	en_IN	pgr.complaint.category.Compensation	Compensation(Redevelopment & Damaged Property)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8aead2f1-5082-4198-a744-4a7ad47cb675	en_IN	pgr.complaint.category.ConstructionMaterialLyingOntheRoad	Construction material lying on the road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d96c79cf-40d7-4761-bf96-311226d009f2	en_IN	pgr.complaint.category.CustomsDuty	Customs Duty	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+eff376eb-bd25-4707-bd90-622bfb3d5f80	en_IN	pgr.complaint.category.CuttingOrTrimmingOfTreeRequired	Cutting/trimming of tree required	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3c6341fe-bc0f-48f6-8641-eb46ebc39e14	en_IN	pgr.complaint.category.DAMAGED	Damaged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c4b85e39-43eb-4fff-992f-d93f88431fcc	en_IN	pgr.complaint.category.DAMAGED/BLOCKEDFOOTPATH	Damaged/blocked footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6ad5620-937c-4fcb-acb0-6c7fac6a0d77	en_IN	pgr.complaint.category.DAMAGEDBLOCKEDFOOTPATH	Damaged/blocked footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8989978-d412-4534-b466-4d3df6d08c56	en_IN	pgr.complaint.category.DAMAGEDDRAIN	Damaged Drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7aa5d0ea-bb2d-4629-8bf8-4a70a7939829	en_IN	pgr.complaint.category.DAMAGEDFOOTPATH	Damaged Footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9cb81a4e-5c0e-43bb-a410-9bec217bddc2	en_IN	pgr.complaint.category.DAMAGEDGARBAGEBIN	Damaged garbage bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+752a2eaf-a33f-40f3-bf57-4ebad89ed628	en_IN	pgr.complaint.category.DAMAGEDORBLOCKEDFOOTPATH	Damaged/blocked footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+56f45277-93c8-4df6-ae6a-7989419ffe15	en_IN	pgr.complaint.category.DAMAGEDROAD	Damaged road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+137a7992-df22-4848-813e-f95f733298ae	en_IN	pgr.complaint.category.DAMAGEDSTREETLIGHT	Damaged Streetlights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66dfe7ed-5f1b-4722-9c53-311c9444634c	en_IN	pgr.complaint.category.DEADANIMALS	Dead animals	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+817d7b62-cdc2-48f2-a15f-4aef84ebbae4	en_IN	pgr.complaint.category.DEADBODY	Dead Body	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+939275e9-f3fe-4fb2-9f59-6f53f29b15b5	en_IN	pgr.complaint.category.DEBRISORSILT	Debris Or Silt	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a5731c16-b721-496a-99d1-0bd8292f7634	en_IN	pgr.complaint.category.DIRTYORSMELLY	Dirty Or Smelly	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b21bbd20-3146-4993-bcb8-6f4305eedf89	en_IN	pgr.complaint.category.DIRTYORSMELLYPUBLICTOILETS	Dirty/smelly public toilet	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da0934a9-3e66-44bf-af36-e31aaba856c9	en_IN	pgr.complaint.category.DIRTYWATERSUPPLY	Dirty water supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fd6a9ac2-226d-4414-b519-8c59ef3c65ef	en_IN	pgr.complaint.category.DISPLACEMENT	Displacement (Insecurity)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6c51bd09-3c84-487e-be89-739dabb09920	en_IN	pgr.complaint.category.DRAINS	Drains	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9ef42030-fe5e-4750-a7ed-6069f3812b76	en_IN	pgr.complaint.category.DUMPING	Dumping	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5b33b094-9062-44a0-991e-987b7b09b16b	en_IN	pgr.complaint.category.DamagedGarbageBin	Damaged garbage bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b2f054c1-5131-46f7-aa10-b239a8f33a11	en_IN	pgr.complaint.category.DamagedOrBlockedFootpath	Damaged/blocked footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e4f58a4-6d06-43b7-a0f4-74ad2540cab6	en_IN	pgr.complaint.category.DamagedRoad	Damaged road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a429b7c8-b363-4f4b-8e2a-f969341db744	en_IN	pgr.complaint.category.DeadAnimals	Dead animals	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd62e019-9ef5-4c1a-873c-eeddbbc3c462	en_IN	pgr.complaint.category.DirtyOrSmellyPublicToilets	Dirty/smelly public toilet	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0207990e-d702-4544-82e1-90c3cd75086d	en_IN	pgr.complaint.category.DirtyWaterSupply	Dirty water supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8666e721-df33-4561-a378-51d13d4101fc	en_IN	pgr.complaint.category.Displacement	Displacement (Insecurity)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e3f63362-2e5c-4ca6-ac21-e9e05d63ef7f	en_IN	pgr.complaint.category.EMPLOYEEABSENT	Employee Absent	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6bc3c4e-8d51-4dbb-8aa4-49332b68e9da	en_IN	pgr.complaint.category.ENCROACHMENT	Encroachment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e60d2acd-a222-4f44-9e40-4bc5d453c024	en_IN	pgr.complaint.category.ENCROACHMENTONPUBLICPROPERTY	Enroachment on Public Property	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2c1ab83e-8a16-472a-b24d-75566bc154b0	en_IN	pgr.complaint.category.FINANCE	Tax Rate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af841135-2b58-4318-a710-3b580f44a17f	en_IN	pgr.complaint.category.FOOTPATHS	Footpaths	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3147fe6f-ea6e-46b6-8f64-ef10fcefe14e	en_IN	pgr.complaint.category.GARBAGE	Garbage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d0db9a4-4439-4639-b629-11c94bdf48d3	en_IN	pgr.complaint.category.GARBAGEBINNOTEMPTY	Garbage Bin not empty	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6f08327-b0b1-4260-888e-c948c47ca3a4	en_IN	pgr.complaint.category.GARBAGEBINNOTTHERE	Garbage Bin not there	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e4a17d1a-7814-43c4-813f-c9f62c950837	en_IN	pgr.complaint.category.GARBAGENEEDSTOBECLEANED	Garbage needs to be cleaned	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+45dc2003-92c0-476c-bc1c-7e630a96474a	en_IN	pgr.complaint.category.GARBAGENEEDSTOBECLEARED	Garbage needs to be cleared	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0f3e368d-0435-49ed-9a9a-014f6124be0e	en_IN	pgr.complaint.category.GOODGOVERNANCE	Good Governance	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc192ae0-3b5b-45a0-ab2f-96528e4e041d	en_IN	pgr.complaint.category.GOVERNANCE	Good Governance	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+63eb9d49-3337-49be-b145-5b1b4f696434	en_IN	pgr.complaint.category.GarbageNeedsTobeCleared	Garbage needs to be cleared	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9382e3be-3a90-4ff3-b837-931d4263ccbc	en_IN	pgr.complaint.category.GoodGovernance	Good Governance	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c90ac5ac-e3f9-4853-bf92-9b172755eefc	en_IN	pgr.complaint.category.HOUSEDEBATE	House Debate (Kebele House & Proclamation 47/67)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6a1b26df-ff46-4e98-82fd-e4d2163a19cc	en_IN	pgr.complaint.category.HOUSING	House Debate (Kebele House & Proclamation 47/67)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+60384841-df66-45d2-8806-a8ee20b3f9f1	en_IN	pgr.complaint.category.HouseDebate	House Debate (Kebele House & Proclamation 47/67)	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+53ec9b5e-62ed-405a-bc62-c626f4abf9f3	en_IN	pgr.complaint.category.ILLEGALCONSTRUCTION	Illegal Construction	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fa70d700-5de4-481c-a213-aacdd4bee208	en_IN	pgr.complaint.category.ILLEGALCONSTRUCTIONS	Illegal constructions	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a43f0e8a-01d4-413c-b6db-6270caedfbea	en_IN	pgr.complaint.category.ILLEGALCUTTING	Illegal Cutting	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e2333556-b392-47eb-b8bf-d96d3c9d9a3b	en_IN	pgr.complaint.category.ILLEGALCUTTINGOFTREES	Illegal Cutting of trees	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0e82fdd3-85e6-4b3c-a2e4-2533f048914e	en_IN	pgr.complaint.category.ILLEGALDISCHARGE	Illegal discharge of sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+53647dee-8abc-4451-b999-e5be1dcadfd6	en_IN	pgr.complaint.category.ILLEGALDISCHARGEOFSEWAGE	Ilegal Discharge of Sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+42fade68-4f73-4fcb-91cf-b7f6c81852a7	en_IN	pgr.complaint.category.ILLEGALFOOTPATHSHOP	Illegal Footpath Shop	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1fb28c56-b892-49bd-9da6-15b051f4f49a	en_IN	pgr.complaint.category.ILLEGALHOARDING	Illegal Hoarding	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2e80a99e-83a8-45a1-8d4b-68f34932f17e	en_IN	pgr.complaint.category.ILLEGALPARKING	Illegal parking	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e1a894cb-e89b-4b3d-b857-e2478eb844c4	en_IN	pgr.complaint.category.ILLEGALSHOPS	Illegal Shops	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9a9ac06e-f248-46d3-bc5f-e394ac12b60d	en_IN	pgr.complaint.category.ILLEGALSHOPSONFOOTPATH	Illegal shops on footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d02e8499-83d9-41f3-bbc0-630cbc0896f5	en_IN	pgr.complaint.category.ILLEGALSHOPSONTHEFOOTPATH	Illegal Shops on the Footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+48c3a606-c260-4df6-a01b-10cca0f71a02	en_IN	pgr.complaint.category.INFRASTRUCTURE	Boundary, Structure & Identity	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c5474a75-b43e-47ee-9b4d-fdc4a23e647e	en_IN	pgr.complaint.category.IllegalConstructions	Illegal constructions	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d09e663f-86e0-4c77-be56-ef7f1ba80170	en_IN	pgr.complaint.category.IllegalCuttingOfTrees	Illegal Cutting of trees	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab80cf7f-759e-4081-81c5-acec02db796c	en_IN	pgr.complaint.category.IllegalParking	Illegal parking	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+308a6028-7395-4702-9986-c93c365e5e95	en_IN	pgr.complaint.category.IllegalShopsOnFootPath	Illegal shops on footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2379ee3d-c65f-4c16-967b-10a69e3cfa32	en_IN	pgr.complaint.category.JUSTICE	Justice	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a17fb8a5-fef3-4962-b206-32a8504dfc9f	en_IN	pgr.complaint.category.Justice	Justice	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ad3879f7-16a2-4940-b2f2-5d52b075305e	en_IN	pgr.complaint.category.LABOR	Labor Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a3557841-9151-405e-9653-603bb5d225fd	en_IN	pgr.complaint.category.LABORDISPUTE	Labor Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b96b2a3-430d-4da9-9fd6-b213e2a91d3d	en_IN	pgr.complaint.category.LANDVIOLATION	Land Violation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+351d17df-7473-4022-acb3-fc1d6f8a5c6d	en_IN	pgr.complaint.category.LANDVIOLATIONS	Land Violations	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+330d60f6-d039-4690-be46-4bb9218b3b2c	en_IN	pgr.complaint.category.LEGAL	Justice	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9102d89f-f377-4930-9454-c0bdf22abda0	en_IN	pgr.complaint.category.LIGHTS	Lights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5b18aefc-6707-4371-8dd2-c825d6925489	en_IN	pgr.complaint.category.LaborDispute	Labor Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1cc64410-514d-4763-8acf-27b42f1bb19b	en_IN	pgr.complaint.category.MANHOLECOVERMISSINGORDAMAGED	Manhole cover is missing/damaged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6442464f-a57d-440f-8062-cf9eeeed61a9	en_IN	pgr.complaint.category.MANHOLEISSUE	Manhole Issue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8999cbf0-172e-4bf5-894b-aef983f78d08	en_IN	pgr.complaint.category.MISUSE	Misuse	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+de9e6c10-47cd-423d-8644-8843036af09b	en_IN	pgr.complaint.category.MOSQUITOES	Mosquitoes	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9ff5bc0-ded7-4432-912a-212a7f61ca08	en_IN	pgr.complaint.category.MOSQUITOS	Mosquitoes	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+099377e5-3c04-42af-883c-3bac382b7e81	en_IN	pgr.complaint.category.ManholeCoverMissingOrDamaged	Manhole cover is missing/damaged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1e4981f3-b8b6-4e76-ac1a-cde6abc0db43	en_IN	pgr.complaint.category.NONSWEEPINGOFROAD	Non sweeping of road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6f236bac-5fc0-4ea0-a181-e07e2b422c97	en_IN	pgr.complaint.category.NOSTREETLIGHT	No streetlight	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3d30e0f3-9fbb-4cf3-ac7a-52803dbf8fb6	en_IN	pgr.complaint.category.NOTFUNCTIONAL	Not Functional	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b5e601dc-2526-498f-abdc-1514dc6423a7	en_IN	pgr.complaint.category.NOTWATERSUPPLY	Not Water Supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5d20a851-ed67-4ffe-befd-c2193016ddd0	en_IN	pgr.complaint.category.NOWATERORELECTRICITY	No Water Or Electricity	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+439720ee-4165-4a5a-9758-c36a2bfe3a9d	en_IN	pgr.complaint.category.NOWATERORELECTRICITYINPUBLICTOILET	No water/electricity in public toilet	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+57c45b1f-5a17-4be3-85b7-5c95d10a9cdd	en_IN	pgr.complaint.category.NOWATERSUPPLY	No Water Supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b0ca10d-ca58-4756-9c5e-294df8dd4ad8	en_IN	pgr.complaint.category.NoStreetlight	No streetlight	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+297cca30-3247-4fe6-86b1-ae047072a4d5	en_IN	pgr.complaint.category.NoWaterOrElectricityinPublicToilet	No water/electricity in public toilet	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7858595b-00aa-4ffa-9019-4234d3ff1c36	en_IN	pgr.complaint.category.NoWaterSupply	No Water Supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+71b70d5f-ec64-42f0-a3a2-1d0710cf8f6f	en_IN	pgr.complaint.category.NonSweepingOfRoad	Non Sweeping Of Road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+964e4437-8679-49f8-9957-63a251a12fe0	en_IN	pgr.complaint.category.OPENDEFACATION	Open Defecation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5ca532d6-ca8b-419e-b4b3-fefafa9579e2	en_IN	pgr.complaint.category.OPENDEFECATION	Open Defecation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+550f6458-6efd-448e-a688-3232c6ec1ba9	en_IN	pgr.complaint.category.OPENLAND	Open Land	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9e0e03a5-4de3-4987-9086-9ab9e43d28c6	en_IN	pgr.complaint.category.OTHERS	Others	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4cd54bee-bc2b-492f-a724-26d9d5dcd24f	en_IN	pgr.complaint.category.OVERFLOWING	Overflowing	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ec8e34a-ea8e-4351-817b-df561a91aeec	en_IN	pgr.complaint.category.OVERFLOWING/BLOCKEDDRAIN	Overflowing/Blocked drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e65ca2d3-e687-48db-bf0f-8c6e3cd3e0d6	en_IN	pgr.complaint.category.OVERFLOWINGBLOCKEDDRAIN	Overflowing/Blocked drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b14d13dc-37c4-4529-b8f4-677914aadf19	en_IN	pgr.complaint.category.OVERFLOWINGDRAIN	Owerflowing Drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dbbc5baf-d682-4698-8a19-53d2a541e282	en_IN	pgr.complaint.category.OVERFLOWINGORBLOCKEDDRAIN	Overflowing/Blocked drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7f9bdf3b-b8ba-4a79-87b9-e6a3cc377c8e	en_IN	pgr.complaint.category.OVERFLOWINGSEWAGE	Overflowing Sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8e3cbfc5-349e-4639-a1e1-63a391485bd6	en_IN	pgr.complaint.category.OpenDefecation	Open Defecation	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8c24f07-1c3c-4b9d-ad38-bd5addb9dfa7	en_IN	pgr.complaint.category.Others	Others	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3d65e418-27e1-46e3-b8d8-fed5eaa0e49f	en_IN	pgr.complaint.category.OverflowingOrBlockedDrain	Overflowing/Blocked drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9faf56dc-9c55-40dd-a406-7eb937bdb87f	en_IN	pgr.complaint.category.POLEORLIGHTDAMAGE	Pole Or Light Damage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b286f6b-e8f1-4019-8c69-f5e06283bc5d	en_IN	pgr.complaint.category.POORSWEEPING	Poor Sweeping	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ced43dbe-1063-4b25-98d8-3d186f25198a	en_IN	pgr.complaint.category.POSSESSIONDISPUTE	Possession Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2f926f7e-45ab-4e79-90e8-280ddccb84fa	en_IN	pgr.complaint.category.POTHOLES	Potholes	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a127208-e9af-48f6-ad8f-29d0822db383	en_IN	pgr.complaint.category.POTHOLESONTHEROAD	Potholes on the Road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d7b4536e-10fc-4a6f-8e48-6bbe7c2934cb	en_IN	pgr.complaint.category.PROPERTY	Possession Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c789c5e6-5730-490d-9828-910f7e07bdfb	en_IN	pgr.complaint.category.PROPOSAL	Proposal	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1fca3a9-09ee-4754-b0c7-d71d51854301	en_IN	pgr.complaint.category.PROPOSALS	Proposal	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a1db5eb0-0777-42c8-afef-2ae6e973f658	en_IN	pgr.complaint.category.PUBLICTOILETISDAMAGED	Public toilet damaged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91127e79-2be7-4845-89e3-cd9b71a8aa40	en_IN	pgr.complaint.category.PUBLICTOILETISNOTWORKINGPROPERLY	Public Toilet is not working properly	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+99157614-e366-43e6-b4d7-6e5236e81bb9	en_IN	pgr.complaint.category.PUBLICTOILETS	Public Toilets	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+993b4df4-c93c-43ca-a4bd-5c5bdd105c38	en_IN	pgr.complaint.category.ParkRequiresMaintenance	Park requires maintenance	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+05264e56-712f-44c2-b9f2-5a337765b477	en_IN	pgr.complaint.category.Parks	Park requires maintenance	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+856e4891-97d3-47d1-aa9d-22f65f50524c	en_IN	pgr.complaint.category.PossessionDispute	Possession Dispute	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fc5937e4-5ba1-4d77-b3a7-bcc7b51bcd75	en_IN	pgr.complaint.category.Proposal	Proposal	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6f236af1-7f9d-42fe-b615-e70b4c5d0b96	en_IN	pgr.complaint.category.PublicToiletIsDamaged	Public toilet damaged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e41df8a5-057d-4345-ab74-86ca2d7d1312	en_IN	pgr.complaint.category.REMOVEGARBAGEORWATER	Remove Garbage Or Water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4ec2f7a1-3823-487c-96f5-11b20205376e	en_IN	pgr.complaint.category.REPLACE/PROVIDEGARBAGEBIN	Replace/provide garbage bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cfb36e49-c4a1-4d0b-a07a-634e919ee579	en_IN	pgr.complaint.category.REPLACEORPROVIDEGARBAGEBIN	Replace/provide garbage bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2b9e5081-47a6-45d5-9f5a-cfc1819b0972	en_IN	pgr.complaint.category.REPLACEPROVIDEGARBAGEBIN	Replace/provide garbage bin	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4dec6fe4-41c6-49e5-a9fe-8682e159afbb	en_IN	pgr.complaint.category.REQUESTNEW	Request New	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6f84f61-4f91-4c45-889d-d1cf5ffd7f5c	en_IN	pgr.complaint.category.REQUESTSMOKEOP	Request Smoke Op	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c91561e4-569d-408c-b420-80c2ec2002d2	en_IN	pgr.complaint.category.REQUESTSPRAYINGORFOGGINGOPERATION	Request spraying/ fogging operations	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b6101c16-cae0-4f10-9fda-4e3a104b6d0b	en_IN	pgr.complaint.category.REQUESTSPRAYOP	Request Spray Op	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f479180-26df-4119-b3ab-95dffd809027	en_IN	pgr.complaint.category.REQUESTTANKER	Request Tanker	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f253e468-129c-4562-b775-f3a423fa57f6	en_IN	pgr.complaint.category.REQUESTTRIMMING	Request Trimming	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e6ef5914-772e-4ca4-9178-cb19a111fabe	en_IN	pgr.complaint.category.RETIREMENT	Retirement	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+07955c93-f6ce-4f83-b8fd-99089031dbb7	en_IN	pgr.complaint.category.ROADORFOOTPATH	Road Or Footpath	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e90156a7-a583-4b1a-88a5-6e11c464294d	en_IN	pgr.complaint.category.ROADS	Roads	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4cb15e56-26ad-4148-81a5-05bb3b88a047	en_IN	pgr.complaint.category.ROADSANDFOOTPATHS	Roads & footpaths	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+33859263-41b5-418f-8714-399c14646d8d	en_IN	pgr.complaint.category.ROADSCODEE	Roads codee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ee19e7a-7cfb-4668-9fa7-bf66441f1f44	en_IN	pgr.complaint.category.ReplaceOrProvideGarbageBin	Replace or provide garbage bin 	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f6f5af8-cef5-4b45-8678-59731366e9e2	en_IN	pgr.complaint.category.RequestSprayingOrFoggingOperation	Request spraying/ fogging operations	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e95ac59-3dca-4303-8312-11d609abd4fc	en_IN	pgr.complaint.category.Retirement	Retirement	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+32c5e81f-b881-4ee5-9b7b-a415de3f84ee	en_IN	pgr.complaint.category.SERVICE	Service	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+666fb8fe-333d-45da-964d-6f006dfa5cf1	en_IN	pgr.complaint.category.SERVICENAME.FEVERS_DENGUE_MALARIA	Fevers - Dengue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f9b3a6f-6a1e-4de3-92a5-2cf7bd12b3aa	en_IN	pgr.complaint.category.SERVICENAME.NON_RECEIPT_OF_PENSIONS_DISABLED_ELDERLY_ETC	Non-Receipt of Pensions - Disabled	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+053a834a-286d-4409-a21d-8c86c824e08f	en_IN	pgr.complaint.category.SERVICENAME.REPAIRS_TO_FLYOVERS_BRIDGES_CULVERTS	Repairs to Flyovers	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+71318457-259b-4480-8388-59b773d4a9c6	en_IN	pgr.complaint.category.SERVICENAME.UNHYGIENIC_IMPROPER_TRANSFER_OF_MEAT_LIVESTOCK	Unhygienic	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1ca4f598-f099-4e20-85e6-d3d002359399	en_IN	pgr.complaint.category.SEWAGE	Sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d940b3ae-a3af-4b8a-a6c9-b5dcd3278cff	en_IN	pgr.complaint.category.SEWAGEEFFLUENTS	Sewage Effluents	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c3de05db-b9d8-4a27-ab6d-d84244da3c3b	en_IN	pgr.complaint.category.SHORTAGEOFWATER	Shortage of water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+df575151-4111-4467-a1bc-9abf0aa9d9bb	en_IN	pgr.complaint.category.SHORTSUPPLY	Short Supply	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+03cb2df6-bf26-4aa7-bac7-1726c317040b	en_IN	pgr.complaint.category.SLOWPROGRESS	Slow Progress	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+386c4083-bdab-44ce-acdd-ef4f924529cc	en_IN	pgr.complaint.category.STAGNANTWATER	Stagnant Water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+37efd390-4312-4482-b38f-9b7b213f2b7d	en_IN	pgr.complaint.category.STORMWATERDRAIN	Storm Water Drain	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15fcb786-f672-45c9-990b-78ff26dc895d	en_IN	pgr.complaint.category.STRAYANIMALS	Stray animals	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9851dc5c-56df-4742-86b3-f5bfaaecdbeb	en_IN	pgr.complaint.category.STRAYCATTLE	Stray Cattle	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e192a535-5f70-4ee6-adef-928c5f118c2e	en_IN	pgr.complaint.category.STRAYDOGS	Stray Dogs	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d5d33a01-e064-4401-8d0f-2df992968fbf	en_IN	pgr.complaint.category.STRAYPIGS	Stray Pigs	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd13cc5a-2cbd-4086-96f6-93f005f7068e	en_IN	pgr.complaint.category.STREETLIGHTNOTWORKING	Streetlight not working	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f294e5d-5a81-4be3-a935-b9f77e05107c	en_IN	pgr.complaint.category.STREETLIGHTS	Streetlights	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f28e157d-6e82-4b3c-a8d7-e5d190130438	en_IN	pgr.complaint.category.SUGGESTION	Suggestion	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ffec705-fcc7-4828-8a2a-eb1eae33d45d	en_IN	pgr.complaint.category.SUGGESTIONS	Suggestion	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15eb7714-98f5-4335-bcba-f2a48c57c16f	en_IN	pgr.complaint.category.SUPPORT	Support / Help	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc3cff40-b0db-4a60-b292-218554cd59f3	en_IN	pgr.complaint.category.SUPPORTHELP	Support / Help	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2de0fa38-fd1e-4698-90fa-6bfc77f6103f	en_IN	pgr.complaint.category.ShortageOfWater	Shortage of water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+db6fe5d9-d06b-4858-883a-fc2efe740b0c	en_IN	pgr.complaint.category.StrayAnimals	Stray animals	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+121c4188-37f4-418a-a61d-f93d768c5481	en_IN	pgr.complaint.category.StreetLightNotWorking	Streetlight not working	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d221a88f-2230-4cb1-9645-76ca6b47eb19	en_IN	pgr.complaint.category.Suggestion	Suggestion	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1f750d5d-4a00-4e7a-88c7-75f9708a07ce	en_IN	pgr.complaint.category.SupportHelp	Support / Help	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5704a022-fdbd-4295-94a7-49ba7dca9184	en_IN	pgr.complaint.category.TAXRATE	Tax Rate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ec1110b6-a289-4d2d-a609-0d6c059e0960	en_IN	pgr.complaint.category.TOILETS	Toilets	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1c0f5d26-5abd-4e10-9d40-9ac6f387e288	en_IN	pgr.complaint.category.TREES	Trees	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e630c573-bbb1-4455-87b1-199a0a094165	en_IN	pgr.complaint.category.TRUCKSPILLAGE	Truck Spillage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f97841eb-62e9-4fe2-9fff-0311fcf43fad	en_IN	pgr.complaint.category.TaxRate	Tax Rate	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c904c611-84e0-41ed-91de-7556b12e7f65	en_IN	pgr.complaint.category.VACANTLAND	Vacant Land	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1fac575f-0d46-407a-81c2-1716dfac7667	en_IN	pgr.complaint.category.WATER	Water	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3e958c9e-d625-4d69-8aa8-384aed73ce91	en_IN	pgr.complaint.category.WATERANDSEWAGE	Water & Sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b28f40af-cd93-4d2e-a8ea-27b579facda7	en_IN	pgr.complaint.category.WATERBODY	Water Body	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5967048d-6883-4eb3-8851-d747190fa158	en_IN	pgr.complaint.category.WATERLOGGED	Water Logged	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7806ebc0-32af-442a-8c1d-9532d60f78f1	en_IN	pgr.complaint.category.WATERLOGGEDROAD	Water logged road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c0c2e2e4-68ec-45ab-a24a-f0be1a52cad9	en_IN	pgr.complaint.category.WATERPRESSUREISVERYLESS	Water pressure is very less	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5d4f2cf3-0b3d-481f-ad3a-e7d815f11845	en_IN	pgr.complaint.category.WaterLoggedRoad	Water logged road	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4788a6e5-329b-4cdc-a04a-7a5e3480ec82	en_IN	pgr.complaint.category.WaterPressureisVeryLess	Water pressure is very less	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2d7a8f09-8828-49c4-9085-5fcc96f3fb1b	en_IN	pgr.complaint.category.illegalDischargeOfSewage	Ilegal Discharge of Sewage	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a9c1c198-9282-4bcc-bd0b-1d0719e98401	en_IN	pgr.sms.notification.assign	Your complaint for {complaint_type} has been assigned to {emp_name}, {emp_designation}, {emp_department}\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9cc1c2c4-5fd4-406a-896a-a6848ad39ae2	en_IN	pgr.sms.notification.assign.citizen	Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been assigned to <emp_name>, <emp_designation>, <emp_department>. You can track your complaint status and connect with our officials on the on the web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bc3a437e-ffaa-43f9-886c-bee6c2a16f06	en_IN	pgr.sms.notification.assign.employee	Shri <emp_name>, Complaint for '<complaint_type>' with ID <id> has been assigned to you. Please take appropriate action. <ao_designation> - <ulb>	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8ba59ae3-4e37-48e3-9f0e-6ccd0b048c59	en_IN	pgr.sms.notification.close.employee	Shri <emp_name>, Complaint for <complaint_type> with ID <id> has received <rating>/5 feedback from the citizen. Thank you for your service.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c80fa0d5-bb95-4f41-9c58-a5258b102b67	en_IN	pgr.sms.notification.comment	<emp_name> has commented on your complaint for <complaint_type> with complaint ID <id>. Comment - <comment>.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73ae83a7-2790-4cc1-8e52-1031b0f471be	en_IN	pgr.sms.notification.comment.default	You have received a comment on your complaint. You can track your complaint status on the mSeva app or your local government web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+80b42441-fad0-488e-87dc-fe0ec6fea1e4	en_IN	pgr.sms.notification.default	Your complaint has been <status>. You can track your complaint status on the mSeva app or your local government web portal	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+989325dd-f276-4de6-807c-664a35bd007c	en_IN	pgr.sms.notification.reassign	Your complaint for {complaint_type} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ba24007a-5e83-4d5f-9029-a1084e5b8e94	en_IN	pgr.sms.notification.reassign.citizen	Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been re-assigned to <emp_name>, <emp_designation>, <emp_department>. You can track your complaint status and connect with our officials on the on the web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4fcbbea1-3b4d-40fd-98b9-468bb158c29c	en_IN	pgr.sms.notification.reassign.employee	Shri <emp_name>, Complaint for '<complaint_type>' with ID <id> has been re-assigned as per your request. <ao_designation> - <ulb>	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b17a7dd9-9551-49af-9ae2-57f1e0bf9b64	en_IN	pgr.sms.notification.reject	Your complaint for {complaint_type} has been rejected on {date}. Reason for Rejection: {reason} Additional Comments: {additional_comments}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2d42c8b1-9faf-4fbc-ae0f-912c025e8117	en_IN	pgr.sms.notification.reject.citizen	Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been rejected. Reason for Rejection: <reason>, Additional Comments: <additional_comments> If you wish to re-open the complaint, you can visit the web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+29546dc7-8d23-4c48-a243-1dddb4e17d6e	en_IN	pgr.sms.notification.reopen	Your complaint for {complaint_type} has been re-opened on {date}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+635864f5-d9c3-46a9-936a-c100bd29704d	en_IN	pgr.sms.notification.reopen.citizen	Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been RE-OPEN as per your request. You can track your complaint status and connect with our officials on the web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3ea05e43-6c23-4d16-a1b9-173138d28612	en_IN	pgr.sms.notification.reopen.employee	Shri <emp_name>, Complaint for <complaint_type> with ID <id> has been re-opened by the citizen. It is being reviewed by Assigning officer - <ulb>.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ccea2b7b-b27c-4acc-a6db-4bccb266f844	en_IN	pgr.sms.notification.resolve	Your complaint for {complaint_type} has been resolved on {date}. Please give us your feedback on the mSeva app, your local government web portal or at this link {app_link}.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ebd4b22c-7347-4133-a2c5-b2a73b660025	en_IN	pgr.sms.notification.resolve.citizen	Dear Citizen, Your complaint for <complaint_type> with ID <id> submitted on <date> has been resolved by <emp_name>. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling our CSR.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fee73b10-b1df-4c5f-b0e2-8a85613f9994	en_IN	pgr.sms.notification.submit	Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ebae8669-607d-4bcf-9b19-57f0982206fb	en_IN	pgr.sms.notification.submit.citizen	Dear Citizen, Your complaint for <complaint_type> has been submitted with ID <id> on <date>. You can track your complaint status on the web portal.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a4d7d4d1-2ac3-432d-8fae-84ff3e3216f5	en_IN	COMMON_MASTERS_COMMON_MASTERS_LOCALIZATIONMODULES	Localizationmodules	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e94cf3d6-0c5c-4f54-90bc-d7290a3d8653	en_IN	COMMON_MASTERS_DEPARTMENT_ACTIVE	Active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+52c7b1e5-a130-459a-a85d-0dd1e1ec08f2	en_IN	COMMON_MASTERS_DEPARTMENT_CODE	Code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f49c9bb-11b1-4b59-9573-d0ad01c40fc3	en_IN	COMMON_MASTERS_DEPARTMENT_NAME	Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a8d658a2-a687-4a3c-959d-ce8a17fcb659	en_IN	COMMON_MASTERS_DESIGNATION_ACTIVE	Active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f40ff32f-4c02-4098-bd00-cc701c384726	en_IN	COMMON_MASTERS_DESIGNATION_CODE	Code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+066c1b0b-3d58-45d6-a33e-7a7fb69392c4	en_IN	COMMON_MASTERS_DESIGNATION_DESCRIPTION	Description	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5ab58497-8071-4e23-bb0d-7b8062df9793	en_IN	COMMON_MASTERS_DESIGNATION_NAME	Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4a2ad8a9-799f-4a39-9b3a-de2acbb66e48	en_IN	COMMON_MASTERS_STATEINFO_EMPLOYEE	Employee	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b946e7f0-0ef1-48ac-800f-7ccfe647cd75	en_IN	COMMON_MASTERS_STATEINFO_HASLOCALISATION	Haslocalisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+39ca831a-4554-4124-948d-09a547c4cedb	en_IN	COMMON_MASTERS_STATEINFO_LOCALIZATIONMODULES	Localizationmodules	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f4ce25d8-4552-4131-a9fa-4e3f822c8627	en_IN	COMMON_MASTERS_UICOMMONPAY_EMPLOYEEURL	Employeeurl	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+686610b2-659a-43f4-9f8b-d3f49f54af9d	en_IN	EGOV_HRMS_DEACTIVATIONREASON_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af01b936-7a6a-475a-a998-d8bd13988328	en_IN	EGOV_HRMS_DEACTIVATIONREASON_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+070c9c02-c85c-4f16-b511-458da5b72a75	en_IN	EGOV_HRMS_DEGREE_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9d952ea2-201d-4104-8213-48084dfd25f9	en_IN	EGOV_HRMS_DEGREE_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+790de38d-3218-48bf-96e9-46d99b325bf0	en_IN	EGOV_HRMS_EMPLOYEESTATUS_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bde413a8-60a7-45f2-9401-51684a6b969f	en_IN	EGOV_HRMS_EMPLOYEESTATUS_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+203e271b-dc33-4097-b0f4-1a02e33f4244	en_IN	EGOV_HRMS_EMPLOYEETYPE_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cb9f4c2c-8806-4d14-b71b-cd3fd3b7904f	en_IN	EGOV_HRMS_EMPLOYEETYPE_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8e27e0d-53e3-479e-8897-1b028e65769b	en_IN	EGOV_HRMS_EMPLOYMENTTEST_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8ebcf8da-856e-4821-b63a-9f15da8d8bd1	en_IN	EGOV_HRMS_EMPLOYMENTTEST_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+631515d3-e7c6-4cbe-9f77-9d8ee75a102a	en_IN	EGOV_HRMS_SPECALIZATION_ACTIVE	active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+19a601f4-c20e-4562-a086-4d85ff0e0118	en_IN	EGOV_HRMS_SPECALIZATION_CODE	code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+90e78eed-d762-4745-9624-f55799b0f2c7	en_IN	LOCALISATION_ADD	Add Localisation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77148b45-21a6-4217-83ea-d28629edf2fc	en_IN	MDMS_ADD_V2	Add Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+490283ef-9712-41cc-9f6f-06c58d748590	en_IN	MDMS_EDIT	Edit Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8818502-aad4-4c64-bad2-5e2db9176b96	en_IN	MDMS_SEARCH_V2	Search Master Data	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+88b2c49d-61ee-496c-8672-cfcc336be130	en_IN	RAINMAKER_PGR_COMPLAINCLOSINGTIME_COMPLAINMAXIDLETIME	Complainmaxidletime	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cfc4b79a-f1d6-4dc7-aaec-b879e8289807	en_IN	RAINMAKER_PGR_PRIORITYLEVEL_ACTIVE	Active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ce49227-6753-46e3-934b-0635459e7e44	en_IN	RAINMAKER_PGR_PRIORITYLEVEL_CODE	Code	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cd57bf32-c87a-43d0-a995-27f7969d3d8b	en_IN	RAINMAKER_PGR_PRIORITYLEVEL_NAME	Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+751b9d53-032d-4038-b11c-0b0d47a4317b	en_IN	RAINMAKER_PGR_SERVICEDEFS_ACTIVE	Active	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9581e28f-8a75-478a-87eb-200356b80517	en_IN	RAINMAKER_PGR_SERVICEDEFS_DEPARTMENT	Department	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+60365f72-1ddd-4afc-b950-be842c480a7a	en_IN	RAINMAKER_PGR_SERVICEDEFS_KEYWORDS	Keywords	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6a7249fb-4ee2-4bfc-8a7e-ff27283c6c44	en_IN	RAINMAKER_PGR_SERVICEDEFS_MENUPATH	Menupath	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a69255e-1667-47a8-9b7a-8e333d50b4b0	en_IN	RAINMAKER_PGR_SERVICEDEFS_MENUPATHNAME	Menu Path Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+bcaec567-6102-4702-81ed-ef55a14f02e7	en_IN	RAINMAKER_PGR_SERVICEDEFS_NAME	Name	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b5109cb0-8362-488d-ae1e-bbefc8b4d56e	en_IN	RAINMAKER_PGR_SERVICEDEFS_ORDER	Order	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1d572691-f97f-4e05-8ea5-14e039ea1200	en_IN	RAINMAKER_PGR_SERVICEDEFS_SERVICECODE	Servicecode	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77086db0-0c3f-4d8d-a81d-eb4c5a66985d	en_IN	RAINMAKER_PGR_SERVICEDEFS_SLAHOURS	Slahours	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+95408f4e-aab4-458e-8b55-276ccb6f0a49	en_IN	RAINMAKER_PGR_UICONSTANTS_REOPENSLA	Reopensla	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7a0a9459-c59f-4ee0-9218-55b1ac8b6cf7	en_IN	SCHEMA_COMMON_MASTERS_DEPARTMENT	Department	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+fd266395-7b06-48b4-b74d-a1eacc6cf87c	en_IN	SCHEMA_COMMON_MASTERS_DESIGNATION	Designation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+931ee18f-f1d2-4d60-a66e-32c0ae57c0e4	en_IN	SCHEMA_EGOV_HRMS_DEACTIVATIONREASON	DeactivationReason	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae9b1d85-4b6c-4413-97d1-2bd9c510b457	en_IN	SCHEMA_EGOV_HRMS_DEGREE	Degree	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cca9ffac-469a-424b-80d1-4b3e95c62f8b	en_IN	SCHEMA_EGOV_HRMS_EMPLOYEESTATUS	EmployeeStatus	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5600b39d-aae7-42b5-9e97-04f8ee9e32ca	en_IN	SCHEMA_EGOV_HRMS_EMPLOYEETYPE	EmployeeType	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+18e7bf86-40c7-476a-bf4d-e481a0ab52e8	en_IN	SCHEMA_EGOV_HRMS_EMPLOYMENTTEST	EmploymentTest	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4bbf902a-248d-4a0d-b545-55d3f21deacc	en_IN	SCHEMA_EGOV_HRMS_SPECALIZATION	Specalization	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+87821f0d-ee18-4922-92e4-e3d1a062aaea	en_IN	SCHEMA_EGOV_HRM_EGOV_HRMS	Egov-hrms	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ac040e47-6dac-4899-9a72-6e7d6f6ed2fc	en_IN	SCHEMA_RAINMAKER_PGR_COMPLAINCLOSINGTIME	Complainclosingtime	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+70e1052a-bb2d-46fe-8178-bcf2656936e8	en_IN	SCHEMA_RAINMAKER_PGR_PRIORITYLEVEL	Prioritylevel	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+041646f1-b015-43b2-a456-f8c2df2ff272	en_IN	SCHEMA_RAINMAKER_PGR_SERVICEDEFS	Servicedefs	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+64e3ae82-3a84-4a3f-9be3-564685623c30	en_IN	SCHEMA_RAINMAKER_PGR_UICONSTANTS	Uiconstants	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+25545fcf-e642-4639-8ef1-00d875008783	en_IN	WBH_ERROR_MDMS_DATA DUPLICATE_RECORD	Duplicate Record	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc68e150-5143-4fab-ab83-3d49a236e334	en_IN	WBH_MDMS_ACCESSCONTROL_ACTIONS_TEST_ACTIONS_TEST	actions-test	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6daeee1a-7d1f-4c03-b3d6-b27098419ef5	en_IN	WBH_MDMS_ACCESSCONTROL_ROLEACTIONS_ROLEACTIONS	roleactions	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+14031661-2ebd-4bda-95f1-198b4b1efb32	en_IN	WBH_MDMS_ACCESSCONTROL_ROLEACTION_ACCESSCONTROL_ROLEACTIONS	Accesscontrol-roleactions	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a7aaef74-48a1-4707-bc36-28620aea3e55	en_IN	WBH_MDMS_ACCESSCONTROL_ROLES_ROLES	roles	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b4638c66-3ae8-4a31-ab09-4c6cdfdc5d39	en_IN	WBH_MDMS_BILLINGSERVICE_BUSINESSSERVICE	BusinessService	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e99103f7-ccc6-45ca-9db8-7e7a55e6b76c	en_IN	WBH_MDMS_BILLINGSERVICE_PAYMENTSERVICE	PaymentService	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9f6ae66e-dee3-4a8d-8438-72ff192674dd	en_IN	WBH_MDMS_BILLINGSERVICE_TAXHEADMASTER	TaxHeadMaster	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+2a34b3f2-1148-4870-9740-a03fd3ecad7e	en_IN	WBH_MDMS_BILLINGSERVICE_TAXPERIOD	TaxPeriod	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1c6bb66d-ad02-4626-bfcb-accdc921eea7	en_IN	WBH_MDMS_COMMON-MASTERS_GENDERTYPE	GenderType	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f804c3db-4d9b-4085-9388-44c49494254e	en_IN	WBH_MDMS_COMMON_MASTERS_BDTEMPLATE	Bdtemplate	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f572fe88-b40b-4e45-ad38-af20260a0e3d	en_IN	WBH_MDMS_COMMON_MASTERS_CANCELCURRENTBILLREASONS	Cancelcurrentbillreasons	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b4b5bc3d-2e8c-4406-af81-ee052a52bb82	en_IN	WBH_MDMS_COMMON_MASTERS_CANCELRECEIPTREASON	Cancelreceiptreason	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dd42363c-5082-4a89-bf88-4fab245dd7e6	en_IN	WBH_MDMS_COMMON_MASTERS_CENSUSYEAR	Censusyear	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9eafde89-c279-4a56-bd0a-1400c58ef95a	en_IN	WBH_MDMS_COMMON_MASTERS_CITIZENCONSENTFORM	Citizenconsentform	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+54e9f3e4-d810-413e-93b2-50d71d4cfed4	en_IN	WBH_MDMS_COMMON_MASTERS_COMMONINBOXCONFIG	Commoninboxconfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+dc20db87-08d0-4dc4-9c1c-2fe1f85b07f8	en_IN	WBH_MDMS_COMMON_MASTERS_CRONJOBAPICONFIG	Cronjobapiconfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8b249f6c-d830-434c-bb5e-1cce16a3a2dc	en_IN	WBH_MDMS_COMMON_MASTERS_DEPARTMENT	Department	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ea874558-8a8a-496f-a975-9dc4c7a0fc34	en_IN	WBH_MDMS_COMMON_MASTERS_DESIGNATION	Designation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+02556a21-885a-492e-aa86-1b488378ecbb	en_IN	WBH_MDMS_COMMON_MASTERS_DOCUMENTTYPE	Documenttype	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f982b609-5a29-4a90-b462-0143270de4dc	en_IN	WBH_MDMS_COMMON_MASTERS_GENDERTYPE	Gendertype	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+654a69cb-e2da-4e63-ba17-4089510d97f8	en_IN	WBH_MDMS_COMMON_MASTERS_IDFORMAT	Idformat	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a82580c5-da63-479e-bf54-db1d010fe8c4	en_IN	WBH_MDMS_COMMON_MASTERS_OWNERSHIPCATEGORY	Ownershipcategory	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c9df9d19-75f0-4822-bcc9-54a5c5a6da0a	en_IN	WBH_MDMS_COMMON_MASTERS_OWNERTYPE	Ownertype	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4e923516-7b3c-4a99-a087-b8e851a01e41	en_IN	WBH_MDMS_COMMON_MASTERS_STATEINFO	Stateinfo	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+04d0b24a-aa2d-4911-9775-093b7af84c75	en_IN	WBH_MDMS_COMMON_MASTERS_STRUCTURETYPE	Structuretype	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9a589cfd-47c6-4574-b601-5d0c32297b1f	en_IN	WBH_MDMS_COMMON_MASTERS_TABLEPAGINATIONOPTIONS	Tablepaginationoptions	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0e341fcf-4060-4440-b6ab-6f0f8cbe7fcf	en_IN	WBH_MDMS_COMMON_MASTERS_UICOMMONPAY	Uicommonpay	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ae380971-3186-46e7-9049-b2633cafa822	en_IN	WBH_MDMS_COMMON_MASTERS_UOM	Uom	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e0a478c9-2d16-4fa2-8780-91e22215151b	en_IN	WBH_MDMS_COMMON_MASTERS_UOMCATEGORY	Uomcategory	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46905499-0431-4160-bd69-9b9a198a3917	en_IN	WBH_MDMS_COMMON_MASTERS_WFSLACONFIG	Wfslaconfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6617f14a-c917-42e8-a826-dbde5c35c83e	en_IN	WBH_MDMS_COMMON_MASTER_DEPARTMENT	Department	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7d8d249b-78a9-4c15-b2b6-9f2f9423a470	en_IN	WBH_MDMS_DATASECURITY_DECRYPTIONABAC	DecryptionABAC	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6718a3ec-9412-42c2-ba66-8bf39530c028	en_IN	WBH_MDMS_DATASECURITY_ENCRYPTIONPOLICY	EncryptionPolicy	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6bea6dae-10aa-4ef8-89d2-128e663a5b86	en_IN	WBH_MDMS_DATASECURITY_MASKINGPATTERNS	MaskingPatterns	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4755b15a-758a-4ed6-b749-34a95ea9f810	en_IN	WBH_MDMS_DATASECURITY_SECURITYPOLICY	SecurityPolicy	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0d7f868c-9a1d-456e-ba2e-f105e8266df5	en_IN	WBH_MDMS_DATASECURIT_DATASECURITY	Datasecurity	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6c653acf-5a5f-4115-bbf9-d2b0120034ea	en_IN	WBH_MDMS_EGF_MASTER_FINANCIALYEAR	FinancialYear	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77da08ae-fdb4-4bba-884e-1b5e26dfe6d2	en_IN	WBH_MDMS_EGOV_HRMS_DEACTIVATIONREASON	DeactivationReason	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+6e3569f5-f035-4b78-ace4-5cf79f5640ee	en_IN	WBH_MDMS_EGOV_HRMS_DEGREE	Degree	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9b79085b-209c-446a-8945-325806886433	en_IN	WBH_MDMS_EGOV_HRMS_EMPLOYEESTATUS	EmployeeStatus	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+528cefa8-a938-4ae1-bee7-8e33f72f75fd	en_IN	WBH_MDMS_EGOV_HRMS_EMPLOYEETYPE	EmployeeType	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a60affab-c6a1-46f3-a592-ac2b30396478	en_IN	WBH_MDMS_EGOV_HRMS_EMPLOYMENTTEST	EmploymentTest	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+af4d215a-8cc3-46f3-8fa3-41209eac6039	en_IN	WBH_MDMS_EGOV_HRMS_SPECALIZATION	Specalization	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+12383e05-3156-465b-9cc3-4e975823f941	en_IN	WBH_MDMS_EGOV_HRM_EGOV_HRMS	Egov-hrms	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+15083292-62a6-4b69-a172-612f317c80a0	en_IN	WBH_MDMS_INBOX_INBOXQUERYCONFIGURATION	InboxQueryConfiguration	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4d3977be-f2be-4c1c-9d3d-cc6ec917dcfb	en_IN	WBH_MDMS_INBOX_V_INBOX_V2	Inbox-v2	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8610452c-2fdb-416f-a695-eb84fc11d0d0	en_IN	WBH_MDMS_MASTER_ACCESSCONTROL_ROLEACTION	Accesscontrol-roleaction	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+da69a6a7-8ae8-49b8-8ba2-02b00f68287e	en_IN	WBH_MDMS_MASTER_ACCESSCONTROL_ROLEACTIONS	ACCESSCONTROL-ROLEACTIONS	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+422147f5-1a72-4d22-8905-a451a770ffa1	en_IN	WBH_MDMS_MASTER_ACCESSCONTROL_ROLES	ACCESSCONTROL-ROLES	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3a0e9101-35d8-440a-8d6d-b72057a40cf1	en_IN	WBH_MDMS_MASTER_BILLINGSERVICE	BillingService	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c6de52e3-5cf5-4cc0-b749-ece89b9effba	en_IN	WBH_MDMS_MASTER_COMMON-MASTERS	common-masters	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0a886a0e-0f12-4bda-8bd8-8bb62ef5df8f	en_IN	WBH_MDMS_MASTER_COMMON_MASTER	common masters	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f8b7b4b4-8011-4cde-9d07-298f346056fd	en_IN	WBH_MDMS_MASTER_COMMON_MASTERS	Common-masters	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+66bf385f-d966-4af0-a071-5a617accbeed	en_IN	WBH_MDMS_MASTER_DATASECURIT	Datasecurit	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ce307a6d-a2e1-425c-8ff2-409bb1fdec59	en_IN	WBH_MDMS_MASTER_DATASECURITY	DataSecurity	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+7d5595c9-c0c2-48db-ace6-fb7e371f5228	en_IN	WBH_MDMS_MASTER_EGF_MASTER	EGF Master	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4b40c54a-a883-48a3-a9e7-4808bba3958f	en_IN	WBH_MDMS_MASTER_EGOV_HRM	Egov-hrm	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e308791b-2dca-43e7-b5b7-3f6a6cf1f12a	en_IN	WBH_MDMS_MASTER_EGOV_HRMS	egov-hrms	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+083e2516-8384-49b6-bc17-8887e32f44fa	en_IN	WBH_MDMS_MASTER_INBOX	INBOX	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+73c3a6f8-e616-4bc7-95fb-1cf18e4dbcc9	en_IN	WBH_MDMS_MASTER_INBOX_V	Inbox-v	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b1c873f4-15e3-4bb8-8213-128af28c373c	en_IN	WBH_MDMS_MASTER_PSPCL_INTEGRATION	PSPCL Integration	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+e551d9e0-21ba-4c0f-aeb6-7edaa79d4b04	en_IN	WBH_MDMS_MASTER_RAINMAKER_PGR	Citizen Complaint Resolution System	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b8547114-fca1-4a91-a0ab-7e4286022dbe	en_IN	WBH_MDMS_MASTER_TENANT	Tenant	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+155697fb-e046-4733-b4bf-46856cbd7dce	en_IN	WBH_MDMS_MASTER_WORKFLO	Workflo	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3e43d438-1337-4dba-97dc-e22e138dea78	en_IN	WBH_MDMS_MASTER_WORKFLOW	Workflow	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cbe2695b-c054-486f-b7d5-97b49075013b	en_IN	WBH_MDMS_RAINMAKER_PGR_COMPLAINCLOSINGTIME	ComplainClosingTime	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+00ef5eeb-6923-45aa-bf46-d62d0e6e3b47	en_IN	WBH_MDMS_RAINMAKER_PGR_PRIORITYLEVEL	Prioritylevel	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+c6c481d3-a139-4549-84f7-65d595cf014c	en_IN	WBH_MDMS_RAINMAKER_PGR_SERVICEDEFS	ServiceDefs	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+1c0de130-3c6c-41d4-9df4-376b028323fd	en_IN	WBH_MDMS_RAINMAKER_PGR_UICONSTANTS	UIConstants	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+410d313b-c494-43b3-b0fa-2351ffb94945	en_IN	WBH_MDMS_TENANT_ASSESSMENTCONFIG	Assessmentconfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+3d6e1dc7-a728-4650-8308-78bd1863f202	en_IN	WBH_MDMS_TENANT_CITYMODULE	Citymodule	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f1f10622-12e3-463f-82ac-38872123fb02	en_IN	WBH_MDMS_TENANT_FOOTER	Footer	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+8519bbcf-2985-457d-a9b4-e3fd5d0a5827	en_IN	WBH_MDMS_TENANT_NATIONALINFO	Nationalinfo	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+46c15af7-8c83-419a-80f7-228ebd38bf09	en_IN	WBH_MDMS_TENANT_REASSESSMENTCONFIG	Reassessmentconfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5f0cbfba-718b-4166-8761-ae1b96a2467a	en_IN	WBH_MDMS_TENANT_TENANTINFO	Tenantinfo	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+91e9cf67-e97c-4a50-acf1-721bff8111c6	en_IN	WBH_MDMS_TENANT_TENANTS	Tenant Master	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+ab519264-1fde-4cf9-8cfd-6e9a7ffa71d6	en_IN	WBH_MDMS_TRADE_FIELDS	Fields	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a049109b-fc11-498f-94dd-57ed5a18f7b9	en_IN	WBH_MDMS_WORKFLOW_AUTOESCALATION	AutoEscalation	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+4abda8f7-545c-4e7d-aa4d-28b05f66c6fc	en_IN	WBH_MDMS_WORKFLOW_AUTOESCALATIONSTATESTOIGNORE	AutoEscalationStatesToIgnore	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9c79a8bc-cf0b-47c7-8b48-70139e9f13a4	en_IN	WBH_MDMS_WORKFLOW_BUSINESSSERVICE	BusinessService	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+d107bddd-ce84-496a-903f-ae3530012a49	en_IN	WBH_MDMS_WORKFLOW_BUSINESSSERVICECONFIG	BusinessServiceConfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a48f098d-b50d-4910-bda3-f967e0e7e454	en_IN	WBH_MDMS_WORKFLOW_BUSINESSSERVICEMASTERCONFIG	BusinessServiceMasterConfig	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+787b7aeb-18e3-4a5d-886f-c177177c13dc	en_IN	WBH_MDMS_WORKFLO_WORKFLOW	Workflow	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a597391-61b1-4c19-bdc0-7ad4f2b60f10	en_IN	WBH_SUCCESS_DIS_MDMS_MSG	Data disabled successfully with id	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+9168eb44-d8c8-4e93-b95c-1e71cea4827c	en_IN	WBH_SUCCESS_ENA_MDMS_MSG	Data enabled successfully with id	pg	rainmaker-workbench	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+689d14da-e16f-4f09-b6e5-6b9b7ed6cd75	en_IN	DIGIT_I_ACCEPT	I accept	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+256655d7-bd16-4ab2-8304-a4c8e7bfe55b	en_IN	DIGIT_I_DO_NOT_ACCEPT	I do not accept	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+b195f803-345d-4251-982b-ac7aa8b6fa49	en_IN	DIGIT_TABLE_OF_CONTENTS	Privacy Policy	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+0ccc1700-3837-4573-888d-89baa382ad5f	en_IN	ES_BY_CLICKING	I agree to the DIGIT's	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+77dd5342-5d3f-4e5b-be5c-fc10b3a98855	en_IN	ES_PRIVACY_POLICY	Privacy Policy	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 \.
 
 

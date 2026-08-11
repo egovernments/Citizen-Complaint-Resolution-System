@@ -858,7 +858,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1130,7 +1130,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1214,7 +1214,7 @@ services:
   # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1301,6 +1301,7 @@ services:
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "false"
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"

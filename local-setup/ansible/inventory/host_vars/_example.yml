@@ -20,7 +20,8 @@
 
 # REQUIRED. IP or hostname Ansible SSHes into. Can be a Tailscale IP
 # (100.x.x.x), a Hetzner VPC IP (10.0.0.x), or a public address.
-ansible_host: 10.0.0.10
+ansible_host: localhost
+ansible_connection: local
 
 # REQUIRED. Public hostname for the deployment. Used in:
 #   - nginx `server_name`
@@ -35,6 +36,19 @@ domain: digit.example.com
 # listens on plain HTTP and the playbook's validate-* tasks switch to
 # 127.0.0.1 with `Host:` header.
 tls_enabled: true
+
+# Optional. Default empty (Docker's own default: /var/lib/docker, on the
+# root filesystem). Set to a path on a larger/dedicated partition, e.g.
+# "/opt/docker", when `/` is small — a fresh box pulling the ~30 images in
+# this stack onto a small `/` reliably fills it mid-deploy with "no space
+# left on device". Setting this ALSO relocates containerd's own image-layer
+# store (a separate config that Docker's data-root does not control) to a
+# sibling directory, e.g. "/opt/containerd" — both are relabeled for SELinux
+# automatically on RHEL-family targets. Only takes effect on a box where
+# Docker/containerd have never been started before; an already-populated
+# /var/lib/docker needs a manual stop+rsync+relabel migration first (see
+# local-setup/ansible/README.md).
+docker_data_root: ""
 
 # ────────── DIGIT tenancy ──────────
 
@@ -113,15 +127,41 @@ core_mobile_configs:
 # Postal-code validation. The SPA reads this via globalConfigs key
 # `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
 # employee PGR create-complaint flows. Empty/absent → the legacy hard
-# default (^[0-9]{5}$ / Kenya) is used as a fallback. Examples:
-#   Kenya:   ^[0-9]{5}$              (5 digits)
-#   India:   ^[0-9]{6}$              (6 digits)
-#   UK:      ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
-#   US:      ^[0-9]{5}(-[0-9]{4})?$  (5 or 5+4)
+# default (^[0-9]{5}$ / Kenya) is used as a fallback.
+#
+# `postalCodePattern` is the ONLY knob — a regex already expresses length,
+# starting-digit constraints, and alnum shapes in one place, so there's no
+# separate length field that can silently drift out of sync with it
+# (CCRS#722 — a stale hand-maintained length field kept enforcing an old
+# digit count after the pattern, or vice versa, was updated).
+#   Kenya:      ^[0-9]{5}$                                            (5 digits)
+#   India:      ^[0-9]{6}$                                            (6 digits)
+#   Mozambique: ^[0-9]{4}$                                            (4 digits)
+#   UK:         ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
+#   US:         ^[0-9]{5}(-[0-9]{4})?$                                (5 or 5+4)
+#
+# All three PGR create-complaint surfaces (employee form, legacy citizen
+# flow, citizen v2 flow) render the postal field as a free-text input and
+# validate against this pattern, so alnum/dash shapes are enterable
+# everywhere; digit-only patterns additionally hint a numeric mobile
+# keyboard on the citizen v2 flow.
+#
+# The error message is always derived dynamically from this pattern (the
+# digit count, when the pattern is a plain ^[0-9]{N}$ shape) and resolved
+# through the standard localization pipeline (module `rainmaker-pgr`, key
+# `CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN`), so it's correct in every
+# locale the tenant ships without any per-tenant message override field.
+#
+# MDMS is the PRIMARY knob: the `fieldType: "postalCode"` row in the
+# `common-masters.FormValidations` master outranks this pattern (same
+# precedence as the mobile/name/email rules), in DIGIT Studio and the PGR
+# create-complaint flows alike. DDH seeds a default 5-digit row at tenant
+# creation — change a tenant's postal rule by editing that row (DIGIT
+# Studio > FormValidations), not just this file. This host_vars pattern is
+# the fallback for tenants without the row (dump-booted stacks, tenants
+# created before FormValidations existed).
 core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
-  postalCodeLength: 5
-  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
 # Postal-code serviceability allowlist, passed to the MCP tenant
 # bootstrap as `pincode_allowlist` and seeded as `pincode` on every
@@ -238,12 +278,17 @@ enable_search_stack: false
 
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
-# the configurator/frontend uses for tenant onboarding. The image lives
-# in the Hetzner VPC registry (10.0.0.4:5000) — only Hetzner-internal
-# hosts can reach it. Compose validates every image before starting any
-# service, so a public-internet box with this on would fail at
-# `docker compose up`. Flip to false (or override `docker_registry` to
-# a public mirror) if you're not on the VPC.
+# the configurator/frontend uses for tenant onboarding. Serving that shim
+# through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
+#
+# Image source: the playbook's "Resolve MCP image tag" task defaults to the
+# PUBLIC pin `ghcr.io/subhashini-egov/digit-mcp:<tag>`, and passes it to
+# compose verbatim (no `docker_registry` prefix) — so a public-internet box
+# works out of the box. Set `build_mcp: true` to build from the vendored
+# in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
+# Hetzner VPC registry (10.0.0.4:5000) the target must be VPC-internal:
+# compose validates every image before starting any service, so an
+# unreachable one fails the whole `docker compose up`.
 enable_mcp: true
 
 # ────────── Turbopass (OSM location autocomplete) ──────────
@@ -362,6 +407,26 @@ novu_bridge_channel: "sms"
 # novu_bridge_workflow_id_email:    "complaints-email"
 # Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
 # novu_bridge_identify_cache_ttl_ms: 300000
+
+# Browser-facing origin for the Novu dashboard SPA (scheme + host, no trailing
+# slash). The dashboard runs in the OPERATOR's browser, so these URLs must name
+# a host the browser can reach — not an in-cluster or loopback address.
+#
+# Defaults to this tenant's own `domain` + `tls_enabled` scheme, which is
+# correct whenever the ansible-managed vhost is the one the browser hits.
+# Set this only when TLS terminates on a vhost whose hostname differs from
+# `domain` — e.g. `domain: localhost` for the internal vhost, with a
+# separately-managed public vhost proxying /novu/, /novu-api/ and /novu-ws/.
+# novu_public_base_url: "https://pilot.example.org"
+
+# Escape hatch for the rare case where the API / WS / dashboard live on
+# DIFFERENT hosts. Prefer novu_public_base_url above — it sets all four at
+# once and keeps the paths aligned with the nginx location blocks.
+# novu_api_public_url:  "https://pilot.example.org/novu-api"
+# novu_ws_public_url:   "https://pilot.example.org/novu-ws"
+# novu_api_root_url:    "https://pilot.example.org/novu-api"
+# novu_front_base_url:  "https://pilot.example.org/novu"
+# novu_node_env: "production"
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host

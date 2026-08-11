@@ -7,7 +7,7 @@
 services:
   # ==================== Tracing Infrastructure ====================
   otel-collector:
-    image: registry.preview.egov.theflywheel.in/otel/opentelemetry-collector-contrib:0.114.0
+    image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -21,7 +21,7 @@ services:
       - egov-network
 
   tempo:
-    image: registry.preview.egov.theflywheel.in/grafana/tempo:2.6.1
+    image: egovio/tempo:2.6.1
     container_name: digit-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
@@ -39,7 +39,7 @@ services:
       - egov-network
 
   grafana:
-    image: registry.preview.egov.theflywheel.in/grafana/grafana:11.4.0
+    image: egovio/grafana:11.4.0
     container_name: digit-grafana
     restart: unless-stopped
     environment:
@@ -68,7 +68,7 @@ services:
   # ==================== Core Infrastructure ====================
   # Actual PostgreSQL - services should NOT connect directly to this
   postgres-db:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     container_name: docker-postgres
     # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
     # that a parallel query's workers use to exchange tuples here — about 8 MB
@@ -100,7 +100,7 @@ services:
 
   # PgBouncer - transparent connection pooler, aliased as "postgres"
   pgbouncer:
-    image: registry.preview.egov.theflywheel.in/edoburu/pgbouncer:latest
+    image: egovio/pgbouncer:latest
     container_name: digit-pgbouncer
     environment:
       DB_HOST: postgres-db
@@ -128,7 +128,7 @@ services:
           - postgres
 
   redis:
-    image: registry.preview.egov.theflywheel.in/redis:7.2.4
+    image: egovio/redis:7.2.4
     container_name: digit-redis
     ports:
     - 16379:6379
@@ -145,7 +145,7 @@ services:
 
   # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
   redpanda:
-    image: registry.preview.egov.theflywheel.in/redpandadata/redpanda:v24.1.1
+    image: egovio/redpanda:v24.1.1
     container_name: digit-redpanda
     command:
       - redpanda
@@ -181,7 +181,7 @@ services:
 
   # MinIO - S3-compatible object storage for filestore
   minio:
-    image: registry.preview.egov.theflywheel.in/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -202,7 +202,7 @@ services:
 
   # MinIO init - creates the bucket
   minio-init:
-    image: registry.preview.egov.theflywheel.in/minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -218,7 +218,7 @@ services:
       - egov-network
 
   elasticsearch:
-    image: registry.preview.egov.theflywheel.in/docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    image: egovio/elasticsearch:8.10.3
     container_name: digit-elasticsearch
     environment:
     - discovery.type=single-node
@@ -242,7 +242,7 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:maven-jdk21-9f83afb
+    image: egovio/egov-indexer:maven-jdk21-9f83afb
     container_name: egov-indexer
     depends_on:
       pgbouncer:
@@ -307,7 +307,7 @@ services:
   # Inbox v2 - Queries Elasticsearch for inbox/search views
   # ===========================================================================
   inbox:
-    image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
+    image: egovio/inbox:state-tenant-fix
     container_name: digit-inbox
     depends_on:
       pgbouncer:
@@ -369,7 +369,7 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:2.12-87e13fe
+    image: egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -422,7 +422,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -468,7 +468,7 @@ services:
   # MDMS Proxy - handles path rewriting for backward compatibility
   # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
   egov-mdms-service:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-mdms-service
     depends_on:
       mdms-backend:
@@ -488,7 +488,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:maven-jdk21-9f83afb
+    image: egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -539,7 +539,7 @@ services:
   # Unified database migrations for all DIGIT services
   # Runs all Flyway migrations in one container before services start
   db-migrations:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-db-migrations:latest
+    image: egovio/tilt-demo-db-migrations:latest
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -552,7 +552,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:2.12-87e13fe
+    image: egovio/egov-user:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -617,7 +617,7 @@ services:
     - egov-network
 
   egov-otp:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-otp:v2.9.2-4a60f20
+    image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
     depends_on:
       pgbouncer:
@@ -656,7 +656,7 @@ services:
     - egov-network
 
   user-otp:
-    image: registry.preview.egov.theflywheel.in/egovio/user-otp:master-e22c7c5
+    image: egovio/user-otp:master-e22c7c5
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -693,8 +693,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-    ports:
-    - 18095:8090
+    # no host port: internal-only, matching docker-compose.egov-digit.yaml
+    # (18095 is taken by egov-indexer in this file)
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8090/user-otp/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -705,7 +705,7 @@ services:
     - egov-network
 
   egov-notification-sms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-notification-sms:master-e22c7c5
+    image: egovio/egov-notification-sms:master-e22c7c5
     container_name: egov-notification-sms
     depends_on:
       redpanda:
@@ -739,7 +739,7 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -756,7 +756,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:2.12-87e13fe
+    image: egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -821,7 +821,7 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -838,7 +838,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:2.12-87e13fe
+    image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -886,7 +886,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:maven-jdk21-9f83afb
+    image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -944,7 +944,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -992,7 +992,7 @@ services:
     - egov-network
 
   egov-persister:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:maven-jdk21-9f83afb
+    image: egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -1040,7 +1040,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:maven-jdk21-9f83afb
+    image: egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -1098,7 +1098,7 @@ services:
   # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
   # ===========================================================================
   hrms-prereq-gate:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: hrms-prereq-gate
     depends_on:
       egov-user:
@@ -1134,7 +1134,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1202,7 +1202,7 @@ services:
   # Boundary Management Service - Boundary generation from Excel
   # ===========================================================================
   egov-bndry-mgmnt:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -1251,7 +1251,7 @@ services:
 
   # RE-ENABLED: Required for services to start (schema definitions)
   mdms-tenant-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1276,7 +1276,7 @@ services:
 
   # RE-ENABLED: Required for egov-workflow-v2 to start
   mdms-workflow-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1303,7 +1303,7 @@ services:
 
   # RE-ENABLED: Required for security services
   mdms-security-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1330,7 +1330,7 @@ services:
 
   # RE-ENABLED: Required for localization
   localization-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1350,7 +1350,7 @@ services:
 
   # RE-ENABLED: Creates base database records needed by services
   db-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     container_name: db-seed-container
     depends_on:
       pgbouncer:
@@ -1391,7 +1391,7 @@ services:
   # RE-ENABLED: Required for system users (HRMS needs this)
   # User seed via API (ensures proper password encryption via egov-enc-service)
   user-seed:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: user-seed-container
     depends_on:
       egov-user:
@@ -1413,7 +1413,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1493,7 +1493,7 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:maven-jdk21-983e8b2
+    image: egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
@@ -1529,7 +1529,7 @@ services:
   # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1552,7 +1552,7 @@ services:
   # Main entry point: http://localhost:18000/digit-ui/
   # ===========================================================================
   kong:
-    image: registry.preview.egov.theflywheel.in/kong:3.6
+    image: egovio/kong:3.6
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"
@@ -1592,7 +1592,7 @@ services:
 
   # ==================== Gatus Health Monitoring ====================
   gatus:
-    image: registry.preview.egov.theflywheel.in/twinproduction/gatus:latest
+    image: egovio/gatus:latest
     container_name: digit-gatus
     depends_on:
       pgbouncer:
@@ -1608,6 +1608,7 @@ services:
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "true"
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
@@ -1620,7 +1621,7 @@ services:
 
   # ==================== Jupyter Lab for PGR Configuration ====================
   jupyter:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-jupyter:latest
+    image: egovio/tilt-demo-jupyter:latest
     container_name: digit-jupyter
     user: root
     depends_on:

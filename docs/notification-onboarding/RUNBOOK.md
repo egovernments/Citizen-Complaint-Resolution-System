@@ -42,7 +42,7 @@ The steps below are the same thing by hand, for when you need to do one piece.
 Compose helper (**name services explicitly** — a bare `up -d` revives `default-data-handler`, which re-seeds MDMS):
 ```bash
 cd /opt/digit
-C="sudo docker compose -f docker-compose.egov-digit.yaml -f docker-compose.fast-path.yml -f docker-compose.migrations.yml -f docker-compose.migrations.ansible.yml"
+C="sudo docker compose -f docker-compose.egov-digit.yaml -f docker-compose.fast-path.yml -f docker-compose.migrations.yml"
 ```
 
 **1 — PGR onto the config-driven path**
