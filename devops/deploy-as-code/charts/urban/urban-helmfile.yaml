@@ -34,4 +34,18 @@ releases:
   - name: configurator # DIGIT Studio tenant onboarding/management SPA
     installed: true
     <<: *default
+
+  # Citizen UI v2 (Vite SPA under /citizen/). No common-chart image: it serves a
+  # tenant-baked dist pulled from object storage (see the chart's values.yaml for
+  # why + how to build the tarball). Declares its own values instead of *default.
+  - name: digit-ui-v2
+    installed: true
+    chart: ./digit-ui-v2
+    namespace: egov
+    missingFileHandler: Warn
+    values:
+      - global:
+          domain: {{ .Values.global.domain | quote }}
+        namespace: egov
+        distUrl: {{ index .Values "digit-ui-v2" "distUrl" | default "" | quote }}
   # Frontend services end
