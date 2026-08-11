@@ -178,6 +178,13 @@ function mapLeafToServiceDef(
  *  The metadata strip (id / `_*`) is left to the caller. */
 function serviceDefToLeafWrite(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
+  // hierarchyType/levelCode are required + part of the x-unique key
+  // (RAINMAKER-PGR.json) but the Complaint Type create form never carries
+  // them — it only knows the legacy ServiceDefs fields. Stamp the same
+  // constants every leaf row in this hierarchy already uses (CCRS#1700);
+  // guarded so an edit's spread-in existing values are never overwritten.
+  if (!out.hierarchyType) out.hierarchyType = 'PGR';
+  if (!out.levelCode) out.levelCode = 'SUB_TYPE';
   // serviceCode -> code (the leaf's code IS the serviceCode stored on a
   // complaint). Populate `code` from a filled Service Code whenever `code` is
   // absent OR blank — the create form carries `code: ""` (empty string, not
