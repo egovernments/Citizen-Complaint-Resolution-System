@@ -10,6 +10,12 @@ const os = require("os");
 const esbuild = require("esbuild");
 
 const OUT = path.join(os.tmpdir(), `publicRuntimeIsolation.cjs.${process.pid}.js`);
+const PUBLIC_ENTRY = path.resolve(__dirname, "../../../../public/public-dashboard.html");
+const DASHBOARD_LAYOUT = path.resolve(__dirname, "../components/DashboardLayout.jsx");
+const EN_MESSAGES = path.resolve(
+  __dirname,
+  "../../../../../local-setup/db/dss-mdms-seed/l10n/en_IN.json",
+);
 esbuild.buildSync({
   stdin: {
     contents: `
@@ -80,4 +86,21 @@ test("public runtime makes shared auxiliary requests anonymous and single-shot",
   assert.equal(reads, 0);
   assert.equal(writes, 0);
   assert.equal(events, 0);
+});
+
+test("public entry resets the standalone browser viewport", () => {
+  const html = fs.readFileSync(PUBLIC_ENTRY, "utf8");
+  assert.match(html, /html,\s*body,\s*#root\s*\{[^}]*margin:\s*0;[^}]*padding:\s*0;/s);
+  assert.match(html, /body\s*\{[^}]*overflow-x:\s*hidden;/s);
+});
+
+test("public-only chrome has seeded localization messages", () => {
+  const messages = JSON.parse(fs.readFileSync(EN_MESSAGES, "utf8"));
+  const byCode = Object.fromEntries(messages.map(({ code, message }) => [code, message]));
+  assert.equal(byCode.DASHBOARD_HEADER_PUBLIC_SUBTITLE, "Public view");
+});
+
+test("public entry omits the employee navigation sidebar", () => {
+  const source = fs.readFileSync(DASHBOARD_LAYOUT, "utf8");
+  assert.match(source, /!embedded\s*&&\s*!publicMode\s*&&\s*<Sidebar/);
 });

@@ -32,14 +32,11 @@ function getSignedInLabel() {
   }
 }
 
-const Sidebar = ({ onSignOut, publicMode = false }) => {
+const Sidebar = ({ onSignOut }) => {
   const { t } = useDashboardT();
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
-  const signedInLabel = useMemo(
-    () => (publicMode ? null : getSignedInLabel()),
-    [publicMode]
-  );
+  const signedInLabel = useMemo(() => getSignedInLabel(), []);
 
   return (
     <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground">
@@ -69,9 +66,7 @@ const Sidebar = ({ onSignOut, publicMode = false }) => {
       <div className="tw-flex-1" />
       <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
         <span className="tw-min-w-0 tw-truncate" title={signedInLabel || undefined}>
-          {publicMode
-            ? t("DASHBOARD_SIDEBAR_PUBLIC_VIEW", "Public dashboard")
-            : signedInLabel || t("DASHBOARD_SIDEBAR_NOT_SIGNED_IN", "Not signed in")}
+          {signedInLabel || t("DASHBOARD_SIDEBAR_NOT_SIGNED_IN", "Not signed in")}
         </span>
         {onSignOut ? (
           <button

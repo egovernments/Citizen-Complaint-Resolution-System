@@ -485,6 +485,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Public view",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Reset",
     "module": "rainmaker-dashboard"

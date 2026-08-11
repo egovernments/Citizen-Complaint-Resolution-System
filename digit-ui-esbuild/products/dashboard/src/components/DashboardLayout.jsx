@@ -50,7 +50,7 @@ const DashboardLayout = ({
       className={`dashboard-root${embedded ? " dashboard-embedded" : ""} tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground`}
       style={brandStyle}
     >
-      {!embedded && <Sidebar onSignOut={onSignOut} publicMode={publicMode} />}
+      {!embedded && !publicMode && <Sidebar onSignOut={onSignOut} />}
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}

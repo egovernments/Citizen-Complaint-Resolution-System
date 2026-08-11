@@ -500,6 +500,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Public view",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Reset",
     "module": "rainmaker-dashboard"
@@ -2091,6 +2096,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_PGR_OPERATIONS",
     "message": "Operações PGR",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Vista pública",
     "module": "rainmaker-dashboard"
   },
   {

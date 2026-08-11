@@ -14,6 +14,22 @@
   <meta name="theme-color" content="#00bcd1" />
   <title>Public Dashboard</title>
 
+  <!-- The standalone entry does not load DigitUI's global reset stylesheet. -->
+  <style>
+    html,
+    body,
+    #root {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+  </style>
+
   <!--
     Deliberately minimal compared with index.html. The public page mounts the
     dashboard subtree directly, with no DigitUI chrome, so it needs none of the
