@@ -3136,7 +3136,7 @@ aab37726-63eb-4e16-bc1e-13624df9baa2	pg	DUPLICATE	RAINMAKER-PGR.RejectionReasons
 0feaf548-1ba4-4e22-b6be-8a3cd2f8604b	pg	INSUFFICIENT_INFO	RAINMAKER-PGR.RejectionReasons	{"code": "INSUFFICIENT_INFO", "name": "Insufficient information", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078605	1786319078605
 f1dc8ee5-a463-497c-8ea5-ee1f9bc5cfb1	pg	NOT_PUBLIC_INFRA	RAINMAKER-PGR.RejectionReasons	{"code": "NOT_PUBLIC_INFRA", "name": "Not on public infrastructure", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078475	1786319078475
 05f3d3b4-5617-4351-970e-16e07fa0bb65	pg	OUT_OF_SCOPE	RAINMAKER-PGR.RejectionReasons	{"code": "OUT_OF_SCOPE", "name": "Out of scope for this department", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078563	1786319078563
-c2a98c2d-edc2-4bbf-b9f1-28e7efcabcf5	pg	OUTSIDE_JURISDICTION	RAINMAKER-PGR.RejectionReasons	{"code": "OUTSIDE_JURISDICTION", "name": "Outside Nairobi County jurisdiction", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078432	1786319078432
+c2a98c2d-edc2-4bbf-b9f1-28e7efcabcf5	pg	OUTSIDE_JURISDICTION	RAINMAKER-PGR.RejectionReasons	{"code": "OUTSIDE_JURISDICTION", "name": "Outside Punjab jurisdiction", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078432	1786319078432
 \.
 
 
