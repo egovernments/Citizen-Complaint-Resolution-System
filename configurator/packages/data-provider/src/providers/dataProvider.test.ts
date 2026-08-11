@@ -396,4 +396,5 @@ describe('createDigitDataProvider', () => {
     assert.ok(queried.includes('ADMIN'));
     assert.ok(queried.includes('REVENUE'));
   });
+
 });
