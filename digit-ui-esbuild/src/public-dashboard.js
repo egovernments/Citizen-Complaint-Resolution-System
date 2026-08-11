@@ -16,8 +16,9 @@
  * services, so this stays a small independent bundle.
  *
  * Served from the same /digit-ui/ docroot as the employee build (so hashed
- * assets resolve against one publicPath) at public-dashboard.html; give it a
- * friendly URL with an nginx alias rather than a second docroot.
+ * assets resolve against one publicPath) at public-dashboard.html. Nginx gives it the
+ * canonical friendly URL /digit-ui/public-dashboard (with /dashboard retained as an alias)
+ * rather than adding a second docroot.
  *
  * The analytics read paths this page calls are explicitly auth-optional on Kong,
  * so anonymous access is a declared compose/Ansible contract rather than a side

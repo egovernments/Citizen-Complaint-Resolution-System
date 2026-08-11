@@ -37,6 +37,7 @@ public class AnalyticsControllerPublicTest {
     public void setUp() {
         controller = new AnalyticsController(service, kpiCatalogService, mapper, config);
         when(config.getStateLevelTenantIdLength()).thenReturn(1);
+        when(kpiCatalogService.isPublicDashboardEnabled(anyString())).thenReturn(true);
     }
 
     private KpiDefinition publicDef(String id) {
@@ -81,9 +82,53 @@ public class AnalyticsControllerPublicTest {
 
         assertEquals(200, response.getStatusCodeValue());
         assertEquals("public-default", response.getBody().get("packId"));
+        assertEquals(true, response.getBody().get("enabled"));
         assertEquals(1, ((List<?>) response.getBody().get("tiles")).size());
         assertFalse(response.getBody().containsKey("recordCount"));
         verify(service, never()).recordCount(anyString(), anyInt());
+    }
+
+    @Test
+    public void disabledPublicDashboardReturnsDataFreePackEnvelope() {
+        when(kpiCatalogService.isPublicDashboardEnabled("ke")).thenReturn(false);
+
+        ResponseEntity<Map<String,Object>> response =
+                controller.getPublicPack(Map.of("tenantId", "ke"));
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(false, response.getBody().get("enabled"));
+        assertEquals(Collections.emptyList(), response.getBody().get("tiles"));
+        assertEquals(Collections.emptyList(), response.getBody().get("defaultLayout"));
+        assertNull(response.getBody().get("packId"));
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), anySet());
+        verify(kpiCatalogService, never()).getBestPack(anyString(), anySet(), anyList());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    public void disabledPublicDashboardRejectsQueriesBeforeCatalogLookup() throws Exception {
+        when(kpiCatalogService.isPublicDashboardEnabled("ke")).thenReturn(false);
+
+        ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public\"}}}"), null);
+
+        assertEquals(404, response.getStatusCodeValue());
+        assertEquals("public_dashboard_disabled", response.getBody().get("error"));
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), anySet());
+        verify(kpiCatalogService, never()).getBestPack(anyString(), anySet(), anyList());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    public void configRefreshReturnsFreshPublicDashboardState() {
+        when(kpiCatalogService.refreshPublicDashboardConfig("ke")).thenReturn(true);
+
+        ResponseEntity<Map<String,Object>> response =
+                controller.refreshDashboardConfig(Map.of("tenantId", "ke"));
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(true, response.getBody().get("publicDashboardEnabled"));
+        verify(kpiCatalogService).refreshPublicDashboardConfig("ke");
     }
 
     @Test

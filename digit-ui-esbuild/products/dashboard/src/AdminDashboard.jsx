@@ -883,7 +883,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     URL.revokeObjectURL(url);
   }, [layout, kpis, batch.results, t]);
 
-  const showEmpty = !catalogLoading && pack && layout.length === 0;
+  const showPublicDisabled = publicMode && !catalogLoading && pack?.enabled === false;
+  const showEmpty = !showPublicDisabled && !catalogLoading && pack && layout.length === 0;
 
   const handleFilterChange = useCallback(
     (...args) => {
@@ -932,6 +933,19 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
           {t("DASHBOARD_COMMON_CATALOG_UNAVAILABLE", "Catalog unavailable")}: {catalogError}
         </div>
       )}
+      {showPublicDisabled && (
+        <div className="tw-mx-auto tw-mt-12 tw-max-w-xl tw-rounded-lg tw-border tw-border-border tw-bg-surface tw-p-8 tw-text-center tw-shadow-sm">
+          <h1 className="tw-text-xl tw-font-semibold tw-text-foreground">
+            {t("DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE", "Public dashboard is not available")}
+          </h1>
+          <p className="tw-mt-3 tw-text-sm tw-leading-6 tw-text-muted-foreground">
+            {t(
+              "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+              "This dashboard has not been enabled for this tenant."
+            )}
+          </p>
+        </div>
+      )}
       {batch.errors && batch.errors.__batch && (
         <div className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
           {batch.errors.__batch}
@@ -943,7 +957,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
           while a picker drag is live so the RGL placeholder stays visible. */}
       <div
         ref={gridWrapRef}
-        className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
+        className={`dashboard-grid-wrap${showPublicDisabled ? " tw-hidden" : ""}${isExternalDrag ? " dashboard-external-drag" : ""}${
           isGridDragging ? " dashboard-grid-dragging" : ""
         }${showEmpty ? " dashboard-grid-wrap--empty tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface" : ""}`}
         onDragOver={handleWrapDragOver}

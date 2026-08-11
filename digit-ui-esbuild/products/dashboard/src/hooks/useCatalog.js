@@ -30,7 +30,8 @@ function currentRoleSetKey() {
  *
  * Returns: { loading, kpis, pack, packMeta, error }
  * - kpis: object keyed by kpiId, value = full tile descriptor including viz
- * - pack: { tiles, layout } — tiles already ceiling-filtered by server
+ * - pack: { tiles, layout, enabled } — tiles already ceiling-filtered by server;
+ *   enabled is false only for the public shell when the tenant switch is off
  * - packMeta: { packId, recordCount, persona } — read DEFENSIVELY off the
  *   /packs response; all null until the PR2 backend exposes them (#1110)
  * - error: string | null
@@ -88,7 +89,11 @@ export function useCatalog(tenantId, { publicMode = false } = {}) {
         setState({
           loading: false,
           kpis: allKpis,
-          pack: { tiles: filteredTiles, layout: packLayout },
+          pack: {
+            tiles: filteredTiles,
+            layout: packLayout,
+            enabled: !publicMode || packRes?.enabled !== false,
+          },
           packMeta,
           error: null,
         });

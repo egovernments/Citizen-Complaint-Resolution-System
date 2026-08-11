@@ -50,7 +50,8 @@ public class KpiCatalogService {
 
     /**
      * ONE cached fetch of the state-root's {@code dss.DashboardConfig} record, shared by
-     * {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} so the two config axes
+     * {@link #isDepartmentScopingDisabled}, {@link #isPublicDashboardEnabled}, and
+     * {@link #resolveTimeZone} so the config axes
      * never trigger duplicate MDMS calls or run parallel cache implementations (#29 requirement).
      * stateRoot -> [Map<String,Object> record-or-null, Long expiresAtMs].
      */
@@ -168,6 +169,40 @@ public class KpiCatalogService {
     }
 
     /**
+     * Whether the state root explicitly enables the credential-free dashboard.
+     *
+     * <p>This is deliberately fail-closed: only the JSON boolean {@code true} in
+     * {@code dss.DashboardConfig.publicDashboardEnabled} enables the public data plane. An absent
+     * record/field, a string such as {@code "true"}, an MDMS failure, or any unexpected error all
+     * resolve to {@code false}. It shares the same state-root cache as the other DashboardConfig
+     * fields, so a configurator change reaches every public endpoint together within the configured
+     * analytics config-cache TTL (five minutes by default).
+     */
+    public boolean isPublicDashboardEnabled(String tenantId) {
+        try {
+            if (tenantId == null || tenantId.isEmpty()) return false;
+            Map<String, Object> record = dashboardConfig(tenantId);
+            return record != null && Boolean.TRUE.equals(record.get("publicDashboardEnabled"));
+        } catch (Exception e) {
+            log.warn("publicDashboardEnabled lookup failed for tenant {}; treating as disabled", tenantId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Evict and immediately reload the state-root DashboardConfig after an authenticated
+     * configurator write. Returning the freshly resolved switch lets the caller verify the write
+     * reached the analytics data plane instead of waiting for the normal TTL.
+     */
+    public boolean refreshPublicDashboardConfig(String tenantId) {
+        if (tenantId == null || tenantId.isEmpty()) return false;
+        String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        dashboardConfigCache.remove(stateRoot);
+        timeZoneFallbackWarnedGeneration.remove(stateRoot);
+        return isPublicDashboardEnabled(tenantId);
+    }
+
+    /**
      * Resolve the IANA {@link java.time.ZoneId} {@code dss.DashboardConfig.timeZone} declares for
      * this tenant's state root (#29 timezone addendum) — the single source of the analytics
      * calendar zone every downstream consumer (planner, composer, compose ops, response) uses.
@@ -248,8 +283,9 @@ public class KpiCatalogService {
 
     /**
      * THE single cached fetch of the state-root's {@code dss.DashboardConfig} record — the shared
-     * seam {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} both read, so a
-     * request touching both axes issues exactly one MDMS call, and a config flip (either field)
+     * seam {@link #isDepartmentScopingDisabled}, {@link #isPublicDashboardEnabled}, and
+     * {@link #resolveTimeZone} all read, so a
+     * request touching multiple axes issues exactly one MDMS call, and any config-field flip
      * takes effect together within one {@link #configCacheTtlMs()} window. Returns {@code null}
      * (cached) when no record exists; never throws — callers apply their own field-specific
      * fallback.
@@ -268,19 +304,19 @@ public class KpiCatalogService {
      */
     private Object[] dashboardConfigEntry(String tenantId) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        long now = configClock.getAsLong();
-        Object[] cached = dashboardConfigCache.get(stateRoot);
-        if (cached != null && (Long) cached[1] > now) return cached;
+        return dashboardConfigCache.compute(stateRoot, (root, cached) -> {
+            long now = configClock.getAsLong();
+            if (cached != null && (Long) cached[1] > now) return cached;
 
-        List<Map<String, Object>> records =
-                fetchMaster(stateRoot, MASTER_CONFIG, new TypeReference<List<Map<String, Object>>>() {});
-        Map<String, Object> selected = selectDashboardConfigRecord(records);
-        // Unmodifiable: this same Map instance is cached and handed to every caller/thread until the
-        // TTL expires, so a caller mutating it (however unlikely today) must never corrupt the cache.
-        Map<String, Object> record = selected == null ? null : Collections.unmodifiableMap(selected);
-        Object[] entry = new Object[]{record, now + configCacheTtlMs()};
-        dashboardConfigCache.put(stateRoot, entry);
-        return entry;
+            List<Map<String, Object>> records =
+                    fetchMaster(root, MASTER_CONFIG, new TypeReference<List<Map<String, Object>>>() {});
+            Map<String, Object> selected = selectDashboardConfigRecord(records);
+            // Unmodifiable: this same Map instance is cached and handed to every caller/thread until
+            // the TTL expires, so a caller mutating it must never corrupt the shared cache.
+            Map<String, Object> record = selected == null
+                    ? null : Collections.unmodifiableMap(selected);
+            return new Object[]{record, now + configCacheTtlMs()};
+        });
     }
 
     /**

@@ -82,6 +82,16 @@ public class AnalyticsController {
     public ResponseEntity<Map<String,Object>> getPublicPack(@RequestBody Map<String,Object> body){
         try {
             String tenantId = extractTenantId(body);
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                Map<String,Object> out = new LinkedHashMap<>();
+                out.put("enabled", false);
+                out.put("tiles", Collections.emptyList());
+                out.put("defaultLayout", Collections.emptyList());
+                out.put("packId", null);
+                // A 200 response lets the anonymous shell render an intentional unavailable
+                // screen. No KPI descriptors, layouts, counts, or query data leave the service.
+                return ResponseEntity.ok(out);
+            }
             Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
             List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
             Map<String,KpiDefinition> defIndex = visibleDefs.stream()
@@ -95,6 +105,7 @@ public class AnalyticsController {
             }
 
             Map<String,Object> out = new LinkedHashMap<>();
+            out.put("enabled", true);
             out.put("tiles", tiles);
             out.put("defaultLayout", pack.map(DashboardPack::getLayout).orElse(Collections.emptyList()));
             out.put("asOf", System.currentTimeMillis());
@@ -122,6 +133,11 @@ public class AnalyticsController {
             String tenantId = body.hasNonNull("tenantId") ? body.get("tenantId").asText() : null;
             if (tenantId == null || tenantId.isEmpty())
                 throw new IllegalArgumentException("invalid_param: tenantId is required");
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(
+                        new IllegalArgumentException(
+                                "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
+            }
 
             JsonNode queries = body.get("queries");
             if (queries == null || !queries.isObject() || queries.isEmpty())
@@ -166,6 +182,22 @@ public class AnalyticsController {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
             log.error("public analytics query failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
+        }
+    }
+
+    /** Refresh DashboardConfig after an authenticated configurator MDMS write. */
+    @PostMapping("/config/_refresh")
+    public ResponseEntity<Map<String,Object>> refreshDashboardConfig(
+            @RequestBody Map<String,Object> body) {
+        try {
+            String tenantId = extractTenantId(body);
+            boolean enabled = kpiCatalogService.refreshPublicDashboardConfig(tenantId);
+            return ResponseEntity.ok(Map.of("publicDashboardEnabled", enabled));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("analytics DashboardConfig refresh failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
         }
     }

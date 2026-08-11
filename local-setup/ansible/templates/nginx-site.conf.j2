@@ -425,8 +425,14 @@ server {
   # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
   # gateway is deliberately not opened because it does not normalize spoofed
   # anonymous userInfo. The real data boundary remains server-side.
-  location = /dashboard {
+  location = /digit-ui/public-dashboard {
     return 302 /digit-ui/public-dashboard.html;
+  }
+
+  # Backwards-compatible alias for the first public-dashboard preview. The
+  # explicit digit-ui path is canonical and is what the configurator exposes.
+  location = /dashboard {
+    return 302 /digit-ui/public-dashboard;
   }
 
 {% if digit_ui_mode == "static" %}
