@@ -14,6 +14,24 @@ import { buildExtendedAttributeRows, useExtendedAttributeOrder } from "../../com
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
+import { findLatestAssigneeUuidByRole } from "../../utils/workflowAssignee";
+
+// CCSD-2167 (employee side) — route-back / terminal actions derive their
+// assignee from the complaint's OWN workflow history, exactly like the citizen
+// reopen/rate: route to the person who previously/last held that role, rather
+// than depending on a manual pick (which for these actions is optional and, for
+// a cross-department screening officer, was scoped to the wrong department).
+//   RATE     -> the Case Manager     (CMS_CASE_MANAGER)     who last handled it
+//   REASSIGN -> the Screening Officer (CMS_SCREENING_OFFICER) who screened it
+//   REOPEN   -> the Supervisor       (CMS_SUPERVISOR)       who handled it
+// A manual pick still wins when the officer explicitly chose someone; the
+// history-derived value only fills in when they didn't. On the standard non-CMS
+// PGR workflow none of these roles appear in history, so it is a no-op there.
+const HISTORY_DERIVED_ASSIGNEE_ROLE = {
+  RATE: "CMS_CASE_MANAGER",
+  REASSIGN: "CMS_SCREENING_OFFICER",
+  REOPEN: "CMS_SUPERVISOR",
+};
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -281,7 +299,7 @@ const PGRDetails = () => {
   const isAssigneeMandatory = (action) => action?.action === "ASSIGN";
 
   // Prepare and submit the update complaint request
-  const handleActionSubmit = (_data) => {
+  const handleActionSubmit = async (_data) => {
     // Build the same generic form config the modal renders, so mandatory-field validation stays in sync.
     const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
 
@@ -338,6 +356,18 @@ const PGRDetails = () => {
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
+
+    // CCSD-2167 (employee side): for the route-back / terminal actions, resolve
+    // the assignee from the complaint's workflow history by role — the person
+    // who previously handled it — unless the officer explicitly picked someone.
+    const pickedUuid = _data?.SelectedAssignee?.uuid || null;
+    const derivedRole = HISTORY_DERIVED_ASSIGNEE_ROLE[selectedAction.action];
+    let assigneeUuid = pickedUuid;
+    if (!pickedUuid && derivedRole) {
+      const stateCode = Digit.ULBService.getStateId();
+      const businessId = baseService?.serviceRequestId;
+      assigneeUuid = await findLatestAssigneeUuidByRole(stateCode, businessId, derivedRole);
+    }
     // Parse (object OR stringified) so stamping never discards existing keys
     // like supervisorName / serviceName that older flows stored as a string.
     const baseAdditionalDetail = parseAdditionalDetail(baseService?.additionalDetail);
@@ -347,8 +377,8 @@ const PGRDetails = () => {
         : { ...baseService },
       workflow: {
         action: selectedAction.action,
-        assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
-        hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
+        assignes: assigneeUuid ? [assigneeUuid] : null,
+        hrmsAssignes: assigneeUuid ? [assigneeUuid] : null,
         comments: composedComment,
         // Verification documents captured when the target state is docUploadRequired
         // (VerificationDocsComponent already shapes them as {documentType,fileStoreId,…}).
@@ -412,7 +442,14 @@ const PGRDetails = () => {
     // primary department. (Backend validateDepartment still scopes to the primary
     // until relaxed — cross-department assigns will be rejected at submit for now.)
     const userRoles = userInfo?.info?.roles?.map((r) => r.code) || [];
-    const allDepartments = userRoles.includes("CMS_SCREENING_OFFICER");
+    // Show every department's employees when the picker TARGETS a cross-department
+    // role, not only when the ACTOR is one. A CMS_SCREENING_OFFICER routes across
+    // the whole tenant, so when the assignee being picked is a screening officer
+    // (e.g. a Supervisor doing REASSIGN / send-back), scoping to the complaint's
+    // single department wrongly emptied the list ("no eligible employee") — the
+    // screening officer usually sits in a different department. (CCSD-2167)
+    const allDepartments =
+      userRoles.includes("CMS_SCREENING_OFFICER") || roles.includes("CMS_SCREENING_OFFICER");
 
     return {
       ...actionConfig.formConfig,
