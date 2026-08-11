@@ -13,6 +13,14 @@ const OUT = path.join(os.tmpdir(), `publicRuntimeIsolation.cjs.${process.pid}.js
 const PUBLIC_ENTRY = path.resolve(__dirname, "../../../../public/public-dashboard.html");
 const DASHBOARD_LAYOUT = path.resolve(__dirname, "../components/DashboardLayout.jsx");
 const DASHBOARD_STYLES = path.resolve(__dirname, "../styles/input.css");
+const DASHBOARD_PACKS = path.resolve(
+  __dirname,
+  "../../../../../ansible/nairobi-mdms/mdms/dss/DashboardPack.json",
+);
+const KPI_DEFINITIONS = path.resolve(
+  __dirname,
+  "../../../../../ansible/nairobi-mdms/mdms/dss/KpiDefinition.json",
+);
 const EN_MESSAGES = path.resolve(
   __dirname,
   "../../../../../local-setup/db/dss-mdms-seed/l10n/en_IN.json",
@@ -114,4 +122,31 @@ test("public grid reflows instead of squeezing desktop columns on small screens"
   assert.match(css, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(min\(100%,\s*18rem\),\s*1fr\)\);/);
   assert.match(css, /> \.react-grid-item\s*\{[^}]*position:\s*relative\s*!important;[^}]*transform:\s*none\s*!important;/s);
   assert.match(css, /\.dashboard-root\.dashboard-public \.dashboard-header-controls\s*\{[^}]*width:\s*auto;[^}]*flex-shrink:\s*0;/s);
+});
+
+test("public pack includes only aggregate PUBLIC KPIs and their configured layouts", () => {
+  const packs = JSON.parse(fs.readFileSync(DASHBOARD_PACKS, "utf8"));
+  const definitions = JSON.parse(fs.readFileSync(KPI_DEFINITIONS, "utf8"));
+  const publicPack = packs.find(({ data }) => data?.id === "public-default")?.data;
+  const expectedInsights = [
+    "cl_chart_complaints_by_type",
+    "cl_chart_over_time_created_daily",
+    "cl_chart_department_resolution_rate",
+  ];
+
+  assert.ok(publicPack);
+  assert.deepEqual(publicPack.tiles.slice(-3), expectedInsights);
+  assert.equal(new Set(publicPack.tiles).size, publicPack.tiles.length);
+  assert.deepEqual(
+    publicPack.layout.map(({ kpiId }) => kpiId),
+    publicPack.tiles,
+  );
+
+  const definitionsById = new Map(definitions.map(({ data }) => [data.id, data]));
+  for (const kpiId of publicPack.tiles) {
+    const definition = definitionsById.get(kpiId);
+    assert.ok(definition, `${kpiId} must exist in the KPI catalog`);
+    assert.equal(definition.viz?.pii, false, `${kpiId} must remain aggregate-only`);
+    assert.ok(definition.rbac?.visibleTo?.includes("PUBLIC"), `${kpiId} must remain PUBLIC`);
+  }
 });
