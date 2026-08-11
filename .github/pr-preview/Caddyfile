@@ -1,0 +1,19 @@
+# Caddy TLS termination for PR preview environments
+# Auto-obtains Let's Encrypt certs per subdomain via HTTP-01 challenge
+{
+	on_demand_tls {
+		ask http://pr-nginx-proxy/tls-check
+	}
+}
+
+*.preview.egov.theflywheel.in {
+	tls {
+		on_demand
+	}
+	reverse_proxy pr-nginx-proxy:80 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

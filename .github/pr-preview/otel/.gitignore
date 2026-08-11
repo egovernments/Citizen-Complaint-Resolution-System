@@ -1,0 +1,2 @@
+# OTEL Java agent is copied at setup time, not committed (22MB binary)
+opentelemetry-javaagent.jar
