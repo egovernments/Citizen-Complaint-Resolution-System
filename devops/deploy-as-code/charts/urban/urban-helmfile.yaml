@@ -30,4 +30,8 @@ releases:
   - name: egov-bndry-mgmnt # Replace with your desired namespace
     installed: true
     <<: *default
+
+  - name: configurator # DIGIT Studio tenant onboarding/management SPA
+    installed: true
+    <<: *default
   # Frontend services end
