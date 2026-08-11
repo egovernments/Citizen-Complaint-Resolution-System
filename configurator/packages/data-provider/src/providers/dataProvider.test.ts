@@ -174,6 +174,32 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
   });
 
+  it('getList(localization) does not drop rows when the list pins locales[]', async () => {
+    // LocalizationList writes `{ locales: ['en_IN', 'hi_IN', …] }` as a fetcher
+    // control. Matching that array against a record field stringifies it to
+    // "en_in,hi_in,…" and, because no row has a `locales` column, clientFilter
+    // used to return []. Dashboard (filter: {}) kept the real count.
+    mock.method(client, 'localizationSearch', async (_tenant: string, locale: string) => {
+      if (locale === 'en_IN') {
+        return [{ code: 'HELLO', message: 'Hello', module: 'rainmaker-common', locale }];
+      }
+      return [{ code: 'HELLO', message: 'Bonjour', module: 'rainmaker-common', locale }];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('localization', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: { locales: ['en_IN', 'fr_FR'] },
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result.data.length, 1);
+    assert.equal(result.data[0].code, 'HELLO');
+    assert.equal((result.data[0] as { msg__en_IN: string }).msg__en_IN, 'Hello');
+    assert.equal((result.data[0] as { msg__fr_FR: string }).msg__fr_FR, 'Bonjour');
+  });
+
   it('uses the real mdmsCount total for a generic MDMS list, not a page-size heuristic (issue #953)', async () => {
     // Departments/Designations previously faked `total` from the page just fetched
     // (`offset + perPage + 1` while a full page kept coming back), so the "X of Y"
@@ -187,7 +213,6 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }));
-
     mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number }) => {
       const offset = options?.offset ?? 0;
       const limit = options?.limit ?? 100;

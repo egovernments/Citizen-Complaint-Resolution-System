@@ -253,7 +253,17 @@ function clientFilter(records: RaRecord[], filter: Record<string, unknown>): RaR
       // choose which locales to pivot; they are not record fields, so they must
       // not participate in record-level filtering (else every pivoted row, which
       // has msg__<locale> fields but no `locales`/`locale` field, gets dropped).
+      // `locales.0` etc. appear when an array filter is objectified by ra-core
+      // / flattenFilterSources; those must be skipped too.
       if (key === 'locale' || key === 'locale2' || key === 'locales') return true;
+      if (key.startsWith('locale.') || key.startsWith('locale2.') || key.startsWith('locales.')) return true;
+      // Sentinel from LocalizationList's "All modules" Select — never a real module.
+      if (key === 'module' && (value === '__all__' || value === '')) return true;
+      // Arrays/objects are fetcher control data (e.g. locales: ['en_IN', …]).
+      // Matching them against a missing record field stringifies to
+      // "en_in,hi_in,…" / "[object Object]" and drops every row — that's how
+      // /manage/localization showed 0 against a dashboard count of thousands.
+      if (value !== null && typeof value === 'object') return true;
       if (key === 'q' && typeof value === 'string') {
         const q = value.toLowerCase();
         return JSON.stringify(record).toLowerCase().includes(q);
@@ -419,11 +429,16 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   // tree and left the Boundary picker blank). Falls back to "ADMIN" when no
   // hierarchy definitions are found.
   async function flatForTenant(t: string): Promise<RaRecord[]> {
+    // Playwright onboarding specs leave hundreds of PW_* hierarchy stubs on
+    // live tenants (bomet ke has 214 types, 212 of them PW_*). Searching
+    // only the first page of those (limit 100, newest first) never reaches
+    // ADMIN, every stub tree is empty, and the dashboard shows 0 boundaries
+    // even though the real ADMIN tree has dozens of nodes.
     const hierarchies = await client.boundaryHierarchySearch(t).catch(() => []);
-    const hierarchyTypes = (hierarchies as Record<string, unknown>[])
+    const discovered = (hierarchies as Record<string, unknown>[])
       .map((h) => (typeof h.hierarchyType === 'string' ? h.hierarchyType : ''))
-      .filter(Boolean);
-    const types = hierarchyTypes.length > 0 ? hierarchyTypes : ['ADMIN'];
+      .filter((ht) => ht && !/^PW_/i.test(ht));
+    const types = Array.from(new Set(['ADMIN', ...discovered]));
     const treeLists = await Promise.all(
       types.map((ht) => client.boundaryRelationshipSearch(t, ht).catch(() => [])),
     );
@@ -566,22 +581,31 @@ async function pgrGetList(client: DigitApiClient, config: ResourceConfig, tenant
   });
 }
 
+/** Parse the localization list's `locales` control value into locale codes. */
+function parseLocalesFilter(raw: unknown): string[] {
+  if (raw == null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.map((l) => String(l).trim()).filter(Boolean);
+  // ra-core / flattenFilterSources may objectify an array into {0: 'en_IN', …}.
+  if (typeof raw === 'object') {
+    return Object.values(raw as Record<string, unknown>).map((l) => String(l).trim()).filter(Boolean);
+  }
+  return String(raw).split(',').map((l) => l.trim()).filter(Boolean);
+}
+
 async function localizationGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   // Side-by-side pivot of two locales. The list view picks the locales via
   // dropdowns and passes them as `locale` (left column) and `locale2` (right
   // column). localeB is empty until the user explicitly picks a second locale
   // so the right column starts as all-missing rather than defaulting to a
   // hardcoded locale that may not exist on the tenant.
-  const module = filter?.module ? String(filter.module) : undefined;
+  const module = filter?.module && filter.module !== '__all__' ? String(filter.module) : undefined;
   // Multi-locale pivot: when the caller passes `locales` (array or CSV) the
   // grid wants one editable column per locale (msg__<locale>) instead of the
   // 2-way message/message2 compare — so every language can be edited side by
   // side. Rows are keyed by code+module; a code present in one locale but not
   // another still appears (its missing columns stay empty).
-  const localesRaw = filter?.locales;
-  if (localesRaw) {
-    const locales = (Array.isArray(localesRaw) ? localesRaw : String(localesRaw).split(','))
-      .map((l) => String(l).trim()).filter(Boolean);
+  const locales = parseLocalesFilter(filter?.locales);
+  if (locales.length > 0) {
     const perLocale = await Promise.all(locales.map((l) => client.localizationSearch(tenantId, l, module)));
     const pivotN = new Map<string, Record<string, unknown>>();
     locales.forEach((loc, i) => {

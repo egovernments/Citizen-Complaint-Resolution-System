@@ -1,5 +1,5 @@
 import { ENDPOINTS, OAUTH_CONFIG } from './endpoints.js';
-import { ApiClientError } from './errors.js';
+import { ApiClientError, isSessionExpired } from './errors.js';
 import type {
   RequestInfo, UserInfo, MdmsRecord, ApiError,
 } from './types.js';
@@ -19,6 +19,12 @@ export class DigitApiClient {
 
   private static readonly RETRY_STATUS_CODES = new Set([429, 503]);
   private static readonly MAX_RETRIES = 3;
+  // Survives `new DigitApiClient()` on URL change (configureDigitClient).
+  private static onSessionExpired: (() => void) | null = null;
+
+  static setSessionExpiredHandler(handler: (() => void) | null): void {
+    DigitApiClient.onSessionExpired = handler;
+  }
 
   constructor(config: DigitApiClientConfig) {
     this.baseUrl = config.url;
@@ -93,6 +99,16 @@ export class DigitApiClient {
           const errors: ApiError[] = (data.Errors as ApiError[]) || [
             { code: `HTTP_${response.status}`, message: (data.message as string) || `Request failed: ${response.status}` },
           ];
+          // HRMS / PGR / access-control enforce the token; MDMS and localization
+          // often don't. An expired session therefore looks like "employees=0,
+          // access roles crashed" while tenants still load. Bounce to login.
+          if (isSessionExpired(response.status, errors)) {
+            DigitApiClient.onSessionExpired?.();
+            throw new ApiClientError(
+              [{ code: 'SESSION_EXPIRED', message: 'Your session has expired. Please log in again to continue.' }],
+              response.status,
+            );
+          }
           throw new ApiClientError(errors, response.status);
         }
         return data as T;
