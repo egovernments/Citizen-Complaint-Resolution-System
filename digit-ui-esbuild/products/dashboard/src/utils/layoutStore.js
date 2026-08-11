@@ -4,6 +4,7 @@ import {
   UNIFORM_CHART_SIZE_CONSTRAINTS,
   MAP_SIZE_CONSTRAINTS,
   FULL_WIDTH_TABLE_GRID,
+  DEFAULT_CHART_GRID,
   findFirstOpenPosition,
 } from "../constants/layoutConfig";
 import { compactVertically, compactAroundPinned } from "./gridGeometry";
@@ -72,13 +73,13 @@ export function sizeConstraintsForKpi(kpiId, kpis) {
 
 /** Default size for a freshly-added tile, by kind. */
 export function defaultSizeForKpi(kpiId, kpis) {
-  const c = sizeConstraintsForKpi(kpiId, kpis);
   const kind = kpis?.[kpiId]?.viz?.kind;
   if (CARD_KINDS.has(kind)) return { w: 2, h: 2 };
   if (kind === "map" || kind === "choropleth-map") return { w: 8, h: 6 };
   if (kind === "sla-risk-table" || kind === "table" || kind === "data-table")
-    return { w: 12, h: 5 };
-  return { w: Math.max(c.minW, 6), h: Math.max(c.minH, 6) };
+    return { w: FULL_WIDTH_TABLE_GRID.w, h: FULL_WIDTH_TABLE_GRID.h };
+  if (kind === "rankedList" || kind === "dow") return { w: 6, h: 6 };
+  return { ...DEFAULT_CHART_GRID };
 }
 
 function clampNum(v, min, max, fallback) {

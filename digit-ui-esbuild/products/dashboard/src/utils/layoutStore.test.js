@@ -296,11 +296,11 @@ test("click add is UNCHANGED by drop-placement parity: appends at the first open
   assert.deepEqual({ x: untouched.x, y: untouched.y }, { x: 0, y: 0 });
 });
 
-test("defaultSizeForKpi sizes cards/charts/maps/tables distinctly", () => {
+test("defaultSizeForKpi preserves the existing add-KPI geometry contract", () => {
   assert.deepEqual(defaultSizeForKpi("card_a", KPIS), { w: 2, h: 2 });
   assert.deepEqual(defaultSizeForKpi("map_a", KPIS), { w: 8, h: 6 }); // incl. choropleth-map
-  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 5 });
-  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 6, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 4, h: 6 });
 });
 
 /* ------------------------------------------------------------------ */
