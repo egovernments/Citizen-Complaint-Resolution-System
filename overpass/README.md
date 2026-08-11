@@ -4,6 +4,12 @@ The configurator's Phase 2 OSM step fetches admin-boundary polygons from
 Overpass. The public `overpass-api.de` is rate-limited and frequently returns
 `504 Gateway Timeout` under load. A deployment can self-host Overpass instead.
 
+This file is the operator runbook. For what Overpass *is*, its query language and
+quotas, and the wider OSM picture (data sources, geocoding, tiles, self-hosting the
+other services), see [`docs/openstreetmap/`](../docs/openstreetmap/README.md) — in
+particular [30 — APIs](../docs/openstreetmap/30-apis.md) and
+[50 — Self-hosting](../docs/openstreetmap/50-self-hosting.md).
+
 ## How it fits together
 
 - **configurator** — `Phase2Page.tsx` calls `VITE_OVERPASS_URL || https://overpass-api.de/api/interpreter`.
