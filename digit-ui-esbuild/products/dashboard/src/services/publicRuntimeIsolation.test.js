@@ -130,14 +130,20 @@ test("public pack includes only aggregate PUBLIC KPIs and their configured layou
   const packs = JSON.parse(fs.readFileSync(DASHBOARD_PACKS, "utf8"));
   const definitions = JSON.parse(fs.readFileSync(KPI_DEFINITIONS, "utf8"));
   const publicPack = packs.find(({ data }) => data?.id === "public-default")?.data;
-  const expectedInsights = [
+  const expectedTiles = [
+    "cl_new_created_count",
+    "cl_resolution_rate_count",
+    "cl_reopen_rate_count",
+    "cl_open_complaints_live",
+    "cl_resolved_date_range_count",
     "cl_chart_complaints_by_type",
     "cl_chart_over_time_created_daily",
     "cl_chart_department_resolution_rate",
   ];
+  const expectedInsights = expectedTiles.slice(-3);
 
   assert.ok(publicPack);
-  assert.deepEqual(publicPack.tiles.slice(-3), expectedInsights);
+  assert.deepEqual(publicPack.tiles, expectedTiles);
   assert.equal(new Set(publicPack.tiles).size, publicPack.tiles.length);
   assert.deepEqual(
     publicPack.layout.map(({ kpiId }) => kpiId),

@@ -13,6 +13,7 @@ const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
 const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
 const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
 const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
+const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
 
 describe('Kong declarative route syntax', () => {
   /**
@@ -21,13 +22,14 @@ describe('Kong declarative route syntax', () => {
    * so Kong exited during startup while YAML/static gateway checks stayed green.
    */
   test('every regex path uses the Kong 3 declarative `~/` prefix', () => {
-    const regexPaths = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
-    expect(regexPaths.filter((routePath) => !routePath.startsWith('~/'))).toEqual([]);
+    expect(KONG_REGEX_PATHS.filter((routePath) => !routePath.startsWith('~/'))).toEqual([]);
   });
 
   test('public analytics regex routes stay end-anchored and Kong-parseable', () => {
-    expect(KONG).toContain('- ~/pgr-services/v2/analytics/public/packs$');
-    expect(KONG).toContain('- ~/pgr-services/v2/analytics/public/_query$');
+    expect(KONG_REGEX_PATHS.filter((routePath) => routePath.startsWith('~/pgr-services/v2/analytics/public/'))).toEqual([
+      '~/pgr-services/v2/analytics/public/packs$',
+      '~/pgr-services/v2/analytics/public/_query$',
+    ]);
   });
 });
 

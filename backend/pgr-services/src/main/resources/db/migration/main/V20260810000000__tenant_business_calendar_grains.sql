@@ -58,7 +58,10 @@
 -- local-setup/db/dss-mdms-seed/schemas/dss.DashboardConfig.json), else the
 -- record with the lexicographically smallest nonblank (trimmed) data->>'id',
 -- else the lowest internal id (stable first-occurrence proxy -- eg_mdms_data.id
--- is assigned in insertion order).
+-- is assigned in insertion order). Grain and snapshot consumers match a complaint
+-- to the LONGEST dot-segment-boundary prefix represented in this view, rather than
+-- assuming the state root is one segment. Thus a configured `ken.bomet` root wins
+-- over `ken` for `ken.bomet.city1`, while `ke` still resolves `ke.city1`.
 DROP VIEW IF EXISTS pgr_dashboard_tenant_timezone CASCADE;
 CREATE VIEW pgr_dashboard_tenant_timezone AS
 WITH selected AS (
@@ -282,7 +285,16 @@ SELECT
   (extract(isodow FROM (to_timestamp(tx.entered_at/1000) AT TIME ZONE COALESCE(tz.resolved_zone, 'Africa/Nairobi'))) IN (6,7)) AS occurred_is_weekend,
   (extract(hour  FROM (to_timestamp(tx.entered_at/1000) AT TIME ZONE COALESCE(tz.resolved_zone, 'Africa/Nairobi'))) BETWEEN 8 AND 17) AS occurred_is_business_hr
 FROM tx
-LEFT JOIN pgr_dashboard_tenant_timezone tz ON tz.state_root_tenant_id = split_part(tx.tenantid,'.',1)
+LEFT JOIN LATERAL (
+  SELECT candidate.resolved_zone
+  FROM pgr_dashboard_tenant_timezone candidate
+  WHERE tx.tenantid = candidate.state_root_tenant_id
+     OR left(tx.tenantid, length(candidate.state_root_tenant_id) + 1)
+          = candidate.state_root_tenant_id || '.'
+  ORDER BY array_length(string_to_array(candidate.state_root_tenant_id, '.'), 1) DESC,
+           candidate.state_root_tenant_id
+  LIMIT 1
+) tz ON true
 LEFT JOIN svc ON svc.servicerequestid = tx.service_request_id
 LEFT JOIN bnd ON bnd.code = svc.locality_code
 LEFT JOIN cnp ON cnp.code = svc.servicecode
@@ -487,7 +499,16 @@ SELECT
   to_char((to_timestamp(roll.resolved_at/1000) AT TIME ZONE COALESCE(tz.resolved_zone, 'Africa/Nairobi')),'YYYY-MM') AS resolved_month,
   clock.now_ms AS facts_built_at
 FROM eg_pgr_service_v2 s
-LEFT JOIN pgr_dashboard_tenant_timezone tz ON tz.state_root_tenant_id = split_part(s.tenantid,'.',1)
+LEFT JOIN LATERAL (
+  SELECT candidate.resolved_zone
+  FROM pgr_dashboard_tenant_timezone candidate
+  WHERE s.tenantid = candidate.state_root_tenant_id
+     OR left(s.tenantid, length(candidate.state_root_tenant_id) + 1)
+          = candidate.state_root_tenant_id || '.'
+  ORDER BY array_length(string_to_array(candidate.state_root_tenant_id, '.'), 1) DESC,
+           candidate.state_root_tenant_id
+  LIMIT 1
+) tz ON true
 CROSS JOIN clock
 LEFT JOIN eg_pgr_address_v2 a ON a.parentid = s.id
 LEFT JOIN roll ON roll.service_request_id = s.servicerequestid

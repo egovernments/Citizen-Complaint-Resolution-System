@@ -3,7 +3,6 @@ import { GRID_COLS, DROPPING_ITEM_ID } from "../constants/layoutConfig";
 import { getEmployeeInfo, getTenantId } from "../services/authService";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
 import {
-  LEGACY_STORAGE_KEY,
   storageKeyFor,
   readSavedLayout,
   persistLayout,
@@ -35,12 +34,7 @@ function scopedStorageKey() {
 }
 
 function readSaved() {
-  const scopedKey = scopedStorageKey();
-  return readSavedLayout(
-    window.localStorage,
-    scopedKey,
-    scopedKey === LEGACY_STORAGE_KEY ? undefined : LEGACY_STORAGE_KEY
-  );
+  return readSavedLayout(window.localStorage, scopedStorageKey());
 }
 
 /** Re-attach min/max constraints after geometry helpers strip them to positions only. */

@@ -117,7 +117,7 @@ public class AnalyticsController {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
             log.error("public analytics packs failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
         }
     }
 
@@ -130,6 +130,8 @@ public class AnalyticsController {
     public ResponseEntity<Map<String,Object>> publicQuery(@RequestBody JsonNode body,
             @RequestHeader(value = "x-trace-id", required = false) String xTraceId){
         try {
+            if (body == null || body.isNull())
+                throw new IllegalArgumentException("invalid_param: tenantId is required");
             String tenantId = body.hasNonNull("tenantId") ? body.get("tenantId").asText() : null;
             if (tenantId == null || tenantId.isEmpty())
                 throw new IllegalArgumentException("invalid_param: tenantId is required");
@@ -182,7 +184,7 @@ public class AnalyticsController {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
             log.error("public analytics query failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(e));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
         }
     }
 
@@ -323,10 +325,17 @@ public class AnalyticsController {
     }
 
     private String extractTenantId(Map<String,Object> body) {
+        if (body == null)
+            throw new IllegalArgumentException("invalid_param: tenantId is required");
         Object t = body.get("tenantId");
         if (t == null || t.toString().isEmpty())
             throw new IllegalArgumentException("invalid_param: tenantId is required");
         return t.toString();
+    }
+
+    /** Fixed anonymous 500 envelope: internal exception detail belongs only in the server log. */
+    private Map<String,Object> publicUnavailable() {
+        return Map.of("error", "query_failed", "message", "public dashboard is unavailable");
     }
 
     private Set<String> extractRoles(RequestInfo requestInfo) {
