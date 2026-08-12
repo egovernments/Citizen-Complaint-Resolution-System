@@ -13,12 +13,13 @@ import { parseFilestoreEntry } from "../utils/attachmentKind";
 // class names/rules as the wizard's WIZARD_CSS block, so double-injection on
 // the citizen page is harmless).
 
-// Per the Moz feedback doc (CCSD-1971): PDF, DOC, images, audio and video up
-// to 5 MB each. Server-side, filestore's allowed-format list for module
-// "property-upload" must also permit these (platform config).
+// CCSD-2082: aligned to what filestore ACTUALLY accepts on the env (verified
+// against the live allowlist): images, PDF, DOC/DOCX, XLS/XLSX and video.
+// Audio (mp3/wav/m4a/aac) is NOT in the server allowlist — advertising it let
+// users pick files that then failed server-side with an opaque error.
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per file
 const DEFAULT_ACCEPT =
-  "image/*,.pdf,.doc,.docx,.mp3,.wav,.m4a,.aac,.mp4,.mov,.avi,.mkv";
+  "image/*,.pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.mkv,.webm";
 
 function tr(t, key, fallback) {
   const v = typeof t === "function" ? t(key) : key;
@@ -336,7 +337,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
         {busy ? tr(t, "CS_UPLOADING", "Uploading…") : tr(t, "CS_UPLOAD_CHOOSE", "Choose files")}
       </span>
       <p className="pgr-upload-hint">
-        {hint || tr(t, "CS_UPLOAD_HINT", `Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to ${maxFiles} files.`)}
+        {hint || tr(t, "CS_UPLOAD_HINT", `JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MOV, AVI, MKV up to 5 MB each. You can upload up to ${maxFiles} files.`)}
       </p>
     </div>
   );

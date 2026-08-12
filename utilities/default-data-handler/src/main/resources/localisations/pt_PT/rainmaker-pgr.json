@@ -1591,7 +1591,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Formatos aceitos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4 (máximo 5 MB por ficheiro)",
+        "message": "Formatos aceitos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MOV, AVI, MKV (máximo 5 MB por ficheiro)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1681,7 +1681,7 @@
     },
     {
         "code": "CS_REOPEN_UPLOAD_HINT",
-        "message": "Imagens, PDF, DOC, áudio ou vídeo até 5 MB cada. Pode carregar até 5 ficheiros.",
+        "message": "JPG, PNG, PDF, DOC, DOCX, XLS, XLSX, MP4, MOV, AVI, MKV até 5 MB cada. Pode carregar até 5 ficheiros.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
