@@ -1,0 +1,173 @@
+# ═══════════════════════════════════════════════════════════════════
+# ige-prod.yml.example — host_vars template for a NEW production-style
+# IGE (Mozambique) environment, modelled on the validated cms-pilot
+# deployment and corrected for every gap found while operating it
+# (see runbooks/04-new-env-ige-setup.md for the full step-by-step).
+#
+# To use:
+#   cp inventory/host_vars/ige-prod.yml.example inventory/host_vars/<tenant>.yml
+#   # fill every CHANGE_ME, review each ── section ──
+#   ./deploy.sh <tenant>
+#
+# Every CHANGE_ME must be replaced. Secrets must never be committed.
+# ═══════════════════════════════════════════════════════════════════
+
+# ── target box ──
+# Run ansible ON the server itself (recommended: clone the repo there):
+ansible_host: localhost
+ansible_connection: local
+deploy_become: true                # apt + nginx need root
+docker_default_platform: ''
+domain: CHANGE_ME                  # real FQDN, e.g. ige.digit.org (DNS must already resolve)
+tls_enabled: true
+insecure_registries: []            # MUST stay [] for ghcr.io / flywheel (TLS registries)
+
+# ── identity / tenancy ──
+# JVM STATE_LEVEL pins stay at the bare state root (mz). The city tenant
+# (mz.ige) is created BY the onboarding wizard afterwards — same split as
+# cms-pilot (complaints are tenanted at mz).
+state_root: mz
+state_tenant_id: mz
+boot_tenant: mz
+tenant_id: mz
+ui_state_tenant_id: mz
+nginx_preserve_vhost: false
+# Add the city tenant(s) the wizard will create, or the login dropdown
+# won't offer them (cms-pilot lists mz, mz.ige, mz.igsae):
+login_tenant_allowlist: ['mz', 'mz.ige']
+employee_module_denylist: ['IM']
+
+# ── UI language: Portuguese on first load ──
+# cms-pilot MISSED these and booted English until manual toggle (CCSD-2162).
+locale_default: "pt"
+locale_region: "PT"
+
+# ── geography / boundary model (Maputo Cidade — IGE) ──
+map_center: { lat: -25.9692, lng: 32.5732 }
+# ⚠ These strings must EXACTLY match the boundaryType values in the
+# Boundary xlsx you will load in the wizard — including accents (or the
+# lack of them). The IGE workbook set uses UNACCENTED values
+# (Provincia / Distrito / Municipio); if you accent these three lines,
+# accent the xlsx too. Pick ONE convention.
+pgr_boundary_highest_level: "Provincia"
+pgr_boundary_lowest_level: "Municipio"
+boundary_type: "Municipio"
+hierarchy_type: "divisao_administrativa"
+
+# ── Mozambique mobile validation ──
+# Backend (egov-user) reads countryCode + mobileNumberRegex; length and
+# allowed leading digits derive from the regex (filter_plugins/mobile.py).
+# Without these, egov-user falls back to +91/India and stamps +91 on
+# citizens (observed on an earlier env).
+core_mobile_configs:
+  countryCode: '+258'
+  mobileNumberRegex: "^8[0-9]{8}$"
+
+# ── Mozambique postal validation (4-digit) ──
+# The bomet kit shipped Kenya's 5-digit pattern here — do not copy it.
+core_postal_configs:
+  postalCodePattern: "^[0-9]{4}$"
+  postalCodeLength: 4
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+# ── feature toggles ──
+asset_s3_bucket: CHANGE_ME         # e.g. ige-egov-assets
+digit_ui_mode: container
+enable_search_stack: false
+enable_mcp: true                   # REQUIRED on a fresh DB: MCP bootstraps mz + ADMIN
+build_mcp: true
+enable_novu: true                  # notifications stack (novu-*, novu-bridge, +~1GB RAM)
+build_otp_publisher: true
+build_default_data_handler: true
+build_digit_ui: true
+build_configurator: true
+tolerate_bootstrap_failures: true
+
+# ⚠ FIRST DEPLOY ONLY. db_fast_path recreates the postgres volume — it
+# WIPES data. Set BOTH to true for the very first bring-up, then flip
+# db_fast_path to false immediately after and never back.
+db_fast_path: true
+db_fast_path_ack_data_wipe: true
+
+# ── Config-driven notifications (the cms-pilot notification matrix) ──
+pgr_notification_config_driven: true     # default is false = legacy path, no config-driven email
+novu_bridge_channels_enabled: "SMS,EMAIL,WHATSAPP"
+# ⚠ These four MUST be THIS server's domain. The bomet kit example carried
+# cms-pilot's URLs baked in — copying them verbatim points your Novu at
+# another environment.
+NOVU_API_ROOT_URL: "https://CHANGE_ME/novu-api"
+NOVU_FRONT_BASE_URL: "https://CHANGE_ME/novu"
+NOVU_API_PUBLIC_URL: "https://CHANGE_ME/novu-api"
+NOVU_WS_PUBLIC_URL: "https://CHANGE_ME/novu-ws"
+NOVU_NODE_ENV: "production"
+NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: "complaints-whats-app"
+build_novu_dashboard: true         # subpath-rebased dashboard under /novu
+
+# Novu bootstrap inputs — leave empty on the FIRST deploy. After signing up
+# at https://<domain>/novu/ paste the API key (+ Twilio creds if WhatsApp)
+# and deploy a second time (runbook Phase 3).
+novu_api_key: ""
+twilio_account_sid: ""
+twilio_auth_token: ""
+twilio_whatsapp_from: "whatsapp:+14155238886"
+
+# ── image pins ──
+# Pin pgr-services to a release-v2.12-moz build. Without a pin, a redeploy
+# rolls back to the stock image (breaks hierarchy validation + admin search).
+pgr_services_image: "egovio/pgr-services:release-v2.12-moz-9deb7e0"   # update to the latest moz tag
+novu_bridge_image: "egovio/novu-bridge:master-298af68"
+
+# ── frontend branches: the moz release, official repo ──
+# (the bomet kit pointed at a stale feature branch + a personal fork)
+digit_ui_esbuild_branch: release-v2.12-moz
+enable_digit_ui_v2: false
+
+# ── auth: plain DIGIT auth (no Keycloak), like cms-pilot ──
+enable_keycloak: false
+auth_provider: ""
+keycloak_client_id: digit-ui
+keycloak_google_client_id: ''
+
+# ── OTP: decide before go-live ──
+# false = the kong mock with FIXED OTP 123456 (fine for staging/QA, NOT for
+# a citizen-facing production box). true = real egov-otp + SMS gateway.
+enable_otp_services: false
+
+nginx_features:
+  brand_assets: false
+  configurator: true
+  configurator_caching: false
+  status: true
+  api_pgr: false
+  mcp: true
+  keycloak: false
+  digit_ui_v2: false
+  integration_tests: false
+  integration_tests_runner: false
+
+# ── testing entrance (/digit-ui-test) — optional hidden QA tenant ──
+testing_ui_enabled: false
+# testing_tenant: mz.igetesting
+# testing_seed_source_tenant: mz.ige
+# testing_ui_htpasswd: "CHANGE_ME"       # printf "tester:%s\n" "$(openssl passwd -apr1 'pw')"
+# testing_emp_password: "CHANGE_ME"
+
+footer_logo_url: ""
+footer_bw_logo_url: ""
+enable_integration_tests: false
+enable_integration_tests_runner: false
+enable_turbopass: false
+enable_overpass: false
+requires_nairobi_mdms: false
+run_ci_tests: false
+install_claude_code: false
+
+# ── secrets — GENERATE REAL VALUES, never commit them ──
+secrets_path: kv/digit/ige-prod
+bootstrap_secrets:
+  postgres_password: CHANGE_ME
+  mcp_db_password: CHANGE_ME
+  minio_root_user: CHANGE_ME
+  minio_root_password: CHANGE_ME
+  elasticsearch_master_password: "asd@#$@$!132123"   # MUST be this literal while db_fast_path: true
+  egov_hrms_default_password: CHANGE_ME              # initial password for wizard-created employees
