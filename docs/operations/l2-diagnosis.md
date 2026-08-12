@@ -21,6 +21,8 @@ against a live deployment.
 - [Going deeper on logs](#going-deeper-on-logs)
 - [Is it slow, or is it failing?](#is-it-slow-or-is-it-failing)
 - [The host itself](#the-host-itself-cpu-ram-disk)
+- [Container logs — the usual reason the disk fills](#container-logs--the-usual-reason-the-disk-fills)
+- [Raising CPU or memory for a service](#raising-cpu-or-memory-for-a-service)
 - [Symptom → playbook](#symptom--playbook)
 - [Working on the server itself](#working-on-the-server-itself)
 - [Commands that are destructive](#commands-that-are-destructive)
@@ -252,6 +254,133 @@ Disk fails slowly and then all at once, and it takes the database with it.
 
 ---
 
+## Container logs — the usual reason the disk fills
+
+Container logs are the single largest reclaimable thing on these boxes, and the cap on them
+is easy to believe in and not actually have.
+
+### How the cap is supposed to work
+
+The Docker daemon is configured with log rotation in `/etc/docker/daemon.json`:
+
+```json
+"log-driver": "json-file",
+"log-opts": { "max-size": "100m", "max-file": "10" }
+```
+
+That is **1 GB per container** (10 files × 100 MB), oldest rotated out. With ~44 containers
+the ceiling is roughly **40 GB even when rotation is working correctly** — worth knowing when
+sizing a disk, because it is not a small number.
+
+### The catch: the cap only applies to containers created after it was set
+
+Docker fixes a container's logging options **at creation time**. Changing `daemon.json` — or
+restarting the daemon — does **not** retrofit the cap onto containers that already exist, and
+neither does `docker restart`, which preserves the container's existing configuration. A
+long-lived container created before the setting was applied will grow **without limit**.
+
+Check how many containers are actually capped:
+
+```bash
+sudo docker ps -aq | while read c; do
+  sudo docker inspect "$c" --format '{{.HostConfig.LogConfig.Config}}'
+done | sort | uniq -c
+```
+
+`map[]` means **no cap on that container**. `map[max-file:10 max-size:100m]` means capped.
+
+Find the offenders and who owns them:
+
+```bash
+# largest log files
+sudo find /var/lib/docker/containers -name '*-json.log' -printf '%s\t%p\n' \
+  | sort -rn | head -10 | awk -F'\t' '{printf "%8.1f MB  %s\n", $1/1048576, $2}'
+
+# map a container id back to a name
+sudo docker inspect <container-id> \
+  --format '{{.Name}} created={{.Created}} logopts={{.HostConfig.LogConfig.Config}}'
+```
+
+> **This is not hypothetical.** On a box checked while writing this, container logs occupied
+> **65 GB of a 301 GB disk** — 30 of 81 containers had no cap, and a single uncapped
+> container's log had reached **54 GB** on its own. Reclaiming it moved the disk from 77% to
+> around 55%.
+
+### Corrective action
+
+**1 — Reclaim the space now** (safe, and the only thing that is urgent when a disk is
+filling). Truncate rather than delete: the file must keep existing for the running container.
+
+```bash
+sudo find /var/lib/docker/containers -type f -name '*-json.log' -exec truncate -s 0 {} +
+```
+
+Use the `find` form, not a shell glob — see
+[Commands that are destructive](#commands-that-are-destructive). Note in your report that you
+did this: it removes logs that would otherwise have been read, and anything not already
+shipped to Loki is gone for good.
+
+**2 — Make the cap stick.** The container has to be **recreated**, not restarted, for the
+daemon's log options to apply. That is a redeploy — it recreates containers — so raise it with
+us rather than removing containers by hand. Confirm afterwards with the `uniq -c` check above:
+every container should show `max-file:10 max-size:100m`.
+
+**3 — If one service is producing logs far faster than the rest**, that is a finding in its
+own right, not just a disk problem. Report which service and the rate:
+
+```logql
+sum by (compose_service) (rate({compose_project="digit"}[5m]))
+```
+
+A service logging at debug level in production, or looping on an error, will refill the disk
+within days of any cleanup.
+
+---
+
+## Raising CPU or memory for a service
+
+When the evidence says a service is starved — OOM events, heap headroom under 10%, sustained
+GC above ~0.2 s/s, or CPU pinned at `1.0` with no traffic — the fix is more resources. **This
+is a deployment change, not something to apply on the box**, because anything edited under
+`/opt/digit` is overwritten on the next deploy.
+
+### What can actually be changed
+
+| Limit | Where it lives | Notes |
+|---|---|---|
+| **JVM heap** (`-Xmx`) | `JAVA_TOOL_OPTIONS` or `JAVA_OPTS` per service in the compose file | This is the ceiling that actually causes `OutOfMemoryError`. Currently ~6.3 GB of heap is allocated across the JVM services |
+| **Container memory** | not set today | The deployed compose has **no `mem_limit` on any container**, so a container can use as much host RAM as it asks for. Only the JVM heap bounds it |
+| **Container CPU** | not set today | No `cpus` limit either — services compete freely for host CPU |
+| **Host size** | your infrastructure | If the host itself is short of RAM or cores, no per-service change helps |
+
+Two consequences worth understanding before asking for more:
+
+- **Heap is not the whole footprint.** A JVM's actual memory use runs well above `-Xmx` —
+  metaspace, thread stacks, code cache and direct buffers typically add a few hundred MB per
+  service. Raising every heap by 512 MB costs the host considerably more than the sum of the
+  increases.
+- **With no container memory limit, a leak takes the host down rather than the container.**
+  The Linux OOM killer then picks a victim, usually the largest JVM, which may not be the
+  service at fault.
+
+### What to send us
+
+Raising a limit blindly moves the problem rather than fixing it, so include the evidence:
+
+- **Which service**, and the heap figures from the JVM dashboard's *Right-sizing snapshot* —
+  current, 1-hour peak, committed, limit, and headroom %.
+- **Whether it OOMs or just runs hot.** An `OutOfMemoryError` in the logs is a different case
+  from steady 85% heap usage.
+- **How long it has been like this**, and whether it correlates with load, a data import, or a
+  particular operation.
+- **Host headroom** — total RAM and current usage from the Node Exporter dashboard. If the
+  host is already at 90%, more heap is the wrong answer.
+
+We will come back with a specific value rather than a guess, and it ships as a normal
+redeploy.
+
+---
+
 ## Symptom → playbook
 
 | Symptom | Most likely | Check, in this order |
@@ -268,7 +397,9 @@ Disk fails slowly and then all at once, and it takes the database with it.
 | **Everything is slow** | Host CPU/RAM/disk, or the DB pool | Host panels → `db_client_connections_pending_requests` → Tempo slow traces |
 | **Works for one city, not another** | Tenant configuration or data rather than code | File with both tenant codes so we can diff them |
 | **A service restarts every few minutes** | OOM, failed health check, or a bad config/env value | OOM panels → that service's logs from the *first* boot attempt onward |
-| **"No space left on device"** anywhere | Disk full | Host panels or `df -h`. Postgres may already be refusing writes |
+| **"No space left on device"** anywhere | Disk full — usually container logs | Host panels or `df -h`, then [Container logs](#container-logs--the-usual-reason-the-disk-fills). Postgres may already be refusing writes |
+| **Disk climbing steadily with no new usage** | An uncapped container log | [Container logs](#container-logs--the-usual-reason-the-disk-fills) — check which containers lack the rotation cap |
+| **A service is starved (OOM, low headroom, GC thrash)** | Under-provisioned heap | [Raising CPU or memory](#raising-cpu-or-memory-for-a-service) — gather the evidence, then raise it with us |
 
 ---
 

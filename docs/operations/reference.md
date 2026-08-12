@@ -17,7 +17,9 @@ all.
 - [URLs](#urls)
 - [Credentials — who to ask](#credentials--who-to-ask)
 - [The observability stack](#the-observability-stack)
+- [Are the monitoring services important to keep up?](#are-the-monitoring-services-important-to-keep-up)
 - [Grafana dashboards — what each one shows](#grafana-dashboards--what-each-one-shows)
+- [The health dashboard's groups](#the-health-dashboards-groups)
 - [What each service does](#what-each-service-does)
 - [Metric and log coverage — what is and isn't watched](#metric-and-log-coverage--what-is-and-isnt-watched)
 - [Data retention](#data-retention)
@@ -105,6 +107,44 @@ Two rules that do not bend:
 The consequence worth remembering: **metrics cover the Java services; logs cover
 everything.** If a container has no metrics, that does not mean it is unmonitored — check
 Gatus and Loki.
+
+---
+
+## Are the monitoring services important to keep up?
+
+Short answer: **none of them is citizen- or staff-facing.** If every one stopped at once,
+citizens would still file complaints, clerks would still work them, and notifications would
+still go out. Nothing anybody does in the product depends on these services.
+
+What you lose is **visibility, not function** — and for most of them, data that cannot be
+recovered afterwards.
+
+| Service | What stops working if it goes down | Is data lost? |
+|---|---|---|
+| **gatus** | The health dashboard at `/status/` is unreachable — you lose the fastest "is anything down" check | Yes — its history is held in memory only, so the record of what was red is gone |
+| **grafana** | You cannot view *anything*: no dashboards, no logs, no metrics. Alert rules stop being evaluated too | **No.** Collection carries on regardless, and everything reappears when Grafana returns |
+| **prometheus** | Nothing records measurements — memory, CPU, restarts, request timings | Yes — a permanent gap in the graphs covering the period it was down |
+| **loki** | Log messages are not stored | **Yes, and this is the costly one.** Anything written while it is down is gone for good |
+| **promtail** | Nothing ships logs into Loki, even though Loki itself is healthy | Yes — same effect as Loki being down |
+| **tempo** | Request timings are not recorded | Yes — a gap in traces for that period |
+| **otel-collector** | The Java services have nowhere to send metrics and traces, so both stop arriving | Yes — gaps in both metrics and traces |
+| **node-exporter** | Machine statistics stop being reported, so the host dashboard goes blank | Yes — a gap in the CPU, memory and disk graphs |
+
+**Why the data loss matters more than the downtime.** Logs, metrics and traces are a running
+recording, not a query against something stored elsewhere. Nothing buffers them while the
+receiver is away, and they cannot be back-filled later. A monitoring service that was down
+for three hours leaves a three-hour hole that nobody can fill in afterwards.
+
+**How to treat it in practice:**
+
+- **On its own, a monitoring service being down is S3.** Nobody is blocked, nothing is broken
+  for a citizen or a clerk, and it can wait for working hours.
+- **While you are already handling an incident it matters much more**, because losing your
+  visibility mid-outage costs you the evidence you need. Say so explicitly in the report —
+  "Loki has been down since 09:00, so there are no logs for the window you are asking about"
+  is essential context, not a footnote.
+- **Restarting one is safe.** It does not touch the product and cannot affect a citizen or a
+  clerk. It is L2's call, not first line's.
 
 ---
 
@@ -256,6 +296,39 @@ When it does have data, the readings that matter:
 
 ---
 
+## The health dashboard's groups
+
+The health dashboard sorts its ~50 checks into ten groups. Which group a red tile sits in
+tells you how serious it is before you know anything else about it.
+
+| Group | What's in it | A red tile here means |
+|---|---|---|
+| **Infrastructure** | Database, connection pooler, cache, message broker, file storage | **The most serious thing on the page.** Nothing above it can work — treat it as an outage and escalate immediately |
+| **Core Services** | The shared platform: user accounts, workflow, master data, employees, boundaries, translations, ID generation, authorisation, encryption, file metadata, and the two Kafka writers | A service many features depend on. Expect several unrelated-looking symptoms at once |
+| **API Gateway** | Kong and its proxies — every API request in the system passes through here | Requests cannot be routed. Users see "502" or a blank screen |
+| **Application** | The complaint service itself and the web front end | The product people actually use |
+| **Search** | Elasticsearch, the indexer and the inbox service | Inbox and search break. Filing complaints still works |
+| **Notifications** | The notification platform, its bridge, and the config and preference services | SMS / email / WhatsApp stop going out. Everything else is unaffected |
+| **OTP** | One-time-password delivery for sign-in | Users cannot receive the code they need to log in |
+| **Sign-in / identity** | The identity provider, its database, and the token exchange service | Signing in fails |
+| **MCP** | Integration tooling | No effect on citizens or staff using the system |
+| **API Tests** | Real calls against live APIs — different from the rest, see below | Read the note below before acting on it |
+
+**API Tests is the group worth understanding.** Every other group asks a service one simple
+question — *are you alive?* — by calling its health endpoint. A service can answer that
+perfectly while being completely unable to do any real work.
+
+The API Tests group instead makes **genuine API calls**: searching for a tenant, generating a
+complaint number, fetching a translated message. That gives it a different meaning:
+
+- **Service tile green but API Tests tile red** — the service is running but cannot do its
+  job. This is almost always a **data or configuration** problem rather than a crash, and it
+  needs a completely different fix from restarting something.
+- It is also the group most likely to catch a failure that every other check misses, because
+  it is the only one exercising the real path.
+
+---
+
 ## What each service does
 
 Grouped as the health dashboard groups them.
@@ -333,15 +406,40 @@ Loki tells you why it isn't.** There are no metrics-based alerts to be had for t
 
 ## Data retention
 
+Nothing here is kept for long. Knowing the numbers is what tells you whether a problem
+reported today can still be investigated at all.
+
 | Data | Store | Retention |
 |---|---|---|
 | Metrics | Prometheus | **15 days** |
-| Logs | Loki | **72 hours** |
+| Logs — searchable, in Grafana | Loki | **72 hours (3 days)** |
 | Traces | Tempo | **24 hours** |
-| Health-check history | Gatus | in-memory; lost when the container restarts |
+| Health-check history | Gatus | in-memory; lost the moment the container restarts |
+| Container logs — the raw files on the server | Docker, on disk | Capped by the Docker daemon at **10 files × 100 MB = 1 GB per container**, oldest rotated away first |
 
-Promtail also refuses log entries older than 7 days, so back-filling old logs is not
-possible.
+Two consequences worth knowing:
+
+- **Promtail refuses log entries older than 7 days**, so old logs cannot be back-filled into
+  Loki. If Loki missed something — because it was down, or because the message has aged out —
+  it is missed permanently as far as Grafana is concerned.
+- **The raw files on the server often outlast Loki's 72 hours.** For a busy service the 1 GB
+  cap may hold less than three days; for a quiet one it may hold weeks. So when something has
+  aged out of Grafana, L2 can sometimes still find it with `docker logs` on the box. It is
+  the only remaining copy, and only until it rotates.
+
+**These figures are deliberate** — short retention is what keeps the monitoring stack from
+consuming disk. Changing any of them is a **deployment change**, not something to edit on the
+server; anything edited there is overwritten on the next deploy.
+
+| To change | Lives in |
+|---|---|
+| Loki's log retention | `retention_period` in `otel/loki-config.yaml` |
+| Prometheus's metric retention | the `--storage.tsdb.retention.time` flag on the Prometheus container |
+| Tempo's trace retention | `block_retention` in `otel/tempo-config.yaml` |
+| Docker's per-container log cap | `log-opts` in `/etc/docker/daemon.json` |
+
+Raise it with us if you need longer, and weigh the trade first: **longer retention means more
+disk**, and a full disk is the most common cause of a complete outage.
 
 ---
 

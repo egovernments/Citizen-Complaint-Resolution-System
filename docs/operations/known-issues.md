@@ -22,9 +22,13 @@ have.
 
 Two markers appear in that column because the fix needs access beyond the dashboards:
 
-- **†** — needs an **admin login to the Configurator or HRMS**. The
-  [first-response checklist](l1-first-response.md) does not assume one. If your service desk
-  doesn't have it, these are L2's.
+- **†** — needs an **admin login to the Configurator or HRMS**. These are screen-based tasks
+  — creating users, fixing a role, adding a missing master-data entry — so where a team has
+  decided that anything with a UI belongs to first line, they are L1's, and that is the usual
+  split. The [first-response checklist](l1-first-response.md) does not *assume* the login
+  exists, so confirm your service desk actually has it; without it these fall to L2 by
+  default. Work that needs the backend — a database query, a container, a config file — stays
+  with L2 regardless.
 - **‡** — needs the **notification provider's console** (the SMS/WhatsApp account). Usually
   held by whoever owns the provider contract, which may be neither tier.
 
@@ -66,7 +70,8 @@ this and not something that looks like it, the **resolution**, who **applies** i
 | Inbox unavailable immediately after a from-scratch deployment | Only on a first deploy; `digit-inbox` exited | Known start-order race — `docker start digit-inbox`. Does not recur on later deploys | L2 |
 | A service is stuck restarting | `Started .+Application in` repeating for one service | Read that service's log from the *first* boot attempt. If it's an OOM, the heap needs raising — that's a deployment change, escalate | L2 |
 | Everything slow, nothing red | `db_client_connections_pending_requests` above 0 | Connection pool exhausted. Identify the slow query or the leak; a restart clears the symptom, not the cause | L2 |
-| Disk filling up | `df -h` above 85% | Docker JSON log files are the usual cause: `sudo find /var/lib/docker/containers -type f -name '*-json.log' -exec truncate -s 0 {} +` (the `find` form is required — a shell glob expands before `sudo` and fails). Note that this deletes logs you may still need | L2 |
+| Disk filling up | `df -h` above 85% | Container logs are the usual cause. Truncate to reclaim now: `sudo find /var/lib/docker/containers -type f -name '*-json.log' -exec truncate -s 0 {} +` (the `find` form is required — a shell glob expands before `sudo` and fails). This deletes logs you may still need. **Then check whether the rotation cap is actually applied** — it only takes effect on containers created after it was set, so long-lived containers can grow without limit. See [l2-diagnosis.md](l2-diagnosis.md#container-logs--the-usual-reason-the-disk-fills) | L2 |
+| A monitoring service is down (grafana, prometheus, loki, tempo, gatus) | Its tile or dashboard is unavailable; complaints still work normally | Not a citizen-facing outage — nobody is blocked. But data generated while Loki, Prometheus or Tempo is down is **lost permanently**, so restart it promptly and note the gap. Restarting a monitoring container is safe | L2 |
 
 ---
 
