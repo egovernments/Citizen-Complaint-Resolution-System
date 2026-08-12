@@ -501,6 +501,67 @@ data:
         conditions:
           - "[STATUS] == 200"
 
+      # ==================== Observability stack ====================
+      # OFF in this tier: it has no grafana/prometheus/loki/tempo/otel-collector
+      # manifests (#1618). Defined here only to keep both catalogues identical,
+      # per the header — flip GATUS_OBSERVABILITY to "true" when they land.
+      #
+      # promtail and node-exporter stay out: no reachable HTTP listener, and a
+      # dead node-exporter shows as a stale prometheus target instead.
+      #
+      # Reached through the ExternalName aliases at the bottom of this file, not
+      # by namespace-qualifying these URLs.
+      #
+      # Gatus runs in `digit` and #1618 deploys this stack to `monitoring`, so a
+      # bare name resolves as <svc>.digit.svc.cluster.local and does not exist.
+      # Verified on a cluster: all five failed with
+      #   dial tcp: lookup grafana on 10.96.0.10:53: no such host
+      # while grafana.monitoring answered 200 from the same pod.
+      #
+      # The URLs stay bare so both tiers' catalogues remain textually identical,
+      # which check-gatus-coverage.py requires (it matches by URL host and fails
+      # on drift between the two files). The cross-namespace hop is done once, in
+      # Kubernetes, by the alias Services instead.
+      - name: Grafana
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://grafana:3000/api/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Prometheus
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://prometheus:9090/-/healthy"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Loki
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://loki:3100/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Tempo
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://tempo:3200/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: OTEL Collector
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://otel-collector:13133"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
       # ==================== Public endpoint (TLS) ====================
       # Every other check in this file runs INSIDE the cluster network and never
       # traverses the public ingress, so none of them presents the public
@@ -622,6 +683,10 @@ spec:
             # public TLS check stays off. Declared rather than omitted: Gatus
             # reads an UNSET enabled-var as true, which would leave a
             # permanently-red check against a URL that never resolves.
+            # No observability stack in this tier (#1618), so these checks stay off.
+            # Declared rather than omitted: an unset enabled-var reads as true.
+            - name: GATUS_OBSERVABILITY
+              value: "false"
             - name: GATUS_TLS
               value: "false"
             # Non-empty on purpose. Gatus validates `url` on EVERY endpoint
@@ -675,3 +740,69 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
+---
+# Cross-namespace aliases for the observability stack (#1613).
+#
+# Gatus runs in `digit`; #1618 deploys Prometheus, Loki, Tempo, Grafana and the
+# OTEL collector into `monitoring`. A bare `http://grafana:3000` from a pod in
+# `digit` resolves as grafana.digit.svc.cluster.local and does not exist --
+# confirmed on a cluster, where all five Observability checks failed with
+# "no such host" while grafana.monitoring answered 200 from the same pod.
+#
+# Aliasing here rather than writing grafana.monitoring into the URLs keeps the
+# compose and k3s endpoint catalogues textually identical, which
+# check-gatus-coverage.py requires: it matches checks to services by URL HOST and
+# fails on any drift between the two files. Bare names work in compose (one
+# network, no namespaces) and now work here too.
+#
+# These resolve to nothing until #1618's stack is deployed. That is correct --
+# the checks are gated off by GATUS_OBSERVABILITY until it lands.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: grafana.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: prometheus.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: loki.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: tempo.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: otel-collector.monitoring.svc.cluster.local
