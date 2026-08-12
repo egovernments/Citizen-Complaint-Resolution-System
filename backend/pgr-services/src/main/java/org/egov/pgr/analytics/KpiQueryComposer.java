@@ -404,7 +404,7 @@ public class KpiQueryComposer {
         JsonNode window = query.get("window");
         if (window == null || !window.isObject()
                 || !window.hasNonNull("name") || !window.path("pinned").asBoolean(false)) return null;
-        long now = calendar.asOfMs;
+        long now = calendar.nowMs;
         Long startMs = AnalyticsPlanner.windowStartMs(window.get("name").asText(), now, calendar.zoneId);
         if (startMs == null) {
             log.debug("ignoring pinned:true on boundless window '{}' — nothing to pin", window.get("name").asText());
@@ -538,11 +538,11 @@ public class KpiQueryComposer {
 
     /**
      * This calendar week's Monday 00:00 in the resolved tenant zone, mirroring the FE local-time
-     * Monday. Measured from the request's shared {@code asOf} (not wall-clock {@code now()}), so it
+     * Monday. Measured from the request's single captured wall-clock instant, so it
      * agrees with every other window decision in the same batch.
      */
     private LocalDate thisMonday(BusinessCalendar calendar) {
-        return Instant.ofEpochMilli(calendar.asOfMs).atZone(calendar.zoneId).toLocalDate()
+        return Instant.ofEpochMilli(calendar.nowMs).atZone(calendar.zoneId).toLocalDate()
                 .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 

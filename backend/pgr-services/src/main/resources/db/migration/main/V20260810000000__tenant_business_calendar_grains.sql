@@ -56,9 +56,8 @@
 -- from identical data: the record whose btrim(data->>'id') = 'default' wins
 -- (matching the master's own "single-record master" contract -- see
 -- local-setup/db/dss-mdms-seed/schemas/dss.DashboardConfig.json), else the
--- record with the lexicographically smallest nonblank (trimmed) data->>'id',
--- else the lowest internal id (stable first-occurrence proxy -- eg_mdms_data.id
--- is assigned in insertion order).
+-- lowest internal id (stable first-occurrence proxy -- eg_mdms_data.id is
+-- assigned in insertion order), preserving the historical API-first behavior.
 DROP VIEW IF EXISTS pgr_dashboard_tenant_timezone CASCADE;
 CREATE VIEW pgr_dashboard_tenant_timezone AS
 WITH selected AS (
@@ -70,7 +69,6 @@ WITH selected AS (
     AND d.isactive
   ORDER BY d.tenantid,
            (btrim(d.data->>'id') = 'default') DESC,
-           NULLIF(btrim(d.data->>'id'), '') ASC NULLS LAST,
            d.id
 )
 SELECT s.tenantid                 AS state_root_tenant_id,

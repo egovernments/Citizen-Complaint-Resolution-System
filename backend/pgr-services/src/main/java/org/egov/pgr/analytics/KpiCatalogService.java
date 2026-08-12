@@ -65,6 +65,9 @@ public class KpiCatalogService {
      */
     private final java.util.concurrent.ConcurrentHashMap<String, Long> timeZoneFallbackWarnedGeneration =
             new java.util.concurrent.ConcurrentHashMap<>();
+    /** Same per-cache-generation gate for the department-scoping-disabled INFO line. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> deptScopingDisabledLoggedGeneration =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private final PGRConfiguration config;
     private final ServiceRequestRepository serviceRequestRepository;
@@ -151,13 +154,16 @@ public class KpiCatalogService {
     public boolean isDepartmentScopingDisabled(String tenantId) {
         try {
             if (tenantId == null || tenantId.isEmpty()) return false;
-            Map<String, Object> record = dashboardConfig(tenantId);
+            String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+            Object[] entry = dashboardConfigEntry(tenantId);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> record = (Map<String, Object>) entry[0];
             if (record == null) return false;
             Object v = record.get("departmentScoping");
             boolean disabled = v instanceof String && DEPT_SCOPING_DISABLED.equalsIgnoreCase(((String) v).trim());
-            if (disabled)
+            if (disabled && shouldLogDepartmentScopingDisabled(stateRoot, (Long) entry[1]))
                 log.info("dss.DashboardConfig.departmentScoping=disabled at {} — employee department scoping OFF",
-                        multiStateInstanceUtil.getStateLevelTenant(tenantId));
+                        stateRoot);
             return disabled;
         } catch (Exception e) {
             // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
@@ -247,23 +253,26 @@ public class KpiCatalogService {
     }
 
     /**
-     * THE single cached fetch of the state-root's {@code dss.DashboardConfig} record — the shared
-     * seam {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} both read, so a
-     * request touching both axes issues exactly one MDMS call, and a config flip (either field)
-     * takes effect together within one {@link #configCacheTtlMs()} window. Returns {@code null}
-     * (cached) when no record exists; never throws — callers apply their own field-specific
-     * fallback.
+     * Returns true once per state-root DashboardConfig cache generation, preventing the
+     * department-scoping-disabled INFO line from becoming a per-request log.
      */
-    private Map<String, Object> dashboardConfig(String tenantId) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> record = (Map<String, Object>) dashboardConfigEntry(tenantId)[0];
-        return record;
+    private boolean shouldLogDepartmentScopingDisabled(String stateRoot, long generation) {
+        boolean[] shouldLog = {false};
+        deptScopingDisabledLoggedGeneration.compute(stateRoot, (root, loggedGeneration) -> {
+            if (loggedGeneration == null || loggedGeneration != generation) {
+                shouldLog[0] = true;
+                return generation;
+            }
+            return loggedGeneration;
+        });
+        return shouldLog[0];
     }
 
     /**
-     * Same cached fetch as {@link #dashboardConfig}, additionally exposing the cache entry's
-     * {@code expiresAtMs} as its generation id ({@link #shouldWarnTimeZoneFallback} needs it to
-     * tell "still the same TTL window" apart from "config was just re-fetched"). Returns
+     * THE single cached fetch of the state-root's {@code dss.DashboardConfig} record — the shared
+     * seam {@link #isDepartmentScopingDisabled} and {@link #resolveTimeZone} both read. Also exposes
+     * the cache entry's {@code expiresAtMs} as its generation id so logging gates can distinguish
+     * "still the same TTL window" from "config was just re-fetched". Returns
      * {@code Object[]{Map<String,Object> record-or-null, Long expiresAtMs}}.
      */
     private Object[] dashboardConfigEntry(String tenantId) {
@@ -291,8 +300,7 @@ public class KpiCatalogService {
      * data. Depends only on fields present in the MDMS data object itself:
      * <ol>
      *   <li>the record whose (trimmed) {@code id} equals {@code "default"} wins;</li>
-     *   <li>else the record with the lexicographically smallest nonblank (trimmed) {@code id};</li>
-     *   <li>else the first record in API response order (stable — no reordering).</li>
+     *   <li>else the first record in API response order (the historical behavior).</li>
      * </ol>
      * Deliberately does NOT consult API ordering guarantees or audit metadata
      * (lastModifiedTime etc.) unavailable on this Java data map. Returns {@code null} for an
@@ -306,17 +314,7 @@ public class KpiCatalogService {
             if ("default".equals(trimmedId(r))) return r;
         }
 
-        Map<String, Object> smallest = null;
-        String smallestId = null;
-        for (Map<String, Object> r : records) {
-            String id = trimmedId(r);
-            if (id == null || id.isEmpty()) continue;
-            if (smallestId == null || id.compareTo(smallestId) < 0) {
-                smallestId = id;
-                smallest = r;
-            }
-        }
-        return smallest != null ? smallest : records.get(0);
+        return records.get(0);
     }
 
     private static String trimmedId(Map<String, Object> record) {

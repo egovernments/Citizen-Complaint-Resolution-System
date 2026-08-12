@@ -71,6 +71,8 @@ public class AnalyticsService {
     private final KpiQueryComposer queryComposer;
     private final AnalyticsMetrics metrics;
     private final PGRConfiguration config;
+    /** Injectable request clock; captured once so every query in a batch shares one calendar. */
+    private java.util.function.LongSupplier requestClock = System::currentTimeMillis;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
@@ -114,14 +116,17 @@ public class AnalyticsService {
         Set<String> callerRoles = extractRoles(requestInfo);
         boolean publicFloor = isPublicFloor(callerRoles);
 
-        // ONE resolved zone + ONE captured asOf for the whole batch (#29): composer, planner,
-        // compose ops and the response itself all read this same BusinessCalendar, so a request can
-        // never straddle two clock readings or disagree with its own echoed asOf/calendar.
-        long asOfMs = asOf();
-        BusinessCalendar calendar = BusinessCalendar.of(kpiCatalogService.resolveTimeZone(tenantId), asOfMs);
+        // Data freshness and request time are deliberately separate. factsAsOfMs may be null for an
+        // empty materialized view, while named windows must use the current request instant rather
+        // than becoming stale when the refresh scheduler stalls. Capture request time exactly once
+        // so planner, composer, compose ops and response calendar still share one coherent clock.
+        Long factsAsOfMs = asOf();
+        long requestNowMs = requestClock.getAsLong();
+        BusinessCalendar calendar = BusinessCalendar.of(
+                kpiCatalogService.resolveTimeZone(tenantId), requestNowMs);
 
         Map<String,Object> out = new LinkedHashMap<>();
-        out.put("asOf", asOfMs);
+        out.put("asOf", factsAsOfMs);
         out.put("calendar", calendarInfo(calendar));
         out.put("scope", scopeInfo(scope));
 
@@ -465,25 +470,25 @@ public class AnalyticsService {
     private double orZero(Double d) { return d == null ? 0.0 : d; }
 
     /**
-     * FE elapsedDaysSince(startOfWeek(asOf), asOf): max(1, floor((asOf-weekStart)/day)). Preserves
+     * FE elapsedDaysSince(startOfWeek(now), now): max(1, floor((now-weekStart)/day)). Preserves
      * the existing Sunday week-start semantic (FE {@code getDay()}) for THIS operation only — wtd
      * elsewhere in the planner/composer uses Monday; that is a separate, intentionally distinct
      * product semantic and is left unchanged (#29 requirement: don't silently unify week starts).
-     * Measured from the request's shared {@code asOf}/zone, not wall-clock. Package-private for tests.
+     * Measured from the request's captured wall clock and shared zone. Package-private for tests.
      */
     long elapsedDaysSinceStartOfWeek(BusinessCalendar calendar) {
-        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(calendar.asOfMs).atZone(calendar.zoneId);
+        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(calendar.nowMs).atZone(calendar.zoneId);
         java.time.ZonedDateTime weekStart = now.toLocalDate()
                 .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
                 .atStartOfDay(calendar.zoneId);
-        long ms = calendar.asOfMs - weekStart.toInstant().toEpochMilli();
+        long ms = calendar.nowMs - weekStart.toInstant().toEpochMilli();
         return Math.max(1, ms / 86_400_000L);
     }
 
-    /** FE elapsedHoursSince(startOfDay(asOf), asOf): max(1, floor((asOf-dayStart)/hour)). Package-private for tests. */
+    /** FE elapsedHoursSince(startOfDay(now), now): max(1, floor((now-dayStart)/hour)). Package-private for tests. */
     long elapsedHoursSinceStartOfDay(BusinessCalendar calendar) {
         long dayStart = calendar.businessDate.atStartOfDay(calendar.zoneId).toInstant().toEpochMilli();
-        long ms = calendar.asOfMs - dayStart;
+        long ms = calendar.nowMs - dayStart;
         return Math.max(1, ms / 3_600_000L);
     }
 
