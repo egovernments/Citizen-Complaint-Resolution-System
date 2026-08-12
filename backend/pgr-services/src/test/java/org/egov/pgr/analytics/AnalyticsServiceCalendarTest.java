@@ -13,12 +13,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -26,9 +28,9 @@ import static org.mockito.Mockito.*;
 
 /**
  * #29: pins the one-calendar-per-request contract in {@link AnalyticsService#doQuery} — a batch of
- * N queries resolves the tenant zone and captures {@code asOf} EXACTLY ONCE and threads that same
+ * N queries resolves the tenant zone and captures request time EXACTLY ONCE and threads that same
  * {@link BusinessCalendar} into every entry's {@link AnalyticsPlanner#plan}, and the response's
- * top-level {@code asOf}/{@code calendar} agree with what was actually used to plan every entry —
+ * top-level {@code asOf} reports fact freshness independently of the request-time calendar —
  * never a per-entry re-resolution that could straddle two clock readings. Also pins the
  * {@code composeKpi.js}-mirroring elapsed-time math {@link AnalyticsService#computeCompose} uses.
  */
@@ -52,14 +54,16 @@ public class AnalyticsServiceCalendarTest {
         return RequestInfo.builder().userInfo(u).build();
     }
 
-    // ---- batch: one resolved zone + one captured asOf, shared by every entry ----
+    // ---- batch: one resolved zone + one request clock reading, shared by every entry ----
 
     @Test
     public void batchEntriesShareExactlyOneCalendarAndOneAsOfResolution() {
         AnalyticsService service = new AnalyticsService(planner, null, jdbc, kpiCatalogService,
                 scopeResolver, null, new AnalyticsMetrics(), null);
 
-        long fixedAsOf = 1_718_442_000_000L;   // 2024-06-15T12:00:00+03:00 (arbitrary, fixed)
+        long fixedAsOf = 1_700_000_000_000L;   // deliberately stale fact refresh timestamp
+        long fixedNow = 1_718_442_000_000L;    // request wall clock
+        ReflectionTestUtils.setField(service, "requestClock", (LongSupplier) () -> fixedNow);
         when(jdbc.queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class)))
                 .thenReturn(fixedAsOf);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
@@ -86,21 +90,47 @@ public class AnalyticsServiceCalendarTest {
         List<BusinessCalendar> seen = cal.getAllValues();
         assertSame(seen.get(0), seen.get(1), "every batch entry must plan against the SAME calendar instance");
         assertSame(seen.get(1), seen.get(2), "every batch entry must plan against the SAME calendar instance");
-        assertEquals(fixedAsOf, seen.get(0).asOfMs);
+        assertEquals(fixedNow, seen.get(0).nowMs);
         assertEquals(ZoneId.of("Asia/Kolkata"), seen.get(0).zoneId);
 
-        // The response's own top-level asOf/calendar must agree with what every entry was planned against.
+        // asOf remains fact freshness; calendar/businessDate comes from current request time.
         assertEquals(fixedAsOf, out.get("asOf"));
         @SuppressWarnings("unchecked")
         Map<String, Object> calendarInfo = (Map<String, Object>) out.get("calendar");
         assertEquals("Asia/Kolkata", calendarInfo.get("timeZone"));
-        assertEquals(Instant.ofEpochMilli(fixedAsOf).atZone(ZoneId.of("Asia/Kolkata")).toLocalDate().toString(),
+        assertEquals(Instant.ofEpochMilli(fixedNow).atZone(ZoneId.of("Asia/Kolkata")).toLocalDate().toString(),
                 calendarInfo.get("businessDate"));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> results = (Map<String, Object>) out.get("results");
         assertEquals(3, results.size());
         assertFalse((Boolean) out.get("partial"));
+    }
+
+    @Test
+    public void emptyFactsKeepNullableAsOfWithoutBreakingRequestCalendar() {
+        AnalyticsService service = new AnalyticsService(planner, null, jdbc, kpiCatalogService,
+                scopeResolver, null, new AnalyticsMetrics(), null);
+        long fixedNow = 1_718_442_000_000L;
+        ReflectionTestUtils.setField(service, "requestClock", (LongSupplier) () -> fixedNow);
+
+        when(jdbc.queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class)))
+                .thenReturn((Long) null);
+        when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
+        when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
+                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+        when(planner.plan(any(), any(), any()))
+                .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
+        when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
+
+        JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
+        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+
+        assertTrue(out.containsKey("asOf"));
+        assertNull(out.get("asOf"));
+        ArgumentCaptor<BusinessCalendar> calendar = ArgumentCaptor.forClass(BusinessCalendar.class);
+        verify(planner).plan(any(), any(), calendar.capture());
+        assertEquals(fixedNow, calendar.getValue().nowMs);
     }
 
     @Test

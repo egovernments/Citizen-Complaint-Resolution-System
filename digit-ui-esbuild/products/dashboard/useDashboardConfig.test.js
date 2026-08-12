@@ -51,18 +51,18 @@ test("selectDashboardConfigRecord: id 'default' wins regardless of position", ()
   assert.equal(selectDashboardConfigRecord([def, aaa, zzz]), def);
 });
 
-test("selectDashboardConfigRecord: no default -> lexicographically smallest nonblank id", () => {
+test("selectDashboardConfigRecord: no default -> preserves first API record", () => {
   const zzz = { id: "zzz", timeZone: "UTC" };
   const aaa = { id: "aaa", timeZone: "Africa/Maputo" };
   const bbb = { id: "bbb", timeZone: "Asia/Kolkata" };
-  assert.equal(selectDashboardConfigRecord([zzz, aaa, bbb]), aaa);
+  assert.equal(selectDashboardConfigRecord([zzz, aaa, bbb]), zzz);
 });
 
-test("selectDashboardConfigRecord: blank/missing ids are ignored when comparing", () => {
+test("selectDashboardConfigRecord: first API record wins even when its id is blank", () => {
   const blank = { id: "   ", timeZone: "Africa/Maputo" };
   const missing = { timeZone: "UTC" };
   const real = { id: "abc", timeZone: "Asia/Kolkata" };
-  assert.equal(selectDashboardConfigRecord([blank, missing, real]), real);
+  assert.equal(selectDashboardConfigRecord([blank, missing, real]), blank);
 });
 
 test("selectDashboardConfigRecord: no usable id anywhere -> first occurrence (stable)", () => {

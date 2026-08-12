@@ -19,13 +19,6 @@ export function selectOwnedDashboardConfig(
   if (own.length === 0) return null;
 
   return own.find((record) => String(record.data?.id ?? '').trim() === 'default')
-    ?? [...own].sort((left, right) => {
-      const leftId = String(left.data?.id ?? '').trim();
-      const rightId = String(right.data?.id ?? '').trim();
-      if (!leftId) return rightId ? 1 : 0;
-      if (!rightId) return -1;
-      return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
-    })[0]
     ?? own[0];
 }
 

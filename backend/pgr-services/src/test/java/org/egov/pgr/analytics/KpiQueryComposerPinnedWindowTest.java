@@ -73,7 +73,7 @@ public class KpiQueryComposerPinnedWindowTest {
     /** dtd is the calendar day in EAT — NOT last_1d's rolling 24h, which drifts across midnight. */
     @Test
     public void dtdIsTheCalendarDayNotARollingDay() {
-        long now = CAL.asOfMs;
+        long now = CAL.nowMs;
         long dtd = AnalyticsPlanner.windowStartMs("dtd", now, EAT);
         long rolling = AnalyticsPlanner.windowStartMs("last_1d", now, EAT);
 
@@ -94,7 +94,7 @@ public class KpiQueryComposerPinnedWindowTest {
     @Test
     public void unknownWindowNameStillRejected() {
         assertThrows(IllegalArgumentException.class,
-                () -> AnalyticsPlanner.windowStartMs("dtd_", CAL.asOfMs, EAT));
+                () -> AnalyticsPlanner.windowStartMs("dtd_", CAL.nowMs, EAT));
     }
 
     // ---- pinning beats the dashboard globals ----

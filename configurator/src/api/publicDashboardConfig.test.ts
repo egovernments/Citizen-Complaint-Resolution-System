@@ -36,10 +36,11 @@ describe('public dashboard configuration', () => {
     expect(selectOwnedDashboardConfig([record('ke', 'default', false)], 'ke')).toBeNull();
   });
 
-  it('uses the same ordinal id ordering as pgr-services and digit-ui', () => {
+  it('preserves response order for malformed duplicates like pgr-services and digit-ui', () => {
     const lowercase = record('ke', 'alpha');
     const uppercase = record('ke', 'Zulu');
 
-    expect(selectOwnedDashboardConfig([lowercase, uppercase], 'ke')).toBe(uppercase);
+    expect(selectOwnedDashboardConfig([lowercase, uppercase], 'ke')).toBe(lowercase);
+    expect(selectOwnedDashboardConfig([uppercase, lowercase], 'ke')).toBe(uppercase);
   });
 });

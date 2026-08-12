@@ -203,7 +203,7 @@ public class KpiCatalogServiceTimeZoneTest {
 
     // ---- deterministic multi-record selection (selectDashboardConfigRecord) ----
     // Same rule as the pgr_dashboard_tenant_timezone SQL view and useDashboardConfig.js:
-    // id=="default" wins; else lexicographically smallest nonblank id; else first occurrence.
+    // id=="default" wins; otherwise preserve the historical first API record.
 
     private static Map<String, Object> recordWithId(Object id, String timeZone) {
         Map<String, Object> r = new HashMap<>();
@@ -233,20 +233,20 @@ public class KpiCatalogServiceTimeZoneTest {
     }
 
     @Test
-    public void selectDashboardConfigRecordFallsBackToLexicographicallySmallestNonblankId() {
+    public void selectDashboardConfigRecordPreservesFirstApiRecordWhenNoDefaultExists() {
         Map<String, Object> zzz = recordWithId("zzz", "UTC");
         Map<String, Object> aaa = recordWithId("aaa", "Africa/Maputo");
         Map<String, Object> bbb = recordWithId("bbb", "Asia/Kolkata");
-        assertSame(aaa, KpiCatalogService.selectDashboardConfigRecord(List.of(zzz, aaa, bbb)));
+        assertSame(zzz, KpiCatalogService.selectDashboardConfigRecord(List.of(zzz, aaa, bbb)));
     }
 
     @Test
-    public void selectDashboardConfigRecordIgnoresBlankAndMissingIdsWhenComparing() {
+    public void selectDashboardConfigRecordPreservesFirstRecordEvenWhenItsIdIsBlank() {
         Map<String, Object> blank = recordWithId("   ", "Africa/Maputo");
         Map<String, Object> missing = new HashMap<>();
         missing.put("timeZone", "UTC");
         Map<String, Object> real = recordWithId("abc", "Asia/Kolkata");
-        assertSame(real, KpiCatalogService.selectDashboardConfigRecord(List.of(blank, missing, real)));
+        assertSame(blank, KpiCatalogService.selectDashboardConfigRecord(List.of(blank, missing, real)));
     }
 
     @Test
@@ -257,12 +257,12 @@ public class KpiCatalogServiceTimeZoneTest {
     }
 
     @Test
-    public void resolveTimeZonePicksLexicographicallySmallestIdWhenNoDefaultAmongDuplicates() {
+    public void resolveTimeZonePreservesFirstApiRecordWhenNoDefaultAmongDuplicates() {
         when(repo.fetchResult(any(), any())).thenReturn(mdmsResult(
                 recordWithId("zzz", "UTC"),
                 recordWithId("aaa", "Africa/Maputo")));
 
-        assertEquals(ZoneId.of("Africa/Maputo"), service.resolveTimeZone("ke.bomet"));
+        assertEquals(ZoneId.of("UTC"), service.resolveTimeZone("ke.bomet"));
     }
 
     // ---- TTL-bounded fallback warning gate (#29 review fix) ----

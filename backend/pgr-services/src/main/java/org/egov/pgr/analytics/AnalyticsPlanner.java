@@ -324,7 +324,7 @@ public class AnalyticsPlanner {
             if (g.filterable.contains("is_open")) conj.add("is_open = ?"); else return;
             params.add(true); return;
         }
-        long now = calendar.asOfMs;
+        long now = calendar.nowMs;
         Long fromMs = windowStartMs(name, now, calendar.zoneId);
         if (fromMs == null) return;
         if (g.isEpochMs(timeCol)) {

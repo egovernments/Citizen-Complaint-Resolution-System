@@ -38,11 +38,9 @@
  * pgr_dashboard_tenant_timezone SQL view (ORDER BY) apply, so every layer
  * picks the identical record from identical data:
  *   1) the record whose (trimmed) id equals "default" wins;
- *   2) else the record with the lexicographically smallest nonblank
- *      (trimmed) id;
- *   3) else the first record in API response order (stable — no reordering).
- * Depends only on fields present on the record itself — never API ordering
- * guarantees or audit metadata the FE payload doesn't carry.
+ *   2) else the first record in API response order (the historical behavior).
+ * The explicit default is the single-record contract; preserving response
+ * order for malformed duplicates avoids silently changing existing tenants.
  */
 export function selectDashboardConfigRecord(records) {
   if (!Array.isArray(records) || records.length === 0) return null;
@@ -53,17 +51,7 @@ export function selectDashboardConfigRecord(records) {
   const withDefault = records.find((r) => trimmedId(r) === "default");
   if (withDefault) return withDefault;
 
-  let smallest = null;
-  let smallestId = null;
-  for (const r of records) {
-    const id = trimmedId(r);
-    if (!id) continue;
-    if (smallestId === null || id < smallestId) {
-      smallestId = id;
-      smallest = r;
-    }
-  }
-  return smallest || records[0];
+  return records[0];
 }
 
 export const useDashboardConfig = () => {
