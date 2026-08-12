@@ -208,12 +208,16 @@ function leafDefaultsFromDefinition(
  *  making it invisible everywhere else in the app that reads the real one.
  *
  *  Disambiguation, in order: (1) a single active definition needs none;
- *  (2) with multiple, prefer whichever hierarchyType has at least one
- *  EXISTING leaf row — real usage is the strongest signal of which one is
- *  actually live — via a small bounded sample, cheap and only reached at
- *  all for a tenant already in this ambiguous state; (3) with no usage
- *  signal for any candidate either (e.g. a fresh tenant mid-migration
- *  between two definitions, nothing created under either yet), prefer the
+ *  (2) with multiple, prefer whichever hierarchyType has the MOST existing
+ *  leaf rows in a small bounded sample — cheap, and only reached at all for
+ *  a tenant already in this ambiguous state. Counting matters, not just
+ *  presence: the live leftover-hierarchyType case above has exactly one
+ *  real leaf under it too, so "has any usage at all" ties with the
+ *  dominant, actually-live one and silently falls back to array order
+ *  again — an earlier version of this fix had exactly that bug, caught by
+ *  testing live rather than just against mocks; (3) with no usage signal
+ *  for any candidate either (e.g. a fresh tenant mid-migration between two
+ *  definitions, nothing created under either yet), prefer the
  *  earliest-created active definition as the most likely original one.
  *  Falls back to the FALLBACK_* constants only when no definition exists at
  *  all, or the lookup fails outright. */
@@ -231,17 +235,23 @@ async function resolveNewLeafDefaults(
       return leafDefaultsFromDefinition(definitions[0])!;
     }
 
-    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 200 });
-    const usedHierarchyTypes = new Set(
-      sample
-        .map((r) => (r.data as { hierarchyType?: unknown } | undefined)?.hierarchyType)
-        .filter((h): h is string => typeof h === 'string'),
-    );
-    const withUsage = definitions.find((d) =>
-      usedHierarchyTypes.has((d.data as { hierarchyType?: unknown } | undefined)?.hierarchyType as string),
-    );
-    if (withUsage) {
-      return leafDefaultsFromDefinition(withUsage)!;
+    // Presence alone isn't enough here — a stray one-off leftover row under
+    // the wrong hierarchyType (exactly the live scenario this is fixing)
+    // would tie with a candidate that has real, dominant usage, and array
+    // order would silently decide the winner again. Count occurrences and
+    // pick the candidate with the MOST usage, not just "any at all".
+    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 500 });
+    const usageCounts = new Map<string, number>();
+    for (const r of sample) {
+      const ht = (r.data as { hierarchyType?: unknown } | undefined)?.hierarchyType;
+      if (typeof ht === 'string') usageCounts.set(ht, (usageCounts.get(ht) ?? 0) + 1);
+    }
+    const byUsage = definitions
+      .map((d) => ({ def: d, count: usageCounts.get((d.data as { hierarchyType?: unknown } | undefined)?.hierarchyType as string) ?? 0 }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count);
+    if (byUsage.length > 0) {
+      return leafDefaultsFromDefinition(byUsage[0].def)!;
     }
 
     const oldest = [...definitions].sort(

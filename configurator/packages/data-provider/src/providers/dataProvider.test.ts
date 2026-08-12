@@ -147,13 +147,17 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.levelCode, 'SUB_TYPE');
   });
 
-  it('with two active hierarchy definitions, picks whichever one has real existing leaf usage', async () => {
-    // Reproduces a live-observed state: a leftover 4-level "test" hierarchyType
-    // sitting alongside the real 2-level one, both isActive:true, MDMS returning
-    // the test one FIRST — confirmed to actually happen (CCRS#1713 follow-up).
-    // Picking "whichever comes first" would silently tag a new leaf with the
-    // wrong hierarchyType, making it invisible everywhere else that reads the
-    // real one. Real usage is the tie-break signal, not definition order.
+  it('with two active hierarchy definitions, picks whichever one has the MOST existing leaf usage — not just any', async () => {
+    // Reproduces the exact live-observed state (CCRS#1713 follow-up): a
+    // leftover 4-level "test" hierarchyType with its own one-off leaf sitting
+    // alongside the real 2-level one backing hundreds of real complaint
+    // types, both isActive:true, MDMS returning the test one FIRST. An
+    // earlier version of this fix used Set-based "has ANY usage" instead of
+    // counting — since the stray hierarchyType has exactly one real leaf too
+    // (not zero), that tied with the dominant one and array order silently
+    // decided the winner again, live, on a real create. This sample gives
+    // BOTH candidates non-zero usage, with "PGR" dominant, specifically to
+    // catch that regression.
     mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
       if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
         return [
@@ -180,11 +184,20 @@ describe('createDigitDataProvider', () => {
         ];
       }
       if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
-        // The sample of existing leaves — all real usage is under "PGR",
-        // none under "PGR_TEST" (matches the live-observed 999-vs-0 split).
+        // "PGR_TEST" has exactly one real leaf (matches live: not zero —
+        // presence-only disambiguation would tie here). "PGR" has several.
         return [
+          { id: 'leaf-test-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR_TEST.STRAY',
+            data: { hierarchyType: 'PGR_TEST', code: 'STRAY' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
           { id: 'leaf-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_1',
             data: { hierarchyType: 'PGR', code: 'EXISTING_1' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'leaf-2', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_2',
+            data: { hierarchyType: 'PGR', code: 'EXISTING_2' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'leaf-3', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_3',
+            data: { hierarchyType: 'PGR', code: 'EXISTING_3' }, isActive: true,
             auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
         ];
       }
