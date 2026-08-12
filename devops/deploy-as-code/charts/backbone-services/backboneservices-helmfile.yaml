@@ -220,6 +220,50 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+    # Gateway metrics (#1648). Every citizen request crosses this controller and
+    # it contributes nothing to Prometheus, so "are we returning errors, and on
+    # which route?" can only be answered by reading logs.
+    #
+    # Written into the `ingress-nginx:` subtree, and NOT via `set:`, because of
+    # a local modification to this vendored chart. templates/_helpers.tpl:6-9
+    # (absent from upstream 4.10.0) does, inside "ingress-nginx.name":
+    #
+    #   $envOverrides := index .Values .Chart.Name
+    #   mustMergeOverwrite . (dict "Values" (mustMergeOverwrite $baseValues $envOverrides))
+    #
+    # mergeOverwrite mutates its destination, and the destination here is the
+    # root context -- so the first template to render a label permanently
+    # merges .Values["ingress-nginx"] OVER .Values for the whole render. That
+    # happens at TEMPLATE time, after every values file and after --set, so
+    # anything named in env.yaml's block wins over both. Verified: with
+    # env.yaml present, `--set controller.metrics.enabled=true` renders NO
+    # metrics Service, because env.yaml says `enabled: false` one level down.
+    #
+    # Which is also why this cannot move to a root `controller:` key: the
+    # subtree would still overwrite it, and kafka-kraft reads .Values.controller
+    # for its own broker block off the same shared passthrough.
+    - ingress-nginx:
+        controller:
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: true
+              # Prometheus selects only ServiceMonitors carrying its release
+              # name (serviceMonitorSelectorNilUsesHelmValues true + empty
+              # selector renders as matchLabels {release: kube-prometheus-stack}).
+              # Without this the object exists and is never scraped.
+              additionalLabels:
+                release: kube-prometheus-stack
+            # MUST stay false while `prometheusRule.rules` is [] in
+            # ingress-nginx/values.yaml. The template emits `spec:` with no
+            # body when the list is empty, so the object renders as
+            # `spec: null` -- and the PrometheusRule CRD marks spec required
+            # and typed object, so the API server rejects it and the whole
+            # release apply fails. env.yaml asks for true; it was harmless only
+            # because metrics.enabled gated it off. Turning metrics on is what
+            # makes it dangerous.
+            prometheusRule:
+              enabled: false
 
 - name: novu
   installed: true
