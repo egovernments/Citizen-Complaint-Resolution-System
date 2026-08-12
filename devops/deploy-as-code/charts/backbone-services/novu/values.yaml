@@ -39,6 +39,15 @@ novu:
   # Overridden per deployment from secrets.novu.* by the helmfile, which is the
   # SOPS-covered file. Left here only so the chart renders standalone.
   secrets:
+    # PREFERRED: name a Secret you created out of band, and the three values
+    # below are ignored entirely -- they never enter values.yaml, the Helm
+    # release, or `helm get values`. It must carry the keys `jwt-secret`,
+    # `store-encryption-key` and `novu-secret-key`:
+    #   kubectl -n novu create secret generic novu-secrets \
+    #     --from-literal=jwt-secret='...' \
+    #     --from-literal=store-encryption-key='<exactly 32 chars>' \
+    #     --from-literal=novu-secret-key='...'
+    existingSecret: ""
     jwtSecret: "change-me"
     storeEncryptionKey: "change-me-exactly-32-characters!"
     novuSecretKey: "change-me"
@@ -196,11 +205,20 @@ api:
     - name: AWS_SECRET_ACCESS_KEY
       value: {{ .Values.novu.aws.secretAccessKey | quote }}
     - name: JWT_SECRET
-      value: {{ .Values.novu.secrets.jwtSecret | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: jwt-secret
     - name: STORE_ENCRYPTION_KEY
-      value: {{ .Values.novu.secrets.storeEncryptionKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: store-encryption-key
     - name: NOVU_SECRET_KEY
-      value: {{ .Values.novu.secrets.novuSecretKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: novu-secret-key
     - name: SUBSCRIBER_WIDGET_JWT_EXPIRATION_TIME
       value: {{ .Values.novu.subscriberWidgetJwtExpirationTime | quote }}
     - name: SENTRY_DSN
@@ -283,7 +301,10 @@ worker:
     - name: AWS_SECRET_ACCESS_KEY
       value: {{ .Values.novu.aws.secretAccessKey | quote }}
     - name: STORE_ENCRYPTION_KEY
-      value: {{ .Values.novu.secrets.storeEncryptionKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: store-encryption-key
     - name: SUBSCRIBER_WIDGET_JWT_EXPIRATION_TIME
       value: {{ .Values.novu.subscriberWidgetJwtExpirationTime | quote }}
     - name: SENTRY_DSN
@@ -349,7 +370,10 @@ ws:
     - name: REDIS_PASSWORD
       value: {{ .Values.novu.redis.password | quote }}
     - name: JWT_SECRET
-      value: {{ .Values.novu.secrets.jwtSecret | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: jwt-secret
     - name: WS_CONTEXT_PATH
       value: {{ .Values.ws.contextPath | quote }}
     - name: NEW_RELIC_ENABLED
