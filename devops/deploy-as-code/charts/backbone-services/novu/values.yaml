@@ -9,8 +9,15 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: "/$2"
-  host: "pgroneclick.digit.org"
+  # Overridden per deployment from global.domain by the helmfile (#1644).
+  # This default named pgroneclick.digit.org — a hostname belonging to a
+  # DIFFERENT environment, inherited from the upstream import — so the
+  # dashboard did not serve on the deployment's own domain at all.
+  host: "domain.com"
   path: "/novu(/|$)(.*)"
+  # Populated per deployment by the helmfile, same secret every other ingress
+  # in this tree uses.
+  tls: []
   pathType: "ImplementationSpecific"
   service:
     name: "novu-dashboard"
@@ -23,10 +30,18 @@ global:
   nodeEnv: "local"
 
 novu:
+  # These are the upstream project's EXAMPLE values and must not survive into a
+  # deployment (#1644). jwtSecret signs session tokens, so a known value lets a
+  # session be forged outright — no password needed and nothing to intercept.
+  # storeEncryptionKey encrypts the stored SMS/email provider credentials, so a
+  # known value makes them readable.
+  #
+  # Overridden per deployment from secrets.novu.* by the helmfile, which is the
+  # SOPS-covered file. Left here only so the chart renders standalone.
   secrets:
-    jwtSecret: "your-secret"
-    storeEncryptionKey: "change-this-key-32-characters!!!"
-    novuSecretKey: "change-this-secret-key"
+    jwtSecret: "change-me"
+    storeEncryptionKey: "change-me-exactly-32-characters!"
+    novuSecretKey: "change-me"
   subscriberWidgetJwtExpirationTime: "15d"
   aws:
     accessKeyId: "test"
