@@ -45,3 +45,42 @@ services:
       - /:/rootfs:ro,rslave
     networks:
       - egov-network
+
+  # Database metrics (#1615). Postgres is under every complaint, user lookup
+  # and workflow transition, and the only thing we knew about it was whether a
+  # TCP connect succeeded — which stays green while the connection pool is
+  # saturated and every service queues behind it.
+  #
+  # Same conventions as node-exporter above: official Docker Hub image, no
+  # published host port (Prometheus reaches it by DNS over egov-network), and
+  # always layered by the Ansible deploy.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: digit-postgres-exporter
+    restart: unless-stopped
+    environment:
+      # IMPORTANT: postgres-db, NOT postgres.
+      # `postgres` is a network alias for PgBouncer in this stack; the database
+      # itself is postgres-db (the gatus config carries the same warning: "a
+      # dead database cannot hide behind a healthy pooler"). Pointing this at
+      # the pooler would report PgBouncer's view of connections rather than the
+      # database's — misleading on the exact metric this exists for.
+      #
+      # Credentials match postgres-db's own POSTGRES_USER/DB (egov/egov), with
+      # the password coming from the same ${POSTGRES_PASSWORD} the deploy
+      # writes into .env from OpenBao. No new secret is introduced.
+      #
+      # Least privilege: `egov` is the stack's superuser, and postgres_exporter
+      # only needs pg_monitor. Reusing it is not a new grant — every backend
+      # service already connects as `egov` through PgBouncer — but a dedicated
+      # role would be tighter. It is deliberately not done here: the only place
+      # this stack creates roles is postgres-db's /docker-entrypoint-initdb.d
+      # (db/full-dump.sql), which Postgres runs ONLY on an empty data
+      # directory. Adding the role there would take effect on fresh volumes
+      # only, so every existing deploy would come up with an exporter that
+      # cannot authenticate — a blank dashboard, which is the failure mode this
+      # work exists to remove. Doing it properly needs a migration that runs
+      # against live databases; tracked as follow-up, not smuggled in here.
+      DATA_SOURCE_NAME: "postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres-db:5432/egov?sslmode=disable"
+    networks:
+      - egov-network
