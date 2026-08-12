@@ -1153,6 +1153,10 @@ services:
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8080"
+      # No grafana/prometheus/loki/tempo on this path, so the observability
+      # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
+      # enabled-var as true, which would make them red forever here.
+      GATUS_OBSERVABILITY: "false"
       # No public hostname on this path — the TLS check (#1622) is off.
       # Declared explicitly because Gatus treats an UNSET `enabled` var as
       # true, which would leave a permanently-red check for a URL that does
