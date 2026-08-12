@@ -650,10 +650,15 @@ shared belongs in `group_vars/digit.yml`.
 4. **digit-ui** — render `globalConfigs.js`, ship nginx config, optional `npm install` + esbuild rebuild for HMR
 5. **OpenBao bootstrap** (first run) + secret-pull for every run
 6. **Compose pull + start** (with profiles)
-7. **Health gates** — wait for kong / persister / hrms / ui / mcp (fatal), then the
-   observability stack — loki / grafana / prometheus / tempo / otel-collector
-   (non-fatal: dashboards are not a serving dependency, but each is named in the
-   output and carries a Gatus check, see #1613)
+7. **Health gates** — wait for kong / persister / hrms / ui / mcp. The only
+   observability service waited on is **loki**, and non-fatally (`ignore_errors`):
+   dashboards are not a serving dependency, so an unhealthy one is reported and the
+   deploy continues. #1657 gates that wait on the logs tier actually being active, so a
+   `observability_level: metrics` tenant no longer spends two minutes retrying a
+   container it deliberately did not deploy. **grafana, prometheus, tempo,
+   otel-collector and node-exporter are not waited on at all** — and are not Gatus-checked
+   either, so nothing reports them either way (#1613). See
+   `docs/observability/enabling-monitoring.md`.
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 

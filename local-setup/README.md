@@ -337,12 +337,12 @@ Between them these include:
 
 | Category | Services |
 |----------|----------|
-| **Tracing** | OpenTelemetry Collector, Tempo, Grafana |
+| **Observability** | Prometheus + node-exporter (metrics), Loki + Promtail (logs), OpenTelemetry Collector + Tempo (traces), Grafana (dashboards), Gatus (uptime). All of it deploys today; **#1657 adds `observability_level`** to deploy less than all of it — see [Enabling monitoring](../docs/observability/enabling-monitoring.md). Until that lands the variable does not exist and there is nothing to set. |
 | **Infrastructure** | PostgreSQL 16, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch |
 | **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
 | **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
 | **Frontend** | DIGIT UI (React), Kong API Gateway |
-| **Tools** | Jupyter Lab (DataLoader), Gatus (health monitoring) |
+| **Tools** | Jupyter Lab (DataLoader) |
 | **Seeds** | Tenant data, security config, workflow config, localization, user accounts |
 
 ### Files & configuration
