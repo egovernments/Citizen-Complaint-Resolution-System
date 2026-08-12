@@ -925,7 +925,7 @@ services:
     # Parameterized so deploys can pin a local ABAC-testing build via
     # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
     # the pgr-services image param below.
-    image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:maven-jdk21-9f83afb}
+    image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:abac-changes-cb6a372}
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -962,7 +962,7 @@ services:
     - 18090:8090
     healthcheck:
       # Universal across both possible images: the pinned default
-      # (egovio/egov-accesscontrol:maven-jdk21-9f83afb) has always had
+      # (egovio/egov-accesscontrol:abac-changes-cb6a372) has always had
       # /bin/sh + wget; the abac-local build now does too (its Dockerfile
       # uses the distroless `debug-nonroot` tag specifically so this same
       # check works there as well — see Digit-Core's build/maven/Dockerfile).
