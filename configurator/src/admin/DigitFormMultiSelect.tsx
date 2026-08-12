@@ -60,7 +60,14 @@ export function DigitFormMultiSelect({
   }, [staticChoices, data, optionValue, optionText]);
 
   const selected: string[] = Array.isArray(field.value) ? field.value : [];
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  // Not gated on fieldState.isTouched (unlike DigitFormSelect's sibling
+  // pattern): a pre-existing record edited before `departments` existed
+  // loads this field empty, and an operator changing an unrelated field
+  // then hitting Save would otherwise get no visible reason the submit was
+  // blocked — nothing here to "touch" until they notice on their own. RHF
+  // only computes `invalid` once a validation pass actually runs (on change
+  // or on submit attempt), so this still stays quiet on initial mount.
+  const hasError = fieldState.invalid;
   const errorMessage = fieldState.error?.message;
 
   const toggle = (value: string, checked: boolean) => {
