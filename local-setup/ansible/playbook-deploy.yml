@@ -1459,7 +1459,32 @@
     # COMPOSE_PROFILES drives which optional service groups are included.
     # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
     # Default off; tenants opt in via `enable_search_stack: true`.
+    # Observability levels are CUMULATIVE (#1657): each includes the ones
+    # above it. Default `traces` yields all three profiles, i.e. exactly the
+    # stack every tenant runs today — this knob only ever removes.
+    - name: "Validate observability_level"
+      ansible.builtin.fail:
+        msg: >-
+          observability_level must be one of metrics|logs|traces, got
+          '{{ observability_level }}'. Levels are cumulative; `traces` is the
+          full stack and the default. A gatus-only level is not offered yet —
+          16 services depend_on otel-collector, so omitting it risks failing
+          the deploy rather than shrinking it.
+      when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
+
     - name: "Compute compose profiles for this tenant"
+      vars:
+        _obs: "{{ observability_level | default('traces') }}"
+        # collector lives in `metrics`, not `traces`: JVM metrics reach
+        # Prometheus via otel-collector:8889, so dropping it costs metrics too.
+        _obs_profiles: >-
+          {{
+            ([]
+              + (['obs-metrics'] if _obs in ['metrics', 'logs', 'traces'] else [])
+              + (['obs-logs']    if _obs in ['logs', 'traces']            else [])
+              + (['obs-traces']  if _obs == 'traces'                      else [])
+            )
+          }}
       ansible.builtin.set_fact:
         compose_profiles: >-
           {{
@@ -1469,6 +1494,7 @@
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
+              + _obs_profiles
             ) | join(',')
           }}
 
