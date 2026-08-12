@@ -636,6 +636,11 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    # Alerted (#1609) like every other endpoint. These five are where
+    # silence is most misleading: if Grafana stops evaluating rules or
+    # Loki dies, no alerts reads identically to "all clear".
+    alerts:
+      - type: slack
 
   - name: Prometheus
     group: Observability
@@ -644,6 +649,11 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    # Alerted (#1609) like every other endpoint. These five are where
+    # silence is most misleading: if Grafana stops evaluating rules or
+    # Loki dies, no alerts reads identically to "all clear".
+    alerts:
+      - type: slack
 
   - name: Loki
     group: Observability
@@ -652,6 +662,11 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    # Alerted (#1609) like every other endpoint. These five are where
+    # silence is most misleading: if Grafana stops evaluating rules or
+    # Loki dies, no alerts reads identically to "all clear".
+    alerts:
+      - type: slack
 
   - name: Tempo
     group: Observability
@@ -660,6 +675,11 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    # Alerted (#1609) like every other endpoint. These five are where
+    # silence is most misleading: if Grafana stops evaluating rules or
+    # Loki dies, no alerts reads identically to "all clear".
+    alerts:
+      - type: slack
 
   - name: OTEL Collector
     group: Observability
@@ -668,6 +688,11 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+    # Alerted (#1609) like every other endpoint. These five are where
+    # silence is most misleading: if Grafana stops evaluating rules or
+    # Loki dies, no alerts reads identically to "all clear".
+    alerts:
+      - type: slack
   # ==================== Public endpoint (TLS) ====================
   # Every other check in this file runs INSIDE the container network and never
   # traverses nginx, so none of them presents the public certificate. An expired
