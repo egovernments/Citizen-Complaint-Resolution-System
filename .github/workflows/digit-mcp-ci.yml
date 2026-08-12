@@ -2,12 +2,12 @@ name: DIGIT-MCP CI
 
 on:
   push:
-    branches: [develop, main]
+    branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - '.github/workflows/digit-mcp-ci.yml'
   pull_request:
-    branches: [develop, main]
+    branches: [master, develop, main]
     paths:
       - 'digit-mcp/**'
       - '.github/workflows/digit-mcp-ci.yml'
@@ -36,3 +36,8 @@ jobs:
 
       - name: Typecheck (no emit) as a separate gate
         run: npx tsc --noEmit
+
+      # Offline unit tests only — the test-*.ts suites that need a live DIGIT
+      # environment (test-integration, test-e2e-new-tenant, …) stay out of CI.
+      - name: Unit tests (no environment required)
+        run: npx tsx test-master-localizations.ts
