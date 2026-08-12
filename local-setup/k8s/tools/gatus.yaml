@@ -28,8 +28,21 @@ metadata:
   namespace: digit
 data:
   config.yaml: |
+    # Uptime history survives container restarts (#1610). emptyDir, not a PVC:
+    # it is tied to the pod, so a restart keeps history while a reschedule does
+    # not. That is the right trade while this tier runs nothing real — revisit
+    # with a PVC when it does (#1618).
+    #
+    # Retention is deliberately left unset: Gatus bounds it itself, per endpoint, at
+    # maximum-number-of-results 100 and maximum-number-of-events 50 (upstream
+    # storage/config.go, DefaultMaximumNumberOfResults / DefaultMaximumNumberOfEvents),
+    # and the SQL store prunes past those thresholds. gatus.db therefore settles at a
+    # steady-state size instead of growing forever. Set those keys here only if a
+    # deployment wants a different window -- and check the pinned image supports them,
+    # since Gatus rejects unknown config keys outright.
     storage:
-      type: memory
+      type: sqlite
+      path: /data/gatus.db
 
     ui:
       title: DIGIT Core Services - Health Dashboard
@@ -487,6 +500,127 @@ data:
         interval: 60s
         conditions:
           - "[STATUS] == 200"
+
+      # ==================== Observability stack ====================
+      # OFF in this tier: it has no grafana/prometheus/loki/tempo/otel-collector
+      # manifests (#1618). Defined here only to keep both catalogues identical,
+      # per the header — flip GATUS_OBSERVABILITY to "true" when they land.
+      #
+      # promtail and node-exporter stay out: no reachable HTTP listener, and a
+      # dead node-exporter shows as a stale prometheus target instead.
+      #
+      # Reached through the ExternalName aliases at the bottom of this file, not
+      # by namespace-qualifying these URLs.
+      #
+      # Gatus runs in `digit` and #1618 deploys this stack to `monitoring`, so a
+      # bare name resolves as <svc>.digit.svc.cluster.local and does not exist.
+      # Verified on a cluster: all five failed with
+      #   dial tcp: lookup grafana on 10.96.0.10:53: no such host
+      # while grafana.monitoring answered 200 from the same pod.
+      #
+      # The URLs stay bare so both tiers' catalogues remain textually identical,
+      # which check-gatus-coverage.py requires (it matches by URL host and fails
+      # on drift between the two files). The cross-namespace hop is done once, in
+      # Kubernetes, by the alias Services instead.
+      - name: Grafana
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://grafana:3000/api/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Prometheus
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://prometheus:9090/-/healthy"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Loki
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://loki:3100/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: Tempo
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://tempo:3200/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      - name: OTEL Collector
+        group: Observability
+        enabled: ${GATUS_OBSERVABILITY}
+        url: "http://otel-collector:13133"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+
+      # ==================== Public endpoint (TLS) ====================
+      # Every other check in this file runs INSIDE the cluster network and never
+      # traverses the public ingress, so none of them presents the public
+      # certificate. An expired cert therefore leaves this whole dashboard green
+      # while every citizen and employee gets a browser security warning — the
+      # dashboard would actively mislead whoever is diagnosing the outage (#1622).
+      #
+      # This is also the only check that exercises the REAL public path end to
+      # end: DNS, firewall, TLS termination and routing through to the app.
+      #
+      # OFF in this tier: it has no ingress and no public hostname (see #1618).
+      # Defined here only to keep both catalogues identical, per the header.
+      #
+      # GATUS_PUBLIC_URL is still set to a non-empty placeholder on the Deployment
+      # below. Gatus validates `url` on EVERY endpoint before it consults
+      # `enabled:`, so an empty value here does not disable the check -- it aborts
+      # startup ("you must specify an url for each endpoint") and CrashLoopBackOffs.
+      #
+      # [CONNECTED] == true is what separates the two ways this can go red. On any
+      # TLS failure -- SAN mismatch, broken chain, wrong cert -- the handshake never
+      # completes, so [CERTIFICATE_EXPIRATION] resolves to 0s and [STATUS] to 0. With
+      # only the two conditions below, "0s > 240h" would fail and read exactly like a
+      # cert about to expire, sending on-call to chase a renewal that is not the
+      # problem. [CONNECTED] fails too in that case and not in the expiry case, so
+      # which condition is red says which fault it is. (It also closes a real gap:
+      # 0 < 500 is TRUE, so [STATUS] alone stays green on a dead connection.)
+      # Upstream pairs these two conditions in its own certificate examples.
+      - name: TLS Certificate
+        group: Public Endpoint
+        enabled: ${GATUS_TLS}
+        url: "${GATUS_PUBLIC_URL}"
+        interval: 5m
+        conditions:
+          - "[CONNECTED] == true"
+          - "[CERTIFICATE_EXPIRATION] > 240h"
+          - "[STATUS] < 500"
+
+---
+# Backing store for the sqlite database (#1610). Without this the volume was an
+# emptyDir, which is destroyed with the pod -- so the uptime history this PR
+# exists to preserve was still lost on every rollout, drain or eviction.
+# Measured before the fix: after deleting the pod, the oldest row in the
+# database was timestamped one second after the new pod started.
+#
+# No storageClassName: k3s provisions this with local-path, the default. 1Gi is
+# generous -- Gatus stores one row per check per interval and prunes on read.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: digit
+  labels:
+    app: gatus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -497,6 +631,13 @@ metadata:
     app: gatus
 spec:
   replicas: 1
+  # Recreate, not the default RollingUpdate. The claim above is ReadWriteOnce
+  # and holds a sqlite file, so a rolling update would deadlock: the new pod
+  # cannot mount the volume until the old one releases it, and the old one is
+  # not terminated until the new one is ready. Recreate also keeps two Gatus
+  # processes off one sqlite file, which replicas: 1 assumes anyway.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: gatus
@@ -538,6 +679,23 @@ spec:
               value: "false"
             - name: GATUS_SMS_PORT
               value: "8080"
+            # No ingress and no public hostname in this tier (#1618), so the
+            # public TLS check stays off. Declared rather than omitted: Gatus
+            # reads an UNSET enabled-var as true, which would leave a
+            # permanently-red check against a URL that never resolves.
+            # No observability stack in this tier (#1618), so these checks stay off.
+            # Declared rather than omitted: an unset enabled-var reads as true.
+            - name: GATUS_OBSERVABILITY
+              value: "false"
+            - name: GATUS_TLS
+              value: "false"
+            # Non-empty on purpose. Gatus validates `url` on EVERY endpoint
+            # before it consults `enabled:`, so "" is not an inert placeholder --
+            # it aborts startup with "you must specify an url for each endpoint"
+            # and CrashLoopBackOffs the pod. Only ever parsed; with GATUS_TLS
+            # false this endpoint is never dialled.
+            - name: GATUS_PUBLIC_URL
+              value: "https://localhost/"
           resources:
             limits:
               memory: 64Mi
@@ -559,10 +717,17 @@ spec:
             - name: gatus-config
               mountPath: /config/config.yaml
               subPath: config.yaml
+            # sqlite store (#1610). The config mount is a read-only ConfigMap,
+            # so the database needs a writable volume of its own.
+            - name: gatus-data
+              mountPath: /data
       volumes:
         - name: gatus-config
           configMap:
             name: gatus-config
+        - name: gatus-data
+          persistentVolumeClaim:
+            claimName: gatus-data
 ---
 apiVersion: v1
 kind: Service
@@ -575,3 +740,69 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
+---
+# Cross-namespace aliases for the observability stack (#1613).
+#
+# Gatus runs in `digit`; #1618 deploys Prometheus, Loki, Tempo, Grafana and the
+# OTEL collector into `monitoring`. A bare `http://grafana:3000` from a pod in
+# `digit` resolves as grafana.digit.svc.cluster.local and does not exist --
+# confirmed on a cluster, where all five Observability checks failed with
+# "no such host" while grafana.monitoring answered 200 from the same pod.
+#
+# Aliasing here rather than writing grafana.monitoring into the URLs keeps the
+# compose and k3s endpoint catalogues textually identical, which
+# check-gatus-coverage.py requires: it matches checks to services by URL HOST and
+# fails on any drift between the two files. Bare names work in compose (one
+# network, no namespaces) and now work here too.
+#
+# These resolve to nothing until #1618's stack is deployed. That is correct --
+# the checks are gated off by GATUS_OBSERVABILITY until it lands.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: grafana.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: prometheus.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: loki.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: tempo.monitoring.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: digit
+  labels: {app: gatus-observability-alias}
+spec:
+  type: ExternalName
+  externalName: otel-collector.monitoring.svc.cluster.local
