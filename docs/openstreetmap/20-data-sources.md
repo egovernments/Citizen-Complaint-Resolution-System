@@ -19,7 +19,9 @@ is about **querying** it at runtime.
   `.osm.bz2` (XML, larger). Use PBF unless a tool demands XML. Mirrors are listed on
   the wiki; use a mirror, not the origin, for repeated pulls.
 - **Diffs** let you keep a local copy current without re-downloading: minutely, hourly
-  and daily `.osc.gz` change files. `osmosis` or `pyosmium-get-changes` apply them.
+  and daily `.osc.gz` change files. `pyosmium-get-changes` downloads and combines
+  changes; apply the result to a snapshot with `osmium apply-changes` (or feed it to
+  the updater for your target database). `osmosis` can also run an update pipeline.
 - Rule of thumb: a full planet download plus import is a multi-hour-to-multi-day
   operation. Do not put it on a critical path you have not rehearsed.
 
@@ -72,7 +74,7 @@ one. Know these alternatives:
 | **[Natural Earth](https://www.naturalearthdata.com)** | Global, coarse | Public domain | Country/state level, cartographic generalisation. Too coarse for wards |
 | **[HDX](https://data.humdata.org)** (OCHA) | Crisis/dev countries | Varies, usually CC BY | Hosts national **COD-AB** (Common Operational Datasets — Administrative Boundaries), typically the government-endorsed set |
 | **National mapping agency / electoral commission** | One country, authoritative | Varies | The real source of truth. In Kenya, IEBC ward boundaries; in most countries, a national statistics or survey office |
-| **[Overture Maps](https://overturemaps.org)** | Global | ODbL-ish/CDLA | Newer consortium dataset that blends OSM with corporate sources; worth watching |
+| **[Overture Places](https://docs.overturemaps.org/guides/places/)** (`place` feature type) | Global | Per source: CC0-1.0, Apache-2.0, or CDLA-Permissive-2.0 | Point representations of businesses, services, and landmarks; inspect each feature's `sources` metadata. Not an administrative-boundary source |
 | **[Who's On First](https://whosonfirst.org)** | Global gazetteer | CC0/varies | Good for place-name hierarchies rather than precise geometry |
 
 ### Choosing between them

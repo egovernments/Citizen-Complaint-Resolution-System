@@ -48,15 +48,17 @@ docker run -d --name overpass --restart unless-stopped \
 
 | Setting | Why |
 |---|---|
-| `OVERPASS_MODE=init` | First run imports; later runs should use the normal mode |
+| `OVERPASS_MODE=init` | First run imports and creates `/db/init_done`. It then exits by default; `--restart unless-stopped` restarts it automatically, or use `docker start overpass`. The next start sees the marker, skips initialisation, and serves the API |
 | `OVERPASS_PLANET_URL` | Accepts `file://` for a local extract — use it, do not re-download |
 | `OVERPASS_META=no` | Drops per-object user/version metadata. Much smaller and faster; you lose `out meta` |
-| **`OVERPASS_RULES_LOAD=10`** | **Builds the area index.** Without it every `area[…]` query returns nothing, with no error |
+| `OVERPASS_USE_AREAS` | Enables initial area generation and the area updater; defaults to `true` |
+| `OVERPASS_RULES_LOAD=10` | Controls the area generator's work/sleep ratio; it does not enable area generation |
 | `OVERPASS_DIFF_URL` | Optional: apply minutely/daily diffs to stay current |
 
-The `RULES_LOAD` point is the number-one first-attempt failure: the import succeeds, the
-service answers, plain `rel[...]` queries work, and every `area[...]` query returns an
-empty set. Area generation is a separate post-import pass.
+Area generation runs during initialisation when `OVERPASS_USE_AREAS=true`, then the
+area updater keeps it current. A higher `OVERPASS_RULES_LOAD` gives that updater more
+work time relative to sleep time; set `OVERPASS_USE_AREAS=false` only when area queries
+are intentionally disabled.
 
 **Sizing.** Entirely a function of what you import:
 
@@ -98,9 +100,10 @@ docker run -d --name nominatim \
   -p 127.0.0.1:8080:8080 \
   -e PBF_URL=https://download.geofabrik.de/africa/kenya-latest.osm.pbf \
   -e REPLICATION_URL=https://download.geofabrik.de/africa/kenya-updates/ \
+  -e UPDATE_MODE=continuous \
   -e IMPORT_STYLE=address \
   -v nominatim-data:/var/lib/postgresql/16/main \
-  mediagis/nominatim:4.5
+  mediagis/nominatim:5.3.2
 ```
 
 **This is the heaviest of the OSM services** — it is a full PostGIS database with a
@@ -116,7 +119,8 @@ Notes that matter:
 
 - `IMPORT_STYLE=address` (vs `full`) drops POI detail and cuts the import substantially.
   For "reverse-geocode a pin to a street and postcode", `address` is sufficient.
-- `REPLICATION_URL` keeps it current; without it the index is frozen at import.
+- `REPLICATION_URL` selects the update feed; `UPDATE_MODE=continuous` starts the
+  replication loop. Without both, the index is frozen at import.
 - Use the **country extract, not the planet**, unless you genuinely serve worldwide.
   Country-scoped is the difference between a 30 GB volume and a 1 TB one.
 - Postcode coverage is inherited from OSM. Self-hosting does not conjure postcodes that

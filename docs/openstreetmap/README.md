@@ -52,8 +52,9 @@ Three rules that catch everyone, in decreasing order of how often we have broken
    community-funded, have no SLA, and will rate-limit or block you. Anything on the
    citizen-facing hot path either gets self-hosted or gets a paid provider.
 2. **Attribution is a licence obligation, not a nicety.** `© OpenStreetMap
-   contributors` must be visible on every map. Derived data you publish inherits ODbL
-   share-alike terms.
+   contributors` must be visible on every public map. Publicly used Derivative
+   Databases inherit ODbL share-alike; Produced Works do not, but still require
+   attribution and an ODbL availability notice.
 3. **OSM completeness is wildly uneven.** Nairobi and Maputo have clean multi-level
    administrative hierarchies; a given Kenyan ward may not exist in OSM at all. Always
    have a non-OSM fallback source for boundaries (see [part 20](20-data-sources.md)).

@@ -78,9 +78,10 @@ every `area[...]` query silently return nothing. See [part 50](50-self-hosting.m
 - **Name matching must be multi-key.** Per [part 10](10-osm-fundamentals.md), match
   across `name`, `name:en`, `int_name`, `alt_name` — a single strict `["name"="X"]` is
   the classic zero-results bug.
-- **Escape interpolated values.** Anything inside `"…"` needs `\` and `"` escaped, or a
-  place name with an apostrophe/quote becomes a syntax error — and, in principle, query
-  injection. Prefer to interpolate only values you obtained from a trusted picker.
+- **Escape interpolated values.** Inside an Overpass double-quoted string, escape
+  backslashes and double quotes. Apostrophes do not require escaping. Untrusted input
+  can still alter a query if encoded incorrectly, so use a query builder or a dedicated
+  encoder rather than ad-hoc interpolation.
 - **Regex filters are expensive.** `["admin_level"~"4|5|8"]` over a country is far
   slower than three exact filters unioned.
 - **Ask for less.** `out center` instead of `out geom` when you only need a point;

@@ -87,26 +87,32 @@ country may use 2, 4, 8 with nothing at 5, 6, 7.
 
 ## Licensing: ODbL 1.0
 
-OSM data is licensed **[Open Database License 1.0](https://opendatacommons.org/licenses/odbl/)**
-(the *data*; the cartography/tile images are CC-BY-SA). The practical obligations:
+OSM data is licensed **[Open Database License 1.0](https://opendatacommons.org/licenses/odbl/)**.
+The standard tiles served by openstreetmap.org are ODbL Produced Works, while the
+OpenStreetMap Carto style is CC0 1.0; third-party tile providers set their own terms.
+The practical obligations:
 
-1. **Attribution.** Credit `© OpenStreetMap contributors` visibly wherever the data or
-   a rendering of it is shown. On a map this conventionally sits bottom-right and must
-   not be hidden behind a toggle or covered by UI chrome.
-2. **Share-alike on Derivative Databases.** If you publicly use an adapted version of
-   the database, you must offer that adapted database under ODbL too.
-3. **"Produced Works" are exempt from share-alike.** A rendered map image, a printed
-   report, a screenshot, or a dashboard chart is a Produced Work: you must attribute,
-   but you need not open-license the artefact.
+1. **Attribution.** When the data or a rendering is publicly used, credit
+   `© OpenStreetMap contributors` visibly. On a map this conventionally sits
+   bottom-right and must not be hidden behind a toggle or covered by UI chrome.
+2. **Share-alike on publicly used Derivative Databases.** If you publicly use an
+   adapted database, you must offer that database under ODbL too.
+3. **Produced Works do not inherit share-alike.** A rendered map image, a printed
+   report, a screenshot, or a dashboard chart is normally a Produced Work. You may
+   license the artefact separately, but public use still requires attribution and a
+   notice that the underlying OSM data is available under ODbL. If it was made from a
+   Derivative Database, that database must also be offered under ODbL.
 
 Where the line falls for a system like ours is worth stating explicitly, because it is
 the question that actually comes up:
 
-- Showing OSM tiles and OSM-derived ward outlines in a UI → **Produced Work**.
-  Attribution only.
-- Importing OSM boundary polygons into `boundary-service` and running the platform on
-  them → an internal Derivative Database. No public distribution, so no share-alike
-  trigger, but attribution still applies to anything user-visible.
+- Publicly showing OSM tiles and OSM-derived ward outlines in a UI → **Produced Work**.
+  Attribute OSM and include an ODbL data-availability notice; the rendered artefact
+  itself does not inherit share-alike.
+- Importing OSM boundary polygons into `boundary-service` and using them only inside
+  the organisation → an internal Derivative Database. Purely internal use does not
+  trigger the ODbL public-use obligations; they apply when data or output is publicly
+  used.
 - **Publishing** the resulting boundary dataset (an onboarding kit, an open-data
   release, a GeoJSON download endpoint) → distributing a Derivative Database.
   **ODbL applies, and you must say so.** Ship a `LICENCE`/`ATTRIBUTION` note beside
