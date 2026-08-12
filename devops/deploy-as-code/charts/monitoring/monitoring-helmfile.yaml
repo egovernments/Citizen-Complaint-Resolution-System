@@ -1,10 +1,63 @@
+# Monitoring stack (#1619). This helmfile is wired into digit-helmfile.yaml, but
+# every release below is OFF by default -- uncommenting the path deploys nothing
+# until an operator opts in. Turn on only the parts you want: a deployment with
+# limited capacity can run metrics alone, and a full stack is six booleans.
+#
+# Set them in charts/environments/env.yaml under `monitoring:` -- see the
+# documented block there for what each one costs and what it gives you.
+#
+# Note on scope: several releases below pass the whole merged values tree into
+# their chart (`.Values | toYaml`), a long-standing pattern here rather than
+# anything new. It means the `monitoring:` toggle map is also handed to
+# loki-stack, kube-prometheus-stack, blackbox and kafka-ui, which ignore
+# unrecognised top-level keys. Harmless, but assume anything added under
+# `monitoring:` is visible to those charts' rendered values.
 environments:
   env:
     values:
       - namespace: monitoring
+      # Defaults for the toggles read below. Listed BEFORE env.yaml so an
+      # operator's env.yaml overrides them, and so the keys ALWAYS exist --
+      # without this, an env.yaml predating this block renders `installed:` as
+      # `<no value>` and the helmfile fails to parse. Deliberately not using
+      # sprig's `dig` for the same reason: CI pins helmfile v0.140.0, which
+      # ships a sprig too old to have it.
+      - monitoring:
+          metrics: false
+          logs: false
+          dashboards: false
+          traces: false
+          probes: false
+          kafkaUi: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
 ---
+{{- /* Toggle lookup, written defensively on purpose (#1619).
+
+       `.Values.monitoring.x` written directly is a HARD PARSE ERROR ("map has
+       no entry for key") in two ordinary situations: running without `-e env`,
+       and an operator env.yaml written before this block existed. Both used to
+       render fine, and a helmfile that will not parse breaks every other
+       release in this file, not just monitoring.
+
+       So: resolve the block once, tolerate its absence, and default each key to
+       false individually. sprig's `dig` would express this in one call but does
+       not exist in helmfile v0.140.0, the version CI pins.
+
+       Absent is fine; present-but-not-a-map is not. `monitoring: true`, the
+       natural typo for "turn monitoring on", makes every `index $mon "..."`
+       below fail with "can't index item of type bool" — the same whole-file
+       parse failure this block exists to prevent. Silently treating it as an
+       empty map would be worse than the crash, though: the operator asked for
+       monitoring, and would instead get every component false, which on an
+       existing install means helmfile UNINSTALLS the stack. So fail loudly and
+       name the expected shape. */}}
+{{- $mon := dict }}
+{{- if hasKey .Values "monitoring" }}
+{{-   if not (kindIs "map" (index .Values "monitoring")) }}
+{{-     fail "`monitoring:` in charts/environments/env.yaml must be a map of component toggles (metrics/logs/dashboards/traces/probes/kafkaUi), not a single value" }}
+{{-   end }}
+{{-   $mon = .Values.monitoring }}
 {{- /* Grafana admin credentials (#1650).
 
        Two mutually exclusive paths, resolved once here so the release block
@@ -53,7 +106,8 @@ repositories:
 
 releases:
 - name: loki-stack
-  installed: true
+  # Loki + Promtail. Log aggregation.
+  installed: {{ default false (index $mon "logs") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: grafana/loki-stack
   version: 2.10.1
@@ -62,7 +116,9 @@ releases:
   - {{ .Values | toYaml | nindent 8 }}
 
 - name: kube-prometheus-stack
-  installed: true
+  # Prometheus, Alertmanager, node-exporter, kube-state-metrics. The core of
+  # the stack: everything else is optional, this is not.
+  installed: {{ default false (index $mon "metrics") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: prometheus-community/kube-prometheus-stack
   version: 56.6.2
@@ -149,7 +205,9 @@ releases:
   - ./values/otel-collector.yaml
 
 - name: jaeger
-  installed: false
+  # Distributed tracing. Needs an Elasticsearch backend, so it is the most
+  # expensive thing here -- off unless you know you want traces.
+  installed: {{ default false (index $mon "traces") }}
   namespace: es-cluster
   chart: jaegertracing/jaeger
   version: 0.35.0
@@ -164,7 +222,9 @@ releases:
       value: "{{ .Values.global.domain }}"
 
 - name: grafana
-  installed: true
+  # Dashboards. Useful only alongside metrics and/or logs -- on its own it has
+  # nothing to query.
+  installed: {{ default false (index $mon "dashboards") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: grafana/grafana
   version: 7.3.0
@@ -246,7 +306,8 @@ releases:
 #     matches instance="prometheus-blackbox-exporter:9115" — so certificate
 #     expiry has never been alertable here despite the rule existing
 - name: blackbox
-  installed: true
+  # blackbox-exporter: external HTTP/TLS probing, incl. certificate expiry (#1649).
+  installed: {{ default false (index $mon "probes") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: prometheus-community/prometheus-blackbox-exporter
   version: 8.2.0
@@ -271,7 +332,9 @@ releases:
     # not the `kube-prometheus-stack` the operator's selector matches.
 
 - name: kafka-ui
-  installed: true
+  # Kafka admin console. NOT monitoring -- it is a write-capable admin UI, so it
+  # is listed here only because it has always lived in this helmfile.
+  installed: {{ default false (index $mon "kafkaUi") }}
   namespace: backbone
   chart: kafka-ui/kafka-ui
   version: 0.7.6
