@@ -48,6 +48,8 @@ repositories:
   url: https://helm.elastic.co
 - name: apm-attacher
   url: https://helm.elastic.co
+- name: open-telemetry
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts
 
 releases:
 - name: loki-stack
@@ -110,6 +112,41 @@ releases:
           - job_name: blackbox_exporter
             static_configs:
               - targets: ['prometheus-blackbox-exporter:9115']
+
+# Application telemetry pipeline (#1646). Services attach the OTEL javaagent
+# and export OTLP here; the collector re-exposes everything on ONE Prometheus
+# endpoint, so collection needs a single ServiceMonitor rather than one per
+# service. Deploying this is inert until the agent is switched on in the common
+# chart (otel.enabled), so it is safe to land first.
+- name: otel-collector
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: open-telemetry/opentelemetry-collector
+  version: 0.108.0
+  values:
+  # NO whole-values passthrough on this release, unlike its siblings -- the
+  # `.Values | toYaml` line every other release carries is deliberately absent
+  # here. (Written without the surrounding braces on purpose: helmfile renders
+  # this file as a Go template BEFORE parsing it as YAML, so an interpolation
+  # inside a comment is still expanded. Writing it literally here dumped the
+  # entire values tree into this line and broke the document, with a parse error
+  # pointing ~1500 lines away.) This chart ships a values.schema.json with
+  # additionalProperties:false, and the passthrough hands every top-level
+  # env.yaml key -- ~30 service blocks -- to whichever chart is being installed.
+  # Helm rejects the lot:
+  #
+  #   Error: values don't meet the specifications of the schema(s) in the
+  #   following chart(s): opentelemetry-collector:
+  #   - at '': additional properties 'pgadmin', 'configmaps', 'egov-persister',
+  #     'prometheus', 'grafana', 'digit-ui', ... not allowed
+  #
+  # Nothing is lost by dropping it: values/otel-collector.yaml references no
+  # `.Values` at all, so the passthrough supplied this release nothing it reads.
+  # The release-level `namespace:` above is a helmfile field, not a chart value.
+  #
+  # This is also why most mis-paths in this tree go unnoticed -- charts without a
+  # schema silently discard unknown keys. This one refuses to install instead.
+  - ./values/otel-collector.yaml
 
 - name: jaeger
   installed: false
