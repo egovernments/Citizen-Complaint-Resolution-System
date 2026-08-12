@@ -8,8 +8,21 @@
 # deployment actually runs. Add an endpoint to one file, add it to the other.
 # CI enforces this (.github/workflows/gatus-coverage.yml).
 
+# Uptime history survives restarts (#1610). With the previous `type: memory`
+# every redeploy wiped it, so "how long was it down?" and "is this endpoint
+# flapping or is this the first failure?" were unanswerable — which is the
+# first question anyone asks when an alert fires.
+#
+# Retention is deliberately left unset: Gatus bounds it itself, per endpoint, at
+# maximum-number-of-results 100 and maximum-number-of-events 50 (upstream
+# storage/config.go, DefaultMaximumNumberOfResults / DefaultMaximumNumberOfEvents),
+# and the SQL store prunes past those thresholds. gatus.db therefore settles at a
+# steady-state size instead of growing forever. Set those keys here only if a
+# deployment wants a different window -- and check the pinned image supports them,
+# since Gatus rejects unknown config keys outright.
 storage:
-  type: memory
+  type: sqlite
+  path: /data/gatus.db
 
 ui:
   title: DIGIT Core Services - Health Dashboard
@@ -472,3 +485,104 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+
+  # ==================== Observability stack ====================
+  # The monitoring itself. Deliberately gated: these components exist only in
+  # docker-compose.egov-digit.yaml (plus grafana/tempo/otel-collector in
+  # registry.yml). docker-compose.yml and the k3s tier have none, so an ungated
+  # check would be red forever there — which is how dashboards get ignored.
+  #
+  # This closes the TODO the coverage guard left parked ("Monitoring the
+  # monitoring is a separate decision -- if it is ever wanted, they need a
+  # GATUS_OBSERVABILITY toggle"). It matters most once alerting lands (#1609):
+  # from that point silence means "all clear", and silence looks identical if
+  # Loki has crashed and Grafana has stopped evaluating rules.
+  #
+  # promtail and node-exporter stay out: promtail exposes no HTTP listener the
+  # network can reach, and node-exporter is scraped by prometheus (a dead
+  # exporter shows as a stale `node` target, not a missing check).
+  - name: Grafana
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://grafana:3000/api/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Prometheus
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://prometheus:9090/-/healthy"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Loki
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://loki:3100/ready"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Tempo
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://tempo:3200/ready"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: OTEL Collector
+    group: Observability
+    enabled: ${GATUS_OBSERVABILITY}
+    url: "http://otel-collector:13133"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+  # ==================== Public endpoint (TLS) ====================
+  # Every other check in this file runs INSIDE the container network and never
+  # traverses nginx, so none of them presents the public certificate. An expired
+  # cert therefore leaves this whole dashboard green while every citizen and
+  # employee gets a browser security warning — the dashboard would actively
+  # mislead whoever is diagnosing the outage (#1622).
+  #
+  # This is also the only check that exercises the REAL public path end to end:
+  # DNS, the host firewall, nginx, TLS termination and routing through to the
+  # app. Everything above bypasses all of it.
+  #
+  # Certificates are Let's Encrypt, renewed by certbot's systemd timer. Renewal
+  # is automatic and unverified: if it fails (expired ACME account, blocked
+  # HTTP-01 challenge, nginx not reloaded, disabled timer) the expiry is
+  # perfectly predictable 90 days ahead, and nothing currently notices.
+  #
+  # 240h ≈ 10 days of warning. Certbot renews at 30 days, so this only fires
+  # once renewal has genuinely failed, not on the normal renewal cycle.
+  #
+  # GATUS_TLS is false unless the deployment sets it: it needs a real public
+  # hostname AND the gatus container must be able to reach it from inside
+  # (hairpin NAT is not universal). Ansible enables it only when tls_enabled.
+  #
+  # GATUS_PUBLIC_URL is always rendered non-empty, even when GATUS_TLS is false.
+  # Gatus validates `url` on EVERY endpoint before it consults `enabled:`, so an
+  # empty value here does not disable the check -- it aborts startup entirely
+  # ("you must specify an url for each endpoint") and takes the dashboard with it.
+  #
+  # [CONNECTED] == true is what separates the two ways this can go red. On any
+  # TLS failure -- SAN mismatch, broken chain, wrong cert -- the handshake never
+  # completes, so [CERTIFICATE_EXPIRATION] resolves to 0s and [STATUS] to 0. With
+  # only the two conditions below, "0s > 240h" would fail and read exactly like a
+  # cert about to expire, sending on-call to chase a renewal that is not the
+  # problem. [CONNECTED] fails too in that case and not in the expiry case, so
+  # which condition is red says which fault it is. (It also closes a real gap:
+  # 0 < 500 is TRUE, so [STATUS] alone stays green on a dead connection.)
+  # Upstream pairs these two conditions in its own certificate examples.
+  - name: TLS Certificate
+    group: Public Endpoint
+    enabled: ${GATUS_TLS}
+    url: "${GATUS_PUBLIC_URL}"
+    interval: 5m
+    conditions:
+      - "[CONNECTED] == true"
+      - "[CERTIFICATE_EXPIRATION] > 240h"
+      - "[STATUS] < 500"
