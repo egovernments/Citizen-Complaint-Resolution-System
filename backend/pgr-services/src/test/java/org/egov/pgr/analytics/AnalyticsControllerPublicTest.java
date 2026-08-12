@@ -64,6 +64,14 @@ public class AnalyticsControllerPublicTest {
         return pack;
     }
 
+    private Map<String,Object> refreshBody(String callerTenant, String role, String targetTenant) {
+        return Map.of(
+                "tenantId", targetTenant,
+                "RequestInfo", Map.of("userInfo", Map.of(
+                        "tenantId", callerTenant,
+                        "roles", List.of(Map.of("code", role)))));
+    }
+
     @Test
     public void publicPackIgnoresSpoofedRequestInfoAndNeverReturnsRecordCount() {
         KpiDefinition def = publicDef("cl_public");
@@ -138,11 +146,41 @@ public class AnalyticsControllerPublicTest {
         when(kpiCatalogService.refreshPublicDashboardConfig("ke")).thenReturn(true);
 
         ResponseEntity<Map<String,Object>> response =
-                controller.refreshDashboardConfig(Map.of("tenantId", "ke"));
+                controller.refreshDashboardConfig(refreshBody("ke", "MDMS_ADMIN", "ke"));
 
         assertEquals(200, response.getStatusCodeValue());
         assertEquals(true, response.getBody().get("publicDashboardEnabled"));
         verify(kpiCatalogService).refreshPublicDashboardConfig("ke");
+    }
+
+    @Test
+    public void configRefreshAllowsConfiguratorAdminWithinCallerTenantTree() {
+        when(kpiCatalogService.refreshPublicDashboardConfig("ke.bomet")).thenReturn(false);
+
+        ResponseEntity<Map<String,Object>> response = controller.refreshDashboardConfig(
+                refreshBody("ke", "SUPERUSER", "ke.bomet"));
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(false, response.getBody().get("publicDashboardEnabled"));
+        verify(kpiCatalogService).refreshPublicDashboardConfig("ke.bomet");
+    }
+
+    @Test
+    public void configRefreshRejectsAnonymousWrongRoleAndCrossTenantCallers() {
+        ResponseEntity<Map<String,Object>> anonymous =
+                controller.refreshDashboardConfig(Map.of("tenantId", "ke"));
+        ResponseEntity<Map<String,Object>> wrongRole = controller.refreshDashboardConfig(
+                refreshBody("ke", "EMPLOYEE", "ke"));
+        ResponseEntity<Map<String,Object>> crossTenant = controller.refreshDashboardConfig(
+                refreshBody("ke.bomet", "MDMS_ADMIN", "ke"));
+
+        assertEquals(403, anonymous.getStatusCodeValue());
+        assertEquals(403, wrongRole.getStatusCodeValue());
+        assertEquals(403, crossTenant.getStatusCodeValue());
+        assertEquals("config_refresh_forbidden", anonymous.getBody().get("error"));
+        assertEquals("config_refresh_forbidden", wrongRole.getBody().get("error"));
+        assertEquals("config_refresh_forbidden", crossTenant.getBody().get("error"));
+        verify(kpiCatalogService, never()).refreshPublicDashboardConfig(anyString());
     }
 
     @Test

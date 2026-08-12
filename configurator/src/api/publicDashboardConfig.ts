@@ -24,7 +24,7 @@ export function selectOwnedDashboardConfig(
       const rightId = String(right.data?.id ?? '').trim();
       if (!leftId) return rightId ? 1 : 0;
       if (!rightId) return -1;
-      return leftId.localeCompare(rightId);
+      return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
     })[0]
     ?? own[0];
 }

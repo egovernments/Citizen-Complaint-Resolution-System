@@ -107,6 +107,14 @@ test("public-only chrome has seeded localization messages", () => {
   const messages = JSON.parse(fs.readFileSync(EN_MESSAGES, "utf8"));
   const byCode = Object.fromEntries(messages.map(({ code, message }) => [code, message]));
   assert.equal(byCode.DASHBOARD_HEADER_PUBLIC_SUBTITLE, "Public view");
+  assert.equal(byCode.DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE, "Public dashboard is not available");
+  assert.equal(
+    byCode.DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION,
+    "This dashboard has not been enabled for this tenant.",
+  );
+  for (const message of messages.filter(({ code }) => code.startsWith("DASHBOARD_PUBLIC_"))) {
+    assert.equal(message.module, "rainmaker-dashboard");
+  }
 });
 
 test("public entry omits the employee navigation sidebar", () => {

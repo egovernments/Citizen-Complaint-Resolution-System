@@ -1015,6 +1015,16 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "Este painel não foi ativado para este município.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "O painel público não está disponível",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_SERIES_CREATED",
     "message": "Criadas",
     "module": "rainmaker-dashboard"

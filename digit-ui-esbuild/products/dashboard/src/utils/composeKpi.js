@@ -42,3 +42,8 @@ export function evaluateCompose(compose, results) {
       return null;
   }
 }
+
+/** These calendar-aware rules are evaluated by pgr-services and must never use raw row totals. */
+export function requiresBackendComposition(compose) {
+  return compose?.type === 'dailyAvgFromWeekly' || compose?.type === 'hourlyAvgFromDaily';
+}

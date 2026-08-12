@@ -35,4 +35,11 @@ describe('public dashboard configuration', () => {
   it('ignores soft-deleted records', () => {
     expect(selectOwnedDashboardConfig([record('ke', 'default', false)], 'ke')).toBeNull();
   });
+
+  it('uses the same ordinal id ordering as pgr-services and digit-ui', () => {
+    const lowercase = record('ke', 'alpha');
+    const uppercase = record('ke', 'Zulu');
+
+    expect(selectOwnedDashboardConfig([lowercase, uppercase], 'ke')).toBe(uppercase);
+  });
 });

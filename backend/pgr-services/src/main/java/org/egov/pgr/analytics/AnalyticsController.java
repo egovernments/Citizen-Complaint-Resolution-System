@@ -35,6 +35,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AnalyticsController {
 
+    private static final Set<String> DASHBOARD_CONFIG_ROLES =
+            Set.of("MDMS_ADMIN", "SUPERUSER", "LOC_ADMIN");
+
     private final AnalyticsService service;
     private final KpiCatalogService kpiCatalogService;
     private final ObjectMapper mapper;
@@ -194,6 +197,12 @@ public class AnalyticsController {
             @RequestBody Map<String,Object> body) {
         try {
             String tenantId = extractTenantId(body);
+            RequestInfo requestInfo = extractRequestInfo(body);
+            String authorizationError = dashboardConfigAuthorizationError(requestInfo, tenantId);
+            if (authorizationError != null) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(
+                        new IllegalArgumentException("config_refresh_forbidden: " + authorizationError)));
+            }
             boolean enabled = kpiCatalogService.refreshPublicDashboardConfig(tenantId);
             return ResponseEntity.ok(Map.of("publicDashboardEnabled", enabled));
         } catch (IllegalArgumentException e) {
@@ -350,6 +359,27 @@ public class AnalyticsController {
                 .map(Role::getCode)
                 .collect(Collectors.toSet());
         return roles.isEmpty() ? Set.of(AnalyticsService.PUBLIC_ROLE) : roles;
+    }
+
+    /** Restrict the cache-busting write hook to configurator admins within their tenant tree. */
+    private String dashboardConfigAuthorizationError(RequestInfo requestInfo, String tenantId) {
+        User user = requestInfo == null ? null : requestInfo.getUserInfo();
+        if (user == null) return "authenticated configurator user is required";
+
+        Set<String> roles = extractRoles(requestInfo);
+        if (Collections.disjoint(roles, DASHBOARD_CONFIG_ROLES)) {
+            return "MDMS_ADMIN, SUPERUSER, or LOC_ADMIN role is required";
+        }
+
+        String callerTenant = user.getTenantId();
+        if (callerTenant == null || callerTenant.trim().isEmpty()) {
+            return "caller tenant is required";
+        }
+        callerTenant = callerTenant.trim();
+        if (!tenantId.equals(callerTenant) && !tenantId.startsWith(callerTenant + ".")) {
+            return "requested tenant is outside the caller tenant tree";
+        }
+        return null;
     }
 
     private Map<String,Object> error(Exception e){

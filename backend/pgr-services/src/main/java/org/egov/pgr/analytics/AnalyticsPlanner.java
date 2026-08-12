@@ -356,7 +356,7 @@ public class AnalyticsPlanner {
             if (g.boundaryColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
             conj.add(g.boundaryColumn + " LIKE ?");
-            params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+            params.add(escapeLikeLiteral(scope.boundaryPrefix) + "%");
         }
         // department scope: restrict to the union of the principal's HRMS assignment departments.
         // NULL department_code rows won't match an IN list → correctly excluded.
