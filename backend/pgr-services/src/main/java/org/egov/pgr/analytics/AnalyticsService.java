@@ -71,6 +71,8 @@ public class AnalyticsService {
     private final KpiQueryComposer queryComposer;
     private final AnalyticsMetrics metrics;
     private final PGRConfiguration config;
+    /** Injectable request clock; captured once so every query in a batch shares one calendar. */
+    private java.util.function.LongSupplier requestClock = System::currentTimeMillis;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
@@ -114,8 +116,18 @@ public class AnalyticsService {
         Set<String> callerRoles = extractRoles(requestInfo);
         boolean publicFloor = isPublicFloor(callerRoles);
 
+        // Data freshness and request time are deliberately separate. factsAsOfMs may be null for an
+        // empty materialized view, while named windows must use the current request instant rather
+        // than becoming stale when the refresh scheduler stalls. Capture request time exactly once
+        // so planner, composer, compose ops and response calendar still share one coherent clock.
+        Long factsAsOfMs = asOf();
+        long requestNowMs = requestClock.getAsLong();
+        BusinessCalendar calendar = BusinessCalendar.of(
+                kpiCatalogService.resolveTimeZone(tenantId), requestNowMs);
+
         Map<String,Object> out = new LinkedHashMap<>();
-        out.put("asOf", asOf());
+        out.put("asOf", factsAsOfMs);
+        out.put("calendar", calendarInfo(calendar));
         out.put("scope", scopeInfo(scope));
 
         if (body.has("queries") && body.get("queries").isObject()) {
@@ -137,11 +149,11 @@ public class AnalyticsService {
                         continue;
                     }
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
-                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name);
+                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name, calendar);
                     if (composed != null) { results.put(name, composed); continue; }
 
                     List<String> paramsIgnored = new ArrayList<>();
-                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
+                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored, calendar);
                     if (actualQueryNode == null) {
                         partial = true;
                         results.put(name, Map.of("error", "kpi_forbidden",
@@ -157,7 +169,7 @@ public class AnalyticsService {
                                 "message", "inline query projects officer-PII dimension(s); role not authorized"));
                         continue;
                     }
-                    Map<String,Object> result = runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode));
+                    Map<String,Object> result = runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode), calendar);
                     if (!paramsIgnored.isEmpty()) result.put("paramsIgnored", paramsIgnored);
                     results.put(name, result);
                 } catch (Exception ex) {
@@ -171,15 +183,15 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
-            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query");
+            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query", calendar);
             if (composed != null) { out.putAll(composed); return out; }
             List<String> paramsIgnored = new ArrayList<>();
-            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
+            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored, calendar);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
             if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
                 throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
-            out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode)));
+            out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode), calendar));
             if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
@@ -204,7 +216,7 @@ public class AnalyticsService {
      *                      {@code paramsIgnored:[...]}
      */
     private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles,
-                                   List<String> paramsIgnored) {
+                                   List<String> paramsIgnored, BusinessCalendar calendar) {
         // Inline path: the suppression marker is composer-internal, so a caller-supplied one is
         // stripped rather than trusted. Replaying a logged effective query (which legitimately
         // carries it) must still be planned and validated, not short-circuited into a clean empty
@@ -232,7 +244,7 @@ public class AnalyticsService {
             // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
             // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return queryComposer.mergeParams(storedQuery, effectiveParams, paramsIgnored);
+        return queryComposer.mergeParams(storedQuery, effectiveParams, paramsIgnored, calendar);
     }
 
     /**
@@ -315,7 +327,8 @@ public class AnalyticsService {
      */
     private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
                                                   String tenantId, Set<String> callerRoles,
-                                                  QueryTelemetry tel, String entryName) {
+                                                  QueryTelemetry tel, String entryName,
+                                                  BusinessCalendar calendar) {
         if (queryNode == null || !queryNode.has("kpiId")) return null;
         String kpiId = queryNode.get("kpiId").asText();
         Optional<KpiDefinition> defOpt = kpiCatalogService.getDef(kpiId, tenantId);
@@ -343,10 +356,10 @@ public class AnalyticsService {
         List<String> paramsIgnored = new ArrayList<>();   // deduped in resolveKpiRef/composer
         for (JsonNode srcId : compose.get("sourceKpiIds")) {
             JsonNode srcRef = synthRef(srcId.asText(), params);
-            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles, paramsIgnored);
+            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles, paramsIgnored, calendar);
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
-            Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText());
+            Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText(), calendar);
             // A suppressed source is UNANSWERABLE, not zero. firstRow() would flatten it to {} and
             // computeCompose would read a missing measure as 0 — netBacklogDaily would then publish a
             // confident number derived from a period the filter excludes. Propagate instead.
@@ -364,7 +377,7 @@ public class AnalyticsService {
             sourceRows.add(firstRow(r));
         }
 
-        Double value = computeCompose(type, compose, sourceRows);
+        Double value = computeCompose(type, compose, sourceRows, calendar);
         String valueKey = def.getViz().getValueKey() != null ? def.getViz().getValueKey() : "value";
         Map<String,Object> row = new LinkedHashMap<>();
         row.put(valueKey, value);
@@ -420,10 +433,11 @@ public class AnalyticsService {
     /**
      * Compute the compose op against the source rows. Faithful port of {@code composeKpi.js}:
      * the *_Avg ops divide the source total by the elapsed days/hours since the start of the
-     * current week/day (in the dashboard EAT zone), measured from {@link #asOf()} (server clock
-     * authority, mirroring the FE's use of {@code results[..].asOf}).
+     * current week/day in the request's resolved {@link BusinessCalendar} zone (mirroring the
+     * FE's use of {@code results[..].asOf}). Package-private for tests.
      */
-    private Double computeCompose(String type, JsonNode compose, List<Map<String,Object>> src) {
+    Double computeCompose(String type, JsonNode compose, List<Map<String,Object>> src,
+                          BusinessCalendar calendar) {
         switch (type) {
             case "openRateComplement": {
                 // pct is a 0..1 ratio (the planner's round(.. ,4)); complement -> percentage points.
@@ -439,13 +453,13 @@ public class AnalyticsService {
             case "dailyAvgFromWeekly": {
                 double total = orZero(num(src.get(0), "total"));
                 if (!compose.path("elapsedFromAsOf").asBoolean(false)) return null;
-                long elapsed = elapsedDaysSinceStartOfWeek(asOf());
+                long elapsed = elapsedDaysSinceStartOfWeek(calendar);
                 return elapsed > 0 ? total / elapsed : null;
             }
             case "hourlyAvgFromDaily": {
                 double total = orZero(num(src.get(0), "total"));
                 if (!compose.path("elapsedFromAsOf").asBoolean(false)) return null;
-                long elapsed = elapsedHoursSinceStartOfDay(asOf());
+                long elapsed = elapsedHoursSinceStartOfDay(calendar);
                 return elapsed > 0 ? total / elapsed : null;
             }
             default:
@@ -455,25 +469,26 @@ public class AnalyticsService {
 
     private double orZero(Double d) { return d == null ? 0.0 : d; }
 
-    /** EAT zone for week/day-start, matching {@link AnalyticsPlanner}/{@link KpiQueryComposer}. */
-    private static final java.time.ZoneId EAT = java.time.ZoneId.of("Africa/Nairobi");
-
-    /** FE elapsedDaysSince(startOfWeek(asOf), asOf): max(1, floor((asOf-weekStart)/day)). startOfWeek = Sunday (JS getDay). */
-    private long elapsedDaysSinceStartOfWeek(long asOfMs) {
-        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(asOfMs).atZone(EAT);
-        // FE startOfWeek: d.getDate() - d.getDay() => previous (or same) Sunday at local midnight.
+    /**
+     * FE elapsedDaysSince(startOfWeek(now), now): max(1, floor((now-weekStart)/day)). Preserves
+     * the existing Sunday week-start semantic (FE {@code getDay()}) for THIS operation only — wtd
+     * elsewhere in the planner/composer uses Monday; that is a separate, intentionally distinct
+     * product semantic and is left unchanged (#29 requirement: don't silently unify week starts).
+     * Measured from the request's captured wall clock and shared zone. Package-private for tests.
+     */
+    long elapsedDaysSinceStartOfWeek(BusinessCalendar calendar) {
+        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(calendar.nowMs).atZone(calendar.zoneId);
         java.time.ZonedDateTime weekStart = now.toLocalDate()
                 .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
-                .atStartOfDay(EAT);
-        long ms = asOfMs - weekStart.toInstant().toEpochMilli();
+                .atStartOfDay(calendar.zoneId);
+        long ms = calendar.nowMs - weekStart.toInstant().toEpochMilli();
         return Math.max(1, ms / 86_400_000L);
     }
 
-    /** FE elapsedHoursSince(startOfDay(asOf), asOf): max(1, floor((asOf-dayStart)/hour)). */
-    private long elapsedHoursSinceStartOfDay(long asOfMs) {
-        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(asOfMs).atZone(EAT);
-        long dayStart = now.toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
-        long ms = asOfMs - dayStart;
+    /** FE elapsedHoursSince(startOfDay(now), now): max(1, floor((now-dayStart)/hour)). Package-private for tests. */
+    long elapsedHoursSinceStartOfDay(BusinessCalendar calendar) {
+        long dayStart = calendar.businessDate.atStartOfDay(calendar.zoneId).toInstant().toEpochMilli();
+        long ms = calendar.nowMs - dayStart;
         return Math.max(1, ms / 3_600_000L);
     }
 
@@ -517,7 +532,7 @@ public class AnalyticsService {
      * @param kpiId     the resolved KPI id, or {@code "inline"} for inline-grammar queries
      */
     private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
-                                      String entryName, String kpiId){
+                                      String entryName, String kpiId, BusinessCalendar calendar){
         // #1462: a pinned-window def whose interval falls outside the selected date range is
         // unanswerable, not empty-by-filter. Return no rows WITHOUT running SQL, flagged so the tile
         // renders "no data for the applied filters" rather than a zero the user would read as fact.
@@ -531,7 +546,7 @@ public class AnalyticsService {
             r.put("tookMs", 0L);
             return r;
         }
-        AnalyticsPlanner.Planned p = planner.plan(q, scope);
+        AnalyticsPlanner.Planned p = planner.plan(q, scope, calendar);
         long t0 = System.currentTimeMillis();
         List<Map<String,Object>> rows = jdbc.queryForList(p.sql, p.params.toArray());
         long tookMs = System.currentTimeMillis() - t0;
@@ -640,6 +655,14 @@ public class AnalyticsService {
     private long configCacheTtlMs() {
         Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();
         return v != null ? v : PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS;
+    }
+
+    /** Additive top-level response metadata (#29): the resolved zone + businessDate the whole batch used. */
+    private Map<String,Object> calendarInfo(BusinessCalendar c){
+        Map<String,Object> m = new LinkedHashMap<>();
+        m.put("timeZone", c.zoneId.getId());
+        m.put("businessDate", c.businessDate.toString());
+        return m;
     }
 
     private Map<String,Object> scopeInfo(AnalyticsScope s){

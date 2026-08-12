@@ -8,20 +8,21 @@ import {
 } from "../config/dashboardFilters";
 import { normalizeComplaintTypeValue } from "../utils/complaintTypeTree";
 
-export function useDashboardFilters() {
-  const [filters, setFilters] = useState(loadDashboardFilters);
+/** `timeZone` is the already-resolved dashboard config zone (see AdminDashboard). */
+export function useDashboardFilters(timeZone) {
+  const [filters, setFilters] = useState(() => loadDashboardFilters(timeZone));
   const [optionLists, setOptionLists] = useState(null);
 
   useEffect(() => {
     if (!optionLists) return;
     setFilters((prev) => {
-      const next = reconcileFiltersWithOptions(prev, optionLists);
+      const next = reconcileFiltersWithOptions(prev, optionLists, timeZone);
       if (next !== prev) {
-        persistDashboardFilters(next, optionLists);
+        persistDashboardFilters(next, optionLists, timeZone);
       }
       return next;
     });
-  }, [optionLists]);
+  }, [optionLists, timeZone]);
 
   const applyFilterOptions = useCallback((filterOptions) => {
     setOptionLists(filterOptions);
@@ -50,18 +51,18 @@ export function useDashboardFilters() {
         if (groupId === "dateFrom" || groupId === "dateTo") {
           next.dateRangeActive = true;
         }
-        persistDashboardFilters(next, optionLists);
+        persistDashboardFilters(next, optionLists, timeZone);
         return next;
       });
     },
-    [optionLists]
+    [optionLists, timeZone]
   );
 
   const clearFilters = useCallback(() => {
-    const next = clearDashboardFilters();
-    persistDashboardFilters(next, optionLists);
+    const next = clearDashboardFilters(timeZone);
+    persistDashboardFilters(next, optionLists, timeZone);
     setFilters(next);
-  }, [optionLists]);
+  }, [optionLists, timeZone]);
 
   const resolveSubMetricId = useCallback(
     (metric) => resolveSubMetricIdForMetric(metric, filters),

@@ -12,8 +12,6 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
@@ -109,8 +107,6 @@ import java.util.regex.Pattern;
 @Slf4j
 public class KpiQueryComposer {
 
-    /** Dashboard canonical zone (UTC+3), matching {@link AnalyticsPlanner}'s EAT for window math. */
-    private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");
     private static final long MS_PER_DAY = 86_400_000L;
     /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
     private static final int MAX_SERIES_DAYS = 366;
@@ -144,13 +140,16 @@ public class KpiQueryComposer {
      * Produce the effective query by layering the request's {@code params} (dashboard globals) onto
      * the def's base {@code query}. Returns the base query unchanged when {@code params} is absent /
      * empty. Never mutates {@code baseQuery}.
+     *
+     * @param calendar the ONE request-scoped {@link BusinessCalendar} (resolved zone + shared asOf)
+     *                 every window/bounds/prior-period computation in this merge is judged against.
      */
-    public JsonNode mergeParams(JsonNode baseQuery, JsonNode params) {
-        return mergeParams(baseQuery, params, null);
+    public JsonNode mergeParams(JsonNode baseQuery, JsonNode params, BusinessCalendar calendar) {
+        return mergeParams(baseQuery, params, null, calendar);
     }
 
     /**
-     * As {@link #mergeParams(JsonNode, JsonNode)}, additionally reporting into
+     * As {@link #mergeParams(JsonNode, JsonNode, BusinessCalendar)}, additionally reporting into
      * {@code paramsIgnoredOut} (nullable) the name of any supplied param that could NOT be applied
      * to this def's grain and whose skip the FE must be told about. Today only
      * {@code complaintPath} reports (the daily grain has no {@code complaint_node_path}, so a
@@ -158,7 +157,8 @@ public class KpiQueryComposer {
      * silent no-ops ({@code ward} on ward-less grains, {@code hierLevel} on daily) keep their
      * behaviour unchanged.
      */
-    public JsonNode mergeParams(JsonNode baseQuery, JsonNode params, List<String> paramsIgnoredOut) {
+    public JsonNode mergeParams(JsonNode baseQuery, JsonNode params, List<String> paramsIgnoredOut,
+                                BusinessCalendar calendar) {
         if (baseQuery == null || !baseQuery.isObject()) return baseQuery;
         if (params == null || !params.isObject() || params.size() == 0) return baseQuery;
 
@@ -168,6 +168,7 @@ public class KpiQueryComposer {
         if (g == null) return baseQuery;   // planner will reject; don't mask the error here.
 
         ObjectNode next = (ObjectNode) baseQuery.deepCopy();
+        ZoneId zone = calendar.zoneId;
 
         boolean hasDateRange = params.hasNonNull("dateFrom") && params.hasNonNull("dateTo");
         boolean prior  = "prior".equals(textOrNull(params, "compare"));
@@ -177,8 +178,10 @@ public class KpiQueryComposer {
         // operate on these bounds; null means "no explicit range" (rolling window or whole-history).
         // C2: a present-but-unparseable dateFrom/dateTo must NOT silently fall back to the base/window
         // query (that returned the wrong, un-narrowed scalar). Surface a per-entry invalid_param instead.
+        // dateFrom/dateTo are LOCAL calendar dates in the resolved tenant zone (never UTC midnight) —
+        // the same zone the planner's window math and this def's grain use.
         Bounds bounds = hasDateRange
-                ? parseBounds(params.get("dateFrom").asText(), params.get("dateTo").asText())
+                ? parseBounds(params.get("dateFrom").asText(), params.get("dateTo").asText(), zone)
                 : null;
         if (hasDateRange && bounds == null)
             throw new IllegalArgumentException("invalid_param: dateFrom/dateTo is not a valid yyyy-MM-dd range");
@@ -198,7 +201,7 @@ public class KpiQueryComposer {
         // interval, so a range that does not COVER that interval makes the tile unanswerable rather
         // than merely unfiltered. That case is SUPPRESSED: no value, so the tile can render an empty
         // state instead of quietly reporting a number for a period the filter excludes.
-        PinnedWindow pinned = pinnedWindow(next);
+        PinnedWindow pinned = pinnedWindow(next, calendar);
         if (pinned != null) {
             if (series && !prior) {
                 // The sparkline is trend CONTEXT for the pinned value, not the value itself, and a
@@ -211,9 +214,9 @@ public class KpiQueryComposer {
             } else {
                 // Decided BEFORE the window is consumed below, and from the SAME clock reading the
                 // bounds are materialized with, so the suppression verdict and the executed SQL can
-                // never straddle EAT midnight and disagree.
+                // never straddle the resolved zone's midnight and disagree.
                 boolean suppress = bounds != null && !rangeCoversPinnedWindow(pinned, bounds);
-                if (prior) applyPinnedPrior(next, g, pinned);
+                if (prior) applyPinnedPrior(next, g, pinned, zone);
                 else       materializePinnedWindow(next, g, pinned);
                 if (suppress) next.put(SUPPRESSED, true);
                 // The window param cannot override a pin — say so, rather than silently ignoring it
@@ -235,7 +238,7 @@ public class KpiQueryComposer {
 
         if (prior) {
             // ---- prior-period: shift the (selected | default-week) range back one equal duration ----
-            applyPrior(next, g, bounds);
+            applyPrior(next, g, bounds, calendar);
         } else if (bounds != null && !liveOpenSnapshot) {
             // ---- explicit date range -> gte/lt filter on the grain's time column ----
             applyDateRange(next, g, bounds);
@@ -297,29 +300,37 @@ public class KpiQueryComposer {
 
     // ---- date range ----
 
-    /** Half-open epoch-ms range [fromMs, toMs), with the inclusive ISO start/end dates retained. */
+    /**
+     * Half-open epoch-ms range [fromMs, toMs), with the inclusive ISO start/end dates retained.
+     * {@code dateFrom}/{@code dateTo} are LOCAL calendar dates in the resolved tenant zone — bounds
+     * are start-of-day in THAT zone, not UTC midnight, so they line up with the planner's window
+     * math and the grain's zone-derived date columns.
+     */
     private static final class Bounds {
         final LocalDate fromDate;       // inclusive
         final LocalDate toExclusive;    // exclusive (day after dateTo)
-        final long fromMs;              // UTC-midnight epoch-ms of fromDate (FE isoDateToStartMs)
-        final long toMs;                // UTC-midnight epoch-ms of toExclusive (FE isoDateToEndExclusiveMs)
-        Bounds(LocalDate fromDate, LocalDate toExclusive) {
+        final long fromMs;              // zone-midnight epoch-ms of fromDate
+        final long toMs;                // zone-midnight epoch-ms of toExclusive
+        Bounds(LocalDate fromDate, LocalDate toExclusive, ZoneId zone) {
             this.fromDate = fromDate; this.toExclusive = toExclusive;
-            this.fromMs = fromDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-            this.toMs   = toExclusive.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+            this.fromMs = fromDate.atStartOfDay(zone).toInstant().toEpochMilli();
+            this.toMs   = toExclusive.atStartOfDay(zone).toInstant().toEpochMilli();
         }
         long durationMs() { return toMs - fromMs; }
         /** FE countDaysInDateRange: max(1, ceil(duration / day)). */
         int dayCount() { return (int) Math.max(1, (durationMs() + MS_PER_DAY - 1) / MS_PER_DAY); }
     }
 
-    /** Parse the FE {@code dateFrom}/{@code dateTo} (ISO, inclusive) into half-open {@link Bounds}; null if unparseable. */
-    private Bounds parseBounds(String dateFrom, String dateTo) {
+    /**
+     * Parse {@code dateFrom}/{@code dateTo} (ISO, inclusive) as LOCAL calendar dates in {@code zone}
+     * into half-open {@link Bounds}; null if unparseable.
+     */
+    private Bounds parseBounds(String dateFrom, String dateTo, ZoneId zone) {
         try {
             LocalDate from = LocalDate.parse(dateFrom);
             LocalDate toExclusive = LocalDate.parse(dateTo).plusDays(1);
             if (toExclusive.isBefore(from)) return null;   // nonsensical range
-            return new Bounds(from, toExclusive);
+            return new Bounds(from, toExclusive, zone);
         } catch (DateTimeParseException ex) {
             log.debug("ignoring date range with unparseable bounds dateFrom='{}' dateTo='{}'", dateFrom, dateTo);
             return null;
@@ -360,20 +371,20 @@ public class KpiQueryComposer {
     // ---- pinned window (#1462) ----
 
     /**
-     * A pinned window RESOLVED against one clock reading: its start, "now", and the EAT calendar days
-     * either maps to. Every downstream decision — suppression, the materialized SQL bounds, the prior
-     * period — reads this single snapshot, so a request cannot be judged against one calendar day and
-     * executed against the next.
+     * A pinned window RESOLVED against one clock reading: its start, "now", and the resolved-zone
+     * calendar days either maps to. Every downstream decision — suppression, the materialized SQL
+     * bounds, the prior period — reads this single snapshot, so a request cannot be judged against
+     * one calendar day and executed against the next.
      */
     private static final class PinnedWindow {
         final long nowMs, startMs;
         final LocalDate startDate, today;
-        PinnedWindow(long nowMs, long startMs) {
+        PinnedWindow(long nowMs, long startMs, ZoneId zone) {
             this.nowMs = nowMs; this.startMs = startMs;
-            this.startDate = Instant.ofEpochMilli(startMs).atZone(EAT).toLocalDate();
-            this.today = Instant.ofEpochMilli(nowMs).atZone(EAT).toLocalDate();
+            this.startDate = Instant.ofEpochMilli(startMs).atZone(zone).toLocalDate();
+            this.today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate();
         }
-        /** Span in whole EAT days, inclusive of both ends — 1 for {@code dtd}. */
+        /** Span in whole zone-local days, inclusive of both ends — 1 for {@code dtd}. */
         long spanDays() { return Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(startDate, today) + 1); }
     }
 
@@ -389,17 +400,17 @@ public class KpiQueryComposer {
      * against — pinning them is ignored and they take the ordinary path rather than silently
      * degrading into a query whose prior equals its current.
      */
-    private PinnedWindow pinnedWindow(JsonNode query) {
+    private PinnedWindow pinnedWindow(JsonNode query, BusinessCalendar calendar) {
         JsonNode window = query.get("window");
         if (window == null || !window.isObject()
                 || !window.hasNonNull("name") || !window.path("pinned").asBoolean(false)) return null;
-        long now = System.currentTimeMillis();
-        Long startMs = AnalyticsPlanner.windowStartMs(window.get("name").asText(), now);
+        long now = calendar.nowMs;
+        Long startMs = AnalyticsPlanner.windowStartMs(window.get("name").asText(), now, calendar.zoneId);
         if (startMs == null) {
             log.debug("ignoring pinned:true on boundless window '{}' — nothing to pin", window.get("name").asText());
             return null;
         }
-        return new PinnedWindow(now, startMs);
+        return new PinnedWindow(now, startMs, calendar.zoneId);
     }
 
     /**
@@ -411,7 +422,7 @@ public class KpiQueryComposer {
      * Monday–Friday under a two-day filter — which is the same wrong-period-number class #1462 exists
      * to remove. For the {@code dtd} case both rules coincide: the range must contain today.
      *
-     * <p>Comparison is on EAT calendar days, the zone the planner buckets in, so a range ending
+     * <p>Comparison is on resolved-zone calendar days, the same zone the planner buckets in, so a range ending
      * "today" covers today regardless of clock time.
      */
     private boolean rangeCoversPinnedWindow(PinnedWindow pinned, Bounds bounds) {
@@ -437,14 +448,14 @@ public class KpiQueryComposer {
      * span, NOT the FE's prior-equal-duration-of-the-selected-range (which would compare "today"
      * against a month). For {@code dtd} this is yesterday — matching the tile's "vs yesterday" label.
      */
-    private void applyPinnedPrior(ObjectNode query, Grain g, PinnedWindow pinned) {
+    private void applyPinnedPrior(ObjectNode query, Grain g, PinnedWindow pinned, ZoneId zone) {
         String col = dateFilterColumn(query, g);
         if (col == null || !g.filterable.contains(col)) {
             log.debug("grain '{}' has no filterable time column for a pinned compare:prior; skipping", g.name);
             return;
         }
         LocalDate priorStart = pinned.startDate.minusDays(pinned.spanDays());
-        bindPinnedBounds(query, col, priorStart, priorStart.atStartOfDay(EAT).toInstant().toEpochMilli(),
+        bindPinnedBounds(query, col, priorStart, priorStart.atStartOfDay(zone).toInstant().toEpochMilli(),
                 pinned.startDate, pinned.startMs);
         query.remove("window");   // the explicit prior bounds now govern the time axis.
     }
@@ -485,10 +496,10 @@ public class KpiQueryComposer {
      * {@code priorPeriodEndDateIso} (the single day before the range start, ~1360) for the daily grain.
      *
      * <p>With no range: mirrors the FE no-{@code __dateRange} fallback (~1973) — the prior calendar
-     * week ({@code priorPeriodWeek}, last-Monday .. this-Monday), computed in EAT to match the
-     * planner's window zone.
+     * week ({@code priorPeriodWeek}, last-Monday .. this-Monday), computed in the resolved tenant
+     * zone (from the request's shared {@code asOf}) to match the planner's window zone.
      */
-    private void applyPrior(ObjectNode query, Grain g, Bounds bounds) {
+    private void applyPrior(ObjectNode query, Grain g, Bounds bounds, BusinessCalendar calendar) {
         String col = dateFilterColumn(query, g);
         if (col == null || !g.filterable.contains(col)) {
             log.debug("grain '{}' has no filterable time column for compare:prior; skipping", g.name);
@@ -500,11 +511,11 @@ public class KpiQueryComposer {
             if ("snapshot_date".equals(col)) {
                 // No FE analogue for a daily prior-week scalar; the day before this-Monday is the
                 // closest faithful "preceding snapshot". Bind the single prior day.
-                LocalDate thisMonday = eatThisMonday();
+                LocalDate thisMonday = thisMonday(calendar);
                 ObjectNode bound = mergeableFilterObject(query, col);
                 bound.put("eq", thisMonday.minusDays(1).toString());
             } else {
-                long[] wk = priorWeekMs();
+                long[] wk = priorWeekMs(calendar);
                 ObjectNode bound = mergeableFilterObject(query, col);
                 bound.put("gte", wk[0]);
                 bound.put("lt", wk[1]);
@@ -525,17 +536,22 @@ public class KpiQueryComposer {
         query.remove("window");
     }
 
-    /** This calendar week's Monday 00:00 in EAT, mirroring the FE local-time Monday. */
-    private LocalDate eatThisMonday() {
-        return ZonedDateTime.now(EAT).toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    /**
+     * This calendar week's Monday 00:00 in the resolved tenant zone, mirroring the FE local-time
+     * Monday. Measured from the request's single captured wall-clock instant, so it
+     * agrees with every other window decision in the same batch.
+     */
+    private LocalDate thisMonday(BusinessCalendar calendar) {
+        return Instant.ofEpochMilli(calendar.nowMs).atZone(calendar.zoneId).toLocalDate()
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 
-    /** Epoch-ms [lastMonday, thisMonday) in EAT — the FE priorWeekCreatedAtFilter equivalent. */
-    private long[] priorWeekMs() {
-        LocalDate thisMonday = eatThisMonday();
+    /** Epoch-ms [lastMonday, thisMonday) in the resolved zone — the FE priorWeekCreatedAtFilter equivalent. */
+    private long[] priorWeekMs(BusinessCalendar calendar) {
+        LocalDate thisMonday = thisMonday(calendar);
         LocalDate lastMonday = thisMonday.minusDays(7);
-        long lo = lastMonday.atStartOfDay(EAT).toInstant().toEpochMilli();
-        long hi = thisMonday.atStartOfDay(EAT).toInstant().toEpochMilli();
+        long lo = lastMonday.atStartOfDay(calendar.zoneId).toInstant().toEpochMilli();
+        long hi = thisMonday.atStartOfDay(calendar.zoneId).toInstant().toEpochMilli();
         return new long[]{ lo, hi };
     }
 

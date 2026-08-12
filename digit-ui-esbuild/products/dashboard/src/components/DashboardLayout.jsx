@@ -16,6 +16,7 @@ const DashboardLayout = ({
   filters,
   onFilterChange,
   onClearFilters,
+  timeZone,
   filterOptions,
   filterOptionsLoading,
   kpiCardData,
@@ -77,6 +78,7 @@ const DashboardLayout = ({
             filters={filters}
             onFilterChange={onFilterChange}
             onClearFilters={onClearFilters}
+            timeZone={timeZone}
             filterOptions={filterOptions}
             filterOptionsLoading={filterOptionsLoading}
           />
