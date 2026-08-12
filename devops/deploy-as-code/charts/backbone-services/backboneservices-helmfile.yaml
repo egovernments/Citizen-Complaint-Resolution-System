@@ -220,6 +220,67 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+    # Security config (#1648). Two of these three keys were reaching nothing at
+    # all, and it was not cosmetic: the TLS cipher suite and the protocol floor
+    # were silently absent while env.yaml stated them plainly.
+    #
+    # The precise shape of the defect, since it is not the obvious one. This
+    # vendored chart carries a LOCAL modification to templates/_helpers.tpl
+    # (lines 6-9, absent from upstream 4.10.0): inside "ingress-nginx.name" it
+    # merges .Values[.Chart.Name] over the root context with mustMergeOverwrite,
+    # which mutates in place. So env.yaml's `ingress-nginx.controller.*` IS
+    # read -- the subtree is hoisted to the root at template time. What is NOT
+    # read is everything the hoist cannot help:
+    #   - ssl-ciphers / ssl-protocols / ssl-ecdh-curve are SIBLINGS of
+    #     `controller:` in env.yaml, so they hoist to root `.Values.ssl-ciphers`,
+    #     not to `.Values.controller.config.*` where the chart reads them
+    #   - `replicas` is simply the wrong key name; the chart reads replicaCount
+    # Those two are what this block genuinely repairs. addHeaders is re-pathed
+    # here as well and is belt-and-braces -- the hoist already delivers it --
+    # but stating it explicitly beats depending on a hand-patched helper.
+    #
+    # Re-pathed HERE rather than by moving the block to a top-level
+    # `controller:` key in env.yaml, because kafka-kraft reads .Values.controller
+    # too (13 templates, its own controller block) and the whole-values
+    # passthrough on the line above is shared -- a root-level move would leak
+    # these into the broker.
+    #
+    # An inline values block rather than `set:`: Access-Control-Allow-Headers
+    # contains COMMAS, which helm's --set parses as separate assignments.
+    #
+    # NB: do not write a Go-template action in these comments. helmfile renders
+    # the file as a template BEFORE parsing it as YAML, so `#` does not protect
+    # anything -- an interpolation here expands into the middle of the comment
+    # and corrupts the document.
+    - controller:
+        replicaCount: {{ index .Values "ingress-nginx" "controller" "replicas" | default 1 }}
+        # Roll the controller whenever the headers change.
+        #
+        # The `add-headers` ConfigMap is read by nginx when the controller
+        # builds its configuration, and the running process does not pick up
+        # later edits to it. Verified on a cluster: the ConfigMap was updated at
+        # 11:39:14 and the controller was still serving the OLD
+        # Access-Control-Allow-Origin at 11:41 -- it had even logged a RELOAD,
+        # for the main config, while the custom headers stayed stale. A restart
+        # applied them immediately.
+        #
+        # Without this annotation a `helmfile apply` that changes only these
+        # headers reports success and changes nothing that a browser can see --
+        # the same silent no-op this whole block exists to fix, one level up.
+        # The hash makes the pod template differ, so helm rolls it for us.
+        podAnnotations:
+          checksum/add-headers: {{ index .Values "ingress-nginx" "controller" "addHeaders" | toYaml | sha256sum }}
+        # Rendered into its own ConfigMap and referenced by the controller's
+        # `add-headers` key -- this is what actually applies X-Frame-Options,
+        # nosniff and the CORS policy to every response.
+        addHeaders: {{ index .Values "ingress-nginx" "controller" "addHeaders" | toYaml | nindent 10 }}
+        # nginx ConfigMap entries. ssl-protocols is the one that matters most:
+        # without it the controller keeps its build default, which on some
+        # builds still permits TLSv1.0/1.1.
+        config:
+          ssl-ciphers: {{ index .Values "ingress-nginx" "ssl-ciphers" | quote }}
+          ssl-protocols: {{ index .Values "ingress-nginx" "ssl-protocols" | quote }}
+          ssl-ecdh-curve: {{ index .Values "ingress-nginx" "ssl-ecdh-curve" | quote }}
     # Gateway metrics (#1648). Every citizen request crosses this controller and
     # it contributes nothing to Prometheus, so "are we returning errors, and on
     # which route?" can only be answered by reading logs.
