@@ -868,7 +868,12 @@ services:
       - "18443:8443"
       - "18001:8001"
       - "18002:8002"
-      - "18100:8100"
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -908,9 +913,14 @@ services:
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
     ports:
-      - "18889:8080"
+      - "127.0.0.1:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Slack alerting (#1609). Unset = alerting off: gatus expands the
+      # missing variable to an empty string and drops the slack provider
+      # with a warning instead of failing to start. Set it in .env to
+      # switch alerting on.
+      GATUS_SLACK_WEBHOOK_URL: ${GATUS_SLACK_WEBHOOK_URL:-}
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
@@ -922,6 +932,21 @@ services:
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "false"
       GATUS_SMS_PORT: "8080"
+      # No grafana/prometheus/loki/tempo on this path, so the observability
+      # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
+      # enabled-var as true, which would make them red forever here.
+      GATUS_OBSERVABILITY: "false"
+      # No public hostname on this path — the TLS check (#1622) is off.
+      # Declared explicitly because Gatus treats an UNSET `enabled` var as
+      # true, which would leave a permanently-red check for a URL that does
+      # not resolve.
+      GATUS_TLS: "false"
+      # Non-empty on purpose. Gatus validates `url` on EVERY endpoint before it
+      # ever consults `enabled:`, so "" is not an inert placeholder -- it aborts
+      # startup with "you must specify an url for each endpoint" and takes the
+      # entire dashboard down with it. This value is only ever parsed by the
+      # config loader; the check is disabled, so it is never dialled.
+      GATUS_PUBLIC_URL: "https://localhost/"
     networks:
       - egov-network
 
