@@ -66,7 +66,7 @@ These have no off-switch — every v2.12-beta deployment gets them, whether or n
 
 - **OpenTelemetry agent** — every Java service now mounts `./otel/opentelemetry-javaagent.jar` and sets `JAVA_TOOL_OPTIONS=-javaagent:...`. Run `local-setup/otel/download-agent.sh` (pinned version 2.11.0) **before** `docker compose up`, or every Java container fails to start on a missing mount source.
 - **Full observability stack** — otel-collector, Tempo (tracing), Promtail+Loki (logs), Grafana+Prometheus (dashboards/metrics) start unconditionally. Budget the extra RAM/CPU/disk, and be aware of the new loopback ports (Loki 13100, Prometheus 19090, Tempo 13200, OTel-collector 14317/14318/13133, OpenBao 18200).
-- **Client-side dashboard render-lag instrumentation** — ships two new **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs`, so the browser can report metrics directly. Set `dashboard_metrics_enabled: false` (ansible) / `DASHBOARD_METRICS_ENABLED=false` (globalConfigs) to turn it off if you don't want the extra public routes. See `docs/observability/dashboard-metrics.md` and `docs/observability/dashboard-metrics-server.md` for what it measures and how to read it.
+- **Client-side dashboard render-lag instrumentation** — ships two new **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs`, so the browser can report metrics directly. Set `dashboard_metrics_enabled: false` (ansible) / `DASHBOARD_METRICS_ENABLED=false` (globalConfigs) to turn it off if you don't want the extra public routes. See `docs/observability/dashboard-metrics.md` for what it measures and how to read it (it now covers both the client and server sides).
 - **OpenBao** — see the backup note in Section 2. Initializes and auto-unseals on every deploy run.
 - **audit-service, db-migrations, hrms-prereq-gate, user-seed** — new always-on compose services with no profile gate.
 - **egov-enc-service dependency** — pgr-services now calls this service for PII encryption on every request path that touches it; it must be deployed and reachable or those calls fail.
@@ -131,7 +131,7 @@ None of these are required to upgrade — enable only what you need:
 - [ ] Mobile-number entry accepts your tenant's real number format on both citizen and employee create-complaint forms.
 - [ ] Dashboard loads without errors and KPI tiles show non-null values (confirms the new materialized views populated correctly). If tiles are unexpectedly empty for a given employee, check their HRMS department is set (Section 1.3 of the companion changelog — the new scoping fails closed).
 - [ ] If notifications are enabled: `drive-test-complaint.py` (local-setup/scripts) completes and a real SMS/WhatsApp message is received using your **own** approved Content templates, not the seeded reference SIDs.
-- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service; if dashboard render-lag metrics are enabled, see `docs/observability/dashboard-metrics.md` / `dashboard-metrics-server.md` for how to read them.
+- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service; if dashboard render-lag metrics are enabled, see `docs/observability/dashboard-metrics.md` for how to read them.
 - [ ] The backed-up OpenBao `init.json` matches what is currently on disk at `/opt/digit/.openbao/init.json`.
 
 ---

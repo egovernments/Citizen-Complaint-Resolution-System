@@ -13,12 +13,12 @@ positions:
 clients:
   - url: http://loki:3100/loki/api/v1/push
 
-limits_config:
-  # Drop log entries older than 7 days (matches Loki's reject threshold) so
-  # the first sweep over historical /var/lib/docker/containers/*-json.log
-  # files doesn't hammer Loki with 400s.
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
+# Note: `reject_old_samples` / `reject_old_samples_max_age` belong in
+# Loki's loki-config.yaml, NOT here — promtail's limits_config schema
+# doesn't accept them and rejects the whole config with a fatal:
+#   "field reject_old_samples not found in type limit.Config"
+# Loki already enforces the 7-day rejection on its side, so there's
+# nothing to mirror in promtail.
 
 scrape_configs:
   - job_name: docker

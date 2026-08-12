@@ -125,22 +125,19 @@ EXEMPT = {
     "telemetry": "no port: alpine sidecar, file-based healthcheck only",
     "novu-worker": "no port: kafka/queue worker, exposes no HTTP or TCP listener",
     "promtail": "no port: log-shipper agent, tails files and pushes to loki",
-    # Observability plumbing that genuinely cannot be probed. The five components
-    # that CAN be (grafana/prometheus/loki/tempo/otel-collector) are no longer
-    # exempt: #1613 added them behind a GATUS_OBSERVABILITY toggle, which is the
-    # decision this comment used to defer. They are defined in
-    # docker-compose.egov-digit.yaml (plus grafana/tempo/otel-collector in
-    # registry.yml) and absent from docker-compose.yml and the k3s tier, so the
-    # toggle is what keeps them from being red where they do not exist.
-    "node-exporter": "observability plumbing: host-metrics exporter (#1335); no check because prometheus scrapes it directly -- a dead exporter surfaces as a stale `node` target, not a missing endpoint. Absent from k3s tier and docker-compose.yml",
-    # Added here rather than in #1629, which introduces the service, so that the
-    # guard survives either merge order. #1629 edits this dict in the same place
-    # this PR rewrites, so the two conflict whichever lands second, and a
-    # conflict resolved toward this side would silently drop the entry and fail
-    # CI on an UNMONITORED postgres-exporter. An EXEMPT key for a service that
-    # does not exist yet is inert -- the dict is only ever consulted via
-    # `name in EXEMPT` for services actually found in a compose file -- so this
-    # is safe to land first and needs no follow-up once #1629 arrives.
+    # Observability plumbing. Deliberately out of scope: Gatus is the DIGIT
+    # serving-stack dashboard, and these failing costs visibility, not service.
+    # Monitoring the monitoring is a separate decision -- if it is ever wanted,
+    # they need a GATUS_OBSERVABILITY toggle, since none of them exist in the
+    # k3s tier or in docker-compose.yml: they are defined in
+    # docker-compose.egov-digit.yaml, and grafana/tempo/otel-collector also in
+    # docker-compose.registry.yml.
+    "grafana": "observability plumbing: dashboards UI, not a serving dependency",
+    "prometheus": "observability plumbing: metrics store, not a serving dependency",
+    "loki": "observability plumbing: log store, not a serving dependency",
+    "tempo": "observability plumbing: trace store, not a serving dependency",
+    "otel-collector": "observability plumbing: telemetry pipeline, not a serving dependency",
+    "node-exporter": "observability plumbing: host-metrics exporter (#1335), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml",
     "postgres-exporter": "observability plumbing: database-metrics exporter (#1615), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml. The DATABASE it reads is already covered by the PostgreSQL check; this container going down costs metrics, not service.",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does

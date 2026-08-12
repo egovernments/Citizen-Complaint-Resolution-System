@@ -19,6 +19,22 @@ services:
       - "127.0.0.1:14317:4317"
       - "127.0.0.1:14318:4318"
       - "127.0.0.1:13133:13133"
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    #
+    # Written as deploy.resources.limits.memory rather than the legacy
+    # top-level mem_limit key, because that is already the convention here:
+    # egov-otp, user-otp and egov-notification-sms use it in this file, and
+    # 28 of docker-compose.yml's services do. Compose V2 applies it outside
+    # Swarm exactly as it applies mem_limit — egov-otp's cap was raised
+    # 256M→512M precisely because it was taking effect — so this is one
+    # convention rather than a second one for the same job.
+    deploy:
+      resources:
+        limits:
+          memory: 320M   # internal memory_limiter is 200 MiB; this is the hard backstop above it
     networks:
       - egov-network
 
@@ -37,6 +53,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 384M   # 24h retention, small blocks
     networks:
       - egov-network
 
@@ -105,6 +127,12 @@ services:
         condition: service_healthy
       prometheus:
         condition: service_started
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 256M   # query proxy + dashboard rendering
     networks:
       - egov-network
 
@@ -128,6 +156,12 @@ services:
       - prometheus_data:/prometheus
     ports:
       - "127.0.0.1:19090:9090"
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # 15d TSDB; scrape targets grow as exporters are added
     networks:
       - egov-network
 
@@ -1728,6 +1762,12 @@ services:
       # whole dashboard down (nginx /status/ then 502s). Only ever parsed here --
       # with GATUS_TLS false the endpoint is never dialled.
       GATUS_PUBLIC_URL: ${GATUS_PUBLIC_URL:-https://localhost/}
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 64M   # matches the 64Mi already set on the k3s Deployment
     networks:
       - egov-network
 
@@ -1747,6 +1787,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # largest real-world grower: chunks plus query working set
     networks:
       - egov-network
 
@@ -1768,6 +1814,12 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 128M   # log shipper: tails files, small buffers
     networks:
       - egov-network
 
