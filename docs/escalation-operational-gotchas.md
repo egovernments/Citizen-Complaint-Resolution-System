@@ -189,7 +189,8 @@ topic; `egov-persister` is the consumer that writes to Postgres. The 202 says
 DOMAIN=<deployment-domain>
 TENANT=ke
 SCHEMA=CRS.WorkflowStateMapping           # whatever you just wrote
-EXPECT_KEY=mappings                        # a key you expect in the response
+EXPECTED_DATA='{"singletonKey":"default","mappings":{"PENDINGFORASSIGNMENT":"new","PENDINGATLME":"forwarded"}}'
+MATCHED=false
 
 for i in 1 2 3 4 5; do
   RESP=$(curl -sf -X POST \
@@ -199,12 +200,21 @@ for i in 1 2 3 4 5; do
          \"MdmsCriteria\":{\"tenantId\":\"$TENANT\",
             \"moduleDetails\":[{\"moduleName\":\"CRS\",
               \"masterDetails\":[{\"name\":\"WorkflowStateMapping\"}]}]}}")
-  if echo "$RESP" | jq -e ".mdms[0].data.$EXPECT_KEY" > /dev/null 2>&1; then
-    echo "Persisted after ${i} polls"; break
+  if printf '%s' "$RESP" \
+       | jq -e --argjson expected "$EXPECTED_DATA" \
+           'any(.mdms[]?; .data == $expected)' > /dev/null; then
+    echo "Expected value persisted after ${i} polls"
+    MATCHED=true
+    break
   fi
   echo "Poll $i: not yet, sleeping 2s..."
   sleep 2
 done
+
+if [ "$MATCHED" != true ]; then
+  echo "Expected value was not persisted after 5 polls" >&2
+  exit 1
+fi
 ```
 
 **If the loop exhausts** (5 polls × 2s = 10s and still not landed),
@@ -226,22 +236,26 @@ ssh <deployment-host> docker restart digit-egov-persister-1
 
 ---
 
-## 5. DIGIT workflow `ASSIGN` action does not persist assignees
+## 5. Historical: workflow `ASSIGN` payload lost assignees
 
 **Symptom.** `/escalation/_trigger` returns
 `skipBreakdown: { NO_ASSIGNEES: 55 }` even though every complaint shows an
 ASSIGN history entry in the UI and PGR `_search` returns
 `workflow.action == "ASSIGN"` against `status == "PENDINGATLME"`.
 
-**Root cause.** Upstream DIGIT `egov-workflow-v2` bug: the ASSIGN action
-transitions the state but does **not** insert the corresponding row into
-`eg_wf_assignee_v2`. The escalation scheduler reads from that table (via the
-workflow `_processInstanceSearch` API) and correctly reports
-`NO_ASSIGNEES` — the data is missing at the source.
+**Historical root cause.** `egov-workflow-v2` bound only the misspelled
+`assignes` field. Clients that sent the correctly spelled `assignees` field
+were silently decoded without an assignee, so the transition succeeded but no
+`eg_wf_assignee_v2` row was inserted. The escalation scheduler reads from that
+table (via the workflow `_processInstanceSearch` API) and correctly reported
+`NO_ASSIGNEES` because the data was missing at the source.
 
-**Fix.** None on the CRS side. This is an upstream bug to be raised against
-the `egov-workflow-v2` repo separately. Until that lands, escalation can't
-fire for assignees that were set through the ASSIGN action.
+**Current prerequisite.** The workflow fix accepts `assignees` as a JSON alias
+and is tracked in
+[eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674).
+Bomet verified it with `egov-workflow-v2:maven-jdk21-43f925c2`. Before enabling
+escalation on another tenant, deploy an image containing that fix, perform a
+fresh ASSIGN, and verify the join row with the query below.
 
 **Diagnostic.** Confirm you're hitting the upstream bug (and not, e.g., a
 permissions issue) by counting the assignee rows for a specific complaint
@@ -261,27 +275,30 @@ ssh <deployment-host> docker exec docker-postgres psql -U egov -d egov -c \
     ORDER BY pi.lastmodifiedtime DESC;"
 ```
 
-If `assignee_rows` is `0` for the ASSIGNed transitions, you're hitting the
-upstream bug. The new `history=true` fallback in
-[`EscalationService.getCurrentAssignees`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java#L206)
+If `assignee_rows` is `0` for a fresh ASSIGN on the fixed image, stop rollout
+and inspect the request payload and deployed image. The `history=true` fallback in
+[`EscalationService.getCurrentAssignees`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java)
 helps when the *current* `ProcessInstance` is empty but a historical one
 carries assignees — but it cannot rescue rows that were never written.
 
 ---
 
-## 6. `STATE_MAPPING_MISSING` for every complaint
+## 6. `STATE_MAPPING_MISSING` after SLA resolution reaches v0
 
 **Symptom.** `/escalation/_trigger` returns
 `skipBreakdown: { STATE_MAPPING_MISSING: 55 }`, scheduler logs read
-`Escalation skip — ... reason=STATE_MAPPING_MISSING`, every complaint falls
-back to v0 SLA resolution.
+`Escalation skip — ... reason=STATE_MAPPING_MISSING`, and the affected
+complaints report `slaSource: v0.EscalationConfig`.
 
-**Root cause.** `CRS.WorkflowStateMapping` (the 4th MDMS schema, a singleton
+**Root cause.** `CRS.WorkflowStateMapping` (one of six MDMS schemas, a singleton
 operator-defined dictionary that maps PGR workflow state names to the
 CRS-level keys `new|triage|forwarded|investigation|awaiting|resolved`) has
 not been seeded for this tenant. The scheduler's `mapWorkflowStateToKey`
-does a dictionary lookup, gets `null`, and trips `STATE_MAPPING_MISSING`
-before ever reaching the SLA layer.
+does a dictionary lookup and gets `null`. Per-level
+`CRS.CategorySLA.slaHoursByLevel` or
+`CRS.EscalationPolicy.defaultSlaHoursByLevel` values can still answer because
+they do not need a state key. If neither does, the lookup reaches v0 and
+reports `STATE_MAPPING_MISSING`.
 
 **Diagnostic.** Confirm the schema record is missing (not just malformed):
 
@@ -310,9 +327,9 @@ escalation PR description). Once `WorkflowStateMapping` is present, the
 scheduler picks it up on the next tick — no restart required.
 
 **Operator rule of thumb:** seed `CRS.WorkflowStateMapping` **before**
-`CRS.StateSLA` and `CRS.CategorySLA`. Otherwise every complaint trips
-`STATE_MAPPING_MISSING` on the very first scan and the SLA matrices look
-like they're being ignored.
+`CRS.StateSLA` and state-indexed `CRS.CategorySLA` values. Otherwise those
+state sources look ignored; only configured per-level sources can answer
+before the v0 fallback.
 
 ---
 

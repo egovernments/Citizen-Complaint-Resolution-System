@@ -48,16 +48,19 @@ Throughout this runbook, replace:
 
 ## Architecture in one paragraph
 
-The CRS escalation feature is a **three-layer SLA resolution** read by the
-`pgr-services` scheduler — `CRS.CategorySLA` (per-tuple matrix) →
-`CRS.StateSLA` (per-state singleton) → `RAINMAKER-PGR.EscalationConfig`
-(legacy v0 fallback) — fronted by a fourth supporting schema
-`CRS.WorkflowStateMapping` that translates the tenant's workflow state
-names (`PENDINGFORASSIGNMENT`, `IN_TRIAGE`, ...) into the six canonical
-SLA-column keys (`new | triage | forwarded | investigation | awaiting |
-resolved`). The scheduler is tenant-agnostic; everything tenant-specific
-lives in MDMS. See [`escalation-feature-design.md`](./escalation-feature-design.md)
-for the full architecture, schemas, scheduler pseudocode and OTEL contract.
+The scheduler resolves an SLA from five sources, in order:
+`CRS.CategorySLA.slaHoursByLevel` →
+`CRS.CategorySLA.slaHoursByState` →
+`CRS.EscalationPolicy.defaultSlaHoursByLevel` →
+`CRS.StateSLA.stateDefaults` → legacy
+`RAINMAKER-PGR.EscalationConfig`. Six `CRS` schemas support the feature:
+`CategorySLA`, `StateSLA`, `SLAAuditLog`, `WorkflowStateMapping`,
+`EscalationPolicy`, and `RoleSupervisors`. `WorkflowStateMapping`
+translates tenant workflow states into the six canonical state keys;
+`RoleSupervisors` is optional unless role-level escalation is enabled.
+The scheduler is tenant-agnostic; everything tenant-specific lives in
+MDMS. See [`escalation-feature-design.md`](./escalation-feature-design.md)
+for the full precedence, schemas, scheduler pseudocode, and OTEL contract.
 
 ---
 
@@ -65,10 +68,11 @@ for the full architecture, schemas, scheduler pseudocode and OTEL contract.
 
 > **Why first?** The scheduler reads the mapping on every scan to translate
 > the complaint's `applicationStatus` into the SLA-column key the other
-> layers are keyed on. Without it, *every* candidate complaint trips
-> `STATE_MAPPING_MISSING` and the scheduler falls all the way through to
-> the legacy v0 EscalationConfig. You will see hours of "why nothing
-> escalates" debugging that is entirely avoidable.
+> state-indexed layers are keyed on. Without it, the scheduler skips the
+> CategorySLA and StateSLA state cells. Per-level CategorySLA or
+> EscalationPolicy values may still answer first; otherwise the lookup
+> reaches legacy v0 and reports `STATE_MAPPING_MISSING`. Seeding the
+> mapping first avoids a misleading partially configured rollout.
 
 ### PGR-flavoured deployment (Bomet, Nairobi, any DIGIT-PGR-derived tenant)
 
@@ -240,6 +244,7 @@ curl -X POST \
         "category": "Solid Waste",
         "subcategoryL1": "Missed Pickup",
         "isActive": true,
+        "slaHoursByLevel": [120, 72, 24],
         "slaHoursByState": {
           "new":           4,
           "triage":        4,
@@ -260,16 +265,35 @@ The `(path, category, subcategoryL1)` triple is enforced unique by the
 with an empty `mdms` array (see
 [Phantom 200](#phantom-200-on-duplicate-create)).
 
+The optional `slaHoursByLevel` array is indexed by the complaint's current
+escalation level and takes precedence over `slaHoursByState`. Omit it (or
+use `null` holes) when that level should fall through to the state cell.
+
+### Optional policy and role-level configuration
+
+Create the singleton `CRS.EscalationPolicy` when you need tenant-wide
+per-level defaults (`defaultSlaHoursByLevel`), policy-controlled maximum
+depth, pre-breach warnings, comment rules, or role-level escalation.
+`defaultSlaHoursByLevel` is the third SLA source in the precedence chain.
+
+If `roleEscalation.enabled` is `true`, also create active
+`CRS.RoleSupervisors` rows for explicit `(role, department)` pins where
+needed. A row contains `role`, `department` (`ALL` for a tenant-wide pin),
+`assigneeUuid`, and `isActive`. Role pins are not SLA sources and are not
+needed when role-level escalation is disabled. Configure both surfaces in
+**Manage → ESCALATION → Escalation Settings**, or use the schema shapes in
+the [canonical design](./escalation-feature-design.md#schemas).
+
 ---
 
 ## Step 4: Verification checklist
 
 Run all four. A green box on each means the tenant is fully wired.
 
-### 4a. Confirm all four schemas registered
+### 4a. Confirm all six schemas registered
 
 ```bash
-for code in CRS.CategorySLA CRS.StateSLA CRS.WorkflowStateMapping CRS.SLAAuditLog; do
+for code in CRS.CategorySLA CRS.StateSLA CRS.WorkflowStateMapping CRS.SLAAuditLog CRS.EscalationPolicy CRS.RoleSupervisors; do
   echo -n "$code: "
   curl -s -X POST \
     -H "Authorization: Bearer $TOKEN" \
@@ -280,7 +304,7 @@ for code in CRS.CategorySLA CRS.StateSLA CRS.WorkflowStateMapping CRS.SLAAuditLo
 done
 ```
 
-Expect four `OK` lines. Any `MISSING` means the default-data-handler
+Expect six `OK` lines. Any `MISSING` means the default-data-handler
 hasn't run for that schema — re-run `register_schemas.py` from
 `configurator/src/resources/crs/sla-matrix/_seed/` or post the schema
 manually.
@@ -293,13 +317,18 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -d '{
     "RequestInfo": { "authToken": "'"$TOKEN"'" },
-    "tenantId": "<tenant>"
+    "tenantId": "<tenant>",
+    "dryRun": true
   }' \
   "https://<deployment>/pgr-services/escalation/_trigger" | python3 -m json.tool
 ```
 
 What to look for:
 
+- `dryRun` should be `true`, `escalated` should be `0`, and
+  `wouldEscalate` is the number of complaints that a mutating scan would
+  escalate. Keep verification scans dry; Step 5 is the explicit mutating
+  end-to-end exercise.
 - `skipBreakdown.STATE_MAPPING_MISSING` should be **0**. Any nonzero
   count means Step 1 didn't cover one of the workflow states currently
   in the open-complaint set — search the response `details[]` for the
@@ -309,19 +338,21 @@ What to look for:
   Strategy A/B (see design doc) isn't wired for some complaints. Those
   complaints still escalate via `CRS.StateSLA`, but you should plan to
   fix the mapping. Not a release blocker.
-- `escalated`, `scanned`, `skipped` should sum to the open-complaint
-  candidate set. If `escalated == 0` and `skipBreakdown` is dominated
+- `wouldEscalate` and `skipped` should account for the open-complaint
+  candidate set. If `wouldEscalate == 0` and `skipBreakdown` is dominated
   by `NO_ASSIGNEES`, see
-  [Assignee-persistence upstream bug](#assignee-persistence-upstream-bug).
+  [historical assignee-persistence failure](#historical-assignee-persistence-failure-verify-the-workflow-image).
 
 ### 4c. Trace-back drawer (configurator UI)
 
 Open `https://<deployment>/configurator/manage/crs-sla-matrix`, click
 **Trace escalation…** top-right, paste a known service request id of an
 open complaint, and inspect the **Resolved SLA** pane. The `source`
-field should read `CRS.CategorySLA` or `CRS.StateSLA`. If you see
-`v0.EscalationConfig`, you fell through all three CRS layers — most
-commonly because Step 1 hasn't picked up the current workflow state.
+field should be one of `CRS.CategorySLA.level`, `CRS.CategorySLA`,
+`CRS.EscalationPolicy.level`, `CRS.StateSLA`, or the legacy fallback
+`v0.EscalationConfig`. A v0 result is successful fallback during staged
+adoption; if the tenant is meant to be fully migrated, inspect the other
+four sources and the Step 1 state mapping.
 
 ### 4d. (Optional but recommended) OTEL trace assertion
 
@@ -333,7 +364,7 @@ curl -sD - -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Correlation-ID: verify-$(date +%s)" \
-  -d '{ "RequestInfo": {"authToken": "'"$TOKEN"'"}, "tenantId": "<tenant>" }' \
+  -d '{ "RequestInfo": {"authToken": "'"$TOKEN"'"}, "tenantId": "<tenant>", "dryRun": true }' \
   "https://<deployment>/pgr-services/escalation/_trigger" > /tmp/resp.txt
 
 # Grab the traceparent header and search Tempo (port varies by deployment)
@@ -342,9 +373,10 @@ curl -s "http://<deployment>:13200/api/traces/$TRACE_ID" \
   | python3 -c "import json,sys;t=json.load(sys.stdin);[print(a) for s in t['batches'] for sp in s['scopeSpans'] for span in sp['spans'] for a in span.get('attributes',[]) if 'escalation' in a['key']]"
 ```
 
-Expect to see `escalation.slaSource = CRS.CategorySLA` (or `CRS.StateSLA`)
-on at least one span. `v0.EscalationConfig` everywhere means the same
-"didn't pick up the new MDMS" symptom as 4c — recheck Step 1.
+Expect one of `CRS.CategorySLA.level`, `CRS.CategorySLA`,
+`CRS.EscalationPolicy.level`, `CRS.StateSLA`, or
+`v0.EscalationConfig`. If a fully migrated tenant reports only v0, inspect
+the configured level sources and recheck the Step 1 state mapping.
 
 ---
 
@@ -522,23 +554,27 @@ nothing lands. The persister has died silently in production before
 (see [`docs/escalation-feature-bomet.md`](./escalation-feature-bomet.md)
 for the Bomet incident). Restart it and re-issue the writes.
 
-### Assignee-persistence upstream bug
+### Historical assignee-persistence failure: verify the workflow image
 
 **Symptom**: `/escalation/_trigger` returns
 `skipBreakdown.NO_ASSIGNEES` dominating, even though employee UI clearly
 shows the complaints are ASSIGNed.
 
-**Cause**: upstream `egov-workflow-v2` ASSIGN action does not persist
-the assignee to `eg_wf_assignee_v2`. This is an upstream DIGIT bug that
-needs a fix in the workflow-v2 repo; CRS cannot work around it
-generically. The new `history=true` fallback in
+**Historical cause**: the workflow API accepted only the misspelled
+`assignes` field, so clients sending `assignees` were silently decoded
+without an assignee and no `eg_wf_assignee_v2` row was written. The
+`history=true` fallback in
 [`EscalationService.getCurrentAssignees`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationService.java)
 covers the *terminal/sub-terminal-state* case but not the
 ASSIGN-never-persisted case.
 
-**Workaround**: backfill the assignee table directly while the upstream
-fix is in flight, or wait for the upstream patch. Track on the
-egov-workflow-v2 repo and cross-link from PR #770.
+**Current prerequisite**: deploy an `egov-workflow-v2` image containing
+the `@JsonAlias("assignees")` fix from
+[eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674).
+Bomet verified `egov-workflow-v2:maven-jdk21-43f925c2`. On every new
+deployment, perform a fresh ASSIGN and confirm it creates an
+`eg_wf_assignee_v2` row before enabling escalation; do not use a manual
+assignee-table backfill as the rollout path.
 
 ### `mapWorkflowStateToKey` returns null for a state the tenant actually uses
 
@@ -578,11 +614,11 @@ explains the symptom.
    docker logs digit-pgr-services 2>&1 | grep -i "Escalation skip" | tail -30
    ```
 
-3. **MDMS read-back, all four schemas** — confirm what the scheduler is
-   actually reading:
+3. **MDMS read-back, all scheduler configuration masters** — confirm what
+   the scheduler is actually reading:
 
    ```bash
-   for code in CRS.WorkflowStateMapping CRS.StateSLA CRS.CategorySLA; do
+   for code in CRS.WorkflowStateMapping CRS.StateSLA CRS.CategorySLA CRS.EscalationPolicy CRS.RoleSupervisors; do
      echo "=== $code ==="
      curl -s -X POST \
        -H "Authorization: Bearer $TOKEN" \
@@ -648,19 +684,33 @@ curl -s -X POST \
 
 ### Full-rollback: revert to `v0.EscalationConfig`
 
-Worst case — turn the new pipeline off entirely until the bad change
-is sorted. Deactivate the singleton mapping:
+Worst case — turn the new pipeline off entirely until the bad change is
+sorted. State mapping alone is not enough: CategorySLA and policy
+per-level values resolve without it, and role policy can still alter the
+target. Record the rows returned by this transaction so you can reactivate
+only rows that this rollback changed:
 
 ```bash
-# Set CRS.WorkflowStateMapping.isActive=false via DB (the v2 _update doesn't expose this cleanly today)
+# Disable the state mapping, every CategorySLA row with a level source,
+# and the newer tenant/role policy records.
 docker exec docker-postgres psql -U egov -d egov -c \
-  "UPDATE eg_mdms_data SET data = jsonb_set(data, '{isActive}', 'false'::jsonb) WHERE schema_code = 'CRS.WorkflowStateMapping' AND tenant_id = '<tenant>';"
+  "BEGIN;
+   UPDATE eg_mdms_data
+      SET isactive = false
+    WHERE tenantid = '<tenant>'
+      AND isactive
+      AND (
+        schemacode IN ('CRS.WorkflowStateMapping', 'CRS.EscalationPolicy', 'CRS.RoleSupervisors')
+        OR (schemacode = 'CRS.CategorySLA' AND data ? 'slaHoursByLevel')
+      )
+   RETURNING schemacode, uniqueidentifier;
+   COMMIT;"
 ```
 
-With the mapping inactive, `mapWorkflowStateToKey` returns null on
-every state → trips `STATE_MAPPING_MISSING` → falls through to v0.
-Escalation continues from `RAINMAKER-PGR.EscalationConfig` exactly as
-before PR #770. Reactivate (`SET isActive=true`) once the fix is in.
+With those sources inactive, state-indexed sources cannot resolve and the
+two newer per-level sources are absent, so SLA resolution reaches
+`RAINMAKER-PGR.EscalationConfig`. Reactivate (`SET isactive = true`) only
+the returned `(schemacode, uniqueidentifier)` rows once the fix is in.
 
 ---
 
@@ -699,7 +749,7 @@ deployment.
   [`configurator/src/resources/crs/sla-matrix/_seed/fix-xref-schema.sql`](../configurator/src/resources/crs/sla-matrix/_seed/fix-xref-schema.sql)
 - **Seed CSV** (generic starter template for CategorySLA bulk import):
   [`configurator/src/resources/crs/sla-matrix/_seed/example.csv`](../configurator/src/resources/crs/sla-matrix/_seed/example.csv)
-- **Register-schemas helper** (idempotent script to push the four
+- **Register-schemas helper** (idempotent script to push the six
   `CRS.*` schemas to a fresh tenant):
   [`configurator/src/resources/crs/sla-matrix/_seed/register_schemas.py`](../configurator/src/resources/crs/sla-matrix/_seed/register_schemas.py)
 - **CSV import helper** (drives bulk-load against a deployment):

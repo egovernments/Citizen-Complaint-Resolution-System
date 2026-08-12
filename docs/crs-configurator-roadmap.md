@@ -21,9 +21,11 @@ auto-routing, the entity directory (Ministries / CSREPs / PECs / Municipalities 
 Agents), the role-permission matrix, notification templates, the four-level territorial
 hierarchy, dashboard configuration, and citizen submission form customisation. It does
 **NOT** cover escalation: the SLA matrix, per-state SLA defaults, the scheduler/OTEL work,
-the mandatory `ESCALATE` comment validator, or the trace-back tool. All of those ship in
-PR #770 on this same branch (`feat/escalation-otel-configurator-designer`) under
-`/manage/crs-sla-matrix` and `/manage/crs-sla-trace`. This document is the home for
+the mandatory `ESCALATE` comment validator, or the trace-back tool. PR #770 is the
+historical implementation PR; use
+[`escalation-feature-design.md`](./escalation-feature-design.md) for the current
+implementation status and code locations, including `/manage/crs-sla-matrix` and
+`/manage/crs-sla-trace`. This document is the home for
 everything **else** the BRD calls out so the team has somewhere stable to plan from.
 
 ## Relationship to PR #770 (Escalation)

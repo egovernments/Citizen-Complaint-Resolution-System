@@ -92,22 +92,32 @@ Forked from `<workflow-designer-host>/designer/`. Vanilla React 18 SPA, esbuild 
 > diagnosis trail — the symptom/verification steps are still the right way to
 > confirm the table is being populated.
 
-The escalation chain does not actually fire on Bomet today because of an **upstream DIGIT workflow-service bug**: the ASSIGN action does NOT persist assignees to `eg_wf_assignee_v2`. Verified:
+At the time of this field log, the escalation chain did not fire on Bomet
+because the workflow API silently dropped correctly spelled `assignees`
+payloads, leaving `eg_wf_assignee_v2` empty. The incident was verified with:
 
 - ASSIGN action succeeded (state → `PENDINGATLME`)
 - Both `processInstance.assignes` AND `ServiceWrapper.workflow.assignes` come back as `null` / empty
 - `SELECT * FROM eg_wf_assignee_v2 WHERE processinstanceid IN (...)` returns 0 rows
 
-The new `history=true` fallback in `getCurrentAssignees()` is harmless but cannot rescue this — the data is missing from the DB itself. **Tracked as a follow-up**: an upstream egov-workflow-v2 bug where the ASSIGN action does not persist assignees to `eg_wf_assignee_v2` — to be raised against the workflow-v2 repo separately.
+The `history=true` fallback in `getCurrentAssignees()` could not rescue the
+incident because the data was missing from the DB itself. The follow-up was
+resolved by accepting `assignees` as an alias for the workflow contract's
+historical `assignes` spelling; current deployments must use an image that
+contains that fix.
 
-When that upstream bug is fixed, the chain fires automatically for any complaint with assignees + breached SLA. `/escalation/_trigger` will then return `escalated >= 1` with full per-complaint details, and OTEL spans get the per-complaint custom attributes (`escalation.fromAssignee`, `toAssignee`, `fromLevel`, `toLevel`, …) that are already wired in the code.
+With the fixed workflow image, the chain fires automatically for any complaint
+with assignees and a breached SLA. `/escalation/_trigger` returns
+`escalated >= 1` on a mutating scan, with full per-complaint details, and OTEL
+spans carry the wired per-complaint attributes (`escalation.fromAssignee`,
+`toAssignee`, `fromLevel`, `toLevel`, …).
 
 ## Repro / operator runbook
 
 ```bash
 # Trigger a synchronous scan (replace TOKEN with an ADMIN/ke OAuth token)
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"RequestInfo":{...},"tenantId":"ke","serviceRequestIds":["PG-PGR-..."]}' \
+  -d '{"RequestInfo":{"authToken":"'"$TOKEN"'"},"tenantId":"ke","serviceRequestIds":["PG-PGR-..."],"dryRun":true}' \
   https://<deployment-domain>/pgr-services/escalation/_trigger
 
 # Check structured skip logs
@@ -137,5 +147,8 @@ open https://<deployment-domain>/designer/
 
 ## Follow-ups
 
-- **Upstream DIGIT workflow-service ASSIGN bug**: `eg_wf_assignee_v2` stays empty after ASSIGN; the escalation chain can't fire until this is fixed upstream.
+- **Historical — resolved**: workflow ASSIGN payload compatibility
+  ([eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674)).
+  Keep the fixed workflow image as a deployment prerequisite and retain the
+  `eg_wf_assignee_v2` regression check.
 - **Push + PR** the equivalent changes to the dev configurator + workflow-designer + integration-tests environments mirrored in this monorepo, then validate the new docs match on Nairobi too.

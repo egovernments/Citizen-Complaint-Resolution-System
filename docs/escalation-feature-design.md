@@ -60,25 +60,25 @@ sit unattended; **operators** who need to debug *why* a specific complaint did o
 did not escalate (and tune SLAs in response); and **platform engineers** who need
 a generic, tenant-agnostic way to wire SLA targets without code changes.
 
-Architecturally the feature is a **three-layer SLA resolution** read by
+Architecturally the feature is a **five-source SLA resolution** read by
 [`EscalationScheduler#resolveSlaHours`](../backend/pgr-services/src/main/java/org/egov/pgr/service/EscalationScheduler.java),
-supported by a fourth MDMS schema (`CRS.WorkflowStateMapping`) that
-translates a tenant's workflow state names into the canonical SLA-column
-keys used by the three resolution layers:
+with six supporting `CRS` schemas:
 
-1. **`CRS.CategorySLA`** — per-tuple (path, category, subcategoryL1) SLA rows
-   with one cell per workflow state.
-2. **`CRS.StateSLA`** — per-state defaults (singleton record per tenant) used
-   when the matching CategorySLA cell is null.
-3. **`RAINMAKER-PGR.EscalationConfig`** (v0) — the pre-existing per-level SLA
-   table, kept as a safety net so a tenant that has not yet migrated does not
-   lose escalation overnight.
+1. **`CRS.CategorySLA.slaHoursByLevel`** — per-tuple, per-level values.
+2. **`CRS.CategorySLA.slaHoursByState`** — per-tuple workflow-state values.
+3. **`CRS.EscalationPolicy.defaultSlaHoursByLevel`** — tenant-wide per-level
+   defaults.
+4. **`CRS.StateSLA.stateDefaults`** — tenant-wide per-state defaults.
+5. **`RAINMAKER-PGR.EscalationConfig`** (v0) — the legacy safety net.
 
-The fourth schema, **`CRS.WorkflowStateMapping`**, is not itself an SLA layer
+The six schemas are `CRS.CategorySLA`, `CRS.StateSLA`, `CRS.SLAAuditLog`,
+`CRS.WorkflowStateMapping`, `CRS.EscalationPolicy`, and
+`CRS.RoleSupervisors`. `CRS.WorkflowStateMapping` is not itself an SLA source
 — it is the operator-defined dictionary that maps each workflow state name
 (e.g. `PENDINGFORASSIGNMENT`) onto one of the six canonical SLA-column keys
 (`new | triage | forwarded | investigation | awaiting | resolved`). Without
-it, the scheduler cannot resolve which cell of the SLA layers above to read.
+it, the scheduler cannot resolve which state-indexed cells above to read;
+per-level sources remain usable.
 
 The selected layer is surfaced on each OTEL span as `escalation.slaSource` and,
 since `feat/escalation-prd-alignment`, as a `slaSource` field on each
@@ -289,7 +289,7 @@ indexed by. The table is in precedence order:
 | Layer | MDMS code | Key shape | Cell shape | When used | `escalation.slaSource` attribute |
 |---|---|---|---|---|---|
 | Category per-level | `CRS.CategorySLA` (`slaHoursByLevel`) | `(path, category, subcategoryL1)` | `slaHoursByLevel[currentLevel]` — `number` (hours) \| `null` | tuple maps to a row AND the level cell is a number | `CRS.CategorySLA.level` |
-| Category per-state | `CRS.CategorySLA` (`slaHoursByState`) | `(path, category, subcategoryL1)` | `slaHoursByState.{new|triage|forwarded|investigation|awaiting|resolved}` — `number` (hours) \| `[min,max]` (range) \| `null` | tuple maps to a row AND the state cell is non-null | `CRS.CategorySLA` |
+| Category per-state | `CRS.CategorySLA` (`slaHoursByState`) | `(path, category, subcategoryL1)` | `slaHoursByState` at `new`, `triage`, `forwarded`, `investigation`, `awaiting`, or `resolved` — `number` (hours) \| `[min,max]` (range) \| `null` | tuple maps to a row AND the state cell is non-null | `CRS.CategorySLA` |
 | Policy per-level default | `CRS.EscalationPolicy` (singleton `default`) | `singletonKey="default"` | `defaultSlaHoursByLevel[currentLevel]` → `number` (hours) | no usable CategorySLA cell | `CRS.EscalationPolicy.level` |
 | Per-state default | `CRS.StateSLA` (singleton `default`) | `singletonKey="default"` | `stateDefaults.{...} → number` (hours) | category row missing or cell null, no policy level default | `CRS.StateSLA` |
 | Legacy | `RAINMAKER-PGR.EscalationConfig` | singleton | `defaultSlaByLevel[currentLevel]` + per-`serviceCode` overrides | all of the above empty (backward-compat for not-yet-migrated deployments) | `v0.EscalationConfig` |
@@ -300,11 +300,13 @@ The literal source-tag strings are defined in
 
 > **Operator callout — seed order matters.** Seed
 > `CRS.WorkflowStateMapping` **before** `CRS.StateSLA` and
-> `CRS.CategorySLA`. Without the mapping, the scheduler cannot
-> translate `applicationStatus` into the SLA-column key, emits
-> `STATE_MAPPING_MISSING` for every candidate complaint, and falls all
-> the way through to the v0 fallback regardless of how well populated
-> the CRS layers are.
+> state-indexed `CRS.CategorySLA` values. Without the mapping, the
+> scheduler cannot translate `applicationStatus` into an SLA-column key,
+> so it skips those state-indexed values and reports
+> `STATE_MAPPING_MISSING` if the lookup reaches v0. A usable
+> `CRS.CategorySLA.slaHoursByLevel` or
+> `CRS.EscalationPolicy.defaultSlaHoursByLevel` value can still answer
+> before v0 because level-indexed sources do not require a state mapping.
 
 ### Schemas
 
@@ -364,7 +366,7 @@ Annotations:
   picker is roadmap **G1**.
 - `slaHoursByState` — intentionally `additionalProperties: true` and **not**
   validated by JSON Schema. Cell-shape validation (`number | [min,max] | null`,
-  bounds `0 < n < 8760`) is enforced application-side. The MDMS v2 validator
+  bounds `0 < n ≤ 8760`) is enforced application-side. The MDMS v2 validator
   throws `ClassCastException` on `oneOf` variants mixing number/array, so we
   cannot encode it declaratively.
 - `slaHoursByLevel` (added on `feat/escalation-prd-alignment`, optional, not
@@ -377,7 +379,7 @@ Annotations:
   `additionalProperties: true`). A **zero or negative** entry is treated
   like `null` — it falls through silently to the next source. This is
   typo-safety (a stray `0` must not create an instantly-breached SLA) and
-  matches the `0 < n < 8760` bounds already enforced on the state cells.
+  matches the `0 < n ≤ 8760` bounds already enforced on the state cells.
   Contrast: `CRS.StateSLA` defaults still honour an explicit `0` —
   pre-existing behaviour, unchanged. Tenants whose `CRS.CategorySLA` schema was
   registered before this property existed must apply the SQL patch
@@ -754,7 +756,7 @@ falls through **silently** to the next step; only category- and
 state-mapping misses are counted and surfaced. Ignoring zero/negative
 cells is typo-safety: a fat-fingered `0` must not produce an
 instantly-breached SLA, and the rule mirrors the application-side
-bounds already enforced on CategorySLA state cells (`0 < n < 8760`).
+bounds already enforced on CategorySLA state cells (`0 < n ≤ 8760`).
 One pre-existing asymmetry to be aware of: `CRS.StateSLA`
 `stateDefaults` still honour an explicit `0` (the schema allows
 `minimum: 0` and the lookup only checks for null) — that behaviour
@@ -1554,7 +1556,7 @@ distinguishes "explicitly set" from "falls through to default":
 | `null` | `—` muted, faint "default: 48h" hint on hover | Falls through to `CRS.StateSLA[state]` | Click → number input (creating a value here promotes the cell to "explicitly set") |
 | (no row at all) | n/a | Falls through to `CRS.StateSLA[state]`; if that is also empty, falls through to v0 hardcoded fallback | Add the row via the toolbar's **Add row** |
 | `slaHoursByLevel` badge (Levels column) | compact `L0 120 · L1 — · L2 24` badge (holes as `—`); muted `—` with a "+ levels" hover affordance when unset/all-null | Levels with a number set here take priority over this row's state cells at that escalation level; blank (null) levels use the state cell — the badge's tooltip says exactly that | Click → Dialog with the shared level editor (holes allowed); each non-null entry validated `0 < n ≤ 8760` on Save changes, and the pending/revert flow deep-clones the array like any other cell edit |
-| CSV encoding | n/a | empty=`null`, bare number=scalar (`120`), `"min-max"` single dash no spaces=range (`24-120`). Inclusive bounds `0 < n < 8760` for scalars and `0 < lo < hi < 8760` for ranges. | See [`csvParser#parseCell`](../configurator/src/resources/crs/sla-matrix/csvParser.ts) |
+| CSV encoding | n/a | empty=`null`, bare number=scalar (`120`), `"min-max"` single dash no spaces=range (`24-120`). Bounds are `0 < n ≤ 8760` for scalars and `0 < lo < hi ≤ 8760` for ranges. | See [`csvParser#parseCell`](../configurator/src/resources/crs/sla-matrix/csvParser.ts) |
 
 The "muted dash + default hint" treatment is deliberate: operators
 should be able to scan the grid and instantly see which cells are
@@ -1590,7 +1592,7 @@ Validation runs in two layers: inline (per-cell, pre-save) and
 batch (on save).
 
 - **Per-cell** — invalid values highlight red with a tooltip
-  explaining the rule: `SLA must be > 0 and < 8760` (≤ one year);
+  explaining the rule: `SLA must be > 0 and ≤ 8760` (≤ one year);
   if a range is used, `min < max`; the `(path, category, subcategoryL1)`
   triple must be unique among active rows.
 - **Pre-save** — the Save changes button shows a `(N pending)` badge
@@ -2469,14 +2471,14 @@ validator is opaque and tightly coupled to a live Postgres. What we do have:
     — UI-drive of the configurator escalation editor.
   - [`tests/integration-tests/tests/utils/tempo.ts`](../tests/integration-tests/tests/utils/tempo.ts)
     — helper to query the per-tenant Tempo and assert OTEL span attributes.
-- **Caveat.** The assignee-persistence upstream bug in `egov-workflow-v2`
-  (ASSIGN action does not persist assignees to `eg_wf_assignee_v2`, to be
-  raised against the workflow-v2 repo separately) blocks the full chain
-  end-to-end on Bomet. The integration tests correctly **catch this
-  regression** rather than masking it — they fail at the ASSIGN step, not
-  the escalation step, with a clear diagnosis (`eg_wf_assignee_v2` row
-  count == 0). When upstream fixes the bug, the tests pass without
-  modification.
+- **Workflow-image prerequisite.** The historical ASSIGN-persistence failure
+  is fixed by the `@JsonAlias("assignees")` workflow change tracked in
+  [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674).
+  Bomet verified the fix with `egov-workflow-v2:maven-jdk21-43f925c2`.
+  Before enabling escalation on another deployment, verify its workflow image
+  contains that fix and that a fresh ASSIGN creates an
+  `eg_wf_assignee_v2` row; the integration tests retain this as a regression
+  assertion.
 
 ### Layer 5 — Live trace-back (operator runbook)
 
@@ -2484,12 +2486,14 @@ The fastest way to prove the scheduler is alive and reads CategorySLA on a
 specific deployment. Works against any deployment.
 
 ```bash
-# 1. Get an ADMIN token (replace <deployment> with bomet/nairobi etc.)
+# 1. Set the deployment host and root tenant, then get an ADMIN token.
+DEPLOYMENT=<deployment>
+TENANT=<tenant>
 TOKEN=$(curl -sf -X POST \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -H "Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-  -d "grant_type=password&username=ADMIN&password=<ADMIN_PASSWORD_URLENCODED>&tenantId=ke&scope=read&userType=EMPLOYEE&userInfo=true" \
-  "https://<deployment>/user/oauth/token" \
+  -d "grant_type=password&username=ADMIN&password=<ADMIN_PASSWORD_URLENCODED>&tenantId=$TENANT&scope=read&userType=EMPLOYEE&userInfo=true" \
+  "https://$DEPLOYMENT/user/oauth/token" \
   | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
 
 # 2. Synchronous scheduler scan
@@ -2503,12 +2507,12 @@ curl -X POST \
     "RequestInfo": {
       "apiId": "Rainmaker",
       "authToken": "'"$TOKEN"'",
-      "userInfo": { "roles": [{ "code": "SUPERUSER", "tenantId": "ke" }] }
+      "userInfo": { "roles": [{ "code": "SUPERUSER", "tenantId": "'"$TENANT"'" }] }
     },
-    "tenantId": "ke",
+    "tenantId": "'"$TENANT"'",
     "dryRun": true
   }' \
-  "https://<deployment>/pgr-services/escalation/_trigger"
+  "https://$DEPLOYMENT/pgr-services/escalation/_trigger"
 
 # Expected response shape:
 # {
@@ -2551,7 +2555,7 @@ For the Bomet operator runbook (Tempo curl + log greps), see
 | # | Item | Tracking |
 |---|---|---|
 | 1 | ~~No configurator UI yet for editing the `CRS.WorkflowStateMapping` singleton~~ — **Closed (this branch)**: the [Escalation Settings page](#escalation-settings-page) (Card 3, "Complaint-status mapping") edits the singleton, with unique-name validation and a non-destructive standard-set merge; curl / python remain alternatives for scripted seeding | Closed by `feat/escalation-prd-alignment` ([PR #815](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/815)) — no longer routed via G1 |
-| 2 | Upstream DIGIT workflow ASSIGN-assignee persistence bug — blocks end-to-end escalation testing on Bomet | upstream `egov-workflow-v2`, to be raised against the workflow-v2 repo separately |
+| 2 | ~~Workflow ASSIGN payload compatibility blocked end-to-end escalation testing on Bomet~~ | **Resolved** by the `@JsonAlias("assignees")` workflow fix tracked in [eGovStack/core-services#1674](https://github.com/eGovStack/core-services/issues/1674); fixed image remains a rollout prerequisite |
 | 3 | Category Taxonomy editor (constrained picker) — replaces the free-text category/subcategoryL1 inputs in the SLA Matrix | Roadmap phase **G1** ([`docs/crs-configurator-roadmap.md`](./crs-configurator-roadmap.md)) |
 | 4 | Path Routing Rules — `(category, subcategoryL1) → path` editable rules | Roadmap phase **G2** |
 | 5 | Submission Form Customization — required for **Strategy A** wiring of new tenants | Roadmap phase **G8** |
