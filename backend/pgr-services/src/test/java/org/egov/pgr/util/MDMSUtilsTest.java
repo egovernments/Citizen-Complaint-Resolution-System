@@ -18,8 +18,11 @@ import org.mockito.quality.Strictness;
 import java.util.List;
 import java.util.Map;
 
+import org.egov.pgr.policy.AccessControlUnavailableException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -88,14 +91,16 @@ class MDMSUtilsTest {
     }
 
     @Test
-    void returnsEmptyWhenTheOutboundCallFails() {
+    void throwsWhenTheOutboundCallFails() {
+        // Distinct from a confirmed-empty result (returnsEmptyWhenNoActionMatchesTheUrl below): the
+        // call itself failing must be distinguishable from "no policy configured", since
+        // AccessPolicyRegistry treats the latter as backward-compatible allow but must still fail
+        // closed on an actual accesscontrol outage.
         RequestInfo requestInfo = requestInfo("EMPLOYEE");
         when(serviceRequestRepository.fetchResult(any(), any())).thenThrow(new RuntimeException("connection refused"));
 
-        List<Map<String, Object>> result = mdmsUtils.fetchAccessControlActions(
-                requestInfo, "pg.city", "/pgr-services/v2/request/_search");
-
-        assertTrue(result.isEmpty());
+        assertThrows(AccessControlUnavailableException.class, () -> mdmsUtils.fetchAccessControlActions(
+                requestInfo, "pg.city", "/pgr-services/v2/request/_search"));
     }
 
     @Test

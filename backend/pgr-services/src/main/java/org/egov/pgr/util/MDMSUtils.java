@@ -482,8 +482,14 @@ public class MDMSUtils {
      * Fetches the ACCESSCONTROL-ACTIONS-TEST.actions-test MDMS entry (id/url/method/resource/
      * condition) for a given action url — the Tier-2 PDP's source of truth for JsonLogic
      * conditions (see org.egov.pgr.policy.AccessPolicyRegistry). Returns an empty list (never
-     * null) on any MDMS failure or when no matching action is found, so callers fail closed
-     * rather than throwing.
+     * null) when the call SUCCEEDED but no matching action is visible for the caller's roles —
+     * callers (AccessPolicyRegistry) treat that as "policy not defined" and allow, for backward
+     * compatibility with tenants that never configured this master.
+     *
+     * Throws {@link org.egov.pgr.policy.AccessControlUnavailableException} when the accesscontrol
+     * call itself fails (network error, non-2xx, malformed payload) — that is NOT the same as a
+     * confirmed absence of policy, and must NOT be treated as "not defined, allow": doing so would
+     * fail a whole tenant open during an accesscontrol outage. Callers fail closed on this.
      *
      * Deliberately omits the request's "enabled" field: egov-accesscontrol's
      * /access/v1/actions/mdms/_get only constrains results by enabled status when that field is
@@ -491,22 +497,28 @@ public class MDMSUtils {
      * its enabled flag, filtered only by roleCodes/tenantId/actionMaster.
      */
     public List<Map<String, Object>> fetchAccessControlActions(RequestInfo requestInfo, String tenantId, String actionUrl) {
+        List<String> roleCodes = extractRoleCodes(requestInfo);
+        if (roleCodes.isEmpty()) {
+            log.error("No roles on RequestInfo — cannot resolve access-control action for url='{}' tenant='{}'",
+                    actionUrl, tenantId);
+            return Collections.emptyList();
+        }
+
+        // egov-accesscontrol's ResponseInfoFactory NPEs on a null RequestInfo.ts (a Long/long
+        // ternary auto-unboxing trap) — the incoming search RequestInfo isn't guaranteed to
+        // carry one, so backfill it here rather than forward it as-is and 400 the call.
+        if (requestInfo.getTs() == null)
+            requestInfo.setTs(System.currentTimeMillis());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("roleCodes", roleCodes);
+        body.put("tenantId", tenantId);
+        body.put("actionMaster", MDMS_ACCESSCONTROL_ACTIONS_MASTER);
+        body.put("RequestInfo", requestInfo);
+
+        StringBuilder url = new StringBuilder(config.getAccessControlHost())
+                .append(config.getAccessControlActionsMdmsGetPath());
         try {
-            List<String> roleCodes = extractRoleCodes(requestInfo);
-            if (roleCodes.isEmpty()) {
-                log.error("No roles on RequestInfo — cannot resolve access-control action for url='{}' tenant='{}'",
-                        actionUrl, tenantId);
-                return Collections.emptyList();
-            }
-
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("roleCodes", roleCodes);
-            body.put("tenantId", tenantId);
-            body.put("actionMaster", MDMS_ACCESSCONTROL_ACTIONS_MASTER);
-            body.put("RequestInfo", requestInfo);
-
-            StringBuilder url = new StringBuilder(config.getAccessControlHost())
-                    .append(config.getAccessControlActionsMdmsGetPath());
             Object result = serviceRequestRepository.fetchResult(url, body);
             if (result == null)
                 return Collections.emptyList();
@@ -515,9 +527,10 @@ public class MDMSUtils {
             List<Map<String, Object>> actions = JsonPath.read(result, "$.actions[?(@.url=='" + safeUrl + "')]");
             return actions == null ? Collections.emptyList() : actions;
         } catch (Exception e) {
-            log.error("Failed to fetch access-control action for url='{}' tenant='{}' via {} — treating as no policy found",
+            log.error("Failed to fetch access-control action for url='{}' tenant='{}' via {} — accesscontrol call failed",
                     actionUrl, tenantId, config.getAccessControlActionsMdmsGetPath(), e);
-            return Collections.emptyList();
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "access-control call failed for url=" + actionUrl + " tenant=" + tenantId, e);
         }
     }
 

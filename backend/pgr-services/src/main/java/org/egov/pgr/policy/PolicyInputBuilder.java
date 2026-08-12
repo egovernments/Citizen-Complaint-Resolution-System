@@ -28,7 +28,18 @@ public class PolicyInputBuilder {
         User user = requestInfo == null ? null : requestInfo.getUserInfo();
 
         Map<String, Object> attributes = new LinkedHashMap<>();
-        boolean tenantWide = scope.citizenUuid == null && CollectionUtils.isEmpty(scope.departmentCodes);
+        // Department and jurisdiction are independent axes — an employee scoped by jurisdiction
+        // alone (departmentCodes empty, jurisdictionCodes not) is NOT tenant-wide; only "no
+        // restriction on EITHER axis" is. Checking departmentCodes alone would let a
+        // boundary-only-scoped employee's condition short-circuit to unrestricted via the
+        // "tenantWide" branch below, bypassing their own jurisdiction scope. This also already
+        // covers ScopePolicyEngine's config-driven output correctly: a role configured NONE on both
+        // axes resolves both AnalyticsScope fields to null (the engine omits NONE axes entirely),
+        // landing here exactly like the old hardcoded "unrestricted" case — no axis-count-aware
+        // rewrite needed as long as AnalyticsScope keeps exactly these two named fields.
+        boolean tenantWide = scope.citizenUuid == null
+                && CollectionUtils.isEmpty(scope.departmentCodes)
+                && CollectionUtils.isEmpty(scope.jurisdictionCodes);
         attributes.put("tenantWide", tenantWide);
         attributes.put("departments", scope.departmentCodes == null ? List.of() : scope.departmentCodes);
         attributes.put("jurisdictions", scope.jurisdictionCodes == null ? List.of() : scope.jurisdictionCodes);

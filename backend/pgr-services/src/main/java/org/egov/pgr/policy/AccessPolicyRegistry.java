@@ -8,9 +8,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -34,12 +36,37 @@ import java.util.concurrent.TimeUnit;
 public class AccessPolicyRegistry {
 
     public static final String PGR_REQUEST_SEARCH_URL = "/pgr-services/v2/request/_search";
+    private static final String RESOURCE_TYPE_COMPLAINT = "complaint";
 
     private static final long CACHE_TTL_MILLIS = TimeUnit.MINUTES.toMillis(15);
     private static final String ATTRIBUTES_KEY = "attributes";
+    private static final String SCOPE_KEY = "scope";
     private static final Map<String, Object> DEFAULT_ON_DENY = Map.of("strategy", MaskingStrategy.REDACT.name());
+
+    /**
+     * Per-axis JsonLogic field mapping for the generated EMPLOYEE clause — tied to the complaint
+     * resource's own JSON shape (a policy decision an MDMS operator makes is WHICH ROLE gets WHICH
+     * LEVEL per axis, not what the resource's field is literally called), so this stays code-defined
+     * rather than MDMS-authored. "jurisdiction" intentionally maps to the resource's "boundary"
+     * field — that naming predates this axis model.
+     */
+    private record AxisFields(String resourceVar, String userAttributeVar) {
+    }
+
+    private static final Map<String, AxisFields> AXIS_FIELDS = Map.of(
+            "department", new AxisFields("resource.complaint.department", "user.attributes.departments"),
+            "jurisdiction", new AxisFields("resource.complaint.boundary", "user.attributes.jurisdictions")
+    );
     /** JsonLogic literal `false` — always evaluates to deny, used to fail closed on a malformed rule. */
     private static final String ALWAYS_DENY_CONDITION = "false";
+    /**
+     * JsonLogic literal `true` — always evaluates to allow. Used ONLY when no
+     * ACCESSCONTROL-ACTIONS-TEST entry is visible at all for this url+tenant+role (policy simply
+     * not defined for this deployment) — backward compatible with pre-ABAC behavior, which had no
+     * Tier-2 condition to consult. This is distinct from an entry that IS visible but is missing its
+     * `condition` field — that is a real authoring mistake and still fails closed.
+     */
+    private static final String ALWAYS_ALLOW_CONDITION = "true";
 
     private final MDMSUtils mdmsUtils;
     private final ObjectMapper objectMapper;
@@ -54,14 +81,48 @@ public class AccessPolicyRegistry {
 
     /**
      * Returns the raw JsonLogic condition JSON for the given action url + tenant (resolved using
-     * the caller's roles), or null if unresolvable (no visible/enabled MDMS entry for this
-     * caller's roles, no condition on it, or an accesscontrol failure) — callers must treat null
-     * as fail-closed, never as "no restriction".
+     * the caller's roles). Outcomes:
+     * <ul>
+     *   <li>no MDMS entry visible at all for this url+tenant+role — policy not defined for this
+     *       deployment; returns {@link #ALWAYS_ALLOW_CONDITION} (backward compatible with pre-ABAC
+     *       behavior, which had no Tier-2 condition to consult).</li>
+     *   <li>the accesscontrol call itself failed (see {@link AccessControlUnavailableException}) —
+     *       NOT the same as a confirmed absence of policy; returns null (fail-closed) rather than
+     *       risk failing a whole tenant open during an outage.</li>
+     *   <li>the entry has a well-formed {@code resource.complaint.scope} — the EMPLOYEE clause is
+     *       GENERATED from it (see {@link #synthesizeCondition}) rather than read from
+     *       {@code condition}, so the Tier-1 SQL scope ({@link PrincipalScopeResolver}, which reads
+     *       the same {@code scope} block) and this Tier-2 re-check can never disagree.</li>
+     *   <li>no {@code scope} block, and the entry has no {@code condition} field either — an
+     *       authoring mistake, not an absent policy; returns null, fail-closed.</li>
+     *   <li>no {@code scope} block, but a hand-authored {@code condition} exists — returns it
+     *       verbatim (legacy path, unchanged).</li>
+     * </ul>
      */
     public String getCondition(String actionUrl, RequestInfo requestInfo, String tenantId) {
-        Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
-        if (action == null)
+        Map<String, Object> action;
+        try {
+            action = getAction(actionUrl, requestInfo, tenantId);
+        } catch (AccessControlUnavailableException e) {
+            log.error("AccessPolicyRegistry: accesscontrol unavailable for url='{}' tenant='{}' — failing closed: {}",
+                    actionUrl, tenantId, e.getMessage());
             return null;
+        }
+        if (action == null) {
+            log.info("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — policy not defined, allowing (backward compatible)",
+                    actionUrl, tenantId);
+            return ALWAYS_ALLOW_CONDITION;
+        }
+
+        Optional<ScopePolicy> scopePolicy = extractScopePolicy(action, RESOURCE_TYPE_COMPLAINT);
+        if (scopePolicy.isPresent()) {
+            String generated = synthesizeCondition(scopePolicy.get());
+            if (generated != null)
+                return generated;
+            log.error("AccessPolicyRegistry: failed to serialize generated condition for url='{}' tenant='{}' — failing closed",
+                    actionUrl, tenantId);
+            return null;
+        }
 
         Object condition = action.get("condition");
         if (condition == null) {
@@ -80,6 +141,82 @@ public class AccessPolicyRegistry {
     }
 
     /**
+     * Generates the {@code {"or": [tenantWide, citizenSelfScope, employeeAxisClause]}} JsonLogic
+     * tree for a resolved {@link ScopePolicy}: the tenantWide bypass and CITIZEN self-scope branches
+     * are a fixed template (they aren't axis-based), and only the EMPLOYEE clause's axis-matching
+     * sub-conditions are generated by iterating {@code policy.getAxes()} against {@link #AXIS_FIELDS}.
+     * An axis with no known field mapping is skipped (logged) rather than failing the whole
+     * condition — same "don't invalidate the whole policy over one bad entry" principle as
+     * {@link ScopePolicy#parse}. Returns null only if JSON serialization itself fails.
+     */
+    private String synthesizeCondition(ScopePolicy policy) {
+        List<Object> employeeClauseParts = new ArrayList<>();
+        employeeClauseParts.add(Map.of("==", List.of(Map.of("var", "user.type"), "EMPLOYEE")));
+        for (String axis : policy.getAxes()) {
+            AxisFields fields = AXIS_FIELDS.get(axis);
+            if (fields == null) {
+                log.warn("AccessPolicyRegistry: scope declares axis '{}' with no known resource/user field mapping — skipping in generated condition", axis);
+                continue;
+            }
+            employeeClauseParts.add(Map.of("or", List.of(
+                    Map.of("!", Map.of("var", fields.userAttributeVar())),
+                    Map.of("in", List.of(Map.of("var", fields.resourceVar()), Map.of("var", fields.userAttributeVar())))
+            )));
+        }
+
+        Map<String, Object> condition = Map.of("or", List.of(
+                Map.of("==", List.of(Map.of("var", "user.attributes.tenantWide"), true)),
+                Map.of("and", List.of(
+                        Map.of("==", List.of(Map.of("var", "user.type"), "CITIZEN")),
+                        Map.of("==", List.of(Map.of("var", "resource.complaint.accountId"), Map.of("var", "user.uuid")))
+                )),
+                Map.of("and", employeeClauseParts)
+        ));
+
+        try {
+            return objectMapper.writeValueAsString(condition);
+        } catch (Exception e) {
+            log.error("AccessPolicyRegistry: failed to serialize generated condition: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Parses {@code resource.<resourceType>.scope} into a {@link ScopePolicy}, or empty when
+     * absent/malformed — callers treat that identically to "not configured" (backward compatible),
+     * never as an error.
+     */
+    @SuppressWarnings("unchecked")
+    private Optional<ScopePolicy> extractScopePolicy(Map<String, Object> action, String resourceType) {
+        Object resource = action.get("resource");
+        if (!(resource instanceof Map))
+            return Optional.empty();
+        Object resourceEntry = ((Map<String, Object>) resource).get(resourceType);
+        if (!(resourceEntry instanceof Map))
+            return Optional.empty();
+        return ScopePolicy.parse(((Map<String, Object>) resourceEntry).get(SCOPE_KEY));
+    }
+
+    /**
+     * Public counterpart of {@link #extractScopePolicy} for {@link PrincipalScopeResolver} (the
+     * Tier-1 SQL side) to consult the SAME {@code resource.<resourceType>.scope} block the
+     * generated Tier-2 condition above reads — one authored artifact for both.
+     */
+    public Optional<ScopePolicy> getScopePolicy(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
+        Map<String, Object> action;
+        try {
+            action = getAction(actionUrl, requestInfo, tenantId);
+        } catch (AccessControlUnavailableException e) {
+            log.error("AccessPolicyRegistry: accesscontrol unavailable for url='{}' tenant='{}' — no scope policy resolvable: {}",
+                    actionUrl, tenantId, e.getMessage());
+            return Optional.empty();
+        }
+        if (action == null)
+            return Optional.empty();
+        return extractScopePolicy(action, resourceType);
+    }
+
+    /**
      * Extracts and validates the field-visibility rules for {@code resourceType} from the same
      * Action's {@code resource} JSON object: {@code resource[resourceType].attributes} is a JSON
      * object keyed by field path, each value an independent {@code {condition, onDeny}} rule — any
@@ -90,7 +227,14 @@ public class AccessPolicyRegistry {
     @SuppressWarnings("unchecked")
     public Map<String, FieldVisibilityRule> getFieldVisibilityRules(String actionUrl, RequestInfo requestInfo,
                                                                       String tenantId, String resourceType) {
-        Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
+        Map<String, Object> action;
+        try {
+            action = getAction(actionUrl, requestInfo, tenantId);
+        } catch (AccessControlUnavailableException e) {
+            log.error("AccessPolicyRegistry: accesscontrol unavailable for url='{}' tenant='{}' — no field-visibility rules resolvable: {}",
+                    actionUrl, tenantId, e.getMessage());
+            return Map.of();
+        }
         if (action == null)
             return Map.of();
 
@@ -160,13 +304,15 @@ public class AccessPolicyRegistry {
         return action;
     }
 
+    /**
+     * Returns null when no MDMS entry is visible for this url+tenant+role — callers decide what
+     * that means for their axis: {@link #getCondition} treats it as "not defined, allow"; a
+     * malformed-but-present entry is a distinct case handled by the callers themselves.
+     */
     private Map<String, Object> fetch(String actionUrl, RequestInfo requestInfo, String tenantId) {
         List<Map<String, Object>> actions = mdmsUtils.fetchAccessControlActions(requestInfo, tenantId, actionUrl);
-        if (CollectionUtils.isEmpty(actions)) {
-            log.error("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — failing closed",
-                    actionUrl, tenantId);
+        if (CollectionUtils.isEmpty(actions))
             return null;
-        }
         return actions.get(0);
     }
 

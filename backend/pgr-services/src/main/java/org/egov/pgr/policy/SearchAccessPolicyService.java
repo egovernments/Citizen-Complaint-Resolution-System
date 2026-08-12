@@ -29,6 +29,16 @@ import java.util.Map;
 @Slf4j
 public class SearchAccessPolicyService {
 
+    /**
+     * In-code fallback when MDMS has no {@code resource.complaint.scope} configured for this action
+     * — reproduces PGR search's structural default (jurisdiction-based, department not part of its
+     * row-scoping model) via the SAME {@link ScopePolicyEngine} the MDMS-authored path uses, so
+     * "not configured" and "configured to match today's default" behave identically.
+     */
+    private static final ScopePolicy DEFAULT_SCOPE_POLICY = ScopePolicy.of(
+            List.of("department", "jurisdiction"),
+            Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN));
+
     private final PrincipalScopeResolver principalScopeResolver;
     private final AccessPolicyRegistry registry;
     private final PolicyEvaluator evaluator;
@@ -43,8 +53,16 @@ public class SearchAccessPolicyService {
         this.inputBuilder = inputBuilder;
     }
 
+    /**
+     * Fetches the MDMS-authored {@code resource.complaint.scope} for this action (falling back to
+     * {@link #DEFAULT_SCOPE_POLICY} when not configured — the same "policy not defined, backward
+     * compatible" principle {@link AccessPolicyRegistry#getCondition} already applies), then
+     * resolves the caller's scope against it via {@link PrincipalScopeResolver}.
+     */
     public AnalyticsScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
-        return principalScopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
+        ScopePolicy scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint")
+                .orElse(DEFAULT_SCOPE_POLICY);
+        return principalScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy);
     }
 
     /**

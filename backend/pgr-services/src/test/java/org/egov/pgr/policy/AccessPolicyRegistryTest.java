@@ -13,10 +13,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,10 +31,12 @@ import static org.mockito.Mockito.when;
 
 /**
  * Verifies AccessPolicyRegistry resolves the condition via egov-accesscontrol's role-scoped
- * /access/v1/actions/mdms/_get API (through MDMSUtils.fetchAccessControlActions), fails closed
- * when no visible/enabled action or condition is found, caches successful resolutions, and does
- * NOT cache a "not found" (since that API is role-scoped — a miss for one caller's roles must not
- * lock out a differently-roled caller for the TTL).
+ * /access/v1/actions/mdms/_get API (through MDMSUtils.fetchAccessControlActions): allows
+ * (backward compatible) when no action is visible at all for the caller's roles — a confirmed
+ * absence of policy configuration — but still fails closed when an action IS visible with a
+ * malformed/missing condition, or when the accesscontrol call itself fails. Caches successful
+ * resolutions, and does NOT cache a "not found" (since that API is role-scoped — a miss for one
+ * caller's roles must not lock out a differently-roled caller for the TTL).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -62,10 +67,23 @@ class AccessPolicyRegistryTest {
     }
 
     @Test
-    void failsClosedWhenNoActionVisibleForCallersRoles() {
+    void allowsBackwardCompatiblyWhenNoActionVisibleForCallersRoles() {
+        // A confirmed-empty result (not an accesscontrol failure) means this tenant/role never had
+        // this policy configured — backward compatible with pre-ABAC behavior: allow, don't deny.
         RequestInfo requestInfo = requestInfo("CITIZEN");
         when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
                 .thenReturn(List.of());
+
+        assertEquals("true", registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+    }
+
+    @Test
+    void failsClosedWhenAccessControlCallFails() {
+        // Distinct from the above: the call itself FAILED (accesscontrol down/erroring), which must
+        // NOT be treated as "not defined" — that would fail a whole tenant open during an outage.
+        RequestInfo requestInfo = requestInfo("CITIZEN");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
 
         assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
     }
@@ -104,7 +122,7 @@ class AccessPolicyRegistryTest {
                 .thenReturn(List.of(Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
                         "condition", Map.of("==", List.of(1, 1)))));
 
-        assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, citizenRequestInfo, "pg.city"));
+        assertEquals("true", registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, citizenRequestInfo, "pg.city"));
         assertNotNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, employeeRequestInfo, "pg.city"));
 
         verify(mdmsUtils, times(1)).fetchAccessControlActions(citizenRequestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
@@ -122,7 +140,7 @@ class AccessPolicyRegistryTest {
                 .thenReturn(List.of());
 
         assertNotNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
-        assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "ke.nairobi"));
+        assertEquals("true", registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "ke.nairobi"));
     }
 
     @Test
@@ -205,6 +223,97 @@ class AccessPolicyRegistryTest {
                 AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "employee");
 
         assertTrue(rules.isEmpty());
+    }
+
+    // --- resource.complaint.scope: getScopePolicy() + generated condition -----------------------
+
+    @Test
+    void getScopePolicyParsesTheScopeBlockFromResource() {
+        Map<String, Object> scope = Map.of(
+                "axes", List.of("department", "jurisdiction"),
+                "default", Map.of("department", "NONE", "jurisdiction", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        Optional<ScopePolicy> policy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
+
+        assertTrue(policy.isPresent());
+        assertEquals(ScopeLevel.NONE, policy.get().levelFor("ANY_ROLE", "department"));
+        assertEquals(ScopeLevel.OWN, policy.get().levelFor("ANY_ROLE", "jurisdiction"));
+    }
+
+    @Test
+    void getScopePolicyIsEmptyWhenNoScopeBlockPresent() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
+                "condition", Map.of("==", List.of(1, 1)));
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertTrue(registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint").isEmpty());
+    }
+
+    @Test
+    void getConditionGeneratesFromScopeWhenPresentIgnoringHandAuthoredCondition() {
+        Map<String, Object> scope = Map.of(
+                "axes", List.of("department", "jurisdiction"),
+                "default", Map.of("department", "OWN", "jurisdiction", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        // A hand-authored condition is ALSO present — must be ignored once scope is present, per
+        // the "one authored artifact" design (no possibility of the two disagreeing).
+        Map<String, Object> action = new LinkedHashMap<>();
+        action.put("id", 2008);
+        action.put("url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+        action.put("resource", resource);
+        action.put("condition", Map.of("==", List.of(1, 2))); // would always be false if read
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        String generated = registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city");
+
+        assertNotNull(generated);
+        assertFalse(generated.contains("\"==\":[1,2]"), "must not fall back to the hand-authored condition once scope is present");
+        assertTrue(generated.contains("user.attributes.departments"));
+        assertTrue(generated.contains("user.attributes.jurisdictions"));
+        assertTrue(generated.contains("resource.complaint.boundary"), "jurisdiction axis maps to the resource's 'boundary' field");
+
+        // behavioral check, not just string shape: an EMPLOYEE whose department/jurisdiction match
+        // the resource should be allowed by the generated condition.
+        PolicyEvaluator evaluator = new PolicyEvaluator();
+        Map<String, Object> data = Map.of(
+                "user", Map.of("type", "EMPLOYEE", "attributes", Map.of(
+                        "tenantWide", false,
+                        "departments", List.of("DEPT_1"),
+                        "jurisdictions", List.of("WARD_001"))),
+                "resource", Map.of("complaint", Map.of("department", "DEPT_1", "boundary", "WARD_001")));
+        assertTrue(evaluator.isAllowed(generated, data));
+
+        Map<String, Object> wrongBoundaryData = Map.of(
+                "user", Map.of("type", "EMPLOYEE", "attributes", Map.of(
+                        "tenantWide", false,
+                        "departments", List.of("DEPT_1"),
+                        "jurisdictions", List.of("WARD_001"))),
+                "resource", Map.of("complaint", Map.of("department", "DEPT_1", "boundary", "WARD_999")));
+        assertFalse(evaluator.isAllowed(generated, wrongBoundaryData));
+    }
+
+    @Test
+    void getConditionFallsBackToHandAuthoredWhenNoScopeBlock() {
+        // Unaffected legacy path — same assertion as resolvesConditionFromTheAccessControlAction,
+        // stated explicitly here to pin the "no scope -> read condition verbatim" precedence rule.
+        Map<String, Object> condition = Map.of("==", List.of(1, 1));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "condition", condition);
+        RequestInfo requestInfo = requestInfo("CITIZEN");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        String result = registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city");
+
+        assertEquals("{\"==\":[1,1]}", result);
     }
 
     private RequestInfo requestInfo(String roleCode) {
