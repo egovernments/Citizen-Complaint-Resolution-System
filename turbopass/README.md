@@ -9,7 +9,7 @@ explicitly forbids client-side autocomplete ("you must not implement such a serv
 the client side using the API"), and debouncing does not make it compliant — the pattern
 is barred, not just the rate. A bounded, pre-fetched, self-hosted gazetteer is the
 compliant answer for a search space that is a known set of administrative places. See
-[`docs/openstreetmap/30-apis.md`](../docs/openstreetmap/30-apis.md) for the policy and the
+[`docs/openstreetmap/20-services.md`](../docs/openstreetmap/20-services.md) for the policy and the
 alternatives (Photon, Pelias, commercial providers).
 
 ## Layout
