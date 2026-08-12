@@ -60,10 +60,16 @@ public class DashboardRefreshSchedulerTest {
                 "snapshot_date must not come from a single server-wide CURRENT_DATE");
         assertTrue(upsert.contains("CURRENT_TIMESTAMP AT TIME ZONE COALESCE(tz.resolved_zone, 'Africa/Nairobi')"),
                 "snapshot_date must resolve per tenant via the shared timezone view, falling back to Africa/Nairobi");
-        assertTrue(upsert.contains("LEFT JOIN pgr_dashboard_tenant_timezone tz"),
+        assertTrue(upsert.contains("LEFT JOIN LATERAL (SELECT candidate.resolved_zone "
+                        + "FROM pgr_dashboard_tenant_timezone candidate"),
                 "must join the same SQL timezone view the V2 grain MVs use");
-        assertTrue(upsert.contains("tz.state_root_tenant_id = split_part(cf.tenant_id, '.', 1)"),
-                "must resolve the zone from the complaint's own state-root tenant");
+        assertTrue(upsert.contains("cf.tenant_id = candidate.state_root_tenant_id OR "
+                        + "left(cf.tenant_id, length(candidate.state_root_tenant_id) + 1) "
+                        + "= candidate.state_root_tenant_id || '.'"),
+                "must match exact or dot-boundary ancestor roots without assuming one segment");
+        assertTrue(upsert.contains("ORDER BY array_length(string_to_array("
+                        + "candidate.state_root_tenant_id, '.'), 1) DESC"),
+                "the deepest configured root (for example ken.bomet over ken) must win");
         assertTrue(upsert.contains("FROM complaint_facts cf"));
         assertTrue(upsert.contains("WHERE cf.is_open"));
         assertTrue(upsert.contains("ON CONFLICT (snapshot_date, service_request_id) DO NOTHING"),

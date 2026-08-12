@@ -17,6 +17,7 @@
  * react-i18next imports — the host instance is reached via window.i18next.
  */
 import { getTenantId } from "../config/dashboardConfig";
+import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
 
 const FALLBACK_LOCALE = "en_IN";
 const STANDALONE_MODULES = [
@@ -85,10 +86,12 @@ export function ensureMessages() {
   const locale = getLanguage();
   if (standalone.messages[locale] || standalone.pending[locale]) return;
   let authToken = null;
-  try {
-    authToken = window.localStorage.getItem("Employee.token");
-  } catch (e) {
-    /* ignore */
+  if (!isPublicDashboardRuntime()) {
+    try {
+      authToken = window.localStorage.getItem("Employee.token");
+    } catch (e) {
+      /* ignore */
+    }
   }
   const params = new URLSearchParams({
     module: STANDALONE_MODULES.join(","),
@@ -98,7 +101,13 @@ export function ensureMessages() {
   standalone.pending[locale] = fetch(`/localization/messages/v1/_search?${params}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ RequestInfo: { apiId: "Rainmaker", ver: ".01", authToken } }),
+    body: JSON.stringify({
+      RequestInfo: {
+        apiId: "Rainmaker",
+        ver: ".01",
+        ...(authToken && { authToken }),
+      },
+    }),
   })
     .then((res) => (res.ok ? res.json() : { messages: [] }))
     .then((data) => {

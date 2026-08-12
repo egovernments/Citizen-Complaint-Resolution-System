@@ -32,7 +32,7 @@ process.on("exit", () => {
   }
 });
 
-const { evaluateCompose } = require(OUT);
+const { evaluateCompose, requiresBackendComposition } = require(OUT);
 
 test("evaluateCompose: no compose or no type returns null", () => {
   assert.equal(evaluateCompose(null, {}), null);
@@ -89,4 +89,11 @@ test("evaluateCompose: other compose types are preserved (netBacklogDaily)", () 
 test("evaluateCompose: unknown compose type returns null", () => {
   const compose = { type: "somethingUnrecognized", sourceKpiIds: ["x"] };
   assert.equal(evaluateCompose(compose, { x: { rows: [{ total: 1 }] } }), null);
+});
+
+test("requiresBackendComposition identifies only calendar-aware average rules", () => {
+  assert.equal(requiresBackendComposition({ type: "dailyAvgFromWeekly" }), true);
+  assert.equal(requiresBackendComposition({ type: "hourlyAvgFromDaily" }), true);
+  assert.equal(requiresBackendComposition({ type: "netBacklogDaily" }), false);
+  assert.equal(requiresBackendComposition(null), false);
 });

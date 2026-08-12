@@ -925,6 +925,36 @@
   }
 
   @media (max-width: 1023px) {
+    /* Public dashboards are read-only, so their configured desktop geometry
+       can become a normal responsive grid without sacrificing edit/drag
+       semantics. The backend still chooses the tiles and their source order;
+       the frontend owns fitting that content to the current viewport. */
+    .dashboard-root.dashboard-public .dashboard-grid-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+      gap: 1rem;
+      height: auto !important;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > .react-grid-item {
+      position: relative !important;
+      transform: none !important;
+      width: auto !important;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > .dashboard-kpi-widget {
+      height: auto !important;
+      min-height: 7.5rem;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-grid-layout > section.react-grid-item {
+      height: 20rem !important;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-widget-surface {
+      cursor: default;
+    }
+
     .dashboard-sidebar {
       position: fixed;
       left: 0;
@@ -1033,6 +1063,16 @@
     .dashboard-header-controls {
       justify-content: flex-end;
       width: 100%;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-header-top {
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+
+    .dashboard-root.dashboard-public .dashboard-header-controls {
+      width: auto;
+      flex-shrink: 0;
     }
 
     .dashboard-header-subtitle {
@@ -2609,7 +2649,7 @@
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }

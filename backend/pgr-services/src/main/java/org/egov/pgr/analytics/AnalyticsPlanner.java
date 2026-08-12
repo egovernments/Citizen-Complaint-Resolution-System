@@ -338,7 +338,10 @@ public class AnalyticsPlanner {
     // ---------- RBAC scope (server-injected) ----------
     private void applyScope(AnalyticsScope scope, Grain g, List<String> conj, List<Object> params){
         if (scope.tenantId != null) {
-            if (scope.tenantStateLevel) { conj.add(g.tenantColumn + " LIKE ?"); params.add(scope.tenantId + "%"); }
+            if (scope.tenantStateLevel) {
+                conj.add(g.tenantColumn + " LIKE ?");
+                params.add(escapeLikeLiteral(scope.tenantId) + "%");
+            }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
         // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
@@ -353,7 +356,7 @@ public class AnalyticsPlanner {
             if (g.boundaryColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
             conj.add(g.boundaryColumn + " LIKE ?");
-            params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+            params.add(escapeLikeLiteral(scope.boundaryPrefix) + "%");
         }
         // department scope: restrict to the union of the principal's HRMS assignment departments.
         // NULL department_code rows won't match an IN list → correctly excluded.
@@ -364,6 +367,11 @@ public class AnalyticsPlanner {
             conj.add(g.departmentColumn + " IN (" + placeholders + ")");
             params.addAll(scope.departmentCodes);
         }
+    }
+
+    /** Escape caller-controlled text before appending a SQL LIKE wildcard. */
+    static String escapeLikeLiteral(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     // ---------- sort ----------

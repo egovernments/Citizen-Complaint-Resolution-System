@@ -3,7 +3,6 @@ import { GRID_COLS, DROPPING_ITEM_ID } from "../constants/layoutConfig";
 import { getEmployeeInfo, getTenantId } from "../services/authService";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
 import {
-  LEGACY_STORAGE_KEY,
   storageKeyFor,
   readSavedLayout,
   persistLayout,
@@ -35,12 +34,7 @@ function scopedStorageKey() {
 }
 
 function readSaved() {
-  const scopedKey = scopedStorageKey();
-  return readSavedLayout(
-    window.localStorage,
-    scopedKey,
-    scopedKey === LEGACY_STORAGE_KEY ? undefined : LEGACY_STORAGE_KEY
-  );
+  return readSavedLayout(window.localStorage, scopedStorageKey());
 }
 
 /** Re-attach min/max constraints after geometry helpers strip them to positions only. */
@@ -59,7 +53,7 @@ function persist(layout) {
   persistLayout(window.localStorage, scopedStorageKey(), layout);
 }
 
-export function useCatalogLayout(kpis, packLayout) {
+export function useCatalogLayout(kpis, packLayout, { persistent = true } = {}) {
   const seed = useMemo(() => buildSeedLayout(packLayout, kpis), [packLayout, kpis]);
   const geom = useMemo(() => createCatalogDragGeometry(kpis), [kpis]);
   const catalogReady = Object.keys(kpis || {}).length > 0;
@@ -76,15 +70,15 @@ export function useCatalogLayout(kpis, packLayout) {
 
   useEffect(() => {
     if (!catalogReady) return;
-    const saved = readSaved();
+    const saved = persistent ? readSaved() : null;
     const reconciled = resolveInitialLayout(saved, seed, kpis);
     const repaired = geom.hasOverlaps(reconciled)
       ? geom.resolveRemainingOverlaps(reconciled, [])
       : reconciled;
     setLayout(repaired);
-    if (repaired !== reconciled) persist(repaired);
+    if (persistent && repaired !== reconciled) persist(repaired);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, catalogReady, geom]);
+  }, [seed, catalogReady, geom, persistent]);
 
   const syncFlagRef = useRef(false);
   const stampSync = useCallback((next) => {
@@ -96,10 +90,10 @@ export function useCatalogLayout(kpis, packLayout) {
   const applyLayout = useCallback(
     (next) => {
       const normalized = canonicalizeLayout(next, kpis);
-      persist(normalized);
+      if (persistent) persist(normalized);
       setLayout(stampSync(normalized));
     },
-    [stampSync, kpis]
+    [stampSync, kpis, persistent]
   );
 
   const commitLayoutWithReflow = useCallback(

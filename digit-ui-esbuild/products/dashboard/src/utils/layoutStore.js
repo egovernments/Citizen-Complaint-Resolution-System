@@ -27,11 +27,12 @@ export const LEGACY_STORAGE_KEY = "ccrs.dashboard.catalog-layout.v1";
  * shared counter machines) silently overwrote each other's arrangement: the
  * second login reconciled the first user's saved layout against its own
  * catalog and the next persist rewrote the shared slot with the reduced set —
- * KPIs added by the first user were gone when they came back (#1276). Falls
- * back to the legacy key when identity is unavailable.
+ * KPIs added by the first user were gone when they came back (#1276). Without
+ * a complete identity there is no safe persistence scope, so callers get no
+ * key instead of falling back to the shared legacy slot.
  */
 export function storageKeyFor(tenantId, userId) {
-  if (!tenantId || !userId) return LEGACY_STORAGE_KEY;
+  if (!tenantId || !userId) return null;
   return `${LEGACY_STORAGE_KEY}.${tenantId}.${userId}`;
 }
 
@@ -187,12 +188,12 @@ export function mergeEmittedLayout(prev, next) {
  * cleared every tile) is returned as `[]` so the seed does not re-add the
  * removed tiles on reload.
  *
- * `legacyKey` (optional) is consulted when `key` holds nothing — a one-time,
- * read-only migration path so layouts saved under the global v1 key survive
- * the move to per-user keys. Persisting always writes the scoped key, so the
- * legacy slot is never mutated and stops mattering after the first save.
+ * The former shared v1 slot is deliberately not consulted: assigning that
+ * layout to whichever identity happens to log in first would leak one user's
+ * preferences into another user's dashboard.
  */
-export function readSavedLayout(storage, key, legacyKey) {
+export function readSavedLayout(storage, key) {
+  if (!key) return null;
   const readKey = (k) => {
     try {
       const raw = storage?.getItem(k);
@@ -203,12 +204,11 @@ export function readSavedLayout(storage, key, legacyKey) {
       return null;
     }
   };
-  const saved = readKey(key);
-  if (saved !== null) return saved;
-  return legacyKey && legacyKey !== key ? readKey(legacyKey) : null;
+  return readKey(key);
 }
 
 export function persistLayout(storage, key, layout) {
+  if (!key) return;
   try {
     storage?.setItem(key, JSON.stringify(layout));
   } catch {

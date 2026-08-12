@@ -138,3 +138,32 @@ test("hydrates only the current tenant and user's saved layout", () => {
     ["chart_a"]
   );
 });
+
+test("uses the pack seed without touching storage when persistence is disabled", () => {
+  let reads = 0;
+  let writes = 0;
+  globalThis.window = {
+    localStorage: {
+      getItem: () => {
+        reads += 1;
+        return null;
+      },
+      setItem: () => {
+        writes += 1;
+      },
+    },
+  };
+
+  useCatalogLayout(
+    KPIS,
+    [{ kpiId: "card_a", x: 0, y: 0, w: 2, h: 2 }],
+    { persistent: false }
+  );
+
+  assert.deepEqual(
+    globalThis.__catalogTestState[0].map((item) => item.i),
+    ["card_a"]
+  );
+  assert.equal(reads, 0);
+  assert.equal(writes, 0);
+});

@@ -69,7 +69,13 @@ public class DashboardRefreshScheduler {
           + "       cf.current_assignee_uuid AS current_assignee_uuid, cf.department_code AS department_code, "
           + "       cf.account_id AS account_id "
           + "FROM complaint_facts cf "
-          + "LEFT JOIN pgr_dashboard_tenant_timezone tz ON tz.state_root_tenant_id = split_part(cf.tenant_id, '.', 1) "
+          + "LEFT JOIN LATERAL (SELECT candidate.resolved_zone "
+          + "FROM pgr_dashboard_tenant_timezone candidate "
+          + "WHERE cf.tenant_id = candidate.state_root_tenant_id "
+          + "OR left(cf.tenant_id, length(candidate.state_root_tenant_id) + 1) "
+          + "= candidate.state_root_tenant_id || '.' "
+          + "ORDER BY array_length(string_to_array(candidate.state_root_tenant_id, '.'), 1) DESC, "
+          + "candidate.state_root_tenant_id LIMIT 1) tz ON true "
           + "WHERE cf.is_open "
           + "ON CONFLICT (snapshot_date, service_request_id) DO NOTHING";
 
