@@ -68,7 +68,22 @@ export function DigitFormMultiSelect({
   // only computes `invalid` once a validation pass actually runs (on change
   // or on submit attempt), so this still stays quiet on initial mount.
   const hasError = fieldState.invalid;
-  const errorMessage = fieldState.error?.message;
+  // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
+  // before storing them in react-hook-form state (same fix already applied in
+  // DigitFormInput). Strip the prefix and unwrap the JSON string so the raw
+  // human-readable message renders instead of the literal wrapped string.
+  const rawError = fieldState.error?.message;
+  const errorMessage = rawError?.startsWith('@@react-admin@@')
+    ? (() => {
+        try {
+          const parsed: unknown = JSON.parse(rawError.slice(15));
+          if (typeof parsed === 'string') return parsed;
+          if (parsed && typeof parsed === 'object' && 'message' in parsed)
+            return String((parsed as { message: unknown }).message);
+          return String(parsed);
+        } catch { return rawError.slice(15); }
+      })()
+    : rawError;
 
   const toggle = (value: string, checked: boolean) => {
     const next = checked ? [...selected, value] : selected.filter((v) => v !== value);
