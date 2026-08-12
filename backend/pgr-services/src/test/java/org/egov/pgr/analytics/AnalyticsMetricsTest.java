@@ -36,7 +36,7 @@ public class AnalyticsMetricsTest {
      * The collector's prometheus exporter appends a unit-derived suffix to the metric
      * name when the OTLP unit field is set (validated live: unit "ms" surfaced as
      * pgr_analytics_query_duration_ms_milliseconds_*). The documented scrape names
-     * (docs/observability/dashboard-metrics-server.md) require the instruments to carry
+     * (docs/observability/dashboard-metrics.md) require the instruments to carry
      * their unit in the NAME only — this pins name and empty-unit for both instruments.
      */
     @Test
