@@ -147,6 +147,111 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.levelCode, 'SUB_TYPE');
   });
 
+  it('with two active hierarchy definitions, picks whichever one has real existing leaf usage', async () => {
+    // Reproduces a live-observed state: a leftover 4-level "test" hierarchyType
+    // sitting alongside the real 2-level one, both isActive:true, MDMS returning
+    // the test one FIRST — confirmed to actually happen (CCRS#1713 follow-up).
+    // Picking "whichever comes first" would silently tag a new leaf with the
+    // wrong hierarchyType, making it invisible everywhere else that reads the
+    // real one. Real usage is the tie-break signal, not definition order.
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [
+          {
+            id: 'def-test', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR_TEST',
+            data: { hierarchyType: 'PGR_TEST', levels: [
+              { levelCode: 'AUTHORITY_TYPE', isLeafServiceCode: false },
+              { levelCode: 'MAIN_CATEGORY', isLeafServiceCode: false },
+              { levelCode: 'SECTOR', isLeafServiceCode: false },
+              { levelCode: 'SUB_TYPE', isLeafServiceCode: true },
+            ] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 999, lastModifiedTime: 999 },
+          },
+          {
+            id: 'def-real', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR',
+            data: { hierarchyType: 'PGR', levels: [
+              { levelCode: 'CATEGORY', isLeafServiceCode: false },
+              { levelCode: 'SUB_TYPE', isLeafServiceCode: true },
+            ] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+          },
+        ];
+      }
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
+        // The sample of existing leaves — all real usage is under "PGR",
+        // none under "PGR_TEST" (matches the live-observed 999-vs-0 split).
+        return [
+          { id: 'leaf-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_1',
+            data: { hierarchyType: 'PGR', code: 'EXISTING_1' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+        ];
+      }
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'PGR.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'PGR');
+    assert.equal(captured!.levelCode, 'SUB_TYPE');
+  });
+
+  it('with two active hierarchy definitions and no existing usage of either, picks the earliest-created one', async () => {
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [
+          {
+            id: 'def-newer', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'NEWER',
+            data: { hierarchyType: 'NEWER', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 500, lastModifiedTime: 500 },
+          },
+          {
+            id: 'def-older', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'OLDER',
+            data: { hierarchyType: 'OLDER', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 100, lastModifiedTime: 100 },
+          },
+        ];
+      }
+      // A fresh tenant mid-migration between two definitions — nothing
+      // created under either one yet.
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'OLDER.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'OLDER');
+    assert.equal(captured!.levelCode, 'LEAF');
+  });
+
   it('does not overwrite an existing complaint type\'s hierarchyType/levelCode on update', async () => {
     // The Complaint Type edit form never renders these fields, so an edit
     // that only changes e.g. slaHours must not silently reset them to a

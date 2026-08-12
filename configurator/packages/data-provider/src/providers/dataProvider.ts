@@ -182,27 +182,72 @@ interface HierarchyDefinitionLevel {
   isLeafServiceCode?: boolean;
 }
 
+function leafDefaultsFromDefinition(
+  def: MdmsRecord,
+): { hierarchyType: string; levelCode: string } | undefined {
+  const data = def.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
+  const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
+  const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
+  const leafLevel = levels.find((l) => l.isLeafServiceCode);
+  return hierarchyType && leafLevel?.levelCode ? { hierarchyType, levelCode: leafLevel.levelCode } : undefined;
+}
+
 /** Resolve {hierarchyType, levelCode} for a NEW leaf row from the tenant's
  *  actual RAINMAKER-PGR.ComplaintHierarchyDefinition, rather than a hardcoded
  *  literal — both are tenant-configurable (levelCode especially: a tenant can
  *  name its leaf level anything, not always "SUB_TYPE"; see review on
- *  CCRS#1719). Picks the first active definition and the level it marks
- *  isLeafServiceCode. Falls back to the FALLBACK_* constants only when no
- *  definition exists at all, or the lookup fails. */
+ *  CCRS#1719).
+ *
+ *  A tenant can have more than one ACTIVE definition — observed live: a
+ *  leftover 4-level "test" hierarchyType (exactly one leaf ever created
+ *  under it) sitting alongside the real 2-level one backing 999+ real
+ *  complaint types, both isActive:true. Picking "whichever comes first" is
+ *  order-dependent on MDMS's unspecified result ordering — confirmed live to
+ *  actually flip between otherwise-identical requests — so a create could
+ *  silently tag a brand new complaint type with the wrong hierarchyType,
+ *  making it invisible everywhere else in the app that reads the real one.
+ *
+ *  Disambiguation, in order: (1) a single active definition needs none;
+ *  (2) with multiple, prefer whichever hierarchyType has at least one
+ *  EXISTING leaf row — real usage is the strongest signal of which one is
+ *  actually live — via a small bounded sample, cheap and only reached at
+ *  all for a tenant already in this ambiguous state; (3) with no usage
+ *  signal for any candidate either (e.g. a fresh tenant mid-migration
+ *  between two definitions, nothing created under either yet), prefer the
+ *  earliest-created active definition as the most likely original one.
+ *  Falls back to the FALLBACK_* constants only when no definition exists at
+ *  all, or the lookup fails outright. */
 async function resolveNewLeafDefaults(
   client: DigitApiClient,
   tenantId: string,
 ): Promise<{ hierarchyType: string; levelCode: string }> {
   try {
-    const definitions = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true });
-    const def = definitions.find((d) => d.isActive);
-    const data = def?.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
-    const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
-    const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
-    const leafLevel = levels.find((l) => l.isLeafServiceCode);
-    if (hierarchyType && leafLevel?.levelCode) {
-      return { hierarchyType, levelCode: leafLevel.levelCode };
+    const definitions = (await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true }))
+      .filter((d) => d.isActive && leafDefaultsFromDefinition(d));
+    if (definitions.length === 0) {
+      return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
     }
+    if (definitions.length === 1) {
+      return leafDefaultsFromDefinition(definitions[0])!;
+    }
+
+    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 200 });
+    const usedHierarchyTypes = new Set(
+      sample
+        .map((r) => (r.data as { hierarchyType?: unknown } | undefined)?.hierarchyType)
+        .filter((h): h is string => typeof h === 'string'),
+    );
+    const withUsage = definitions.find((d) =>
+      usedHierarchyTypes.has((d.data as { hierarchyType?: unknown } | undefined)?.hierarchyType as string),
+    );
+    if (withUsage) {
+      return leafDefaultsFromDefinition(withUsage)!;
+    }
+
+    const oldest = [...definitions].sort(
+      (a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0),
+    )[0];
+    return leafDefaultsFromDefinition(oldest)!;
   } catch {
     // fall through to the bootstrap default below
   }
