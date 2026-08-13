@@ -509,7 +509,11 @@ public class PGRService {
             // department scope filter and the assignment flow (PGRDetails.js stamping the
             // assignee's raw HRMS department code onto this same field) both compare against
             // the code, and HRMS employee assignments only ever carry the code.
-            return departmentCodeList.get(0);
+            String departmentCode = departmentCodeList.get(0);
+            if (departmentCode == null)
+                return "NA";
+            String normalized = departmentCode.trim();
+            return normalized.isEmpty() || normalized.equalsIgnoreCase("NA") ? "NA" : normalized;
         } catch (Exception e) {
             log.warn("Failed to parse MDMS response for department lookup, service: {}. Defaulting to NA.", serviceCode, e);
             return "NA";

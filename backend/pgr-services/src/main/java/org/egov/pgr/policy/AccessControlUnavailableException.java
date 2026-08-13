@@ -8,6 +8,10 @@ package org.egov.pgr.policy;
  * treating an outage as "no policy defined" would fail the whole tenant open during an incident.
  */
 public class AccessControlUnavailableException extends RuntimeException {
+    public AccessControlUnavailableException(String message) {
+        super(message);
+    }
+
     public AccessControlUnavailableException(String message, Throwable cause) {
         super(message, cause);
     }

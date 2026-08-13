@@ -298,7 +298,8 @@ public class PrincipalScopeResolver {
 
             Set<String> roleCodes = u.getRoles() == null ? Set.of() : u.getRoles().stream()
                     .filter(r -> r != null && r.getCode() != null)
-                    .map(Role::getCode)
+                    .map(r -> r.getCode().trim().toUpperCase())
+                    .filter(c -> !c.isEmpty())
                     .collect(Collectors.toSet());
 
             Map<String, Set<String>> hrmsResolvedValuesPerAxis = Map.of(

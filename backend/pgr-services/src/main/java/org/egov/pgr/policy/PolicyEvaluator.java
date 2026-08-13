@@ -26,7 +26,7 @@ public class PolicyEvaluator {
         }
         try {
             Object result = jsonLogic.apply(conditionJson, data);
-            return JsonLogic.truthy(result);
+            return Boolean.TRUE.equals(result);
         } catch (JsonLogicException | RuntimeException e) {
             log.error("PolicyEvaluator: condition evaluation failed — denying (fail-closed): {}", e.getMessage());
             return false;

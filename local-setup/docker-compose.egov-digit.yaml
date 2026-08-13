@@ -1425,6 +1425,8 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
+      egov-accesscontrol:
+        condition: service_healthy
       otel-collector:
         condition: service_started
     volumes:

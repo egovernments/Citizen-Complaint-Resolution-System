@@ -79,14 +79,16 @@ class MDMSUtilsTest {
     }
 
     @Test
-    void returnsEmptyWithoutCallingOutWhenRequestInfoHasNoRoles() {
+    void throwsWithoutCallingOutWhenRequestInfoHasNoRoles() {
+        // An unidentifiable caller is NOT the same as "call succeeded, no action visible for these
+        // roles" — the latter is what AccessPolicyRegistry treats as "policy not defined, allow"
+        // for backward compatibility. Collapsing the two would disable the Tier-2 per-row re-check
+        // for exactly the caller whose identity is least trustworthy (#1441 review).
         RequestInfo requestInfo = new RequestInfo();
         requestInfo.setUserInfo(new User());
 
-        List<Map<String, Object>> result = mdmsUtils.fetchAccessControlActions(
-                requestInfo, "pg.city", "/pgr-services/v2/request/_search");
-
-        assertTrue(result.isEmpty());
+        assertThrows(AccessControlUnavailableException.class, () -> mdmsUtils.fetchAccessControlActions(
+                requestInfo, "pg.city", "/pgr-services/v2/request/_search"));
         verifyNoInteractions(serviceRequestRepository);
     }
 

@@ -501,7 +501,13 @@ public class MDMSUtils {
         if (roleCodes.isEmpty()) {
             log.error("No roles on RequestInfo — cannot resolve access-control action for url='{}' tenant='{}'",
                     actionUrl, tenantId);
-            return Collections.emptyList();
+            // An unidentifiable caller is NOT the same as "call succeeded, no action visible for
+            // these roles" — that empty-list case is what callers treat as "policy not defined,
+            // allow" for backward compatibility. Collapsing the two here would disable the Tier-2
+            // per-row re-check for exactly the caller whose identity is least trustworthy.
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "no roles on RequestInfo; cannot resolve access-control action for url=" + actionUrl
+                            + " tenant=" + tenantId);
         }
 
         // egov-accesscontrol's ResponseInfoFactory NPEs on a null RequestInfo.ts (a Long/long

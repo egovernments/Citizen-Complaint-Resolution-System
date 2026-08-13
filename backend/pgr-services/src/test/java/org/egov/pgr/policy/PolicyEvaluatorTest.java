@@ -84,4 +84,18 @@ class PolicyEvaluatorTest {
     void nullConditionFailsClosed() {
         assertFalse(evaluator.isAllowed(null, Map.of()));
     }
+
+    @Test
+    void truthyNonBooleanStringResultIsDenied() {
+        // {"var": "user.uuid"} evaluates to the non-empty string "u1" — JsonLogic.truthy() would
+        // treat that as allow, but only an actual Boolean.TRUE may allow (#1441 review).
+        assertFalse(evaluator.isAllowed("{\"var\": \"user.uuid\"}", Map.of("user", Map.of("uuid", "u1"))));
+    }
+
+    @Test
+    void truthyNonBooleanListResultIsDenied() {
+        // {"var": "user.attributes.departments"} evaluates to a non-empty list, truthy but not a Boolean.
+        Map<String, Object> data = Map.of("user", Map.of("attributes", Map.of("departments", List.of("SANITATION"))));
+        assertFalse(evaluator.isAllowed("{\"var\": \"user.attributes.departments\"}", data));
+    }
 }

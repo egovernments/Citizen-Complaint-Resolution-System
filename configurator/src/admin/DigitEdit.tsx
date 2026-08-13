@@ -147,9 +147,12 @@ function DigitEditContent({
             it, fieldState.invalid stays unset (no red/error styling) until
             the first submit attempt. */}
         <Form mode="onChange">
-          <div className="space-y-4">
+          {/* fieldset[disabled] natively blocks all interaction with (and keyboard/Enter
+              submission via) every native form control inside it — a view-only form has one
+              blocking input, but hiding the submit button alone doesn't stop that. */}
+          <fieldset disabled={!canEdit} className="space-y-4 border-0 p-0 m-0">
             {children}
-          </div>
+          </fieldset>
 
           <ActionBar>
             <Button

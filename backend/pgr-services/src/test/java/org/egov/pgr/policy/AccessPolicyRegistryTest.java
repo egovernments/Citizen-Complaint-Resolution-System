@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -130,6 +131,31 @@ class AccessPolicyRegistryTest {
     }
 
     @Test
+    void cachesSuccessfulResolutionsPerRoleSetNotJustPerTenantAndUrl() {
+        // The API is role-scoped: two callers with different roles hitting the same tenant+url must
+        // never share a cached SUCCESSFUL entry either — each role set gets its own condition.
+        RequestInfo supervisorRequestInfo = requestInfo("SUPERVISOR");
+        RequestInfo lmeRequestInfo = requestInfo("PGR_LME");
+        when(mdmsUtils.fetchAccessControlActions(supervisorRequestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
+                        "condition", Map.of("==", List.of(1, 1)))));
+        when(mdmsUtils.fetchAccessControlActions(lmeRequestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
+                        "condition", Map.of("==", List.of(2, 2)))));
+
+        String supervisorCondition = registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, supervisorRequestInfo, "pg.city");
+        String lmeCondition = registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, lmeRequestInfo, "pg.city");
+        // repeat both — each should be served from its OWN cache entry, not the other's
+        assertEquals(supervisorCondition, registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, supervisorRequestInfo, "pg.city"));
+        assertEquals(lmeCondition, registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, lmeRequestInfo, "pg.city"));
+
+        assertEquals("{\"==\":[1,1]}", supervisorCondition);
+        assertEquals("{\"==\":[2,2]}", lmeCondition);
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(supervisorRequestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(lmeRequestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+    }
+
+    @Test
     void cachesDifferentTenantsSeparately() {
         RequestInfo requestInfo = requestInfo("EMPLOYEE");
         Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
@@ -208,6 +234,20 @@ class AccessPolicyRegistryTest {
                 AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
 
         assertEquals("REDACT", rules.get("citizen.mobileNumber").getOnDeny().get("strategy"));
+    }
+
+    @Test
+    void getFieldVisibilityRulesFailsClosedWhenAccessControlCallFails() {
+        // Distinct from "no rules configured" (an empty map, which FieldVisibilityService reads as
+        // a no-op and leaves every field untouched, including citizen PII): an accesscontrol outage
+        // must NOT collapse to that same empty-map sentinel, since some callers (plain search) apply
+        // field masking with no record-level Tier-2 gate at all (#1441 review).
+        RequestInfo requestInfo = requestInfo("CITIZEN");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
+
+        assertThrows(AccessControlUnavailableException.class, () -> registry.getFieldVisibilityRules(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
     }
 
     @Test

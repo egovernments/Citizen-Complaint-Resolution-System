@@ -81,17 +81,32 @@ public class FieldVisibilityService {
     }
 
     private void maskField(BeanWrapper beanWrapper, String path, Map<String, Object> onDeny, String serviceRequestId) {
+        Object current;
         try {
-            Object current = beanWrapper.getPropertyValue(path);
-            if (current == null)
-                return; // nothing to mask
-            beanWrapper.setPropertyValue(path, MaskingStrategy.apply(current, onDeny));
+            current = beanWrapper.getPropertyValue(path);
         } catch (Exception e) {
             // Most commonly a null intermediate object (e.g. no citizen enriched onto this
             // wrapper) — there's genuinely nothing exposed in that case, so this is expected, not
             // an error condition worth alarming on.
-            log.debug("FieldVisibilityService: could not evaluate/mask path '{}' on serviceRequestId={} — nothing to mask: {}",
+            log.debug("FieldVisibilityService: could not read path '{}' on serviceRequestId={} — nothing to mask: {}",
                     path, serviceRequestId, e.getMessage());
+            return;
+        }
+        if (current == null)
+            return; // nothing to mask
+        try {
+            beanWrapper.setPropertyValue(path, MaskingStrategy.apply(current, onDeny));
+        } catch (Exception e) {
+            // The value IS present and the policy denied it — a failed write leaves it exposed in
+            // the response. Fail closed by clearing it instead, and alarm loudly since this is not
+            // an expected condition the way a null intermediate object is.
+            log.error("FieldVisibilityService: failed to mask path '{}' on serviceRequestId={} — clearing the value to avoid exposing it",
+                    path, serviceRequestId, e);
+            try {
+                beanWrapper.setPropertyValue(path, null);
+            } catch (Exception ignored) {
+                throw new IllegalStateException("cannot mask or clear denied field '" + path + "'", e);
+            }
         }
     }
 }

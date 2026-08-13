@@ -118,8 +118,14 @@ public final class ScopePolicy {
         Map<String, Map<String, ScopeLevel>> roleScopes = new LinkedHashMap<>();
         Object roleScopesRaw = scopeMap.get("roleScopes");
         if (roleScopesRaw instanceof Map) {
-            for (Map.Entry<String, Object> entry : ((Map<String, Object>) roleScopesRaw).entrySet())
-                roleScopes.put(entry.getKey(), parseAxisLevelMap(entry.getValue(), axisSet, "roleScopes." + entry.getKey()));
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) roleScopesRaw).entrySet()) {
+                String roleCode = entry.getKey() == null ? "" : entry.getKey().trim().toUpperCase();
+                if (roleCode.isEmpty()) {
+                    log.warn("ScopePolicy: 'roleScopes' has a blank role key — ignoring");
+                    continue;
+                }
+                roleScopes.put(roleCode, parseAxisLevelMap(entry.getValue(), axisSet, "roleScopes." + entry.getKey()));
+            }
         }
 
         return Optional.of(new ScopePolicy(axes, roleScopes, defaultScope));

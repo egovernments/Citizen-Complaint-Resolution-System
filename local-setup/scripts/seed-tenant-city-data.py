@@ -250,6 +250,7 @@ def seed_complaint_hierarchy(tok, uuid):
     time.sleep(2)
 
     rows = complaint_hierarchy_rows()
+    total_failed = 0
     for tenant in [TENANT, CITY_TENANT]:
         print("--- ComplaintHierarchy(Definition) data: %s ---" % tenant)
         r = create_mdms_row(tok, uuid, tenant, "RAINMAKER-PGR.ComplaintHierarchyDefinition", "PGR",
@@ -261,6 +262,8 @@ def seed_complaint_hierarchy(tok, uuid):
             counts[create_mdms_row(tok, uuid, tenant, "RAINMAKER-PGR.ComplaintHierarchy", uid, row)] += 1
         print("  rows: %d created, %d already existed, %d failed" %
               (counts["created"], counts["exists"], counts["failed"]))
+        total_failed += counts["failed"]
+    return total_failed
 
 
 # ---------- Boundary: hierarchy definition + City/Ward entities/relationships ----------
@@ -367,6 +370,7 @@ def seed_city_boundary(tok):
     for w in WARD_CODES:
         plan.append((w, "Ward", CITY_CODE, "%s.%s" % (CITY_CODE, w)))
 
+    still_missing = []
     for code, btype, parent, path in plan:
         if code in existing:
             print("  %s: exists" % code)
@@ -387,13 +391,21 @@ def seed_city_boundary(tok):
                 print("  %s: created via SQL fallback (confirmed)" % code)
             else:
                 print("  ! %s: STILL missing after SQL fallback — investigate manually" % code)
+                still_missing.append(code)
+    return still_missing
 
 
 def main():
     print("seed-tenant-city-data: tenant=%s city=%s url=%s" % (TENANT, CITY_TENANT, URL))
     tok, uuid = token()
-    seed_complaint_hierarchy(tok, uuid)
-    seed_city_boundary(tok)
+    failed_rows = seed_complaint_hierarchy(tok, uuid)
+    still_missing = seed_city_boundary(tok)
+    if failed_rows or still_missing:
+        raise RuntimeError(
+            "seed-tenant-city-data: incomplete — %d ComplaintHierarchy row(s) failed, "
+            "boundary relationship(s) still missing after SQL fallback: %s"
+            % (failed_rows, still_missing or "none")
+        )
     print("done.")
 
 

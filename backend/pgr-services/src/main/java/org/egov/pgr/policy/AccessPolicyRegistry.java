@@ -223,18 +223,21 @@ public class AccessPolicyRegistry {
      * number (N) of them. Returns an empty map (never null) if the action is unresolvable, the
      * legacy flat-string-array {@code resource} shape is present, or {@code resourceType}/
      * {@code attributes} isn't declared — all no-op cases, not errors.
+     *
+     * <p>Deliberately does NOT catch {@link AccessControlUnavailableException} the way
+     * {@link #getCondition} and {@link #getScopePolicy} do: those two have a safe RESTRICTIVE
+     * sentinel to fall back to (null condition -> {@link PolicyEvaluator} denies; absent
+     * ScopePolicy -> {@code SearchAccessPolicyService}'s conservative default). An empty rules map
+     * here means the opposite — {@code FieldVisibilityService.apply} reads it as "nothing to mask"
+     * and leaves every field, including citizen PII, untouched. Some callers (plain search) apply
+     * field masking with NO record-level Tier-2 gate at all, so silently returning "no rules" during
+     * an outage would expose PII outright. Letting the exception propagate fails the whole request
+     * closed instead.
      */
     @SuppressWarnings("unchecked")
     public Map<String, FieldVisibilityRule> getFieldVisibilityRules(String actionUrl, RequestInfo requestInfo,
                                                                       String tenantId, String resourceType) {
-        Map<String, Object> action;
-        try {
-            action = getAction(actionUrl, requestInfo, tenantId);
-        } catch (AccessControlUnavailableException e) {
-            log.error("AccessPolicyRegistry: accesscontrol unavailable for url='{}' tenant='{}' — no field-visibility rules resolvable: {}",
-                    actionUrl, tenantId, e.getMessage());
-            return Map.of();
-        }
+        Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
         if (action == null)
             return Map.of();
 
@@ -293,7 +296,7 @@ public class AccessPolicyRegistry {
     }
 
     private Map<String, Object> getAction(String actionUrl, RequestInfo requestInfo, String tenantId) {
-        String cacheKey = tenantId + "|" + actionUrl;
+        String cacheKey = tenantId + "|" + actionUrl + "|" + roleKey(requestInfo);
         CachedEntry cached = cache.get(cacheKey);
         if (cached != null && !cached.isExpired())
             return cached.action;
@@ -302,6 +305,23 @@ public class AccessPolicyRegistry {
         if (action != null)
             cache.put(cacheKey, new CachedEntry(action));
         return action;
+    }
+
+    /**
+     * Stable, order-independent key for the caller's role set — {@code /access/v1/actions/mdms/_get}
+     * is role-scoped (a role with no ACCESSCONTROL-ROLEACTIONS mapping to this action simply won't
+     * see it), so a resolved entry must never be reused for a caller with a different role set.
+     */
+    private static String roleKey(RequestInfo requestInfo) {
+        if (requestInfo == null || requestInfo.getUserInfo() == null || requestInfo.getUserInfo().getRoles() == null)
+            return "";
+        return requestInfo.getUserInfo().getRoles().stream()
+                .filter(r -> r != null && r.getCode() != null)
+                .map(r -> r.getCode().trim().toUpperCase())
+                .filter(c -> !c.isEmpty())
+                .distinct()
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(","));
     }
 
     /**
