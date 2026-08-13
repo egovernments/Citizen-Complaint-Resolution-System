@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.*;
 
+@lombok.extern.slf4j.Slf4j
 @org.springframework.stereotype.Service
 public class WorkflowService {
 
@@ -179,28 +180,75 @@ public class WorkflowService {
         Service service = request.getService();
         Workflow workflow = request.getWorkflow();
 
+        BusinessService businessService = getBusinessService(request);
+
         ProcessInstance processInstance = new ProcessInstance();
         processInstance.setBusinessId(service.getServiceRequestId());
         processInstance.setAction(request.getWorkflow().getAction());
         processInstance.setModuleName(PGR_MODULENAME);
         processInstance.setTenantId(service.getTenantId());
-        processInstance.setBusinessService(getBusinessService(request).getBusinessService());
+        processInstance.setBusinessService(businessService.getBusinessService());
         processInstance.setDocuments(request.getWorkflow().getVerificationDocuments());
         processInstance.setComment(workflow.getComments());
 
         if(!CollectionUtils.isEmpty(workflow.getAssignes())){
-            List<User> users = new ArrayList<>();
+            // CCSD-2167: egov-workflow-v2 validates every assignee as "can act on
+            // the TARGET state" — terminal states (e.g. RATE ->
+            // CLOSEDAFTERRESOLUTION / CLOSEDAFTERREJECTION) define no actions, so
+            // ANY assignee fails INVALID_ASSIGNEE and the whole transition 400s.
+            // Per requirement the FE sends the Case Manager uuid on RATE; keep it
+            // on request.getWorkflow() (the notification path and the kafka
+            // payload read it from there, so assignee-targeted notifications and
+            // {emp_name} resolve to the right person) but do NOT forward it to
+            // the engine when the transition lands on a terminal state.
+            if (isTargetStateTerminal(businessService, service.getApplicationStatus(), workflow.getAction())) {
+                log.info("Assignee(s) on action {} for {} kept for notifications but not forwarded to "
+                        + "workflow — target state is terminal and the engine would reject them",
+                        workflow.getAction(), service.getServiceRequestId());
+            } else {
+                List<User> users = new ArrayList<>();
 
-            workflow.getAssignes().forEach(uuid -> {
-                User user = new User();
-                user.setUuid(uuid);
-                users.add(user);
-            });
+                workflow.getAssignes().forEach(uuid -> {
+                    User user = new User();
+                    user.setUuid(uuid);
+                    users.add(user);
+                });
 
-            processInstance.setAssignes(users);
+                processInstance.setAssignes(users);
+            }
         }
 
         return processInstance;
+    }
+
+    /**
+     * True when taking {@code action} from the state whose applicationStatus (or
+     * state name — PENDINGFORREASSIGNMENT reports applicationStatus REASSIGND)
+     * equals {@code currentStatus} lands on a state flagged isTerminateState.
+     * Unknown states/actions return false: the engine stays the authority and
+     * behaviour is unchanged everywhere except the terminal-target case.
+     */
+    private boolean isTargetStateTerminal(BusinessService businessService, String currentStatus, String action) {
+        if (businessService == null || CollectionUtils.isEmpty(businessService.getStates())
+                || StringUtils.isBlank(action)) {
+            return false;
+        }
+        for (State state : businessService.getStates()) {
+            boolean matchesCurrent = currentStatus != null
+                    && (currentStatus.equalsIgnoreCase(state.getApplicationStatus())
+                        || currentStatus.equalsIgnoreCase(state.getState()));
+            if (!matchesCurrent || CollectionUtils.isEmpty(state.getActions()))
+                continue;
+            for (Action stateAction : state.getActions()) {
+                if (!action.equalsIgnoreCase(stateAction.getAction()))
+                    continue;
+                for (State target : businessService.getStates()) {
+                    if (target.getUuid() != null && target.getUuid().equals(stateAction.getNextState()))
+                        return Boolean.TRUE.equals(target.getIsTerminateState());
+                }
+            }
+        }
+        return false;
     }
 
     /**
