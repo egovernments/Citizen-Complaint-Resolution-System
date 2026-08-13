@@ -1051,7 +1051,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                 {!selfHeaders && (
                   <header className={`${buildWidgetHeaderClassName(vizType)} dashboard-widget-header tw-min-w-0`}>
                     <div className="dashboard-widget-header-title-row tw-flex tw-min-w-0 tw-items-start tw-gap-2">
-                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-min-w-0 tw-flex-1 tw-truncate`}>
+                      <h2
+                        className={`${SHARED_CHROME.dragHandleTitle} tw-min-w-0 tw-flex-1`}
+                        title={headerTitle}
+                      >
                         {headerTitle}
                       </h2>
                       {hasGroupBy && (
