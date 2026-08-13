@@ -265,6 +265,100 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.levelCode, 'LEAF');
   });
 
+  it('falls back to the oldest known definition, not the hardcoded bootstrap constants, when the usage-count lookup itself fails', async () => {
+    // Reviewer finding on CCRS#1724: the original implementation ran the
+    // `definitions` fetch and the usage-count fetch inside the SAME
+    // try/catch, so a transient failure in the usage lookup discarded the
+    // already-successful `definitions` fetch and fell through to the
+    // hardcoded FALLBACK_HIERARCHY_TYPE/FALLBACK_LEAF_LEVEL_CODE — which
+    // match neither real definition, reproducing the exact
+    // invisible-complaint-type bug (CCRS#1713) this disambiguation exists
+    // to fix. It must degrade to the oldest known definition instead.
+    // The leaf-adapter create path re-fetches via this same schema AFTER
+    // mdmsCreate succeeds (to return the freshly created row) — only the
+    // FIRST call, resolveNewLeafDefaults's own usage-count lookup, should
+    // fail; the post-create re-fetch must still succeed like real MDMS
+    // would on a retry.
+    let hierarchySearches = 0;
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [
+          {
+            id: 'def-newer', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'NEWER',
+            data: { hierarchyType: 'NEWER', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 500, lastModifiedTime: 500 },
+          },
+          {
+            id: 'def-older', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'OLDER',
+            data: { hierarchyType: 'OLDER', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 100, lastModifiedTime: 100 },
+          },
+        ];
+      }
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
+        hierarchySearches += 1;
+        if (hierarchySearches === 1) throw new Error('simulated transient MDMS failure');
+        return [];
+      }
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'OLDER.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'OLDER');
+    assert.equal(captured!.levelCode, 'LEAF');
+  });
+
+  it('seeds departments from the legacy singular department field on read, for records saved before departments existed', async () => {
+    // Reviewer finding on CCRS#1724: a pre-existing complaint type only
+    // ever had `department` — `departments` is a new field those rows
+    // never populated. Without a read-side fallback, the Edit form's
+    // required Departments multi-select loads empty, blocking Save until
+    // the operator re-picks a department blind.
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
+        return [
+          {
+            id: 'leaf-legacy', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.LEGACY',
+            data: {
+              hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'LEGACY', name: 'Legacy Type',
+              parentCode: 'CAT', department: 'DEPT_OLD', slaHours: 24,
+            },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    const { data } = await dp.getList('complaint-hierarchy', {
+      pagination: { page: 1, perPage: 10 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(data.length, 1);
+    assert.deepEqual(data[0].departments, ['DEPT_OLD']);
+    assert.equal(data[0].department, 'DEPT_OLD');
+  });
+
   it('does not overwrite an existing complaint type\'s hierarchyType/levelCode on update', async () => {
     // The Complaint Type edit form never renders these fields, so an edit
     // that only changes e.g. slaHours must not silently reset them to a

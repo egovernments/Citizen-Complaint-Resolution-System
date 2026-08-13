@@ -86,7 +86,13 @@ export function DigitFormMultiSelect({
     : rawError;
 
   const toggle = (value: string, checked: boolean) => {
-    const next = checked ? [...selected, value] : selected.filter((v) => v !== value);
+    const nextSet = new Set(checked ? [...selected, value] : selected.filter((v) => v !== value));
+    // Order by the CHOICES list, not click order — appending the newly
+    // checked value to the end would move a re-checked entry (e.g. undoing
+    // an accidental uncheck) past ones that were already checked, silently
+    // changing which entry is `departments[0]` ("primary") with no visible
+    // indication anything reordered (CCRS#1724 review).
+    const next = choices.filter((c) => nextSet.has(c.value)).map((c) => c.value);
     field.onChange(next);
   };
 

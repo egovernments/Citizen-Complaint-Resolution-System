@@ -153,12 +153,23 @@ function mapLeafToServiceDef(
   parentNameByCode: Map<string, string>,
 ): Record<string, unknown> {
   const parentCode = data.parentCode == null ? '' : String(data.parentCode);
+  // Records saved before `departments` existed only carry the singular
+  // `department` — fall back to it (same convention ComplaintTypeList/Show
+  // already use for rendering) so editing a legacy row doesn't load an
+  // empty, required multi-select that blocks Save until the operator
+  // re-picks a department blind (CCRS#1724 review).
+  const departments =
+    Array.isArray(data.departments) && data.departments.length
+      ? data.departments
+      : data.department != null && data.department !== ''
+        ? [String(data.department)]
+        : [];
   return {
     ...data,
     serviceCode: data.code,
     name: data.name,
     department: data.department,
-    departments: data.departments,
+    departments,
     slaHours: data.slaHours,
     keywords: data.keywords,
     order: data.order,
@@ -225,21 +236,38 @@ async function resolveNewLeafDefaults(
   client: DigitApiClient,
   tenantId: string,
 ): Promise<{ hierarchyType: string; levelCode: string }> {
+  let definitions: MdmsRecord[];
   try {
-    const definitions = (await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true }))
+    definitions = (await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true }))
       .filter((d) => d.isActive && leafDefaultsFromDefinition(d));
-    if (definitions.length === 0) {
-      return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
-    }
-    if (definitions.length === 1) {
-      return leafDefaultsFromDefinition(definitions[0])!;
-    }
+  } catch {
+    return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+  }
+  if (definitions.length === 0) {
+    return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+  }
+  if (definitions.length === 1) {
+    return leafDefaultsFromDefinition(definitions[0])!;
+  }
 
-    // Presence alone isn't enough here — a stray one-off leftover row under
-    // the wrong hierarchyType (exactly the live scenario this is fixing)
-    // would tie with a candidate that has real, dominant usage, and array
-    // order would silently decide the winner again. Count occurrences and
-    // pick the candidate with the MOST usage, not just "any at all".
+  const oldestOfKnown = () =>
+    leafDefaultsFromDefinition(
+      [...definitions].sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0))[0],
+    )!;
+
+  // Presence alone isn't enough here — a stray one-off leftover row under
+  // the wrong hierarchyType (exactly the live scenario this is fixing)
+  // would tie with a candidate that has real, dominant usage, and array
+  // order would silently decide the winner again. Count occurrences and
+  // pick the candidate with the MOST usage, not just "any at all".
+  //
+  // This lookup gets its OWN try/catch, separate from the `definitions`
+  // fetch above (CCRS#1724 review): a transient failure here must degrade
+  // to the oldest already-fetched definition, not discard the successful
+  // `definitions` fetch and fall through to the hardcoded bootstrap
+  // constants, which match neither real definition and would reproduce
+  // the exact invisible-complaint-type bug (CCRS#1713) this is fixing.
+  try {
     const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 500 });
     const usageCounts = new Map<string, number>();
     for (const r of sample) {
@@ -253,15 +281,11 @@ async function resolveNewLeafDefaults(
     if (byUsage.length > 0) {
       return leafDefaultsFromDefinition(byUsage[0].def)!;
     }
-
-    const oldest = [...definitions].sort(
-      (a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0),
-    )[0];
-    return leafDefaultsFromDefinition(oldest)!;
   } catch {
-    // fall through to the bootstrap default below
+    return oldestOfKnown();
   }
-  return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+
+  return oldestOfKnown();
 }
 
 /** Translate an inbound complaint-type form payload (legacy ServiceDefs
