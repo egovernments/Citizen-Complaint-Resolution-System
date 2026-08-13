@@ -1,0 +1,149 @@
+# Promtail for the k3s tier (#1618, phase 2).
+#
+# This is the one config that could NOT be reused verbatim. The compose version
+# discovers containers through the Docker socket:
+#
+#     docker_sd_configs:
+#       - host: unix:///var/run/docker.sock
+#
+# k3s runs containerd. There is no Docker socket, so the discovery half is a
+# rewrite: kubernetes_sd_configs over pods, reading /var/log/pods.
+#
+# The Loki-facing half carries over unchanged, and so does the OUTPUT contract,
+# which is the part that actually matters: `service_name` is the only label the
+# loki-logs.json dashboard selects on, so it is reproduced here from the pod's
+# app label (falling back to the container name). Get that wrong and the
+# dashboard silently returns nothing on this tier while looking identical.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promtail
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promtail
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/proxy, services, endpoints, pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: promtail
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: promtail
+subjects:
+  - kind: ServiceAccount
+    name: promtail
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+    # As in the compose config: reject_old_samples belongs in Loki's config,
+    # not here -- promtail's limits_config schema rejects it outright.
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          # containerd writes CRI format, not Docker JSON. This is the direct
+          # counterpart of the compose config's `docker: {}` stage.
+          - cri: {}
+        relabel_configs:
+          # Only this node's pods -- each DaemonSet pod reads its own node's
+          # /var/log/pods, so without this every log line is ingested N times.
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: __host__
+          - action: keep
+            source_labels: [__meta_kubernetes_pod_node_name]
+            regex: ^${HOSTNAME}$
+          # The dashboard contract. OTLP-emitted entries already carry their own
+          # service_name from OTEL resource attributes; both populate the same
+          # Loki label, exactly as compose_service does in the compose tier.
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: service_name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          # Fall back to the container name when a pod carries no app label,
+          # so an unlabelled pod's logs are still queryable rather than
+          # arriving with an empty selector.
+          - source_labels: [service_name]
+            regex: ^$
+            replacement: $1
+            target_label: service_name
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          # Where the log files actually are, keyed by the UID/container path
+          # kubelet uses.
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            separator: /
+            target_label: __path__
+            replacement: /var/log/pods/*$1/*.log
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: promtail
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: promtail
+  template:
+    metadata:
+      labels:
+        app: promtail
+    spec:
+      serviceAccountName: promtail
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: promtail
+          image: grafana/promtail:3.4.2
+          args:
+            - -config.file=/etc/promtail/config.yaml
+            # Lets ${HOSTNAME} in the config resolve, which is what scopes
+            # discovery to this node.
+            - -config.expand-env=true
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - {name: config, mountPath: /etc/promtail}
+            - {name: positions, mountPath: /run/promtail}
+            - {name: pods, mountPath: /var/log/pods, readOnly: true}
+            # /var/log/pods entries are symlinks into here; without it the
+            # tail resolves to a dangling link and silently reads nothing.
+            - {name: containers, mountPath: /var/log/containers, readOnly: true}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+      volumes:
+        - {name: config, configMap: {name: promtail-config}}
+        - {name: positions, hostPath: {path: /run/promtail, type: DirectoryOrCreate}}
+        - {name: pods, hostPath: {path: /var/log/pods}}
+        - {name: containers, hostPath: {path: /var/log/containers}}

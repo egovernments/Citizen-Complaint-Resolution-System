@@ -160,8 +160,30 @@ extraEnv:
           configMapKeyRef:
             name: egov-config
             key: spring-datasource-tomcat-initialSize
+      {{- if .Values.otel.enabled }}
+      # OTEL javaagent (#1646). JAVA_TOOL_OPTIONS is how the JVM picks the
+      # agent up without changing any service's entrypoint. Metrics AND traces
+      # travel one OTLP pipeline to the collector, which re-exposes metrics for
+      # Prometheus — so this single block is what gives 41 services JVM metrics.
+      - name: JAVA_TOOL_OPTIONS
+        value: "-javaagent:/otel/opentelemetry-javaagent.jar"
+      - name: OTEL_SERVICE_NAME
+        value: {{ template "common.name" . }}
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: {{ .Values.otel.endpoint | quote }}
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: "grpc"
+      - name: OTEL_METRICS_EXPORTER
+        value: "otlp"
+      - name: OTEL_TRACES_EXPORTER
+        value: {{ .Values.otel.tracesExporter | quote }}
+      # Logs stay on the promtail -> loki path this tier already uses.
+      - name: OTEL_LOGS_EXPORTER
+        value: "none"
+      {{- else }}
       - name: OTEL_TRACES_EXPORTER
         value: "none"
+      {{- end }}
       - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
         value: "org.postgresql.Driver"
       - name: SERVER_TOMCAT_MAX_THREADS
@@ -271,6 +293,51 @@ securityContext: {}
 
 service:
   additionalAnnotations: {}
+
+# ── Application telemetry (#1646) ──────────────────────────────────────
+# OFF BY DEFAULT, deliberately. Switching it on adds an init container and a
+# JAVA_TOOL_OPTIONS javaagent to EVERY java-spring service in the deployment —
+# the widest blast radius of any value in this chart. Enable it in env.yaml
+# for one environment, verify pods still start and metrics arrive, then roll
+# it wider.
+#
+# What it buys: JVM metrics for all 41 services, which this tier has none of
+# today (0 of 41 charts define a ServiceMonitor, and no service exposes a
+# micrometer/actuator endpoint for one to scrape). The agent exports OTLP to
+# the collector, which re-exposes everything on a SINGLE Prometheus endpoint —
+# so collection needs one ServiceMonitor, not 41.
+#
+# It also supersedes the Jaeger env this chart still injects (extraEnv.jaeger,
+# below): 25 live services point at a node-local jaeger agent that is not
+# deployed and, with useHostPort: false in the jaeger values, could not receive
+# them if it were. Remove that block once this is on everywhere.
+otel:
+  enabled: false
+  # Where the agent sends OTLP. Service name follows the collector release in
+  # charts/monitoring/monitoring-helmfile.yaml.
+  endpoint: "http://otel-collector-opentelemetry-collector.monitoring:4317"
+  # Traces need a backend. This tier has none yet (jaeger is installed: false
+  # and is a different architecture), so traces stay off while metrics flow.
+  # Flip to "otlp" when a trace store lands, and add the traces pipeline to
+  # the collector values at the same time.
+  tracesExporter: "none"
+  # Image carrying the javaagent jar. This is the image the OpenTelemetry
+  # Operator uses for Java auto-instrumentation; it ships the jar at
+  # /javaagent.jar. Pinned to match the Ansible tier's agent version
+  # (local-setup/otel/download-agent.sh pins 2.11.0) so metric names and the
+  # JVM dashboard line up across both tiers.
+  #
+  # The 2.11.0 tag is published and pullable — GHCR's package page only shows
+  # recent tags by default, so check the registry, not the page. Verified
+  # 2026-08-10 against ghcr.io/v2/.../manifests/2.11.0: an OCI image index at
+  # sha256:b32b2153611bb11a98006d8d34c3ee91d307f491fa754ab66f5b0aff31a93a1b
+  # covering linux/amd64, arm64, s390x and ppc64le. Re-check before bumping:
+  # otel.enabled adds this as an init container to every service, so a bad tag
+  # is ImagePullBackOff across the whole tier at once.
+  agentImage: "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:2.11.0"
+  # Path to the jar INSIDE agentImage. Configurable because it differs between
+  # the operator image (/javaagent.jar) and a hand-built one.
+  agentJarPath: "/javaagent.jar"
 
 serviceMonitor:
   honorLabels: true

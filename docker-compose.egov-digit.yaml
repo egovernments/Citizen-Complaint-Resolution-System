@@ -14,9 +14,9 @@ services:
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "14317:4317"
-      - "14318:4318"
-      - "13133:13133"
+      - "127.0.0.1:14317:4317"
+      - "127.0.0.1:14318:4318"
+      - "127.0.0.1:13133:13133"
     networks:
       - egov-network
 
@@ -29,7 +29,7 @@ services:
       - ./otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "13200:3200"
+      - "127.0.0.1:13200:3200"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
       interval: 10s
@@ -55,7 +55,7 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "13000:3000"
+      - "127.0.0.1:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
@@ -81,12 +81,17 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
-      - --web.enable-lifecycle
+      # NOTE: no --web.enable-lifecycle (#1608) — it exposes POST /-/reload
+      # AND POST /-/quit unauthenticated. The Ansible deploy reloads by
+      # SIGHUP instead. (This whole root-level file is deleted by #1637,
+      # which closes drift issue #1617. If #1637 lands first this hunk is
+      # moot; if it lands second, resolve the modify/delete by taking the
+      # delete. The live copy is local-setup/docker-compose.egov-digit.yaml.)
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "19090:9090"
+      - "127.0.0.1:19090:9090"
     networks:
       - egov-network
 
@@ -1494,7 +1499,12 @@ services:
       - "18443:8443"   # Proxy (HTTPS)
       - "18001:8001"   # Admin API
       - "18002:8002"   # Kong Manager GUI
-      - "18100:8100"   # Status endpoint
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1521,7 +1531,7 @@ services:
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
     ports:
-      - "18889:8080"
+      - "127.0.0.1:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
     networks:
@@ -1537,7 +1547,7 @@ services:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
     ports:
-      - "13100:3100"
+      - "127.0.0.1:13100:3100"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
       interval: 10s
