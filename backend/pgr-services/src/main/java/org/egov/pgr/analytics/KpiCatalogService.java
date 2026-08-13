@@ -37,6 +37,9 @@ public class KpiCatalogService {
     private static final String MASTER_PACK = "DashboardPack";
     private static final String MASTER_CONFIG = "DashboardConfig";
 
+    /** The only departmentScoping value that turns employee department scoping OFF (#1280). */
+    private static final String DEPT_SCOPING_DISABLED = "disabled";
+
     /**
      * Documented backward-compatible fallback zone (#29 timezone addendum) — used ONLY when a
      * tenant's state-root {@code dss.DashboardConfig.timeZone} is absent, malformed (not a valid
@@ -47,13 +50,14 @@ public class KpiCatalogService {
 
     /**
      * ONE cached fetch of the state-root's {@code dss.DashboardConfig} record, shared by
-     * {@link #isPublicDashboardEnabled} and {@link #resolveTimeZone} so the config axes
+     * {@link #isDepartmentScopingDisabled}, {@link #isPublicDashboardEnabled}, and
+     * {@link #resolveTimeZone} so the config axes
      * never trigger duplicate MDMS calls or run parallel cache implementations (#29 requirement).
      * stateRoot -> [Map<String,Object> record-or-null, Long expiresAtMs].
      */
     private final java.util.concurrent.ConcurrentHashMap<String, Object[]> dashboardConfigCache =
             new java.util.concurrent.ConcurrentHashMap<>();
-    /** Injectable clock for cache-expiry tests. */
+    /** Injectable clock for cache-expiry tests (see KpiCatalogServiceDeptScopingTest). */
     private java.util.function.LongSupplier configClock = System::currentTimeMillis;
     /**
      * TTL-bounded warning gate for {@link #resolveTimeZone}'s fallback logging — see
@@ -61,6 +65,9 @@ public class KpiCatalogService {
      * generation (expiresAtMs) already warned for.
      */
     private final java.util.concurrent.ConcurrentHashMap<String, Long> timeZoneFallbackWarnedGeneration =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Same per-cache-generation gate for the department-scoping-disabled INFO line. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> deptScopingDisabledLoggedGeneration =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     private final PGRConfiguration config;
@@ -128,6 +135,43 @@ public class KpiCatalogService {
         return fetchDefs(stateRoot).stream()
                 .filter(d -> kpiId.equals(d.getId()))
                 .findFirst();
+    }
+
+    /**
+     * Whether {@code dss.DashboardConfig.departmentScoping} is {@code "disabled"} for the tenant's
+     * state root (#1280) — i.e. employees should NOT be department-scoped on the analytics API.
+     *
+     * <p>Returns {@code true} only when a DashboardConfig record exists whose
+     * {@code departmentScoping} equals {@code "disabled"} (case-insensitive, trimmed). Everything
+     * else — module/record/field absent, malformed value, MDMS unreachable — resolves to
+     * {@code false} ("enforced", today's behavior). Fail-safe by construction; this method never
+     * throws.
+     *
+     * <p>Cached in-memory per state root (both outcomes) for
+     * {@code pgr.analytics.config-cache-ttl-ms} (the single TTL shared by every analytics
+     * config cache; default 5 minutes), mirroring the {@code recordCount} cache idiom in
+     * AnalyticsService — a config flip takes effect within one TTL without a redeploy.
+     */
+    public boolean isDepartmentScopingDisabled(String tenantId) {
+        try {
+            if (tenantId == null || tenantId.isEmpty()) return false;
+            String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+            Object[] entry = dashboardConfigEntry(tenantId);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> record = (Map<String, Object>) entry[0];
+            if (record == null) return false;
+            Object v = record.get("departmentScoping");
+            boolean disabled = v instanceof String && DEPT_SCOPING_DISABLED.equalsIgnoreCase(((String) v).trim());
+            if (disabled && shouldLogDepartmentScopingDisabled(stateRoot, (Long) entry[1]))
+                log.info("dss.DashboardConfig.departmentScoping=disabled at {} — employee department scoping OFF",
+                        stateRoot);
+            return disabled;
+        } catch (Exception e) {
+            // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
+            // that could flip the caller's HRMS-error path to deny-all.
+            log.warn("departmentScoping lookup failed for tenant {}; treating as enforced", tenantId, e);
+            return false;
+        }
     }
 
     /**
@@ -244,9 +288,25 @@ public class KpiCatalogService {
     }
 
     /**
+     * Returns true once per state-root DashboardConfig cache generation, preventing the
+     * department-scoping-disabled INFO line from becoming a per-request log.
+     */
+    private boolean shouldLogDepartmentScopingDisabled(String stateRoot, long generation) {
+        boolean[] shouldLog = {false};
+        deptScopingDisabledLoggedGeneration.compute(stateRoot, (root, loggedGeneration) -> {
+            if (loggedGeneration == null || loggedGeneration != generation) {
+                shouldLog[0] = true;
+                return generation;
+            }
+            return loggedGeneration;
+        });
+        return shouldLog[0];
+    }
+
+    /**
      * THE single cached fetch of the state-root's {@code dss.DashboardConfig} record — the shared
-     * seam {@link #isPublicDashboardEnabled} and {@link #resolveTimeZone} both read, so a request
-     * touching multiple axes issues exactly one
+     * seam {@link #isDepartmentScopingDisabled}, {@link #isPublicDashboardEnabled}, and
+     * {@link #resolveTimeZone} all read, so a request touching multiple axes issues exactly one
      * MDMS call and any config-field flip takes effect within one {@link #configCacheTtlMs()}
      * window. Returns {@code null} (cached) when no record exists; never throws — callers apply
      * their own field-specific fallback.

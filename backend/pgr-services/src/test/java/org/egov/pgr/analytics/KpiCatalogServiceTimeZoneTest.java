@@ -31,9 +31,10 @@ import static org.mockito.Mockito.*;
  * module/record/field, a malformed value, and an MDMS error ALL fall back to
  * {@link KpiCatalogService#DEFAULT_TIME_ZONE} (Africa/Nairobi, migration-compatibility default,
  * never thrown). Also pins the ONE shared {@code dashboardConfig} cache/fetch
- * {@link KpiCatalogService#isPublicDashboardEnabled} and {@link KpiCatalogService#resolveTimeZone}
+ * {@link KpiCatalogService#isDepartmentScopingDisabled} and {@link KpiCatalogService#resolveTimeZone}
  * both read — a request touching both axes issues exactly one MDMS call, and a config flip on
- * either field takes effect together within one TTL window.
+ * either field takes effect together within one TTL window (mirrors
+ * {@link KpiCatalogServiceDeptScopingTest}'s cache coverage for the sibling axis).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -128,16 +129,16 @@ public class KpiCatalogServiceTimeZoneTest {
         verifyNoInteractions(repo);
     }
 
-    // ---- the shared cache: ONE fetch serves both publicDashboardEnabled and timeZone ----
+    // ---- the shared cache: ONE fetch serves both departmentScoping and timeZone ----
 
     @Test
     public void oneFetchServesBothConfigAxes() {
         Map<String, Object> combined = new HashMap<>();
-        combined.put("publicDashboardEnabled", true);
+        combined.put("departmentScoping", "disabled");
         combined.put("timeZone", "Asia/Kolkata");
         when(repo.fetchResult(any(), any())).thenReturn(mdmsResult(combined));
 
-        assertTrue(service.isPublicDashboardEnabled("ke.bomet"));
+        assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
         assertEquals(ZoneId.of("Asia/Kolkata"), service.resolveTimeZone("ke.bomet"));
 
         verify(repo, times(1)).fetchResult(any(), any());
@@ -146,12 +147,12 @@ public class KpiCatalogServiceTimeZoneTest {
     @Test
     public void oneFetchServesBothConfigAxesRegardlessOfCallOrder() {
         Map<String, Object> combined = new HashMap<>();
-        combined.put("publicDashboardEnabled", false);
+        combined.put("departmentScoping", "enforced");
         combined.put("timeZone", "Africa/Maputo");
         when(repo.fetchResult(any(), any())).thenReturn(mdmsResult(combined));
 
         assertEquals(ZoneId.of("Africa/Maputo"), service.resolveTimeZone("ke.bomet"));
-        assertFalse(service.isPublicDashboardEnabled("ke.bomet"));
+        assertFalse(service.isDepartmentScopingDisabled("ke.bomet"));
 
         verify(repo, times(1)).fetchResult(any(), any());
     }
@@ -314,17 +315,17 @@ public class KpiCatalogServiceTimeZoneTest {
     }
 
     @Test
-    public void resolveTimeZoneWarningGateDoesNotAffectPublicDashboardCaching() {
-        // Regression guard: the shared dashboardConfig fetch/cache (and isPublicDashboardEnabled's
+    public void resolveTimeZoneWarningGateDoesNotAffectDepartmentScopingCaching() {
+        // Regression guard: the shared dashboardConfig fetch/cache (and isDepartmentScopingDisabled's
         // use of it) must be byte-for-byte unaffected by the resolveTimeZone-only warning gate.
         Map<String, Object> combined = new HashMap<>();
-        combined.put("publicDashboardEnabled", true);
+        combined.put("departmentScoping", "disabled");
         combined.put("timeZone", "Asia/Kolkata");
         when(repo.fetchResult(any(), any())).thenReturn(mdmsResult(combined));
 
-        assertTrue(service.isPublicDashboardEnabled("ke.bomet"));
+        assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
         assertEquals(ZoneId.of("Asia/Kolkata"), service.resolveTimeZone("ke.bomet"));
-        assertTrue(service.isPublicDashboardEnabled("ke.bomet"));
+        assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
         assertEquals(ZoneId.of("Asia/Kolkata"), service.resolveTimeZone("ke.bomet"));
 
         verify(repo, times(1)).fetchResult(any(), any());
