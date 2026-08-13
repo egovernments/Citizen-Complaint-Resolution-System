@@ -13,6 +13,11 @@ import { probeServices } from '../utils/probe.js';
 import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
 import { DASHBOARD_L10N_PACKS } from './dashboard-l10n-seed.js';
+import {
+  DASHBOARD_CATALOG_SCHEMAS,
+  DASHBOARD_KPI_DEFINITIONS,
+  DASHBOARD_PACKS,
+} from './dashboard-catalog-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -161,6 +166,121 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
     .filter((p) => p.length > 0)
     .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p));
   return cleaned.length > 0 ? cleaned : null;
+}
+
+/** Minimal shape of an mdms-v2 record this module needs to read a master's code + name. */
+interface MasterRowLike {
+  uniqueIdentifier?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * #1590: derive `COMMON_MASTERS_DEPARTMENT_<CODE>` / `COMMON_MASTERS_DESIGNATION_<CODE>`
+ * messages from the department/designation MASTERS a bootstrap just copied.
+ *
+ * tenant_bootstrap's localization step can only carry a message that already
+ * exists on some source tenant, while the MDMS data copy carries the masters
+ * unconditionally. A master the source dump never localized therefore lands on
+ * the target with no message and renders as its raw code — the canned
+ * `pg.citya` / `india.citya` `PMC_*` departments are the live example, and the
+ * dashboard's department tiles show `PMC_ELEC` because the dimensionLabel
+ * contract deliberately has no humaniser
+ * (digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+ *
+ * The message text is the master's own `name` — DATA-OWNED text an operator
+ * authored, which is exactly what that contract sanctions as fallback. A
+ * master with no `name` yields nothing: the gap stays visible rather than
+ * being papered over with a label invented from the code.
+ *
+ * Callers apply this as a FLOOR (a real copied message always wins) and for
+ * the primary locale only — writing an English master name into a pt_PT pack
+ * would hide a genuine translation gap.
+ */
+export function deriveMasterLocalizations(
+  departments: MasterRowLike[],
+  designations: MasterRowLike[],
+): { code: string; message: string; module: string }[] {
+  const out: { code: string; message: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const derive = (rows: MasterRowLike[], prefix: string) => {
+    for (const row of rows || []) {
+      const data = row?.data || {};
+      // Both fields are typed loosely enough to arrive non-string from a
+      // hand-edited or dump-imported record. Guard before trim(): a throw
+      // here escapes into the caller's catch and drops the WHOLE derived
+      // floor, not just the malformed row.
+      const identifier = typeof row?.uniqueIdentifier === 'string' ? row.uniqueIdentifier.trim() : '';
+      const dataCode = typeof data.code === 'string' ? data.code.trim() : '';
+      const code = identifier || dataCode;
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!code || !name) continue;
+      const key = `${prefix}${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ code: key, message: name, module: 'rainmaker-common' });
+    }
+  };
+  derive(departments, 'COMMON_MASTERS_DEPARTMENT_');
+  derive(designations, 'COMMON_MASTERS_DESIGNATION_');
+  return out;
+}
+
+/**
+ * Schemas where copying ZERO records from the source is a defect, not a no-op.
+ *
+ * The bootstrap copy is silent about an empty source: no records to iterate
+ * means nothing lands in `copied`, `skipped` OR `failed`, so the run reports
+ * success and the operator finds out weeks later that a feature renders blank.
+ * These schemas carry platform-level definitions that every root needs and
+ * that no other step seeds, so an empty source gets an explicit warning.
+ *
+ * Deliberately NOT in this list: tenant-specific masters (ComplaintHierarchy,
+ * ServiceDefs) whose emptiness at the source is the correct, expected state —
+ * they are operator-owned and loaded via the configurator.
+ */
+const SCHEMAS_EMPTY_IS_A_PROBLEM = new Map<string, { impact: string; remedy: string }>([
+  // dss.KpiDefinition / dss.DashboardPack are intentionally NOT here: they are
+  // backfilled from the repo by the catalog floor (Step 2b), so an empty source
+  // is no longer a problem for them. The remaining entries have no floor yet.
+  [
+    'INBOX.InboxQueryConfiguration',
+    {
+      impact: 'employee inbox searches will fail to resolve their query config',
+      remedy: 'copy the master from a populated root (no installer script covers this one)',
+    },
+  ],
+  [
+    'ACCESSCONTROL-ROLEACTIONS.roleactions',
+    {
+      impact: 'no role will have any action grants, so every sidebar renders empty',
+      remedy: 'seed ACCESSCONTROL-ROLEACTIONS from the ansible seed files',
+    },
+  ],
+]);
+
+/**
+ * True when an MDMS data payload is actually a JSON Schema document.
+ *
+ * Posting a schema body to `/v2/_create/<schema>` instead of
+ * `/schema/v1/_create` produces a data row whose payload is the schema itself.
+ * mdms-v2 accepts it, it occupies the uniqueIdentifier that the real record
+ * needs, and every later seed of that record is rejected as a duplicate — so
+ * the master stays permanently broken while looking populated. Observed live
+ * on `mz` for dss.KpiDefinition and dss.DashboardPack.
+ *
+ * Both markers are required, and both must be at the TOP level. Masters that
+ * legitimately carry a JSON Schema as part of their data (e.g.
+ * RAINMAKER-PGR.ComplaintExtendedAttributeSchema) nest it under a field —
+ * verified live on `mz`, where those rows have neither `$schema` nor
+ * `properties` as a top-level key.
+ */
+function isSchemaDocument(data: Record<string, unknown> | undefined): boolean {
+  if (!data || typeof data !== 'object') return false;
+  return (
+    typeof data['$schema'] === 'string' &&
+    typeof data['properties'] === 'object' &&
+    data['properties'] !== null
+  );
 }
 
 /**
@@ -1189,9 +1309,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const results: {
         schemas: { copied: string[]; skipped: string[]; failed: string[] };
         data: { copied: string[]; skipped: string[]; failed: string[] };
+        warnings: string[];
       } = {
         schemas: { copied: [], skipped: [], failed: [] },
         data: { copied: [], skipped: [], failed: [] },
+        warnings: [],
       };
 
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
@@ -1212,6 +1334,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const sourceSchemas = await digitApi.mdmsSchemaSearch(source);
       for (const schema of sourceSchemas) {
         const code = schema.code as string;
+        // The dss.* catalog schemas are registered from the repo in Step 1b.
+        // If we copied the source's copy here first, Step 1b would only ever
+        // see a duplicate and the source's (possibly stale) definition would
+        // win — schema code is immutable, so whichever registers first stays.
+        // Skip them here so the canonical definition is the one that lands.
+        if (code in DASHBOARD_CATALOG_SCHEMAS) {
+          continue;
+        }
         const definition = schema.definition as Record<string, unknown>;
         const description = (schema.description as string) || code;
         const xUnique = (definition as { 'x-unique'?: unknown })['x-unique'];
@@ -1222,6 +1352,31 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         try {
           await digitApi.mdmsSchemaCreate(target, code, description, definition);
           results.schemas.copied.push(code);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (isDuplicateError(msg)) {
+            results.schemas.skipped.push(code);
+          } else {
+            results.schemas.failed.push(`${code}: ${msg}`);
+          }
+        }
+      }
+
+      // Step 1b: ensure the canonical dss schemas are registered.
+      //
+      // The dashboard catalog masters (dss.KpiDefinition / dss.DashboardPack /
+      // dss.DashboardConfig) are tenant-invariant platform definitions. Copying
+      // them from the source (Step 1 above) only works if the source carries
+      // them, and copies whatever the source has — including a stale schema.
+      // Register the canonical definitions from the repo instead, create-if-
+      // absent (schema code is immutable; mdms-v2 _update is 501, so an already-
+      // registered schema is left as-is — reconciling a stale one is a separate
+      // DB-level op, out of scope here). This guarantees the schema exists
+      // before Step 2b seeds the catalog data.
+      for (const [code, definition] of Object.entries(DASHBOARD_CATALOG_SCHEMAS)) {
+        try {
+          await digitApi.mdmsSchemaCreate(target, code, code, definition);
+          results.schemas.copied.push(`${code} (canonical)`);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (isDuplicateError(msg)) {
@@ -1542,11 +1697,62 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               .map((r) => [r.uniqueIdentifier, r]),
           );
 
+          // An empty source is not the same as "nothing to do". For schemas
+          // whose whole purpose is to carry platform-level definitions, a
+          // source root with no rows means the target gets a working shell
+          // with an empty catalog — which is indistinguishable from success in
+          // the copied/skipped/failed counters. This is exactly how `mz` was
+          // bootstrapped to a dashboard with zero KPIs. Say so out loud.
+          const emptyImpact = SCHEMAS_EMPTY_IS_A_PROBLEM.get(schemaCode);
+          if (sourceRecords.length === 0 && emptyImpact) {
+            const warning =
+              `Source tenant "${source}" has no ${schemaCode} records — nothing was copied to ` +
+              `"${target}", so ${emptyImpact.impact}. Seed it from the repo files: ` +
+              `${emptyImpact.remedy} (tenant "${target}").`;
+            results.warnings.push(warning);
+            console.warn(`[tenant_bootstrap] ${warning}`);
+            emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode } });
+          }
+
           for (const record of sourceRecords) {
             const existing = targetByUid.get(record.uniqueIdentifier);
             try {
+              // A record whose payload is a JSON Schema document is the result
+              // of POSTing a schema body to /v2/_create/<schema> instead of
+              // /schema/v1/_create. It is not data, it occupies the uid a real
+              // record needs, and copying it propagates the corruption to every
+              // tenant bootstrapped from this source. Found live on `mz`.
+              if (isSchemaDocument(record.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at source "${source}": the ` +
+                  `record payload is a JSON Schema document, not data. Deactivate it at the ` +
+                  `source (mdms-v2 _update with isActive:false) — it also shadows the real record there.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (schema-as-data, not copied)`);
+                continue;
+              }
+              // A valid source record colliding with an active schema-as-data
+              // row on the TARGET must be surfaced, not swallowed by the
+              // generic active-record skip below — otherwise the target's
+              // corruption is invisible and the good record never lands, while
+              // bootstrap reports success. The copy can't repair it (an active
+              // row is not overwritten), so point the operator at the fix.
+              if (existing?.isActive && isSchemaDocument(existing.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at target "${target}": the ` +
+                  `existing record is a JSON Schema document, not data, and shadows the real record. ` +
+                  `Deactivate it (mdms-v2 _update with isActive:false), then re-run — or repair it ` +
+                  `with local-setup/scripts/enable-dashboard.sh --repair.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (target schema-as-data, not copied)`);
+                continue;
+              }
               if (existing && existing.isActive) {
-                // Already active — skip
+                // Already active — skip.
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
               } else if (existing && !existing.isActive) {
                 // Inactive (from cleanup) — re-activate via update.
@@ -1585,6 +1791,57 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         } catch (schemaErr) {
           // Schema might not have data in source — that's OK
           console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+        }
+      }
+
+      // Step 2b: seed the canonical dashboard catalog as a floor.
+      //
+      // Mirrors the l10n floor below (DASHBOARD_L10N_PACKS): the copy-from-
+      // source above fills dss.KpiDefinition / dss.DashboardPack only when the
+      // source carries them, and a source without a catalog yields an empty one
+      // (#1394). These are tenant-invariant platform definitions with no tenant
+      // identity, so seed them from the repo, create-if-absent — a live record
+      // from the source copy (or a prior run) wins; a fresh/empty root gets the
+      // full canonical catalog. dss.DashboardConfig is intentionally NOT floored
+      // (its allowedRoles/scoping are tenant-specific, operator-owned).
+      {
+        const catalogFloor: Array<[string, Record<string, unknown>[]]> = [
+          ['dss.KpiDefinition', DASHBOARD_KPI_DEFINITIONS],
+          ['dss.DashboardPack', DASHBOARD_PACKS],
+        ];
+        for (const [schemaCode, records] of catalogFloor) {
+          let existingUids = new Set<string>();
+          try {
+            const rows = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+            existingUids = new Set(
+              (rows || [])
+                .filter((r) => (r as { tenantId?: string }).tenantId === target)
+                .map((r) => r.uniqueIdentifier as string),
+            );
+          } catch {
+            // No rows yet (fresh tenant) — the floor fills everything.
+          }
+          for (const data of records) {
+            // The uid is derived server-side from x-unique (["id"]); a record
+            // already present under that id — copied from source or seeded on a
+            // prior run — is left untouched (first-writer-wins).
+            const id = (data as { id?: string }).id;
+            if (id && existingUids.has(id)) {
+              results.data.skipped.push(`${schemaCode}/${id} (catalog floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithSchemaWait(target, schemaCode, id ?? '', { ...data });
+              results.data.copied.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+              } else {
+                results.data.failed.push(`${schemaCode}/${id ?? '?'} (catalog floor): ${msg}`);
+              }
+            }
+          }
         }
       }
 
@@ -1942,7 +2199,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // ────────────────────────────────────────────────────────────────
       emitProgress({ phase: 'localizations:start', message: 'Copying localization messages (this can take a while for the full set)', pct: 95 });
 
-      const localizationResults: { locale: string; copied: number; failed: number; error?: string }[] = [];
+      const localizationResults: { locale: string; copied: number; failed: number; derived?: number; error?: string }[] = [];
       const UPSERT_BATCH = 500;
 
       // Discover locales — read source's StateInfo, pull `.languages[].value`.
@@ -1968,6 +2225,43 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const localeSourceTenants = Array.from(
         new Set([source, 'statea', 'statea.g', 'pg', 'pg.citest', 'ke', 'ke.nairobi']),
       );
+
+      // #1590: the copy loop can only carry a message that already exists on
+      // SOME source tenant. Step 2 copies the department/designation MASTERS
+      // regardless — so a master the source dump never localized (the canned
+      // `pg.citya`/`india.citya` PMC_* departments are the live example) lands
+      // on the target with no `COMMON_MASTERS_DEPARTMENT_<CODE>` message and
+      // renders as the raw code wherever a code is displayed: HRMS forms, the
+      // employee filters, and the dashboard's department tiles (which have no
+      // humaniser by design — see the dimensionLabel contract in
+      // digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+      //
+      // Derive the missing keys from the master's own `name`. That is the
+      // DATA-OWNED display text an operator authored, which is exactly what
+      // the dimensionLabel contract sanctions as fallback — not a code-owned
+      // English guess. Copied messages still win (added below only when the
+      // union has no entry for the key).
+      //
+      // PRIMARY LOCALE ONLY — and the primary locale is StateInfo.languages[0],
+      // the deployment's own default, NOT en_IN. The master `name` is authored
+      // in whatever language the operator onboarded in ("Obras Públicas" on mz),
+      // so it belongs in that deployment's default pack. Copying it into the
+      // *other* packs would paper over a real translation gap and defeat the
+      // locale-strict resolution added for #1108 — an untranslated department
+      // must stay visibly untranslated in the locales nobody translated it into.
+      const primaryLocale = locales[0];
+      let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
+      try {
+        const [deptRows, desigRows] = await Promise.all([
+          digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 500 }).catch(() => []),
+          digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 500 }).catch(() => []),
+        ]);
+        derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
+      } catch (e) {
+        // Non-fatal: the copy loop below still runs. A master read failure
+        // just means no derived floor for this run.
+        console.error(`[tenant_bootstrap] master-derived localization skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       for (const locale of locales) {
         emitProgress({
@@ -2032,6 +2326,26 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (!byKey.has(key)) byKey.set(key, m);
             }
           }
+          // #1590 floor: department/designation labels derived from the masters
+          // Step 2 copied, for codes no source tenant localized. Primary locale
+          // only, and only where the union has nothing — a real translation
+          // always wins over the master name.
+          let derivedCount = 0;
+          if (locale === primaryLocale) {
+            for (const m of derivedMasterMessages) {
+              const key = `${m.module}::${m.code}`;
+              if (byKey.has(key)) continue;
+              byKey.set(key, m);
+              derivedCount++;
+            }
+            if (derivedCount > 0) {
+              emitProgress({
+                phase: 'localizations:derived',
+                message: `${locale}: derived ${derivedCount} department/designation label(s) from MDMS masters (no source tenant localized them)`,
+                data: { locale, derived: derivedCount },
+              });
+            }
+          }
           const messages = Array.from(byKey.values());
 
           if (messages.length === 0) {
@@ -2090,13 +2404,59 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             }
           }
-          localizationResults.push({ locale, copied, failed });
+          localizationResults.push({ locale, copied, failed, ...(derivedCount > 0 ? { derived: derivedCount } : {}) });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           localizationResults.push({ locale, copied: 0, failed: 0, error: msg.slice(0, 200) });
         }
       }
 
+      // The derived floor also has to land on the ROOT tenant, not just the
+      // city. egov-localization `_search` resolves a tenant's OWN rows only —
+      // verified on bomet: a `_search` at `ke.india` returns its 9 rows and no
+      // `ke` row, and a `_search` at `ke` never sees a `ke.india` row. The
+      // dashboard (like the rest of the employee shell) loads its packs for
+      // `stateTenantId`, so a message written only to `ke.india` is invisible
+      // exactly where #1590 was reported — the root dashboard aggregating that
+      // city's complaints. Same reason, same shape as the TENANT_TENANTS_*
+      // push below. Duplicate-tolerant: the root usually already has most of
+      // these, and the upsert treats a repeat as a no-op.
+      if (derivedMasterMessages.length > 0 && target.includes('.')) {
+        const rootTenant = target.split('.')[0];
+        let rootDerived = 0;
+        let rootExisting = 0;
+        let rootFailed = 0;
+        for (const m of derivedMasterMessages) {
+          try {
+            await digitApi.localizationUpsert(rootTenant, primaryLocale, [m]);
+            rootDerived++;
+          } catch (e) {
+            const em = e instanceof Error ? e.message : String(e);
+            if (isDuplicateError(em)) {
+              // Already present at the root (the common case) — a no-op.
+              rootExisting++;
+            } else {
+              // A service/auth/validation failure leaves the root without the
+              // label, which is the whole point of this push. Count it so the
+              // run cannot report clean while a state-level UI still renders
+              // the raw code.
+              rootFailed++;
+              console.error(`[tenant_bootstrap] derived label ${m.code} → root "${rootTenant}": ${em.slice(0, 200)}`);
+            }
+          }
+        }
+        if (rootFailed > 0) {
+          localizationResults.push({ locale: primaryLocale, copied: 0, failed: rootFailed, error: `derived-label push to root "${rootTenant}" failed for ${rootFailed} message(s)` });
+        }
+        emitProgress({
+          phase: 'localizations:derived_root',
+          message: `${primaryLocale}: pushed ${rootDerived} derived master label(s) to root "${rootTenant}" (${rootExisting} already present, ${rootFailed} failed) so state-level UIs resolve them`,
+          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived, existing: rootExisting, failed: rootFailed },
+        });
+      }
+
+      // Totalled AFTER the root push so its failures reach both the reported
+      // counts and the run's success condition.
       const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
       const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
 
@@ -2515,7 +2875,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // gates auth.
           admin_user_provisioned: !!userProvisioned,
           admin_employee_provisioned: adminEmployee.provisioned,
+          warnings: results.warnings.length,
         },
+        // Surfaced at the top level on purpose. These are cases the copy
+        // cannot fix and that no counter reflects — an empty source master, a
+        // corrupt source record. Buried in `results` they read as success.
+        ...(results.warnings.length > 0 && { warnings: results.warnings }),
         localizations: localizationResults,
         adminEmployee,
         ...(userProvisioned && {

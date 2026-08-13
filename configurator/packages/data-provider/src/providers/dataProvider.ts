@@ -21,6 +21,81 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   return current;
 }
 
+/**
+ * Re-project nested filter values onto their dotted paths.
+ *
+ * react-admin's `<FilterLiveForm>` drives react-hook-form, and RHF treats a
+ * dotted input name as a PATH: a filter declared `source="additionalDetail.department"`
+ * reaches the data provider as `{ additionalDetail: { department: 'x' } }`, never
+ * as `{ 'additionalDetail.department': 'x' }`. Every branch in this provider reads
+ * filters by their flat, declared key, so any dotted-source filter silently
+ * evaporated (verified at runtime on /manage/complaints, 2026-07-27).
+ *
+ * This normalises generically rather than special-casing one field: every leaf of
+ * every nested filter object is also published under its full dotted path, while
+ * the original nested shape is left intact so fetchers that read nested objects
+ * (and `clientFilter`, which compares them stringified) keep behaving as before.
+ * Existing flat keys always win — a caller that passed `'a.b'` explicitly is not
+ * overwritten by the walk.
+ */
+function flattenFilterSources(filter?: Record<string, unknown>): Record<string, unknown> {
+  if (!filter) return {};
+  const out: Record<string, unknown> = { ...filter };
+  const walk = (value: unknown, path: string): void => {
+    if (
+      value == null ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      value instanceof Date
+    ) {
+      if (!(path in out)) out[path] = value;
+      return;
+    }
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      walk(child, path ? `${path}.${key}` : key);
+    }
+  };
+  for (const [key, value] of Object.entries(filter)) walk(value, key);
+  return out;
+}
+
+/**
+ * Coerce a filter date into the epoch-ms that DIGIT services expect.
+ *
+ * pgr-services types `RequestSearchCriteria.fromDate/toDate` as `Long` and runs
+ * `ser.createdtime BETWEEN ? AND ?` (PGRQueryBuilder), and the rest of the estate
+ * (digit-ui inbox, the v2 dashboard) sends epoch-ms too. But `<input type="date">`
+ * hands react-hook-form a date-ONLY string ("2026-07-20"), which the provider used
+ * to drop on a `typeof === 'number'` guard.
+ *
+ * The Y-M-D parts are parsed explicitly in LOCAL time: `new Date('2026-07-20')`
+ * is specified as UTC midnight, which is the wrong day for any tenant east of UTC.
+ * `edge` widens a bare day to the boundary the caller means — 'start' takes local
+ * 00:00:00.000, 'end' takes local 23:59:59.999 so an inclusive "To 20 Jul" still
+ * matches complaints filed on 20 Jul.
+ */
+function toEpochMs(value: unknown, edge: 'start' | 'end'): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isNaN(t) ? undefined : t;
+  }
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  // Already an epoch-ms value round-tripped through the URL query string.
+  if (/^\d{10,}$/.test(raw)) return Number(raw);
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return edge === 'end'
+      ? new Date(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999).getTime()
+      : new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0).getTime();
+  }
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
 function extractId(record: Record<string, unknown>, config: ResourceConfig): string {
   const value = getNestedValue(record, config.idField);
   return value == null ? '' : String(value);
@@ -96,13 +171,65 @@ function mapLeafToServiceDef(
   };
 }
 
+// Used only when a tenant has no ComplaintHierarchyDefinition yet — a fresh
+// tenant bootstrapping its first leaf row before ever visiting "Complaint
+// Hierarchies" to declare one. Every real tenant's definition overrides these.
+const FALLBACK_HIERARCHY_TYPE = 'PGR';
+const FALLBACK_LEAF_LEVEL_CODE = 'SUB_TYPE';
+
+interface HierarchyDefinitionLevel {
+  levelCode?: string;
+  isLeafServiceCode?: boolean;
+}
+
+/** Resolve {hierarchyType, levelCode} for a NEW leaf row from the tenant's
+ *  actual RAINMAKER-PGR.ComplaintHierarchyDefinition, rather than a hardcoded
+ *  literal — both are tenant-configurable (levelCode especially: a tenant can
+ *  name its leaf level anything, not always "SUB_TYPE"; see review on
+ *  CCRS#1719). Picks the first active definition and the level it marks
+ *  isLeafServiceCode. Falls back to the FALLBACK_* constants only when no
+ *  definition exists at all, or the lookup fails. */
+async function resolveNewLeafDefaults(
+  client: DigitApiClient,
+  tenantId: string,
+): Promise<{ hierarchyType: string; levelCode: string }> {
+  try {
+    const definitions = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true });
+    const def = definitions.find((d) => d.isActive);
+    const data = def?.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
+    const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
+    const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
+    const leafLevel = levels.find((l) => l.isLeafServiceCode);
+    if (hierarchyType && leafLevel?.levelCode) {
+      return { hierarchyType, levelCode: leafLevel.levelCode };
+    }
+  } catch {
+    // fall through to the bootstrap default below
+  }
+  return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+}
+
 /** Translate an inbound complaint-type form payload (legacy ServiceDefs
  *  vocabulary) into a ComplaintHierarchy LEAF row for writing. `serviceCode`
  *  becomes the row `code`; the adapter-only synthetic fields (menuPath /
  *  menuPathName / serviceCode) are dropped — grouping derives from parentCode.
- *  The metadata strip (id / `_*`) is left to the caller. */
-function serviceDefToLeafWrite(data: Record<string, unknown>): Record<string, unknown> {
+ *  The metadata strip (id / `_*`) is left to the caller.
+ *
+ *  `newLeafDefaults`, when passed, stamps hierarchyType/levelCode for a brand
+ *  new row that doesn't have them yet (CREATE — see resolveNewLeafDefaults).
+ *  Omit it on UPDATE: dataProvider.update() merges this output onto the
+ *  freshly-fetched existing record, so an edit that never touches these
+ *  fields correctly keeps whatever the record already has, rather than this
+ *  function silently overwriting them with a default (CCRS#1719 review). */
+function serviceDefToLeafWrite(
+  data: Record<string, unknown>,
+  newLeafDefaults?: { hierarchyType: string; levelCode: string },
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
+  if (newLeafDefaults) {
+    if (!out.hierarchyType) out.hierarchyType = newLeafDefaults.hierarchyType;
+    if (!out.levelCode) out.levelCode = newLeafDefaults.levelCode;
+  }
   // serviceCode -> code (the leaf's code IS the serviceCode stored on a
   // complaint). Populate `code` from a filled Service Code whenever `code` is
   // absent OR blank — the create form carries `code: ""` (empty string, not
@@ -203,16 +330,19 @@ async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
 }
 
-async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
-  // First try searching the given tenant
-  const employees = await client.employeeSearch(tenantId, { limit: 500 });
+async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+  // Honor a __tenantId override (e.g. the assignee picker on a city complaint
+  // must list the CITY's employees, not the root/session tenant's).
+  const tenant = pickTenant(tenantId, filter);
+  // First try searching the resolved tenant
+  const employees = await client.employeeSearch(tenant, { limit: 500 });
   if (employees.length > 0) return employees.map((e) => normalizeRecord(e, config));
 
   // If root tenant returned 0 results, search all city-level sub-tenants
-  if (!tenantId.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+  if (!tenant.includes('.')) {
+    const tenantRecords = await client.mdmsSearch(tenant, 'tenant.tenants', { limit: 200 });
     const cityTenants = tenantRecords
-      .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
+      .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenant}.`))
       .map((r) => String(r.data.code));
 
     if (cityTenants.length > 0) {
@@ -344,6 +474,63 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   }
 
   return rootFlat;
+}
+
+/**
+ * Drop UI-private sidecar keys from a PGR `address.locality`.
+ *
+ * A form control that keeps navigation state under a dotted source rooted at the
+ * field it drives (`address.locality.code` → `address.locality.code__h`) has
+ * react-hook-form build those keys INSIDE the locality object, so they ride out
+ * on the wire as part of PGR's address contract. pgr-services tolerates them
+ * (they vanish when the payload is bound to the Boundary POJO), but they are not
+ * ours to send, and a stricter service would reject the whole write. `__` is the
+ * codebase's synthetic-key marker (cf. the localization grid's `msg__<locale>`)
+ * and no field of Boundary contains it.
+ */
+function stripLocalitySidecars(locality: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(locality)) {
+    if (key.includes('__')) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Merge a complaint-edit form's `address` onto the address loaded from PGR.
+ *
+ * `eg_pgr_address_v2.locality` is NOT NULL, and egov-persister applies the
+ * address and service UPDATEs in ONE transaction. So an address whose
+ * `locality.code` is null does not merely lose the locality: pgr-services
+ * returns 200 and advances the workflow, the persister then dies on
+ * `null value in column "locality" of relation "eg_pgr_address_v2"`, and the
+ * service UPDATE rolls back with it — nine retries, message dropped, the
+ * complaint left untouched while its workflow state says otherwise. A write the
+ * persister cannot apply must never be sent, whatever the form hands us: an
+ * empty incoming code is always restored from the record that was just loaded.
+ * (Clearing a complaint's locality is not a supported edit — the column forbids
+ * it — so there is no legitimate intent to preserve here.)
+ *
+ * Every other address field merges as before: nulling a landmark or a pincode is
+ * a real edit the schema allows.
+ */
+function mergePgrAddress(
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...current, ...incoming };
+  const currentLocality = current.locality as Record<string, unknown> | undefined;
+  const incomingLocality = incoming.locality as Record<string, unknown> | undefined;
+  if (currentLocality || incomingLocality) {
+    const locality = stripLocalitySidecars({ ...(currentLocality ?? {}), ...(incomingLocality ?? {}) });
+    const loadedCode = currentLocality?.code;
+    if ((locality.code == null || locality.code === '') && loadedCode != null && loadedCode !== '') {
+      locality.code = loadedCode;
+    }
+    merged.locality = locality;
+  }
+  return merged;
 }
 
 /** Resolve the tenant that a complaint's `address.tenantId` must carry.
@@ -660,7 +847,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     const config = resolveConfig(resource);
     switch (config.type) {
       case 'mdms': return mdmsGetList(client, config, tenantId, filter);
-      case 'hrms': return hrmsGetList(client, config, tenantId);
+      case 'hrms': return hrmsGetList(client, config, tenantId, filter);
       case 'boundary': return boundaryGetList(client, config, tenantId);
       case 'pgr': return pgrGetList(client, config, tenantId, filter);
       case 'localization': return localizationGetList(client, config, tenantId, filter);
@@ -683,6 +870,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async getList(resource, params): Promise<GetListResult> {
       const { page = 1, perPage = 25 } = params.pagination ?? {};
       const { field = 'id', order = 'ASC' } = params.sort ?? {};
+      // Filters declared with a dotted source arrive nested from react-hook-form;
+      // normalise once here so every branch below can read them by their declared
+      // key. See flattenFilterSources.
+      const filterValues = flattenFilterSources(params.filter as Record<string, unknown> | undefined);
 
       // PGR complaints: push pagination + server-supported filters to the
       // API. The old behavior pulled the first 100 records and paginated
@@ -690,10 +881,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // returns the real total so react-admin's paginator stays honest.
       const config = resolveConfig(resource);
       if (config.type === 'pgr') {
-        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        const filter = filterValues;
         const status = filter.applicationStatus ?? filter.status;
-        const fromDate = typeof filter.fromDate === 'number' ? filter.fromDate : undefined;
-        const toDate = typeof filter.toDate === 'number' ? filter.toDate : undefined;
+        // <input type="date"> yields a "YYYY-MM-DD" string; pgr-services wants epoch-ms.
+        let fromDate = toEpochMs(filter.fromDate, 'start');
+        const toDate = toEpochMs(filter.toDate, 'end');
+        // PGRQueryBuilder throws INVALID_SEARCH ("Cannot specify to-Date without a
+        // from-Date") when only toDate is given, so anchor an open-ended "To" at the epoch.
+        if (toDate !== undefined && fromDate === undefined) fromDate = 0;
         const department =
           typeof filter['additionalDetail.department'] === 'string'
             ? filter['additionalDetail.department']
@@ -759,7 +954,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // proxy (which returns the real total); notification-provider returns the
       // full integration list, so we paginate/filter/sort it client-side.
       if (config.type === 'custom') {
-        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        const filter = filterValues;
         if (resource === 'notification-log') {
           const { records, total } = await customFetchList(client, config, tenantId, {
             referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
@@ -776,7 +971,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // Generic custom list (e.g. notification-provider): fetch-all then
         // filter/sort/paginate in memory.
         const { records } = await customFetchList(client, config, tenantId, {});
-        const filtered = clientFilter(records, params.filter);
+        const filtered = clientFilter(records, filterValues);
         const sorted = clientSort(filtered, field, order);
         const data = clientPaginate(sorted, page, perPage);
         return { data, total: filtered.length };
@@ -789,12 +984,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // count, so we use a heuristic: a full page means "there may be more"
       // (next button enabled), a partial page means "last page".
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
-        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
           const offset = (page - 1) * perPage;
-          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset });
+          // isActive:true so the server paginates over active rows only. The
+          // client-side .filter below stays as a defensive fallback for any MDMS
+          // that ignores the criterion (degrades to old behavior, never worse).
+          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset, isActive: true });
           const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
           const sorted = clientSort(data, field, order);
           const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
@@ -802,8 +1000,8 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
       }
 
-      const all = await fetchAll(resource, params.filter);
-      const filtered = clientFilter(all, params.filter);
+      const all = await fetchAll(resource, filterValues);
+      const filtered = clientFilter(all, filterValues);
       const sorted = clientSort(filtered, field, order);
       const data = clientPaginate(sorted, page, perPage);
       return { data, total: filtered.length };
@@ -864,7 +1062,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data: normalizeRecord(users[0], config) };
       }
       if (config.type === 'workflow-bs') {
-        const services = await client.workflowBusinessServiceSearch(tenantId, [String(params.id)]);
+        // Honor a meta.tenantId override — a complaint's PGR workflow (actions
+        // like ESCALATE) lives at the CITY tenant; the root/session tenant's PGR
+        // config differs, so reading it there hides city-only actions.
+        const wfTenant = (params.meta as Record<string, unknown> | undefined)?.tenantId as string | undefined;
+        const services = await client.workflowBusinessServiceSearch(wfTenant || tenantId, [String(params.id)]);
         if (!services.length) throw new Error(`Workflow business service not found: ${params.id}`);
         return { data: normalizeRecord(services[0], config) };
       }
@@ -928,7 +1130,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const incoming = config.leafServiceDefAdapter
-          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
+          ? serviceDefToLeafWrite(
+              params.data as Record<string, unknown>,
+              await resolveNewLeafDefaults(client, tenantId),
+            )
           : (params.data as Record<string, unknown>);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
@@ -974,6 +1179,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         if (!address.locality && typeof data['address.locality.code'] === 'string') {
           address.locality = { code: data['address.locality.code'] };
         }
+        // Never ship the picker's private navigation state as part of the
+        // address — see stripLocalitySidecars.
+        if (address.locality && typeof address.locality === 'object') {
+          address.locality = stripLocalitySidecars(address.locality as Record<string, unknown>);
+        }
         // address.tenantId must be the boundary's CITY tenant (e.g.
         // `mz.maputo`), NOT the session tenant. A root-`mz` admin session
         // previously stamped `mz`, violating the PGR address contract and
@@ -984,8 +1194,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           tenantId,
           typeof localityCode === 'string' ? localityCode : undefined,
         );
+        // The complaint's service.tenantId must be the boundary's CITY tenant
+        // (same as address.tenantId, resolved above), NOT the session/root tenant:
+        // pgr-services validates the picked locality against service.tenantId, and
+        // root has no boundaries → INVALID_BOUNDARY_CODE. A root-`mz` admin session
+        // previously passed `mz` here and every create 400'd.
         const wrapper = await client.pgrCreate(
-          tenantId,
+          String(address.tenantId || tenantId),
           String(data.serviceCode),
           String(data.description || ''),
           address,
@@ -1152,13 +1367,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // and only the workflow action, comment, assignees, and rating survived.
         const editableTop = ['serviceCode', 'description', 'source', 'additionalDetail'];
         for (const key of editableTop) {
-          if (key in data) service[key] = data[key];
+          // Only overwrite when the form actually carries a value. A complaint
+          // edit that only changes the description leaves serviceCode null on the
+          // form (the hierarchy cascade doesn't repopulate it), and blindly
+          // merging that null clobbers the real serviceCode → pgr-services NPEs on
+          // ASSIGN (it needs the type to validate the assignee's department).
+          const val = data[key];
+          if (key in data && val != null && val !== '') service[key] = val;
         }
         if (data.address && typeof data.address === 'object') {
-          service.address = {
-            ...(service.address as Record<string, unknown> | undefined ?? {}),
-            ...(data.address as Record<string, unknown>),
-          };
+          service.address = mergePgrAddress(
+            (service.address as Record<string, unknown> | undefined) ?? {},
+            data.address as Record<string, unknown>,
+          );
         }
 
         // Normalize assignees: accept a single string (from form select) or an array

@@ -88,6 +88,99 @@ describe('createDigitDataProvider', () => {
     assert.deepEqual(Object.keys(captured!).sort(), ['active', 'code', 'name']);
   });
 
+  it('resolves hierarchyType/levelCode for a new complaint type from the tenant\'s actual hierarchy definition, not a hardcoded literal', async () => {
+    // The tenant's real definition uses non-default names — proves the
+    // values come from MDMS, not a 'PGR'/'SUB_TYPE' literal (CCRS#1719 review).
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [{
+          id: 'def-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'CUSTOM',
+          data: { hierarchyType: 'CUSTOM', levels: [
+            { levelCode: 'CATEGORY', isLeafServiceCode: false },
+            { levelCode: 'LEAF_TYPE', isLeafServiceCode: true },
+          ] },
+          isActive: true,
+          auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+        }];
+      }
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'CUSTOM.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'CUSTOM');
+    assert.equal(captured!.levelCode, 'LEAF_TYPE');
+  });
+
+  it('falls back to PGR/SUB_TYPE for a new complaint type when the tenant has no hierarchy definition yet', async () => {
+    mock.method(client, 'mdmsSearch', async () => []);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'PGR.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'PGR');
+    assert.equal(captured!.levelCode, 'SUB_TYPE');
+  });
+
+  it('does not overwrite an existing complaint type\'s hierarchyType/levelCode on update', async () => {
+    // The Complaint Type edit form never renders these fields, so an edit
+    // that only changes e.g. slaHours must not silently reset them to a
+    // default — dataProvider.update() should preserve whatever the
+    // existing record already has (CCRS#1719 review).
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'abc-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+      uniqueIdentifier: 'CUSTOM.EXISTING_TYPE',
+      data: {
+        hierarchyType: 'CUSTOM', levelCode: 'LEAF_TYPE', code: 'EXISTING_TYPE',
+        name: 'Existing Type', department: 'DEPT_X', slaHours: 24, active: true,
+      },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+      captured = rec.data;
+      return rec;
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.update('complaint-hierarchy', {
+      id: 'EXISTING_TYPE',
+      data: { serviceCode: 'EXISTING_TYPE', name: 'Existing Type', department: 'DEPT_X', slaHours: 48, active: true },
+      previousData: { id: 'EXISTING_TYPE' },
+    });
+
+    assert.ok(captured, 'mdmsUpdate should have been called');
+    assert.equal(captured!.hierarchyType, 'CUSTOM');
+    assert.equal(captured!.levelCode, 'LEAF_TYPE');
+    assert.equal(captured!.slaHours, 48);
+  });
+
   it('strips id and underscore-prefixed metadata from MDMS update payload', async () => {
     // The form payload includes the ra-admin id and the
     // _-prefixed fields normalizeMdmsRecord glued on. MDMS schemas

@@ -121,8 +121,10 @@ The admin (executive) pack seeds **12 tiles** (15 available). Walk the tile grou
 - **Ward performance table** (`cl_table_ward_performance`) and *Recurring
   ward×subtype* (`cl_table_recurring_ward_subtype`) — where and what keeps breaking.
 - **The Leaflet choropleth map + pins.** *Ward WoW current* (`cl_map_ward_wow_current`)
-  shades each ward by open-complaint volume; *complaint pins* (`cl_map_complaint_pins`)
-  drops individual pins. Hover a ward for a tooltip (count + WoW delta). Ward highlight
+  shades each ward by open-complaint volume; *complaint pins*
+  (`cl_map_complaint_pins_all`, falling back to the legacy open-only
+  `cl_map_complaint_pins`) drops individual pins, partitioned to follow the
+  Created / Open / Resolved layer toggle. Hover a ward for a tooltip (count + WoW delta). Ward highlight
   colour and basemap are MDMS-driven (`RAINMAKER-PGR.MapConfig`), defaulting to
   orange on the light CARTO voyager basemap.
 

@@ -683,7 +683,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "common-masters.FormValidations",
-    "description": "Form field validation patterns (one row per field type, e.g. email, name)",
+    "description": "Form field validation patterns (one row per field type, e.g. email, name, postalCode)",
     "isActive": true,
     "definition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -699,7 +699,7 @@
       "properties": {
         "fieldType": {
           "type": "string",
-          "description": "Which user field this pattern validates, e.g. \"email\". Frontends fall back to their built-in pattern when a fieldType row is absent."
+          "description": "Which user field this pattern validates, e.g. \"email\" or \"postalCode\". Frontends fall back to their built-in pattern when a fieldType row is absent. NOTE for postalCode: this row is the PRIMARY per-tenant rule (a default 5-digit row is seeded at tenant creation) and outranks the host_vars core_postal_configs pattern (globalConfigs CORE_POSTAL_CONFIGS) in DIGIT Studio and the PGR create-complaint flows alike; host_vars remains the fallback for tenants without the row."
         },
         "regex": {
           "type": "string"

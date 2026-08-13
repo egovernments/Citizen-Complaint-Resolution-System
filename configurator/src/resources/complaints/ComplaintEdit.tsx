@@ -2,6 +2,8 @@ import { DigitEdit, DigitFormInput, DigitFormSelect, WorkflowActionSelect, v } f
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
 import { ComplaintHierarchyCascade } from './ComplaintHierarchyCascade';
+import { usePostalRule } from '@/admin/usePostalRule';
+import { useApp } from '../../App';
 
 // Aligned with the PGR service's server-side source allow-list — probed
 // 2026-04-23 on naipepea: web / mobile / whatsapp accepted; ivr / phone /
@@ -13,6 +15,10 @@ const SOURCE_CHOICES = [
 ];
 
 export function ComplaintEdit() {
+  const { state } = useApp();
+  // Publishes the tenant's MDMS postal rule (FormValidations fieldType
+  // postalCode, when authored) to the channel v.postalCodeKE reads.
+  usePostalRule(state.tenant);
   return (
     <DigitEdit title="Update Complaint">
       <FieldSection title="Header">

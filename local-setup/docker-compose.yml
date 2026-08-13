@@ -384,7 +384,7 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -569,7 +569,7 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -807,7 +807,7 @@ services:
       - egov-network
 
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -948,7 +948,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1019,7 +1019,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     restart: on-failure
     ports:
@@ -1135,6 +1135,7 @@ services:
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "false"
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"

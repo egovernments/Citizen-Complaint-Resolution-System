@@ -76,6 +76,10 @@ docker exec docker-postgres psql -U egov -d egov -tAc \
 # proven result: ke=249 (76 cat + 173 leaf), ke.ige=138 (45 cat + 93 leaf)
 ```
 
+> **Row count alone is not enough (G10).** A tenant can land the full count with `department: "NA"` on
+> every leaf and show no department breakdown on any dashboard. Also run Check 2 in
+> [tenant-department-migration-guide.md](./tenant-department-migration-guide.md).
+
 ---
 
 ## 3. CUTOVER deploy (lockstep — only after every used tenant is migrated)
@@ -121,9 +125,23 @@ At tenant **ke.ige** (hard-refresh the browser first):
 3. Resolve → RESOLVED.
 4. A pre-migration complaint still opens (serviceCode preserved).
 
-## 5. Retire old masters — LAST, only after step 4 passes
+### 4.5 Verify ANALYTICS — the check steps 1-4 cannot make (#1494)
+Steps 1-4 all exercise the complaint flow, which fails loudly. Analytics fails silently: tiles keep
+rendering with blank departments. This step is what would have caught G8.
+1. Deploy `V20260731000000__repoint_grain_mvs_to_complainthierarchy.sql` (repoints the grain MVs off
+   `ServiceDefs`). Grains rebuild on the scheduler, default 5 min.
+2. Run Checks 1 and 2 in [tenant-department-migration-guide.md](./tenant-department-migration-guide.md)
+   — every in-use complaint type has a hierarchy node, AND leaves carry real departments (not `NA`).
+3. Open a department-grouped dashboard tile ("Complaints by departments") and confirm real department
+   names, not blanks. A tenant whose leaves are all `NA` needs a back-fill — see the guide.
+
+## 5. Retire old masters — LAST, only after steps 4 AND 4.5 pass
 Deactivate/delete `RAINMAKER-PGR.ServiceDefs` / `ClassificationNode` / `ComplaintTypeDepartments`.
 **Keep them until step 4 passes** — together with your snapshot they are the rollback path.
+
+> **Do not retire `ServiceDefs` before the #1494 repoint is deployed.** Until then the grain MVs still
+> join it, and on a properly-migrated tenant it supplies a large share of the working `department_code`
+> values — deleting it first blanks every department tile. Repoint, verify (4.5), then retire.
 
 ## 6. Rollback
 ```bash
@@ -160,9 +178,19 @@ docker exec -i docker-postgres pg_restore -U egov -d egov --clean --if-exists < 
 - **(G6) deploy is data-safe but re-seeds DDH.** No `down -v` (volumes kept; full-dump only loads into an
   empty DB), so data survives — but DDH re-seed can revert the x-ref fix → re-apply (step 3c).
 - **(G7) No fallback.** Migrate every used tenant before the backend cutover, or those tenants hard-fail.
-- **(G8) V2 grain-MV gap.** The analytics materialized-view forward Flyway migration was not authored on the
-  branch (still reads `ServiceDefs`/`menuPath`) — does not block the complaint flow, but dashboards using the
-  grain MV are stale until a `repoint_grain_mvs_to_complainthierarchy` migration is added.
+- **(G8) V2 grain-MV gap — CLOSED by `V20260731000000__repoint_grain_mvs_to_complainthierarchy.sql` (#1494).**
+  The analytics MVs kept reading `ServiceDefs`/`menuPath` after the cutover. A repoint was attempted on the
+  #917 branch but edited an already-applied migration, so it was a no-op live and was overwritten by the next
+  migration on a fresh replay. It does not block the complaint flow, which is why it survived step 4 — see G9.
+  Deploying the repoint is now a **prerequisite for step 5**, not optional cleanup.
+- **(G9) Step 4 only proves the complaint flow.** Every check in step 4 is a create/assign/resolve check, and
+  all of them pass while dashboards are silently wrong. Analytics fails *quietly* — tiles keep rendering, just
+  with blank or missing departments. Verify a department-grouped tile explicitly (step 4.5); do not infer
+  analytics health from a green complaint flow.
+- **(G10) Row counts are not data quality.** "Verify the data landed" counts rows. A tenant onboarded from a
+  sheet with a blank Department column lands the full row count with `department: "NA"` on **every** leaf, and
+  shows no department breakdown anywhere. Run Check 2 in
+  [tenant-department-migration-guide.md](./tenant-department-migration-guide.md).
 
 ## Server differences
 - **Schema install:** your CD deploys the branch `default-data-handler`, which registers the schema — so you

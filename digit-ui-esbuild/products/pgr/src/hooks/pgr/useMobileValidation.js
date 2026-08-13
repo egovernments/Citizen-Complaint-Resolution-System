@@ -26,7 +26,14 @@ import { useTranslation } from "react-i18next";
  *
  * The hook also writes the resolved rules to `window.__DIGIT_USER_VALIDATION.mobile`
  * so synchronous consumers (form-config getters that can't be hooks)
- * can read the same MDMS-sourced value the React tree just resolved.
+ * can read the same MDMS-sourced value the React tree just resolved. The
+ * name and email rules from `common-masters.FormValidations` (one row per
+ * fieldType) ride the same channel — `.name` / `.email`, each
+ * `{ pattern }`. The postalCode row is mirrored to
+ * `window.__DIGIT_FORM_VALIDATIONS.postalCode` instead — a channel named
+ * after the master, shared with the configurator's usePostalRule /
+ * validation.ts. Every key is simply absent when no row is seeded, so
+ * every consumer falls back to its own default.
  *
  * @param {string} tenantId - The tenant ID
  * @param {string} validationName - Reserved for future per-field-name
@@ -83,12 +90,14 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   // common-masters.FormValidations — per-fieldType user validation patterns
   // ({ fieldType, regex, isActive }). Carries the non-mobile user rules
-  // (email, name); MobileNumberValidation stays mobile-number-only.
+  // (email, name, postalCode); MobileNumberValidation stays mobile-number-only.
   const formValidationList = data?.["common-masters"]?.FormValidations || [];
   const emailValidationConfig =
     formValidationList.find((entry) => entry?.fieldType === "email" && entry?.isActive !== false) || null;
   const nameValidationConfig =
     formValidationList.find((entry) => entry?.fieldType === "name" && entry?.isActive !== false) || null;
+  const postalCodeValidationConfig =
+    formValidationList.find((entry) => entry?.fieldType === "postalCode" && entry?.isActive !== false) || null;
 
   /** ---------- Priority 2: Global Config ---------- */
   const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
@@ -155,6 +164,24 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     if (emailValidationConfig?.regex) {
       window.__DIGIT_USER_VALIDATION.email = { pattern: emailValidationConfig.regex };
     }
+  }
+
+  // CCRS#722: the postalCode row is the MDMS-authored postal rule. It
+  // rides a window channel named after the master it mirrors —
+  // `__DIGIT_FORM_VALIDATIONS`, keyed by fieldType exactly like the
+  // common-masters.FormValidations rows themselves — so every consumer
+  // (utils/postalCode.js here; validation.ts + usePostalRule in the
+  // configurator) speaks the master's name. Readers check this channel
+  // FIRST, before globalConfigs CORE_POSTAL_CONFIGS: MDMS is the primary
+  // per-tenant knob, with identical precedence in DIGIT Studio and the
+  // PGR create-complaint flows. DDH seeds a default 5-digit row at tenant
+  // creation (edit it in Studio's FormValidations editor to change the
+  // tenant's rule); the host_vars pattern remains the fallback for
+  // tenants without the row (dump-booted stacks, pre-FormValidations
+  // tenants).
+  if (typeof window !== "undefined" && !isLoading && postalCodeValidationConfig?.regex) {
+    window.__DIGIT_FORM_VALIDATIONS = window.__DIGIT_FORM_VALIDATIONS || {};
+    window.__DIGIT_FORM_VALIDATIONS.postalCode = { pattern: postalCodeValidationConfig.regex };
   }
 
   const getMinMaxValues = () => {
