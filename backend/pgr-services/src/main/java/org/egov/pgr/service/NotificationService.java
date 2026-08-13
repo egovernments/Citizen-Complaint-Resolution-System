@@ -676,9 +676,23 @@ public class NotificationService {
         if (CollectionUtils.isEmpty(processInstanceResponse.getProcessInstances()))
             throw new CustomException("WORKFLOW_NOT_FOUND", "The workflow object is not found");
 
-        for(ProcessInstance processInstance:processInstanceResponse.getProcessInstances()){
-            if(processInstance.getAction().equalsIgnoreCase(action))
-                processInstanceToReturn= processInstance;
+        // CCSD-2167: pick the NEWEST matching instance. The old loop kept
+        // overwriting on every match, so the LAST list element won — and the
+        // history search returns newest-first, meaning the OLDEST step was
+        // returned. On a rated complaint that resolved {emp_name}/assignee to
+        // the first ASSIGN's Supervisor instead of the Case Manager who last
+        // handled it (observed live: rating emails greeting the Supervisor).
+        long newestTime = Long.MIN_VALUE;
+        for (ProcessInstance processInstance : processInstanceResponse.getProcessInstances()) {
+            if (!processInstance.getAction().equalsIgnoreCase(action))
+                continue;
+            long time = (processInstance.getAuditDetails() != null
+                    && processInstance.getAuditDetails().getLastModifiedTime() != null)
+                    ? processInstance.getAuditDetails().getLastModifiedTime() : Long.MIN_VALUE;
+            if (time > newestTime || processInstanceToReturn.getId() == null) {
+                newestTime = time;
+                processInstanceToReturn = processInstance;
+            }
         }
         requestInfo.setUserInfo(userInfoCopy);
         return processInstanceToReturn;
