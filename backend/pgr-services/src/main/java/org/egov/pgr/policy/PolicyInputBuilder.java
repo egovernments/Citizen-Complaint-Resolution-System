@@ -3,7 +3,6 @@ package org.egov.pgr.policy;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.web.models.Address;
 import org.egov.pgr.web.models.Boundary;
 import org.egov.pgr.web.models.Service;
@@ -24,7 +23,7 @@ import java.util.Map;
 @Component
 public class PolicyInputBuilder {
 
-    public Map<String, Object> buildUserDoc(RequestInfo requestInfo, AnalyticsScope scope) {
+    public Map<String, Object> buildUserDoc(RequestInfo requestInfo, PgrSearchScope scope) {
         User user = requestInfo == null ? null : requestInfo.getUserInfo();
 
         Map<String, Object> attributes = new LinkedHashMap<>();
@@ -34,9 +33,9 @@ public class PolicyInputBuilder {
         // boundary-only-scoped employee's condition short-circuit to unrestricted via the
         // "tenantWide" branch below, bypassing their own jurisdiction scope. This also already
         // covers ScopePolicyEngine's config-driven output correctly: a role configured NONE on both
-        // axes resolves both AnalyticsScope fields to null (the engine omits NONE axes entirely),
+        // axes resolves both PgrSearchScope fields to null (the engine omits NONE axes entirely),
         // landing here exactly like the old hardcoded "unrestricted" case — no axis-count-aware
-        // rewrite needed as long as AnalyticsScope keeps exactly these two named fields.
+        // rewrite needed as long as PgrSearchScope keeps exactly these two named fields.
         boolean tenantWide = scope.citizenUuid == null
                 && CollectionUtils.isEmpty(scope.departmentCodes)
                 && CollectionUtils.isEmpty(scope.jurisdictionCodes);
@@ -65,7 +64,7 @@ public class PolicyInputBuilder {
 
     /**
      * The complaint's jurisdiction boundary code, matched exact-match against an employee's HRMS
-     * jurisdiction assignments (AnalyticsScope#jurisdictionCodes). Null-safe: a complaint with no
+     * jurisdiction assignments (PgrSearchScope#jurisdictionCodes). Null-safe: a complaint with no
      * address/locality yields null, which never matches any non-empty jurisdiction list — fails
      * closed rather than leaking a complaint with unresolvable location data.
      */

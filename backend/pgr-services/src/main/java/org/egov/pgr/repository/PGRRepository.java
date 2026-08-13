@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.egov.pgr.analytics.AnalyticsScope;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.repository.rowmapper.DocumentRowMapper;
 import org.egov.pgr.repository.rowmapper.PGRQueryBuilder;
 import org.egov.pgr.repository.rowmapper.PGRRowMapper;
@@ -85,7 +85,7 @@ public class PGRRepository {
      * @param scope
      * @return
      */
-    public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria, AnalyticsScope scope){
+    public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria, PgrSearchScope scope){
         List<Service> services = getServices(criteria, scope);
         List<String> serviceRequestids = services.stream().map(Service::getServiceRequestId).collect(Collectors.toList());
         Map<String, Workflow> idToWorkflowMap = new HashMap<>();
@@ -113,7 +113,7 @@ public class PGRRepository {
      * @param scope
      * @return
      */
-    public List<Service> getServices(RequestSearchCriteria criteria, AnalyticsScope scope) {
+    public List<Service> getServices(RequestSearchCriteria criteria, PgrSearchScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
@@ -167,7 +167,7 @@ public class PGRRepository {
      * @param scope
      * @return
      */
-    public Integer getCount(RequestSearchCriteria criteria, AnalyticsScope scope) {
+    public Integer getCount(RequestSearchCriteria criteria, PgrSearchScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();

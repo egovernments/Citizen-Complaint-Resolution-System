@@ -6,14 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,15 +77,15 @@ public class PolicyDrivenScopeResolver {
      * condition is compiled from — one authored artifact, so the SQL prefilter here and the per-row
      * re-check there cannot disagree.
      */
-    public AnalyticsScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen, ScopePolicy scopePolicy) {
+    public PgrSearchScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen, ScopePolicy scopePolicy) {
         boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
         User u = requestInfo == null ? null : requestInfo.getUserInfo();
 
         if (u == null)
-            return new AnalyticsScope(tenantId, stateLevel, null, null, null);
+            return new PgrSearchScope(tenantId, stateLevel, null, null, null);
 
         if (principalScopeResolver.isPureCitizen(requestInfo))
-            return new AnalyticsScope(tenantId, stateLevel, u.getUuid(), null, null);
+            return new PgrSearchScope(tenantId, stateLevel, u.getUuid(), null, null);
 
         return resolveEmployeeScopeViaPolicy(requestInfo, u, tenantId, stateLevel, scopePolicy);
     }
@@ -101,7 +99,7 @@ public class PolicyDrivenScopeResolver {
      * per-axis (a sentinel value, not "no restriction") when that SPECIFIC axis is required but
      * unresolvable — see {@link ScopePolicyEngine#UNRESOLVED_SENTINEL}.
      */
-    private AnalyticsScope resolveEmployeeScopeViaPolicy(RequestInfo requestInfo, User u, String tenantId,
+    private PgrSearchScope resolveEmployeeScopeViaPolicy(RequestInfo requestInfo, User u, String tenantId,
                                                           boolean stateLevel, ScopePolicy scopePolicy) {
         try {
             String userName = u.getUserName();
@@ -134,7 +132,7 @@ public class PolicyDrivenScopeResolver {
             List<String> jurisdictionList = resolvedAxisValues.get("jurisdiction");
             log.info("PolicyDrivenScopeResolver: userName='{}' departments={} jurisdictions={} (policy-driven)",
                     userName, deptList, jurisdictionList);
-            return new AnalyticsScope(tenantId, stateLevel, null, null, deptList, jurisdictionList);
+            return new PgrSearchScope(tenantId, stateLevel, null, deptList, jurisdictionList);
         } catch (Exception ex) {
             log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
             return unresolvedScope(u, tenantId, stateLevel, "HRMS error");
@@ -170,13 +168,13 @@ public class PolicyDrivenScopeResolver {
      * Scope for an employee whose department could not be resolved. Fail-CLOSED (deny-all sentinel)
      * for constrained roles; unrestricted only for tenant-wide (admin/supervisor) roles.
      */
-    private AnalyticsScope unresolvedScope(User u, String tenantId, boolean stateLevel, String reason) {
+    private PgrSearchScope unresolvedScope(User u, String tenantId, boolean stateLevel, String reason) {
         if (hasTenantWideRole(u)) {
             log.debug("scope unresolved ({}) for tenant-wide role '{}' — unrestricted", reason, u.getUserName());
-            return new AnalyticsScope(tenantId, stateLevel, null, null, null);
+            return new PgrSearchScope(tenantId, stateLevel, null, null, null);
         }
         log.info("scope unresolved ({}) for constrained principal '{}' — DENY (fail-closed)", reason, u.getUserName());
-        return new AnalyticsScope(tenantId, stateLevel, null, null, List.of(DENY_ALL_DEPARTMENT));
+        return new PgrSearchScope(tenantId, stateLevel, null, List.of(DENY_ALL_DEPARTMENT), null);
     }
 
     private boolean hasTenantWideRole(User u) {

@@ -3,7 +3,6 @@ package org.egov.pgr.policy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.Address;
 import org.egov.pgr.web.models.Boundary;
@@ -34,7 +33,7 @@ import static org.mockito.Mockito.when;
  * outbound accesscontrol call ({@link MDMSUtils#fetchAccessControlActions}) mocked to return the
  * same JsonLogic condition shipped in ACCESSCONTROL-ACTIONS-TEST.actions-test (id 2008) — so this
  * exercises the actual condition contract, not a stand-in. Most {@code enforce()} tests construct
- * an {@code AnalyticsScope} directly (bypassing {@link PolicyDrivenScopeResolver}, which makes an
+ * a {@link PgrSearchScope} directly (bypassing {@link PolicyDrivenScopeResolver}, which makes an
  * HRMS call) — the {@code resolveScope()} tests near the bottom instead mock the resolver to
  * verify what {@link ScopePolicy} actually gets fetched/passed through.
  *
@@ -80,7 +79,7 @@ class SearchAccessPolicyServiceTest {
 
     @Test
     void citizenScopeKeepsOnlyTheirOwnComplaint() {
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, "citizen-1", null, null);
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, "citizen-1", null, null);
         RequestInfo requestInfo = requestInfo("citizen-1", "CITIZEN");
 
         ServiceWrapper own = wrapper("citizen-1", "NA", "WARD_5", TENANT_ID);
@@ -103,7 +102,7 @@ class SearchAccessPolicyServiceTest {
     void employeeScopeKeepsOnlyMatchingJurisdictionComplaintsRegardlessOfDepartment() {
         // PGR search is jurisdiction-based ONLY: two complaints in DIFFERENT departments but the
         // SAME (matching) jurisdiction are both kept; department plays no role in this decision.
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, null, List.of("WARD_5"));
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, null, List.of("WARD_5"));
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         ServiceWrapper sanitationWard5 = wrapper("citizen-1", "SANITATION", "WARD_5", TENANT_ID);
@@ -116,7 +115,7 @@ class SearchAccessPolicyServiceTest {
 
     @Test
     void employeeWithWrongJurisdictionIsDeniedRegardlessOfDepartment() {
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, null, List.of("WARD_5"));
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, null, List.of("WARD_5"));
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         ServiceWrapper sanitationWard9 = wrapper("citizen-1", "SANITATION", "WARD_9", TENANT_ID);
@@ -132,7 +131,7 @@ class SearchAccessPolicyServiceTest {
         // PolicyDrivenScopeResolver can actually produce for PGR anymore — this is a defensive
         // check that the condition itself doesn't fall back to department if such a scope were
         // ever constructed some other way.
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, List.of("SANITATION"));
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, List.of("SANITATION"), null);
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         ServiceWrapper sanitationWard5 = wrapper("citizen-1", "SANITATION", "WARD_5", TENANT_ID);
@@ -144,7 +143,7 @@ class SearchAccessPolicyServiceTest {
 
     @Test
     void tenantWideScopeKeepsEverythingRegardlessOfJurisdiction() {
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, null);
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, null, null);
         RequestInfo requestInfo = requestInfo("admin-1", "EMPLOYEE");
 
         ServiceWrapper a = wrapper("citizen-1", "SANITATION", "WARD_5", TENANT_ID);
@@ -157,7 +156,7 @@ class SearchAccessPolicyServiceTest {
 
     @Test
     void failClosedSentinelScopeDropsEverything() {
-        AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, List.of("__scope_denied__"));
+        PgrSearchScope scope = new PgrSearchScope(TENANT_ID, false, null, List.of("__scope_denied__"), null);
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         ServiceWrapper a = wrapper("citizen-1", "SANITATION", "WARD_5", TENANT_ID);
@@ -174,7 +173,7 @@ class SearchAccessPolicyServiceTest {
         // An outage must still fail closed, or a whole tenant would go unrestricted during one.
         when(mdmsUtils.fetchAccessControlActions(any(), eq("ke.nairobi"), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
                 .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
-        AnalyticsScope scope = new AnalyticsScope("ke.nairobi", false, null, null, null);
+        PgrSearchScope scope = new PgrSearchScope("ke.nairobi", false, null, null, null);
         RequestInfo requestInfo = requestInfo("admin-1", "EMPLOYEE");
 
         ServiceWrapper a = wrapper("citizen-1", "SANITATION", "WARD_5", "ke.nairobi");

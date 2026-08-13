@@ -9,8 +9,8 @@ import java.util.Set;
 
 /**
  * Compiles a {@link ScopePolicy} (the MDMS-authored PAP artifact) + a caller's held roles + their
- * HRMS-resolved values per axis into the generic scope-filter map {@link PrincipalScopeResolver}
- * needs to build an {@code AnalyticsScope}. Pure function, no I/O — the HRMS lookup (the PIP) and
+ * HRMS-resolved values per axis into the generic scope-filter map {@link PolicyDrivenScopeResolver}
+ * needs to build a {@link PgrSearchScope}. Pure function, no I/O — the HRMS lookup (the PIP) and
  * the MDMS fetch (reading the PAP) both happen in the caller.
  */
 public final class ScopePolicyEngine {
@@ -28,7 +28,7 @@ public final class ScopePolicyEngine {
      * {@link ScopeLevel#OWN}: the caller's HRMS-resolved values for that axis, or
      * {@link #UNRESOLVED_SENTINEL} alone if HRMS resolved nothing for it. Axes whose effective
      * level is {@link ScopeLevel#NONE} are simply absent from the result (== "no restriction on
-     * this axis", per {@code AnalyticsScope}'s documented null/empty contract).
+     * this axis", per {@code PgrSearchScope}'s documented null/empty contract).
      */
     public static Map<String, List<String>> resolve(ScopePolicy policy, Set<String> callerRoleCodes,
                                                       Map<String, Set<String>> hrmsResolvedValuesPerAxis) {

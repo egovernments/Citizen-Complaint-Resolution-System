@@ -1,7 +1,7 @@
 package org.egov.pgr.repository.rowmapper;
 
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ class PGRQueryBuilderTest {
     void citizenScopeAddsAccountIdPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, "citizen-1", null, null);
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -66,7 +66,7 @@ class PGRQueryBuilderTest {
     void departmentScopeAddsInPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, null, null, List.of("SANITATION", "ROADS"));
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION", "ROADS"), null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -79,7 +79,7 @@ class PGRQueryBuilderTest {
     void countQueryAppliesTheSameScope() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, "citizen-1", null, null);
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
 
         String query = queryBuilder.getCountQuery(criteria, preparedStmtList, null, scope);
 
@@ -91,7 +91,7 @@ class PGRQueryBuilderTest {
     void jurisdictionScopeAddsLocalityInPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, null, null, List.of("SANITATION"), List.of("WARD_5", "WARD_6"));
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION"), List.of("WARD_5", "WARD_6"));
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -104,7 +104,7 @@ class PGRQueryBuilderTest {
     void nullJurisdictionCodesAddNoLocalityPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, null, null, List.of("SANITATION"));
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION"), null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 

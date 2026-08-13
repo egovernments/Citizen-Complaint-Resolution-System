@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +61,7 @@ class PolicyDrivenScopeResolverTest {
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("DEPT_1"), scope.departmentCodes);
         assertNull(scope.jurisdictionCodes);
@@ -74,7 +73,7 @@ class PolicyDrivenScopeResolverTest {
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertNull(scope.departmentCodes);
         assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
@@ -87,7 +86,7 @@ class PolicyDrivenScopeResolverTest {
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("DEPT_1"), scope.departmentCodes);
         assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
@@ -104,7 +103,7 @@ class PolicyDrivenScopeResolverTest {
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("sup1", "EMPLOYEE", "SUPERVISOR"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("sup1", "EMPLOYEE", "SUPERVISOR"), "pg.city", 2, policy);
 
         assertNull(scope.departmentCodes, "unrestricted across departments");
         assertEquals(List.of("WARD_5"), scope.jurisdictionCodes, "still scoped to their own boundary");
@@ -120,7 +119,7 @@ class PolicyDrivenScopeResolverTest {
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("dgro1", "EMPLOYEE", "DGRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("dgro1", "EMPLOYEE", "DGRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("DEPT_1"), scope.departmentCodes, "still scoped to their own department");
         assertNull(scope.jurisdictionCodes, "unrestricted across boundaries");
@@ -132,7 +131,7 @@ class PolicyDrivenScopeResolverTest {
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(), List.of());
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
     }
@@ -143,7 +142,7 @@ class PolicyDrivenScopeResolverTest {
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(), List.of());
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("admin1", "EMPLOYEE", "SUPERUSER"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("admin1", "EMPLOYEE", "SUPERUSER"), "pg.city", 2, policy);
 
         assertNull(scope.departmentCodes);
         assertNull(scope.jurisdictionCodes);
@@ -159,7 +158,7 @@ class PolicyDrivenScopeResolverTest {
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(), List.of(Map.of("boundary", "WARD_5")));
 
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
         assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);

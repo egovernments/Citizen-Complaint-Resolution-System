@@ -1,7 +1,7 @@
 package org.egov.pgr.repository.rowmapper;
 
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +62,7 @@ public class PGRQueryBuilder {
      *              NEVER sourced from client-controlled request fields — see
      *              {@link org.egov.pgr.policy.SearchAccessPolicyService}.
      */
-    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, AnalyticsScope scope) {
+    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope) {
 
         StringBuilder builder = new StringBuilder(QUERY);
 
@@ -211,10 +211,10 @@ public class PGRQueryBuilder {
      * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
      * department-scope), plus PGR search's own jurisdiction axis (exact-match on the complaint's
-     * address locality — see {@code AnalyticsScope#jurisdictionCodes}, distinct from the analytics
+     * address locality — see {@code PgrSearchScope#jurisdictionCodes}, distinct from the analytics
      * module's own hierarchical {@code boundaryPrefix}, which stays unwired here).
      */
-    private void applyScope(AnalyticsScope scope, StringBuilder builder, List<Object> preparedStmtList) {
+    private void applyScope(PgrSearchScope scope, StringBuilder builder, List<Object> preparedStmtList) {
         if (scope == null)
             return;
 
@@ -246,7 +246,7 @@ public class PGRQueryBuilder {
         return getCountQuery(criteria, preparedStmtList, serviceCodeToSla, null);
     }
 
-    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, AnalyticsScope scope){
+    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope){
         String query = getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, scope);
         String countQuery = COUNT_WRAPPER.replace("{INTERNAL_QUERY}", query);
         return countQuery;

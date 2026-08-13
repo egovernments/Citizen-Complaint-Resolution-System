@@ -33,12 +33,8 @@ import static org.mockito.Mockito.when;
  *   <li>{@link PrincipalScopeResolver#isPureCitizen}, the single source of truth for whether a
  *   principal is locked to their OWN complaints (#1071) — a misclassification here is a data
  *   leak, not a cosmetic bug, hence the fail-closed cases below.</li>
- *   <li>{@link PrincipalScopeResolver#resolve} for an employee principal under the default
- *   {@link PrincipalScopeResolver.ScopeAxis#DEPARTMENT_AND_JURISDICTION} axis (Dashboard/Analytics'
- *   call shape) — department and jurisdiction are independent axes: an employee needs at least ONE
- *   of them to resolve to get a restricted (non-deny) scope; only "neither resolved" fails closed.
- *   Tenant-wide roles still bypass regardless of HRMS data. PGR search's own
- *   {@link PrincipalScopeResolver.ScopeAxis#JURISDICTION_ONLY} axis is covered separately.</li>
+ *   <li>{@link PrincipalScopeResolver#resolve} for an employee principal — department scope from
+ *   HRMS, fail-closed when no department resolves, tenant-wide roles bypass regardless.</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -127,45 +123,20 @@ class PrincipalScopeResolverTest {
         assertTrue(resolver.isPureCitizen(RequestInfo.builder().userInfo(user).build()));
     }
 
-    // --- resolve: employee department + jurisdiction axes ---------------------------------
+    // --- resolve: employee department scope -------------------------------------------------
 
     @Test
-    void resolvesBothDepartmentsAndJurisdictionsForANormalEmployee() {
-        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)),
-                List.of(Map.of("boundary", "WARD_5")));
+    void resolvesDepartmentForANormalEmployee() {
+        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)));
 
         AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2);
 
         assertEquals(List.of("SANITATION"), scope.departmentCodes);
-        assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
     }
 
     @Test
-    void scopesByDepartmentAloneWhenNoJurisdictionAssigned() {
-        // Department and jurisdiction are independent axes (some tenants don't track department at
-        // all): resolving one but not the other scopes by the one that resolved, rather than
-        // denying outright — only "neither axis resolved" fails closed (see below).
-        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)), List.of());
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2);
-
-        assertEquals(List.of("SANITATION"), scope.departmentCodes);
-        assertNull(scope.jurisdictionCodes);
-    }
-
-    @Test
-    void scopesByJurisdictionAloneWhenNoDepartmentAssigned() {
-        stubHrms(List.of(), List.of(Map.of("boundary", "WARD_5")));
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2);
-
-        assertNull(scope.departmentCodes);
-        assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
-    }
-
-    @Test
-    void failsClosedWhenNeitherDepartmentNorJurisdictionResolve() {
-        stubHrms(List.of(), List.of());
+    void failsClosedWhenNoDepartmentResolves() {
+        stubHrms(List.of());
 
         AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2);
 
@@ -174,84 +145,26 @@ class PrincipalScopeResolverTest {
 
     @Test
     void tenantWideRoleBypassesEvenWithNoHrmsDataAtAll() {
-        stubHrms(List.of(), List.of());
+        stubHrms(List.of());
 
         AnalyticsScope scope = resolver.resolve(requestInfo("admin1", "EMPLOYEE", "SUPERUSER"), "pg.city", 2);
 
         assertNull(scope.departmentCodes);
-        assertNull(scope.jurisdictionCodes);
     }
 
-    @Test
-    void unionsJurisdictionsAcrossMultipleAssignments() {
-        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)),
-                List.of(Map.of("boundary", "WARD_5"), Map.of("boundary", "WARD_6")));
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2);
-
-        assertEquals(List.of("WARD_5", "WARD_6"), scope.jurisdictionCodes);
-    }
-
-    // --- ScopeAxis.JURISDICTION_ONLY (PGR search's own call shape) -----------------------------
-
-    @Test
-    void jurisdictionOnlyScopesByJurisdictionEvenWhenHrmsAlsoHasADepartment() {
-        // The exact "force jurisdiction-only" scenario: an employee whose HRMS record has BOTH a
-        // department AND a jurisdiction. PGR search never looks at department at all — this isn't
-        // an optional/missing-data fallback, it's structural for this axis.
-        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)),
-                List.of(Map.of("boundary", "WARD_5")));
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2,
-                PrincipalScopeResolver.ScopeAxis.JURISDICTION_ONLY);
-
-        assertNull(scope.departmentCodes);
-        assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
-    }
-
-    @Test
-    void jurisdictionOnlyFailsClosedWhenNoJurisdictionEvenWithADepartmentAssigned() {
-        // Department being present is irrelevant to this axis — no jurisdiction means denied,
-        // full stop, unlike DEPARTMENT_AND_JURISDICTION where department alone would scope it.
-        stubHrms(List.of(Map.of("department", "SANITATION", "isCurrentAssignment", true)), List.of());
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2,
-                PrincipalScopeResolver.ScopeAxis.JURISDICTION_ONLY);
-
-        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
-    }
-
-    @Test
-    void jurisdictionOnlyTenantWideRoleBypassesEvenWithNoHrmsDataAtAll() {
-        stubHrms(List.of(), List.of());
-
-        AnalyticsScope scope = resolver.resolve(requestInfo("admin1", "EMPLOYEE", "SUPERUSER"), "pg.city", 2,
-                PrincipalScopeResolver.ScopeAxis.JURISDICTION_ONLY);
-
-        assertNull(scope.departmentCodes);
-        assertNull(scope.jurisdictionCodes);
-    }
-
-    private void stubHrms(List<Map<String, Object>> assignments, List<Map<String, Object>> jurisdictions) {
+    private void stubHrms(List<Map<String, Object>> assignments) {
         Map<String, Object> employee = new HashMap<>();
         employee.put("assignments", assignments);
-        employee.put("jurisdictions", jurisdictions);
         Map<String, Object> hrmsResponse = Map.of("Employees", List.of(employee));
         when(restTemplate.postForObject(any(String.class), any(), eq(Map.class))).thenReturn(hrmsResponse);
     }
 
-    /**
-     * A real HRMS-issued token carries the generic EMPLOYEE marker role ALONGSIDE the functional
-     * role (GRO, SUPERVISOR, …) — not just that one role alone; stubbed that way here to match.
-     */
     private RequestInfo requestInfo(String uuid, String type, String roleCode) {
         User user = new User();
         user.setUuid(uuid);
         user.setUserName(uuid);
         user.setType(type);
-        user.setRoles("EMPLOYEE".equals(roleCode)
-                ? List.of(Role.builder().code(roleCode).build())
-                : List.of(Role.builder().code("EMPLOYEE").build(), Role.builder().code(roleCode).build()));
+        user.setRoles(List.of(Role.builder().code(roleCode).build()));
         RequestInfo requestInfo = new RequestInfo();
         requestInfo.setUserInfo(user);
         return requestInfo;

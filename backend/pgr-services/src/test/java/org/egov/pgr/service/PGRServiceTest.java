@@ -2,9 +2,9 @@ package org.egov.pgr.service;
 
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.FieldVisibilityService;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
@@ -75,7 +75,7 @@ class PGRServiceTest {
     void searchResolvesScopeAndKeepsPolicyAllowedResults() {
         RequestInfo requestInfo = requestInfo("citizen-1", "CITIZEN", "pg.city");
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").serviceRequestId("SR-1").build();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, "citizen-1", null, null);
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
         ServiceWrapper wrapper = wrapper("citizen-1");
 
         when(searchAccessPolicyService.resolveScope(eq(requestInfo), eq("pg.city"), anyInt())).thenReturn(scope);
@@ -94,7 +94,7 @@ class PGRServiceTest {
     void searchReturnsEmptyWhenPolicyEnforcementDropsEverything() {
         RequestInfo requestInfo = requestInfo("citizen-1", "CITIZEN", "pg.city");
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").serviceRequestId("SR-1").build();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, "citizen-1", null, null);
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
         ServiceWrapper wrapper = wrapper("citizen-2");
 
         when(searchAccessPolicyService.resolveScope(any(), any(), anyInt())).thenReturn(scope);
@@ -111,7 +111,7 @@ class PGRServiceTest {
     void countResolvesScopeAndPassesItToTheRepository() {
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE", "pg.city");
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
-        AnalyticsScope scope = new AnalyticsScope("pg.city", false, null, null, List.of("SANITATION"));
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION"), null);
 
         when(searchAccessPolicyService.resolveScope(eq(requestInfo), eq("pg.city"), anyInt())).thenReturn(scope);
         when(repository.getCount(criteria, scope)).thenReturn(3);

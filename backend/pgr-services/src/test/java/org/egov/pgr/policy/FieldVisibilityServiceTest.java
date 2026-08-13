@@ -1,7 +1,6 @@
 package org.egov.pgr.policy;
 
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.User;
@@ -125,8 +124,8 @@ class FieldVisibilityServiceTest {
                 service.apply(requestInfo("citizen-1"), TENANT_ID, ownScope(), ACTION_URL, "complaint", List.of(wrapper)));
     }
 
-    private AnalyticsScope ownScope() {
-        return new AnalyticsScope(TENANT_ID, false, "citizen-1", null, null);
+    private PgrSearchScope ownScope() {
+        return new PgrSearchScope(TENANT_ID, false, "citizen-1", null, null);
     }
 
     private RequestInfo requestInfo(String uuid) {

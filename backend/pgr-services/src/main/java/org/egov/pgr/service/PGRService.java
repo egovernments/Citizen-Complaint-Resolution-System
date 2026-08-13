@@ -4,7 +4,7 @@ package org.egov.pgr.service;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.AnalyticsScope;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.AccessPolicyRegistry;
 import org.egov.pgr.policy.FieldVisibilityService;
@@ -166,7 +166,7 @@ public class PGRService {
             return new ArrayList<>();
 
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        AnalyticsScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
 
         if (criteria.getAssignee() != null) {
             String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
@@ -318,7 +318,7 @@ public class PGRService {
 
         criteria.setIsPlainSearch(false);
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        AnalyticsScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
         Integer count = repository.getCount(criteria, scope);
         return count;
     }
@@ -355,7 +355,7 @@ public class PGRService {
         // plainSearch stays record-level unrestricted (see PGRRepository/PGRQueryBuilder — no
         // scope threaded into the query), but field-level PII masking (e.g. citizen.mobileNumber)
         // must still apply here — this scope is used ONLY for that, never for row filtering.
-        AnalyticsScope fieldVisibilityScope = searchAccessPolicyService.resolveScope(
+        PgrSearchScope fieldVisibilityScope = searchAccessPolicyService.resolveScope(
                 requestInfo, tenantIdForMdms, config.getStateLevelTenantIdLength());
         fieldVisibilityService.apply(requestInfo, tenantIdForMdms, fieldVisibilityScope,
                 AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "complaint", enrichedServiceWrappers);

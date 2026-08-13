@@ -2,7 +2,6 @@ package org.egov.pgr.policy;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.springframework.beans.BeanWrapper;
@@ -48,7 +47,7 @@ public class FieldVisibilityService {
      * cache) when no field-visibility rules are configured for actionUrl/resourceType — existing
      * behavior is unaffected until an operator adds a rule.
      */
-    public void apply(RequestInfo requestInfo, String tenantId, AnalyticsScope scope,
+    public void apply(RequestInfo requestInfo, String tenantId, PgrSearchScope scope,
                        String actionUrl, String resourceType, List<ServiceWrapper> wrappers) {
         if (CollectionUtils.isEmpty(wrappers))
             return;

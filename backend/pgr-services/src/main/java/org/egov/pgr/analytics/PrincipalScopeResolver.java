@@ -22,44 +22,30 @@ import java.util.Set;
 
 /**
  * THE SEAM for Dashboard/Analytics. The single, isolated place that derives an {@link
- * AnalyticsScope} (ScopeSpec) for the authenticated principal on {@code AnalyticsService}'s own
- * hardcoded {@link ScopeAxis} model, from HRMS (employee assignments → departments, jurisdiction
- * → boundary). NOTHING downstream (the planner's WHERE-clause injection, the response shaping)
- * needs to change when this method's derivation logic changes, because every consumer only ever
- * sees the {@link AnalyticsScope} value object.
+ * AnalyticsScope} (ScopeSpec) for the authenticated principal, from HRMS (employee assignments →
+ * departments; jurisdiction/boundary is deliberately left unresolved for now, see the comment
+ * below). NOTHING downstream (the planner's WHERE-clause injection, the response shaping) needs to
+ * change when this method's derivation logic changes, because every consumer only ever sees the
+ * {@link AnalyticsScope} value object.
  *
- * <p>PGR complaint search does NOT use this class' axis machinery — it has its own, separate,
- * MDMS-{@code ScopePolicy}-driven resolver ({@code org.egov.pgr.policy.PolicyDrivenScopeResolver}),
- * kept in a different package deliberately: a change here for Dashboard's own axes must never risk
- * PGR search's scoping, and vice versa. The only thing shared between them is {@link
- * #isPureCitizen}, documented below as the intentional single source of truth for that
- * classification. (A previous per-tenant {@code dss.DashboardConfig.departmentScoping} toggle used
- * to override Dashboard's department axis — removed: Dashboard's scoping rule now lives entirely
- * in {@link ScopeAxis}/this class, no ad-hoc side config.)
+ * <p>PGR complaint search does NOT use this class — it has its own, separate, MDMS-{@code
+ * ScopePolicy}-driven resolver ({@code org.egov.pgr.policy.PolicyDrivenScopeResolver}), and its own
+ * scope value object ({@code org.egov.pgr.policy.PgrSearchScope}), kept in a different package
+ * deliberately: a change here for Dashboard's own scoping must never risk PGR search's, and vice
+ * versa. The only thing shared between them is {@link #isPureCitizen}, documented below as the
+ * intentional single source of truth for that classification.
  *
- * <p>Fail-CLOSED for constrained principals (S3): an employee whose scope cannot be resolved on
- * ANY axis {@link ScopeAxis} requires — empty userName, no HRMS record, no active assignment, or
- * an HRMS error — is denied (a sentinel that matches nothing) UNLESS they hold a
- * {@link #TENANT_WIDE_ROLES} role (admin/supervisor tier), which are legitimately tenant-wide and
- * stay unrestricted. This closes the prior fail-OPEN hole where an officer with a failed/missing
- * HRMS lookup silently saw everything. Under correct config this is a no-op for them — they
- * resolve to their real scope. Pure citizens keep their existing self-scope.
+ * <p>Fail-CLOSED for constrained principals (S3): an employee whose department scope cannot be
+ * resolved — empty userName, no HRMS record, no active assignment, or an HRMS error — is denied
+ * (a sentinel department that matches nothing) UNLESS they hold a {@link #TENANT_WIDE_ROLES}
+ * role (admin/supervisor tier), which are legitimately tenant-wide and stay unrestricted. This
+ * closes the prior fail-OPEN hole where an officer with a failed/missing HRMS lookup silently saw
+ * every department. Under correct config (officers carry an HRMS department) this is a no-op for
+ * them — they resolve to their real department. Pure citizens keep their existing self-scope.
  */
 @Component
 @Slf4j
 public class PrincipalScopeResolver {
-
-    /**
-     * Which HRMS-derived axes matter for a given caller, and which are required for that caller to
-     * be resolvable at all. {@link #DEPARTMENT_AND_JURISDICTION} accepts either axis alone or both
-     * (only "neither resolved" fails closed) — used by Dashboard/Analytics. {@link
-     * #JURISDICTION_ONLY} never looks at department and fails closed purely on jurisdiction — used
-     * by PGR complaint search, whose own row-scoping model doesn't include department.
-     */
-    public enum ScopeAxis {
-        JURISDICTION_ONLY,
-        DEPARTMENT_AND_JURISDICTION
-    }
 
     /**
      * Roles that are legitimately tenant-wide and may be unrestricted with no HRMS department
@@ -94,16 +80,11 @@ public class PrincipalScopeResolver {
         this.mapper = mapper;
     }
 
-    /** Defaults to {@link ScopeAxis#DEPARTMENT_AND_JURISDICTION} — Dashboard/Analytics' call shape. */
-    public AnalyticsScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
-        return resolve(requestInfo, tenantId, stateLevelLen, ScopeAxis.DEPARTMENT_AND_JURISDICTION);
-    }
-
     /**
      * Produce the ScopeSpec for this request. The ONLY entry point; consumers never construct an
      * {@link AnalyticsScope} themselves.
      */
-    public AnalyticsScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen, ScopeAxis axis) {
+    public AnalyticsScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
         boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
         User u = requestInfo == null ? null : requestInfo.getUserInfo();
 
@@ -114,8 +95,8 @@ public class PrincipalScopeResolver {
         if (isPureCitizen(requestInfo))
             return new AnalyticsScope(tenantId, stateLevel, u.getUuid(), null, null);
 
-        // employee principal → derive scope from HRMS, per the caller's required axis.
-        return resolveEmployeeScope(requestInfo, u, tenantId, stateLevel, axis);
+        // employee principal → derive department/jurisdiction scope from HRMS.
+        return resolveEmployeeScope(requestInfo, u, tenantId, stateLevel);
     }
 
     /**
@@ -160,15 +141,11 @@ public class PrincipalScopeResolver {
     }
 
     /**
-     * Employee derivation. Returns a ScopeSpec built from HRMS assignments/jurisdictions, shaped by
-     * {@code axis}: {@link ScopeAxis#JURISDICTION_ONLY} never reads department and fails closed on
-     * jurisdiction alone; {@link ScopeAxis#DEPARTMENT_AND_JURISDICTION} resolves both and only
-     * fails closed when NEITHER resolves. Returns a fail-CLOSED spec (deny-all) for constrained
-     * roles when the required axis/axes can't be resolved, or unrestricted for tenant-wide
-     * (admin/supervisor) roles — see {@link #unresolvedScope}.
+     * Employee derivation. Returns a ScopeSpec with departmentCodes (and best-effort boundaryPrefix).
+     * When a department cannot be resolved, returns a fail-CLOSED spec (deny-all) for constrained
+     * roles, or unrestricted for tenant-wide (admin/supervisor) roles — see {@link #unresolvedScope}.
      */
-    private AnalyticsScope resolveEmployeeScope(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel,
-                                                 ScopeAxis axis) {
+    private AnalyticsScope resolveEmployeeScope(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel) {
         try {
             String userName = u.getUserName();
             if (userName == null || userName.isEmpty())
@@ -181,14 +158,18 @@ public class PrincipalScopeResolver {
             // first matching employee record
             JsonNode emp = employees.get(0);
 
-            // departments: union of ACTIVE assignment departments — never resolved for
-            // JURISDICTION_ONLY callers (PGR search's own row-scoping model doesn't include
-            // department, regardless of what HRMS has assigned to this employee).
-            Set<String> departments = axis == ScopeAxis.DEPARTMENT_AND_JURISDICTION
-                    ? extractDepartments(emp) : new LinkedHashSet<>();
+            // departments: union of ACTIVE assignment departments
+            Set<String> departments = new LinkedHashSet<>();
+            JsonNode assignments = emp.get("assignments");
+            if (assignments != null && assignments.isArray()) {
+                for (JsonNode a : assignments) {
+                    boolean active = a.path("isCurrentAssignment").asBoolean(true);
+                    String dept = a.path("department").asText(null);
+                    if (active && dept != null && !dept.isEmpty()) departments.add(dept);
+                }
+            }
 
-            // analytics module's own hierarchical jurisdiction axis: DELIBERATELY SKIPPED for now
-            // (boundaryPrefix=null).
+            // boundary / jurisdiction scope: DELIBERATELY SKIPPED for now (boundaryPrefix=null).
             //
             // boundary_path is '|'-delimited root-first (ancestralmaterializedpath||'|'||code), so an
             // HRMS jurisdiction whose boundary code is the path ROOT (e.g. county "BOMET") IS a valid
@@ -199,71 +180,23 @@ public class PrincipalScopeResolver {
             // block below — applyScope already injects boundary_path LIKE prefix%. (Resolver-only change;
             // no downstream change — the seam holds.)
             String boundaryPrefix = null;
-            // JsonNode jurisdictionsForAnalytics = emp.get("jurisdictions");
-            // if (jurisdictionsForAnalytics != null && jurisdictionsForAnalytics.isArray() && jurisdictionsForAnalytics.size() > 0) {
-            //     String b = jurisdictionsForAnalytics.get(0).path("boundary").asText(null);
+            // JsonNode jurisdictions = emp.get("jurisdictions");
+            // if (jurisdictions != null && jurisdictions.isArray() && jurisdictions.size() > 0) {
+            //     String b = jurisdictions.get(0).path("boundary").asText(null);
             //     if (b != null && !b.isEmpty()) boundaryPrefix = b;
             // }
 
-            // PGR search's own jurisdiction axis (exact-match against a complaint's address
-            // locality, see AnalyticsScope#jurisdictionCodes) — union of ALL assigned jurisdiction
-            // boundary codes. Always resolved regardless of axis: it's the ONLY axis JURISDICTION_ONLY
-            // callers get, and one of two independent axes for DEPARTMENT_AND_JURISDICTION callers.
-            Set<String> jurisdictions = extractJurisdictions(emp);
+            if (departments.isEmpty())
+                return unresolvedScope(u, tenantId, stateLevel, "no active HRMS department assignment");
 
-            if (axis == ScopeAxis.JURISDICTION_ONLY) {
-                // Department is never this caller's concern — fail closed purely on jurisdiction.
-                if (jurisdictions.isEmpty())
-                    return unresolvedScope(u, tenantId, stateLevel, "no HRMS jurisdiction assignment");
-
-                List<String> jurisdictionList = new ArrayList<>(jurisdictions);
-                log.info("PrincipalScopeResolver: userName='{}' jurisdictions={} (jurisdiction-only)",
-                        userName, jurisdictionList);
-                return new AnalyticsScope(tenantId, stateLevel, null, null, null, jurisdictionList);
-            }
-
-            // DEPARTMENT_AND_JURISDICTION: independent axes — some tenants/countries don't track
-            // department at all, so requiring BOTH would fail-closed every employee on that tenant.
-            // Only deny-all when NEITHER axis resolved — that is the real "can't scope this
-            // principal at all" case. When exactly one resolved, scope by that one alone (the other
-            // stays null => "no restriction on this axis", per AnalyticsScope's documented contract).
-            if (departments.isEmpty() && jurisdictions.isEmpty())
-                return unresolvedScope(u, tenantId, stateLevel, "no active HRMS department assignment or jurisdiction assignment");
-
-            List<String> deptList = departments.isEmpty() ? null : new ArrayList<>(departments);
-            List<String> jurisdictionList = jurisdictions.isEmpty() ? null : new ArrayList<>(jurisdictions);
-            log.info("PrincipalScopeResolver: userName='{}' departments={} jurisdictions={} boundaryPrefix={}",
-                    userName, deptList, jurisdictionList, boundaryPrefix);
-            return new AnalyticsScope(tenantId, stateLevel, null, boundaryPrefix, deptList, jurisdictionList);
+            List<String> deptList = new ArrayList<>(departments);
+            log.info("PrincipalScopeResolver: userName='{}' departments={} boundaryPrefix={}",
+                    userName, deptList, boundaryPrefix);
+            return new AnalyticsScope(tenantId, stateLevel, null, boundaryPrefix, deptList);
         } catch (Exception ex) {
             log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
             return unresolvedScope(u, tenantId, stateLevel, "HRMS error");
         }
-    }
-
-    private static Set<String> extractDepartments(JsonNode emp) {
-        Set<String> departments = new LinkedHashSet<>();
-        JsonNode assignments = emp.get("assignments");
-        if (assignments != null && assignments.isArray()) {
-            for (JsonNode a : assignments) {
-                boolean active = a.path("isCurrentAssignment").asBoolean(true);
-                String dept = a.path("department").asText(null);
-                if (active && dept != null && !dept.isEmpty()) departments.add(dept);
-            }
-        }
-        return departments;
-    }
-
-    private static Set<String> extractJurisdictions(JsonNode emp) {
-        Set<String> jurisdictions = new LinkedHashSet<>();
-        JsonNode jurisdictionNodes = emp.get("jurisdictions");
-        if (jurisdictionNodes != null && jurisdictionNodes.isArray()) {
-            for (JsonNode j : jurisdictionNodes) {
-                String boundary = j.path("boundary").asText(null);
-                if (boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
-            }
-        }
-        return jurisdictions;
     }
 
     /**

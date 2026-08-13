@@ -2,7 +2,6 @@ package org.egov.pgr.policy;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -59,7 +58,7 @@ public class SearchAccessPolicyService {
      * compatible" principle {@link AccessPolicyRegistry#getCondition} already applies), then
      * resolves the caller's scope against it via {@link PolicyDrivenScopeResolver}.
      */
-    public AnalyticsScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
+    public PgrSearchScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
         ScopePolicy scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint")
                 .orElse(DEFAULT_SCOPE_POLICY);
         return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy);
@@ -72,7 +71,7 @@ public class SearchAccessPolicyService {
      * counts and pagination correct; a row dropped here signals SQL/policy drift and is logged
      * loudly.
      */
-    public List<ServiceWrapper> enforce(RequestInfo requestInfo, String tenantId, AnalyticsScope scope, List<ServiceWrapper> wrappers) {
+    public List<ServiceWrapper> enforce(RequestInfo requestInfo, String tenantId, PgrSearchScope scope, List<ServiceWrapper> wrappers) {
         if (CollectionUtils.isEmpty(wrappers))
             return wrappers;
 
