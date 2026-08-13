@@ -3689,6 +3689,45 @@
       no_log: true
 
     # ────────────────────────────────────────────────────────────────
+    # CMS access-control seed (CCSD-1937). MCP bootstrap clones roles from
+    # the stock `pg` tenant baked into the kit dump, which predates the CMS
+    # role set — so a fresh deploy used to reject employee onboarding with
+    # 'Role "CMS_..." not valid' until an operator manually ran the runner.
+    # Run the unified runner's cms phase here so the deploy alone leaves the
+    # tenant complete: CMS roles + actions + grants + PGR workflow.
+    # Idempotent (ensure-semantics — existing rows untouched, re-run safe).
+    # The runner exits non-zero when a phase reports FAILED/PARTIAL, which
+    # fails the deploy loudly instead of leaving a half-seeded tenant.
+    # ────────────────────────────────────────────────────────────────
+    - name: "cms-seed — register CMS roles/actions/grants + workflow (ccrs-migrate --only cms)"
+      ansible.builtin.command:
+        argv:
+          - node
+          - "{{ playbook_dir }}/../../docs/migration/ccrs-migrate.cjs"
+          - --host
+          - "http://127.0.0.1"
+          - --tenant
+          - "{{ tenant_id }}"
+          - --user
+          - "{{ bootstrap_user | default('ADMIN') }}"
+          - --pass
+          - "{{ bootstrap_password | default('eGov@123') }}"
+          - --only
+          - cms
+      register: cms_seed
+      when: state_root != 'pg'
+      retries: 3
+      delay: 20
+      until: cms_seed.rc == 0
+      changed_when: true
+      no_log: true
+
+    - name: "cms-seed — summary"
+      ansible.builtin.debug:
+        msg: "{{ (cms_seed.stdout_lines | default(['skipped']))[-6:] }}"
+      when: state_root != 'pg'
+
+    # ────────────────────────────────────────────────────────────────
     # Configurator UI localization seed. The configurator's own chrome —
     # nav, field labels, resource names, dashboard strings — for every
     # supported locale lives in the `configurator-ui` localization module
