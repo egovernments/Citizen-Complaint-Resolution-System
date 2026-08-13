@@ -230,6 +230,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Unassigned",
     "module": "rainmaker-dashboard"
@@ -692,6 +697,11 @@
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "Signing in…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "Your session has expired. Please sign in again.",
     "module": "rainmaker-dashboard"
   },
   {
