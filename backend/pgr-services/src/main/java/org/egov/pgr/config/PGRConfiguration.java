@@ -236,7 +236,7 @@ public class PGRConfiguration {
 
     /**
      * The ONE TTL for every analytics in-memory config cache — recordCount in
-     * AnalyticsService and departmentScoping in KpiCatalogService both read THIS
+     * AnalyticsService and the DashboardConfig cache in KpiCatalogService both read THIS
      * property; per-file hardcoded TTLs are not allowed (#1282 review).
      */
     @Value("${pgr.analytics.config-cache-ttl-ms:300000}")

@@ -25,6 +25,9 @@ public class KpiQueryComposerComplaintPathTest {
     private final KpiQueryComposer composer = new KpiQueryComposer(catalog);
     private final AnalyticsPlanner planner = new AnalyticsPlanner(catalog);
     private final AnalyticsScope stateScope = new AnalyticsScope("ke", true, null, null, null);
+    /** complaintPath filtering doesn't depend on wall-clock time; one fixed calendar keeps the suite deterministic. */
+    private final BusinessCalendar calendar =
+            BusinessCalendar.of(java.time.ZoneId.of("Africa/Nairobi"), 1_700_000_000_000L);
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
@@ -47,8 +50,8 @@ public class KpiQueryComposerComplaintPathTest {
 
     @Test
     public void sqlSnapshotForSubtreePredicate() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"SANITATION\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"SANITATION\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertEquals("SELECT service_code AS service_code, count(*) AS total"
                 + " FROM complaint_facts"
                 + " WHERE (complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"
@@ -64,8 +67,8 @@ public class KpiQueryComposerComplaintPathTest {
     public void eventsGrainAppliesSubtree() {
         JsonNode base = json("{\"grain\":\"events\",\"dimensions\":[\"service_code\"],"
                 + "\"measures\":[{\"name\":\"n\",\"agg\":\"count\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"complaintPath\":\"SANITATION.SEWAGE\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(base, json("{\"complaintPath\":\"SANITATION.SEWAGE\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("FROM complaint_events"));
         assertTrue(p.sql.contains("(complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"));
     }
@@ -74,8 +77,8 @@ public class KpiQueryComposerComplaintPathTest {
     public void likeMetacharactersInPathAreEscapedInTheLikeArm() {
         // '_' is a legal path character (UPPER_SNAKE codes) but a LIKE metachar — the LIKE arm
         // must receive the escaped literal while the eq arm gets the raw path.
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"ROAD_WORKS\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"ROAD_WORKS\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertEquals("ROAD_WORKS", p.params.get(0));
         assertEquals("ROAD\\_WORKS", p.params.get(1));
     }
@@ -89,7 +92,7 @@ public class KpiQueryComposerComplaintPathTest {
                 "x||'y", "a\"b", "café", "a\tb"}) {
             IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                     () -> composer.mergeParams(byTypeBase(), json(om.createObjectNode()
-                            .put("complaintPath", bad).toString())),
+                            .put("complaintPath", bad).toString()), calendar),
                     "complaintPath '" + bad + "' must be rejected");
             assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
         }
@@ -102,7 +105,7 @@ public class KpiQueryComposerComplaintPathTest {
         String tooLong = sb.append("LEAFNODE").toString();   // > 256 chars, alphabet-legal
         assertTrue(tooLong.length() > KpiQueryComposer.MAX_COMPLAINT_PATH_LENGTH);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"" + tooLong + "\"}")));
+                () -> composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"" + tooLong + "\"}"), calendar));
         assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
     }
 
@@ -111,15 +114,15 @@ public class KpiQueryComposerComplaintPathTest {
         for (String ok : new String[]{"SANITATION", "SANITATION.SEWAGE",
                 "ROADS-AND-TRANSPORT.POTHOLES_1", "infra/roads.SUB"}) {
             JsonNode merged = composer.mergeParams(byTypeBase(),
-                    json("{\"complaintPath\":\"" + ok + "\"}"));
+                    json("{\"complaintPath\":\"" + ok + "\"}"), calendar);
             assertEquals(ok, merged.get("filters").get("complaint_node_path").get("subtree").asText());
         }
     }
 
     @Test
     public void emptyAndAbsentAreNoOps() {
-        assertEquals(byTypeBase(), composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"\"}")));
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"window\":\"last_7d\"}"));
+        assertEquals(byTypeBase(), composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"\"}"), calendar));
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"window\":\"last_7d\"}"), calendar);
         assertFalse(merged.has("filters"));
     }
 
@@ -128,7 +131,7 @@ public class KpiQueryComposerComplaintPathTest {
     @Test
     public void dailyGrainSkipsFilterAndReportsParamsIgnored() {
         List<String> ignored = new ArrayList<>();
-        JsonNode merged = composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored);
+        JsonNode merged = composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored, calendar);
         assertEquals(dailyBase(), merged);                       // no filter injected — daily has no path column
         assertEquals(List.of("complaintPath"), ignored);         // …but the skip is reported to the caller
     }
@@ -137,8 +140,8 @@ public class KpiQueryComposerComplaintPathTest {
     public void dailyGrainSkipIsIdempotentInTheCollector() {
         // The compose path reuses one collector across several source KPIs — no duplicates.
         List<String> ignored = new ArrayList<>();
-        composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored);
-        composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored);
+        composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored, calendar);
+        composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), ignored, calendar);
         assertEquals(List.of("complaintPath"), ignored);
     }
 
@@ -148,17 +151,19 @@ public class KpiQueryComposerComplaintPathTest {
         List<String> ignored = new ArrayList<>();
         JsonNode eventsBase = json("{\"grain\":\"daily\",\"dimensions\":[\"service_code\"],"
                 + "\"measures\":[{\"name\":\"open\",\"agg\":\"count\"}]}");
-        composer.mergeParams(eventsBase, json("{\"ward\":\"W1\",\"complaintPath\":\"SANITATION\"}"), ignored);
+        composer.mergeParams(eventsBase, json("{\"ward\":\"W1\",\"complaintPath\":\"SANITATION\"}"), ignored, calendar);
         assertEquals(List.of("complaintPath"), ignored);
         // a malformed path is invalid_param even on the grain that would skip the filter —
         // garbage is rejected, never half-applied.
         assertThrows(IllegalArgumentException.class,
-                () -> composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"x; DROP TABLE y\"}"), new ArrayList<>()));
+                () -> composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"x; DROP TABLE y\"}"), new ArrayList<>(), calendar));
     }
 
     @Test
-    public void legacyTwoArgOverloadStaysSafeWithoutACollector() {
-        JsonNode merged = composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"));
+    public void noCollectorOverloadStaysSafeWithoutACollector() {
+        // The 3-arg (baseQuery, params, calendar) overload still requires an explicit calendar —
+        // it is not a "silently create a new clock" convenience, just an opt-in-collector-less form.
+        JsonNode merged = composer.mergeParams(dailyBase(), json("{\"complaintPath\":\"SANITATION\"}"), calendar);
         assertEquals(dailyBase(), merged);   // no NPE, same skip — reporting is opt-in
     }
 
@@ -168,8 +173,8 @@ public class KpiQueryComposerComplaintPathTest {
     public void composesWithHierLevelFilterPlusRollup() {
         // "Filter the Sanitation subtree, grouped at level 2" — WHERE prefix + GROUP BY level expr.
         JsonNode merged = composer.mergeParams(byTypeBase(),
-                json("{\"hierLevel\":\"2\",\"complaintPath\":\"SANITATION\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+                json("{\"hierLevel\":\"2\",\"complaintPath\":\"SANITATION\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("split_part(complaint_node_path,'.',least(2,complaint_depth))"),
                 p.sql);   // the rollup dimension survived
         assertTrue(p.sql.contains("(complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"),
@@ -182,12 +187,12 @@ public class KpiQueryComposerComplaintPathTest {
         // Leaf selections keep sending serviceCode (exact match) — complaintPath is additive for
         // interior nodes, not a replacement.
         JsonNode merged = composer.mergeParams(byTypeBase(),
-                json("{\"serviceCode\":\"GarbageNeedsTobeCleared\",\"complaintPath\":\"SANITATION\"}"));
+                json("{\"serviceCode\":\"GarbageNeedsTobeCleared\",\"complaintPath\":\"SANITATION\"}"), calendar);
         assertEquals("GarbageNeedsTobeCleared",
                 merged.get("filters").get("service_code").get("eq").asText());
         assertEquals("SANITATION",
                 merged.get("filters").get("complaint_node_path").get("subtree").asText());
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("service_code = ?"));
     }
 
@@ -197,8 +202,8 @@ public class KpiQueryComposerComplaintPathTest {
     public void abacRowScopeIsStillAppliedOnTopOfTheSubtreeFilter() {
         AnalyticsScope constrained = new AnalyticsScope("ke.nairobi", false, null,
                 "KENYA.NAIROBI", java.util.List.of("DEPT_SANITATION"));
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"SANITATION\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, constrained);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"SANITATION\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, constrained, calendar);
         assertTrue(p.sql.contains("(complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"), p.sql);
         assertTrue(p.sql.contains("tenant_id = ?"), p.sql);                 // city tenant scope
         assertTrue(p.sql.contains("boundary_path LIKE ?"), p.sql);          // jurisdiction subtree scope
@@ -216,7 +221,7 @@ public class KpiQueryComposerComplaintPathTest {
                 + "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}],"
                 + "\"filters\":{\"service_code\":{\"subtree\":\"SANITATION\"}}}");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> planner.plan(inline, stateScope));
+                () -> planner.plan(inline, stateScope, calendar));
         assertTrue(ex.getMessage().startsWith("op_not_allowed"), ex.getMessage());
     }
 
@@ -226,6 +231,6 @@ public class KpiQueryComposerComplaintPathTest {
         JsonNode inline = json("{\"grain\":\"daily\","
                 + "\"measures\":[{\"name\":\"open\",\"agg\":\"count\"}],"
                 + "\"filters\":{\"complaint_node_path\":{\"subtree\":\"SANITATION\"}}}");
-        assertThrows(IllegalArgumentException.class, () -> planner.plan(inline, stateScope));
+        assertThrows(IllegalArgumentException.class, () -> planner.plan(inline, stateScope, calendar));
     }
 }

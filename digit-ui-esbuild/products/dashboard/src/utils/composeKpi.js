@@ -9,7 +9,7 @@
  */
 export function evaluateCompose(compose, results) {
   if (!compose || !compose.type) return null;
-  const { type, sourceKpiIds, elapsedFromAsOf } = compose;
+  const { type, sourceKpiIds } = compose;
 
   const sourceData = sourceKpiIds.map(id => {
     const r = results[id];
@@ -28,43 +28,22 @@ export function evaluateCompose(compose, results) {
       const outflow = sourceData[1]?.total ?? 0;
       return inflow - outflow;
     }
-    case 'dailyAvgFromWeekly': {
-      const total = sourceData[0].total ?? 0;
-      if (!elapsedFromAsOf) return null;
-      // Get asOf from the source result to avoid client clock authority
-      const asOf = results[sourceKpiIds[0]]?.asOf;
-      const daysElapsed = asOf ? elapsedDaysSince(startOfWeek(new Date(asOf)), new Date(asOf)) : null;
-      return daysElapsed && daysElapsed > 0 ? total / daysElapsed : null;
-    }
-    case 'hourlyAvgFromDaily': {
-      const total = sourceData[0].total ?? 0;
-      if (!elapsedFromAsOf) return null;
-      const asOf = results[sourceKpiIds[0]]?.asOf;
-      const hoursElapsed = asOf ? elapsedHoursSince(startOfDay(new Date(asOf)), new Date(asOf)) : null;
-      return hoursElapsed && hoursElapsed > 0 ? total / hoursElapsed : null;
-    }
+    // 'dailyAvgFromWeekly' / 'hourlyAvgFromDaily': the backend's D1a composition (calendar-
+    // aware, tenant-timeZone-correct — see BusinessCalendar / #29) is now the sole authority
+    // for these averages. This engine must NEVER recompute an "elapsed periods since asOf"
+    // average with browser-local Date math (setDate/setHours/new Date() are all local-clock
+    // reads that silently disagree with the tenant's configured calendar). Returning null
+    // here is intentional: KpiTile's resolveScalar falls through to the backend's
+    // result.value whenever evaluateCompose yields null.
+    case 'dailyAvgFromWeekly':
+    case 'hourlyAvgFromDaily':
+      return null;
     default:
       return null;
   }
 }
 
-function startOfWeek(d) {
-  const start = new Date(d);
-  start.setDate(d.getDate() - d.getDay());
-  start.setHours(0, 0, 0, 0);
-  return start;
-}
-
-function startOfDay(d) {
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  return start;
-}
-
-function elapsedDaysSince(start, now) {
-  return Math.max(1, Math.floor((now - start) / 86400000));
-}
-
-function elapsedHoursSince(start, now) {
-  return Math.max(1, Math.floor((now - start) / 3600000));
+/** These calendar-aware rules are evaluated by pgr-services and must never use raw row totals. */
+export function requiresBackendComposition(compose) {
+  return compose?.type === 'dailyAvgFromWeekly' || compose?.type === 'hourlyAvgFromDaily';
 }

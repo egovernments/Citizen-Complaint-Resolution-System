@@ -65,7 +65,6 @@ class ScopePolicyEngineTest {
         // PGR_LME says OWN for department, SUPERVISOR says NONE — holding SUPERVISOR too should
         // widen access (NONE wins), matching how egov-accesscontrol already unions roleactions
         // across a caller's roles.
-        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
         Map<String, Map<String, ScopeLevel>> roleScopes = Map.of(
                 "PGR_LME", Map.of("department", ScopeLevel.OWN),
                 "SUPERVISOR", Map.of("department", ScopeLevel.NONE));

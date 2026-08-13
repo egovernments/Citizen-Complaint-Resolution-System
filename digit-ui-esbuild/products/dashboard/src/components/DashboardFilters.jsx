@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   COMPLAINT_TYPE_OPTIONS,
   GEOGRAPHY_OPTIONS,
-  GLOBAL_FILTER_FIELDS,
+  buildDefaultFilters,
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
@@ -97,19 +97,24 @@ const DashboardFilters = ({
   filters,
   onFilterChange,
   onClearFilters,
+  timeZone,
   filterOptions,
   filterOptionsLoading = false,
 }) => {
   const { t } = useDashboardT();
-  const canClear = hasActiveFilters(filters);
+  const canClear = hasActiveFilters(filters, timeZone);
 
   const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
   const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
 
-  const dateFrom = filters?.dateFrom ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateFrom")?.defaultValue;
-  const dateTo = filters?.dateTo ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateTo")?.defaultValue;
+  // Date fallbacks resolve from buildDefaultFilters(timeZone) at render time — never
+  // GLOBAL_FILTER_FIELDS' module-load defaultValue, which would freeze on whatever
+  // calendar day the JS bundle happened to first evaluate in the browser's local zone.
+  const defaultFilters = useMemo(() => buildDefaultFilters(timeZone), [timeZone]);
+  const dateFrom = filters?.dateFrom ?? defaultFilters.dateFrom;
+  const dateTo = filters?.dateTo ?? defaultFilters.dateTo;
   const geography = filters?.geography ?? "all";
   const complaintType = filters?.complaintType ?? "all";
 

@@ -79,13 +79,13 @@ const item = (i, x, y, w, h) => ({ i, x, y, w, h });
 /* storageKeyFor — per-user/tenant scoping                             */
 /* ------------------------------------------------------------------ */
 
-test("storageKeyFor scopes by tenant and user, falls back to legacy without identity", () => {
+test("storageKeyFor scopes by tenant and user and disables persistence without identity", () => {
   assert.equal(
     storageKeyFor("ke", "uuid-1"),
     `${LEGACY_STORAGE_KEY}.ke.uuid-1`
   );
-  assert.equal(storageKeyFor("ke", null), LEGACY_STORAGE_KEY);
-  assert.equal(storageKeyFor(null, "uuid-1"), LEGACY_STORAGE_KEY);
+  assert.equal(storageKeyFor("ke", null), null);
+  assert.equal(storageKeyFor(null, "uuid-1"), null);
   assert.notEqual(storageKeyFor("ke", "uuid-1"), storageKeyFor("ke", "uuid-2"));
 });
 
@@ -113,19 +113,30 @@ test("readSavedLayout returns null for absent key and for garbage, [] for an int
   assert.deepEqual(readSavedLayout(storage, "empty"), []);
 });
 
-test("readSavedLayout falls back to the legacy global key exactly once (read-only migration)", () => {
+test("a scoped identity never reads or overwrites the shared legacy layout", () => {
   const legacyLayout = [item("chart_a", 0, 0, 6, 6)];
   const storage = fakeStorage({
     [LEGACY_STORAGE_KEY]: JSON.stringify(legacyLayout),
   });
   const key = storageKeyFor("ke", "u1");
-  // Scoped slot empty -> legacy layout surfaces.
-  assert.deepEqual(readSavedLayout(storage, key, LEGACY_STORAGE_KEY), legacyLayout);
-  // After the user persists, the scoped slot wins and legacy stays untouched.
+  assert.equal(readSavedLayout(storage, key), null);
+
   const own = [item("card_a", 0, 0, 2, 2)];
   persistLayout(storage, key, own);
-  assert.deepEqual(readSavedLayout(storage, key, LEGACY_STORAGE_KEY), own);
+  assert.deepEqual(readSavedLayout(storage, key), own);
   assert.equal(storage.getItem(LEGACY_STORAGE_KEY), JSON.stringify(legacyLayout));
+});
+
+test("missing identity neither reads nor writes any storage slot", () => {
+  const storage = fakeStorage({
+    [LEGACY_STORAGE_KEY]: JSON.stringify([item("chart_a", 0, 0, 6, 6)]),
+  });
+  const before = storage._dump();
+
+  assert.equal(readSavedLayout(storage, storageKeyFor("ke", null)), null);
+  persistLayout(storage, storageKeyFor(null, "u1"), [item("card_a", 0, 0, 2, 2)]);
+
+  assert.deepEqual(storage._dump(), before);
 });
 
 test("two users on one browser no longer clobber each other (the #1276 shared-slot failure)", () => {
@@ -140,7 +151,7 @@ test("two users on one browser no longer clobber each other (the #1276 shared-sl
   persistLayout(storage, keySup, [item("table_a", 0, 0, 12, 5)]);
 
   // GRO comes back: additions intact.
-  assert.deepEqual(readSavedLayout(storage, keyGro, LEGACY_STORAGE_KEY), groLayout);
+  assert.deepEqual(readSavedLayout(storage, keyGro), groLayout);
 });
 
 /* ------------------------------------------------------------------ */
@@ -189,7 +200,7 @@ test("REGRESSION #1276: saved additions rehydrate even when the pack seed is EMP
 
   // Session 2 (reload): hydration must surface the saved tile.
   const rehydrated = resolveInitialLayout(
-    readSavedLayout(storage, key, LEGACY_STORAGE_KEY),
+    readSavedLayout(storage, key),
     seed,
     KPIS
   );
@@ -296,11 +307,11 @@ test("click add is UNCHANGED by drop-placement parity: appends at the first open
   assert.deepEqual({ x: untouched.x, y: untouched.y }, { x: 0, y: 0 });
 });
 
-test("defaultSizeForKpi sizes cards/charts/maps/tables distinctly", () => {
+test("defaultSizeForKpi preserves the existing add-KPI geometry contract", () => {
   assert.deepEqual(defaultSizeForKpi("card_a", KPIS), { w: 2, h: 2 });
   assert.deepEqual(defaultSizeForKpi("map_a", KPIS), { w: 8, h: 6 }); // incl. choropleth-map
-  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 5 });
-  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 6, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("table_a", KPIS), { w: 12, h: 6 });
+  assert.deepEqual(defaultSizeForKpi("chart_a", KPIS), { w: 4, h: 6 });
 });
 
 /* ------------------------------------------------------------------ */

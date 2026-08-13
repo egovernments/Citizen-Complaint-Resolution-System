@@ -17,7 +17,9 @@
         "pt_PT": "#.##0,00",
         "fr_FR": "# ##0,00",
         "default": "#,##0.00"
-      }
+      },
+      "publicDashboardEnabled": true,
+      "timeZone": "Africa/Nairobi"
     }
   }
 ]

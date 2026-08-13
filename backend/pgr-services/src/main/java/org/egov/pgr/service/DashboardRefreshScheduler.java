@@ -48,15 +48,35 @@ public class DashboardRefreshScheduler {
     // Daily backlog snapshot: one row per still-open complaint per day. Runs AFTER complaint_facts
     // is refreshed. ON CONFLICT keeps the first snapshot captured for each (day, complaint), so
     // re-running within the same day is a no-op — the day's backlog is fixed at its first capture.
+    //
+    // #29 timezone addendum: snapshot_date is each complaint's TENANT-LOCAL calendar date, not a
+    // single server-wide CURRENT_DATE — joined against the same pgr_dashboard_tenant_timezone view
+    // the V2 grain MVs use (V20260810000000__tenant_business_calendar_grains.sql), keyed by the
+    // complaint's own state-root tenant, falling back to Africa/Nairobi when that tenant has no
+    // configured/valid timeZone. Because this snapshot is an append-only historical table, a later
+    // timeZone change never rewrites a date already captured — only snapshots taken after the
+    // change use the new zone.
     private static final String DAILY_SNAPSHOT_UPSERT =
             "INSERT INTO complaint_open_state_daily "
           + "(snapshot_date, service_request_id, tenant_id, is_open, sla_breached, sla_status_bucket, "
           + " aging_bucket, boundary_path, ward_code, zone_code, service_code, current_assignee_uuid, "
           + " department_code, account_id) "
-          + "SELECT CURRENT_DATE, service_request_id, tenant_id, is_open, sla_breached, sla_status_bucket, "
-          + "       aging_bucket, boundary_path, ward_code, zone_code, service_code, current_assignee_uuid, "
-          + "       department_code, account_id "
-          + "FROM complaint_facts WHERE is_open "
+          + "SELECT (CURRENT_TIMESTAMP AT TIME ZONE COALESCE(tz.resolved_zone, 'Africa/Nairobi'))::date AS snapshot_date, "
+          + "       cf.service_request_id AS service_request_id, cf.tenant_id AS tenant_id, cf.is_open AS is_open, "
+          + "       cf.sla_breached AS sla_breached, cf.sla_status_bucket AS sla_status_bucket, "
+          + "       cf.aging_bucket AS aging_bucket, cf.boundary_path AS boundary_path, cf.ward_code AS ward_code, "
+          + "       cf.zone_code AS zone_code, cf.service_code AS service_code, "
+          + "       cf.current_assignee_uuid AS current_assignee_uuid, cf.department_code AS department_code, "
+          + "       cf.account_id AS account_id "
+          + "FROM complaint_facts cf "
+          + "LEFT JOIN LATERAL (SELECT candidate.resolved_zone "
+          + "FROM pgr_dashboard_tenant_timezone candidate "
+          + "WHERE cf.tenant_id = candidate.state_root_tenant_id "
+          + "OR left(cf.tenant_id, length(candidate.state_root_tenant_id) + 1) "
+          + "= candidate.state_root_tenant_id || '.' "
+          + "ORDER BY array_length(string_to_array(candidate.state_root_tenant_id, '.'), 1) DESC, "
+          + "candidate.state_root_tenant_id LIMIT 1) tz ON true "
+          + "WHERE cf.is_open "
           + "ON CONFLICT (snapshot_date, service_request_id) DO NOTHING";
 
     @Autowired

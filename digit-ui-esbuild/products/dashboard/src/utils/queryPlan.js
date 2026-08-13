@@ -149,6 +149,31 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
 }
 
 /**
+ * Public requests are intentionally narrower than the employee query plan.
+ * Membership, layout, windows and disclosure policy belong to the curated
+ * public pack/backend endpoint. The browser sends one bare kpiId reference per
+ * laid-out tile: no user filters, hierarchy overrides, comparison/series fanout
+ * or per-complaint map pin source.
+ */
+export function buildPublicRefs(tiles, kpis) {
+  const refs = {};
+  for (const tile of tiles || []) {
+    const kpiId = tile?.kpiId;
+    if (!kpiId || !kpis?.[kpiId]) continue;
+    refs[kpiId] = { kpiId };
+  }
+  return refs;
+}
+
+export function buildPublicRefsKey(tiles, kpis) {
+  return JSON.stringify({
+    public: true,
+    ids: (tiles || []).map((tile) => tile?.kpiId).filter((id) => id && kpis?.[id]),
+    versions: (tiles || []).map((tile) => kpis?.[tile?.kpiId]?.version ?? null),
+  });
+}
+
+/**
  * Serialisable fingerprint of everything buildRefs reads, used as the batch
  * effect's dependency key. Includes each tile's viz.kind (a def flipping
  * card<->chart must re-trigger even when ids/params are unchanged) AND each

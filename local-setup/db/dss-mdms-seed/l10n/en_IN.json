@@ -485,6 +485,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Public view",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Reset",
     "module": "rainmaker-dashboard"
@@ -1007,6 +1012,16 @@
   {
     "code": "DASHBOARD_MAP_ZOOM",
     "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "This dashboard has not been enabled for this tenant.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "Public dashboard is not available",
     "module": "rainmaker-dashboard"
   },
   {

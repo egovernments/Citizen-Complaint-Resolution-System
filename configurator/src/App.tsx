@@ -38,6 +38,7 @@ import { NotificationPreferenceList } from '@/resources/notification-preferences
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
+import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
@@ -177,6 +178,7 @@ function ManagementAdminResources() {
           <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />

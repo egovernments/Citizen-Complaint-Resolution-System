@@ -485,6 +485,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Vista pública",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Repor",
     "module": "rainmaker-dashboard"
@@ -1007,6 +1012,16 @@
   {
     "code": "DASHBOARD_MAP_ZOOM",
     "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "Este painel não foi ativado para este município.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "O painel público não está disponível",
     "module": "rainmaker-dashboard"
   },
   {

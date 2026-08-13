@@ -47,7 +47,6 @@ Usage:
 import json
 import os
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -399,4 +398,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

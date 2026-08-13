@@ -24,6 +24,7 @@ import DashboardLogin, {
 } from "./components/DashboardLogin";
 import { useDashboardConfig } from "../useDashboardConfig";
 import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
+import { resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -31,7 +32,7 @@ import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
-import { runKpiBatch, getTenantId } from "./services/analyticsService";
+import { runKpiBatch, runPublicKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
@@ -41,6 +42,8 @@ import {
   isMapKind,
   buildRefs,
   buildRefsKey,
+  buildPublicRefs,
+  buildPublicRefsKey,
   PIN_ROW_CAP,
 } from "./utils/queryPlan";
 import {
@@ -144,10 +147,24 @@ function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, 
 /* Auth gate (mirrors AdminDashboard)                                          */
 /* -------------------------------------------------------------------------- */
 
-const AdminDashboard = ({ embedded = false }) => {
-  // Embedded (inside the DigitUI employee chrome) the host guarantees the
-  // session and owns sign-out, so the standalone login gate is skipped.
-  const [authed, setAuthed] = useState(() => embedded || hasDashboardSession());
+const AdminDashboard = ({ embedded = false, mode }) => {
+  // `mode` splits the two concerns the old boolean `embedded` conflated:
+  // WHO OWNS THE CHROME, and WHETHER A SESSION IS REQUIRED.
+  //
+  //   embedded   host chrome (DigitUI), session guaranteed by AppModules
+  //   standalone own shell, own login gate
+  //   public     own shell, NO login — requests go out anonymously and the
+  //              backend's PUBLIC floor decides what comes back
+  //
+  // `embedded` is kept as a legacy alias so Module.js (and any other caller)
+  // keeps working unchanged; an explicit `mode` always wins.
+  const resolvedMode = mode || (embedded ? "embedded" : "standalone");
+  const isEmbedded = resolvedMode === "embedded";
+  // Only the standalone shell owns a session: embedded inherits the host's,
+  // public deliberately has none.
+  const requiresSession = resolvedMode === "standalone";
+
+  const [authed, setAuthed] = useState(() => !requiresSession || hasDashboardSession());
   const [expired, setExpired] = useState(false);
 
   // The gate used to be evaluated once at mount, so a session that died while
@@ -156,19 +173,21 @@ const AdminDashboard = ({ embedded = false }) => {
   // authService announces an unrecoverable session and we drop to the login
   // screen with an explanation.
   //
-  // Not when embedded: there the surrounding DigitUI chrome owns the session and
-  // its own expiry handling, and rendering our standalone login form inside it
-  // would be wrong. authService has already cleared the dead token, so the host
-  // sees the same state on its next call.
+  // Only in standalone mode. Embedded, the surrounding DigitUI chrome owns the
+  // session and its own expiry handling, and rendering our standalone login form
+  // inside it would be wrong. Public has no session to expire — dropping a
+  // public visitor onto a login form would be a regression, not a recovery.
+  // authService has already cleared the dead token, so the host sees the same
+  // state on its next call.
   useEffect(() => {
-    if (embedded) return undefined;
+    if (!requiresSession) return undefined;
     const onExpired = () => {
       setExpired(true);
       setAuthed(false);
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
-  }, [embedded]);
+  }, [requiresSession]);
 
   // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
   // #1272). Primed synchronously so the first painted frame is already masked.
@@ -176,6 +195,10 @@ const AdminDashboard = ({ embedded = false }) => {
   const { config: dashboardConfig, loading: dashboardConfigLoading } =
     useDashboardConfig();
   setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
+  // Resolved once dashboardConfig settles (dashboardConfigLoading gates AdminDashboardInner's
+  // mount below), then threaded explicitly through every default-date consumer — no
+  // module-global mutable timezone state, unlike the numberFormat mask above.
+  const timeZone = resolveConfiguredTimeZone(dashboardConfig);
 
   const handleLogin = useCallback(() => {
     window.location.reload();
@@ -190,7 +213,16 @@ const AdminDashboard = ({ embedded = false }) => {
   if (dashboardConfigLoading) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
-  return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
+  // Public renders the standalone shell (embedded=false) but with no sign-out —
+  // Sidebar only draws that control when onSignOut is supplied.
+  return (
+    <AdminDashboardInner
+      embedded={isEmbedded}
+      publicMode={resolvedMode === "public"}
+      onSignOut={requiresSession ? handleSignOut : undefined}
+      timeZone={timeZone}
+    />
+  );
 };
 
 /* -------------------------------------------------------------------------- */
@@ -373,7 +405,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* Inner dashboard                                                             */
 /* -------------------------------------------------------------------------- */
 
-const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, timeZone }) => {
   // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount.
   useState(() => {
     dashboardMetrics.beginLoad();
@@ -382,24 +414,25 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
-    useDashboardFilters();
+    useDashboardFilters({ persistent: !publicMode, timeZone });
   const { options: filterOptions, loading: filterOptionsLoading } =
-    useFilterOptions();
+    useFilterOptions({ enabled: !publicMode });
   const tenantId = useMemo(() => getTenantId(), []);
 
   // Feed the server-scoped option lists into the filter store so persisted
   // filter values that no longer match any option get reconciled
   // (reconcileFiltersWithOptions) instead of silently sending dead params.
   useEffect(() => {
-    if (filterOptions) applyFilterOptions(filterOptions);
-  }, [filterOptions, applyFilterOptions]);
+    if (!publicMode && filterOptions) applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions, publicMode]);
   const { loading: catalogLoading, kpis, pack, error: catalogError } =
-    useCatalog(tenantId);
+    useCatalog(tenantId, { publicMode });
 
   // Deployment complaint-hierarchy levels for the per-widget "Group by"
   // control. NO_HIERARCHY-shaped until the fetch resolves (control hidden).
   const [hierarchy, setHierarchy] = useState(null);
   useEffect(() => {
+    if (publicMode) return undefined;
     let cancelled = false;
     fetchComplaintHierarchyLevels().then((h) => {
       if (!cancelled) setHierarchy(h);
@@ -407,24 +440,28 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [publicMode]);
 
   // Per-widget hierLevel overrides — see the module comment on
   // HIER_OVERRIDES_STORAGE_KEY for why this is NOT in `filters`.
-  const [hierOverrides, setHierOverrides] = useState(readHierOverrides);
+  const [hierOverrides, setHierOverrides] = useState(() =>
+    publicMode ? {} : readHierOverrides()
+  );
   const setHierLevelOverride = useCallback((kpiId, value) => {
     setHierOverrides((prev) => {
       const next = { ...prev, [kpiId]: value };
-      persistHierOverrides(next);
+      if (!publicMode) persistHierOverrides(next);
       return next;
     });
-  }, []);
+  }, [publicMode]);
 
   const [batch, setBatch] = useState({
     loading: true,
     results: {},
     errors: null,
     partial: false,
+    asOf: null,
+    calendar: null,
   });
   const reqIdRef = useRef(0);
 
@@ -439,7 +476,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     addKpiToLayout,
     visibleLayoutIds,
     findDragHoverTarget,
-  } = useCatalogLayout(kpis, pack?.layout);
+  } = useCatalogLayout(kpis, pack?.layout, { persistent: !publicMode });
 
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
   const draggingWidgetIdRef = useRef(null);
@@ -664,7 +701,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   // BEFORE the new locale's bundles finish fetching, so the names must also
   // re-resolve when the messages actually land ("added" store event).
   const catalogItems = useMemo(
-    () =>
+    () => publicMode ? [] :
       Object.values(kpis)
         .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
         .map((def) => ({
@@ -674,7 +711,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
-    [kpis, language, i18nTick]
+    [kpis, language, i18nTick, publicMode]
   );
 
   // Re-run the batch whenever the catalog resolves, the filters change, or a
@@ -683,21 +720,37 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   // are unchanged) AND the applied hierLevel overrides (R7c — without them a
   // Group-by change would never refire this effect).
   const refsKey = useMemo(
-    () => buildRefsKey(tiles, kpis, filters, hierOverrides),
-    [tiles, filters, kpis, hierOverrides]
+    () => publicMode
+      ? buildPublicRefsKey(tiles, kpis)
+      : buildRefsKey(tiles, kpis, filters, hierOverrides),
+    [tiles, filters, kpis, hierOverrides, publicMode]
   );
 
   useEffect(() => {
     if (!pack || !tiles.length) {
-      setBatch({ loading: false, results: {}, errors: null, partial: false });
+      setBatch({ loading: false, results: {}, errors: null, partial: false, asOf: null, calendar: null });
       return;
     }
-    const refs = buildRefs(tiles, kpis, filters, hierOverrides);
+    const refs = publicMode
+      ? buildPublicRefs(tiles, kpis)
+      : buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
     dashboardMetrics.markBatchStart(reqId);
-    setBatch((prev) => ({ ...prev, loading: true }));
+    // A changed query plan must not leave the prior values visible/exportable
+    // beneath new filter labels while the replacement request is in flight.
+    setBatch({
+      loading: true,
+      results: {},
+      errors: null,
+      partial: false,
+      asOf: null,
+      calendar: null,
+    });
 
-    runKpiBatch(refs, tenantId)
+    const request = publicMode
+      ? runPublicKpiBatch(refs, tenantId)
+      : runKpiBatch(refs, tenantId);
+    request
       .then((res) => {
         if (reqId !== reqIdRef.current) return;
         setBatch({
@@ -705,6 +758,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           results: res?.results || {},
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
+          // Batch authority for "Last updated" (#29): the response's own top-level
+          // asOf/calendar, never a fresh client-side clock reading.
+          asOf: typeof res?.asOf === "number" ? res.asOf : null,
+          calendar: res?.calendar || null,
         });
         dashboardMetrics.markAllWidgetsReady(
           countErrorWidgets(res?.errors, tiles.length),
@@ -718,23 +775,30 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           results: {},
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
+          asOf: null,
+          calendar: null,
         });
         dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refsKey, pack, tenantId]);
+  }, [refsKey, pack, tenantId, publicMode]);
 
-  const lastUpdatedLabel = useMemo(
-    () =>
-      new Date().toLocaleString(language?.replace("_", "-"), {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-    [batch.results, language]
-  );
+  // "Last updated" reads the batch's OWN echoed asOf/calendar (#29) — the single
+  // clock reading every tile in this batch was judged against — never a fresh
+  // new Date() at render time, which would drift from what's actually on screen.
+  // No stamp (rather than a fabricated "now") when the batch hasn't supplied one.
+  const lastUpdatedLabel = useMemo(() => {
+    if (batch.asOf == null) return null;
+    const zone = batch.calendar?.timeZone || timeZone;
+    return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      ...(zone ? { timeZone: zone } : {}),
+    });
+  }, [batch.asOf, batch.calendar, timeZone, language]);
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
@@ -819,7 +883,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     URL.revokeObjectURL(url);
   }, [layout, kpis, batch.results, t]);
 
-  const showEmpty = !catalogLoading && pack && layout.length === 0;
+  const showPublicDisabled = publicMode && !catalogLoading && pack?.enabled === false;
+  const showEmpty = !showPublicDisabled && !catalogLoading && pack && layout.length === 0;
 
   const handleFilterChange = useCallback(
     (...args) => {
@@ -839,6 +904,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   return (
     <DashboardLayout
       embedded={embedded}
+      readOnly={publicMode}
+      publicMode={publicMode}
       visibleLayoutIds={visibleLayoutIds}
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
@@ -849,6 +916,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       filters={filters}
       onFilterChange={handleFilterChange}
       onClearFilters={handleClearFilters}
+      timeZone={timeZone}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
@@ -865,6 +933,19 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           {t("DASHBOARD_COMMON_CATALOG_UNAVAILABLE", "Catalog unavailable")}: {catalogError}
         </div>
       )}
+      {showPublicDisabled && (
+        <div className="tw-mx-auto tw-mt-12 tw-max-w-xl tw-rounded-lg tw-border tw-border-border tw-bg-surface tw-p-8 tw-text-center tw-shadow-sm">
+          <h1 className="tw-text-xl tw-font-semibold tw-text-foreground">
+            {t("DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE", "Public dashboard is not available")}
+          </h1>
+          <p className="tw-mt-3 tw-text-sm tw-leading-6 tw-text-muted-foreground">
+            {t(
+              "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+              "This dashboard has not been enabled for this tenant."
+            )}
+          </p>
+        </div>
+      )}
       {batch.errors && batch.errors.__batch && (
         <div className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
           {batch.errors.__batch}
@@ -876,7 +957,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           while a picker drag is live so the RGL placeholder stays visible. */}
       <div
         ref={gridWrapRef}
-        className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
+        className={`dashboard-grid-wrap${showPublicDisabled ? " tw-hidden" : ""}${isExternalDrag ? " dashboard-external-drag" : ""}${
           isGridDragging ? " dashboard-grid-dragging" : ""
         }${showEmpty ? " dashboard-grid-wrap--empty tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface" : ""}`}
         onDragOver={handleWrapDragOver}
@@ -899,9 +980,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           containerPadding={[0, 0]}
           compactType={null}
           allowOverlap={false}
-          isDraggable
-          isResizable
-          isDroppable={isExternalDrag}
+          isDraggable={!publicMode}
+          isResizable={!publicMode}
+          isDroppable={!publicMode && isExternalDrag}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
           onDropDragOver={handleDropDragOver}
@@ -918,7 +999,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
               <TypeFilterIgnoredNote />
             ) : null;
-            const removeBtn = (
+            const removeBtn = publicMode ? null : (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
                 onClick={(e) => {
@@ -937,7 +1018,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   {removeBtn}
                   {renderTile(item.i)}
                   {ignoredNote}
-                  <CardUpdatedStamp label={lastUpdatedLabel} />
+                  {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
                 </div>
               );
             }
@@ -999,8 +1080,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   {renderTile(item.i, groupBy.info)}
                 </div>
                 {ignoredNote}
-                <CardUpdatedStamp label={lastUpdatedLabel} />
-                <ResizeGrip />
+                {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
+                {!publicMode && <ResizeGrip />}
               </section>
             );
           })}
