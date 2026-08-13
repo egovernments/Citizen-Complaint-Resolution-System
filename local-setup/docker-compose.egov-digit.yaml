@@ -960,22 +960,16 @@ services:
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18090:8090
-    healthcheck:
-      # Universal across both possible images: the pinned default
-      # (egovio/egov-accesscontrol:abac-changes-cb6a372) has always had
-      # /bin/sh + wget; the abac-local build now does too (its Dockerfile
-      # uses the distroless `debug-nonroot` tag specifically so this same
-      # check works there as well — see Digit-Core's build/maven/Dockerfile).
-      # Do NOT make this healthcheck image-specific again: ACCESSCONTROL_IMAGE
-      # can silently flip back to the pinned default whenever a DIFFERENT
-      # tenant is deployed on this same shared host (its host_vars won't
-      # define the abac-local override), so whatever runs here must work for
-      # either image without needing a compose change.
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
+    # No healthcheck: both the pinned default (egovio/egov-accesscontrol:abac-changes-cb6a372)
+    # and the abac-local build are minimal/distroless images with no shell and no wget/curl —
+    # confirmed by `docker exec`ing each of /bin/sh, wget, curl, ls, all of which fail with
+    # "executable file not found in $PATH". Docker/Compose healthchecks always exec a command
+    # INSIDE the container; there is no way to run one here short of changing the image itself
+    # (a Digit-Core build concern, not this compose file). Do not add a CMD-SHELL wget/curl
+    # check back — it will sit "unhealthy" forever and, combined with a dependent's
+    # `condition: service_healthy`, hard-fails every deploy despite the app being genuinely up
+    # (verified via logs: Tomcat/Spring Boot start fine and serve real traffic). Dependents
+    # needing ordering must use `condition: service_started`, not `service_healthy`.
     networks:
     - egov-network
 
@@ -1426,7 +1420,11 @@ services:
       egov-enc-service:
         condition: service_healthy
       egov-accesscontrol:
-        condition: service_healthy
+        # service_healthy is unavailable — see the "No healthcheck" note on egov-accesscontrol's
+        # own service block above; this still orders pgr-services' start after the container
+        # starts, which is what PGR startup actually needs (fail-closed access-control lookups
+        # already handle "not up yet" at the application layer).
+        condition: service_started
       otel-collector:
         condition: service_started
     volumes:
