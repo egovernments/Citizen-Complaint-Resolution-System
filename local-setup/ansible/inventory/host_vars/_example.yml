@@ -559,6 +559,33 @@ nginx_features:
 # new tenants get the standard templated vhost.
 nginx_preserve_vhost: false
 
+# ────────── Monitoring alerts (Gatus → Slack) ──────────
+
+# Where this tenant's outage alerts go. Empty (the group_vars default) means
+# alerting is OFF: Gatus logs `Ignoring provider=slack`, keeps serving the
+# dashboard, and nobody is paged. That is a real choice, not a safe fallback —
+# an unmonitored tenant fails silently, so leave it empty only deliberately.
+#
+# Before setting this, answer all three. An alert stream with no named owner
+# gets muted within a week, and a muted channel is worse than no alerting
+# because it looks like coverage:
+#
+#   1. WHICH CHANNEL  a dedicated one per environment, not a busy team channel.
+#                     Gatus alerts on every endpoint transition, so a shared
+#                     channel trains people to skim past them.
+#   2. WHO TRIAGES    a named person or rota that reads it during working hours
+#                     and owns deciding "act or ignore". Not "the team".
+#   3. WHO MINTS IT   whoever administers the Slack workspace creates the
+#                     incoming webhook and puts the URL in OpenBao. Record who,
+#                     so it can be rotated when they leave.
+#
+# SECRET: anyone holding this URL can post into the channel. Do not commit a
+# real one — this file is tracked. Store it in OpenBao under this tenant's
+# secrets_path and reference it from there, the same as bootstrap_secrets.
+#
+# Rationale and the opt-in design: #1609. Alerting runbook: #1681.
+# gatus_slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xxxx"
+
 # ────────── OpenBao (per-tenant secrets backend) ──────────
 
 # REQUIRED. Path under the kv/ mount where this tenant's secrets live.

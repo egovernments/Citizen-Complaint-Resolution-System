@@ -1,10 +1,93 @@
+# Monitoring stack (#1619). This helmfile is wired into digit-helmfile.yaml, but
+# every release below is OFF by default -- uncommenting the path deploys nothing
+# until an operator opts in. Turn on only the parts you want: a deployment with
+# limited capacity can run metrics alone, and a full stack is six booleans.
+#
+# Set them in charts/environments/env.yaml under `monitoring:` -- see the
+# documented block there for what each one costs and what it gives you.
+#
+# Note on scope: several releases below pass the whole merged values tree into
+# their chart (`.Values | toYaml`), a long-standing pattern here rather than
+# anything new. It means the `monitoring:` toggle map is also handed to
+# loki-stack, kube-prometheus-stack, blackbox and kafka-ui, which ignore
+# unrecognised top-level keys. Harmless, but assume anything added under
+# `monitoring:` is visible to those charts' rendered values.
 environments:
   env:
     values:
       - namespace: monitoring
+      # Defaults for the toggles read below. Listed BEFORE env.yaml so an
+      # operator's env.yaml overrides them, and so the keys ALWAYS exist --
+      # without this, an env.yaml predating this block renders `installed:` as
+      # `<no value>` and the helmfile fails to parse. Deliberately not using
+      # sprig's `dig` for the same reason: CI pins helmfile v0.140.0, which
+      # ships a sprig too old to have it.
+      - monitoring:
+          metrics: false
+          logs: false
+          dashboards: false
+          traces: false
+          probes: false
+          kafkaUi: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
 ---
+{{- /* Toggle lookup, written defensively on purpose (#1619).
+
+       `.Values.monitoring.x` written directly is a HARD PARSE ERROR ("map has
+       no entry for key") in two ordinary situations: running without `-e env`,
+       and an operator env.yaml written before this block existed. Both used to
+       render fine, and a helmfile that will not parse breaks every other
+       release in this file, not just monitoring.
+
+       So: resolve the block once, tolerate its absence, and default each key to
+       false individually. sprig's `dig` would express this in one call but does
+       not exist in helmfile v0.140.0, the version CI pins.
+
+       Absent is fine; present-but-not-a-map is not. `monitoring: true`, the
+       natural typo for "turn monitoring on", makes every `index $mon "..."`
+       below fail with "can't index item of type bool" — the same whole-file
+       parse failure this block exists to prevent. Silently treating it as an
+       empty map would be worse than the crash, though: the operator asked for
+       monitoring, and would instead get every component false, which on an
+       existing install means helmfile UNINSTALLS the stack. So fail loudly and
+       name the expected shape. */}}
+{{- $mon := dict }}
+{{- if hasKey .Values "monitoring" }}
+{{-   if not (kindIs "map" (index .Values "monitoring")) }}
+{{-     fail "`monitoring:` in charts/environments/env.yaml must be a map of component toggles (metrics/logs/dashboards/traces/probes/kafkaUi), not a single value" }}
+{{-   end }}
+{{-   $mon = .Values.monitoring }}
+{{- /* Grafana admin credentials (#1650).
+
+       Two mutually exclusive paths, resolved once here so the release block
+       below stays readable:
+
+         adminExistingSecret  -- preferred. Names a Kubernetes Secret created
+                                 out of band (sealed-secret / external-secret /
+                                 OpenBao-synced) with keys admin-user and
+                                 admin-password. Nothing credential-shaped
+                                 lands in git, and rotation is a Secret update
+                                 rather than a commit.
+         adminPassword        -- escape hatch. Committed in cleartext to
+                                 env-secrets.yaml, which is neither encrypted
+                                 nor gitignored.
+
+       Read with `index` rather than `.Values.secrets.grafana.x` on purpose:
+       helmfile renders with missingkey=error, so the dotted form is a hard
+       parse failure against an env-secrets.yaml written before these keys
+       existed, while `index` yields "" for an absent key.
+
+       Neither set is a render error, not a silent default: with both empty the
+       chart falls back to `randAlphaNum 40` evaluated per render, so every
+       helmfile run would rewrite the admin Secret with a different password
+       and no operator would ever hold a working one. */}}
+{{- $gsec := .Values.secrets.grafana }}
+{{- $grafanaAdminSecret := index $gsec "adminExistingSecret" | default "" }}
+{{- $grafanaAdminPassword := index $gsec "adminPassword" | default "" }}
+{{- if and (not $grafanaAdminSecret) (not $grafanaAdminPassword) }}
+{{- fail "grafana admin login is unset: set secrets.grafana.adminExistingSecret (preferred) or secrets.grafana.adminPassword in charts/environments/env-secrets.yaml" }}
+{{- end }}
 repositories:
 - name: grafana
   url: https://grafana.github.io/helm-charts
@@ -18,10 +101,13 @@ repositories:
   url: https://helm.elastic.co
 - name: apm-attacher
   url: https://helm.elastic.co
+- name: open-telemetry
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts
 
 releases:
 - name: loki-stack
-  installed: true
+  # Loki + Promtail. Log aggregation.
+  installed: {{ default false (index $mon "logs") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: grafana/loki-stack
   version: 2.10.1
@@ -30,7 +116,9 @@ releases:
   - {{ .Values | toYaml | nindent 8 }}
 
 - name: kube-prometheus-stack
-  installed: true
+  # Prometheus, Alertmanager, node-exporter, kube-state-metrics. The core of
+  # the stack: everything else is optional, this is not.
+  installed: {{ default false (index $mon "metrics") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: prometheus-community/kube-prometheus-stack
   version: 56.6.2
@@ -38,9 +126,88 @@ releases:
   values:
   - ./values/prometheus.yaml
   - {{ .Values | toYaml | nindent 8 }}
+  # External probe target (#1649). values/prometheus.yaml probes a hardcoded
+  # https://unified-uat.digit.org/citizen/ — a FOREIGN environment carried in by
+  # the upstream import (#1619). Left as-is, enabling blackbox would start
+  # probing someone else's deployment and report its health as ours.
+  #
+  # This list REPLACES the one in values/prometheus.yaml (helm replaces lists,
+  # it does not merge them). Deliberate — the three jobs there were: this
+  # blackbox probe with the wrong target; `blackbox_exporter` self-metrics,
+  # kept below; and `nginx-ingress-metrics` against a Service name that never
+  # resolved, now superseded by the ServiceMonitor in #1648.
+  - prometheus:
+      prometheusSpec:
+        additionalScrapeConfigs:
+          - job_name: blackbox
+            metrics_path: /probe
+            params:
+              module: [http_2xx]
+            static_configs:
+              # /digit-ui/ and not the bare root: NOTHING in this tier serves
+              # `/`. Every ingress is a prefix on its own context
+              # (charts/common/templates/_ingress.yaml:48 renders
+              # `path: /<context>`) and the controller's defaultBackend is
+              # disabled (ingress-nginx/values.yaml:916), so a probe of `/`
+              # gets the controller's built-in 404 and probe_success is pinned
+              # at 0 forever -- a red panel that means nothing.
+              # /digit-ui/ is a real 2xx: the ingress passes the path through
+              # unrewritten (no rewrite-target annotation) and the SPA image's
+              # nginx serves `location /digit-ui` with
+              # `try_files $uri $uri/ /digit-ui/index.html`
+              # (frontend/micro-ui/web/docker/nginx.conf).
+              - targets:
+                  - https://{{ .Values.global.domain }}/digit-ui/
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: __param_target
+              - source_labels: [__param_target]
+                target_label: instance
+              - target_label: __address__
+                replacement: prometheus-blackbox-exporter:9115
+          - job_name: blackbox_exporter
+            static_configs:
+              - targets: ['prometheus-blackbox-exporter:9115']
+
+# Application telemetry pipeline (#1646). Services attach the OTEL javaagent
+# and export OTLP here; the collector re-exposes everything on ONE Prometheus
+# endpoint, so collection needs a single ServiceMonitor rather than one per
+# service. Deploying this is inert until the agent is switched on in the common
+# chart (otel.enabled), so it is safe to land first.
+- name: otel-collector
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: open-telemetry/opentelemetry-collector
+  version: 0.108.0
+  values:
+  # NO whole-values passthrough on this release, unlike its siblings -- the
+  # `.Values | toYaml` line every other release carries is deliberately absent
+  # here. (Written without the surrounding braces on purpose: helmfile renders
+  # this file as a Go template BEFORE parsing it as YAML, so an interpolation
+  # inside a comment is still expanded. Writing it literally here dumped the
+  # entire values tree into this line and broke the document, with a parse error
+  # pointing ~1500 lines away.) This chart ships a values.schema.json with
+  # additionalProperties:false, and the passthrough hands every top-level
+  # env.yaml key -- ~30 service blocks -- to whichever chart is being installed.
+  # Helm rejects the lot:
+  #
+  #   Error: values don't meet the specifications of the schema(s) in the
+  #   following chart(s): opentelemetry-collector:
+  #   - at '': additional properties 'pgadmin', 'configmaps', 'egov-persister',
+  #     'prometheus', 'grafana', 'digit-ui', ... not allowed
+  #
+  # Nothing is lost by dropping it: values/otel-collector.yaml references no
+  # `.Values` at all, so the passthrough supplied this release nothing it reads.
+  # The release-level `namespace:` above is a helmfile field, not a chart value.
+  #
+  # This is also why most mis-paths in this tree go unnoticed -- charts without a
+  # schema silently discard unknown keys. This one refuses to install instead.
+  - ./values/otel-collector.yaml
 
 - name: jaeger
-  installed: false
+  # Distributed tracing. Needs an Elasticsearch backend, so it is the most
+  # expensive thing here -- off unless you know you want traces.
+  installed: {{ default false (index $mon "traces") }}
   namespace: es-cluster
   chart: jaegertracing/jaeger
   version: 0.35.0
@@ -55,7 +222,9 @@ releases:
       value: "{{ .Values.global.domain }}"
 
 - name: grafana
-  installed: true
+  # Dashboards. Useful only alongside metrics and/or logs -- on its own it has
+  # nothing to query.
+  installed: {{ default false (index $mon "dashboards") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: grafana/grafana
   version: 7.3.0
@@ -65,26 +234,107 @@ releases:
       auth.github:
         allowed_organizations: {{ .Values.grafana.github.allowed_organizations }}
         role_attribute_path: {{ .Values.grafana.github.role_attribute_path }}
+  # Grafana's override convention is GF_<SECTION>_<KEY>, so auth.github /
+  # client_id is GF_AUTH_GITHUB_CLIENT_ID (#1650). The name used previously —
+  # GF_AUTH_GITHUB_YAMLAPPLICATIONCONFIG_AUTH_OAUTH2_CLIENT_GITHUB_CLIENTID —
+  # matches no Grafana setting and was silently ignored; it is copy-paste debris
+  # from kafka-ui's yamlApplicationConfig.auth.oauth2.client.github.clientId.
+  # The line below it already used the correct form for the secret, so OAuth had
+  # a secret and no client id: the provider could never complete a login.
+  #
+  # The admin login is managed too, because a broken OAuth provider left the
+  # local login form as the only door into an instance published at /monitoring
+  # with no ingress-level auth — and behind that door the chart's own fallback
+  # is a fresh `randAlphaNum 40` on every render, so the password changed under
+  # the operator each deploy. It now comes from a Kubernetes Secret named in
+  # env-secrets.yaml (admin.existingSecret, below) or, for throwaway clusters
+  # only, from an inline value. See the resolution block at the top of the file.
   - envRenderSecret:
-      GF_AUTH_GITHUB_YAMLAPPLICATIONCONFIG_AUTH_OAUTH2_CLIENT_GITHUB_CLIENTID: {{ .Values.secrets.grafana.clientID }}
+      GF_AUTH_GITHUB_CLIENT_ID: {{ .Values.secrets.grafana.clientID }}
       GF_AUTH_GITHUB_CLIENT_SECRET: {{ .Values.secrets.grafana.clientSecret }}
   set:
+{{- if $grafanaAdminSecret }}
+    # Chart wires GF_SECURITY_ADMIN_USER/PASSWORD from this Secret's
+    # admin-user / admin-password keys and creates no Secret of its own.
+    - name: admin.existingSecret
+      value: {{ $grafanaAdminSecret | quote }}
+{{- else }}
+    # `adminPassword`, NOT GF_SECURITY_ADMIN_PASSWORD via envRenderSecret.
+    #
+    # envRenderSecret becomes an `envFrom: secretRef` on the container, while
+    # the chart declares GF_SECURITY_ADMIN_PASSWORD explicitly in `env` from its
+    # own generated Secret. Kubernetes gives explicit `env` precedence over
+    # `envFrom`, so the value set here would be present in the pod's environment
+    # and simply lose. Verified on a cluster: the configured password returned
+    # 401 while the chart's generated one returned 200, and the two hashes
+    # differed -- the operator would set a password and be locked out by it.
+    #
+    # `adminPassword` is the value the chart itself writes into that Secret, so
+    # setting it here is what the explicit env then reads.
+    - name: adminPassword
+      value: {{ $grafanaAdminPassword | quote }}
+{{- end }}
     - name: ingress.hosts[0]
       value: {{ .Values.global.domain | quote }}
     - name: ingress.tls[0].hosts[0]
       value: {{ .Values.global.domain | quote }}
 
+- name: dashboards
+  # Vendored Grafana dashboards as labelled ConfigMaps (#1650). A local chart,
+  # not an upstream one -- it exists only to turn the JSON files in this repo
+  # into ConfigMaps the grafana sidecar can pick up.
+  #
+  # NOTE for whoever merges #1675 (per-component monitoring toggles): this
+  # should be gated alongside grafana, i.e. on monitoring.dashboards. Left
+  # ungated here only because that toggle block does not exist on this branch.
+  # Deploying it unconditionally is harmless in the meantime -- they are inert
+  # ConfigMaps until a Grafana with the sidecar reads them.
+  installed: true
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: ./dashboards
+  version: 0.1.0
+
+# External probing (#1649). Everything else in this tier watches the platform
+# from the INSIDE — kubelet, pods, services. Nothing verified that a citizen can
+# actually reach the site: DNS, ingress, TLS, routing, end to end.
+#
+# Three things in the repo already depend on this exporter and have therefore
+# never worked:
+#   - the `blackbox` scrape job in values/prometheus.yaml
+#   - the `blackbox_exporter` self-metrics job
+#   - the SSLCertificateExpiring alert (values/prometheus.yaml:181), which
+#     matches instance="prometheus-blackbox-exporter:9115" — so certificate
+#     expiry has never been alertable here despite the rule existing
 - name: blackbox
-  installed: false
+  # blackbox-exporter: external HTTP/TLS probing, incl. certificate expiry (#1649).
+  installed: {{ default false (index $mon "probes") }}
   namespace: {{ .Values.namespace | default "default-namespace" }}
   chart: prometheus-community/prometheus-blackbox-exporter
   version: 8.2.0
   values:
   - ./values/blackbox-exporter.yaml
   - {{ .Values | toYaml | nindent 8 }}
+  set:
+    # Helm would name the Service <release>-<chart>, i.e.
+    # blackbox-prometheus-blackbox-exporter. The scrape jobs and the SSL alert
+    # all hardcode `prometheus-blackbox-exporter`, so without this override the
+    # exporter runs and nothing that references it resolves — the same
+    # never-resolving-name failure this issue exists to fix.
+    - name: fullnameOverride
+      value: prometheus-blackbox-exporter
+    # NO releaseLabel here, unlike #1647 and #1648. Scraping is wired through
+    # the static additionalScrapeConfigs above, not through a ServiceMonitor:
+    # values/blackbox-exporter.yaml leaves both serviceMonitor.enabled and
+    # serviceMonitor.selfMonitor.enabled false with an empty `targets` list, so
+    # the chart emits no ServiceMonitor for the label to land on. And the label
+    # would be the wrong one anyway -- the chart writes
+    # `release: <.Release.Name>` (_helpers.tpl:43), which here is `blackbox`,
+    # not the `kube-prometheus-stack` the operator's selector matches.
 
 - name: kafka-ui
-  installed: true
+  # Kafka admin console. NOT monitoring -- it is a write-capable admin UI, so it
+  # is listed here only because it has always lived in this helmfile.
+  installed: {{ default false (index $mon "kafkaUi") }}
   namespace: backbone
   chart: kafka-ui/kafka-ui
   version: 0.7.6
