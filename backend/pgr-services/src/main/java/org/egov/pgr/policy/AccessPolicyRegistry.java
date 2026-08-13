@@ -202,16 +202,16 @@ public class AccessPolicyRegistry {
      * {@link PolicyDrivenScopeResolver} (the Tier-1 SQL side) to consult the SAME
      * {@code resource.<resourceType>.scope} block the generated Tier-2 condition above reads —
      * one authored artifact for both.
+     *
+     * <p>Deliberately does NOT catch {@link AccessControlUnavailableException} — same rationale as
+     * {@link #getFieldVisibilityRules}: an empty {@link Optional} here reads as "not configured",
+     * which {@code SearchAccessPolicyService} treats as safe to fall back to its own backward-
+     * compatible default policy. Swallowing a genuine accesscontrol OUTAGE into that same empty
+     * result would apply that (comparatively permissive) default while the system is down, instead
+     * of failing the request closed. Letting the exception propagate keeps the outage case distinct.
      */
     public Optional<ScopePolicy> getScopePolicy(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
-        Map<String, Object> action;
-        try {
-            action = getAction(actionUrl, requestInfo, tenantId);
-        } catch (AccessControlUnavailableException e) {
-            log.error("AccessPolicyRegistry: accesscontrol unavailable for url='{}' tenant='{}' — no scope policy resolvable: {}",
-                    actionUrl, tenantId, e.getMessage());
-            return Optional.empty();
-        }
+        Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
         if (action == null)
             return Optional.empty();
         return extractScopePolicy(action, resourceType);

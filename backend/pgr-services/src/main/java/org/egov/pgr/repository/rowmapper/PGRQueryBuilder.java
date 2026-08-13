@@ -64,6 +64,22 @@ public class PGRQueryBuilder {
      */
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope) {
 
+        StringBuilder builder = buildFilteredQuery(criteria, preparedStmtList, scope);
+
+        addOrderByClause(builder, criteria, preparedStmtList, serviceCodeToSla);
+
+        addLimitAndOffset(builder, criteria, preparedStmtList);
+
+        return builder.toString();
+    }
+
+    /**
+     * The tenant/criteria/scope predicates shared by both the paginated search query and the count
+     * query — deliberately WITHOUT ordering or pagination, since a count must reflect the full
+     * scoped result set regardless of the requested page/limit.
+     */
+    private StringBuilder buildFilteredQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, PgrSearchScope scope) {
+
         StringBuilder builder = new StringBuilder(QUERY);
 
         if(criteria.getIsPlainSearch() != null && criteria.getIsPlainSearch()){
@@ -200,11 +216,7 @@ public class PGRQueryBuilder {
 
         applyScope(scope, builder, preparedStmtList);
 
-        addOrderByClause(builder, criteria, preparedStmtList, serviceCodeToSla);
-
-        addLimitAndOffset(builder, criteria, preparedStmtList);
-
-        return builder.toString();
+        return builder;
     }
 
     /**
@@ -247,9 +259,8 @@ public class PGRQueryBuilder {
     }
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope){
-        String query = getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, scope);
-        String countQuery = COUNT_WRAPPER.replace("{INTERNAL_QUERY}", query);
-        return countQuery;
+        StringBuilder builder = buildFilteredQuery(criteria, preparedStmtList, scope);
+        return COUNT_WRAPPER.replace("{INTERNAL_QUERY}", builder.toString());
     }
 
     private void addOrderByClause(StringBuilder builder, RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla){

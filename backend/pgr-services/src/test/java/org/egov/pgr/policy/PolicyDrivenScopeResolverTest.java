@@ -164,6 +164,34 @@ class PolicyDrivenScopeResolverTest {
         assertEquals(List.of("WARD_5"), scope.jurisdictionCodes);
     }
 
+    @Test
+    void missingUserInfoDeniesRatherThanResolvingUnrestricted() {
+        // A null userInfo previously produced a PgrSearchScope with every axis null, which
+        // downstream reads as tenantWide/unrestricted — must deny instead (CodeRabbit #3775816478).
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+
+        PgrSearchScope scope = resolver.resolve(RequestInfo.builder().build(), "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+    }
+
+    @Test
+    void pureCitizenWithBlankUuidDeniesRatherThanResolvingUnrestricted() {
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        User user = new User();
+        user.setUuid(" ");
+        user.setType("CITIZEN");
+        user.setRoles(List.of(Role.builder().code("CITIZEN").build()));
+        RequestInfo requestInfo = new RequestInfo();
+        requestInfo.setUserInfo(user);
+
+        PgrSearchScope scope = resolver.resolve(requestInfo, "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+    }
+
     /** Builds a policy with explicit per-role overrides — {@link ScopePolicy#of} only sets defaults. */
     private ScopePolicy policyWithRoleScopes(List<String> axes,
             Map<String, Map<String, ScopeLevel>> roleScopes, Map<String, ScopeLevel> defaultScope) {

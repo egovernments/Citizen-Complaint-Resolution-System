@@ -106,12 +106,18 @@ axis always wins, regardless of what other held roles say) — see `ScopePolicyE
   `SUPERVISOR` employee (and adjust the expected result per the table above) to exercise the other
   axis combinations.
 - One employee holding a role (or role combination) whose MDMS `roleScopes` resolve **both** axes to
-  `ALL` for the "tenant-wide bypass" cases (§2.5, §2b.3) — there is no hardcoded tenant-wide role
-  list any more (the old `PrincipalScopeResolver.TENANT_WIDE_ROLES` only applies to Dashboard/
-  Analytics now, a different resolver entirely). Add a throwaway `roleScopes` entry like
-  `{"department": "ALL", "jurisdiction": "ALL"}` for a test role if the seed doesn't already have
-  one — `PolicyInputBuilder.buildUserDoc`'s `tenantWide` flag is exactly "citizenUuid is null AND
-  both resolved axes came back empty".
+  `ALL` for the "tenant-wide bypass" cases (§2.5, §2b.3) — for a caller with resolvable HRMS data,
+  this is a pure `roleScopes` decision with no hardcoded role list involved. Add a throwaway
+  `roleScopes` entry like `{"department": "ALL", "jurisdiction": "ALL"}` for a test role if the seed
+  doesn't already have one — `PolicyInputBuilder.buildUserDoc`'s `tenantWide` flag is exactly
+  "citizenUuid is null AND both resolved axes came back empty".
+- Separately, when HRMS resolves **no** data on either axis at all (§2.6), `PolicyDrivenScopeResolver
+  .unresolvedScope()` does NOT consult `roleScopes` at all — it falls back to a hardcoded
+  `PolicyDrivenScopeResolver.TENANT_WIDE_ROLES` set (kept in sync with `PrincipalScopeResolver`'s own
+  copy for Dashboard/Analytics — see that class' Javadoc). A role in that set stays unrestricted even
+  with zero HRMS data; any other (constrained) role is denied instead (§2.6). One employee holding a
+  `TENANT_WIDE_ROLES` role (e.g. `SUPERVISOR`, `PGR_ADMIN`) with HRMS forced empty — needed for §2.6a
+  below.
 
 | # | Step | Expected |
 |---|------|----------|
@@ -122,6 +128,7 @@ axis always wins, regardless of what other held roles say) — see `ScopePolicyE
 | 2.4a | Same employee calls `_search?ids=<a SANITATION complaint in WARD_9>` | Empty result — proves jurisdiction is enforced even when department alone would have allowed it |
 | 2.5 | Tenant-wide caller (a role/role-set whose `roleScopes` resolve both axes to `ALL` — see the seed note above) calls `_search` | All complaints matching the query, unrestricted regardless of department or jurisdiction — confirms the bypass path works |
 | 2.6 | Force an HRMS failure/empty-assignment for an employee (e.g. temporarily unassign them in HRMS, so BOTH department and jurisdiction come back empty) and call `_search` | **Zero results**, not a 500 and not "see everything" — fail-closed; an INFO log `PolicyDrivenScopeResolver: ... "no HRMS employee for '<userName>'"` or `"no active HRMS department assignment or jurisdiction assignment"` followed by `scope unresolved (...) for constrained principal '<userName>' — DENY (fail-closed)` should appear. If instead only ONE axis is unresolvable (e.g. department assignment removed but jurisdiction kept) and that axis is `OWN`-required for the caller's role, expect zero results too — but via `ScopePolicyEngine.UNRESOLVED_SENTINEL` on that one axis, not the deny-all path; the resolved-scope INFO log (`departments=... jurisdictions=... (policy-driven)`) will show `[__scope_denied__]` on the unresolved axis rather than `null` |
+| 2.6a | Force the same HRMS failure/empty-assignment as 2.6, but for the `TENANT_WIDE_ROLES` employee (e.g. `SUPERVISOR`) added above, and call `_search` | All complaints matching the query, unrestricted — this is the hardcoded no-HRMS fallback in `PolicyDrivenScopeResolver.TENANT_WIDE_ROLES`, distinct from the `roleScopes`-driven bypass in 2.5; a DEBUG log `scope unresolved (...) for tenant-wide role '<userName>' — unrestricted` should appear instead of the DENY log from 2.6 |
 | 2.7 | Repeat 2.1, 2.4, 2.5 against `/request/_count` | Count matches the number of rows `_search` would return for the same caller/params |
 | 2.8 | Call `/request/_plainsearch` as any of the above principals | Behavior unchanged from before this change (cross-tenant, unrestricted) — explicitly out of scope for this rule |
 | 2.9 | Tail `pgr-services` logs while running 2.2–2.4 | No `SearchAccessPolicyService: dropping complaint ... (SQL-level scope should already have excluded this; check for drift)` WARN should appear — if it does, the SQL-level scope and the JsonLogic condition have drifted apart and need reconciling before sign-off |

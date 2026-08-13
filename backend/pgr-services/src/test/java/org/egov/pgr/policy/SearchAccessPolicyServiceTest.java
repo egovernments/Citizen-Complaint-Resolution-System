@@ -223,6 +223,22 @@ class SearchAccessPolicyServiceTest {
         assertEquals(ScopeLevel.OWN, captor.getValue().levelFor("ANY_ROLE", "jurisdiction"));
     }
 
+    @Test
+    void resolveScopeFailsClosedRatherThanApplyingTheDefaultDuringAnAccessControlOutage() {
+        // Must NOT collapse an outage into "not configured" and silently apply the permissive
+        // DEFAULT_SCOPE_POLICY while accesscontrol is down (CodeRabbit #3775816481).
+        when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
+                .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
+        AccessPolicyRegistry registryUnavailable = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
+        SearchAccessPolicyService serviceWithMockResolver =
+                new SearchAccessPolicyService(mockResolver, registryUnavailable, new PolicyEvaluator(), new PolicyInputBuilder());
+        RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
+
+        org.junit.jupiter.api.Assertions.assertThrows(AccessControlUnavailableException.class,
+                () -> serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2));
+    }
+
     private RequestInfo requestInfo(String uuid, String type) {
         User user = new User();
         user.setUuid(uuid);

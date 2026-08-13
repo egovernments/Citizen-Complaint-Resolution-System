@@ -81,13 +81,24 @@ public class PolicyDrivenScopeResolver {
         boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
         User u = requestInfo == null ? null : requestInfo.getUserInfo();
 
+        // An absent identity has no restrictive axis to fall back to (citizenUuid/departmentCodes/
+        // jurisdictionCodes all null reads as tenantWide=true in PolicyInputBuilder) — deny rather
+        // than let a missing/incomplete identity resolve to unrestricted access.
         if (u == null)
-            return new PgrSearchScope(tenantId, stateLevel, null, null, null);
+            return denyAllScope(tenantId, stateLevel);
 
-        if (principalScopeResolver.isPureCitizen(requestInfo))
-            return new PgrSearchScope(tenantId, stateLevel, u.getUuid(), null, null);
+        if (principalScopeResolver.isPureCitizen(requestInfo)) {
+            String uuid = u.getUuid();
+            if (uuid == null || uuid.isBlank())
+                return denyAllScope(tenantId, stateLevel);
+            return new PgrSearchScope(tenantId, stateLevel, uuid, null, null);
+        }
 
         return resolveEmployeeScopeViaPolicy(requestInfo, u, tenantId, stateLevel, scopePolicy);
+    }
+
+    private PgrSearchScope denyAllScope(String tenantId, boolean stateLevel) {
+        return new PgrSearchScope(tenantId, stateLevel, null, List.of(DENY_ALL_DEPARTMENT), null);
     }
 
     /**

@@ -297,6 +297,20 @@ class AccessPolicyRegistryTest {
     }
 
     @Test
+    void getScopePolicyFailsClosedWhenAccessControlCallFails() {
+        // Distinct from "no scope block configured" (an empty Optional, which
+        // SearchAccessPolicyService reads as safe to fall back to its own default policy): an
+        // accesscontrol outage must NOT collapse to that same empty-Optional sentinel, since the
+        // fallback default is comparatively permissive (CodeRabbit #3775816481).
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
+
+        assertThrows(AccessControlUnavailableException.class, () -> registry.getScopePolicy(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
     void getConditionGeneratesFromScopeWhenPresentIgnoringHandAuthoredCondition() {
         Map<String, Object> scope = Map.of(
                 "axes", List.of("department", "jurisdiction"),
