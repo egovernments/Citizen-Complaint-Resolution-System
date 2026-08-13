@@ -2191,15 +2191,25 @@ button[class*="toast-close"] svg,
 .employee .digit-sidebar .digit-sidebar-item.selected svg path {
   fill: var(--color-sidebar-selected-text, #FFFFFF) !important;
 }
-/* Search input inside the expanded sidebar — translucent on dark surface */
-.employee .digit-sidebar .digit-sidebar-search-container,
-.employee .digit-sidebar .digit-sidebar-search-container input {
+/* Search inside the expanded sidebar (CCSD-2170): the container strip stays
+ * translucent on the dark surface, but the INPUT itself renders as a solid
+ * white field — so its text must be dark. The previous combined rule forced
+ * white text on the input with 3-class !important specificity, beating the
+ * dark-text fix injected by EmployeeSideBar (CCSD-1947, 1 class): typed text
+ * came out white-on-white and was invisible. */
+.employee .digit-sidebar .digit-sidebar-search-container {
   background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--color-sidebar-selected-text, #FFFFFF) !important;
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
-.employee .digit-sidebar .digit-sidebar-search-container ::placeholder {
-  color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.55)) !important;
+.employee .digit-sidebar .digit-sidebar-search-container input {
+  background: #fff !important;
+  color: #363636 !important;
+  caret-color: #363636 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.employee .digit-sidebar .digit-sidebar-search-container input::placeholder {
+  color: #787878 !important;
+  opacity: 1 !important;
 }
 
 /* Sidebar position — vendor `top: 0` + topbar height 72 + sidebar
