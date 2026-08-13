@@ -2610,6 +2610,76 @@
       changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
       when: ansible_system != "Darwin"
 
+    # Tear down observability tiers that are no longer active (#1657).
+    #
+    # `docker compose up` only declines to START services outside the selected
+    # profiles -- it never STOPS ones already running. So lowering
+    # observability_level changed the exporter env vars and left tempo, loki and
+    # promtail running exactly as before: the operator sees a config that says
+    # metrics-only, a deploy that reports success, and a box still running the
+    # full stack. On a 16 GB box that is ~1 GB of the memory the downgrade was
+    # supposed to release (tempo 384m + loki 512m + promtail 128m).
+    #
+    # `--remove-orphans` does not help: these are declared in the compose file
+    # and merely unselected, which compose treats as "leave alone", not orphaned.
+    # They have to be named explicitly.
+    #
+    # Only fires when a tier is genuinely inactive AND its containers exist, so a
+    # steady-state redeploy is a no-op rather than a needless stop/start.
+    - name: "Observability — stop tiers this tenant no longer runs"
+      ansible.builtin.shell: |
+        set -e
+        GONE=""
+        for svc in {{ _obs_teardown | join(' ') }}; do
+          if docker ps -a --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx "digit-${svc}"; then
+            GONE="$GONE $svc"
+          fi
+        done
+        [ -z "$GONE" ] && { echo "NOCHANGE no inactive observability containers"; exit 0; }
+        echo "removing:$GONE"
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} rm -sf $GONE
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      register: obs_teardown
+      changed_when: "'NOCHANGE' not in obs_teardown.stdout"
+      when:
+        - ansible_system != "Darwin"
+        - _obs_teardown | length > 0
+      vars:
+        # Services belonging to each tier, so an inactive tier can be named.
+        #
+        # Membership here tracks one thing only: whether the service is
+        # profiles:-gated. A gated service stopped at a lower tier stays
+        # stopped, because the next `up -d` will not select it, so the teardown
+        # settles after one run. An UNGATED service would come straight back on
+        # the next `up -d` and flap `changed` forever, which is why
+        # otel-collector is deliberately absent: it is unprofiled and always
+        # runs (every instrumented service depends on it) -- see the comment on
+        # the service in docker-compose.egov-digit.yaml.
+        #
+        # All six listed below are gated. tempo/loki/promtail in
+        # docker-compose.egov-digit.yaml; prometheus and grafana likewise; and
+        # node-exporter in docker-compose.monitoring.yml, which is always
+        # layered as an -f flag but whose one service still carries
+        # `profiles: [obs-metrics]` (since #1657). Layered-always and
+        # started-always are different things.
+        _obs_tier_services:
+          obs-metrics: [prometheus, grafana, node-exporter]
+          obs-logs: [loki, promtail]
+          obs-traces: [tempo]
+        # Derived from compose_profiles, not _obs_profiles: the latter is a
+        # task-scoped `vars:` entry on the set_fact above, so it does not exist
+        # by the time this task runs. compose_profiles IS a fact and already
+        # carries the obs-* tiers.
+        _obs_teardown: >-
+          {{
+            _obs_tier_services
+            | dict2items
+            | rejectattr('key', 'in', (compose_profiles | default('')).split(','))
+            | map(attribute='value') | flatten
+          }}
+
     # OpenBao wrote secrets into .env → compose recreates the JVM
     # containers, which cold-start under Rosetta and trip the same
     # depends_on: service_healthy timeout as the initial start. Reuse the
@@ -4399,12 +4469,20 @@
       until: observability_health.rc == 0
       changed_when: false
       ignore_errors: yes
+      # Skip a component whose tier is not deployed (#1657/#1666). Ungated, a
+      # tenant on `observability_level: metrics` burns the retry budget on
+      # containers it deliberately did not deploy and then reports them
+      # UNHEALTHY -- which reads as a fault when it is the configured state.
+      # An empty profile means always-on: otel-collector carries no profile.
+      when: >-
+        item.profile == ''
+        or item.profile in (compose_profiles | default('')).split(',')
       loop:
-        - { name: Loki,           url: "http://127.0.0.1:13100/ready" }
-        - { name: Grafana,        url: "http://127.0.0.1:13000/api/health" }
-        - { name: Prometheus,     url: "http://127.0.0.1:19090/-/healthy" }
-        - { name: Tempo,          url: "http://127.0.0.1:13200/ready" }
-        - { name: OTEL Collector, url: "http://127.0.0.1:13133" }
+        - { name: Loki,           profile: obs-logs,    url: "http://127.0.0.1:13100/ready" }
+        - { name: Grafana,        profile: obs-metrics, url: "http://127.0.0.1:13000/api/health" }
+        - { name: Prometheus,     profile: obs-metrics, url: "http://127.0.0.1:19090/-/healthy" }
+        - { name: Tempo,          profile: obs-traces,  url: "http://127.0.0.1:13200/ready" }
+        - { name: OTEL Collector, profile: "",          url: "http://127.0.0.1:13133" }
       loop_control:
         label: "{{ item.name }}"
 
@@ -4412,8 +4490,9 @@
       debug:
         msg: >-
           {{ item.item.name }}:
-          {{ 'HEALTHY' if item.rc == 0
-             else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)' }}
+          {{ 'SKIPPED (tier not deployed)' if item.get('skipped', false)
+             else ('HEALTHY' if item.get('rc', 1) == 0
+                   else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)') }}
       loop: "{{ observability_health.results }}"
       loop_control:
         label: "{{ item.item.name }}"

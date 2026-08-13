@@ -55,24 +55,33 @@ enable_search_stack: false
 # is the whole stack, i.e. exactly what every tenant runs today, so this
 # knob only ever lets an operator take LESS.
 #
-#   metrics  gatus, prometheus, node-exporter, grafana, collector  ~1.2 GB
-#   logs     + loki, promtail                                       ~1.8 GB
-#   traces   + tempo                                                ~2.2 GB
+# `gatus` and `otel-collector` carry no profile, so they run at EVERY
+# level and form the floor (~384 MB). What the levels actually gate:
 #
-# A gatus-only `uptime` level (~64 MB) is deliberately NOT offered yet.
-# 16 application services declare `depends_on: otel-collector`, so a level
-# that omits the collector risks failing the whole deploy rather than
-# shrinking it — whether compose auto-enables a dependency's profile or
-# errors is version-dependent, and that is not a thing to guess at on a
-# tenant box. Removing that dependency is the right fix (a telemetry sink
-# should never gate application startup) and is tracked separately.
+#   metrics  + prometheus, node-exporter, grafana               ~1.2 GB
+#   logs     + loki, promtail                                   ~1.8 GB
+#   traces   + tempo                                            ~2.2 GB
 #
-# (Footprints are the mem_limit ceilings from #1612, not measured usage.)
+# The collector is ungated on purpose: 12 UNPROFILED services declare
+# `depends_on: otel-collector`, and compose rejects the whole project
+# when a selected service depends on a profile-excluded one — so gating
+# it broke every ad-hoc `docker compose` command, not just low levels
+# (#1666, fixed in #1687). It also earns its place regardless of level:
+# JVM metrics flow OTLP → otel-collector → /metrics on :8889, which is
+# what Prometheus scrapes, so dropping it costs per-service JVM metrics
+# and not just traces. Tempo is the only traces-exclusive component.
 #
-# Why the collector sits in `metrics` and not `traces`: JVM metrics flow
-# OTLP → otel-collector → /metrics on :8889, which is what Prometheus
-# scrapes. Drop the collector and you lose per-service JVM metrics, not
-# just traces. Tempo is the only traces-exclusive component.
+# A gatus-only `uptime` level is therefore not the ~64 MB it once looked
+# like — the floor above is what any level costs. Removing the
+# application → collector dependency (a telemetry sink should never gate
+# application startup) is tracked separately.
+#
+# Lowering this value on an existing box now TEARS DOWN the containers
+# that leave the selection, rather than orphaning them running (#1687).
+#
+# Footprints are the caps PROPOSED in #1612, which is still open — no
+# observability container has a `mem_limit` today, so these are a paper
+# budget and not an enforced ceiling or a measurement.
 #
 # This matters because the boxes are small: 29 services declare ~12.8 GB
 # of max heap on machines that are commonly 16 GB and have NO swap, so
