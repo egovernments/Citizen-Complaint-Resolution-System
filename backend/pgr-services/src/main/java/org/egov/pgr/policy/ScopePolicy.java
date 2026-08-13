@@ -90,7 +90,7 @@ public final class ScopePolicy {
      * compatible fallback), same principle as {@link AccessPolicyRegistry}'s "policy not defined"
      * handling elsewhere. Malformed individual role/axis entries are skipped with a logged warning
      * rather than invalidating the whole policy — {@link #levelFor} degrades those to {@code default}
-     * or {@link ScopeLevel#OWN}, never silently to {@link ScopeLevel#NONE}.
+     * or {@link ScopeLevel#OWN}, never silently to {@link ScopeLevel#ALL}.
      */
     @SuppressWarnings("unchecked")
     public static Optional<ScopePolicy> parse(Object raw) {

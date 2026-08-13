@@ -271,7 +271,7 @@ class AccessPolicyRegistryTest {
     void getScopePolicyParsesTheScopeBlockFromResource() {
         Map<String, Object> scope = Map.of(
                 "axes", List.of("department", "jurisdiction"),
-                "default", Map.of("department", "NONE", "jurisdiction", "OWN"));
+                "default", Map.of("department", "ALL", "jurisdiction", "OWN"));
         Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
         Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
         RequestInfo requestInfo = requestInfo("EMPLOYEE");
@@ -281,7 +281,7 @@ class AccessPolicyRegistryTest {
         Optional<ScopePolicy> policy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
 
         assertTrue(policy.isPresent());
-        assertEquals(ScopeLevel.NONE, policy.get().levelFor("ANY_ROLE", "department"));
+        assertEquals(ScopeLevel.ALL, policy.get().levelFor("ANY_ROLE", "department"));
         assertEquals(ScopeLevel.OWN, policy.get().levelFor("ANY_ROLE", "jurisdiction"));
     }
 

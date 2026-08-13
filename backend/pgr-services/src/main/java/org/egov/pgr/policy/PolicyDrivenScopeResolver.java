@@ -91,7 +91,7 @@ public class PolicyDrivenScopeResolver {
     }
 
     /**
-     * Which axes are REQUIRED (level {@code OWN}) vs unrestricted (level {@code NONE}) for THIS
+     * Which axes are REQUIRED (level {@code OWN}) vs unrestricted (level {@code ALL}) for THIS
      * caller is read from {@code scopePolicy} — see {@link ScopePolicyEngine}. Only "no HRMS data
      * on ANY axis at all" routes through {@link #unresolvedScope} (preserving the tenant-wide-role
      * safety net for a genuinely blank HRMS record); once there's at least some assignment/

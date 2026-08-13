@@ -32,8 +32,8 @@ public class PolicyInputBuilder {
         // restriction on EITHER axis" is. Checking departmentCodes alone would let a
         // boundary-only-scoped employee's condition short-circuit to unrestricted via the
         // "tenantWide" branch below, bypassing their own jurisdiction scope. This also already
-        // covers ScopePolicyEngine's config-driven output correctly: a role configured NONE on both
-        // axes resolves both PgrSearchScope fields to null (the engine omits NONE axes entirely),
+        // covers ScopePolicyEngine's config-driven output correctly: a role configured ALL on both
+        // axes resolves both PgrSearchScope fields to null (the engine omits ALL-level axes entirely),
         // landing here exactly like the old hardcoded "unrestricted" case — no axis-count-aware
         // rewrite needed as long as PgrSearchScope keeps exactly these two named fields.
         boolean tenantWide = scope.citizenUuid == null

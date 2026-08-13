@@ -17,7 +17,7 @@ class ScopePolicyTest {
                 "axes", List.of("department", "jurisdiction"),
                 "roleScopes", Map.of(
                         "PGR_LME", Map.of("department", "OWN", "jurisdiction", "OWN"),
-                        "SUPERVISOR", Map.of("department", "NONE", "jurisdiction", "OWN")
+                        "SUPERVISOR", Map.of("department", "ALL", "jurisdiction", "OWN")
                 ),
                 "default", Map.of("department", "OWN", "jurisdiction", "OWN")
         );
@@ -26,7 +26,7 @@ class ScopePolicyTest {
 
         assertTrue(policy.isPresent());
         assertEquals(ScopeLevel.OWN, policy.get().levelFor("PGR_LME", "department"));
-        assertEquals(ScopeLevel.NONE, policy.get().levelFor("SUPERVISOR", "department"));
+        assertEquals(ScopeLevel.ALL, policy.get().levelFor("SUPERVISOR", "department"));
         assertEquals(ScopeLevel.OWN, policy.get().levelFor("SUPERVISOR", "jurisdiction"));
     }
 
@@ -52,7 +52,7 @@ class ScopePolicyTest {
 
         ScopePolicy policy = ScopePolicy.parse(raw).orElseThrow();
 
-        // malformed role entry falls back to 'default', not silently to NONE
+        // malformed role entry falls back to 'default', not silently to ALL
         assertEquals(ScopeLevel.OWN, policy.levelFor("PGR_LME", "department"));
     }
 
@@ -72,12 +72,12 @@ class ScopePolicyTest {
     void axisNotDeclaredInAxesListIsIgnoredInRoleScopes() {
         Map<String, Object> raw = Map.of(
                 "axes", List.of("department"),
-                "roleScopes", Map.of("PGR_LME", Map.of("department", "NONE", "someUndeclaredAxis", "OWN"))
+                "roleScopes", Map.of("PGR_LME", Map.of("department", "ALL", "someUndeclaredAxis", "OWN"))
         );
 
         ScopePolicy policy = ScopePolicy.parse(raw).orElseThrow();
 
-        assertEquals(ScopeLevel.NONE, policy.levelFor("PGR_LME", "department"));
+        assertEquals(ScopeLevel.ALL, policy.levelFor("PGR_LME", "department"));
         // undeclared axis was never recorded, so a lookup for it falls through to OWN (no default set)
         assertEquals(ScopeLevel.OWN, policy.levelFor("PGR_LME", "someUndeclaredAxis"));
     }
@@ -87,11 +87,11 @@ class ScopePolicyTest {
         Map<String, Object> raw = Map.of(
                 "axes", List.of("department"),
                 "roleScopes", Map.of("PGR_LME", Map.of("department", "OWN")),
-                "default", Map.of("department", "NONE")
+                "default", Map.of("department", "ALL")
         );
 
         ScopePolicy policy = ScopePolicy.parse(raw).orElseThrow();
 
-        assertEquals(ScopeLevel.NONE, policy.levelFor("CSR", "department"));
+        assertEquals(ScopeLevel.ALL, policy.levelFor("CSR", "department"));
     }
 }

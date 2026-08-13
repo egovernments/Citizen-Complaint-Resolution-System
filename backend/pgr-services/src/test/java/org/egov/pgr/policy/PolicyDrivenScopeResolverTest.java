@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 /**
  * Covers {@link PolicyDrivenScopeResolver#resolve} — PGR complaint search's real call shape,
  * config-driven via {@link ScopePolicy}: which axes are required (level {@code OWN}) vs
- * unrestricted (level {@code NONE}) for a given caller's roles is read from MDMS, resolved by
+ * unrestricted (level {@code ALL}) for a given caller's roles is read from MDMS, resolved by
  * {@link ScopePolicyEngine}. Deliberately a separate test file/class from
  * {@code PrincipalScopeResolverTest} (Dashboard/Analytics' own {@code ScopeAxis}-based tests) —
  * see {@link PolicyDrivenScopeResolver}'s Javadoc for why the two resolvers are kept apart.
@@ -95,10 +95,10 @@ class PolicyDrivenScopeResolverTest {
     @Test
     void roleConfiguredToSeeAllDepartmentsWithinBoundary() {
         // The concrete "higher role sees all complaints of a boundary across depts" use case:
-        // SUPERVISOR's department level is NONE, jurisdiction stays OWN.
+        // SUPERVISOR's department level is ALL, jurisdiction stays OWN.
         ScopePolicy policy = policyWithRoleScopes(
                 List.of("department", "jurisdiction"),
-                Map.of("SUPERVISOR", Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN)),
+                Map.of("SUPERVISOR", Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.OWN)),
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));
@@ -114,7 +114,7 @@ class PolicyDrivenScopeResolverTest {
         // The mirror case: "sees all boundaries within their department".
         ScopePolicy policy = policyWithRoleScopes(
                 List.of("department", "jurisdiction"),
-                Map.of("DGRO", Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.NONE)),
+                Map.of("DGRO", Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.ALL)),
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
                 List.of(Map.of("boundary", "WARD_5")));

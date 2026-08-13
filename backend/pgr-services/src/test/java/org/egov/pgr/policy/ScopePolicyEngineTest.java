@@ -40,7 +40,7 @@ class ScopePolicyEngineTest {
     @Test
     void noneLevelAxisIsOmittedFromResult() {
         ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
-                Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN));
+                Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.OWN));
 
         Map<String, List<String>> resolved = ScopePolicyEngine.resolve(policy, Set.of("SUPERVISOR"), HRMS_VALUES);
 
@@ -62,12 +62,12 @@ class ScopePolicyEngineTest {
 
     @Test
     void multiRoleUnionMostPermissiveWins() {
-        // PGR_LME says OWN for department, SUPERVISOR says NONE — holding SUPERVISOR too should
-        // widen access (NONE wins), matching how egov-accesscontrol already unions roleactions
+        // PGR_LME says OWN for department, SUPERVISOR says ALL — holding SUPERVISOR too should
+        // widen access (ALL wins), matching how egov-accesscontrol already unions roleactions
         // across a caller's roles.
         Map<String, Map<String, ScopeLevel>> roleScopes = Map.of(
                 "PGR_LME", Map.of("department", ScopeLevel.OWN),
-                "SUPERVISOR", Map.of("department", ScopeLevel.NONE));
+                "SUPERVISOR", Map.of("department", ScopeLevel.ALL));
         ScopePolicy multiRolePolicy = policyWithRoleScopes(List.of("department"), roleScopes, Map.of("department", ScopeLevel.OWN));
 
         Map<String, List<String>> resolved = ScopePolicyEngine.resolve(multiRolePolicy, Set.of("PGR_LME", "SUPERVISOR"), HRMS_VALUES);
@@ -85,23 +85,23 @@ class ScopePolicyEngineTest {
         // scenario made a "department=OWN" role fully unrestricted instead).
         ScopePolicy policy = policyWithRoleScopes(
                 List.of("department", "jurisdiction"),
-                Map.of("SUPERVISOR", Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.NONE)),
-                Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN));
+                Map.of("SUPERVISOR", Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.ALL)),
+                Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.OWN));
 
         Map<String, List<String>> resolved = ScopePolicyEngine.resolve(policy, Set.of("EMPLOYEE", "SUPERVISOR"), HRMS_VALUES);
 
-        assertTrue(resolved.containsKey("department"), "SUPERVISOR's explicit OWN must hold despite EMPLOYEE's implicit default(NONE)");
+        assertTrue(resolved.containsKey("department"), "SUPERVISOR's explicit OWN must hold despite EMPLOYEE's implicit default(ALL)");
         assertEquals(List.of("DEPT_1"), resolved.get("department"));
-        assertFalse(resolved.containsKey("jurisdiction"), "SUPERVISOR's explicit NONE should still win for jurisdiction");
+        assertFalse(resolved.containsKey("jurisdiction"), "SUPERVISOR's explicit ALL should still win for jurisdiction");
     }
 
     @Test
     void roleNotListedFallsBackToDefault() {
         ScopePolicy policy = policyWithRoleScopes(List.of("department"),
                 Map.of("PGR_LME", Map.of("department", ScopeLevel.OWN)),
-                Map.of("department", ScopeLevel.NONE));
+                Map.of("department", ScopeLevel.ALL));
 
-        // CSR isn't in roleScopes at all — falls back to the policy default (NONE).
+        // CSR isn't in roleScopes at all — falls back to the policy default (ALL).
         Map<String, List<String>> resolved = ScopePolicyEngine.resolve(policy, Set.of("CSR"), HRMS_VALUES);
 
         assertFalse(resolved.containsKey("department"));
@@ -109,7 +109,7 @@ class ScopePolicyEngineTest {
 
     @Test
     void noRolesAtAllIsConservativeOwnNotUnrestricted() {
-        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.NONE));
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.ALL));
 
         Map<String, List<String>> resolved = ScopePolicyEngine.resolve(policy, Set.of(), HRMS_VALUES);
 

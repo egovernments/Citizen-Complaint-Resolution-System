@@ -36,7 +36,7 @@ public class SearchAccessPolicyService {
      */
     private static final ScopePolicy DEFAULT_SCOPE_POLICY = ScopePolicy.of(
             List.of("department", "jurisdiction"),
-            Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN));
+            Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.OWN));
 
     private final PolicyDrivenScopeResolver policyDrivenScopeResolver;
     private final AccessPolicyRegistry registry;

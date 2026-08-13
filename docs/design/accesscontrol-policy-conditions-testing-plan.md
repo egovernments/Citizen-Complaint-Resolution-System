@@ -93,12 +93,12 @@ Seed one tenant with:
 
 | Role | department | jurisdiction |
 |---|---|---|
-| `GRO` | `NONE` (unrestricted) | `OWN` |
+| `GRO` | `ALL` (unrestricted) | `OWN` |
 | `PGR_LME` | `OWN` | `OWN` |
-| `SUPERVISOR` | `OWN` | `NONE` (unrestricted) |
-| *(any other role, e.g. `CSR`)* | `NONE` | `OWN` — falls back to `default` |
+| `SUPERVISOR` | `OWN` | `ALL` (unrestricted) |
+| *(any other role, e.g. `CSR`)* | `ALL` | `OWN` — falls back to `default` |
 
-Multiple held roles combine most-permissive-wins per axis (holding a role that says `NONE` on an
+Multiple held roles combine most-permissive-wins per axis (holding a role that says `ALL` on an
 axis always wins, regardless of what other held roles say) — see `ScopePolicyEngine`.
 
 - One employee in SANITATION assigned (via HRMS `jurisdictions[]`) to WARD_5 only, holding
@@ -106,10 +106,10 @@ axis always wins, regardless of what other held roles say) — see `ScopePolicyE
   `SUPERVISOR` employee (and adjust the expected result per the table above) to exercise the other
   axis combinations.
 - One employee holding a role (or role combination) whose MDMS `roleScopes` resolve **both** axes to
-  `NONE` for the "tenant-wide bypass" cases (§2.5, §2b.3) — there is no hardcoded tenant-wide role
+  `ALL` for the "tenant-wide bypass" cases (§2.5, §2b.3) — there is no hardcoded tenant-wide role
   list any more (the old `PrincipalScopeResolver.TENANT_WIDE_ROLES` only applies to Dashboard/
   Analytics now, a different resolver entirely). Add a throwaway `roleScopes` entry like
-  `{"department": "NONE", "jurisdiction": "NONE"}` for a test role if the seed doesn't already have
+  `{"department": "ALL", "jurisdiction": "ALL"}` for a test role if the seed doesn't already have
   one — `PolicyInputBuilder.buildUserDoc`'s `tenantWide` flag is exactly "citizenUuid is null AND
   both resolved axes came back empty".
 
@@ -120,13 +120,13 @@ axis always wins, regardless of what other held roles say) — see `ScopePolicyE
 | 2.3 | Citizen A calls `_search?serviceRequestId=<Citizen B's serviceRequestId>` | Empty result, same reasoning as 2.2 |
 | 2.4 | SANITATION/WARD_5 employee calls `_search` with any allowed employee param (e.g. `applicationStatus=PENDINGFORASSIGNMENT`) | Only SANITATION **and** WARD_5 complaints returned — a SANITATION complaint in WARD_9 must NOT appear, even though department matches (jurisdiction is now a second, independently-enforced axis, not just department) |
 | 2.4a | Same employee calls `_search?ids=<a SANITATION complaint in WARD_9>` | Empty result — proves jurisdiction is enforced even when department alone would have allowed it |
-| 2.5 | Tenant-wide caller (a role/role-set whose `roleScopes` resolve both axes to `NONE` — see the seed note above) calls `_search` | All complaints matching the query, unrestricted regardless of department or jurisdiction — confirms the bypass path works |
+| 2.5 | Tenant-wide caller (a role/role-set whose `roleScopes` resolve both axes to `ALL` — see the seed note above) calls `_search` | All complaints matching the query, unrestricted regardless of department or jurisdiction — confirms the bypass path works |
 | 2.6 | Force an HRMS failure/empty-assignment for an employee (e.g. temporarily unassign them in HRMS, so BOTH department and jurisdiction come back empty) and call `_search` | **Zero results**, not a 500 and not "see everything" — fail-closed; an INFO log `PolicyDrivenScopeResolver: ... "no HRMS employee for '<userName>'"` or `"no active HRMS department assignment or jurisdiction assignment"` followed by `scope unresolved (...) for constrained principal '<userName>' — DENY (fail-closed)` should appear. If instead only ONE axis is unresolvable (e.g. department assignment removed but jurisdiction kept) and that axis is `OWN`-required for the caller's role, expect zero results too — but via `ScopePolicyEngine.UNRESOLVED_SENTINEL` on that one axis, not the deny-all path; the resolved-scope INFO log (`departments=... jurisdictions=... (policy-driven)`) will show `[__scope_denied__]` on the unresolved axis rather than `null` |
 | 2.7 | Repeat 2.1, 2.4, 2.5 against `/request/_count` | Count matches the number of rows `_search` would return for the same caller/params |
 | 2.8 | Call `/request/_plainsearch` as any of the above principals | Behavior unchanged from before this change (cross-tenant, unrestricted) — explicitly out of scope for this rule |
 | 2.9 | Tail `pgr-services` logs while running 2.2–2.4 | No `SearchAccessPolicyService: dropping complaint ... (SQL-level scope should already have excluded this; check for drift)` WARN should appear — if it does, the SQL-level scope and the JsonLogic condition have drifted apart and need reconciling before sign-off |
 | 2.10 | Call accesscontrol's own `/access/v1/actions/mdms/_get` directly (not through pgr-services) — see curl below | Response's `actions` array includes id 2008 (`url=/pgr-services/v2/request/_search`) carrying `resource` (with `complaint.scope`) — confirms the data landed in MDMS and is visible for this caller's roles, independent of pgr-services' cache. This action no longer carries a hand-authored `condition` — once `resource.complaint.scope` is present, `AccessPolicyRegistry.getCondition` **generates** the Tier-2 condition from it and ignores any `condition` field entirely (see the "generated condition" limitation below) |
-| 2.11 | Edit `resource.complaint.scope.roleScopes` for the test employee's role on that MDMS entry (e.g. temporarily flip `department` from `OWN` to `NONE`, or break the JSON) and call `_search` within the 15-minute cache window, then again after it expires | Within the window: previous behavior persists (cached — but only if it was a **successful** prior resolution for that exact tenant+url+**role-set**; see the "only positive hits are cached, per role-set" limitation below). After expiry: the new scope takes effect (a valid edit changes which rows come back; a broken/malformed `scope` block falls back to `ScopePolicy.parse`'s "not configured" treatment — check the design doc for whether that degrades to the legacy `condition` or to fail-closed for this specific action) |
+| 2.11 | Edit `resource.complaint.scope.roleScopes` for the test employee's role on that MDMS entry (e.g. temporarily flip `department` from `OWN` to `ALL`, or break the JSON) and call `_search` within the 15-minute cache window, then again after it expires | Within the window: previous behavior persists (cached — but only if it was a **successful** prior resolution for that exact tenant+url+**role-set**; see the "only positive hits are cached, per role-set" limitation below). After expiry: the new scope takes effect (a valid edit changes which rows come back; a broken/malformed `scope` block falls back to `ScopePolicy.parse`'s "not configured" treatment — check the design doc for whether that degrades to the legacy `condition` or to fail-closed for this specific action) |
 
 Curl for 2.10 (mirrors the exact request shape pgr-services itself sends, minus the `enabled` field
 — see `MDMSUtils.fetchAccessControlActions`'s javadoc for why `enabled` is deliberately omitted):
@@ -192,7 +192,7 @@ more; `MaskingStrategy` still supports it, but action 2008's rules were simplifi
 |---|------|----------|
 | 2b.1 | Citizen A calls `_search` for their own complaint | `citizen.mobileNumber`/`name`/`userName` all visible in full (own-record condition passes) |
 | 2b.2 | SANITATION employee (GRO/LME) calls `_search` for a complaint they're allowed to see (own department) | `citizen.mobileNumber`/`name`/`userName` are all **`null`** (REDACT) — the field rule is independent of the record-level department check already passing |
-| 2b.3 | Tenant-wide caller (see the §2 seed note — a role/role-set whose `roleScopes` resolve both axes to `NONE`) calls `_search` | All three fields visible in full (`tenantWide` condition bypass) |
+| 2b.3 | Tenant-wide caller (see the §2 seed note — a role/role-set whose `roleScopes` resolve both axes to `ALL`) calls `_search` | All three fields visible in full (`tenantWide` condition bypass) |
 | 2b.4 | Call `_plainsearch` as a GRO/LME | All three fields still `null` — field masking applies there despite `_plainsearch` staying record-level unrestricted (§2.8) |
 | 2b.5 | Temporarily break the `condition` or `onDeny.strategy` on the `citizen.mobileNumber` rule in MDMS (e.g. remove `"condition"`, or set `"strategy": "not-a-real-strategy"`) | Field is masked (`null`) for **everyone**, including the record's own citizen — fail-closed; an `AccessPolicyRegistry`/`MaskingStrategy` ERROR log names the exact path and the fallback applied |
 | 2b.6 | Add a second `attributes` entry for a different field (e.g. `citizen.emailId`) via MDMS only, no redeploy | New field is masked/visible per its own condition on the next cache refresh — confirms "add a field = data change only" |

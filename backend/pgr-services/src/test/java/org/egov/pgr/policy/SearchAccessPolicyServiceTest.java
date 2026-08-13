@@ -219,7 +219,7 @@ class SearchAccessPolicyServiceTest {
 
         ArgumentCaptor<ScopePolicy> captor = ArgumentCaptor.forClass(ScopePolicy.class);
         verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
-        assertEquals(ScopeLevel.NONE, captor.getValue().levelFor("ANY_ROLE", "department"));
+        assertEquals(ScopeLevel.ALL, captor.getValue().levelFor("ANY_ROLE", "department"));
         assertEquals(ScopeLevel.OWN, captor.getValue().levelFor("ANY_ROLE", "jurisdiction"));
     }
 
