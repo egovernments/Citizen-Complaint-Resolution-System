@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
+import org.egov.pgr.analytics.KpiCatalogService;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,8 @@ class PolicyDrivenScopeResolverTest {
     private PGRConfiguration config;
     @Mock
     private RestTemplate restTemplate;
+    @Mock
+    private KpiCatalogService catalog;
 
     private PolicyDrivenScopeResolver resolver;
 
@@ -51,7 +54,7 @@ class PolicyDrivenScopeResolverTest {
         ObjectMapper mapper = new ObjectMapper();
         // isPureCitizen is pure role/type inspection — safe to use a real instance here rather
         // than mocking, since none of these tests exercise its HRMS-calling siblings.
-        PrincipalScopeResolver principalScopeResolver = new PrincipalScopeResolver(config, restTemplate, mapper);
+        PrincipalScopeResolver principalScopeResolver = new PrincipalScopeResolver(config, restTemplate, mapper, catalog);
         resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, principalScopeResolver);
     }
 

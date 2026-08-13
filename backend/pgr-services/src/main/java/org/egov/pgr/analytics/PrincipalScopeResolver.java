@@ -21,27 +21,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * THE SEAM for Dashboard/Analytics. The single, isolated place that derives an {@link
- * AnalyticsScope} (ScopeSpec) for the authenticated principal, from HRMS (employee assignments →
- * departments; jurisdiction/boundary is deliberately left unresolved for now, see the comment
- * below). NOTHING downstream (the planner's WHERE-clause injection, the response shaping) needs to
- * change when this method's derivation logic changes, because every consumer only ever sees the
- * {@link AnalyticsScope} value object.
+ * THE SEAM. The single, isolated place that derives an {@link AnalyticsScope} (ScopeSpec) for the
+ * authenticated principal. Today it resolves from HRMS (employee assignments → departments,
+ * jurisdiction → boundary). Tomorrow it could evaluate a stored JsonLogic policy condition — and
+ * NOTHING downstream (the planner's WHERE-clause injection, the response shaping) needs to change,
+ * because everyone consumes only the {@link AnalyticsScope} value object.
  *
- * <p>PGR complaint search does NOT use this class — it has its own, separate, MDMS-{@code
- * ScopePolicy}-driven resolver ({@code org.egov.pgr.policy.PolicyDrivenScopeResolver}), and its own
- * scope value object ({@code org.egov.pgr.policy.PgrSearchScope}), kept in a different package
- * deliberately: a change here for Dashboard's own scoping must never risk PGR search's, and vice
- * versa. The only thing shared between them is {@link #isPureCitizen}, documented below as the
- * intentional single source of truth for that classification.
+ * To cut over to a policy engine: replace the body of {@link #resolve} (or just
+ * {@link #resolveEmployeeScope}) with a policy evaluation that produces the same ScopeSpec. One
+ * method. No rewrite.
  *
- * <p>Fail-CLOSED for constrained principals (S3): an employee whose department scope cannot be
+ * Fail-CLOSED for constrained principals (S3): an employee whose department scope cannot be
  * resolved — empty userName, no HRMS record, no active assignment, or an HRMS error — is denied
  * (a sentinel department that matches nothing) UNLESS they hold a {@link #TENANT_WIDE_ROLES}
  * role (admin/supervisor tier), which are legitimately tenant-wide and stay unrestricted. This
  * closes the prior fail-OPEN hole where an officer with a failed/missing HRMS lookup silently saw
  * every department. Under correct config (officers carry an HRMS department) this is a no-op for
  * them — they resolve to their real department. Pure citizens keep their existing self-scope.
+ *
+ * Tenant-configurable (#1280): {@code dss.DashboardConfig.departmentScoping = "disabled"} turns
+ * the whole department axis OFF for a tenant (deployments whose complaint data carries no
+ * departments). Tenant scoping and citizen self-scope are unaffected. Anything other than an
+ * explicit "disabled" — missing record/field, malformed value, MDMS error — means "enforced",
+ * i.e. exactly the behavior described above (fail-safe).
  */
 @Component
 @Slf4j
@@ -72,12 +74,15 @@ public class PrincipalScopeResolver {
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
+    private final KpiCatalogService catalog;
 
     @Autowired
-    public PrincipalScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper) {
+    public PrincipalScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper,
+                                  KpiCatalogService catalog) {
         this.config = config;
         this.restTemplate = restTemplate;
         this.mapper = mapper;
+        this.catalog = catalog;
     }
 
     /**
@@ -141,11 +146,24 @@ public class PrincipalScopeResolver {
     }
 
     /**
-     * Employee derivation. Returns a ScopeSpec with departmentCodes (and best-effort boundaryPrefix).
-     * When a department cannot be resolved, returns a fail-CLOSED spec (deny-all) for constrained
-     * roles, or unrestricted for tenant-wide (admin/supervisor) roles — see {@link #unresolvedScope}.
+     * Employee derivation. THIS is the body a policy-engine cutover would replace. Returns a
+     * ScopeSpec with departmentCodes (and best-effort boundaryPrefix). When a department cannot be
+     * resolved, returns a fail-CLOSED spec (deny-all) for constrained roles, or unrestricted for
+     * tenant-wide (admin/supervisor) roles — see {@link #unresolvedScope}.
      */
     private AnalyticsScope resolveEmployeeScope(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel) {
+        // #1280: tenant-configurable department scoping. When dss.DashboardConfig.departmentScoping
+        // is "disabled" for this tenant, skip HRMS department resolution entirely — the employee is
+        // scoped by tenant only (no department IN filter, no fail-closed sentinel). Citizen
+        // self-scope is untouched (that path returns before this method); tenant scoping is
+        // untouched (carried by the AnalyticsScope tenant fields as always). The catalog lookup is
+        // fail-safe and never throws: missing record/field, malformed value, or an MDMS error all
+        // resolve to "enforced" — exactly today's behavior below.
+        if (catalog.isDepartmentScopingDisabled(tenantId)) {
+            log.info("department scoping disabled by DashboardConfig for tenant {} — unrestricted employee scope for '{}'",
+                    tenantId, u.getUserName());
+            return new AnalyticsScope(tenantId, stateLevel, null, null, null);
+        }
         try {
             String userName = u.getUserName();
             if (userName == null || userName.isEmpty())
