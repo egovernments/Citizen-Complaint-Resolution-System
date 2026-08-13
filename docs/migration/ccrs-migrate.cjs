@@ -760,12 +760,14 @@ async function phaseLanding() {
 
 /* ═════════════════════════════ PHASE: cms ═════════════════════════════ */
 
-// CCSD-1937: CMS_ADMIN and CMS_DASHBOARD_VIEWER were in the DDH seed files
-// (role rows + grants) but absent from this list, so --cms never registered
-// them — CMS_ADMIN could not be assigned via HRMS and the admin
-// cross-department search (SUPERUSER + CMS_ADMIN, PR #1260-#1262) was
-// reachable by SUPERUSER only.
-const CMS_ROLES = ['CMS_RECEPTION_OFFICER', 'CMS_SCREENING_OFFICER', 'CMS_SUPERVISOR', 'CMS_CASE_MANAGER', 'CMS_VIEWER', 'CMS_ADMIN', 'CMS_DASHBOARD_VIEWER'];
+// CCSD-1937: CMS_ADMIN, CMS_DASHBOARD_VIEWER and CONFIDENTIAL_COMPLAINT_VIEWER
+// were in the DDH seed files (role rows + grants) but absent from this list,
+// so --cms never registered them. Consequences: CMS_ADMIN could not be
+// assigned via HRMS (admin cross-department search, PR #1260-#1262, reachable
+// by SUPERUSER only), and employee onboarding that assigns any of these roles
+// fails "Role not valid" on a fresh env — the configurator upload validator
+// checks the codes against ACCESSCONTROL-ROLES at the city tenant.
+const CMS_ROLES = ['CMS_RECEPTION_OFFICER', 'CMS_SCREENING_OFFICER', 'CMS_SUPERVISOR', 'CMS_CASE_MANAGER', 'CMS_VIEWER', 'CMS_ADMIN', 'CMS_DASHBOARD_VIEWER', 'CONFIDENTIAL_COMPLAINT_VIEWER'];
 
 async function cmsSearchAll(schemaCode, tenantId = CFG.state) {
   const out = [];
