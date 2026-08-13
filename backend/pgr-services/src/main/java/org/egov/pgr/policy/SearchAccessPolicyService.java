@@ -3,7 +3,6 @@ package org.egov.pgr.policy;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.analytics.AnalyticsScope;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,9 +15,10 @@ import java.util.Map;
 
 /**
  * Tier-2 PDP for the reference access-control rule: a citizen sees only their own complaints, an
- * employee sees only their department's complaints. Reuses {@link PrincipalScopeResolver} (the
- * existing analytics module's citizen/department scope resolver) instead of re-deriving HRMS
- * lookups, and re-checks the fetched page against the real JsonLogic condition registered in
+ * employee sees only their department's complaints. Reuses {@link PolicyDrivenScopeResolver} (a
+ * {@link ScopePolicy}-driven resolver, kept separate from Dashboard/Analytics' own
+ * {@code PrincipalScopeResolver} — see that class' Javadoc) instead of re-deriving HRMS lookups,
+ * and re-checks the fetched page against the real JsonLogic condition registered in
  * {@link AccessPolicyRegistry} — the actual "runtime-evaluated JSON policy" from the design doc.
  *
  * This is deliberately PGR-search-specific for now (per the current implementation scope); a
@@ -39,15 +39,15 @@ public class SearchAccessPolicyService {
             List.of("department", "jurisdiction"),
             Map.of("department", ScopeLevel.NONE, "jurisdiction", ScopeLevel.OWN));
 
-    private final PrincipalScopeResolver principalScopeResolver;
+    private final PolicyDrivenScopeResolver policyDrivenScopeResolver;
     private final AccessPolicyRegistry registry;
     private final PolicyEvaluator evaluator;
     private final PolicyInputBuilder inputBuilder;
 
     @Autowired
-    public SearchAccessPolicyService(PrincipalScopeResolver principalScopeResolver, AccessPolicyRegistry registry,
+    public SearchAccessPolicyService(PolicyDrivenScopeResolver policyDrivenScopeResolver, AccessPolicyRegistry registry,
                                       PolicyEvaluator evaluator, PolicyInputBuilder inputBuilder) {
-        this.principalScopeResolver = principalScopeResolver;
+        this.policyDrivenScopeResolver = policyDrivenScopeResolver;
         this.registry = registry;
         this.evaluator = evaluator;
         this.inputBuilder = inputBuilder;
@@ -57,12 +57,12 @@ public class SearchAccessPolicyService {
      * Fetches the MDMS-authored {@code resource.complaint.scope} for this action (falling back to
      * {@link #DEFAULT_SCOPE_POLICY} when not configured — the same "policy not defined, backward
      * compatible" principle {@link AccessPolicyRegistry#getCondition} already applies), then
-     * resolves the caller's scope against it via {@link PrincipalScopeResolver}.
+     * resolves the caller's scope against it via {@link PolicyDrivenScopeResolver}.
      */
     public AnalyticsScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
         ScopePolicy scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint")
                 .orElse(DEFAULT_SCOPE_POLICY);
-        return principalScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy);
+        return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy);
     }
 
     /**

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsScope;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.Address;
 import org.egov.pgr.web.models.Boundary;
@@ -35,9 +34,9 @@ import static org.mockito.Mockito.when;
  * outbound accesscontrol call ({@link MDMSUtils#fetchAccessControlActions}) mocked to return the
  * same JsonLogic condition shipped in ACCESSCONTROL-ACTIONS-TEST.actions-test (id 2008) — so this
  * exercises the actual condition contract, not a stand-in. Most {@code enforce()} tests construct
- * an {@code AnalyticsScope} directly (bypassing {@link org.egov.pgr.analytics.PrincipalScopeResolver},
- * which makes an HRMS call) — the {@code resolveScope()} tests near the bottom instead mock the
- * resolver to verify what {@link ScopePolicy} actually gets fetched/passed through.
+ * an {@code AnalyticsScope} directly (bypassing {@link PolicyDrivenScopeResolver}, which makes an
+ * HRMS call) — the {@code resolveScope()} tests near the bottom instead mock the resolver to
+ * verify what {@link ScopePolicy} actually gets fetched/passed through.
  *
  * <p>PGR complaint search's scoping rule (which axes are required per role) is declared by
  * {@code resource.complaint.scope} on the actiontest action record — see {@link ScopePolicyEngine}
@@ -130,9 +129,9 @@ class SearchAccessPolicyServiceTest {
     @Test
     void departmentAloneScopeIsDeniedSinceJurisdictionIsTheOnlyAxisThatMatters() {
         // A department-only scope (5-arg ctor, jurisdictionCodes null) is not something
-        // PrincipalScopeResolver's JURISDICTION_ONLY axis can actually produce for PGR anymore —
-        // this is a defensive check that the condition itself doesn't fall back to department if
-        // such a scope were ever constructed some other way.
+        // PolicyDrivenScopeResolver can actually produce for PGR anymore — this is a defensive
+        // check that the condition itself doesn't fall back to department if such a scope were
+        // ever constructed some other way.
         AnalyticsScope scope = new AnalyticsScope(TENANT_ID, false, null, null, List.of("SANITATION"));
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
@@ -195,7 +194,7 @@ class SearchAccessPolicyServiceTest {
         when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
                 .thenReturn(List.of(action));
         AccessPolicyRegistry registryWithScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
-        PrincipalScopeResolver mockResolver = mock(PrincipalScopeResolver.class);
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
                 new SearchAccessPolicyService(mockResolver, registryWithScope, new PolicyEvaluator(), new PolicyInputBuilder());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
@@ -211,7 +210,7 @@ class SearchAccessPolicyServiceTest {
     void resolveScopeFallsBackToJurisdictionOnlyDefaultWhenNoScopeConfigured() {
         // No 'scope' block on the mocked action (@BeforeEach's action only has a hand-authored
         // condition) — must fall back to the jurisdiction-only default, not fail or pass null.
-        PrincipalScopeResolver mockResolver = mock(PrincipalScopeResolver.class);
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
         SearchAccessPolicyService serviceWithMockResolver =
                 new SearchAccessPolicyService(mockResolver, registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder());

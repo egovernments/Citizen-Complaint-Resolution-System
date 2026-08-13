@@ -91,8 +91,8 @@ public class AccessPolicyRegistry {
      *       risk failing a whole tenant open during an outage.</li>
      *   <li>the entry has a well-formed {@code resource.complaint.scope} — the EMPLOYEE clause is
      *       GENERATED from it (see {@link #synthesizeCondition}) rather than read from
-     *       {@code condition}, so the Tier-1 SQL scope ({@link PrincipalScopeResolver}, which reads
-     *       the same {@code scope} block) and this Tier-2 re-check can never disagree.</li>
+     *       {@code condition}, so the Tier-1 SQL scope ({@link PolicyDrivenScopeResolver}, which
+     *       reads the same {@code scope} block) and this Tier-2 re-check can never disagree.</li>
      *   <li>no {@code scope} block, and the entry has no {@code condition} field either — an
      *       authoring mistake, not an absent policy; returns null, fail-closed.</li>
      *   <li>no {@code scope} block, but a hand-authored {@code condition} exists — returns it
@@ -198,9 +198,10 @@ public class AccessPolicyRegistry {
     }
 
     /**
-     * Public counterpart of {@link #extractScopePolicy} for {@link PrincipalScopeResolver} (the
-     * Tier-1 SQL side) to consult the SAME {@code resource.<resourceType>.scope} block the
-     * generated Tier-2 condition above reads — one authored artifact for both.
+     * Public counterpart of {@link #extractScopePolicy} for {@code SearchAccessPolicyService} /
+     * {@link PolicyDrivenScopeResolver} (the Tier-1 SQL side) to consult the SAME
+     * {@code resource.<resourceType>.scope} block the generated Tier-2 condition above reads —
+     * one authored artifact for both.
      */
     public Optional<ScopePolicy> getScopePolicy(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
         Map<String, Object> action;
