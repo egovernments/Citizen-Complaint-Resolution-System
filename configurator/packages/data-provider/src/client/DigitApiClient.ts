@@ -204,6 +204,23 @@ export class DigitApiClient {
     return data.mdms || [];
   }
 
+  /**
+   * Real total for a schema, backing the configurator's list pagination (issue #953:
+   * mdms-v2 had no count endpoint of its own, so `mdmsSearch` + client-side heuristics used
+   * to either truncate at a hardcoded limit or fake a total that grew every page). mdms-v2
+   * now exposes `_count` alongside `_search`, taking the SAME MdmsCriteria shape and
+   * returning `{ ResponseInfo, totalCount }` — no query params, unlike PGR_COUNT.
+   */
+  async mdmsCount(tenantId: string, schemaCode: string, options?: { isActive?: boolean }): Promise<number> {
+    const criteria: Record<string, unknown> = { tenantId, schemaCode };
+    if (options?.isActive !== undefined) criteria.isActive = options.isActive;
+
+    const data = await this.request<{ totalCount?: number }>(this.endpoint('MDMS_COUNT'), {
+      RequestInfo: this.buildRequestInfo(), MdmsCriteria: criteria,
+    });
+    return typeof data.totalCount === 'number' ? data.totalCount : 0;
+  }
+
   async mdmsCreate(tenantId: string, schemaCode: string, uniqueIdentifier: string, recordData: Record<string, unknown>): Promise<MdmsRecord> {
     const data = await this.request<{ mdms?: MdmsRecord[] }>(`${this.endpoint('MDMS_CREATE')}/${schemaCode}`, {
       RequestInfo: this.buildRequestInfo(),

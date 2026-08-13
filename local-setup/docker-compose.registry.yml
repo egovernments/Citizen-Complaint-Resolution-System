@@ -422,7 +422,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:mdms-count-api-3ac4f8e
     depends_on:
       pgbouncer:
         condition: service_healthy
