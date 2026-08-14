@@ -113,6 +113,41 @@ Operator consequences:
   serviceCode; complaints whose type has no department are excluded for department-scoped users
   (NULL never matches an `IN` list).
 
+#### Tenant-configurable calendar zone — `dss.DashboardConfig.timeZone` (#29)
+
+Every analytics request resolves ONE IANA time zone from this OPTIONAL field on the same
+`dss.DashboardConfig` record (composes additively with `departmentScoping`/`numberFormat`/
+`allowedRoles` on that record) and builds exactly one `BusinessCalendar` (a resolved `ZoneId` +
+a single captured `asOf` instant) that every downstream consumer of the request shares — the
+planner's named windows (`dtd`/`wtd`/`mtd`/`qtd`/`ytd`), the `#1462` pinned-window
+suppression/prior decision, an explicit `dateFrom`/`dateTo` range, the runtime `timeBucket` SQL,
+and the compose `*_Avg` elapsed-time math. The response's own `asOf`/`calendar` fields
+(`{timeZone, businessDate}`) echo exactly this same resolved calendar.
+
+**Fail-safe**: absent, empty, or a value that fails `ZoneId.of(...)` (not a valid IANA zone id)
+falls back to `Africa/Nairobi` — the zone every unconfigured tenant already behaved as before
+this field existed (a migration-compatibility default, not an assertion that EAT is the "right"
+default for new tenants). The fallback is logged at WARN (once per cache TTL window per state
+root); it never throws and never falls back to the server's JVM/OS zone.
+
+Read at the tenant's **state root** and served from the SAME cached fetch/TTL as
+`departmentScoping` (one MDMS call resolves both axes together; see the shared-cache note above)
+— a config flip on either field takes effect within one `pgr.analytics.config-cache-ttl-ms`
+window (default 5 minutes) without a redeploy.
+
+**DB-refresh lag is separate from calendar resolution.** The calendar itself (window boundaries,
+`businessDate`) is computed once per request from the resolved `timeZone` value. A config change
+therefore reaches the request path on the first request after the shared config cache refreshes
+(within the TTL above). What can lag further is the underlying DATA: `complaint_facts` /
+`complaint_events` are materialized views refreshed by `DashboardRefreshScheduler` on its own
+cadence (`pgr.dashboard.refresh.interval.ms`, default 5 min — see `60-operations.md`), so a
+DB-derived tile's numbers reflect a `timeZone` change (e.g. it shifting which rows fall in
+"today") only from that view's next refresh onward, not instantaneously.
+
+Seed note: `ansible/nairobi-mdms/mdms/dss/DashboardConfig.json` carries
+`"timeZone": "Africa/Nairobi"` for the canonical `ke` tenant — the explicit value matches what
+absence would already resolve to, kept explicit so the seed is self-documenting.
+
 ### Layer 2 — Catalog visibility (`rbac.visibleTo`)
 
 Per-KPI role ceiling, evaluated in `KpiDefinition.isVisibleTo`:

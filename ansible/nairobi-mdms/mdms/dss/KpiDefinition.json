@@ -812,7 +812,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",
@@ -960,7 +960,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",
@@ -1772,7 +1772,7 @@
       "query": {
         "grain": "facts",
         "window": {
-          "name": "last_7d",
+          "name": "last_30d",
           "timeRole": "filed_at"
         },
         "dimensions": [
@@ -1865,7 +1865,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",

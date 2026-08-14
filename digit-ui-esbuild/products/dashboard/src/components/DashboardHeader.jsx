@@ -101,6 +101,8 @@ const DashboardHeader = ({
   officerAccess,
   visibleKpiCount,
   scope,
+  readOnly = false,
+  publicMode = false,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
@@ -110,8 +112,11 @@ const DashboardHeader = ({
   // when a locale bundle arrives asynchronously after the switch (t is stable).
   const rowScope = useMemo(() => buildRowScope(scope), [scope, language, i18nTick]);
   const subtitle = useMemo(
-    () => buildSubtitle(filters, filterOptions, t, language),
-    [filters, filterOptions, t, language, i18nTick]
+    () =>
+      publicMode
+        ? t("DASHBOARD_HEADER_PUBLIC_SUBTITLE", "Public view")
+        : buildSubtitle(filters, filterOptions, t, language),
+    [publicMode, filters, filterOptions, t, language, i18nTick]
   );
   // ONE full-phrase key wins when seeded — splicing the DASHBOARD_PRODUCT_LABEL
   // globalConfig onto a translated "Operations" produced mixed-language titles
@@ -204,7 +209,7 @@ const DashboardHeader = ({
         </div>
 
         <div className="dashboard-header-controls">
-          <div className="dashboard-header-kpi-anchor">
+          {!readOnly && <div className="dashboard-header-kpi-anchor">
             <button
               ref={addKpiRef}
               type="button"
@@ -227,16 +232,16 @@ const DashboardHeader = ({
               kpiCardData={kpiCardData}
               allowedWidgetIds={allowedWidgetIds}
             />
-          </div>
+          </div>}
 
-          <button
+          {!readOnly && <button
             type="button"
             onClick={onResetLayout}
             className="dashboard-header-btn dashboard-header-reset"
             title={t("DASHBOARD_HEADER_RESET_LAYOUT", "Reset layout")}
           >
             {t("DASHBOARD_HEADER_RESET", "Reset")}
-          </button>
+          </button>}
 
           <button
             type="button"

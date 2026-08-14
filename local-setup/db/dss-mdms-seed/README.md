@@ -47,7 +47,7 @@ script detects the shape in preflight and `--repair` deactivates it.
 
 ## l10n/
 
-`<locale>.json` — the `rainmaker-dashboard` message pack for that locale, 315
+`<locale>.json` — the `rainmaker-dashboard` message pack for that locale, 318
 codes each, 1:1 across locales. 65 codes carry the `CMS-DASHBOARD.` prefix and
 are referenced by the catalog's `titleKey`/`subtitleKey`/`labelKeys`; the rest
 are dashboard chrome. The prefix is part of the **code**, not a module name —

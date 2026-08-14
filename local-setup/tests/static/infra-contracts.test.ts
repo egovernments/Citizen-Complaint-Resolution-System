@@ -12,6 +12,26 @@ import * as path from 'node:path';
 const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
 const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
 const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
+const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
+const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
+
+describe('Kong declarative route syntax', () => {
+  /**
+   * Incident: public-dashboard regex routes used the older `~^/path` form.
+   * The deployed Kong parser accepts regex paths only when they begin `~/`,
+   * so Kong exited during startup while YAML/static gateway checks stayed green.
+   */
+  test('every regex path uses the Kong 3 declarative `~/` prefix', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => !routePath.startsWith('~/'))).toEqual([]);
+  });
+
+  test('public analytics regex routes stay end-anchored and Kong-parseable', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => routePath.startsWith('~/pgr-services/v2/analytics/public/'))).toEqual([
+      '~/pgr-services/v2/analytics/public/packs$',
+      '~/pgr-services/v2/analytics/public/_query$',
+    ]);
+  });
+});
 
 describe('compose invocation discipline', () => {
   /**
@@ -102,12 +122,19 @@ describe('image pin immutability', () => {
   // this many times, no more, no less — extras, duplicates, AND removals
   // all fail the test until this list is updated to match. The list IS
   // the changelog of this debt; it may shrink, never grow.
+  //
+  // Renamed wholesale to the `egovio/*` Docker Hub org by e6323a09
+  // ("chore(compose): move all image refs to egovio Docker Hub org"). The
+  // count is unchanged at seven — same images, same debt, new owner — so this
+  // update records a rename, not a relaxation. (Note the pre-rename names
+  // still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml}, which
+  // this test does not read: it scans the base compose only.)
   const FROZEN_LATEST_DEBT: Record<string, number> = {
-    'edoburu/pgbouncer:latest': 1,
-    'tilt-demo-db-migrations:latest': 1,
-    'curlimages/curl:latest': 2, // two gate containers
-    'twinproduction/gatus:latest': 1,
-    'tilt-demo-jupyter:latest': 1,
+    'egovio/pgbouncer:latest': 1,
+    'egovio/tilt-demo-db-migrations:latest': 1,
+    'egovio/curl:latest': 2, // two gate containers
+    'egovio/gatus:latest': 1,
+    'egovio/tilt-demo-jupyter:latest': 1,
     'openbao/openbao:latest': 1,
     'egovio/novu-bridge-endpoint:latest': 1,
   };

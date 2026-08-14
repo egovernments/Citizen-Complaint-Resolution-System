@@ -7,21 +7,25 @@ import {
   resolveSubMetricId as resolveSubMetricIdForMetric,
 } from "../config/dashboardFilters";
 import { normalizeComplaintTypeValue } from "../utils/complaintTypeTree";
+import { buildDefaultFilters } from "../config/globalFilterGroups";
 
-export function useDashboardFilters() {
-  const [filters, setFilters] = useState(loadDashboardFilters);
+/** `timeZone` is the already-resolved dashboard config zone (see AdminDashboard). */
+export function useDashboardFilters({ persistent = true, timeZone } = {}) {
+  const [filters, setFilters] = useState(() =>
+    persistent ? loadDashboardFilters(timeZone) : buildDefaultFilters(timeZone)
+  );
   const [optionLists, setOptionLists] = useState(null);
 
   useEffect(() => {
     if (!optionLists) return;
     setFilters((prev) => {
-      const next = reconcileFiltersWithOptions(prev, optionLists);
+      const next = reconcileFiltersWithOptions(prev, optionLists, timeZone);
       if (next !== prev) {
-        persistDashboardFilters(next, optionLists);
+        if (persistent) persistDashboardFilters(next, optionLists, timeZone);
       }
       return next;
     });
-  }, [optionLists]);
+  }, [optionLists, persistent, timeZone]);
 
   const applyFilterOptions = useCallback((filterOptions) => {
     setOptionLists(filterOptions);
@@ -50,18 +54,18 @@ export function useDashboardFilters() {
         if (groupId === "dateFrom" || groupId === "dateTo") {
           next.dateRangeActive = true;
         }
-        persistDashboardFilters(next, optionLists);
+        if (persistent) persistDashboardFilters(next, optionLists, timeZone);
         return next;
       });
     },
-    [optionLists]
+    [optionLists, persistent, timeZone]
   );
 
   const clearFilters = useCallback(() => {
-    const next = clearDashboardFilters();
-    persistDashboardFilters(next, optionLists);
+    const next = clearDashboardFilters(timeZone);
+    if (persistent) persistDashboardFilters(next, optionLists, timeZone);
     setFilters(next);
-  }, [optionLists]);
+  }, [optionLists, persistent, timeZone]);
 
   const resolveSubMetricId = useCallback(
     (metric) => resolveSubMetricIdForMetric(metric, filters),
