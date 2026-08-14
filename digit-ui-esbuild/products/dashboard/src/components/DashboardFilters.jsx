@@ -6,6 +6,7 @@ import {
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
+import GeographyTreeFilter from "./GeographyTreeFilter";
 import PopoverMenu, { PopoverMenuItem, PopoverMenuGroupLabel } from "./ui/PopoverMenu";
 import useDashboardT from "../i18n/useDashboardT";
 
@@ -91,6 +92,7 @@ const DashboardFilters = ({
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
   const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
+  const geographyTree = filterOptions?.geographyTree ?? null;
 
   // Date fallbacks resolve from buildDefaultFilters(timeZone) at render time — never
   // GLOBAL_FILTER_FIELDS' module-load defaultValue, which would freeze on whatever
@@ -149,15 +151,26 @@ const DashboardFilters = ({
           </div>
         </div>
 
-        <FlatFilterMenu
-          ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
-          options={geographyOptions}
-          value={geography}
-          loading={filterOptionsLoading && geographyOptions.length <= 1}
-          onChange={(id) => onFilterChange("geography", id)}
-          panelWidth={240}
-          t={t}
-        />
+        {geographyTree ? (
+          // Boundary drill-down (CCSD-2171): Província → Distrito → Município
+          // via the shared tree panel; leaf → ward, interior → boundaryPath.
+          <GeographyTreeFilter
+            tree={geographyTree}
+            filters={filters}
+            onFilterChange={onFilterChange}
+            t={t}
+          />
+        ) : (
+          <FlatFilterMenu
+            ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
+            options={geographyOptions}
+            value={geography}
+            loading={filterOptionsLoading && geographyOptions.length <= 1}
+            onChange={(id) => onFilterChange("geography", id)}
+            panelWidth={240}
+            t={t}
+          />
+        )}
 
         {complaintTypeTree ? (
           // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",

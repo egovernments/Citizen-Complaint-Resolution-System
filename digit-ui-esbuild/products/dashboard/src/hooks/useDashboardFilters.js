@@ -7,6 +7,7 @@ import {
   resolveSubMetricId as resolveSubMetricIdForMetric,
 } from "../config/dashboardFilters";
 import { normalizeComplaintTypeValue } from "../utils/complaintTypeTree";
+import { normalizeGeographyValue } from "../utils/boundaryTree";
 import { buildDefaultFilters } from "../config/globalFilterGroups";
 
 /** `timeZone` is the already-resolved dashboard config zone (see AdminDashboard). */
@@ -35,7 +36,20 @@ export function useDashboardFilters({ persistent = true, timeZone } = {}) {
     (groupId, value) => {
       setFilters((prev) => {
         let next;
-        if (groupId === "complaintType") {
+        if (groupId === "geography") {
+          // Geography drill-down (CCSD-2171): the tree widget sends the
+          // { code, path, leaf } node selection; the flat fallback select
+          // still sends a bare ward-code string. Persist the trio atomically
+          // so leaf → ward / interior → boundaryPath resolves without
+          // waiting for the boundary tree.
+          const selection = normalizeGeographyValue(value);
+          next = {
+            ...prev,
+            geography: selection.code,
+            geographyPath: selection.path,
+            geographyLeaf: selection.leaf,
+          };
+        } else if (groupId === "complaintType") {
           // Tree-traversal type filter: the widget sends the { code, path,
           // leaf } node selection (APPLY-ON-SELECT); the flat fallback select
           // still sends a bare leaf-code string. Persist the trio atomically
