@@ -1,0 +1,6 @@
+apiVersion: v2
+name: digit-ui-v2
+description: DIGIT citizen UI v2 (Vite SPA) served under /citizen/ from a tenant-baked dist
+type: application
+version: 0.1.0
+appVersion: "2.12"
