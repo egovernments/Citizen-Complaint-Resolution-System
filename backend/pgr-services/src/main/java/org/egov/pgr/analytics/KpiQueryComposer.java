@@ -59,6 +59,13 @@ import java.util.regex.Pattern;
  *       {@code paramsIgnored:["complaintPath"]} on the result envelope) so the FE can flag the
  *       widget as unfiltered. Rows with a NULL path (nodes whose own code contains '.', see the
  *       #1111 migration; flat tenants) never match a subtree filter.</li>
+ *   <li>{@code boundaryPath} — a boundary-hierarchy INTERIOR node's pipe-path (e.g.
+ *       {@code mz|maputo_cidade|distrito_x}; CCSD-2171 geography drill-down). Mirrors
+ *       {@code complaintPath} on the {@code boundary_path} column with a {@code |}-guarded
+ *       subtree predicate ({@code = ? OR LIKE ?||'|%'}); alphabet adds {@code |}, cap 512.
+ *       All three grains carry the column prefix-filterable, so unlike {@code complaintPath}
+ *       it applies on daily too. Leaf (ward) selections keep using {@code ward} (exact
+ *       {@code ward_code} eq) — this param is additive for interior nodes only.</li>
  *   <li>{@code compare: "prior"} — instead of the selected/default range, apply the
  *       <em>immediately-preceding equal-duration</em> range on the def's time column. Mirrors the FE
  *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
@@ -130,6 +137,19 @@ public class KpiQueryComposer {
      */
     private static final Pattern COMPLAINT_PATH_VALUE =
             Pattern.compile("^[A-Za-z0-9._/\\-]{1," + MAX_COMPLAINT_PATH_LENGTH + "}$");
+    /**
+     * {@code boundaryPath} length cap — boundary paths are longer than complaint paths
+     * (pipe-joined lowercase boundary codes, one segment per hierarchy level, each segment
+     * itself underscore-joined, e.g. {@code mz|maputo_cidade|distrito_x|municipio_maputo_katembe}).
+     */
+    static final int MAX_BOUNDARY_PATH_LENGTH = 512;
+    /**
+     * The boundary path alphabet: the complaint-path alphabet plus {@code |}, the
+     * boundary_relationship materialized-path segment delimiter. Same defense-in-depth reasoning
+     * as {@link #COMPLAINT_PATH_VALUE}.
+     */
+    private static final Pattern BOUNDARY_PATH_VALUE =
+            Pattern.compile("^[A-Za-z0-9._/|\\-]{1," + MAX_BOUNDARY_PATH_LENGTH + "}$");
 
     private final AnalyticsCatalog catalog;
 
@@ -274,6 +294,10 @@ public class KpiQueryComposer {
         if (params.hasNonNull("complaintPath")) {
             String path = params.get("complaintPath").asText();
             if (!path.isEmpty()) applyComplaintPath(next, g, path, paramsIgnoredOut);
+        }
+        if (params.hasNonNull("boundaryPath")) {
+            String path = params.get("boundaryPath").asText();
+            if (!path.isEmpty()) applyBoundaryPath(next, g, path, paramsIgnoredOut);
         }
 
         // ---- hierarchy-level rollup (#1111): rewrite service_code dimensions to the level expr ----
@@ -759,6 +783,31 @@ public class KpiQueryComposer {
             return;
         }
         mergeableFilterObject(query, "complaint_node_path").put("subtree", path);
+    }
+
+    /**
+     * Narrow to a boundary-hierarchy INTERIOR node's whole subtree (CCSD-2171: province/district
+     * selections on the dashboard's geography drill-down). Mirrors {@link #applyComplaintPath}
+     * on the {@code boundary_path} column: a delimiter-guarded {@code subtree} predicate
+     * ({@code = ? OR LIKE ?||'|%'} — boundary paths are pipe-joined, see the grain MV's
+     * {@code ancestralmaterializedpath || '|' || code}), hard {@code invalid_param} on a
+     * malformed value, and a REPORTED skip on a grain without the column. Today all three grains
+     * (facts/events/daily) carry {@code boundary_path} prefix-filterable, so the skip arm is a
+     * guard for future grains rather than a live path.
+     *
+     * <p>Leaf (ward) selections must keep using the existing {@code ward} param — exact
+     * {@code ward_code} match; {@code boundaryPath} is additive for interior nodes only.
+     */
+    private void applyBoundaryPath(ObjectNode query, Grain g, String path, List<String> paramsIgnoredOut) {
+        if (!BOUNDARY_PATH_VALUE.matcher(path).matches())
+            throw new IllegalArgumentException("invalid_param: boundaryPath must be a pipe-joined boundary path over"
+                    + " [A-Za-z0-9._/|-], at most " + MAX_BOUNDARY_PATH_LENGTH + " chars");
+        if (!g.prefixFilterable.contains("boundary_path")) {
+            log.debug("grain '{}' has no boundary_path; ignoring boundaryPath param (reported)", g.name);
+            reportIgnored(paramsIgnoredOut, "boundaryPath");
+            return;
+        }
+        mergeableFilterObject(query, "boundary_path").put("subtree", path);
     }
 
     // ---- narrowing eq filter ----
