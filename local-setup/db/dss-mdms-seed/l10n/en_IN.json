@@ -1215,6 +1215,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
+    "message": "All in",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
     "message": "Type filter not applied",
     "module": "rainmaker-dashboard"

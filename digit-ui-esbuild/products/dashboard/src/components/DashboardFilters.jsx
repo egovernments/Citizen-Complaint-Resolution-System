@@ -6,6 +6,7 @@ import {
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
+import GeographyTreeFilter from "./GeographyTreeFilter";
 import PopoverMenu, { PopoverMenuItem, PopoverMenuGroupLabel } from "./ui/PopoverMenu";
 import useDashboardT from "../i18n/useDashboardT";
 
@@ -108,6 +109,7 @@ const DashboardFilters = ({
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
   const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
+  const geographyTree = filterOptions?.geographyTree ?? null;
 
   // Date fallbacks resolve from buildDefaultFilters(timeZone) at render time — never
   // GLOBAL_FILTER_FIELDS' module-load defaultValue, which would freeze on whatever
@@ -166,26 +168,37 @@ const DashboardFilters = ({
           </div>
         </div>
 
-        <div className="dashboard-filter-inline-select-wrap">
-          <select
-            value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
-            disabled={filterOptionsLoading && geographyOptions.length <= 1}
-            onChange={(e) => onFilterChange("geography", e.target.value)}
-            aria-label={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
-            className="dashboard-filter-inline-select"
-          >
-            {filterOptionsLoading && geographyOptions.length <= 1 ? (
-              <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
-            ) : (
-              geographyOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))
-            )}
-          </select>
-          <FilterChevron />
-        </div>
+        {geographyTree ? (
+          // Boundary drill-down (CCSD-2171): Província → Distrito → Município
+          // via the shared tree panel; leaf → ward, interior → boundaryPath.
+          <GeographyTreeFilter
+            tree={geographyTree}
+            filters={filters}
+            onFilterChange={onFilterChange}
+            t={t}
+          />
+        ) : (
+          <div className="dashboard-filter-inline-select-wrap">
+            <select
+              value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
+              disabled={filterOptionsLoading && geographyOptions.length <= 1}
+              onChange={(e) => onFilterChange("geography", e.target.value)}
+              aria-label={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
+              className="dashboard-filter-inline-select"
+            >
+              {filterOptionsLoading && geographyOptions.length <= 1 ? (
+                <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
+              ) : (
+                geographyOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))
+              )}
+            </select>
+            <FilterChevron />
+          </div>
+        )}
 
         {complaintTypeTree ? (
           // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",
