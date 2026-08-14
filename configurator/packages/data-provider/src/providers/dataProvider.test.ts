@@ -347,9 +347,9 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }));
-    let calls = 0;
+    const requestedLimits: number[] = [];
     mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
-      calls += 1;
+      requestedLimits.push(opts?.limit ?? 100);
       const offset = opts?.offset ?? 0;
       const limit = opts?.limit ?? 100;
       return rows.slice(offset, offset + limit);
@@ -364,7 +364,7 @@ describe('createDigitDataProvider', () => {
 
     assert.equal(result.total, 550);
     assert.equal(result.data.length, 1);
-    assert.ok(calls >= 6, `should walk past a 500-row cap, got ${calls} pages`);
+    assert.ok(requestedLimits.some((limit) => limit > 500), 'must not retain the old 500-row cap');
   });
 
   it('getList(boundaries) skips PW_* stubs and still queries ADMIN', async () => {
@@ -397,4 +397,40 @@ describe('createDigitDataProvider', () => {
     assert.ok(queried.includes('REVENUE'));
   });
 
+  it('getList(gender-types) sorts a shuffled generic-MDMS response across pages', async () => {
+    // MDMS v2 has no ordering criterion, so rows arrive in arbitrary order and
+    // sorting must span the whole master, not the current page.
+    const codes = ['DELTA', 'ALPHA', 'ECHO', 'CHARLIE', 'BRAVO'];
+    const rows = codes.map((code, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.GenderType',
+      uniqueIdentifier: code,
+      data: { code },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const asc = await dp.getList('gender-types', {
+      pagination: { page: 1, perPage: 2 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+    assert.deepEqual(asc.data.map((r) => r.code), ['ALPHA', 'BRAVO']);
+    assert.equal(asc.total, 5);
+
+    const descPage2 = await dp.getList('gender-types', {
+      pagination: { page: 2, perPage: 2 },
+      sort: { field: 'code', order: 'DESC' },
+      filter: {},
+    });
+    assert.deepEqual(descPage2.data.map((r) => r.code), ['CHARLIE', 'BRAVO']);
+    assert.equal(descPage2.total, 5);
+  });
 });

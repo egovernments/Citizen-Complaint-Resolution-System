@@ -94,7 +94,11 @@ export class DigitApiClient {
       const response = await fetch(url, { method: 'POST', headers, body: jsonBody });
 
       if (!DigitApiClient.RETRY_STATUS_CODES.has(response.status)) {
-        const data = await response.json() as Record<string, unknown>;
+        // Kong rejects an expired token with a bodyless (or HTML) 401, so
+        // parsing before classifying threw SyntaxError and the session-expired
+        // handler never ran — the UI showed "Unexpected end of JSON input"
+        // instead of bouncing to login.
+        const data = await this.parseJsonBody(response);
         if (!response.ok || (data.Errors as ApiError[] | undefined)?.length) {
           const errors: ApiError[] = (data.Errors as ApiError[]) || [
             { code: `HTTP_${response.status}`, message: (data.message as string) || `Request failed: ${response.status}` },
@@ -122,11 +126,23 @@ export class DigitApiClient {
       }
     }
 
-    const data = await lastResponse!.json().catch(() => ({})) as Record<string, unknown>;
+    const data = await this.parseJsonBody(lastResponse!);
     const errors: ApiError[] = (data.Errors as ApiError[]) || [
       { code: `HTTP_${lastResponse!.status}`, message: (data.message as string) || `Request failed after ${DigitApiClient.MAX_RETRIES} retries` },
     ];
     throw new ApiClientError(errors, lastResponse!.status);
+  }
+
+  /** Empty or non-JSON payloads (gateway 401s, HTML error pages) read as `{}`. */
+  private async parseJsonBody(response: Response): Promise<Record<string, unknown>> {
+    const text = await response.text().catch(() => '');
+    if (!text) return {};
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
   }
 
   // --- Login ---

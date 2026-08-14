@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DigitApiClient } from './DigitApiClient.js';
-import { isSessionExpired } from './errors.js';
+import { ApiClientError, isSessionExpired } from './errors.js';
 
 describe('DigitApiClient', () => {
   let client: DigitApiClient;
@@ -143,6 +143,55 @@ describe('DigitApiClient paged-search guard', () => {
       /truncated after 200 pages/,
     );
     assert.equal(calls, DigitApiClient.SEARCH_MAX_PAGES);
+  });
+});
+
+describe('DigitApiClient.request session handling', () => {
+  it('routes a bodyless 401 to the session-expired handler instead of a JSON parse error', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let expired = 0;
+    DigitApiClient.setSessionExpiredHandler(() => { expired += 1; });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(null, { status: 401 })) as typeof fetch;
+
+    try {
+      await assert.rejects(
+        () => client.mdmsSearch('ke', 'common-masters.Department'),
+        (err: unknown) => {
+          assert.ok(err instanceof ApiClientError);
+          assert.equal(err.statusCode, 401);
+          assert.equal(err.errors[0].code, 'SESSION_EXPIRED');
+          return true;
+        },
+      );
+      assert.equal(expired, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+      DigitApiClient.setSessionExpiredHandler(null);
+    }
+  });
+
+  it('reports an HTML error page as an HTTP error, not a parse failure', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('<html>404 Not Found</html>', {
+      status: 404,
+      headers: { 'Content-Type': 'text/html' },
+    })) as typeof fetch;
+
+    try {
+      await assert.rejects(
+        () => client.mdmsSearch('ke', 'common-masters.Department'),
+        (err: unknown) => {
+          assert.ok(err instanceof ApiClientError);
+          assert.equal(err.statusCode, 404);
+          assert.equal(err.errors[0].code, 'HTTP_404');
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
