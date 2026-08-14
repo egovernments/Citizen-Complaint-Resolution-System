@@ -5,6 +5,11 @@ import {
   repairSelection,
 } from "../utils/complaintTypeTree";
 import {
+  clearedGeographySelection,
+  normalizeGeographyValue,
+  repairGeographySelection,
+} from "../utils/boundaryTree";
+import {
   DEFAULT_TIME_ZONE,
   isValidTimeZone,
   oneMonthEarlierYMD,
@@ -110,6 +115,13 @@ export function buildDefaultFilters(timeZone) {
   // (leaf → serviceCode, interior → complaintPath).
   defaults.complaintTypePath = null;
   defaults.complaintTypeLeaf = false;
+  // Geography drill-down companions (CCSD-2171), same contract: `geography`
+  // stays the selected node's code ("all" = cleared, back-compat with every
+  // consumer); path + leaf make the selection self-describing so the very
+  // first batch already sends the right param (leaf → ward, interior →
+  // boundaryPath).
+  defaults.geographyPath = null;
+  defaults.geographyLeaf = false;
   return defaults;
 }
 
@@ -154,8 +166,8 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
     if (field.type === "date" && isValidISODate(value)) {
       next[field.id] = value;
     }
-    // complaintType is a tree node, not a flat option — handled below.
-    if (field.type === "select" && field.id !== "complaintType") {
+    // complaintType and geography are tree node selections — handled below.
+    if (field.type === "select" && field.id !== "complaintType" && field.id !== "geography") {
       const fieldOptions = options[field.id] ?? field.options;
       if (fieldOptions.some((opt) => opt.id === value)) {
         next[field.id] = value;
@@ -164,6 +176,7 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
   }
 
   Object.assign(next, sanitizeComplaintTypeSelection(raw, options));
+  Object.assign(next, sanitizeGeographySelection(raw, options));
 
   if (["daily", "weekly", "monthly", "wow", "mom"].includes(raw.timeWindow)) {
     next.timeWindow = raw.timeWindow;
@@ -192,6 +205,36 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
  *   persisted trio and let reconcileFiltersWithOptions repair it when the
  *   tree arrives — clearing here would forget the selection on every reload.
  */
+/**
+ * Sanitize/repair the geography node selection ({ geography, geographyPath,
+ * geographyLeaf }) — sanitizeComplaintTypeSelection's rules verbatim on the
+ * boundary tree (options.geographyTree as the authority; flat scoped ward
+ * list validates leaves only, interior selections HELD through tree-fetch
+ * hiccups; no options at all → trust the persisted trio).
+ */
+function sanitizeGeographySelection(raw, options) {
+  const stored = normalizeGeographyValue({
+    code: raw.geography,
+    path: raw.geographyPath,
+    leaf: raw.geographyLeaf,
+  });
+  let selection = stored;
+
+  if (options.geographyTree) {
+    selection = repairGeographySelection(options.geographyTree, stored);
+  } else if (options.geography && stored.leaf) {
+    selection = options.geography.some((opt) => opt.id === stored.code)
+      ? stored
+      : clearedGeographySelection();
+  }
+
+  return {
+    geography: selection.code,
+    geographyPath: selection.path,
+    geographyLeaf: selection.leaf,
+  };
+}
+
 function sanitizeComplaintTypeSelection(raw, options) {
   const stored = normalizeComplaintTypeValue({
     code: raw.complaintType,
