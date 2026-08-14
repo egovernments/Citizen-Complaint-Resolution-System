@@ -416,6 +416,25 @@ server {
   }
 
 {% endif %}
+  # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
+  # a second esbuild entry living in the same /digit-ui/ docroot as the employee
+  # app (so hashed assets resolve against one publicPath), which means this only
+  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  #
+  # Its analytics read paths are explicitly auth-optional on Kong, so the page
+  # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
+  # gateway is deliberately not opened because it does not normalize spoofed
+  # anonymous userInfo. The real data boundary remains server-side.
+  location = /digit-ui/public-dashboard {
+    return 302 /digit-ui/public-dashboard.html;
+  }
+
+  # Backwards-compatible alias for the first public-dashboard preview. The
+  # explicit digit-ui path is canonical and is what the configurator exposes.
+  location = /dashboard {
+    return 302 /digit-ui/public-dashboard;
+  }
+
 {% if digit_ui_mode == "static" %}
 {% if testing_ui_enabled | default(false) %}
   # ── TESTING ENTRANCE (static mode) — same build, testing config, password

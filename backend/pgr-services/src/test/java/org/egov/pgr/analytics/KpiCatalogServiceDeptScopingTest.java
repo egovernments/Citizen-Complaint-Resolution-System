@@ -200,4 +200,18 @@ public class KpiCatalogServiceDeptScopingTest {
 
         verify(repo, times(1)).fetchResult(any(), any());
     }
+
+    @Test
+    public void disabledInfoGateFiresOnceThenAgainOnlyAfterCacheRefresh() {
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "shouldLogDepartmentScopingDisabled", "ke", 1000L));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "shouldLogDepartmentScopingDisabled", "ke", 1000L));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "shouldLogDepartmentScopingDisabled", "ke", 1000L));
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "shouldLogDepartmentScopingDisabled", "ke", 2000L));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "shouldLogDepartmentScopingDisabled", "ke", 2000L));
+    }
 }

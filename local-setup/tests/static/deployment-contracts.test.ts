@@ -46,11 +46,37 @@ describe('ansible playbook-deploy.yml', () => {
 
   // HRMS crash-loops on non-pg tenants without the INTERNAL_USER system
   // user at state_root (its startup lookup is tenant-scoped).
+  //
+  // Asserts the BEHAVIOUR, not the task's display name. This test originally
+  // pinned the exact task title and the payload's YAML form; c0a21204 rewrote
+  // the task as a retrying curl POST — on the same day the test landed — and
+  // broke both assertions without changing what they were protecting.
+  //
+  // Scoped to the request payload rather than scanning the whole playbook.
+  // Three loose `toContain` calls would pass if userName and tenantId lived in
+  // two unrelated tasks — they would prove both strings exist somewhere, not
+  // that INTERNAL_USER is created AT state_root, which is the actual invariant.
+  // Parsing the one payload that mentions INTERNAL_USER checks the fields
+  // together, and survives task renames, field reordering and whitespace.
   test('seeds INTERNAL_USER on state_root after bootstrap', () => {
-    expect(playbook).toContain(
-      'post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS'
-    );
-    expect(playbook).toContain('userName: INTERNAL_USER');
+    // The Jinja expressions sit inside JSON string values, so the body is
+    // still valid JSON — `{{ state_root }}` parses as a plain string.
+    const payloads = [...playbook.matchAll(/body='(\{.*?\})'\s*$/gm)]
+      .map((m) => m[1])
+      .filter((b) => b.includes('INTERNAL_USER'));
+
+    // Exactly one — two would mean a duplicate seed path, and this test would
+    // silently only be covering whichever came first.
+    expect(payloads).toHaveLength(1);
+
+    const user = JSON.parse(payloads[0]).User;
+    expect(user.userName).toBe('INTERNAL_USER');
+    expect(user.tenantId).toBe('{{ state_root }}');
+    // SYSTEM is what makes HRMS's startup lookup accept it.
+    expect(user.type).toBe('SYSTEM');
+    // The role is tenant-scoped too; on `pg` it would not satisfy the lookup.
+    const roleTenants = (user.roles as Array<{ tenantId: string }>).map((r) => r.tenantId);
+    expect(roleTenants).toEqual(['{{ state_root }}']);
   });
 
   // The HRMS prereq gate ships hardcoded to tenant pg; without the

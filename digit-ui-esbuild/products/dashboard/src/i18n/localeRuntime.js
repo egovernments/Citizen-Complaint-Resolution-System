@@ -17,6 +17,7 @@
  * react-i18next imports — the host instance is reached via window.i18next.
  */
 import { getTenantId } from "../config/dashboardConfig";
+import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
 
 const FALLBACK_LOCALE = "en_IN";
 const STANDALONE_MODULES = [
@@ -50,55 +51,58 @@ export function exists(key) {
   if (key == null || key === "") return false;
   const host = hostI18next();
   if (host) return host.exists(String(key));
-  const map = standalone.messages[getLanguage()];
-  return !!map && Object.prototype.hasOwnProperty.call(map, String(key));
+  const k = String(key);
+  const active = standalone.messages[getLanguage()];
+  const english = standalone.messages[FALLBACK_LOCALE];
+  return (
+    (!!active && Object.prototype.hasOwnProperty.call(active, k)) ||
+    (!!english && Object.prototype.hasOwnProperty.call(english, k))
+  );
 }
 
 /**
- * Translate `key`, else echo the KEY — DIGIT's platform-wide behavior, so a
- * missing message surfaces as a visible localisation gap instead of being
- * papered over.
+ * Translate `key`, falling back to its canonical English copy when the active
+ * locale has not received the message yet. Standalone/public mode loads en_IN
+ * beside the active locale to reproduce the employee host's fallback chain.
  *
- * `seedEnglish` is NEVER rendered: it is the canonical English message for
- * the key, kept inline as the single source the generated en_IN seed pack
+ * `seedEnglish` is also the single source the generated en_IN seed pack
  * (digit-mcp dashboard-l10n-seed.ts) is script-extracted from. Keep it in
  * sync when changing copy, then regenerate the pack.
  */
-// eslint-disable-next-line no-unused-vars -- seedEnglish is extraction source, not runtime input
 export function translate(key, seedEnglish) {
   if (key == null || key === "") return "";
   const k = String(key);
   const host = hostI18next();
   if (host) {
-    return host.exists(k) ? host.t(k) : k;
+    return host.exists(k) ? host.t(k) : seedEnglish || k;
   }
-  const map = standalone.messages[getLanguage()];
-  if (map && Object.prototype.hasOwnProperty.call(map, k)) return map[k];
-  return k;
+  const active = standalone.messages[getLanguage()];
+  if (active && Object.prototype.hasOwnProperty.call(active, k)) return active[k];
+  const english = standalone.messages[FALLBACK_LOCALE];
+  if (english && Object.prototype.hasOwnProperty.call(english, k)) return english[k];
+  return seedEnglish || k;
 }
 
 const notifyStandalone = () => standalone.listeners.forEach((cb) => cb());
 
-/** No-op when embedded; in standalone, fetch the message bundles once per locale. */
-export function ensureMessages() {
-  if (hostI18next()) return;
-  const locale = getLanguage();
-  if (standalone.messages[locale] || standalone.pending[locale]) return;
-  let authToken = null;
-  try {
-    authToken = window.localStorage.getItem("Employee.token");
-  } catch (e) {
-    /* ignore */
-  }
+function loadStandaloneMessages(locale, authToken) {
+  if (standalone.messages[locale]) return Promise.resolve();
+  if (standalone.pending[locale]) return standalone.pending[locale];
   const params = new URLSearchParams({
     module: STANDALONE_MODULES.join(","),
     locale,
     tenantId: getTenantId(),
   });
-  standalone.pending[locale] = fetch(`/localization/messages/v1/_search?${params}`, {
+  const request = fetch(`/localization/messages/v1/_search?${params}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ RequestInfo: { apiId: "Rainmaker", ver: ".01", authToken } }),
+    body: JSON.stringify({
+      RequestInfo: {
+        apiId: "Rainmaker",
+        ver: ".01",
+        ...(authToken && { authToken }),
+      },
+    }),
   })
     .then((res) => (res.ok ? res.json() : { messages: [] }))
     .then((data) => {
@@ -113,7 +117,28 @@ export function ensureMessages() {
     .catch(() => {
       standalone.messages[locale] = {};
       delete standalone.pending[locale];
+      notifyStandalone();
     });
+  standalone.pending[locale] = request;
+  return request;
+}
+
+/**
+ * No-op when embedded. Standalone loads the active locale plus en_IN so
+ * dynamic dimension keys have the same fallback behavior as host i18next.
+ */
+export function ensureMessages() {
+  if (hostI18next()) return Promise.resolve();
+  let authToken = null;
+  if (!isPublicDashboardRuntime()) {
+    try {
+      authToken = window.localStorage.getItem("Employee.token");
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  const locales = [...new Set([getLanguage(), FALLBACK_LOCALE])];
+  return Promise.all(locales.map((locale) => loadStandaloneMessages(locale, authToken)));
 }
 
 /**

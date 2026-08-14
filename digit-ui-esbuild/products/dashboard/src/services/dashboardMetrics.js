@@ -1,4 +1,5 @@
 import { DASHBOARD_ROLES } from "../../roles";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
 /**
  * dashboardMetrics — client-side render-lag instrumentation (issue #1110, PR1).
@@ -425,6 +426,7 @@ function getTenantTag() {
  * "other". Bounded cardinality either way.
  */
 function getPersonaTag() {
+  if (isPublicDashboardRuntime()) return "PUBLIC";
   if (state.packMeta?.persona) return state.packMeta.persona;
   const info = readLocalStorage("Employee.user-info");
   const roleCodes = new Set(
@@ -443,6 +445,7 @@ function getPersonaTag() {
  */
 function getLayoutIdTag() {
   const packId = state.packMeta?.packId || "unknown";
+  if (isPublicDashboardRuntime()) return packId;
   let custom = false;
   try {
     custom = window.localStorage?.getItem("ccrs.dashboard.catalog-layout.v1") != null;

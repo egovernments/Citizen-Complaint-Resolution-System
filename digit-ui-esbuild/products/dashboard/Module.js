@@ -18,11 +18,12 @@ const DashboardModule = ({ stateCode }) => {
   // Lazy-load this module's localization bundles into the host i18next
   // (same pattern as PGRModule): rainmaker-dashboard for the dashboard's own
   // chrome/labels, rainmaker-pgr for complaint-type + workflow-status names,
+  // rainmaker-common for department/designation labels,
   // rainmaker-boundary-<hierarchy> for ward names on the map and filters.
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const { isLoading } = Digit.Services.useStore({
     stateCode,
-    moduleCode: ["dashboard", "pgr", `boundary-${hierarchyType?.toString().toLowerCase()}`],
+    moduleCode: ["dashboard", "pgr", "common", `boundary-${hierarchyType?.toString().toLowerCase()}`],
     language: Digit.StoreData.getCurrentLanguage(),
     modulePrefix: "rainmaker",
   });

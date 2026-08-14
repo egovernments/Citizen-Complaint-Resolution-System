@@ -8,6 +8,10 @@ import type {
   MdmsRecord,
   Tenant,
 } from '../types';
+import {
+  selectOwnedDashboardConfig,
+  type DashboardConfigData,
+} from '../publicDashboardConfig';
 
 // MapConfig is a singleton per tenant, keyed on `code` (the schema's x-unique).
 // The key must NOT be derived from any configured value: the one hand-seeded
@@ -15,6 +19,16 @@ import type {
 // either left the key contradicting the data or minted a second record — and the
 // UI reads MapConfig[0], which then picks between them arbitrarily.
 const MAP_CONFIG_KEY = 'DEFAULT';
+const DASHBOARD_CONFIG_KEY = 'default';
+const DEFAULT_DASHBOARD_ROLES = [
+  'SUPERVISOR',
+  'PGR_SUPERVISOR',
+  'GRO',
+  'DGRO',
+  'PGR_LME',
+  'PGR_ADMIN',
+  'SUPERUSER',
+];
 
 export const mdmsService = {
   /**
@@ -155,6 +169,50 @@ export const mdmsService = {
     const inherited = existing.find((r) => r.isActive !== false)?.data as Record<string, unknown> | undefined;
     const data = { ...(inherited || {}), ...patch, code: MAP_CONFIG_KEY };
     return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
+  },
+
+  /** Load the active DashboardConfig owned by the state root (never an inherited row). */
+  async getDashboardConfig(tenantId: string): Promise<MdmsRecord | null> {
+    const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.DASHBOARD_CONFIG);
+    return selectOwnedDashboardConfig(records, tenantId);
+  },
+
+  /**
+   * Patch the singleton DashboardConfig without dropping its existing timezone,
+   * number formatting, scoping, or role settings. A fresh tenant gets the schema's
+   * required fields as a conservative baseline.
+   */
+  async upsertDashboardConfig(
+    tenantId: string,
+    patch: Partial<DashboardConfigData>,
+  ): Promise<MdmsRecord> {
+    const records = await this.searchRecords(tenantId, MDMS_SCHEMAS.DASHBOARD_CONFIG);
+    const own = selectOwnedDashboardConfig(records, tenantId);
+
+    if (own) {
+      return this.update(own, { ...(own.data as Record<string, unknown>), ...patch });
+    }
+
+    const data: DashboardConfigData = {
+      id: DASHBOARD_CONFIG_KEY,
+      allowedRoles: DEFAULT_DASHBOARD_ROLES,
+      ...patch,
+    };
+    return this.create(
+      tenantId,
+      MDMS_SCHEMAS.DASHBOARD_CONFIG,
+      DASHBOARD_CONFIG_KEY,
+      data,
+    );
+  },
+
+  /** Force pgr-services to re-read DashboardConfig after a successful MDMS write. */
+  async refreshDashboardConfig(tenantId: string): Promise<boolean> {
+    const response = await apiClient.post(ENDPOINTS.ANALYTICS_CONFIG_REFRESH, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      tenantId,
+    });
+    return response.publicDashboardEnabled === true;
   },
 
   // ============================================
