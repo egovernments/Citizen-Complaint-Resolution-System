@@ -1,5 +1,6 @@
 import { appliedHierLevel } from "./hierLevelGrouping";
 import { complaintTypeParams } from "./complaintTypeTree";
+import { geographyParams } from "./boundaryTree";
 
 /**
  * Query-plan helpers for the catalog dashboard (extracted from
@@ -81,9 +82,19 @@ export function isMapKind(kind) {
  */
 export function globalParams(filters) {
   const params = {};
-  if (filters?.geography && filters.geography !== "all") {
-    params.ward = filters.geography;
-  }
+  // Geography node selection (CCSD-2171): leaf ward → ward (exact ward_code,
+  // today's wire shape), interior province/district → boundaryPath (subtree
+  // on boundary_path; pre-boundaryPath backends ignore the unknown param, so
+  // interior selections degrade to unfiltered, never an error). Legacy
+  // string-only persisted state (no path/leaf) behaves exactly like today.
+  Object.assign(
+    params,
+    geographyParams({
+      code: filters?.geography,
+      path: filters?.geographyPath,
+      leaf: filters?.geographyLeaf,
+    })
+  );
   Object.assign(
     params,
     complaintTypeParams({

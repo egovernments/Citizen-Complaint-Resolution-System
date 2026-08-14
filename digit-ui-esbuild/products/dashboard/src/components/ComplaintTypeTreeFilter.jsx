@@ -61,8 +61,22 @@ const TRAIL_MAX = 4;
  * The panel body. Exported (also for the ReactDOMServer render smoke): pure
  * React against the tree + applied code, owns only the transient browse
  * location. Mounted fresh on every open, so browse state self-resets.
+ *
+ * Hierarchy-agnostic via three optional props (defaults keep the
+ * complaint-type behaviour bit-for-bit; the geography drill-down passes its
+ * own — CCSD-2171): `labelFor(tree, code)` resolves a node's display label,
+ * `allLabel` is the virtual-root label ("All types" / "All wards"),
+ * `allInLabel` prefixes the subtree-apply row ("All in").
  */
-export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
+export function ComplaintTypeTreePanel({
+  tree,
+  appliedCode,
+  onApply,
+  t,
+  labelFor = nodeDisplayLabel,
+  allLabel,
+  allInLabel,
+}) {
   const [browseCode, setBrowseCode] = useState(() => browseBaseCode(tree, appliedCode));
   const rootRef = useRef(null);
   const mountedRef = useRef(false);
@@ -83,8 +97,9 @@ export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
     target?.focus();
   }, [browseCode]);
 
-  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
-  const label = (c) => (c === ALL ? allTypesLabel : nodeDisplayLabel(tree, c));
+  const allTypesLabel = allLabel ?? t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+  const allInText = allInLabel ?? t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in");
+  const label = (c) => (c === ALL ? allTypesLabel : labelFor(tree, c));
 
   const atRoot = browseCode === ALL || !nodeOf(tree, browseCode);
   const browse = atRoot ? ALL : browseCode;
@@ -146,10 +161,10 @@ export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
         {!atRoot && (
           <PopoverMenuItem
             selected={appliedCode === browse}
-            title={`${t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")} ${label(browse)}`}
+            title={`${allInText} ${label(browse)}`}
             onSelect={() => onApply(browse)}
           >
-            {`${t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")} ${label(browse)}`}
+            {`${allInText} ${label(browse)}`}
           </PopoverMenuItem>
         )}
         {children.map((child) => (
