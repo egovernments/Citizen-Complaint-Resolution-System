@@ -1001,31 +1001,23 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data, total: filtered.length };
       }
 
-      // MDMS v2 does not return a total. Dedicated small masters (tenants /
-      // departments / designations / hierarchy definitions) page until a short
-      // response so dashboard cards and list badges get an exact `total`.
-      // Generic / large MDMS schemas stay on server paging (`limit`/`offset`)
-      // so a list page does not download the whole master.
+      // MDMS v2 returns neither a total nor an ordering criterion, so a
+      // server-paged window is both uncountable and arbitrarily ordered:
+      // sorting one page would rank 25 arbitrary rows, and `perPage + 1`
+      // leaked into list badges (Departments with 10/page read "1-10 of 11"
+      // when the master had 33). Page through the active set, then sort and
+      // paginate in memory. Masters are configuration-sized; mdmsSearchAll
+      // streams 100 rows per request and throws rather than silently
+      // truncating.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          if (config.dedicated) {
-            const raw = await client.mdmsSearchAll(tenant, config.schema!, { isActive: true });
-            const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-            const sorted = clientSort(allActive, field, order);
-            return { data: clientPaginate(sorted, page, perPage), total: sorted.length };
-          }
-          const offset = (page - 1) * perPage;
-          const raw = await client.mdmsSearch(tenant, config.schema!, {
-            limit: perPage,
-            offset,
-            isActive: true,
-          });
-          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const total = data.length < perPage ? offset + data.length : offset + perPage + 1;
-          return { data, total };
+          const raw = await client.mdmsSearchAll(tenant, config.schema!, { isActive: true });
+          const allActive = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(allActive, field, order);
+          return { data: clientPaginate(sorted, page, perPage), total: sorted.length };
         }
       }
 

@@ -385,31 +385,40 @@ describe('createDigitDataProvider', () => {
     assert.ok(queried.includes('REVENUE'));
   });
 
-  it('getList(gender-types) uses server paging instead of fetching the whole master', async () => {
-    const calls: Array<{ limit?: number; offset?: number }> = [];
+  it('getList(gender-types) sorts a shuffled generic-MDMS response across pages', async () => {
+    // MDMS v2 has no ordering criterion, so rows arrive in arbitrary order and
+    // sorting must span the whole master, not the current page.
+    const codes = ['DELTA', 'ALPHA', 'ECHO', 'CHARLIE', 'BRAVO'];
+    const rows = codes.map((code, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.GenderType',
+      uniqueIdentifier: code,
+      data: { code },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
     mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
-      calls.push({ limit: opts?.limit, offset: opts?.offset });
-      return Array.from({ length: 10 }, (_, i) => ({
-        id: `id-${i}`,
-        tenantId: 'ke',
-        schemaCode: 'common-masters.GenderType',
-        uniqueIdentifier: `G_${i}`,
-        data: { code: `G_${i}` },
-        isActive: true,
-        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
-      }));
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
     });
 
     const dp = createDigitDataProvider(client, 'ke');
-    const result = await dp.getList('gender-types', {
-      pagination: { page: 2, perPage: 10 },
+    const asc = await dp.getList('gender-types', {
+      pagination: { page: 1, perPage: 2 },
       sort: { field: 'code', order: 'ASC' },
       filter: {},
     });
+    assert.deepEqual(asc.data.map((r) => r.code), ['ALPHA', 'BRAVO']);
+    assert.equal(asc.total, 5);
 
-    assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0], { limit: 10, offset: 10 });
-    assert.equal(result.data.length, 10);
-    assert.equal(result.total, 21);
+    const descPage2 = await dp.getList('gender-types', {
+      pagination: { page: 2, perPage: 2 },
+      sort: { field: 'code', order: 'DESC' },
+      filter: {},
+    });
+    assert.deepEqual(descPage2.data.map((r) => r.code), ['CHARLIE', 'BRAVO']);
+    assert.equal(descPage2.total, 5);
   });
 });
