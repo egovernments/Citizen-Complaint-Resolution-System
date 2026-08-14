@@ -245,6 +245,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Unassigned",
     "module": "rainmaker-dashboard"
@@ -500,6 +505,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Public view",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Reset",
     "module": "rainmaker-dashboard"
@@ -702,6 +712,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "Signing in…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "Your session has expired. Please sign in again.",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1022,6 +1037,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_MAP_ZOOM",
     "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "This dashboard has not been enabled for this tenant.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "Public dashboard is not available",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1839,6 +1864,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Atualizado",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Sem atribuição",
     "module": "rainmaker-dashboard"
@@ -2094,6 +2124,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Vista pública",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Repor",
     "module": "rainmaker-dashboard"
@@ -2296,6 +2331,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "A iniciar sessão…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "A sua sessão expirou. Inicie sessão novamente.",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2616,6 +2656,16 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_MAP_ZOOM",
     "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "Este painel não foi ativado para este município.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "O painel público não está disponível",
     "module": "rainmaker-dashboard"
   },
   {

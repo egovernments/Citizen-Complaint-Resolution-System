@@ -51,6 +51,15 @@
         "disabled"
       ],
       "description": "Whether analytics scopes employees to their HRMS department. 'disabled' widens visibility to all employees on the tenant \u2014 temporary, pending department enrichment (#1280). Absent = enforced."
+    },
+    "publicDashboardEnabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Fail-closed switch for the credential-free public dashboard and its analytics endpoints. Only boolean true enables it; absent, false, malformed, or an unreadable DashboardConfig disables it. Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default)."
+    },
+    "timeZone": {
+      "type": "string",
+      "description": "IANA time zone id (e.g. \"Africa/Nairobi\", \"Africa/Maputo\", \"Asia/Kolkata\") the analytics engine resolves ONE BusinessCalendar from per request \u2014 every named window (dtd/wtd/mtd/qtd/ytd), pinned-window suppression decision, explicit dateFrom/dateTo bound, timeBucket, and compose elapsed-time calculation is judged against this zone's calendar day, not UTC or the server's JVM zone (#29). Optional: absent, empty, or not a valid IANA zone id falls back to Africa/Nairobi (the historical hardcoded default every unconfigured tenant already behaved as \u2014 a migration-compatibility default, not a real default timezone). Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default). The underlying complaint_facts/complaint_events materialized views are refreshed by DashboardRefreshScheduler on its own cadence (pgr.dashboard.refresh.interval.ms), so a DB-derived tile's data reflects a timeZone change only from its NEXT refresh onward, not instantaneously."
     }
   }
 }

@@ -39,6 +39,7 @@ import { NotificationPreferenceList } from '@/resources/notification-preferences
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
+import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -171,6 +172,7 @@ function ManagementAdmin() {
           <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
           {/* CCSD-2009: visual Landing Page Builder over the P3 resources */}
           <Route path="/landing-builder" element={<LandingBuilder />} />

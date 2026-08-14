@@ -241,10 +241,9 @@ test("group-by smoke: settings gear icon button, no native select, menu semantic
   assert.match(html, /<svg/);
   assert.match(html, /aria-haspopup="menu"/);
   assert.match(html, /aria-expanded="false"/);
-  // accessible name + tooltip carry the label and the current value (the
-  // unseeded smoke runtime echoes the KEY for the label — copy is not what
-  // this smoke verifies; "Category" resolves from the level's own label)
-  assert.match(html, /aria-label="DASHBOARD_GROUPBY_LABEL"/);
-  assert.match(html, /title="DASHBOARD_GROUPBY_LABEL: Category"/);
+  // accessible name + tooltip carry the canonical-English fallback and the
+  // current value ("Category" resolves from the level's own label)
+  assert.match(html, /aria-label="Group by"/);
+  assert.match(html, /title="Group by: Category"/);
   assert.match(html, /dashboard-widget-settings-wrap/);
 });

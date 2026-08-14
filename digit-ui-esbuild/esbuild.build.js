@@ -5,6 +5,25 @@ const { spawnSync } = require("child_process");
 
 const PUBLIC_PATH = "/digit-ui/";
 
+// Build entries, each with its own HTML shell. Both land in the same build/
+// docroot so hashed assets resolve against the one PUBLIC_PATH.
+//
+//   index            the employee app (DigitUI chrome, authenticated)
+//   public-dashboard the anonymous dashboard — same products/dashboard source,
+//                    mounted with mode="public" (see src/public-dashboard.js)
+const ENTRIES = [
+  {
+    entry: path.resolve(__dirname, "src/index.js"),
+    template: "index.html",
+    output: "index.html",
+  },
+  {
+    entry: path.resolve(__dirname, "src/public-dashboard.js"),
+    template: "public-dashboard.html",
+    output: "public-dashboard.html",
+  },
+];
+
 // Compile v2 Tailwind stylesheet (single output, minified) before esbuild builds.
 // Output lands at public/vendor/tailwind.css and gets copied into build/ by the
 // public-asset copy step further down.
@@ -68,7 +87,7 @@ const svgPlugin = {
 async function build() {
   buildTailwind();
   const result = await esbuild.build({
-    entryPoints: [path.resolve(__dirname, "src/index.js")],
+    entryPoints: ENTRIES.map((e) => e.entry),
     bundle: true,
     outdir: path.resolve(__dirname, "build"),
     publicPath: PUBLIC_PATH,
@@ -163,8 +182,8 @@ async function build() {
     logLevel: "info",
   });
 
-  // Generate index.html
-  generateHTML(result);
+  // Generate one HTML shell per entry, each linking only its OWN bundles.
+  for (const spec of ENTRIES) generateHTML(result, spec);
 
   // Copy public assets to build (recursively — excludes the source index.html,
   // which is regenerated above, and walks subdirs like public/vendor/).
@@ -185,8 +204,9 @@ async function build() {
 
   const publicDir = path.resolve(__dirname, "public");
   const buildDir = path.resolve(__dirname, "build");
+  const generatedHtml = new Set(ENTRIES.map((e) => e.template));
   for (const entry of fs.readdirSync(publicDir, { withFileTypes: true })) {
-    if (entry.name === "index.html") continue; // already generated
+    if (generatedHtml.has(entry.name)) continue; // already generated above
     const src = path.join(publicDir, entry.name);
     const dest = path.join(buildDir, entry.name);
     if (entry.isDirectory()) copyRecursive(src, dest);
@@ -196,33 +216,45 @@ async function build() {
   console.log("\nBuild complete! Output in build/");
 }
 
-function generateHTML(result) {
-  const html = fs.readFileSync(
-    path.resolve(__dirname, "public/index.html"),
-    "utf-8"
+/**
+ * Generate one entry's HTML shell, linking ONLY that entry's own bundles.
+ *
+ * This used to inject every entry output into index.html, which was correct
+ * while there was a single entry. With more than one it would make each page
+ * load the other's bundle — so outputs are matched back to their entryPoint,
+ * and the CSS bundle is matched to the JS output by shared basename stem
+ * (esbuild emits <stem>.js / <stem>.css per entry).
+ */
+function generateHTML(result, { entry, template, output }) {
+  const html = fs.readFileSync(path.resolve(__dirname, "public", template), "utf-8");
+
+  const outputs = result.metafile.outputs;
+  const jsOut = Object.keys(outputs).find(
+    (f) =>
+      f.endsWith(".js") &&
+      outputs[f].entryPoint &&
+      path.resolve(__dirname, outputs[f].entryPoint) === entry
+  );
+  if (!jsOut) {
+    throw new Error(`No build output found for entry ${entry} (template ${template})`);
+  }
+
+  const stem = path.basename(jsOut, ".js");
+  const cssOut = Object.keys(outputs).find(
+    (f) => f.endsWith(".css") && path.basename(f, ".css") === stem
   );
 
-  const outputs = Object.keys(result.metafile.outputs);
-  const entryJS = outputs
-    .filter((f) => f.endsWith(".js") && result.metafile.outputs[f].entryPoint)
-    .map((f) => path.basename(f));
-  const cssFiles = outputs
-    .filter((f) => f.endsWith(".css"))
-    .map((f) => path.basename(f));
-
-  const scriptTags = entryJS
-    .map((f) => `  <script src="${PUBLIC_PATH}${f}"></script>`)
-    .join("\n");
-  const linkTags = cssFiles
-    .map((f) => `  <link rel="stylesheet" href="${PUBLIC_PATH}${f}">`)
-    .join("\n");
+  const scriptTag = `  <script src="${PUBLIC_PATH}${path.basename(jsOut)}"></script>`;
+  const linkTag = cssOut
+    ? `  <link rel="stylesheet" href="${PUBLIC_PATH}${path.basename(cssOut)}">`
+    : "";
 
   const injected = html
-    .replace("</head>", `${linkTags}\n</head>`)
-    .replace("</body>", `${scriptTags}\n</body>`);
+    .replace("</head>", `${linkTag}\n</head>`)
+    .replace("</body>", `${scriptTag}\n</body>`);
 
   fs.mkdirSync(path.resolve(__dirname, "build"), { recursive: true });
-  fs.writeFileSync(path.resolve(__dirname, "build/index.html"), injected);
+  fs.writeFileSync(path.resolve(__dirname, "build", output), injected);
 }
 
 build().catch((err) => {
