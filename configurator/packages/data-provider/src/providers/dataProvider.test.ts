@@ -353,6 +353,53 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.levelCode, 'LEAF');
   });
 
+  it('does not treat a definition with a missing createdTime as the oldest', async () => {
+    // Reviewer finding on CCRS#1724: `auditDetails` is optional on
+    // MdmsRecord — a definition with no createdTime must not win the
+    // "oldest" tiebreak over one with a real, known creation time it has
+    // no evidence of actually predating. NO_TIMESTAMP has no auditDetails
+    // at all; WITH_TIMESTAMP has a real, later one — WITH_TIMESTAMP must
+    // still be picked, since it's the only one with actual evidence.
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [
+          {
+            id: 'def-no-ts', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'NO_TIMESTAMP',
+            data: { hierarchyType: 'NO_TIMESTAMP', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+          },
+          {
+            id: 'def-with-ts', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'WITH_TIMESTAMP',
+            data: { hierarchyType: 'WITH_TIMESTAMP', levels: [{ levelCode: 'LEAF', isLeafServiceCode: true }] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 500, lastModifiedTime: 500 },
+          },
+        ];
+      }
+      // Nothing created under either one yet — forces the oldest-created
+      // tiebreak path.
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'WITH_TIMESTAMP.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'WITH_TIMESTAMP');
+    assert.equal(captured!.levelCode, 'LEAF');
+  });
+
   it('falls back to the oldest known definition, not the hardcoded bootstrap constants, when the usage-count lookup itself fails', async () => {
     // Reviewer finding on CCRS#1724: the original implementation ran the
     // `definitions` fetch and the usage-count fetch inside the SAME
@@ -447,6 +494,47 @@ describe('createDigitDataProvider', () => {
     assert.equal(data[0].department, 'DEPT_OLD');
   });
 
+  it('does not seed the "NA" sentinel (or whitespace) as a real department, but trims a genuine value', async () => {
+    // Reviewer finding on CCRS#1724: the bulk-import path
+    // (ComplaintHierarchySetup) stamps `department: 'NA'` for rows with no
+    // real department. Seeding that into `departments` would show a fake
+    // selected department and let it be silently saved as the primary
+    // department on an unrelated edit. Case-insensitive and whitespace
+    // variants must all be treated as absent; a genuine value is trimmed
+    // but keeps its case.
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
+        return [
+          { id: 'leaf-na', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.NA_ROW',
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'NA_ROW', department: 'na', slaHours: 24 },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'leaf-blank', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.BLANK_ROW',
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'BLANK_ROW', department: '   ', slaHours: 24 },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'leaf-real', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.REAL_ROW',
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'REAL_ROW', department: '  DEPT_X  ', slaHours: 24 },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+        ];
+      }
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    const { data } = await dp.getList('complaint-hierarchy', {
+      pagination: { page: 1, perPage: 10 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    const byId = Object.fromEntries(data.map((r) => [r.id, r]));
+    assert.deepEqual(byId['PGR.NA_ROW'].departments, []);
+    assert.deepEqual(byId['PGR.BLANK_ROW'].departments, []);
+    assert.deepEqual(byId['PGR.REAL_ROW'].departments, ['DEPT_X']);
+  });
+
   it('does not overwrite an existing complaint type\'s hierarchyType/levelCode on update', async () => {
     // The Complaint Type edit form never renders these fields, so an edit
     // that only changes e.g. slaHours must not silently reset them to a
@@ -479,6 +567,89 @@ describe('createDigitDataProvider', () => {
     assert.equal(captured!.hierarchyType, 'CUSTOM');
     assert.equal(captured!.levelCode, 'LEAF_TYPE');
     assert.equal(captured!.slaHours, 48);
+  });
+
+  it('resyncs departments when the datagrid\'s legacy single-department cell editor changes department', async () => {
+    // Reviewer finding on CCRS#1724 (flagged outside the diff, on
+    // ComplaintTypeList.tsx): the datagrid's inline "Department" cell
+    // editor predates `departments` and only submits
+    // {...record, department: newVal} — leaving the record's existing
+    // `departments` array untouched in the payload. Without a resync,
+    // `department` (routing) and `departments` (what List/Show render,
+    // preferring it whenever non-empty) would silently diverge: the cell
+    // shows no visible change while routing changes underneath.
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'abc-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+      uniqueIdentifier: 'PGR.MULTI_DEPT',
+      data: {
+        hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'MULTI_DEPT',
+        name: 'Multi Dept Type', department: 'DEPT_A', departments: ['DEPT_A', 'DEPT_B'],
+        slaHours: 24, active: true,
+      },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+      captured = rec.data;
+      return rec;
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    // Mirrors what the datagrid's inline cell editor actually submits:
+    // the full existing (adapted) record, spread, with only `department`
+    // changed — `departments` carried through byte-for-byte unchanged.
+    await dp.update('complaint-hierarchy', {
+      id: 'MULTI_DEPT',
+      data: {
+        serviceCode: 'MULTI_DEPT', name: 'Multi Dept Type',
+        department: 'DEPT_C', departments: ['DEPT_A', 'DEPT_B'],
+        slaHours: 24, active: true,
+      },
+      previousData: { id: 'MULTI_DEPT' },
+    });
+
+    assert.ok(captured, 'mdmsUpdate should have been called');
+    assert.equal(captured!.department, 'DEPT_C');
+    assert.deepEqual(captured!.departments, ['DEPT_C']);
+  });
+
+  it('does not touch departments when only the multi-select itself changes (department unchanged)', async () => {
+    // Safety-net for the resync above: it must key off `department`
+    // actually changing, not fire on every update and clobber a genuine
+    // departments edit made through the dedicated Edit form's multi-select
+    // (where `department` stays derived from — and equal to — departments[0]).
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'abc-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+      uniqueIdentifier: 'PGR.MULTI_DEPT2',
+      data: {
+        hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'MULTI_DEPT2',
+        name: 'Multi Dept Type 2', department: 'DEPT_A', departments: ['DEPT_A'],
+        slaHours: 24, active: true,
+      },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+      captured = rec.data;
+      return rec;
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.update('complaint-hierarchy', {
+      id: 'MULTI_DEPT2',
+      data: {
+        serviceCode: 'MULTI_DEPT2', name: 'Multi Dept Type 2',
+        department: 'DEPT_A', departments: ['DEPT_A', 'DEPT_C'],
+        slaHours: 24, active: true,
+      },
+      previousData: { id: 'MULTI_DEPT2' },
+    });
+
+    assert.ok(captured, 'mdmsUpdate should have been called');
+    assert.equal(captured!.department, 'DEPT_A');
+    assert.deepEqual(captured!.departments, ['DEPT_A', 'DEPT_C']);
   });
 
   it('strips id and underscore-prefixed metadata from MDMS update payload', async () => {

@@ -157,12 +157,18 @@ function mapLeafToServiceDef(
   // `department` — fall back to it (same convention ComplaintTypeList/Show
   // already use for rendering) so editing a legacy row doesn't load an
   // empty, required multi-select that blocks Save until the operator
-  // re-picks a department blind (CCRS#1724 review).
+  // re-picks a department blind (CCRS#1724 review). The bulk-import path
+  // (ComplaintHierarchySetup) stamps `department: 'NA'` for rows with no
+  // real department, so that sentinel — and whitespace-only garbage — must
+  // be treated as ABSENT rather than seeded as a real selected department;
+  // a genuine value is trimmed but keeps its original case.
+  const legacyDepartment = typeof data.department === 'string' ? data.department.trim() : '';
+  const hasLegacyDepartment = legacyDepartment !== '' && legacyDepartment.toUpperCase() !== 'NA';
   const departments =
     Array.isArray(data.departments) && data.departments.length
       ? data.departments
-      : data.department != null && data.department !== ''
-        ? [String(data.department)]
+      : hasLegacyDepartment
+        ? [legacyDepartment]
         : [];
   return {
     ...data,
@@ -250,10 +256,26 @@ async function resolveNewLeafDefaults(
     return leafDefaultsFromDefinition(definitions[0])!;
   }
 
-  const oldestOfKnown = () =>
-    leafDefaultsFromDefinition(
-      [...definitions].sort((a, b) => (a.auditDetails?.createdTime ?? 0) - (b.auditDetails?.createdTime ?? 0))[0],
-    )!;
+  // `auditDetails` is optional on MdmsRecord — `?? 0` would sort a definition
+  // with a missing/malformed createdTime as the OLDEST possible (epoch),
+  // making it win over every definition with a real, known creation time it
+  // has no evidence of actually predating. Known timestamps sort first (by
+  // value); unknown ones sort after all known ones, and ties (including
+  // multiple unknowns) break on uniqueIdentifier so the result never depends
+  // on MDMS's unspecified array order — the exact failure mode this
+  // disambiguation exists to avoid.
+  const oldestOfKnown = () => {
+    const sorted = [...definitions].sort((a, b) => {
+      const at = a.auditDetails?.createdTime;
+      const bt = b.auditDetails?.createdTime;
+      const aKnown = typeof at === 'number';
+      const bKnown = typeof bt === 'number';
+      if (aKnown && bKnown && at !== bt) return at - bt;
+      if (aKnown !== bKnown) return aKnown ? -1 : 1;
+      return a.uniqueIdentifier.localeCompare(b.uniqueIdentifier);
+    });
+    return leafDefaultsFromDefinition(sorted[0])!;
+  };
 
   // Presence alone isn't enough here — a stray one-off leftover row under
   // the wrong hierarchyType (exactly the live scenario this is fixing)
@@ -1391,9 +1413,34 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // any of these fields makes the _update payload fail with
         // INVALID_REQUEST_ADDITIONALPROPERTIES* (closes
         // egovernments/CCRS#472 — Department update).
+        const rawData = { ...(params.data as Record<string, unknown>) };
+        if (config.leafServiceDefAdapter) {
+          // The datagrid's inline "Department" cell editor (ComplaintTypeList)
+          // predates `departments` and only knows the legacy singular field —
+          // it submits {...record, department: newVal}, leaving whatever
+          // `departments` the record already had untouched. Left alone, that
+          // would point `department` (backend routing) and `departments`
+          // (what List/Show render, preferring it whenever non-empty)  at
+          // DIFFERENT departments: the cell would show no visible change
+          // while the actual routing department silently changed underneath
+          // (reviewer finding on CCRS#1724). When `department` changed but
+          // the submitted `departments` is byte-for-byte what the record
+          // already had — the signature of that inline edit specifically,
+          // as opposed to an edit made through the dedicated Edit form's
+          // multi-select, which always submits an intentionally-updated
+          // array — resync `departments` so both fields move together.
+          const existingData = existing.data as { department?: unknown; departments?: unknown } | undefined;
+          const incomingDept = rawData.department;
+          const deptChanged = typeof incomingDept === 'string' && incomingDept !== existingData?.department;
+          const departmentsUntouched =
+            JSON.stringify(rawData.departments ?? null) === JSON.stringify(existingData?.departments ?? null);
+          if (deptChanged && departmentsUntouched) {
+            rawData.departments = [incomingDept];
+          }
+        }
         const incoming = config.leafServiceDefAdapter
-          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
-          : (params.data as Record<string, unknown>);
+          ? serviceDefToLeafWrite(rawData)
+          : rawData;
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;
