@@ -100,7 +100,7 @@ export function useFilterOptions({ enabled = true } = {}) {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
   const [raw, setRaw] = useState({ results: null, hierarchyRecords: null, loading: true });
-  const { language } = useDashboardT();
+  const { language, i18nTick } = useDashboardT();
 
   useEffect(() => {
     if (!enabled) {
@@ -166,6 +166,8 @@ export function useFilterOptions({ enabled = true } = {}) {
       options: Object.keys(options).length ? options : null,
       loading: raw.loading,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- language re-labels cached rows
-  }, [raw, language]);
+    // `languageChanged` can fire before the new message bundle is installed.
+    // i18nTick also advances on the later store `added` event, so cached rows
+    // are re-labelled once the selected locale is actually available (#1108).
+  }, [raw, language, i18nTick]);
 }

@@ -245,6 +245,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Unassigned",
     "module": "rainmaker-dashboard"
@@ -707,6 +712,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "Signing in…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "Your session has expired. Please sign in again.",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1854,6 +1864,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Atualizado",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Sem atribuição",
     "module": "rainmaker-dashboard"
@@ -2316,6 +2331,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "A iniciar sessão…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "A sua sessão expirou. Inicie sessão novamente.",
     "module": "rainmaker-dashboard"
   },
   {

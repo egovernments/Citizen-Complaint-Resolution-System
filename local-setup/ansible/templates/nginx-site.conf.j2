@@ -124,7 +124,14 @@ server {
 {% endif %}
 
 {% endif %}
-  # Grafana dashboard
+{# `| default(true)` is load-bearing: host_vars override nginx_features as a
+   whole dict (hash_behaviour=replace), so every tenant file written before
+   this key existed has no `grafana` member. Without the default those deploys
+   would fail rendering this template. Same reason as digit_ui_v2 below. #}
+{% if nginx_features.grafana | default(true) %}
+  # Grafana dashboard. This is the ONLY public path to Grafana — the Kong
+  # /grafana route was removed in #1604, so turning this flag off makes the
+  # UI genuinely unreachable from outside rather than merely unlinked.
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};
     proxy_set_header Host $host;
@@ -136,6 +143,7 @@ server {
     proxy_set_header Connection "upgrade";
   }
 
+{% endif %}
 {% if nginx_features.status %}
   # Gatus health page — public path /status/, SPA assets rewritten on the fly.
   # Gatus's index.html / JS reference assets and the API as absolute paths

@@ -1,0 +1,26 @@
+{{- /*
+One ConfigMap per dashboard, each labelled so Grafana's dashboard sidecar picks
+it up (sidecar.dashboards.label, "grafana_dashboard").
+
+One per file rather than one combined: a ConfigMap caps at 1 MiB, and these
+boards total ~480 KB today. A single map would work now and fail silently later
+when someone adds the ninth -- the kind of limit you want to be nowhere near.
+
+Filenames become the ConfigMap name, lowercased, because object names must be
+DNS-1123 and two of the vendored boards are camel-cased (BlackBox, Loki-Logs).
+*/}}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+{{- $name := base $path | trimSuffix ".json" | lower }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+data:
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

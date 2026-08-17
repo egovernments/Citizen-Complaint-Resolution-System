@@ -22,6 +22,7 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
+import { serializeGeoLocation } from "../../../utils/geoLocation";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -153,17 +154,6 @@ function validateString(v: unknown): string {
   return typeof v === "string" && v.trim().length > 0 ? v : "";
 }
 
-function validateGeoLocation(v: { latitude?: number | null; longitude?: number | null }) {
-  if (
-    v &&
-    typeof v.latitude === "number" &&
-    typeof v.longitude === "number"
-  ) {
-    return { latitude: v.latitude, longitude: v.longitude };
-  }
-  return {};
-}
-
 function getEffectiveServiceCode(
   mainType: ServiceDef | null | undefined,
   subType: ServiceDef | null | undefined
@@ -210,10 +200,7 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
             formData?.SelectedBoundary?.code ||
             "",
         },
-        geoLocation: validateGeoLocation({
-          latitude: geoLocation.lat ?? null,
-          longitude: geoLocation.lng ?? null,
-        }),
+        geoLocation: serializeGeoLocation(geoLocation),
       },
       additionalDetail: JSON.stringify(additionalDetail),
       auditDetails: {
@@ -264,7 +251,7 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
 // Mandatory fields per step (zero-indexed).
 const MANDATORY_BY_STEP: ReadonlyArray<ReadonlyArray<keyof FormData>> = [
   ["SelectComplaintType"], // 0 — type (sub-type is conditionally required, see stepIsValid)
-  ["GeoLocationsPoint"], // 1 — map pin: lat/lng required; auto-seeded on first load so the user just confirms
+  [], // 1 — exact map pin is optional; the administrative boundary remains required on the next step
   ["SelectedBoundary"], // 2 — combined location step: ward must be selected (map auto-fills it; manual fallback if auto-fill missed)
   ["description"], // 3 — description
   [], // 4 — photos (optional)

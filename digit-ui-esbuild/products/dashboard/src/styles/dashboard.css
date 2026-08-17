@@ -240,40 +240,8 @@
   content: none !important;
 }
 
-@media (max-width: 1023px) {
-  /* Public dashboards are read-only, so their configured desktop geometry
-       can become a normal responsive grid without sacrificing edit/drag
-       semantics. The backend still chooses the tiles and their source order;
-       the frontend owns fitting that content to the current viewport. */
-
-  .dashboard-kpi-list-item .dashboard-drag-handle-title,
-    .dashboard-kpi-card .dashboard-drag-handle-title {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  /* Public dashboards are read-only, so their configured desktop geometry
-       can become a normal responsive grid without sacrificing edit/drag
-       semantics. The backend still chooses the tiles and their source order;
-       the frontend owns fitting that content to the current viewport. */
-
-  .dashboard-kpi-list-item .dashboard-drag-handle-title,
-    .dashboard-kpi-card .dashboard-drag-handle-title {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-}
-
 .dashboard-drag-handle-title{
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0px;
   font-weight: 600;
   color: var(--foreground);
   font-size: 18px;
@@ -281,46 +249,22 @@
   letter-spacing: normal;
   text-transform: none;
   margin: 0;
-}
-
-@media (max-width: 1023px) {
-  /* Public dashboards are read-only, so their configured desktop geometry
-       can become a normal responsive grid without sacrificing edit/drag
-       semantics. The backend still chooses the tiles and their source order;
-       the frontend owns fitting that content to the current viewport. */
-
-  .dashboard-kpi-list-item .dashboard-drag-handle-subtitle,
-    .dashboard-kpi-card .dashboard-drag-handle-subtitle {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  /* Public dashboards are read-only, so their configured desktop geometry
-       can become a normal responsive grid without sacrificing edit/drag
-       semantics. The backend still chooses the tiles and their source order;
-       the frontend owns fitting that content to the current viewport. */
-
-  .dashboard-kpi-list-item .dashboard-drag-handle-subtitle,
-    .dashboard-kpi-card .dashboard-drag-handle-subtitle {
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .dashboard-drag-handle-subtitle{
   margin: 0px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0px;
   font-size: 11px;
   line-height: 1.25;
   color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .dashboard-external-drag .react-grid-item {
@@ -405,7 +349,7 @@
 .dashboard-kpi-card--metric{
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 26px minmax(0, 1fr);
+  grid-template-rows: minmax(0, auto) 26px minmax(0, 1fr);
   gap: 0.25rem;
 }
 
@@ -418,6 +362,7 @@
   color: var(--foreground);
   font-size: 11px;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-kpi-card--metric .dashboard-kpi-title{
@@ -426,7 +371,7 @@
   padding-right: 1.25rem;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .dashboard-kpi-value{
@@ -470,7 +415,7 @@
   padding-right: 1.25rem;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .dashboard-kpi-card--delta .dashboard-kpi-value{
@@ -504,7 +449,7 @@
   padding-right: 1.25rem;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .dashboard-kpi-sparkline-value-row{

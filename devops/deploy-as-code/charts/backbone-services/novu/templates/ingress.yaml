@@ -12,6 +12,16 @@ spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
   {{- end }}
+  {{- /* TLS (#1644). This ingress previously had no tls: block at all, so the
+         Novu dashboard — which manages notification templates, subscribers and
+         the SMS/email provider credentials — was served over plain HTTP: login
+         and session cookie in the clear. Every other ingress in this tree
+         terminates TLS on <domain>-tls-certs, issued by the existing
+         cert-manager ClusterIssuer; this follows that convention. */}}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
       http:
