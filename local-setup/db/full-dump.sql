@@ -2331,7 +2331,7 @@ COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus,
 --
 
 COPY public.eg_hrms_jurisdiction (uuid, employeeid, hierarchy, boundarytype, boundary, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
-29b05cb4-2db3-4b41-abe0-e45052dbc926	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	ADMIN	Zone	PG_CITYA_Z1	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t
+29b05cb4-2db3-4b41-abe0-e45052dbc926	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	ADMIN	Locality	SUN01_LOCALITY	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t
 323cb027-3ed0-47de-8265-1f99a4ad2020	79006ea0-100c-4332-8390-60edff9328c1	REVENUE	City	pg.citest	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	t
 9ca7415f-4796-4748-a242-40987da3143f	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	t
 d77ac74f-9c94-4535-bba4-584cbf0eabad	165804ce-d0bb-4f2a-9472-e011571ea872	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	t
@@ -4267,12 +4267,15 @@ ae49ac75-96a7-46e4-ab74-c26ab9d894ce	en_IN	CS_COMMON_INBOX	Inbox	pg	rainmaker-pg
 5437079a-3313-48a6-bdda-b3e57b82bff6	en_IN	CS_COMMON_NEXT	Next	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 1668de73-9861-4693-a15e-50a1da1885ed	en_IN	CS_COMMON_OPEN	Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b5337311-de30-4178-8f05-b370e4202e09	en_IN	CS_COMMON_PENDINGATLME	Pending at LME	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc823a3e-387d-4f4b-8f6a-8748c7f71009	en_IN	CS_COMMON_PENDINGATSUPERVISOR	Pending At Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 587ab442-cca1-4dcc-ae0b-633a8403e550	en_IN	CS_COMMON_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 5fadce20-585c-4ec2-aad3-522e79704566	en_IN	CS_COMMON_PINCODE_NOT_SERVICABLE	Sorry we are not providing service in this city	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 179cd06f-fd3c-42cd-87eb-bcc16c8f61fb	en_IN	CS_COMMON_RATING_SUBMIT_TEXT	By making your voice heard, you help us improve mSeva.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 e74a7355-4f52-4db9-82e3-4f7e8d5edb6d	en_IN	CS_COMMON_REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a9a6fdec-60ad-4e43-b186-c2be1fda1f72	en_IN	CS_COMMON_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 023a7e3f-7101-4f9e-b1b5-a73555952cb6	en_IN	CS_COMMON_REQUIRED_FIELDS_MISSING	Required fields missing	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b23b70dc-5425-47da-b52f-8d23f3ee6117	en_IN	CS_COMMON_RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7375322-d673-4a51-ba1c-ebdeea8e179c	en_IN	CS_COMMON_RESOLVED	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 93629ebe-92e0-4181-bffd-7f525876725f	en_IN	CS_COMMON_SEARCH_BY	SEARCH BY	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 f257e790-d35c-458f-84b8-f8114a84a2f4	en_IN	CS_COMMON_SELECT_EMPLOYEE	Select Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 8b730fdc-5ce7-4e49-8d7a-c5d320c271b9	en_IN	CS_COMMON_SKIP	Skip and Continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
