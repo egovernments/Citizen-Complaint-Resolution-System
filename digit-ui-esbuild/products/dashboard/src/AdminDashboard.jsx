@@ -33,6 +33,7 @@ import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, runPublicKpiBatch, getTenantId } from "./services/analyticsService";
+import { errorForTile } from "./services/analyticsBatch";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
@@ -755,8 +756,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     });
 
     const request = publicMode
-      ? runPublicKpiBatch(refs, tenantId)
-      : runKpiBatch(refs, tenantId);
+      ? runPublicKpiBatch(refs, tenantId, pack?.maxBatchQueries)
+      : runKpiBatch(refs, tenantId, pack?.maxBatchQueries);
     request
       .then((res) => {
         if (reqId !== reqIdRef.current) return;
@@ -780,7 +781,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
         setBatch({
           loading: false,
           results: {},
-          errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
+          errors: {
+            __batch:
+              err?.payload?.message ||
+              err?.message ||
+              t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed"),
+          },
           partial: true,
           asOf: null,
           calendar: null,
@@ -816,8 +822,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     if (!def) return null;
 
     const assembled = assembleResult(kpiId, def, batch.results);
-    const errCode = batch.errors && batch.errors[kpiId];
-    const tileError = errCode ? { code: errCode, message: String(errCode) } : null;
+    const tileError = errorForTile(batch.errors, kpiId);
 
     return (
       <KpiTile

@@ -5,6 +5,7 @@ import {
   getTenantId,
   toRequestError,
 } from "./authService";
+import { runChunkedAnalyticsBatch } from "./analyticsBatch";
 
 // Re-exported for existing importers; authService is the definition.
 export { getTenantId };
@@ -131,8 +132,10 @@ export function fetchCatalog(tenantId) {
  * refs: { [tileKey]: { kpiId, params } }
  * Returns { results: { [tileKey]: { columns, rows, asOf, scope } }, partial, errors }
  */
-export function runKpiBatch(refs, tenantId) {
-  return postAnalytics("/_query", { tenantId, queries: refs });
+export function runKpiBatch(refs, tenantId, maxBatchQueries) {
+  return runChunkedAnalyticsBatch(refs, maxBatchQueries, (queries) =>
+    postAnalytics("/_query", { tenantId, queries })
+  );
 }
 
 /** Curated PUBLIC pack. The response itself contains the safe tile descriptors. */
@@ -141,6 +144,8 @@ export function fetchPublicPack(tenantId) {
 }
 
 /** PUBLIC data path. The backend accepts only curated, base kpiId references. */
-export function runPublicKpiBatch(refs, tenantId) {
-  return postPublicAnalytics("/_query", { tenantId, queries: refs });
+export function runPublicKpiBatch(refs, tenantId, maxBatchQueries) {
+  return runChunkedAnalyticsBatch(refs, maxBatchQueries, (queries) =>
+    postPublicAnalytics("/_query", { tenantId, queries })
+  );
 }
