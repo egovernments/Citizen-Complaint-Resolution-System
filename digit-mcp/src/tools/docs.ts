@@ -3,6 +3,7 @@ import type { ToolRegistry } from './registry.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sanitizeUserContent } from '../utils/sanitize.js';
 
 const MCP_ENDPOINT = 'https://docs.digit.org/platform/~gitbook/mcp';
 const LOCAL_URL_PREFIX = 'local://';
@@ -138,7 +139,10 @@ async function searchEngramDocs(query: string): Promise<Array<{ title: string; l
       results.push({
         title: `[Engram] ${title}`,
         link: `${ENGRAM_URL_PREFIX}${file}`,
-        content: snippet.slice(0, 500),
+        // Engram files are written by the agent from prior sessions, so hostile
+        // text captured once would otherwise be replayed into every later
+        // session's context. Local docs/ are in-repo and left as authored.
+        content: sanitizeUserContent(snippet.slice(0, 500)),
       });
     } catch {
       // Skip unreadable files
@@ -160,7 +164,7 @@ async function getEngramDoc(engramUrl: string): Promise<{ title: string; content
     const titleMatch = content.match(/^#\s+(.+)/m);
     return {
       title: titleMatch ? titleMatch[1] : filename.replace('.md', ''),
-      content,
+      content: sanitizeUserContent(content),
     };
   } catch {
     return null;
@@ -209,7 +213,8 @@ async function searchDocs(query: string): Promise<Array<{ title: string; link: s
         results.push({
           title: titleLine?.replace('Title: ', '') || '(untitled)',
           link: linkLine?.replace('Link: ', '') || '',
-          content: contentText.slice(0, 500),
+          // Third-party content fetched over the network.
+          content: sanitizeUserContent(contentText.slice(0, 500)),
         });
       }
     } catch {
@@ -225,6 +230,7 @@ export function registerDocsTools(registry: ToolRegistry): void {
     name: 'docs_search',
     group: 'docs',
     category: 'docs',
+    access: 'public',
     risk: 'read',
     description:
       'Search the DIGIT documentation (docs.digit.org) for guides, API references, configuration details, architecture docs, and how-to articles. ' +
@@ -298,6 +304,7 @@ export function registerDocsTools(registry: ToolRegistry): void {
     name: 'docs_get',
     group: 'docs',
     category: 'docs',
+    access: 'public',
     risk: 'read',
     description:
       'Fetch the full markdown content of a DIGIT documentation page. Use docs_search first to find the URL, then pass it here to read the complete page. ' +

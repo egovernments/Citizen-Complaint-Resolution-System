@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
@@ -6,6 +7,14 @@ function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
   if (statusCode >= 400 && statusCode < 500) return 'validation';
   return 'api';
+}
+
+/** Full request-scoped client state. Restoring this must undo everything a tool can mutate. */
+export interface AuthSnapshot {
+  token: string | null;
+  user: UserInfo | null;
+  stateTenantOverride: string | null;
+  environment?: Environment;
 }
 
 export class ApiClientError extends Error {
@@ -89,18 +98,56 @@ class DigitApiClient {
    * Combined with a single-flight mutex this is safe even though the
    * underlying client is a process-level singleton.
    */
-  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null } {
+  snapshotAuth(): AuthSnapshot {
     return {
       token: this.authToken,
       user: this.userInfo,
       stateTenantOverride: this.stateTenantOverride,
+      // `environment` must be part of the snapshot. `configure`'s base_url
+      // writes it, and without it here a single call repointed the whole
+      // process at a caller-chosen host for every subsequent request.
+      environment: this.environment,
     };
   }
 
-  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null }): void {
+  restoreAuth(snap: AuthSnapshot): void {
     this.authToken = snap.token;
     this.userInfo = snap.user;
     this.stateTenantOverride = snap.stateTenantOverride;
+    if (snap.environment) this.environment = snap.environment;
+  }
+
+  /**
+   * Resolve an access token to its user via egov-user token introspection.
+   * Returns null when the token is not valid.
+   *
+   * This is what makes a bearer token meaningful: without it, `applyToken`
+   * accepts any non-empty string, so "authenticated" meant nothing more than
+   * "sent a header".
+   */
+  async validateToken(token: string): Promise<UserInfo | null> {
+    const url = `${this.environment.url}${this.endpoint('USER_DETAILS')}?access_token=${encodeURIComponent(token)}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: {
+            apiId: 'Rainmaker',
+            ver: '1.0',
+            ts: Date.now(),
+            msgId: `${Date.now()}|en_IN`,
+            authToken: token,
+          },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { UserRequest?: UserInfo };
+      return data?.UserRequest ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -957,6 +1004,20 @@ class DigitApiClient {
   // Encryption — encrypt values (no RequestInfo needed)
   // Note: enc-service returns a flat JSON array, not the standard {Errors, ...} envelope.
   // We use raw fetch instead of this.request() to handle the non-standard response.
+  /**
+   * Headers for egov-enc-service calls.
+   *
+   * These previously went out with no Authorization header at all, which made
+   * decrypt_data an unauthenticated decryption oracle for citizen PII: the
+   * caller needed no credentials because none were forwarded. The token is now
+   * attached so the enc-service / gateway can authorise the request.
+   */
+  private encHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`;
+    return headers;
+  }
+
   async encryptData(
     tenantId: string,
     values: string[]
@@ -964,7 +1025,7 @@ class DigitApiClient {
     const url = `${this.environment.url}${this.endpoint('ENC_ENCRYPT')}`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.encHeaders(),
       body: JSON.stringify({
         encryptionRequests: values.map((value) => ({
           tenantId,
@@ -1017,7 +1078,7 @@ class DigitApiClient {
     const url = `${this.environment.url}${this.endpoint('ENC_DECRYPT')}`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.encHeaders(),
       body: JSON.stringify(encryptedValues),
     });
 
@@ -1166,4 +1227,42 @@ class DigitApiClient {
 }
 
 // Singleton
-export const digitApi = new DigitApiClient();
+/**
+ * Request isolation (H5).
+ *
+ * `digitApi` used to be a plain process-wide singleton holding the auth token,
+ * user and environment. Two concurrent requests therefore shared one identity:
+ * the REST path papered over it with a mutex plus snapshot/restore, but the MCP
+ * path mutated it with no lock at all, so one caller's tool could execute under
+ * another caller's token.
+ *
+ * Instead of threading a client through every call site, the export below is a
+ * proxy that resolves to the client bound to the current async context. Code
+ * that runs inside `runWithIsolatedClient()` gets its own instance; everything
+ * else keeps using the shared default, so stdio and the REST path behave
+ * exactly as before.
+ */
+const defaultClient = new DigitApiClient();
+const clientContext = new AsyncLocalStorage<DigitApiClient>();
+
+/** Run `fn` with a fresh DigitApiClient visible to everything it awaits. */
+export function runWithIsolatedClient<T>(fn: () => Promise<T>): Promise<T> {
+  return clientContext.run(new DigitApiClient(), fn);
+}
+
+/** True when the caller is executing inside an isolated client scope. */
+export function hasIsolatedClient(): boolean {
+  return clientContext.getStore() !== undefined;
+}
+
+export const digitApi: DigitApiClient = new Proxy(defaultClient, {
+  get(target, prop) {
+    const active = clientContext.getStore() ?? target;
+    const value = Reflect.get(active, prop, active);
+    return typeof value === 'function' ? value.bind(active) : value;
+  },
+  set(target, prop, value) {
+    const active = clientContext.getStore() ?? target;
+    return Reflect.set(active, prop, value, active);
+  },
+}) as DigitApiClient;

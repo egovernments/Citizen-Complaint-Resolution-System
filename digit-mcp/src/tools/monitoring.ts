@@ -269,6 +269,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'kafka_lag',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Check Kafka consumer group lag for egov-persister via Redpanda rpk. ' +
@@ -294,6 +295,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'persister_errors',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Scan egov-persister container logs for errors. ' +
@@ -327,6 +329,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'db_counts',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Get row counts for key DIGIT database tables via direct psql query. ' +
@@ -352,6 +355,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'persister_monitor',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Comprehensive persister health monitor. Runs all monitoring probes and cross-references results. ' +

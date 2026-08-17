@@ -8,7 +8,9 @@ import { handlePgrDashboard } from './api/pgr-dashboard.js';
 import { ToolRegistry } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
-import { digitApi } from './services/digit-api.js';
+import { digitApi, runWithIsolatedClient } from './services/digit-api.js';
+import { getAuthMode, resolveClientIp } from './services/auth.js';
+import type { UserInfo } from './types/index.js';
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -175,6 +177,62 @@ if (transportMode === 'stdio') {
     }
 
     return null; // caller will translate to 401
+  }
+
+  /**
+   * Authenticate a caller on the MCP (JSON-RPC) route.
+   *
+   * `token` mode: an `Authorization: Bearer <token>` header is required and is
+   * introspected against egov-user. A token that doesn't resolve is rejected —
+   * unlike the REST shim's Form 1, which accepts any non-empty string. The
+   * resolved user is applied so tools run as the caller, and the state tenant
+   * is derived from the token's own tenant rather than a caller-supplied header.
+   *
+   * `ambient` mode: no check (stdio, or an operator who explicitly opted in).
+   */
+  const TOKEN_CACHE_TTL_MS = 30_000;
+  const TOKEN_CACHE_MAX = 500;
+  const tokenCache = new Map<string, { user: UserInfo; at: number }>();
+
+  async function authenticateMcp(
+    req: IncomingMessage,
+  ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (getAuthMode() !== 'token') return { ok: true };
+
+    const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+    if (!authHeader || !/^Bearer\s+/i.test(authHeader)) {
+      return {
+        ok: false,
+        status: 401,
+        error: 'Authentication required: send Authorization: Bearer <DIGIT access token>.',
+      };
+    }
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) return { ok: false, status: 401, error: 'Empty bearer token.' };
+
+    const now = Date.now();
+    const cached = tokenCache.get(token);
+    if (cached && now - cached.at < TOKEN_CACHE_TTL_MS) {
+      applyValidatedUser(token, cached.user);
+      return { ok: true };
+    }
+
+    const user = await digitApi.validateToken(token);
+    if (!user) {
+      tokenCache.delete(token);
+      return { ok: false, status: 401, error: 'Invalid or expired access token.' };
+    }
+
+    if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.clear();
+    tokenCache.set(token, { user, at: now });
+    applyValidatedUser(token, user);
+    return { ok: true };
+  }
+
+  function applyValidatedUser(token: string, user: UserInfo): void {
+    const tenantId = user.tenantId || '';
+    const root = tenantId.includes('.') ? tenantId.split('.')[0] : tenantId;
+    digitApi.applyToken(token, user, root || null);
   }
 
   // Map known low-level Spring / DIGIT errors to human-friendly explanations
@@ -711,19 +769,62 @@ if (transportMode === 'stdio') {
 
     // MCP endpoint — stateless mode for horizontal scaling
     if (pathname === '/mcp') {
-      await sessionStore.ensureSession('http');
-      const clientIp = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || '';
-      const userAgent = req.headers['user-agent'] || '';
-      const normalizedIp = String(clientIp).split(',')[0].trim();
-      mcpLogger.setRequestContext(normalizedIp, userAgent);
-      sessionStore.setHttpContext(String(userAgent), normalizedIp);
+      const handleMcp = async (): Promise<void> => {
+        // Authenticate BEFORE building the server. In `token` mode (the default
+        // for the HTTP transport) the caller must present a token that
+        // egov-user recognises. Previously this route had no check at all, and
+        // because each tool falls back to CRS_USERNAME/CRS_PASSWORD when no
+        // token is set, an anonymous request was executed as ADMIN.
+        const mcpAuth = await authenticateMcp(req);
+        if (!mcpAuth.ok) {
+          res.writeHead(mcpAuth.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32001, message: mcpAuth.error },
+            id: null,
+          }));
+          return;
+        }
 
-      const server = createServer({ enableAllGroups: true });
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
+        await sessionStore.ensureSession('http');
+        const userAgent = req.headers['user-agent'] || '';
+        // N3: X-Forwarded-For is caller-controlled. Honour it only when the peer
+        // is a configured trusted proxy (MCP_TRUSTED_PROXIES); otherwise record
+        // the socket address. Previously the header always won, so any direct
+        // caller chose the IP that showed up in the audit trail.
+        const forwarded = (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) as string | undefined;
+        const resolvedIp = resolveClientIp(req.socket.remoteAddress, forwarded);
+        if (resolvedIp.claimed) {
+          mcpLogger.log({
+            event: 'untrusted_forwarded_for',
+            peer: resolvedIp.ip,
+            claimed: resolvedIp.claimed,
+            note: 'X-Forwarded-For ignored: peer is not in MCP_TRUSTED_PROXIES',
+          });
+        }
+        mcpLogger.setRequestContext(resolvedIp.ip, userAgent);
+        sessionStore.setHttpContext(String(userAgent), resolvedIp.ip);
+
+        const server = createServer({ enableAllGroups: true });
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined, // stateless
+        });
+        await server.connect(transport);
+        await transport.handleRequest(req, res);
+      };
+
+      // In token mode every request carries its own credentials, so give it its
+      // own DigitApiClient. Concurrent callers then cannot observe or inherit
+      // each other's token, and a `configure` call (state tenant / base_url)
+      // dies with the request instead of persisting process-wide.
+      //
+      // In ambient mode (stdio-style single owner, or an explicit opt-in) the
+      // shared client is kept so `configure` once, then use tools still works.
+      if (getAuthMode() === 'token') {
+        await runWithIsolatedClient(handleMcp);
+      } else {
+        await handleMcp();
+      }
       return;
     }
 

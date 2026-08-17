@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated, resolveArtifactPath } from '../services/auth.js';
 import {
   captureSnapshot,
   diffSnapshots,
@@ -12,26 +13,23 @@ import {
 
 const MCP_VERSION = process.env.MCP_VERSION || '1.0.0';
 
-// Auto-login helper (only needed for config/data API sub-probes).
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) return; // capture proceeds; API layers degrade gracefully
-  await digitApi.login(username, password, tenantId);
-}
+// Auth for the config/data API sub-probes. `optional` preserves this tool's
+// contract: a capture still succeeds (with those layers marked unreachable)
+// when no credentials are available, rather than failing outright.
+const ensureAuthenticatedOptional = () => ensureAuthenticated({ optional: true });
 
 /** Resolve a diff side: a file path, an inline snapshot object, or live capture. */
 async function resolveSide(side: unknown, label: string): Promise<Snapshot> {
   if (typeof side === 'string') {
-    return JSON.parse(readFileSync(side, 'utf-8')) as Snapshot;
+    // Reads are confined to the same directory as writes, so a snapshot path
+    // cannot be used to probe arbitrary files on the host.
+    return JSON.parse(readFileSync(resolveArtifactPath(side), 'utf-8')) as Snapshot;
   }
   if (side && typeof side === 'object') {
     const obj = side as Record<string, unknown>;
     if (obj.capture && typeof obj.capture === 'object') {
       const cap = obj.capture as Record<string, unknown>;
-      await ensureAuthenticated();
+      await ensureAuthenticatedOptional();
       return captureSnapshot({
         layers: (cap.layers as SnapshotLayer[]) || ALL_LAYERS,
         tenantId: (cap.tenant_id as string) || digitApi.getEnvironmentInfo().stateTenantId,
@@ -50,7 +48,10 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     name: 'snapshot_capture',
     group: 'snapshot',
     category: 'snapshot',
-    risk: 'read',
+    // 'write': with output_path this writes a file to disk. Reported as read-risk
+    // it looked side-effect-free to any client gating on this field.
+    access: 'admin',
+    risk: 'write',
     description:
       'Capture a portable, deterministic system-state snapshot of the CURRENT DIGIT deployment, to diff against another setup and explain replication deviations. ' +
       'Layers: "images" (running container image refs+digests from docker, plus declared compose refs → catches compose drift; ON-BOX only), ' +
@@ -70,7 +71,7 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
         tenant_id: { type: 'string', description: 'Tenant to scope config/data layers (e.g. "ke.bomet"). Defaults to the environment state tenant.' },
         label: { type: 'string', description: 'Human label stored in the snapshot (e.g. "bomet-prod", "fresh-clone").' },
         redact: { type: 'boolean', description: 'Redact secret-looking env values to hashes (default true). Keep true for shareable artifacts.' },
-        output_path: { type: 'string', description: 'Absolute path to write the JSON artifact. When set, the tool returns only meta + reachability + path.' },
+        output_path: { type: 'string', description: 'Filename (or relative path) for the JSON artifact, written inside the server\'s artifact directory. When set, the tool returns only meta + reachability + the resolved path.' },
       },
     },
     handler: async (args) => {
@@ -80,13 +81,15 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
       const redact = args.redact !== false;
 
       if (layers.some((l) => l === 'config' || l === 'data')) {
-        await ensureAuthenticated();
+        await ensureAuthenticatedOptional();
       }
 
       const snapshot = await captureSnapshot({ layers, tenantId, label, redact, mcpVersion: MCP_VERSION });
 
       if (args.output_path) {
-        const path = args.output_path as string;
+        // Confined to the artifact directory — see resolveArtifactPath. This
+        // used to accept any path and the process runs as root.
+        const path = resolveArtifactPath(args.output_path as string);
         writeFileSync(path, JSON.stringify(snapshot, null, 2));
         return JSON.stringify({ success: true, outputPath: path, meta: snapshot.meta }, null, 2);
       }
@@ -98,6 +101,7 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     name: 'snapshot_diff',
     group: 'snapshot',
     category: 'snapshot',
+    access: 'admin',
     risk: 'read',
     description:
       'Diff two system-state snapshots and report deviations per layer (images/config/data) with severity. ' +
@@ -108,8 +112,8 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     inputSchema: {
       type: 'object' as const,
       properties: {
-        a: { description: 'Side A: file path (string), inline snapshot object, or {"capture":{...}} for a live capture.' },
-        b: { description: 'Side B: file path (string), inline snapshot object, or {"capture":{...}} for a live capture.' },
+        a: { description: 'Side A: artifact filename (resolved inside the server artifact directory), inline snapshot object, or {"capture":{...}} for a live capture.' },
+        b: { description: 'Side B: artifact filename (resolved inside the server artifact directory), inline snapshot object, or {"capture":{...}} for a live capture.' },
         layers: {
           type: 'array',
           items: { type: 'string', enum: ALL_LAYERS as unknown as string[] },

@@ -1,5 +1,6 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
+import { redactDeep } from './utils/redact.js';
 
 class McpLogger {
   public readonly logPath: string;
@@ -47,13 +48,13 @@ class McpLogger {
     });
   }
 
-  /** Strip sensitive fields before logging */
+  /**
+   * Strip sensitive fields before logging. Substring match on the key name, at
+   * any depth — the previous exact-name top-level check missed nested shapes
+   * like `{ auth: { password } }` as well as `apiKey`-style names.
+   */
   private sanitize(args: Record<string, unknown>): Record<string, unknown> {
-    const out = { ...args };
-    for (const key of ['password', 'secret', 'token', 'auth_token']) {
-      if (key in out) out[key] = '***';
-    }
-    return out;
+    return redactDeep(args) as Record<string, unknown>;
   }
 }
 

@@ -7,6 +7,7 @@ export function registerDiscoverTools(registry: ToolRegistry): void {
     name: 'discover_tools',
     group: 'core',
     category: 'discovery',
+    access: 'public',
     risk: 'read',
     description:
       'List all available CRS validator tools grouped by domain. Shows which groups are currently enabled and what tools each group contains. Use this to understand what capabilities are available before enabling additional groups.',
@@ -34,6 +35,7 @@ export function registerDiscoverTools(registry: ToolRegistry): void {
     name: 'enable_tools',
     group: 'core',
     category: 'discovery',
+    access: 'public',
     risk: 'read',
     description:
       'Enable or disable tool groups on demand. Groups: mdms (tenant validation + MDMS search/create), boundary (boundary hierarchy + boundary management CRUD), masters (departments, designations, complaint types), employees (HRMS employee create/update/validate), localization (search/upsert UI labels), pgr (PGR complaints + workflow), admin (filestore upload/download + access control + user search/create), idgen (ID generation), location (geographic boundaries), encryption (encrypt/decrypt), docs (search DIGIT documentation at docs.digit.org + full OpenAPI 3.0 API catalog), monitoring (persister health, Kafka lag, DB counts, E2E parity), tracing (distributed trace search, debug API failures, find slow operations), snapshot (capture + diff system state across two setups). The "core" group is always enabled.',

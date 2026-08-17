@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated, defaultProvisioningPassword } from '../services/auth.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength, validateResourceId } from '../utils/validation.js';
 
 export function registerHrmsTools(registry: ToolRegistry): void {
@@ -8,6 +9,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
     name: 'employee_create',
     group: 'employees',
     category: 'hrms',
+    access: 'admin',
     risk: 'write',
     description:
       'Create a new employee in DIGIT HRMS. Requires employee name, mobile number, roles, department/designation assignment, and jurisdiction. ' +
@@ -186,7 +188,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
         // Don't send a password — HRMS preserves the existing user's auth state.
         userPayload.uuid = existingUserUuid;
       } else {
-        userPayload.password = 'eGov@123';
+        userPayload.password = defaultProvisioningPassword();
       }
 
       const employee: Record<string, unknown> = {
@@ -226,18 +228,24 @@ export function registerHrmsTools(registry: ToolRegistry): void {
         const created = result[0];
         const user = created.user as Record<string, unknown> | undefined;
 
-        // HRMS doesn't reliably set the user password. Reset it via
-        // user update so the employee can actually login. Search must
-        // use the *user's actual tenantId* (the city tenant the user
-        // was created on), not the role tenant. Using the role tenant
-        // would return an empty result on city tenants and leave the
+        // HRMS doesn't reliably set the user password on accounts it creates,
+        // so set it here. Search must use the *user's actual tenantId* (the
+        // city tenant the user was created on), not the role tenant — the role
+        // tenant returns an empty result on city tenants and leaves the
         // password unset.
-        if (user?.uuid) {
+        //
+        // Guarded on !existingUserUuid. When the caller passes an existing
+        // user's uuid, HRMS links that account instead of creating one, and
+        // overwriting its password here was an account-takeover primitive:
+        // any caller who knew a privileged user's uuid could reset it to the
+        // default. That also contradicted the intent stated where the uuid is
+        // applied above ("HRMS preserves the existing user's auth state").
+        if (user?.uuid && !existingUserUuid) {
           try {
             const userTenant = (user.tenantId as string) || tenantId;
             const users = await digitApi.userSearch(userTenant, { uuid: [user.uuid as string], limit: 1 });
             if (users.length > 0) {
-              await digitApi.userUpdate({ ...users[0], password: 'eGov@123' });
+              await digitApi.userUpdate({ ...users[0], password: defaultProvisioningPassword() });
             }
           } catch (pwErr) {
             // Non-fatal: employee was created, password reset just failed
@@ -259,16 +267,27 @@ export function registerHrmsTools(registry: ToolRegistry): void {
               tenantId: created.tenantId,
               roles: ((user?.roles || []) as Array<{ code: string }>).map((r) => r.code),
             },
-            loginCredentials: {
-              username: created.code,
-              password: 'eGov@123',
-              // Login must use the city tenant where the user was
-              // actually provisioned. Auth is scoped by tenantId in
-              // egov-user — a user on `<state>.<city>` is invisible to
-              // a login attempt with tenantId=`<state>`.
-              loginTenantId: tenantId,
-              note: 'To authenticate as this employee, use the employee CODE as the username (not mobile number).',
-            },
+            // Only report credentials for an account we actually provisioned.
+            // On the uuid-link path the existing user keeps their own password,
+            // which this server neither sets nor knows.
+            loginCredentials: existingUserUuid
+              ? {
+                  username: created.code,
+                  loginTenantId: tenantId,
+                  note:
+                    'This employee was linked to an existing user account, so its password was left unchanged. ' +
+                    'Use that account\'s existing credentials.',
+                }
+              : {
+                  username: created.code,
+                  password: defaultProvisioningPassword(),
+                  // Login must use the city tenant where the user was
+                  // actually provisioned. Auth is scoped by tenantId in
+                  // egov-user — a user on `<state>.<city>` is invisible to
+                  // a login attempt with tenantId=`<state>`.
+                  loginTenantId: tenantId,
+                  note: 'To authenticate as this employee, use the employee CODE as the username (not mobile number).',
+                },
           },
           null,
           2
@@ -325,6 +344,7 @@ export function registerHrmsTools(registry: ToolRegistry): void {
     name: 'employee_update',
     group: 'employees',
     category: 'hrms',
+    access: 'admin',
     risk: 'write',
     description:
       'Update an existing HRMS employee. First use validate_employees to get current employee data, then pass the modified employee object. ' +
@@ -528,13 +548,3 @@ export function registerHrmsTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}
