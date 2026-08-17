@@ -538,6 +538,22 @@ tenant — mirroring how the reference `kenya-green` theme is seeded at both
 `seed_theme_preset`, deactivates whichever theme was previously active for
 that tenant rather than leaving two active side by side.
 
+`seed_theme_preset` stays in `host_vars/<tenant>.yml` after the first
+deploy — it's not a one-shot flag. A marker file on the target
+(`theme-seed/.seeded-preset`) records which preset was last seeded by this
+mechanism, so **every later routine `./deploy.sh <tenant>` run is a no-op**
+for theme-seeding once that marker matches `seed_theme_preset`. This is
+deliberate: without it, any theme change made afterwards through the
+Configurator (a color tweak, or switching to a tenant-specific theme not in
+this preset catalog) would get silently reverted on the next unrelated
+redeploy. The seed only (re)runs when:
+
+- this is the first deploy (no marker yet), or
+- `seed_theme_preset` itself changes to a different preset code, or
+- `seed_theme_preset_force: true` is set, to force a re-seed regardless —
+  e.g. to deliberately discard live customization and reset to the
+  committed preset.
+
 ### Just check that everything's wired up correctly
 
 ```bash
