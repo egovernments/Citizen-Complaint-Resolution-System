@@ -245,4 +245,68 @@ describe('createDigitDataProvider', () => {
     assert.equal(result.total, 1230, 'every leaf must be counted, not just the first page');
     assert.ok(calls > 1, 'must page through mdms-v2 rather than a single capped fetch');
   });
+
+  it('sorts the full active set before paginating, not each fetched page independently', async () => {
+    // mdms-v2's MdmsCriteria has no sort parameter. Ids ascending here map to names
+    // DESCENDING, so a naive "sort whatever page got fetched" would only sort within
+    // a page and misorder the boundary between page 1 and page 2.
+    const ALL = Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      tenantId: 'pg',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${i}`, name: `Dept ${String(59 - i).padStart(2, '0')}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number }) => {
+      const offset = options?.offset ?? 0;
+      const limit = options?.limit ?? 100;
+      return ALL.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    const page1 = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+    const page2 = await dp.getList('departments', {
+      pagination: { page: 2, perPage: 25 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    const names = [...page1.data, ...page2.data].map((r) => (r as { name: string }).name);
+    assert.deepEqual(names, [...names].sort(), 'combined pages must be in full ascending name order');
+    assert.equal(page1.total, 60);
+  });
+
+  it('throws instead of silently truncating when a schema never reaches a last page', async () => {
+    // Simulates mdms-v2 always returning a full page (bad offset handling, an
+    // ignored criterion, etc.) so mdmsSearchAll never sees a short page to stop on.
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number }) => {
+      const limit = options?.limit ?? 1000;
+      return Array.from({ length: limit }, (_, i) => ({
+        id: i,
+        tenantId: 'pg',
+        schemaCode: 'common-masters.Department',
+        uniqueIdentifier: `DEPT_${i}`,
+        data: { code: `DEPT_${i}`, name: `Dept ${i}`, active: true },
+        isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      }));
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await assert.rejects(
+      () => dp.getList('departments', {
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: 'id', order: 'ASC' },
+        filter: {},
+      }),
+      /did not finish paging/,
+    );
+  });
 });

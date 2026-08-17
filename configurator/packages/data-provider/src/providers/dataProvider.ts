@@ -293,7 +293,12 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
     if (page.length < MDMS_SEARCH_ALL_BATCH_SIZE) return all;
     offset += MDMS_SEARCH_ALL_BATCH_SIZE;
   }
-  return all;
+  // Still getting full pages after the safety ceiling — returning `all` here would
+  // silently hand getList/getOne/getMany an incomplete tree. Fail loudly instead.
+  throw new Error(
+    `mdmsSearchAll: schema "${schema}" on tenant "${tenant}" did not finish paging after ` +
+      `${MDMS_SEARCH_ALL_MAX_BATCHES * MDMS_SEARCH_ALL_BATCH_SIZE} records; refusing to return a partial result.`,
+  );
 }
 
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
@@ -951,27 +956,24 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       }
 
       // MDMS resources without the leaf-adapter (all schemas except
-      // complaint-hierarchy): push limit/offset to the server when no
-      // client-side filter is active so the API is called with the actual
-      // page size instead of a fixed 500. mdms-v2 now exposes its own `_count`
-      // (mirroring `_search`) for a real total — see issue #953 (Departments/
-      // Designations previously showed a heuristic total that grew by a page
-      // every click: "1 of 2, 2 of 3, 3 of 4...").
+      // complaint-hierarchy), with no client-side filter active. mdms-v2's
+      // MdmsCriteria has no sort parameter, so a single server-paginated page
+      // can't represent the globally-sorted order — sorting just that page
+      // (as a single `{ limit: perPage, offset }` fetch used to) reshuffles
+      // each page independently instead of the full set. Page through every
+      // active record (mdmsSearchAll), sort in memory, then slice the
+      // requested page; the total then falls out of the same fetch instead
+      // of a separate `_count` call that could race with it.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const offset = (page - 1) * perPage;
-          // isActive:true so the server paginates/counts over active rows only, and both
-          // calls share the exact same criteria so the total always matches what's paginated.
-          const [raw, total] = await Promise.all([
-            client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset, isActive: true }),
-            client.mdmsCount(tenant, config.schema!, { isActive: true }),
-          ]);
-          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const sorted = clientSort(data, field, order);
-          return { data: sorted, total };
+          const all = await mdmsSearchAll(client, tenant, config.schema!);
+          const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(active, field, order);
+          const data = clientPaginate(sorted, page, perPage);
+          return { data, total: active.length };
         }
       }
 
