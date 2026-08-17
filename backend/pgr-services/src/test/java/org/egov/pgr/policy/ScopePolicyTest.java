@@ -44,6 +44,16 @@ class ScopePolicyTest {
     }
 
     @Test
+    void unsupportedAxisIsMalformedNotAbsent() {
+        // An axis outside SUPPORTED_AXES ('department'/'jurisdiction') must be rejected at parse
+        // time: Tier 1 (PgrSearchScope) has no field for anything else and would silently drop it,
+        // while Tier 2 either fails closed or drops it too — two tiers quietly disagreeing about a
+        // restriction that's actually enforced nowhere (#1441 review).
+        assertThrows(MalformedScopePolicyException.class,
+                () -> ScopePolicy.parse(Map.of("axes", List.of("department", "unsupported-axis"))));
+    }
+
+    @Test
     void missingOrEmptyAxesIsMalformedNotAbsent() {
         // The scope key IS present here (just missing/empty 'axes') — an authoring mistake, not a
         // confirmed absence of configuration, so this must NOT collapse into the same "not

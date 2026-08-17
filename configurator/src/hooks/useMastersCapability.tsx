@@ -18,23 +18,20 @@ import type { DigitPermissions } from '@digit-mcp/data-provider';
  * previously left a PREVIOUS user's capability (e.g. an MDMS_ADMIN's "see
  * everything") in place for whoever logged in next, silently over-granting
  * masters visibility to a more-restricted role.
+ *
+ * There is no "fail open" window anywhere in this component's lifecycle:
+ * before the first fetch resolves, during a refetch after an identity
+ * change, and on an outright fetch failure all resolve to the SAME
+ * deny-by-default capability below — a caller can read canView/canEdit at
+ * any point and get a safe answer, never a transient "view everything"
+ * while the real (possibly restrictive) policy is still loading.
  */
-const OPEN_PERMISSIONS: DigitPermissions = {
-  roles: [],
-  masters: { canView: () => true, canEdit: () => false },
-};
-
-// Distinct from OPEN_PERMISSIONS: used ONLY when the policy fetch itself
-// failed, never as the transient loading placeholder. A fetch failure means
-// we genuinely don't know the policy — defaulting to "show everything" would
-// silently reveal masters a restricted role shouldn't see, which is worse
-// than a temporarily-empty admin console the user can retry.
-const ERROR_PERMISSIONS: DigitPermissions = {
+const DENIED_PERMISSIONS: DigitPermissions = {
   roles: [],
   masters: { canView: () => false, canEdit: () => false },
 };
 
-const MastersCapabilityContext = createContext<DigitPermissions>(OPEN_PERMISSIONS);
+const MastersCapabilityContext = createContext<DigitPermissions>(DENIED_PERMISSIONS);
 
 function identityKeyOf(): string {
   const info = digitClient.getAuthInfo();
@@ -43,7 +40,7 @@ function identityKeyOf(): string {
 
 export function MastersCapabilityProvider({ children }: { children: ReactNode }) {
   const [identityKey, setIdentityKey] = useState(identityKeyOf);
-  const [permissions, setPermissions] = useState<DigitPermissions>(OPEN_PERMISSIONS);
+  const [permissions, setPermissions] = useState<DigitPermissions>(DENIED_PERMISSIONS);
 
   // Subscribe once for the component's lifetime; every login re-fires this
   // regardless of whether identityKey actually changed (e.g. the same user
@@ -52,10 +49,11 @@ export function MastersCapabilityProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     let cancelled = false;
-    // Reset to the fail-open default immediately on identity change, rather
-    // than leaving the PREVIOUS user's (possibly more permissive) capability
-    // visible for the duration of the new fetch.
-    setPermissions(OPEN_PERMISSIONS);
+    // Reset to deny-by-default immediately on identity change — never leave
+    // the PREVIOUS user's (possibly more permissive) capability visible for
+    // the duration of the new fetch, and never fall back to "show
+    // everything" while the new one is in flight either.
+    setPermissions(DENIED_PERMISSIONS);
     const authProvider = getAuthProvider();
     if (!authProvider.getPermissions) return;
     authProvider
@@ -64,12 +62,11 @@ export function MastersCapabilityProvider({ children }: { children: ReactNode })
         if (!cancelled) setPermissions(perms);
       })
       .catch((err) => {
-        // Fail CLOSED on an actual fetch failure — a failed fetch means we
-        // don't know the policy, not that none is configured; see
-        // ERROR_PERMISSIONS above for why this must not reuse
-        // OPEN_PERMISSIONS's "show everything" default.
+        // A failed fetch means we don't know the policy, not that none is
+        // configured — stays on the same deny-by-default default rather than
+        // resolving to "show everything".
         console.error('useMastersCapability: failed to load access policy', err);
-        if (!cancelled) setPermissions(ERROR_PERMISSIONS);
+        if (!cancelled) setPermissions(DENIED_PERMISSIONS);
       });
     return () => {
       cancelled = true;

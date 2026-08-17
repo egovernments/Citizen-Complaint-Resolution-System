@@ -240,6 +240,29 @@ class SearchAccessPolicyServiceTest {
                 () -> serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2));
     }
 
+    @Test
+    void resolveScopeFailsClosedOnAnUnsupportedAxisRatherThanApplyingTheDefault() {
+        // PGRService.count() calls resolveScope() but never calls enforce() (no Tier-2 re-check on
+        // that path) — so an unsupported axis MUST be rejected here, at the one entry point both
+        // search() and count() share, not left to Tier 2 alone (#1441 review: "_count never runs
+        // Tier 2, so it can expose an insufficiently scoped count").
+        Map<String, Object> scope = Map.of(
+                "axes", List.of("department", "unsupported-axis"),
+                "default", Map.of("department", "OWN", "unsupported-axis", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
+                .thenReturn(List.of(action));
+        AccessPolicyRegistry registryWithBadAxis = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
+        SearchAccessPolicyService serviceWithMockResolver =
+                new SearchAccessPolicyService(mockResolver, registryWithBadAxis, new PolicyEvaluator(), new PolicyInputBuilder());
+        RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
+
+        org.junit.jupiter.api.Assertions.assertThrows(MalformedScopePolicyException.class,
+                () -> serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2));
+    }
+
     private RequestInfo requestInfo(String uuid, String type) {
         User user = new User();
         user.setUuid(uuid);

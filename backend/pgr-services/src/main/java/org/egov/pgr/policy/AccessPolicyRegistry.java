@@ -49,7 +49,11 @@ public class AccessPolicyRegistry {
      * resource's own JSON shape (a policy decision an MDMS operator makes is WHICH ROLE gets WHICH
      * LEVEL per axis, not what the resource's field is literally called), so this stays code-defined
      * rather than MDMS-authored. "jurisdiction" intentionally maps to the resource's "boundary"
-     * field — that naming predates this axis model.
+     * field — that naming predates this axis model. Keys MUST stay in sync with
+     * {@link ScopePolicy#SUPPORTED_AXES} — {@link ScopePolicy#parse} already rejects any axis
+     * outside that set before a {@link ScopePolicy} can even reach {@link #synthesizeCondition},
+     * so the null-mapping branch there is a defense-in-depth backstop against the two drifting
+     * apart, not the primary enforcement.
      */
     private record AxisFields(String resourceVar, String userAttributeVar) {
     }

@@ -117,10 +117,12 @@ export async function loadMastersCapability(
       try {
         return Boolean(jsonLogic.apply(rule.condition, userDoc));
       } catch {
-        // Fail OPEN here (not the fail-closed rule the PGR PDP uses) — this is
-        // UI-only presentation, not a security boundary (§1.1); a bad condition
-        // should never lock an admin out of the console.
-        return true;
+        // Fail CLOSED: an entry IS present here — an operator authored a
+        // restriction — so a malformed condition is policy corruption, not an
+        // absent policy. Denying is the same "authored-but-broken must not
+        // read as open" principle the PGR PDP already applies; the "no entry
+        // at all" case above stays open, unaffected (#1441 review).
+        return false;
       }
     },
     canEdit(schema) {

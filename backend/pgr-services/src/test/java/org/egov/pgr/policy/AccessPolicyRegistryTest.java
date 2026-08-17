@@ -374,13 +374,16 @@ class AccessPolicyRegistryTest {
     }
 
     @Test
-    void getConditionFailsClosedOnAnUnmappedAxisRatherThanSilentlyDroppingIt() {
-        // An axis with no AXIS_FIELDS mapping must fail the WHOLE generated condition (null, not a
-        // condition missing just that axis's restriction) — otherwise Tier-1 (SQL) and Tier-2 (this
-        // generated condition) could silently disagree on what that axis restricts (#1441 review).
+    void getConditionFailsClosedOnAnUnsupportedAxisRatherThanSilentlyDroppingIt() {
+        // An axis outside ScopePolicy.SUPPORTED_AXES must fail the WHOLE generated condition
+        // (null, not a condition missing just that axis's restriction) — otherwise Tier-1 (SQL) and
+        // Tier-2 (this generated condition) could silently disagree on what that axis restricts
+        // (#1441 review). Caught here by ScopePolicy.parse's own SUPPORTED_AXES rejection (see
+        // ScopePolicyTest#unsupportedAxisIsMalformedNotAbsent); AXIS_FIELDS' null-mapping check in
+        // synthesizeCondition is now unreachable via this path and is pure defense-in-depth.
         Map<String, Object> scope = Map.of(
-                "axes", List.of("department", "unmapped-axis"),
-                "default", Map.of("department", "OWN", "unmapped-axis", "OWN"));
+                "axes", List.of("department", "unsupported-axis"),
+                "default", Map.of("department", "OWN", "unsupported-axis", "OWN"));
         Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
         Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
         RequestInfo requestInfo = requestInfo("EMPLOYEE");

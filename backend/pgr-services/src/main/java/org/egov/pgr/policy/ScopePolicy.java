@@ -22,6 +22,19 @@ import java.util.Set;
 @Slf4j
 public final class ScopePolicy {
 
+    /**
+     * The only axes PGR search's ABAC engine actually knows how to enforce — Tier 1 (SQL) only
+     * ever reads {@code department}/{@code jurisdiction} off {@link PgrSearchScope}, and Tier 2
+     * ({@code AccessPolicyRegistry#AXIS_FIELDS}) only has a JsonLogic field mapping for the same
+     * two. An axis outside this set would otherwise be silently ACCEPTED by {@link #parse} yet
+     * silently DROPPED by Tier 1 (which has no field to put it in) while Tier 2 either fails
+     * closed or drops it too — two tiers quietly disagreeing about a restriction that was never
+     * enforced anywhere. Rejecting it here, once, at the one place both tiers' authored artifact
+     * passes through, closes that gap for every consumer, including {@code _count} (which never
+     * runs Tier 2 at all). Keep in sync with {@code AccessPolicyRegistry#AXIS_FIELDS}.
+     */
+    public static final Set<String> SUPPORTED_AXES = Set.of("department", "jurisdiction");
+
     private final List<String> axes;
     private final Map<String, Map<String, ScopeLevel>> roleScopes;
     private final Map<String, ScopeLevel> defaultScope;
@@ -90,9 +103,10 @@ public final class ScopePolicy {
      * (backward compatible fallback), same principle as {@link AccessPolicyRegistry}'s "policy not
      * defined" handling elsewhere. Anything else that fails to parse into a well-formed policy (not
      * a Map, or no non-empty {@code axes} list) means the {@code scope} key IS present but broken —
-     * an authoring mistake, NOT an absent policy — and throws {@link MalformedScopePolicyException}
-     * so callers fail closed instead of silently falling back to the same permissive default an
-     * absent policy gets. Malformed INDIVIDUAL role/axis entries (once the top-level shape is valid)
+     * an authoring mistake, NOT an absent policy — or one of the {@code axes} names isn't in
+     * {@link #SUPPORTED_AXES} — and throws {@link MalformedScopePolicyException} so callers fail
+     * closed instead of silently falling back to the same permissive default an absent policy gets.
+     * Malformed INDIVIDUAL role/axis entries (once the top-level shape is valid)
      * are still skipped with a logged warning rather than invalidating the whole policy —
      * {@link #levelFor} degrades those to {@code default} or {@link ScopeLevel#OWN}, never silently
      * to {@link ScopeLevel#ALL}.
@@ -114,6 +128,9 @@ public final class ScopePolicy {
                 axes.add((String) a);
         if (axes.isEmpty())
             throw new MalformedScopePolicyException("'axes' had no valid string entries");
+        for (String axis : axes)
+            if (!SUPPORTED_AXES.contains(axis))
+                throw new MalformedScopePolicyException("axis '" + axis + "' is not supported (expected one of " + SUPPORTED_AXES + ")");
         Set<String> axisSet = new LinkedHashSet<>(axes);
 
         Map<String, ScopeLevel> defaultScope = parseAxisLevelMap(scopeMap.get("default"), axisSet, "default");

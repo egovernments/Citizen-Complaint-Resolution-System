@@ -102,14 +102,16 @@ describe('loadMastersCapability', () => {
     assert.equal(admin.canEdit('some-schema.WithNoAction'), false);
   });
 
-  it('fails open on a malformed condition rather than hiding the master', async () => {
+  it('fails closed on a malformed authored condition rather than exposing the master', async () => {
+    // An entry IS present — an operator authored a restriction — so a condition that fails to
+    // evaluate is policy corruption, not an absent policy; must deny, not read as open (#1441 review).
     const malformed = {
       ...SEARCH_ACTION,
       data: { ...SEARCH_ACTION.data, resource: { masters: { 'common-masters.Broken': { condition: { '???': [] } } } } },
     };
     const client = stubClient({ [ACTIONS_TEST_SCHEMA]: [malformed], [ROLEACTIONS_SCHEMA]: [] });
     const cap = await loadMastersCapability(client, 'pg', ['SUPERVISOR']);
-    assert.equal(cap.canView('common-masters.Broken'), true);
+    assert.equal(cap.canView('common-masters.Broken'), false);
   });
 
   it('propagates a fetch failure rather than resolving as an open policy', async () => {

@@ -1453,6 +1453,16 @@ services:
       EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
+      # Explicit ABAC rollout gate (org.egov.pgr.policy.AccessPolicyRegistry#getCondition, #1441
+      # review). Left "false" (backward compatible) deliberately: this stack serves multiple
+      # tenants (e.g. new/onboarded ones) that don't yet have a resource.complaint.scope/condition
+      # authored on the ACCESSCONTROL-ACTIONS-TEST action 2008 record for /pgr-services/v2/request/_search
+      # — flipping this to "true" makes PGR search fail closed (empty results) for EVERY tenant
+      # this instance serves that lacks that policy, not just the ones that have it. Only set this
+      # to "true" once every tenant this deployment serves has action 2008's resource/condition
+      # (or resource.complaint.scope) fully authored — e.g. the reference tenant `pg` already does,
+      # via db/full-dump.sql's seed data, but others onboarded later may not.
+      PGR_ABAC_STRICT_MODE: "false"
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
       # consumed by EscalationScheduler#getStateLevelTenantId). Without
