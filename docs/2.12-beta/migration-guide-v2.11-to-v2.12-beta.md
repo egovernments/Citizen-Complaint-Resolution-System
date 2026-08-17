@@ -58,7 +58,9 @@ This guide is for an operator with a live v2.11 tenant (data, users, complaints 
 
 - host_vars shape change: `core_postal_configs` lost `postalCodeLength` and `postalCodeErrorMessage` — `postalCodePattern` is the only remaining knob and the localized error message is derived from it. Delete the two removed keys from your tenant's host_vars.
 
-> **Check your reopen window:** `RAINMAKER-PGR.UIConstants.REOPENSLA` (seeded 432000000 ms = 5 days) is now actually read — previously a hardcoded 1-hour default won regardless of this value, and the deadline is now also enforced server-side. If your tenant implicitly relied on the de-facto 1-hour window, adjust `REOPENSLA` before upgrading.
+> **Check your reopen window:** `RAINMAKER-PGR.UIConstants.REOPENSLA` is now actually read — previously a hardcoded 1-hour default won regardless of this value — and the deadline is now enforced server-side too. New tenants ship 259200000 ms (72 hours); **existing tenants keep whatever they already have** (typically 432000000 = 5 days), so set `REOPENSLA` explicitly if 72 hours is what you want.
+>
+> **Unset `time-before-closing-complaint` in your deployment values.** It maps to `PGR_COMPLAIN_IDLE_TIME`, which used to be the enforced window and is now only a fallback. Leaving it set pins one window server-side while the UI honours the per-tenant `REOPENSLA` — the two disagree and citizens get a "Complaint is closed" error on a REOPEN button the UI still offered. See §5.2 of the config changelog.
 
 ## 4. New mandatory infrastructure (always-on after upgrade)
 

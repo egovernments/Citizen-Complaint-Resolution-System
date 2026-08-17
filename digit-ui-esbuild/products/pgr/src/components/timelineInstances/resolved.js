@@ -51,16 +51,22 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, r
     // ComplainMaxIdleTime is REOPENSLA from MDMS, undefined while it loads or on a tenant
     // without the master. Unknown window => leave REOPEN visible and let pgr-services decide;
     // hiding it here would re-create the unconfigured deadline that #925 was about.
+    //
+    // An unknown lastModifiedTime is deferred the same way (#1252). The employee action bar
+    // already lets REOPEN through when the timestamp is missing, so blocking it here made the
+    // citizen and employee surfaces disagree about the very same unknown.
+    //
+    // The comparison is `>` rather than `<` so it mirrors pgr-services validateReOpen()
+    // exactly. With `<` the two disagreed at the boundary instant (elapsed === window: the UI
+    // hid REOPEN while the server would still have accepted it).
     const windowKnown = typeof ComplainMaxIdleTime === "number" && ComplainMaxIdleTime > 0;
-    const reopenWindowOpen = typeof lastModifiedTime === "number"
-      && Number.isFinite(lastModifiedTime)
-      && (!windowKnown || (Date.now() - lastModifiedTime) < ComplainMaxIdleTime);
+    const elapsedKnown = typeof lastModifiedTime === "number" && Number.isFinite(lastModifiedTime);
+    const reopenWindowOpen =
+      !windowKnown || !elapsedKnown || !(Date.now() - lastModifiedTime > ComplainMaxIdleTime);
     let actions =
       nextActions &&
       nextActions.map((action, index) => {
         if (action && action !== "COMMENT") {
-          // Date.now() - undefined === NaN, and NaN < n is always false,
-          // so REOPEN was hidden whenever auditDetails was still loading.
           if (action !== "REOPEN" || reopenWindowOpen)
           return (
             <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
