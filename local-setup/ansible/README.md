@@ -523,9 +523,15 @@ flags. Setting back to `false` sweeps the running search containers.
 
 ### Seed an OOTB theme (issue #1035)
 
+MDMS (`common-masters.ThemeConfig`) is the single source of truth for theme
+colors at runtime — the frontend never reads a preset file, only MDMS. The
+committed OOTB preset catalog this seeds from lives at
+`local-setup/ansible/files/theme-presets/` — ops/deploy data, not inside the
+frontend app and never imported by any application code.
+
 ```bash
 # In host_vars/<tenant>.yml:
-seed_theme_preset: bomet-blue    # or maputo-green — see digit-ui-esbuild/src/theme/presets/
+seed_theme_preset: bomet-blue    # or maputo-green — see local-setup/ansible/files/theme-presets/
 ./deploy.sh <tenant>
 # Add-on to an existing deploy, without a full re-run:
 ./deploy.sh <tenant> --tags theme-seed
@@ -553,6 +559,9 @@ redeploy. The seed only (re)runs when:
 - `seed_theme_preset_force: true` is set, to force a re-seed regardless —
   e.g. to deliberately discard live customization and reset to the
   committed preset.
+
+Once seeded, further theme changes happen live via the Configurator's Theme
+Config screen — MDMS is authoritative from that point on.
 
 ### Just check that everything's wired up correctly
 

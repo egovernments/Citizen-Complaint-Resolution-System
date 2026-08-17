@@ -4,11 +4,13 @@ the standalone, idempotent equivalent of what DDH's MdmsBulkLoader does inside
 a full tenant bootstrap, scoped to JUST the theme. Modeled directly on
 seed-notifications.py (same shape, same idempotency guarantees).
 
-Single source of truth: reads the SAME committed JSON that ships in the
-default-data-handler image for the schema, and one of the committed OOTB
-preset files for the data —
+MDMS is the single source of truth for theme colors at runtime — the
+frontend (digit-ui-esbuild) never reads a preset file, only MDMS. There is
+NO preset catalog inside the frontend app; the committed OOTB preset JSON
+this seeds FROM lives purely as ops/deploy data, alongside this script,
+never imported by any application code:
   schema: utilities/default-data-handler/src/main/resources/schema/common-masters.json
-  data:   digit-ui-esbuild/src/theme/presets/<preset>.json  (e.g. bomet-blue.json)
+  data:   local-setup/ansible/files/theme-presets/<preset>.json (e.g. bomet-blue.json)
 
 Creates the common-masters.ThemeConfig schema (if absent) then the theme row
 at the given tenant via MDMS v2. Idempotent: schema is search-then-create;
@@ -22,6 +24,10 @@ packages/libraries/src/services/molecules/Store/service.js). So before
 creating the new row, this script finds any OTHER active ThemeConfig row at
 the tenant and deactivates it, so re-running or swapping presets never
 leaves two active-looking themes.
+
+Once seeded, MDMS is authoritative: further theme edits happen live via the
+Configurator's Theme Config screen. Re-running this script (see the ansible
+marker-file gating in playbook-deploy.yml) will not overwrite them.
 
 Env:
   DIGIT_URL          Kong base, e.g. http://127.0.0.1:18000        (required)

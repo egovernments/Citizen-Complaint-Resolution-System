@@ -139,8 +139,10 @@ novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-onl
 
 # ── OOTB theme (issue #1035) ──
 # Bomet Blue formalizes the tenant's real production ThemeConfig colors as a
-# committed preset (digit-ui-esbuild/src/theme/presets/bomet-blue.json).
-# Seeded at both state_root (ke) and ui_state_tenant_id (ke.bomet).
+# committed preset (local-setup/ansible/files/theme-presets/bomet-blue.json)
+# — ops/deploy data, not part of the frontend app; MDMS is the single source
+# of truth at runtime, this only seeds it. Seeded at both state_root (ke)
+# and ui_state_tenant_id (ke.bomet).
 seed_theme_preset: bomet-blue
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>

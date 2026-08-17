@@ -4303,14 +4303,19 @@
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
 
     # ─────────── OOTB theme MDMS seed ───────────
-    # Seeds one committed theme preset (schema + one ThemeConfig row), scoped to
-    # JUST the theme — the standalone equivalent of DDH's file loader for this one
-    # master. Opt-in via `seed_theme_preset: <preset-code>` (e.g. bomet-blue,
-    # maputo-green — see digit-ui-esbuild/src/theme/presets/). Seeds at BOTH the
-    # state root and the city tenant, mirroring how the reference kenya-green
-    # theme is seeded at both ke and ke.nairobi. Idempotent — safe to re-run, and
-    # re-running with a different preset deactivates the prior one (see
-    # seed-theme.py) so a tenant never ends up with two "active" themes.
+    # MDMS (common-masters.ThemeConfig) is the single source of truth for
+    # theme colors at runtime — the frontend never reads a preset file, only
+    # MDMS. The committed OOTB preset catalog this seeds FROM lives purely as
+    # ops/deploy data (local-setup/ansible/files/theme-presets/), never
+    # inside the frontend app and never imported by any application code —
+    # the standalone equivalent of DDH's file loader, scoped to just the
+    # theme. Opt-in via `seed_theme_preset: <preset-code>` (e.g. bomet-blue,
+    # maputo-green — see local-setup/ansible/files/theme-presets/). Seeds at
+    # BOTH the state root and the city tenant, mirroring how the reference
+    # kenya-green theme is seeded at both ke and ke.nairobi. Idempotent —
+    # safe to re-run, and re-running with a different preset deactivates the
+    # prior one (see seed-theme.py) so a tenant never ends up with two
+    # "active" themes.
     #   • Fresh install: runs automatically when `seed_theme_preset` is set.
     #   • Add-on to an existing deploy: ./deploy.sh <tenant> --tags theme-seed
     #
@@ -4368,7 +4373,7 @@
         dest: "{{ digit_dir }}/theme-seed/"
       loop:
         - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/common-masters.json"
-        - "{{ playbook_dir }}/../../digit-ui-esbuild/src/theme/presets/{{ seed_theme_preset }}.json"
+        - "{{ playbook_dir }}/files/theme-presets/{{ seed_theme_preset }}.json"
         - "{{ playbook_dir }}/../scripts/seed-theme.py"
 
     - name: "theme-seed — resolve state-root and city tenants for this run"
