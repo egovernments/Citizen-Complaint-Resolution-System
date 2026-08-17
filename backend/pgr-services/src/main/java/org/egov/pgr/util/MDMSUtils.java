@@ -310,6 +310,39 @@ public class MDMSUtils {
         return new StringBuilder().append(config.getMdmsHost()).append(config.getMdmsEndPoint());
     }
 
+    private static final String MDMS_DEPARTMENT_MASTER_JSONPATH = "$.MdmsRes.common-masters.Department";
+
+    /**
+     * Department CODE -> display-NAME map, for dual-read department-scoped search: complaints
+     * created before this system started storing the department CODE (see
+     * {@code PGRService#getDepartmentFromMDMS}) still have the display NAME stored, so a
+     * department-scope filter that only matches on code would never match those historical rows.
+     * Best-effort — returns an empty map (never throws) on any MDMS failure, degrading to
+     * code-only matching rather than failing the whole search over a lookup that's purely there to
+     * widen matches, not restrict them.
+     */
+    public Map<String, String> getDepartmentCodeToNameMap(RequestInfo requestInfo, String tenantId) {
+        try {
+            MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo, tenantId);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+            List<Map<String, Object>> departments = JsonPath.read(result, MDMS_DEPARTMENT_MASTER_JSONPATH);
+            Map<String, String> codeToName = new LinkedHashMap<>();
+            if (departments != null) {
+                for (Map<String, Object> d : departments) {
+                    Object code = d.get("code");
+                    Object name = d.get("name");
+                    if (code instanceof String && name instanceof String)
+                        codeToName.put((String) code, (String) name);
+                }
+            }
+            return codeToName;
+        } catch (Exception e) {
+            log.warn("MDMSUtils: failed to fetch Department code->name map for tenant '{}' — department dual-read (name<->code) skipped: {}",
+                    tenantId, e.toString());
+            return Map.of();
+        }
+    }
+
     /**
      * Validates that a caseRelatedTo code is active in the ComplaintRelatedToMap MDMS master.
      * Tries city tenant first, falls back to state tenant.

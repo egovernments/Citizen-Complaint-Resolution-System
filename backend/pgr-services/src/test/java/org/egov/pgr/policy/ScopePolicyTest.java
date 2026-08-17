@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ScopePolicyTest {
@@ -31,15 +32,24 @@ class ScopePolicyTest {
     }
 
     @Test
-    void notAMapReturnsEmpty() {
-        assertTrue(ScopePolicy.parse("not-a-map").isEmpty());
+    void nullMeansGenuinelyNotConfiguredAndReturnsEmpty() {
+        // Only a genuinely absent `scope` key (raw == null) reads as "not configured" — everything
+        // else that fails to parse is a present-but-broken policy, see the tests below.
         assertTrue(ScopePolicy.parse(null).isEmpty());
     }
 
     @Test
-    void missingOrEmptyAxesReturnsEmpty() {
-        assertTrue(ScopePolicy.parse(Map.of("roleScopes", Map.of())).isEmpty());
-        assertTrue(ScopePolicy.parse(Map.of("axes", List.of())).isEmpty());
+    void notAMapIsMalformedNotAbsent() {
+        assertThrows(MalformedScopePolicyException.class, () -> ScopePolicy.parse("not-a-map"));
+    }
+
+    @Test
+    void missingOrEmptyAxesIsMalformedNotAbsent() {
+        // The scope key IS present here (just missing/empty 'axes') — an authoring mistake, not a
+        // confirmed absence of configuration, so this must NOT collapse into the same "not
+        // configured" bucket null gets (#1441 review).
+        assertThrows(MalformedScopePolicyException.class, () -> ScopePolicy.parse(Map.of("roleScopes", Map.of())));
+        assertThrows(MalformedScopePolicyException.class, () -> ScopePolicy.parse(Map.of("axes", List.of())));
     }
 
     @Test

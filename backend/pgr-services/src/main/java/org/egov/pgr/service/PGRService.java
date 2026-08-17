@@ -352,13 +352,13 @@ public class PGRService {
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
-        // plainSearch stays record-level unrestricted (see PGRRepository/PGRQueryBuilder — no
-        // scope threaded into the query), but field-level PII masking (e.g. citizen.mobileNumber)
-        // must still apply here — this scope is used ONLY for that, never for row filtering.
-        PgrSearchScope fieldVisibilityScope = searchAccessPolicyService.resolveScope(
-                requestInfo, tenantIdForMdms, config.getStateLevelTenantIdLength());
-        fieldVisibilityService.apply(requestInfo, tenantIdForMdms, fieldVisibilityScope,
-                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "complaint", enrichedServiceWrappers);
+        // plainSearch stays record-level unrestricted (see PGRRepository/PGRQueryBuilder — no scope
+        // threaded into the query) AND, deliberately, unrestricted at the field-visibility level too:
+        // _plainsearch is a distinct endpoint from _search and must not reuse _search's
+        // ACCESSCONTROL-ACTIONS-TEST action/policy (id 2008) for field masking here — that policy's
+        // scope/attributes were authored for _search's semantics, not this endpoint's. If
+        // _plainsearch needs field-level masking, it needs its own action + policy end-to-end
+        // (row AND field), not a borrowed one.
 
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){

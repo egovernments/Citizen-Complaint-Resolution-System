@@ -3,6 +3,7 @@ package org.egov.pgr.policy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -70,13 +71,34 @@ public class AccessPolicyRegistry {
 
     private final MDMSUtils mdmsUtils;
     private final ObjectMapper objectMapper;
+    private final PGRConfiguration config;
 
     private final Map<String, CachedEntry> cache = new ConcurrentHashMap<>();
 
     @Autowired
-    public AccessPolicyRegistry(MDMSUtils mdmsUtils, ObjectMapper objectMapper) {
+    public AccessPolicyRegistry(MDMSUtils mdmsUtils, ObjectMapper objectMapper, PGRConfiguration config) {
         this.mdmsUtils = mdmsUtils;
         this.objectMapper = objectMapper;
+        this.config = config;
+    }
+
+    /**
+     * The "policy not defined for this deployment, allow" fallback (see {@link #getCondition}) is
+     * ONLY taken when {@link PGRConfiguration#isAbacStrictMode()} is false (the default) — an
+     * explicit, opt-in rollout gate: a missing/invisible action is indistinguishable from a broken
+     * role-action mapping, so once a tenant's ABAC policies are fully authored it should opt into
+     * {@code pgr.abac.strict-mode=true} and get fail-closed here too, instead of relying on this
+     * backward-compatible default forever.
+     */
+    private String allowIfBackwardCompatibilityEnabled(String actionUrl, String tenantId) {
+        if (config.isAbacStrictMode()) {
+            log.error("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — pgr.abac.strict-mode is enabled, failing closed",
+                    actionUrl, tenantId);
+            return null;
+        }
+        log.info("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — policy not defined, allowing (backward compatible; set pgr.abac.strict-mode=true to fail closed instead)",
+                actionUrl, tenantId);
+        return ALWAYS_ALLOW_CONDITION;
     }
 
     /**
@@ -93,6 +115,12 @@ public class AccessPolicyRegistry {
      *       GENERATED from it (see {@link #synthesizeCondition}) rather than read from
      *       {@code condition}, so the Tier-1 SQL scope ({@link PolicyDrivenScopeResolver}, which
      *       reads the same {@code scope} block) and this Tier-2 re-check can never disagree.</li>
+     *   <li>the entry HAS a {@code resource.complaint.scope} block, but it's malformed (see
+     *       {@link ScopePolicy#parse}), or declares an axis {@link #synthesizeCondition} has no
+     *       field mapping for — an authoring mistake on an authored policy, worse than no policy at
+     *       all; returns null, fail-closed (never falls through to the legacy {@code condition}
+     *       field or {@link #ALWAYS_ALLOW_CONDITION} — those are for a CONFIRMED absence of scope
+     *       config, not a broken one).</li>
      *   <li>no {@code scope} block, and the entry has no {@code condition} field either — an
      *       authoring mistake, not an absent policy; returns null, fail-closed.</li>
      *   <li>no {@code scope} block, but a hand-authored {@code condition} exists — returns it
@@ -109,17 +137,22 @@ public class AccessPolicyRegistry {
             return null;
         }
         if (action == null) {
-            log.info("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — policy not defined, allowing (backward compatible)",
-                    actionUrl, tenantId);
-            return ALWAYS_ALLOW_CONDITION;
+            return allowIfBackwardCompatibilityEnabled(actionUrl, tenantId);
         }
 
-        Optional<ScopePolicy> scopePolicy = extractScopePolicy(action, RESOURCE_TYPE_COMPLAINT);
+        Optional<ScopePolicy> scopePolicy;
+        try {
+            scopePolicy = extractScopePolicy(action, RESOURCE_TYPE_COMPLAINT);
+        } catch (MalformedScopePolicyException e) {
+            log.error("AccessPolicyRegistry: malformed resource.complaint.scope for url='{}' tenant='{}' — failing closed: {}",
+                    actionUrl, tenantId, e.getMessage());
+            return null;
+        }
         if (scopePolicy.isPresent()) {
             String generated = synthesizeCondition(scopePolicy.get());
             if (generated != null)
                 return generated;
-            log.error("AccessPolicyRegistry: failed to serialize generated condition for url='{}' tenant='{}' — failing closed",
+            log.error("AccessPolicyRegistry: failed to generate condition for url='{}' tenant='{}' (unmapped axis or serialization failure — see above) — failing closed",
                     actionUrl, tenantId);
             return null;
         }
@@ -145,9 +178,12 @@ public class AccessPolicyRegistry {
      * tree for a resolved {@link ScopePolicy}: the tenantWide bypass and CITIZEN self-scope branches
      * are a fixed template (they aren't axis-based), and only the EMPLOYEE clause's axis-matching
      * sub-conditions are generated by iterating {@code policy.getAxes()} against {@link #AXIS_FIELDS}.
-     * An axis with no known field mapping is skipped (logged) rather than failing the whole
-     * condition — same "don't invalidate the whole policy over one bad entry" principle as
-     * {@link ScopePolicy#parse}. Returns null only if JSON serialization itself fails.
+     * An axis with no known field mapping fails the WHOLE condition (returns null) rather than being
+     * silently skipped: skipping would silently drop that axis's restriction from the Tier-2
+     * re-check while {@link PolicyDrivenScopeResolver}'s Tier-1 SQL scope (which reads the exact same
+     * {@code scope} block via {@code AXIS_FIELDS}' Tier-1 counterpart) may still be enforcing it —
+     * i.e. the two tiers would silently disagree, which is exactly what generating both from one
+     * artifact is meant to prevent. Also returns null if JSON serialization itself fails.
      */
     private String synthesizeCondition(ScopePolicy policy) {
         List<Object> employeeClauseParts = new ArrayList<>();
@@ -155,8 +191,8 @@ public class AccessPolicyRegistry {
         for (String axis : policy.getAxes()) {
             AxisFields fields = AXIS_FIELDS.get(axis);
             if (fields == null) {
-                log.warn("AccessPolicyRegistry: scope declares axis '{}' with no known resource/user field mapping — skipping in generated condition", axis);
-                continue;
+                log.error("AccessPolicyRegistry: scope declares axis '{}' with no known resource/user field mapping — failing the whole condition closed", axis);
+                return null;
             }
             employeeClauseParts.add(Map.of("or", List.of(
                     Map.of("!", Map.of("var", fields.userAttributeVar())),
@@ -182,9 +218,12 @@ public class AccessPolicyRegistry {
     }
 
     /**
-     * Parses {@code resource.<resourceType>.scope} into a {@link ScopePolicy}, or empty when
-     * absent/malformed — callers treat that identically to "not configured" (backward compatible),
-     * never as an error.
+     * Parses {@code resource.<resourceType>.scope} into a {@link ScopePolicy}. Returns empty when
+     * the {@code scope} key is genuinely ABSENT (no {@code resource}/{@code resourceType}/
+     * {@code scope} at all) — callers treat that as "not configured" (backward compatible). Throws
+     * {@link MalformedScopePolicyException} when the key IS present but doesn't parse into a
+     * well-formed policy — see {@link ScopePolicy#parse} — which callers must NOT treat the same as
+     * "not configured".
      */
     @SuppressWarnings("unchecked")
     private Optional<ScopePolicy> extractScopePolicy(Map<String, Object> action, String resourceType) {
@@ -209,6 +248,9 @@ public class AccessPolicyRegistry {
      * compatible default policy. Swallowing a genuine accesscontrol OUTAGE into that same empty
      * result would apply that (comparatively permissive) default while the system is down, instead
      * of failing the request closed. Letting the exception propagate keeps the outage case distinct.
+     * Also, deliberately, does NOT catch {@link MalformedScopePolicyException} for the same reason —
+     * a present-but-broken policy must fail the request, never silently take the "not configured"
+     * default a genuinely absent one gets.
      */
     public Optional<ScopePolicy> getScopePolicy(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
         Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);

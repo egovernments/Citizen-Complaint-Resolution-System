@@ -3,6 +3,7 @@ package org.egov.pgr.policy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
+import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.Address;
 import org.egov.pgr.web.models.Boundary;
@@ -73,7 +74,7 @@ class SearchAccessPolicyServiceTest {
         when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
                 .thenReturn(List.of(action));
 
-        AccessPolicyRegistry registry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        AccessPolicyRegistry registry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         service = new SearchAccessPolicyService(null, registry, new PolicyEvaluator(), new PolicyInputBuilder());
     }
 
@@ -192,7 +193,7 @@ class SearchAccessPolicyServiceTest {
         Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
         when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
                 .thenReturn(List.of(action));
-        AccessPolicyRegistry registryWithScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        AccessPolicyRegistry registryWithScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
                 new SearchAccessPolicyService(mockResolver, registryWithScope, new PolicyEvaluator(), new PolicyInputBuilder());
@@ -210,7 +211,7 @@ class SearchAccessPolicyServiceTest {
         // No 'scope' block on the mocked action (@BeforeEach's action only has a hand-authored
         // condition) — must fall back to the jurisdiction-only default, not fail or pass null.
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
-        AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         SearchAccessPolicyService serviceWithMockResolver =
                 new SearchAccessPolicyService(mockResolver, registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
@@ -229,7 +230,7 @@ class SearchAccessPolicyServiceTest {
         // DEFAULT_SCOPE_POLICY while accesscontrol is down (CodeRabbit #3775816481).
         when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
                 .thenThrow(new AccessControlUnavailableException("boom", new RuntimeException("boom")));
-        AccessPolicyRegistry registryUnavailable = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        AccessPolicyRegistry registryUnavailable = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
                 new SearchAccessPolicyService(mockResolver, registryUnavailable, new PolicyEvaluator(), new PolicyInputBuilder());

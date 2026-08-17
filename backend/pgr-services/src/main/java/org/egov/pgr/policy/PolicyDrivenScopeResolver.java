@@ -4,10 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.util.MDMSUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -33,24 +33,18 @@ import java.util.stream.Collectors;
  * PrincipalScopeResolver#isPureCitizen}, which its own Javadoc already documents as the single
  * source of truth for that classification (shared with {@code EnrichmentService}) — that one is
  * meant to never drift, unlike the axis-resolution logic below. Everything else (HRMS lookup,
- * department/jurisdiction extraction, the tenant-wide-role fail-open exception, the deny-all
- * sentinel) is intentionally duplicated here rather than shared, so this class has no dependency
- * on Dashboard's resolver for its own core behavior. Keep {@link #TENANT_WIDE_ROLES} and {@link
- * #DENY_ALL_DEPARTMENT} in sync with {@link PrincipalScopeResolver}'s copies until the migration
+ * department/jurisdiction extraction, the deny-all sentinel) is intentionally duplicated here
+ * rather than shared, so this class has no dependency on Dashboard's resolver for its own core
+ * behavior. Unlike {@link PrincipalScopeResolver}, this class has NO hard-coded tenant-wide-role
+ * bypass: whether a role is unrestricted on an axis is decided ENTIRELY by the authored
+ * {@link ScopePolicy} (an explicit {@code ALL} for that role/axis), even when HRMS has no data at
+ * all for the caller — see {@link #resolveEmployeeScopeViaPolicy}. Keep {@link
+ * #DENY_ALL_DEPARTMENT} in sync with {@link PrincipalScopeResolver}'s copy until the migration
  * above happens.
  */
 @Component
 @Slf4j
 public class PolicyDrivenScopeResolver {
-
-    /**
-     * Roles that are legitimately tenant-wide and may be unrestricted with no HRMS department
-     * (admins/supervisors). Every other employee role MUST resolve a department or be denied.
-     * Kept identical to {@link PrincipalScopeResolver}'s copy — see class Javadoc.
-     */
-    private static final Set<String> TENANT_WIDE_ROLES = Set.of(
-            "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN", "STADMIN",
-            "SUPERVISOR", "PGR_SUPERVISOR");
 
     /** Sentinel department for a denied principal — matches no real row (fail-closed). */
     private static final String DENY_ALL_DEPARTMENT = "__scope_denied__";
@@ -59,14 +53,16 @@ public class PolicyDrivenScopeResolver {
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
     private final PrincipalScopeResolver principalScopeResolver;
+    private final MDMSUtils mdmsUtils;
 
     @Autowired
     public PolicyDrivenScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper,
-                                      PrincipalScopeResolver principalScopeResolver) {
+                                      PrincipalScopeResolver principalScopeResolver, MDMSUtils mdmsUtils) {
         this.config = config;
         this.restTemplate = restTemplate;
         this.mapper = mapper;
         this.principalScopeResolver = principalScopeResolver;
+        this.mdmsUtils = mdmsUtils;
     }
 
     /**
@@ -130,51 +126,94 @@ public class PolicyDrivenScopeResolver {
 
     /**
      * Which axes are REQUIRED (level {@code OWN}) vs unrestricted (level {@code ALL}) for THIS
-     * caller is read from {@code scopePolicy} — see {@link ScopePolicyEngine}. Only "no HRMS data
-     * on ANY axis at all" routes through {@link #unresolvedScope} (preserving the tenant-wide-role
-     * safety net for a genuinely blank HRMS record); once there's at least some assignment/
-     * jurisdiction data, each axis is resolved independently by the engine, which fails closed
-     * per-axis (a sentinel value, not "no restriction") when that SPECIFIC axis is required but
-     * unresolvable — see {@link ScopePolicyEngine#UNRESOLVED_SENTINEL}.
+     * caller is read from {@code scopePolicy} — see {@link ScopePolicyEngine}. EVERY outcome here
+     * (a resolved HRMS record, an empty one, no HRMS record at all, or an HRMS lookup error) routes
+     * through the SAME {@link ScopePolicyEngine#resolve} call, passing whatever department/
+     * jurisdiction values were actually resolved (possibly empty sets) — there is no hard-coded
+     * role-based bypass. The engine already fails closed per-axis (a sentinel value, not "no
+     * restriction") when a REQUIRED axis has no resolvable value, and only lets a role through
+     * unrestricted when the authored policy explicitly grants that role {@code ALL} for that axis
+     * — see {@link ScopePolicyEngine#UNRESOLVED_SENTINEL}. This means a hard-coded tenant-wide role
+     * with no HRMS record is denied unless the policy itself says {@code ALL} for it.
      */
     private PgrSearchScope resolveEmployeeScopeViaPolicy(RequestInfo requestInfo, User u, String tenantId,
                                                           boolean stateLevel, ScopePolicy scopePolicy) {
+        Set<String> roleCodes = extractRoleCodes(u);
         try {
             String userName = u.getUserName();
             if (userName == null || userName.isEmpty())
-                return unresolvedScope(u, tenantId, stateLevel, "empty userName");
+                return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(), "empty userName");
 
             JsonNode employees = searchHrmsByCode(requestInfo, tenantId, userName);
             if (employees == null || !employees.isArray() || employees.size() == 0)
-                return unresolvedScope(u, tenantId, stateLevel, "no HRMS employee for '" + userName + "'");
+                return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(),
+                        "no HRMS employee for '" + userName + "'");
 
             JsonNode emp = employees.get(0);
             Set<String> departments = extractDepartments(emp);
             Set<String> jurisdictions = extractJurisdictions(emp);
-
-            if (departments.isEmpty() && jurisdictions.isEmpty())
-                return unresolvedScope(u, tenantId, stateLevel, "no active HRMS department assignment or jurisdiction assignment");
-
-            Set<String> roleCodes = u.getRoles() == null ? Set.of() : u.getRoles().stream()
-                    .filter(r -> r != null && r.getCode() != null)
-                    .map(r -> r.getCode().trim().toUpperCase())
-                    .filter(c -> !c.isEmpty())
-                    .collect(Collectors.toSet());
-
-            Map<String, Set<String>> hrmsResolvedValuesPerAxis = Map.of(
-                    "department", departments,
-                    "jurisdiction", jurisdictions);
-            Map<String, List<String>> resolvedAxisValues = ScopePolicyEngine.resolve(scopePolicy, roleCodes, hrmsResolvedValuesPerAxis);
-
-            List<String> deptList = resolvedAxisValues.get("department");
-            List<String> jurisdictionList = resolvedAxisValues.get("jurisdiction");
-            log.info("PolicyDrivenScopeResolver: userName='{}' departments={} jurisdictions={} (policy-driven)",
-                    userName, deptList, jurisdictionList);
-            return new PgrSearchScope(tenantId, stateLevel, null, deptList, jurisdictionList);
+            return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, departments, jurisdictions, null);
         } catch (Exception ex) {
             log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
-            return unresolvedScope(u, tenantId, stateLevel, "HRMS error");
+            return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, Set.of(), Set.of(), "HRMS error");
         }
+    }
+
+    private static Set<String> extractRoleCodes(User u) {
+        return u.getRoles() == null ? Set.of() : u.getRoles().stream()
+                .filter(r -> r != null && r.getCode() != null)
+                .map(r -> r.getCode().trim().toUpperCase())
+                .filter(c -> !c.isEmpty())
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * @param noDataReason non-null only when {@code departments}/{@code jurisdictions} are empty
+     *                      because HRMS resolution didn't produce anything (missing/blank/error) —
+     *                      purely for the log line, has no effect on the resolved scope itself.
+     */
+    private PgrSearchScope resolveViaEngine(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel,
+                                             ScopePolicy scopePolicy, Set<String> roleCodes, Set<String> departments,
+                                             Set<String> jurisdictions, String noDataReason) {
+        Map<String, Set<String>> hrmsResolvedValuesPerAxis = Map.of(
+                "department", departments,
+                "jurisdiction", jurisdictions);
+        Map<String, List<String>> resolvedAxisValues = ScopePolicyEngine.resolve(scopePolicy, roleCodes, hrmsResolvedValuesPerAxis);
+
+        List<String> deptList = expandDepartmentNames(requestInfo, tenantId, resolvedAxisValues.get("department"));
+        List<String> jurisdictionList = resolvedAxisValues.get("jurisdiction");
+        if (noDataReason != null)
+            log.info("PolicyDrivenScopeResolver: userName='{}' — {} — resolving via policy with no HRMS axis data: departments={} jurisdictions={}",
+                    u.getUserName(), noDataReason, deptList, jurisdictionList);
+        else
+            log.info("PolicyDrivenScopeResolver: userName='{}' departments={} jurisdictions={} (policy-driven)",
+                    u.getUserName(), deptList, jurisdictionList);
+        return new PgrSearchScope(tenantId, stateLevel, null, deptList, jurisdictionList);
+    }
+
+    /**
+     * HRMS only ever gives department CODEs, but complaints created before this system started
+     * storing the code (see {@code PGRService#getDepartmentFromMDMS}) still have the display NAME
+     * in that field — union in each code's display name (via MDMS {@code common-masters.Department})
+     * so a department-scoped search still matches those historical rows, not just new ones. The
+     * deny-all sentinel is never a real code and is excluded from the lookup entirely (both to avoid
+     * a wasted MDMS call on the already-denied path, and because it must never accidentally resolve
+     * to a real name). Best-effort: an MDMS failure just skips the expansion (see
+     * {@link MDMSUtils#getDepartmentCodeToNameMap}), it never fails the search itself.
+     */
+    private List<String> expandDepartmentNames(RequestInfo requestInfo, String tenantId, List<String> departmentCodes) {
+        if (departmentCodes == null || departmentCodes.isEmpty() || departmentCodes.contains(ScopePolicyEngine.UNRESOLVED_SENTINEL))
+            return departmentCodes;
+        Map<String, String> codeToName = mdmsUtils.getDepartmentCodeToNameMap(requestInfo, tenantId);
+        if (codeToName.isEmpty())
+            return departmentCodes;
+        List<String> expanded = new java.util.ArrayList<>(departmentCodes);
+        for (String code : departmentCodes) {
+            String name = codeToName.get(code);
+            if (name != null && !expanded.contains(name))
+                expanded.add(name);
+        }
+        return expanded;
     }
 
     private static Set<String> extractDepartments(JsonNode emp) {
@@ -200,29 +239,6 @@ public class PolicyDrivenScopeResolver {
             }
         }
         return jurisdictions;
-    }
-
-    /**
-     * Scope for an employee whose department could not be resolved. Fail-CLOSED (deny-all sentinel)
-     * for constrained roles; unrestricted only for tenant-wide (admin/supervisor) roles.
-     */
-    private PgrSearchScope unresolvedScope(User u, String tenantId, boolean stateLevel, String reason) {
-        if (hasTenantWideRole(u)) {
-            log.debug("scope unresolved ({}) for tenant-wide role '{}' — unrestricted", reason, u.getUserName());
-            return new PgrSearchScope(tenantId, stateLevel, null, null, null);
-        }
-        log.info("scope unresolved ({}) for constrained principal '{}' — DENY (fail-closed)", reason, u.getUserName());
-        return new PgrSearchScope(tenantId, stateLevel, null, List.of(DENY_ALL_DEPARTMENT), null);
-    }
-
-    private boolean hasTenantWideRole(User u) {
-        List<Role> roles = u.getRoles();
-        if (roles == null) return false;
-        for (Role r : roles) {
-            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
-            if (TENANT_WIDE_ROLES.contains(c)) return true;
-        }
-        return false;
     }
 
     /**

@@ -111,4 +111,38 @@ describe('loadMastersCapability', () => {
     const cap = await loadMastersCapability(client, 'pg', ['SUPERVISOR']);
     assert.equal(cap.canView('common-masters.Broken'), true);
   });
+
+  it('propagates a fetch failure rather than resolving as an open policy', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => { throw new Error('network down'); };
+    await assert.rejects(() => loadMastersCapability(client, 'pg', ['SUPERVISOR']));
+  });
+
+  it('paginates past a single page instead of truncating', async () => {
+    const PAGE_SIZE = 500;
+    // 501 write actions for distinct schemas — one page's worth plus one more, so the LAST
+    // one only becomes visible if the fetch actually pages past the first PAGE_SIZE.
+    const manyWriteActions = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => ({
+      id: `w${i}`, tenantId: 'pg', schemaCode: ACTIONS_TEST_SCHEMA, uniqueIdentifier: `w${i}`, isActive: true,
+      data: { id: 9000 + i, url: `/mdms-v2/v2/_create/some-schema.Extra${i}` },
+    }));
+    const lastActionId = 9000 + PAGE_SIZE;
+    const roleAction = {
+      id: 'ra1', tenantId: 'pg', schemaCode: ROLEACTIONS_SCHEMA, uniqueIdentifier: 'ra1', isActive: true,
+      data: { rolecode: 'MDMS_ADMIN', actionid: lastActionId },
+    };
+
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, body: { MdmsCriteria?: { schemaCode?: string; limit?: number; offset?: number } }) => {
+        const { schemaCode, limit = PAGE_SIZE, offset = 0 } = body.MdmsCriteria ?? {};
+        if (schemaCode === ROLEACTIONS_SCHEMA) return { mdms: offset === 0 ? [roleAction] : [] };
+        if (schemaCode === ACTIONS_TEST_SCHEMA) return { mdms: manyWriteActions.slice(offset, offset + limit) };
+        return { mdms: [] };
+      };
+
+    const cap = await loadMastersCapability(client, 'pg', ['MDMS_ADMIN']);
+    assert.equal(cap.canEdit(`some-schema.Extra${PAGE_SIZE}`), true);
+  });
 });

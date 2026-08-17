@@ -24,6 +24,16 @@ const OPEN_PERMISSIONS: DigitPermissions = {
   masters: { canView: () => true, canEdit: () => false },
 };
 
+// Distinct from OPEN_PERMISSIONS: used ONLY when the policy fetch itself
+// failed, never as the transient loading placeholder. A fetch failure means
+// we genuinely don't know the policy — defaulting to "show everything" would
+// silently reveal masters a restricted role shouldn't see, which is worse
+// than a temporarily-empty admin console the user can retry.
+const ERROR_PERMISSIONS: DigitPermissions = {
+  roles: [],
+  masters: { canView: () => false, canEdit: () => false },
+};
+
 const MastersCapabilityContext = createContext<DigitPermissions>(OPEN_PERMISSIONS);
 
 function identityKeyOf(): string {
@@ -53,10 +63,13 @@ export function MastersCapabilityProvider({ children }: { children: ReactNode })
       .then((perms: DigitPermissions) => {
         if (!cancelled) setPermissions(perms);
       })
-      .catch(() => {
-        // Fail open (default OPEN_PERMISSIONS stays in effect) — masters
-        // gating is UI-only presentation, not a security boundary; a
-        // policy-fetch failure must never lock an admin out of the console.
+      .catch((err) => {
+        // Fail CLOSED on an actual fetch failure — a failed fetch means we
+        // don't know the policy, not that none is configured; see
+        // ERROR_PERMISSIONS above for why this must not reuse
+        // OPEN_PERMISSIONS's "show everything" default.
+        console.error('useMastersCapability: failed to load access policy', err);
+        if (!cancelled) setPermissions(ERROR_PERMISSIONS);
       });
     return () => {
       cancelled = true;

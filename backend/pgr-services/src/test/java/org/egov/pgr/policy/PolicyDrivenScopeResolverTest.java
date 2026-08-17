@@ -7,6 +7,7 @@ import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.KpiCatalogService;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.util.MDMSUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -44,6 +46,8 @@ class PolicyDrivenScopeResolverTest {
     private RestTemplate restTemplate;
     @Mock
     private KpiCatalogService catalog;
+    @Mock
+    private MDMSUtils mdmsUtils;
 
     private PolicyDrivenScopeResolver resolver;
 
@@ -55,7 +59,37 @@ class PolicyDrivenScopeResolverTest {
         // isPureCitizen is pure role/type inspection — safe to use a real instance here rather
         // than mocking, since none of these tests exercise its HRMS-calling siblings.
         PrincipalScopeResolver principalScopeResolver = new PrincipalScopeResolver(config, restTemplate, mapper, catalog);
-        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, principalScopeResolver);
+        // Unstubbed mdmsUtils.getDepartmentCodeToNameMap defaults to an empty map (Mockito's
+        // built-in empty-collection default), which is exactly "no dual-read expansion available"
+        // — the department-code lists these tests assert on are left unchanged.
+        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, principalScopeResolver, mdmsUtils);
+    }
+
+    @Test
+    void departmentScopeExpandsToIncludeTheDisplayNameForDualRead() {
+        // Complaints created before this system stored the department CODE still have the
+        // display NAME in that field (see PGRService#getDepartmentFromMDMS) — the resolved scope
+        // must include both so a department-scoped search still matches those historical rows.
+        when(mdmsUtils.getDepartmentCodeToNameMap(any(), eq("pg.city"))).thenReturn(Map.of("DEPT_1", "Public Works"));
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)), List.of());
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("DEPT_1", "Public Works"), scope.departmentCodes);
+    }
+
+    @Test
+    void deniedDepartmentScopeIsNeverExpandedWithADisplayName() {
+        // The deny-all sentinel is not a real code — it must never be looked up (wasted call) or,
+        // worse, accidentally resolve to a real department name.
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of());
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+        verifyNoInteractions(mdmsUtils);
     }
 
     @Test
@@ -140,8 +174,29 @@ class PolicyDrivenScopeResolverTest {
     }
 
     @Test
-    void policyDrivenTenantWideRoleBypassesEvenWithNoHrmsDataAtAll() {
+    void roleWithNoExplicitPolicyOpinionAndNoHrmsDataIsDeniedNotBypassed() {
+        // The exact vulnerability this fix closes: a hard-coded "tenant-wide" role (SUPERUSER) must
+        // NOT get a free pass just because HRMS has no record for it — with no explicit roleScopes
+        // entry, SUPERUSER falls through to the policy's OWN/OWN default like anyone else, and with
+        // no HRMS data to satisfy that OWN requirement, it must be denied.
         ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of());
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("admin1", "EMPLOYEE", "SUPERUSER"), "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+        assertEquals(List.of("__scope_denied__"), scope.jurisdictionCodes);
+    }
+
+    @Test
+    void roleExplicitlyGrantedAllRemainsUnrestrictedEvenWithNoHrmsDataAtAll() {
+        // The correct realization of "only an explicit policy ALL can remove a restriction": when
+        // the authored policy itself grants SUPERUSER ALL on both axes, a caller with zero HRMS data
+        // still resolves unrestricted — this is a policy decision, not a hard-coded role shortcut.
+        ScopePolicy policy = policyWithRoleScopes(
+                List.of("department", "jurisdiction"),
+                Map.of("SUPERUSER", Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.ALL)),
                 Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(), List.of());
 

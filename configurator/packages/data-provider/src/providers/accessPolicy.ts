@@ -1,5 +1,6 @@
 import jsonLogic from 'json-logic-js';
 import type { DigitApiClient } from '../client/DigitApiClient.js';
+import type { MdmsRecord } from '../client/types.js';
 
 /**
  * Masters visibility/edit capability, computed client-side from data the
@@ -29,15 +30,37 @@ export const ROLEACTIONS_SCHEMA = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
 const SEARCH_ACTION_URL = '/mdms-v2/v2/_search';
 const WRITE_URL_RE = /^\/mdms-v2\/v2\/_(?:create|update)\/(.+)$/;
 
-// One-time fetch at login, not a paginated UI list — both masters run into
-// the thousands of rows, well past the 500-row cap generic master lists use
-// elsewhere in this app (see mdmsGetList in dataProvider.ts).
-const POLICY_FETCH_LIMIT = 5000;
+// Page size for the exhaustive fetch below — both masters can run into the
+// thousands of rows, well past the 500-row cap generic master lists use
+// elsewhere in this app (see mdmsGetList in dataProvider.ts). Paginating
+// instead of a single fixed-limit fetch means no record count can ever be
+// silently truncated out of the policy.
+const POLICY_FETCH_PAGE_SIZE = 500;
 
 const OPEN_CAPABILITY: MastersCapability = {
   canView: () => true,
   canEdit: () => false,
 };
+
+/**
+ * Fetches every record for `schemaCode`, paging until a page comes back
+ * shorter than the page size — never silently truncated by a fixed limit.
+ * Propagates a fetch failure rather than swallowing it: the caller (
+ * `loadMastersCapability`) must be able to tell "policy fetch failed" apart
+ * from "policy fetch succeeded, zero records" — collapsing those into the
+ * same empty array is exactly what let a fetch failure read as "no policy
+ * configured, show everything" (see `loadMastersCapability`'s Javadoc).
+ */
+async function fetchAllMdmsRecords(client: DigitApiClient, tenantId: string, schemaCode: string): Promise<MdmsRecord[]> {
+  const all: MdmsRecord[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await client.mdmsSearch(tenantId, schemaCode, { limit: POLICY_FETCH_PAGE_SIZE, offset });
+    all.push(...page);
+    if (page.length < POLICY_FETCH_PAGE_SIZE) return all;
+    offset += POLICY_FETCH_PAGE_SIZE;
+  }
+}
 
 export async function loadMastersCapability(
   client: DigitApiClient,
@@ -46,9 +69,14 @@ export async function loadMastersCapability(
 ): Promise<MastersCapability> {
   if (!tenantId || roles.length === 0) return OPEN_CAPABILITY;
 
+  // Deliberately NOT caught here: a policy-fetch failure must propagate to the
+  // caller as a rejected promise, not resolve into an empty policy that reads
+  // identically to "nothing configured, everything visible" (§2.5's existing
+  // "no entry = visible" rule) — see `useMastersCapability`'s error handling,
+  // which is what actually decides the safe fallback capability.
   const [actionRecords, roleActionRecords] = await Promise.all([
-    client.mdmsSearch(tenantId, ACTIONS_TEST_SCHEMA, { limit: POLICY_FETCH_LIMIT }).catch(() => []),
-    client.mdmsSearch(tenantId, ROLEACTIONS_SCHEMA, { limit: POLICY_FETCH_LIMIT }).catch(() => []),
+    fetchAllMdmsRecords(client, tenantId, ACTIONS_TEST_SCHEMA),
+    fetchAllMdmsRecords(client, tenantId, ROLEACTIONS_SCHEMA),
   ]);
 
   const searchAction = actionRecords.find((r) => (r.data as Record<string, unknown> | undefined)?.url === SEARCH_ACTION_URL);

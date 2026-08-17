@@ -85,32 +85,35 @@ public final class ScopePolicy {
 
     /**
      * Parses the raw {@code scope} object from an action's {@code resource.<resourceType>} block.
-     * Returns empty when {@code raw} isn't a well-formed policy at all (not a Map, or no non-empty
-     * {@code axes} list) — callers treat that identically to "no scope configured" (backward
-     * compatible fallback), same principle as {@link AccessPolicyRegistry}'s "policy not defined"
-     * handling elsewhere. Malformed individual role/axis entries are skipped with a logged warning
-     * rather than invalidating the whole policy — {@link #levelFor} degrades those to {@code default}
-     * or {@link ScopeLevel#OWN}, never silently to {@link ScopeLevel#ALL}.
+     * {@code raw == null} means the {@code scope} key itself is absent — a confirmed absence of
+     * configuration, so this returns empty and callers treat that as "no scope configured"
+     * (backward compatible fallback), same principle as {@link AccessPolicyRegistry}'s "policy not
+     * defined" handling elsewhere. Anything else that fails to parse into a well-formed policy (not
+     * a Map, or no non-empty {@code axes} list) means the {@code scope} key IS present but broken —
+     * an authoring mistake, NOT an absent policy — and throws {@link MalformedScopePolicyException}
+     * so callers fail closed instead of silently falling back to the same permissive default an
+     * absent policy gets. Malformed INDIVIDUAL role/axis entries (once the top-level shape is valid)
+     * are still skipped with a logged warning rather than invalidating the whole policy —
+     * {@link #levelFor} degrades those to {@code default} or {@link ScopeLevel#OWN}, never silently
+     * to {@link ScopeLevel#ALL}.
      */
     @SuppressWarnings("unchecked")
     public static Optional<ScopePolicy> parse(Object raw) {
-        if (!(raw instanceof Map))
+        if (raw == null)
             return Optional.empty();
+        if (!(raw instanceof Map))
+            throw new MalformedScopePolicyException("scope is present but not a JSON object: " + raw.getClass().getSimpleName());
         Map<String, Object> scopeMap = (Map<String, Object>) raw;
 
         Object axesRaw = scopeMap.get("axes");
-        if (!(axesRaw instanceof List) || ((List<?>) axesRaw).isEmpty()) {
-            log.warn("ScopePolicy: 'axes' missing/empty — treating as not configured");
-            return Optional.empty();
-        }
+        if (!(axesRaw instanceof List) || ((List<?>) axesRaw).isEmpty())
+            throw new MalformedScopePolicyException("'axes' missing/empty");
         List<String> axes = new java.util.ArrayList<>();
         for (Object a : (List<?>) axesRaw)
             if (a instanceof String && !((String) a).isBlank())
                 axes.add((String) a);
-        if (axes.isEmpty()) {
-            log.warn("ScopePolicy: 'axes' had no valid string entries — treating as not configured");
-            return Optional.empty();
-        }
+        if (axes.isEmpty())
+            throw new MalformedScopePolicyException("'axes' had no valid string entries");
         Set<String> axisSet = new LinkedHashSet<>(axes);
 
         Map<String, ScopeLevel> defaultScope = parseAxisLevelMap(scopeMap.get("default"), axisSet, "default");

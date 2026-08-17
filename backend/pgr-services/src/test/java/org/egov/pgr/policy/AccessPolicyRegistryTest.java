@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
+import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,9 @@ class AccessPolicyRegistryTest {
 
     @BeforeEach
     void setup() {
-        registry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper());
+        // abacStrictMode defaults to false (PGRConfiguration's no-arg constructor) — the
+        // backward-compatible "missing action -> allow" path these existing tests assert on.
+        registry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
     }
 
     @Test
@@ -76,6 +79,21 @@ class AccessPolicyRegistryTest {
                 .thenReturn(List.of());
 
         assertEquals("true", registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+    }
+
+    @Test
+    void failsClosedWhenNoActionVisibleAndStrictModeIsEnabled() {
+        // The explicit opt-in rollout gate (#1441 review): once pgr.abac.strict-mode=true, a
+        // missing/invisible action must fail closed instead of taking the backward-compatible
+        // "allow" default — a separate registry instance since the flag is read at construction.
+        PGRConfiguration strictConfig = new PGRConfiguration();
+        strictConfig.setAbacStrictMode(true);
+        AccessPolicyRegistry strictRegistry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), strictConfig);
+        RequestInfo requestInfo = requestInfo("CITIZEN");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of());
+
+        assertNull(strictRegistry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
     }
 
     @Test
@@ -353,6 +371,58 @@ class AccessPolicyRegistryTest {
                         "jurisdictions", List.of("WARD_001"))),
                 "resource", Map.of("complaint", Map.of("department", "DEPT_1", "boundary", "WARD_999")));
         assertFalse(evaluator.isAllowed(generated, wrongBoundaryData));
+    }
+
+    @Test
+    void getConditionFailsClosedOnAnUnmappedAxisRatherThanSilentlyDroppingIt() {
+        // An axis with no AXIS_FIELDS mapping must fail the WHOLE generated condition (null, not a
+        // condition missing just that axis's restriction) — otherwise Tier-1 (SQL) and Tier-2 (this
+        // generated condition) could silently disagree on what that axis restricts (#1441 review).
+        Map<String, Object> scope = Map.of(
+                "axes", List.of("department", "unmapped-axis"),
+                "default", Map.of("department", "OWN", "unmapped-axis", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+    }
+
+    @Test
+    void getConditionFailsClosedOnAMalformedScopeRatherThanFallingBackToHandAuthoredCondition() {
+        // A present-but-malformed scope block (axes empty) must NOT be treated the same as "no
+        // scope configured" — it must fail closed, never silently fall through to a legacy
+        // hand-authored condition (which could be stale/wrong for this authored-but-broken policy).
+        Map<String, Object> scope = Map.of("axes", List.of());
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = new LinkedHashMap<>();
+        action.put("id", 2008);
+        action.put("url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+        action.put("resource", resource);
+        action.put("condition", Map.of("==", List.of(1, 1))); // must be ignored — see above
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+    }
+
+    @Test
+    void getScopePolicyThrowsOnAMalformedScopeRatherThanReturningEmpty() {
+        // Distinct from getScopePolicyIsEmptyWhenNoScopeBlockPresent: the scope KEY is present here
+        // but malformed — SearchAccessPolicyService must be able to tell this apart from "not
+        // configured" (an empty Optional it treats as safe to apply its own default policy to).
+        Map<String, Object> scope = Map.of("axes", List.of());
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertThrows(MalformedScopePolicyException.class, () -> registry.getScopePolicy(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
     }
 
     @Test
