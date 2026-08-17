@@ -9,7 +9,7 @@ import LineChart from './LineChart';
 import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
-import { evaluateCompose } from '../utils/composeKpi';
+import { evaluateCompose, requiresBackendComposition } from '../utils/composeKpi';
 import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
 import { formatNumber } from '../utils/numberFormat';
 import {
@@ -229,6 +229,12 @@ function primaryMeasure(result, viz) {
 
 function resolveScalar(ctx) {
   const { viz, result, results } = ctx;
+  // Calendar-aware averages are composed by pgr-services. If a malformed KPI definition
+  // combines one with a raw query, fail closed instead of rendering that query's total as
+  // an average. A valid backend-composed response always supplies result.value.
+  if (requiresBackendComposition(viz.compose)) {
+    return result.value != null ? Number(result.value) : null;
+  }
   if (viz.compose && results) {
     const composed = evaluateCompose(viz.compose, results);
     if (composed != null) return composed;

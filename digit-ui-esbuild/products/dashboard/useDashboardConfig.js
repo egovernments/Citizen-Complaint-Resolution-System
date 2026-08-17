@@ -24,12 +24,36 @@
  * never to a retry spinner.
  *
  * @returns {{ config: object|null, loading: boolean }}
- *   - config: the "default" record (else the first record); null when the
- *     master is unseeded / unreadable / malformed. Consumers treat null as
- *     "keep built-in behavior".
+ *   - config: the deterministic record selectDashboardConfigRecord() picks
+ *     (see below); null when the master is unseeded / unreadable / malformed.
+ *     Consumers treat null as "keep built-in behavior".
  *   - loading: query in flight — consumers must HOLD rendering while true so
  *     configured behavior never flashes in after a default-rendered frame.
  */
+
+/**
+ * Deterministic dashboard-config record selection when MDMS returns more than
+ * one active dss.DashboardConfig record (duplicate/malformed data) — the SAME
+ * rule KpiCatalogService.selectDashboardConfigRecord (Java) and the
+ * pgr_dashboard_tenant_timezone SQL view (ORDER BY) apply, so every layer
+ * picks the identical record from identical data:
+ *   1) the record whose (trimmed) id equals "default" wins;
+ *   2) else the first record in API response order (the historical behavior).
+ * The explicit default is the single-record contract; preserving response
+ * order for malformed duplicates avoids silently changing existing tenants.
+ */
+export function selectDashboardConfigRecord(records) {
+  if (!Array.isArray(records) || records.length === 0) return null;
+  if (records.length === 1) return records[0];
+
+  const trimmedId = (r) => (typeof r?.id === "string" ? r.id.trim() : null);
+
+  const withDefault = records.find((r) => trimmedId(r) === "default");
+  if (withDefault) return withDefault;
+
+  return records[0];
+}
+
 export const useDashboardConfig = () => {
   // Standalone harness (DashboardLogin dev mode): no Digit runtime and no
   // react-query provider exist. window.Digit is initialized before React
@@ -56,10 +80,10 @@ export const useDashboardConfig = () => {
   );
 
   // Shape-guard everything: Kong's cjson pre-function can flatten an empty
-  // array to {}, and a hand-seeded master may carry extra records — prefer the
-  // "default" record, tolerate anything else by falling back.
+  // array to {}, and a hand-seeded master may carry extra records — resolve
+  // deterministically via selectDashboardConfigRecord.
   const records = Array.isArray(data) ? data : [];
-  const record = records.find((r) => r?.id === "default") || records[0];
+  const record = selectDashboardConfigRecord(records);
 
   return { config: record || null, loading: isLoading };
 };

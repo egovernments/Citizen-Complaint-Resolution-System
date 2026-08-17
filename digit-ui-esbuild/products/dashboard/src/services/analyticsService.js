@@ -52,6 +52,52 @@ async function postAnalytics(path, body) {
   return response.json();
 }
 
+/**
+ * Public dashboard transport.
+ *
+ * This deliberately does not use authFetch/buildRequestInfo. The public page
+ * can be opened in a browser that also has a live employee session on this
+ * origin; reading that session here would silently turn the public URL into an
+ * employee dashboard. It would also opt a public 401 into the employee token
+ * refresh / session-expiry machinery. The dedicated backend endpoints own the
+ * anonymous PUBLIC contract, so this transport always sends a role-less
+ * RequestInfo and performs exactly one request.
+ */
+async function postPublicAnalytics(path, body) {
+  const url = `${ANALYTICS_BASE}/public${path}`;
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...withTraceHeaders({}) },
+      credentials: "omit",
+      body: JSON.stringify({
+        RequestInfo: {
+          apiId: "Rainmaker",
+          ver: ".01",
+          ts: Date.now(),
+          action: "_search",
+          msgId: `dashboard-public-${Date.now()}`,
+        },
+        ...body,
+      }),
+    });
+  } catch (error) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(url, endedAt - startedAt, 0, false);
+    throw error;
+  }
+
+  if (!response.ok) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(url, endedAt - startedAt, 0, false);
+    throw await toRequestError(response, "Public analytics request");
+  }
+
+  return response.json();
+}
+
 export function fetchSchema() {
   return postAnalytics("/_schema", { tenantId: getTenantId() });
 }
@@ -87,4 +133,14 @@ export function fetchCatalog(tenantId) {
  */
 export function runKpiBatch(refs, tenantId) {
   return postAnalytics("/_query", { tenantId, queries: refs });
+}
+
+/** Curated PUBLIC pack. The response itself contains the safe tile descriptors. */
+export function fetchPublicPack(tenantId) {
+  return postPublicAnalytics("/packs", { tenantId });
+}
+
+/** PUBLIC data path. The backend accepts only curated, base kpiId references. */
+export function runPublicKpiBatch(refs, tenantId) {
+  return postPublicAnalytics("/_query", { tenantId, queries: refs });
 }
