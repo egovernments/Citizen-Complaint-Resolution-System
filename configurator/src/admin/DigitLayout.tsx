@@ -44,6 +44,7 @@ import DocsPane from '@/components/layout/DocsPane';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
@@ -200,19 +201,21 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
               {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.dashboard')}</span>}
             </button>
-            <button
-              onClick={() => navigate('/manage/pgr-dashboard')}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${location.pathname === '/manage/pgr-dashboard'
-                  ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-              title={sidebarCollapsed ? translate('app.nav.pgr_dashboard') : undefined}
-            >
-              <BarChart3 className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.pgr_dashboard')}</span>}
-            </button>
+            {LEGACY_PGR_DASHBOARD_ENABLED && (
+              <button
+                onClick={() => navigate('/manage/pgr-dashboard')}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
+                  ${location.pathname === '/manage/pgr-dashboard'
+                    ? 'bg-primary/10 text-primary border-l-2 border-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
+                `}
+                title={sidebarCollapsed ? translate('app.nav.pgr_dashboard') : undefined}
+              >
+                <BarChart3 className="w-5 h-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span className="text-sm font-medium">{translate('app.nav.pgr_dashboard')}</span>}
+              </button>
+            )}
             <button
               onClick={() => navigate('/manage/public-dashboard')}
               className={`

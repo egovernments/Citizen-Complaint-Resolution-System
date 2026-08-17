@@ -224,6 +224,11 @@ digit_ui_mode: static
 # leave the bundle on disk but unreachable.
 enable_digit_ui_v2: false
 
+# Rollback-only switch for the pre-catalog PGR dashboard copied into both the
+# Configurator and citizen SPA. Keep false: navigation and direct routes are
+# hidden, while the code and /pgr-services/v2/dashboard API remain intact.
+enable_legacy_pgr_dashboard: false
+
 # Git source for the citizen SPA. Cloned on the TARGET (not the
 # controller) so native Vite binaries (esbuild, lightningcss) match
 # the runtime arch.

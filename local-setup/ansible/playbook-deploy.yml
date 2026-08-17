@@ -2274,6 +2274,7 @@
         VITE_TOKEN_EXCHANGE_URL=/token-exchange \
         VITE_CITIZEN_STATE_TENANT="{{ state_tenant_id }}" \
         VITE_CITIZEN_TENANT="{{ tenant_id }}" \
+        VITE_ENABLE_LEGACY_PGR_DASHBOARD="{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}" \
         npm run build
         test -f dist/index.html
       args:
@@ -2794,6 +2795,9 @@
         # placeholder + pre-login default from the real deployment tenant. A city
         # code collapses to its root segment at runtime.
         VITE_STATE_TENANT_ID: "{{ state_tenant_id | default('') }}"
+        # Retained rollback-only UI. Default false hides both navigation and
+        # direct route; the underlying legacy implementation remains in source.
+        VITE_ENABLE_LEGACY_PGR_DASHBOARD: "{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}"
       register: configurator_build_run
       changed_when: true
       when:

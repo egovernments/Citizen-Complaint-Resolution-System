@@ -1,7 +1,7 @@
 import { launchBrowser, login, screenshot } from '../helpers.mjs';
 
 export const name = 'pgr-dashboard';
-export const description = 'Navigate to PGR Dashboard and verify charts render';
+export const description = 'Legacy PGR Dashboard is hidden unless explicitly enabled';
 
 const NAV_TIMEOUT = 30_000;
 
@@ -13,14 +13,32 @@ export async function run() {
   try {
     await login(page);
 
-    // Navigate to PGR Dashboard
     const baseUrl = process.env.E2E_BASE_URL || 'https://crs-mockup.egov.theflywheel.in';
     await page.goto(`${baseUrl}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle2',
       timeout: NAV_TIMEOUT,
     });
 
-    // Verify we're on the right page
+    const legacyEnabled = /^(1|true|yes|on)$/i.test(
+      process.env.ENABLE_LEGACY_PGR_DASHBOARD || '',
+    );
+
+    if (!legacyEnabled) {
+      const url = page.url();
+      if (url.includes('/pgr-dashboard')) {
+        throw new Error(`Disabled legacy dashboard remained directly routable at ${url}`);
+      }
+      const pageText = await page.evaluate(() => document.body.innerText);
+      if (pageText.includes('PGR Dashboard')) {
+        throw new Error('Disabled legacy dashboard is still visible in Configurator navigation');
+      }
+      return {
+        success: true,
+        details: { hiddenByDefault: true, redirectedTo: url },
+      };
+    }
+
+    // Explicit rollback mode: verify the retained implementation still works.
     const url = page.url();
     if (!url.includes('/pgr-dashboard')) {
       throw new Error(`Did not navigate to PGR Dashboard — landed on ${url}`);

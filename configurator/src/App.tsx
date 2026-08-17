@@ -56,6 +56,7 @@ import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
 type AppMode = 'onboarding' | 'management';
@@ -161,7 +162,10 @@ function ManagementAdmin() {
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
-          <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          <Route
+            path="/pgr-dashboard"
+            element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/" replace />}
+          />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
