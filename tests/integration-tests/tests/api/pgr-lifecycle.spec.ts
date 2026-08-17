@@ -195,6 +195,19 @@ First link in a serial chain — every later step skips if this fails.`,
         `with departments=[${((lme as { departments?: string[] })?.departments ?? []).join(',') || 'none'}]. ` +
         `Point EMPLOYEE_USER at a departmented PGR_LME employee, or seed one.`,
     ).toBe(true);
+    // ...and it must be able to do the LME's job. This same principal RESOLVEs
+    // further down the chain, which pgr-services only permits for PGR_LME. The
+    // 'lme' persona and the GRO fallback are both role-checked on the way in,
+    // but the last-resort EMPLOYEE_USER login is not — without this, a
+    // departmented non-LME reaches RESOLVE and fails there with an
+    // authorisation error that reads like a workflow bug rather than a
+    // misconfigured EMPLOYEE_USER.
+    expect(
+      (lme as { roles?: string[] })?.roles ?? [],
+      `the assignee must also hold PGR_LME — it RESOLVEs later in this chain. ` +
+        `Resolved '${(lme as { username?: string })?.username ?? EMPLOYEE_USER}' ` +
+        `with roles=[${((lme as { roles?: string[] })?.roles ?? []).join(',') || 'none'}].`,
+    ).toContain('PGR_LME');
     lmeToken = lme!.token;
     lmeUserInfo = lme!.userInfo;
 

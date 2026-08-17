@@ -336,17 +336,40 @@ async function activeComplaintCodes(
   tenantId: string,
   schemaCode: string,
 ): Promise<string[]> {
-  const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      RequestInfo: { authToken },
-      // 50 truncated the catalogue on any real tenant (bomet's ke carries 251
-      // ServiceDefs), which silently changed WHICH code the fallback returned.
-      MdmsCriteria: { tenantId, schemaCode, limit: 200 },
-    }),
-  });
-  const rows = ((await r.json()) as { mdms?: MdmsCodeRow[] }).mdms || [];
+  // PAGE the catalogue rather than taking a single slice of it. ANY fixed limit
+  // that happens to sit below the row count silently changes WHICH code the
+  // fallback returns — and can hide `preferred` itself on a later page, which is
+  // the exact failure this helper exists to prevent. 50 truncated every real
+  // tenant; 200 still truncated bomet's `ke` at 251 ServiceDefs.
+  const PAGE = 200;
+  // Backstop for a deployment whose mdms-v2 ignores `offset` and re-serves page
+  // 0 forever: stop as soon as a page contributes nothing we have not already
+  // seen. MAX_PAGES is a second belt in case such a server also churns the row
+  // order, so `fresh` never quite empties.
+  const MAX_PAGES = 25;
+  const rows: MdmsCodeRow[] = [];
+  const seen = new Set<string>();
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { authToken },
+        MdmsCriteria: { tenantId, schemaCode, limit: PAGE, offset: page * PAGE },
+      }),
+    });
+    const batch = ((await r.json()) as { mdms?: MdmsCodeRow[] }).mdms || [];
+    const fresh = batch.filter((row, i) => {
+      const key =
+        row.uniqueIdentifier ||
+        `${page}:${i}:${row.data?.serviceCode || row.data?.code || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    rows.push(...fresh);
+    if (batch.length < PAGE || fresh.length === 0) break;
+  }
   const isHierarchy = schemaCode.endsWith('ComplaintHierarchy');
   const codes = rows
     .filter((row) => row.isActive !== false && row.data?.active !== false)
