@@ -9,7 +9,10 @@
          before the module below, so the flag exists before main.tsx decides
          whether to initialise PostHog and Sentry. Shipped in dist alongside this
          file, so the two can never skew. See src/lib/telemetryGate.ts. -->
-    <script src="/telemetry-config.js"></script>
+    <!-- Base-aware: vite.config.ts sets base '/configurator/', so an origin-root
+         path 404s once deployed under that prefix. A missing global makes
+         isTelemetryKilled() return false — i.e. the kill switch fails OPEN. -->
+    <script src="./telemetry-config.js"></script>
   </head>
   <body>
     <div id="root"></div>
