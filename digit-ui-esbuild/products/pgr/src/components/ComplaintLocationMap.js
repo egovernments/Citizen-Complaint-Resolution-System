@@ -8,6 +8,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
+import { hasUsableGeoLocation } from "../utils/geoLocation";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -55,15 +56,16 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // Null while the fetch is in flight; empty collection when the tenant has
   // no usable geometry (no overlay — never another tenant's static wards).
   const tenantBoundaries = useTenantBoundaries();
+  const hasLocation = hasUsableGeoLocation({ latitude, longitude });
 
   const matchedWard = useMemo(() => {
     const wardCollection = tenantBoundaries;
-    if (!latitude || !longitude || !wardCollection?.features?.length) return null;
+    if (!hasLocation || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
     return wardCollection.features.find((f) => {
       try { return booleanPointInPolygon(pt, f); } catch { return false; }
     }) || null;
-  }, [latitude, longitude, tenantBoundaries]);
+  }, [hasLocation, latitude, longitude, tenantBoundaries]);
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
@@ -74,7 +76,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
   // Fetch address details based on lat/lng using reverse geocoding
   useEffect(() => {
-    if (!latitude || !longitude) return;
+    if (!hasLocation) return;
 
     const fetchAddressFromCoordinates = async () => {
       setIsLoadingAddress(true);
@@ -141,10 +143,10 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
     };
 
     fetchAddressFromCoordinates();
-  }, [latitude, longitude]);
+  }, [hasLocation, latitude, longitude]);
 
   // If no coordinates provided, don't render the map
-  if (!latitude || !longitude) {
+  if (!hasLocation) {
     return null;
   }
 

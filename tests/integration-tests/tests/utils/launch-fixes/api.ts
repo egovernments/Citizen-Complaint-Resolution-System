@@ -166,6 +166,10 @@ export interface PgrCreateParams {
   /** Optional: send extended_attributes in service body. Per user direction:
    *  content must stay empty {}. Defaults to undefined (omitted). */
   extendedAttributes?: Record<string, unknown>;
+  /** Optional geo-location override for map/detail contract tests. The legacy
+   * default remains (0,0) so existing fixture semantics do not change. Pass
+   * an empty object to exercise a genuinely missing persisted location. */
+  geoLocation?: { latitude?: number; longitude?: number };
 }
 
 export interface PgrCreateResult {
@@ -195,6 +199,7 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     citizenPhone,
     workflowAction = 'APPLY',
     extendedAttributes,
+    geoLocation,
   } = params;
 
   const serviceBody: Record<string, unknown> = {
@@ -205,7 +210,7 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     address: {
       city: tenantId,
       locality: { code: localityCode },
-      geoLocation: { latitude: 0, longitude: 0 },
+      geoLocation: geoLocation ?? { latitude: 0, longitude: 0 },
     },
     citizen: { name: citizenName, mobileNumber: citizenPhone },
   };

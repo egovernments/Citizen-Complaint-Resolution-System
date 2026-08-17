@@ -34,7 +34,7 @@ Steps:
 3. citizenOtpLogin (provisioned citizen); assert Citizen.token persisted.
 4. Navigate to /pgr/create-complaint/complaint-type, wait 6s for hydration.
 5. Step 1: open type dropdown → pick first item; if a subtype dropdown appears, pick its first item too. NEXT.
-6. Step 2: Pin Location — don't touch the map. NEXT.
+6. Step 2: Pin Location — assert the optional map starts with no marker and NEXT is enabled.
 7. Assert no "pincode not serviceable" toast appeared after step 2.
 8. Step 3 Location Details (cascade): assert exactly 1 cascade dropdown initially (top-level Region/County) — true on every tenant, regardless of hierarchy depth.
 9. Pick the top level; assert dropdown count grows to MORE than 1 (at least one child level appeared).
@@ -119,10 +119,14 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     }
     await clickNext();
 
-    // ── Step 2: Pin Location — DON'T touch the map. Click Next. ─────
-    // Pre-fix this would trap the citizen at step 3 with a 40476
-    // toast; we want the wizard to advance straight through.
+    // ── Step 2: optional Pin Location — continue without a pin. ─────
+    // The configured centre is only a viewport. It must not create a marker,
+    // reverse-geocoded postal code, or mandatory-value gate.
     await page.waitForTimeout(2500);
+    const map = page.locator('.leaflet-container').first();
+    await expect(map).toBeVisible();
+    await expect(map.locator('.leaflet-marker-icon')).toHaveCount(0);
+    await expect(page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first()).toBeEnabled();
     await clickNext();
 
     // ── Assert no pincode toast appeared after pin step ──────────────

@@ -9,6 +9,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
+import { hasUsableGeoLocation } from "../utils/geoLocation";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -128,7 +129,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // citizen zooms in from. Clamped so it can't sit outside the tenant's bounds.
   const OVERVIEW_ZOOM = Math.max(minZoom, Math.min(5, maxZoom));
   const [coords, setCoords] = useState(DEFAULT_CENTER);
-  const [markerPos, setMarkerPos] = useState([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+  const [markerPos, setMarkerPos] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -150,6 +151,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // address back into formData via onSelect, and re-fetching on that write
   // turns one failure into an infinite request loop (CCRS#1380 symptom 4).
   const lastReverseAttempt = useRef(null);
+  // A clear or a newer selection invalidates earlier reverse-geocoding
+  // responses, preventing a slow response from restoring a location the user
+  // has already removed or replaced.
+  const locationRequestId = useRef(0);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
@@ -188,29 +193,17 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // silently discard the tenant's configured starting position.
   useEffect(() => {
     if (!isReady || hasInitialized.current) return;
-    if (formData?.[config.key]) {
-      hasInitialized.current = true;
-    } else {
-      const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
-      if (savedLocation) {
-        hasInitialized.current = true;
-        const { lat, lng, address: savedAddress } = savedLocation;
-        setCoords({ lat, lng });
-        setMarkerPos([lat, lng]);
-        setAddress(savedAddress);
-        setSearchQuery(savedAddress);
-        onSelect(config.key, savedLocation);
-      } else {
-        hasInitialized.current = true;
-        setCoords(DEFAULT_CENTER);
-        setMarkerPos([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
-        mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], DEFAULT_ZOOM);
-        // Seed lat/lng immediately so a quick Next click still captures something.
-        onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
-        fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
-      }
+    hasInitialized.current = true;
+    // This key was historically global to the browser session, so it could
+    // leak a pin from a previous complaint (and between citizen/employee
+    // flows). Wizard-local formData is the sole restoration source now.
+    Digit.SessionStorage.del("PGR_MAP_LOCATION");
+    if (!hasUsableGeoLocation(formData?.[config.key])) {
+      setCoords(DEFAULT_CENTER);
+      setMarkerPos(null);
+      mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
     }
-  }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+  }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, OVERVIEW_ZOOM]);
 
   // Sync FROM formData (wizard restore / re-entering the map step).
   //
@@ -228,9 +221,10 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const savedLng = savedPoint?.lng;
   const savedAddress = savedPoint?.address;
   useEffect(() => {
-    if (!savedLat || !savedLng) return;
+    if (!hasUsableGeoLocation(savedPoint)) return;
     setCoords({ lat: savedLat, lng: savedLng });
     setMarkerPos([savedLat, savedLng]);
+    mapRef.current?.setView([savedLat, savedLng], DEFAULT_ZOOM);
     // Restore saved address if available
     if (savedAddress) {
       setAddress(savedAddress);
@@ -248,7 +242,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedLat, savedLng, savedAddress]);
 
-  const fetchAddress = async (lat, lng) => {
+  const fetchAddress = async (lat, lng, requestId = ++locationRequestId.current) => {
     // Record the attempt BEFORE the request so even a throwing fetch marks
     // these coords as tried — the sync effect keys off this to avoid looping.
     lastReverseAttempt.current = `${lat},${lng}`;
@@ -260,6 +254,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
+      if (requestId !== locationRequestId.current) return;
       if (data && data.display_name) {
         setAddress(data.display_name);
         setSearchQuery(data.display_name); // Update search bar with fetched address
@@ -273,25 +268,31 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           }
         }
         const locationData = { lat, lng, pincode, address: data.display_name, ward };
-        Digit.SessionStorage.set("PGR_MAP_LOCATION", locationData);
         onSelect(config.key, locationData);
       } else {
         const locationData = { lat, lng, ward };
-        Digit.SessionStorage.set("PGR_MAP_LOCATION", locationData);
         onSelect(config.key, locationData);
       }
     } catch (error) {
+      if (requestId !== locationRequestId.current) return;
       console.error("Error fetching address:", error);
       onSelect(config.key, { lat, lng, ward });
     }
   };
 
   const updateLocation = async (lat, lng) => {
+    if (!hasUsableGeoLocation({ lat, lng })) return;
+    const requestId = ++locationRequestId.current;
+    const ward = resolveWard(lat, lng, tenantBoundaries);
     setCoords({ lat, lng });
     setMarkerPos([lat, lng]);
+    setSelectedWard(ward?.code || null);
+    // Persist the explicit user selection before reverse geocoding so a quick
+    // Next click cannot lose the pin. Address/pincode enrichment follows.
+    onSelect(config.key, { lat, lng, ward });
     setIsSearching(true);
-    await fetchAddress(lat, lng);
-    setIsSearching(false);
+    await fetchAddress(lat, lng, requestId);
+    if (requestId === locationRequestId.current) setIsSearching(false);
   };
 
   const handleMapClick = (e) => {
@@ -424,12 +425,18 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   };
 
   const clearSearch = () => {
+    locationRequestId.current += 1;
+    lastReverseAttempt.current = null;
+    debouncedFetchSuggestions.cancel();
+    Digit.SessionStorage.del("PGR_MAP_LOCATION");
     setSearchQuery("");
     setAddress("");
     setMarkerPos(null);
     setSuggestions([]);
     setPolygonPoints([]);
     setCoords(DEFAULT_CENTER);
+    setSelectedWard(null);
+    setIsSearching(false);
     if (mapRef.current) {
       mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
     }
