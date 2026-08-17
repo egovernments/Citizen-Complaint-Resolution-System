@@ -736,7 +736,10 @@
     var type = trim(rec.type).toUpperCase();
     if (type === "MATOMO") {
       if (!isStr(rec.siteId) || !trim(rec.siteId)) return fail(REASONS.MISSING_SITE_ID);
-      return validateScriptUrl(rec.scriptUrl);
+      var mScript = validateScriptUrl(rec.scriptUrl);
+      if (!mScript.ok) return mScript;
+      /* setTrackerUrl is the beacon destination — allowlist it too (CWE-201). */
+      return validateEndpointUrl(matomoEndpoint(rec));
     }
     if (type === "GA4") {
       if (!isStr(rec.measurementId) || !trim(rec.measurementId)) return fail(REASONS.MISSING_MEASUREMENT_ID);
@@ -744,7 +747,11 @@
     }
     if (type === "POSTHOG") {
       if (!isStr(rec.apiKey) || !trim(rec.apiKey)) return fail(REASONS.MISSING_API_KEY);
-      return validateScriptUrl(posthogScriptUrl(rec));
+      var pScript = validateScriptUrl(posthogScriptUrl(rec));
+      if (!pScript.ok) return pScript;
+      /* api_host receives the same host and is where events are POSTed. */
+      if (isStr(rec.endpointUrl) && rec.endpointUrl) return validateEndpointUrl(rec.endpointUrl);
+      return OK; /* no endpointUrl -> vendor default, already allowlisted */
     }
     if (type === "SENTRY") {
       if (!isStr(rec.dsn) || !parseDsn(rec.dsn)) return fail(REASONS.MISSING_DSN);
@@ -780,6 +787,19 @@
     if (isStr(rec.endpointUrl) && rec.endpointUrl) return rec.endpointUrl;
     if (isStr(rec.scriptUrl) && rec.scriptUrl) return rec.scriptUrl.replace(/matomo\.js(\?.*)?$/, "matomo.php");
     return "";
+  }
+
+  /* CWE-201: the endpoint is the BEACON DESTINATION — where page/event data is
+   * actually sent. The allowlist previously gated only the loaded script, so a
+   * record could carry an allowlisted scriptUrl and an arbitrary endpointUrl and
+   * telemetry would be posted to an undeclared host. Same rule as the script:
+   * same-origin path OK, otherwise https + an allowlisted host. */
+  function validateEndpointUrl(url) {
+    if (!isStr(url) || !url) return fail(REASONS.MISSING_SCRIPT_URL);
+    if (isSameOriginPath(url)) return OK;
+    if (url.indexOf("https://") !== 0) return fail(REASONS.SCRIPT_URL_NOT_HTTPS);
+    if (!hostAllowed(urlHost(url))) return fail(REASONS.SCRIPT_URL_HOST_NOT_ALLOWED);
+    return OK;
   }
 
   function posthogScriptUrl(rec) {

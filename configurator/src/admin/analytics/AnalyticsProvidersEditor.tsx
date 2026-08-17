@@ -176,6 +176,9 @@ export function AnalyticsProvidersEditor() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  // Bumped on every startCreate so two consecutive "Add destination" sessions
+  // produce different textarea keys and React remounts them (see the key below).
+  const [createSeq, setCreateSeq] = useState(0);
   const [draft, setDraft] = useState<AnalyticsProviderRecord | null>(null);
   const [isNew, setIsNew] = useState(false);
   /** Per-field JSON parse errors for the settings/adapter textareas. A parse error
@@ -250,6 +253,7 @@ export function AnalyticsProvidersEditor() {
 
   const startCreate = () => {
     setJsonErrors({});
+    setCreateSeq((n) => n + 1);
     setEditingCode('');
     setIsNew(true);
     setDraft({ code: '', type: 'MATOMO', enabled: false });
@@ -462,7 +466,12 @@ export function AnalyticsProvidersEditor() {
             // switches rows. Without this the textarea keeps the previous row's
             // JSON on screen (same position, same key) and could save it onto the
             // new record.
-            key={`${editingCode ?? 'new'}-${key}`}
+            // `||` not `??`: startCreate sets editingCode to '' (not null), and
+            // `??` only falls back on null/undefined — so create sessions all
+            // shared the key '-settings' and the textarea was reused, leaving
+            // the previous session's JSON on screen over an empty draft.
+            // createSeq increments per startCreate so repeated creates remount too.
+            key={`${editingCode || `new-${createSeq}`}-${key}`}
             rows={key === 'adapter' ? 10 : 4}
             spellCheck={false}
             className={
