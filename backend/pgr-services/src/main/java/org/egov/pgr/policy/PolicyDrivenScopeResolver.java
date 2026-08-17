@@ -87,6 +87,18 @@ public class PolicyDrivenScopeResolver {
         if (u == null)
             return denyAllScope(tenantId, stateLevel);
 
+        // The requested tenantId is client-controlled (RequestSearchCriteria#tenantId); the only
+        // trustworthy tenant is the one the auth layer stamped on the token (u.getTenantId()). A
+        // role check alone (e.g. a TENANT_WIDE_ROLES member with no HRMS record for this tenant)
+        // must never be enough to grant access to a tenant the caller has no affiliation with —
+        // validate the subtree BEFORE any role/HRMS resolution runs, and fail closed on mismatch,
+        // same as any other unresolvable scope.
+        if (!isAuthorizedTenant(u.getTenantId(), tenantId)) {
+            log.warn("PolicyDrivenScopeResolver: requested tenantId='{}' is outside caller '{}' 's own tenant/subtree ('{}') — DENY (fail-closed)",
+                    tenantId, u.getUserName(), u.getTenantId());
+            return denyAllScope(tenantId, stateLevel);
+        }
+
         if (principalScopeResolver.isPureCitizen(requestInfo)) {
             String uuid = u.getUuid();
             if (uuid == null || uuid.isBlank())
@@ -99,6 +111,21 @@ public class PolicyDrivenScopeResolver {
 
     private PgrSearchScope denyAllScope(String tenantId, boolean stateLevel) {
         return new PgrSearchScope(tenantId, stateLevel, null, List.of(DENY_ALL_DEPARTMENT), null);
+    }
+
+    /**
+     * The requested tenantId is authorized only when it IS the caller's own (token-derived) home
+     * tenant, or a descendant subtree of it — narrowing into a city under a state-wide identity is
+     * fine, but a caller may never widen past their own tenant/subtree merely by naming a
+     * different tenantId in the search criteria. Fails closed (false) when either side is
+     * missing/blank, since there is then nothing to authorize against.
+     */
+    private static boolean isAuthorizedTenant(String callerTenantId, String requestedTenantId) {
+        if (callerTenantId == null || callerTenantId.isBlank()
+                || requestedTenantId == null || requestedTenantId.isBlank())
+            return false;
+        return requestedTenantId.equals(callerTenantId)
+                || requestedTenantId.startsWith(callerTenantId + ".");
     }
 
     /**

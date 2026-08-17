@@ -152,6 +152,63 @@ class PolicyDrivenScopeResolverTest {
     }
 
     @Test
+    void crossTenantRequestDeniesEvenWithoutAnyRolePrivilege() {
+        // A regular department-restricted employee whose home tenant is "pg.cityA" must be denied
+        // outright when the search targets a sibling tenant "pg.cityB" — never reach HRMS/role
+        // resolution for a tenant they have no affiliation with.
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
+                List.of(Map.of("boundary", "WARD_5")));
+
+        PgrSearchScope scope = resolver.resolve(
+                requestInfo("emp1", "EMPLOYEE", "GRO", "pg.cityA"), "pg.cityB", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+    }
+
+    @Test
+    void crossTenantRequestDeniesEvenForATenantWideRole() {
+        // The exact vulnerability this check closes: a hard-coded tenant-wide role (SUPERUSER)
+        // must NOT be able to widen into a tenant it has no home affiliation with just by naming
+        // it in the search criteria — even though that role would otherwise get a fully
+        // unrestricted scope (see policyDrivenTenantWideRoleBypassesEvenWithNoHrmsDataAtAll).
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+
+        PgrSearchScope scope = resolver.resolve(
+                requestInfo("admin1", "EMPLOYEE", "SUPERUSER", "pg.cityA"), "pg.cityB", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+    }
+
+    @Test
+    void stateLevelCallerMayNarrowIntoOwnSubtreeTenant() {
+        // The legitimate mirror case: a state-wide identity ("pg") searching a city under its own
+        // subtree ("pg.city") must resolve normally, not be denied.
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
+                List.of(Map.of("boundary", "WARD_5")));
+
+        PgrSearchScope scope = resolver.resolve(
+                requestInfo("emp1", "EMPLOYEE", "GRO", "pg"), "pg.city", 2, policy);
+
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes);
+    }
+
+    @Test
+    void missingCallerHomeTenantDeniesRatherThanTrustingTheRequestedTenant() {
+        ScopePolicy policy = ScopePolicy.of(List.of("department", "jurisdiction"),
+                Map.of("department", ScopeLevel.OWN, "jurisdiction", ScopeLevel.OWN));
+
+        PgrSearchScope scope = resolver.resolve(
+                requestInfo("emp1", "EMPLOYEE", "GRO", null), "pg.city", 2, policy);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+    }
+
+    @Test
     void policyDrivenRequiredAxisWithNoHrmsDataDeniesEvenWhenOtherAxisResolves() {
         // department is OWN/required but HRMS has none for this employee, even though jurisdiction
         // resolved fine — a required-but-unresolvable axis denies via its own sentinel (AND
@@ -227,12 +284,22 @@ class PolicyDrivenScopeResolverTest {
      * actually exercises {@link ScopePolicyEngine}'s "skip roles with no explicit opinion" logic
      * realistically; a single-role stub previously masked a real bug where EMPLOYEE's implicit
      * default fallback neutralized a functional role's explicit restriction.
+     *
+     * <p>Home tenant defaults to {@code "pg.city"} — the same tenantId every test in this file
+     * resolves against — so the tenant/subtree authorization check added alongside this class
+     * passes for the "normal" cases; {@link #requestInfo(String, String, String, String)} lets a
+     * test override it to exercise cross-tenant denial.
      */
     private RequestInfo requestInfo(String uuid, String type, String roleCode) {
+        return requestInfo(uuid, type, roleCode, "pg.city");
+    }
+
+    private RequestInfo requestInfo(String uuid, String type, String roleCode, String homeTenantId) {
         User user = new User();
         user.setUuid(uuid);
         user.setUserName(uuid);
         user.setType(type);
+        user.setTenantId(homeTenantId);
         user.setRoles("EMPLOYEE".equals(roleCode)
                 ? List.of(Role.builder().code(roleCode).build())
                 : List.of(Role.builder().code("EMPLOYEE").build(), Role.builder().code(roleCode).build()));

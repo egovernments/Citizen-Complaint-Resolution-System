@@ -74,13 +74,14 @@ public class PGRRepository {
      * @return
      */
     public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria){
-        return getServiceWrappers(criteria, null);
+        return getServiceWrappers(criteria, PgrSearchScope.UNRESTRICTED);
     }
 
     /**
      * searches services based on search criteria, restricted to the given (server-derived, never
-     * client-controlled) RBAC scope. A null scope applies no additional restriction (used by
-     * plainSearch, which is intentionally cross-tenant/unrestricted).
+     * client-controlled) RBAC scope. {@link PgrSearchScope#UNRESTRICTED} applies no additional
+     * restriction — used by plainSearch (intentionally cross-tenant) and internal fetch-by-id
+     * callers (update-reconciliation), never by omission/null.
      * @param criteria
      * @param scope
      * @return
@@ -104,11 +105,12 @@ public class PGRRepository {
      * @return
      */
     public List<Service> getServices(RequestSearchCriteria criteria) {
-        return getServices(criteria, null);
+        return getServices(criteria, PgrSearchScope.UNRESTRICTED);
     }
 
     /**
-     * searches services based on search criteria, restricted to the given RBAC scope (null = no restriction).
+     * searches services based on search criteria, restricted to the given RBAC scope
+     * ({@link PgrSearchScope#UNRESTRICTED} = no restriction, never null).
      * @param criteria
      * @param scope
      * @return
@@ -158,11 +160,12 @@ public class PGRRepository {
      * @return
      */
     public Integer getCount(RequestSearchCriteria criteria) {
-        return getCount(criteria, null);
+        return getCount(criteria, PgrSearchScope.UNRESTRICTED);
     }
 
     /**
-     * Returns the count based on the search criteria, restricted to the given RBAC scope (null = no restriction).
+     * Returns the count based on the search criteria, restricted to the given RBAC scope
+     * ({@link PgrSearchScope#UNRESTRICTED} = no restriction, never null).
      * @param criteria
      * @param scope
      * @return

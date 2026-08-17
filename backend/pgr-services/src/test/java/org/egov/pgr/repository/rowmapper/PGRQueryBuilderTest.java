@@ -16,13 +16,15 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
  * Verifies the RBAC scope predicates added for the access-control policy reference rule
- * (citizen-self / employee-department search scoping) — and that a null scope leaves the query
- * byte-for-byte unaffected, which is what keeps plainSearch/legacy callers unchanged.
+ * (citizen-self / employee-department / tenant search scoping) — that a null scope is fail-closed
+ * (throws, rather than silently unrestricting), and that {@link PgrSearchScope#UNRESTRICTED} is
+ * the only way to opt out, leaving the query byte-for-byte unaffected for plainSearch/legacy callers.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -40,14 +42,47 @@ class PGRQueryBuilderTest {
     }
 
     @Test
-    void nullScopeAddsNoExtraPredicate() {
+    void nullScopeThrowsRatherThanSilentlyUnrestricting() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
 
-        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, null);
+        assertThrows(IllegalStateException.class,
+                () -> queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, null));
+    }
+
+    @Test
+    void unrestrictedSentinelAddsNoExtraPredicate() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
 
         assertFalse(query.contains("accountId"));
         assertFalse(query.contains("department"));
+    }
+
+    @Test
+    void stateLevelScopeAddsTenantLikePredicate() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg", true, null, null, null);
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ser.tenantId LIKE ?"));
+        assertTrue(preparedStmtList.contains("pg%"));
+    }
+
+    @Test
+    void cityLevelScopeAddsTenantEqualsPredicate() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, null, null);
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("ser.tenantId = ?"));
+        assertTrue(preparedStmtList.contains("pg.city"));
     }
 
     @Test
