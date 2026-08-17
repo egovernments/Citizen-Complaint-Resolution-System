@@ -37,6 +37,7 @@ import { NotificationLogList } from '@/resources/notification-logs/NotificationL
 import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
+import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
@@ -170,6 +171,12 @@ function ManagementAdmin() {
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/notification-configure" element={<NotificationConfigure />} />
+          {/* Analytics destinations. A CustomRoute rather than a <Resource>: the
+              screen deliberately does not use react-admin's list/edit/delete
+              machinery, because the generic MDMS mutation path is not scoped to
+              the session tenant and would rewrite or deactivate rows owned by
+              the parent tenant. */}
+          <Route path="/analytics-providers" element={<AnalyticsProvidersEditor />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />

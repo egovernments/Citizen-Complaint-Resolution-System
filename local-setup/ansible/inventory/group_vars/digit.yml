@@ -94,6 +94,24 @@ employee_module_denylist: []
 # globalConfigs.js (ansible/nightly) — no rebuild needed.
 dashboard_metrics_enabled: true
 
+# Analytics adapter registry (digit-ui-esbuild/public/analytics.js). Which
+# destinations run is DATA — one row per destination in the MDMS schema
+# common-masters.AnalyticsProvider, managed in the Configurator. With no rows
+# (the default everywhere) the SPA loads the shim and does nothing.
+#
+# These three are the ops-only knobs MDMS must not be able to set. Note the
+# polarity is the opposite of dashboard_metrics_enabled above: that one is
+# ON-by-default with an explicit off, this one is OFF-by-default because it can
+# load third-party scripts into citizen sessions.
+#   analytics_kill_switch  — true hard-disables everything, whatever MDMS says.
+#   analytics_script_hosts — extra hostnames a record's scriptUrl may use, on top
+#                            of the compile-time allowlist. MDMS cannot widen it.
+#   analytics_custom_enabled — true allows type:"CUSTOM" records (operator-named
+#                            script + data-only call templates) to initialise.
+analytics_kill_switch: false
+analytics_script_hosts: []
+analytics_custom_enabled: false
+
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports
 # ──────────────────────────────────────────────────────────────────────
