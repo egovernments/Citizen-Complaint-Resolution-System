@@ -4,8 +4,8 @@ import { translate, exists, getLanguage, subscribe, ensureMessages } from "./loc
 /**
  * The dashboard's t() hook. `t(key, seedEnglish)` translates against the host
  * i18next when embedded (or the standalone store on the dev harness) and
- * echoes the KEY when unseeded — gaps surface, never the inline English
- * (which exists only as the seed pack's extraction source). `language` is
+ * uses the canonical inline English when the selected locale is missing the
+ * message. `language` is
  * included so imperatively-drawn surfaces (Leaflet layers, ApexCharts
  * instances) can re-key on it — the #882 ward-tooltip pattern.
  *

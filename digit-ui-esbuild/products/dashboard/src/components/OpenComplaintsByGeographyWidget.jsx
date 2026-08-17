@@ -13,7 +13,7 @@ import useDashboardT from "../i18n/useDashboardT";
 import GeographyChoroplethMap from "./GeographyChoroplethMap";
 
 const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
-  const { t, language } = useDashboardT();
+  const { t, language, i18nTick } = useDashboardT();
   const [activeLayer, setActiveLayer] = useState("created");
   const cityLabel = getMapCityLabel();
 
@@ -32,7 +32,7 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
               ? t("DASHBOARD_MAP_LAYER_RESOLVED", "Resolved")
               : t("DASHBOARD_MAP_LAYER_CREATED", "Created"),
       })),
-    [language] // eslint-disable-line react-hooks/exhaustive-deps
+    [language, i18nTick] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const wardCounts = useMemo(() => {
     const series = layers?.[resolvedLayer] ?? [];

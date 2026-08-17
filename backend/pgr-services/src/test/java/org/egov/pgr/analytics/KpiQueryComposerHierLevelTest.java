@@ -20,6 +20,9 @@ public class KpiQueryComposerHierLevelTest {
     private final KpiQueryComposer composer = new KpiQueryComposer(catalog);
     private final AnalyticsPlanner planner = new AnalyticsPlanner(catalog);
     private final AnalyticsScope stateScope = new AnalyticsScope("ke", true, null, null, null);
+    /** hierLevel behavior doesn't depend on wall-clock time; one fixed calendar keeps the suite deterministic. */
+    private final BusinessCalendar calendar =
+            BusinessCalendar.of(java.time.ZoneId.of("Africa/Nairobi"), 1_700_000_000_000L);
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
@@ -37,13 +40,13 @@ public class KpiQueryComposerHierLevelTest {
 
     @Test
     public void leafIsNoOp() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"leaf\"}"));
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"leaf\"}"), calendar);
         assertEquals(byTypeBase(), merged);
     }
 
     @Test
     public void absentIsNoOp() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"window\":\"last_7d\"}"));
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"window\":\"last_7d\"}"), calendar);
         assertEquals("service_code", merged.get("dimensions").get(0).asText());
     }
 
@@ -51,7 +54,7 @@ public class KpiQueryComposerHierLevelTest {
     public void dailyGrainWithoutPathColumnIsNoOp() {
         JsonNode base = json("{\"grain\":\"daily\",\"dimensions\":[\"service_code\"],"
                 + "\"measures\":[{\"name\":\"open\",\"agg\":\"count\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"2\"}"));
+        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"2\"}"), calendar);
         assertEquals(base, merged);   // param inapplicable on daily — graceful skip, like ward
     }
 
@@ -59,7 +62,7 @@ public class KpiQueryComposerHierLevelTest {
     public void queryWithoutServiceCodeDimensionIsNoOp() {
         JsonNode base = json("{\"grain\":\"facts\",\"dimensions\":[\"ward_code\",\"service_group\"],"
                 + "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"));
+        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"), calendar);
         assertEquals(base, merged);   // nothing to roll up; service_group untouched
     }
 
@@ -67,7 +70,7 @@ public class KpiQueryComposerHierLevelTest {
 
     @Test
     public void levelRewritesServiceCodeDimensionToInternalMarker() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"2\"}"));
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"2\"}"), calendar);
         JsonNode dim = merged.get("dimensions").get(0);
         assertTrue(dim.isObject());
         assertEquals(2, dim.get(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD).asInt());
@@ -84,7 +87,7 @@ public class KpiQueryComposerHierLevelTest {
         JsonNode base = json("{\"grain\":\"facts\",\"dimensions\":[\"service_code\",\"service_group\"],"
                 + "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}],"
                 + "\"sort\":[{\"by\":\"service_group\",\"dir\":\"asc\"},{\"by\":\"total\",\"dir\":\"desc\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"));
+        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"), calendar);
         assertEquals(1, merged.get("dimensions").size());   // service_group gone
         assertTrue(merged.get("dimensions").get(0).isObject());
         // sort referencing the dropped dimension is removed; the rest survives
@@ -96,21 +99,21 @@ public class KpiQueryComposerHierLevelTest {
     public void serviceGroupKeptAtLeaf() {
         JsonNode base = json("{\"grain\":\"facts\",\"dimensions\":[\"service_code\",\"service_group\"],"
                 + "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"leaf\"}"));
+        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"leaf\"}"), calendar);
         assertEquals(base, merged);
     }
 
     @Test
     public void composesWithWindowWardAndServiceCodeParams() {
         JsonNode merged = composer.mergeParams(byTypeBase(),
-                json("{\"hierLevel\":\"1\",\"window\":\"last_7d\",\"ward\":\"W1\",\"serviceCode\":\"StreetLightNotWorking\"}"));
+                json("{\"hierLevel\":\"1\",\"window\":\"last_7d\",\"ward\":\"W1\",\"serviceCode\":\"StreetLightNotWorking\"}"), calendar);
         assertEquals("last_7d", merged.get("window").get("name").asText());
         assertEquals("W1", merged.get("filters").get("ward_code").get("eq").asText());
         assertEquals("StreetLightNotWorking", merged.get("filters").get("service_code").get("eq").asText());
         assertTrue(merged.get("dimensions").get(0).isObject());
         // ...and the planner accepts the combination (WHERE on raw service_code column,
         // SELECT/GROUP BY on the aliased level expression — verified non-colliding).
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("service_code = ?"));
         assertTrue(p.sql.contains("AS service_code"));
     }
@@ -121,7 +124,7 @@ public class KpiQueryComposerHierLevelTest {
     public void malformedLevelsAreRejected() {
         for (String bad : new String[]{"0", "13", "abc", "-1", "1.5", "1e1", "1; DROP TABLE x"}) {
             IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                    () -> composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"" + bad + "\"}")),
+                    () -> composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"" + bad + "\"}"), calendar),
                     "hierLevel '" + bad + "' must be rejected");
             assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
         }
@@ -130,7 +133,7 @@ public class KpiQueryComposerHierLevelTest {
     @Test
     public void boundaryLevelsAreAccepted() {
         for (String ok : new String[]{"1", "12"}) {
-            JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"" + ok + "\"}"));
+            JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"" + ok + "\"}"), calendar);
             assertTrue(merged.get("dimensions").get(0).isObject());
         }
     }
@@ -139,8 +142,8 @@ public class KpiQueryComposerHierLevelTest {
 
     @Test
     public void plannerSqlSnapshotForLevelQuery() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"1\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"1\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertEquals("SELECT coalesce(nullif(split_part(complaint_node_path,'.',least(1,complaint_depth)),''),"
                 + " service_code) AS service_code, count(*) AS total"
                 + " FROM complaint_facts"
@@ -153,16 +156,16 @@ public class KpiQueryComposerHierLevelTest {
     public void sqlCarriesLeafFallbackForNullPathRows() {
         // Flat/legacy tenants materialize complaint_node_path NULL — the expr's
         // coalesce(nullif(...),''), service_code) makes those rows roll up as themselves.
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"2\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"2\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("coalesce(nullif(split_part(complaint_node_path,'.',"));
         assertTrue(p.sql.contains(",''), service_code) AS service_code"));
     }
 
     @Test
     public void sqlClampsLevelToRowDepth() {
-        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"4\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"hierLevel\":\"4\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("least(4,complaint_depth)"));
     }
 
@@ -170,8 +173,8 @@ public class KpiQueryComposerHierLevelTest {
     public void eventsGrainSupportsLevelRollup() {
         JsonNode base = json("{\"grain\":\"events\",\"dimensions\":[\"service_code\"],"
                 + "\"measures\":[{\"name\":\"n\",\"agg\":\"count\"}]}");
-        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"));
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        JsonNode merged = composer.mergeParams(base, json("{\"hierLevel\":\"1\"}"), calendar);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, calendar);
         assertTrue(p.sql.contains("FROM complaint_events"));
         assertTrue(p.sql.contains("least(1,complaint_depth)"));
     }
@@ -187,7 +190,7 @@ public class KpiQueryComposerHierLevelTest {
                 + "\"" + AnalyticsCatalog.HIER_DIM_TOKEN_FIELD + "\":\"forged-token\"}],"
                 + "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> planner.plan(forged, stateScope));
+                () -> planner.plan(forged, stateScope, calendar));
         assertTrue(ex.getMessage().startsWith("unknown_column"), ex.getMessage());
     }
 
@@ -202,7 +205,7 @@ public class KpiQueryComposerHierLevelTest {
         dim.put(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD, 13);
         dim.put(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD, AnalyticsCatalog.HIER_DIM_TOKEN);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> planner.plan(q, stateScope));
+                () -> planner.plan(q, stateScope, calendar));
         assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
     }
 }
