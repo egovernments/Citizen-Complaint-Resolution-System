@@ -76,7 +76,7 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
     }
     await clickNext();
 
-    // ── Step 2: Pin Location — don't touch the map (CCRS#469) ───────
+    // ── Step 2: optional Pin Location — continue without a pin ──────
     await page.waitForTimeout(2500);
     await clickNext();
   }
@@ -88,7 +88,7 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
 
 Steps:
 1. OTP-login as the provisioned citizen.
-2. Navigate to /digit-ui/citizen/pgr/create-complaint/complaint-type and walk Steps 1-2 (complaint type + pin, don't touch the map).
+2. Navigate to /digit-ui/citizen/pgr/create-complaint/complaint-type and walk Steps 1-2 (complaint type, then continue without the optional pin).
 3. On Step 3 (Location Details), locate #postal-code and type an alnum probe with a space ("SW1A 1AA", the UK example from _example.yml).
 4. Assert the input's value is exactly "SW1A 1AA" — not stripped to only its digits ("11").
 5. Clear and type a dash-suffixed 10-char probe ("12345-6789", the US example from _example.yml).
