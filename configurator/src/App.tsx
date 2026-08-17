@@ -38,7 +38,7 @@ import { NotificationPreferenceList } from '@/resources/notification-preferences
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider, DigitApiClient } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 // UndoToast removed — see CCRS#417. The previous Undo button only popped
@@ -278,7 +278,7 @@ function App() {
   // token surfaces only on the first write, as a cryptic downstream NPE, with
   // the UI still pretending to be logged in.
   useEffect(() => {
-    apiClient.setSessionExpiredHandler(() => {
+    const expire = () => {
       try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
       clearUser();
       localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -286,7 +286,12 @@ function App() {
       digitClient.clearAuth();
       resetProviders();
       setState(s => ({ ...s, isAuthenticated: false, user: null }));
-    });
+    };
+    apiClient.setSessionExpiredHandler(expire);
+    // Management lists (employees / complaints / access-roles) go through
+    // digitClient, not apiClient — without this they show InvalidAccessTokenException
+    // while MDMS cards keep working (those routes don't enforce the token).
+    DigitApiClient.setSessionExpiredHandler(expire);
   }, []);
 
   // Re-sync apiClient on every render if authenticated (handles HMR)
@@ -318,7 +323,11 @@ function App() {
   // Persist auth state to localStorage
   useEffect(() => {
     if (state.isAuthenticated && state.user) {
-            const authData = {
+      const token = apiClient.getAuth().token;
+      // Never persist a blank token over a good session (HMR can run this
+      // before apiClient is restored and would log the operator out).
+      if (!token) return;
+      const authData = {
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         environment: state.environment,
@@ -327,7 +336,7 @@ function App() {
         mode: state.mode,
         currentPhase: state.currentPhase,
         completedPhases: state.completedPhases,
-        authToken: apiClient.getAuth().token,
+        authToken: token,
       };
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
     }

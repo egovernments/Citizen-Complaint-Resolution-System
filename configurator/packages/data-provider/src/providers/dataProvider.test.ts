@@ -266,4 +266,159 @@ describe('createDigitDataProvider', () => {
     assert.ok(captured, 'employeeUpdate should have been called');
     assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
   });
+
+  it('getList(localization) does not drop rows when the list pins locales[]', async () => {
+    // LocalizationList writes `{ locales: ['en_IN', 'hi_IN', …] }` as a fetcher
+    // control. Matching that array against a record field stringifies it to
+    // "en_in,hi_in,…" and, because no row has a `locales` column, clientFilter
+    // used to return []. Dashboard (filter: {}) kept the real count.
+    mock.method(client, 'localizationSearch', async (_tenant: string, locale: string) => {
+      if (locale === 'en_IN') {
+        return [{ code: 'HELLO', message: 'Hello', module: 'rainmaker-common', locale }];
+      }
+      return [{ code: 'HELLO', message: 'Bonjour', module: 'rainmaker-common', locale }];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('localization', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: { locales: ['en_IN', 'fr_FR'] },
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result.data.length, 1);
+    assert.equal(result.data[0].code, 'HELLO');
+    assert.equal((result.data[0] as { msg__en_IN: string }).msg__en_IN, 'Hello');
+    assert.equal((result.data[0] as { msg__fr_FR: string }).msg__fr_FR, 'Bonjour');
+  });
+
+  it('getList(departments) reports the real total, not perPage+1', async () => {
+    // 15 active rows, list page size 10. The old MDMS path fetched `limit: 10`
+    // and set total = 11 whenever the page was full, so the badge read 11
+    // ("1-10 of 11") instead of 15.
+    const rows = Array.from({ length: 15 }, (_, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${i}`, name: `Dept ${i}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 10 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 15);
+    assert.equal(result.data.length, 10);
+  });
+
+  it('getList(departments) total is exact past 500 rows and with perPage 1', async () => {
+    // Dashboard cards pass perPage: 1. A 500-row cap would report 500 for a
+    // 550-row master. Page through offset until a short page.
+    const rows = Array.from({ length: 550 }, (_, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${String(i).padStart(3, '0')}`, name: `Dept ${i}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    let calls = 0;
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      calls += 1;
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 1 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 550);
+    assert.equal(result.data.length, 1);
+    assert.ok(calls >= 6, `should walk past a 500-row cap, got ${calls} pages`);
+  });
+
+  it('getList(boundaries) skips PW_* stubs and still queries ADMIN', async () => {
+    const stubs = Array.from({ length: 212 }, (_, i) => ({ hierarchyType: `PW_HIER_${i}` }));
+    mock.method(client, 'boundaryHierarchySearch', async () => [
+      ...stubs,
+      { hierarchyType: 'ADMIN' },
+      { hierarchyType: 'REVENUE' },
+    ]);
+    const queried: string[] = [];
+    mock.method(client, 'boundaryRelationshipSearch', async (_t: string, ht?: string) => {
+      queried.push(ht ?? '');
+      if (ht === 'ADMIN') {
+        return [{ tenantId: 'ke', hierarchyType: 'ADMIN', boundary: [{ code: 'KE', children: [] }] }];
+      }
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke.bomet');
+    const result = await dp.getList('boundaries', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 1);
+    assert.equal(result.data[0].id, 'KE');
+    assert.ok(!queried.some((ht) => /^PW_/i.test(ht)), 'must not query PW_* trees');
+    assert.ok(queried.includes('ADMIN'));
+    assert.ok(queried.includes('REVENUE'));
+  });
+
+  it('getList(gender-types) sorts a shuffled generic-MDMS response across pages', async () => {
+    // MDMS v2 has no ordering criterion, so rows arrive in arbitrary order and
+    // sorting must span the whole master, not the current page.
+    const codes = ['DELTA', 'ALPHA', 'ECHO', 'CHARLIE', 'BRAVO'];
+    const rows = codes.map((code, i) => ({
+      id: `id-${i}`,
+      tenantId: 'ke',
+      schemaCode: 'common-masters.GenderType',
+      uniqueIdentifier: code,
+      data: { code },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, opts?: { limit?: number; offset?: number }) => {
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit ?? 100;
+      return rows.slice(offset, offset + limit);
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const asc = await dp.getList('gender-types', {
+      pagination: { page: 1, perPage: 2 },
+      sort: { field: 'code', order: 'ASC' },
+      filter: {},
+    });
+    assert.deepEqual(asc.data.map((r) => r.code), ['ALPHA', 'BRAVO']);
+    assert.equal(asc.total, 5);
+
+    const descPage2 = await dp.getList('gender-types', {
+      pagination: { page: 2, perPage: 2 },
+      sort: { field: 'code', order: 'DESC' },
+      filter: {},
+    });
+    assert.deepEqual(descPage2.data.map((r) => r.code), ['CHARLIE', 'BRAVO']);
+    assert.equal(descPage2.total, 5);
+  });
 });
