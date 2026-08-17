@@ -7,7 +7,7 @@ import { complaintTypeParams } from "./complaintTypeTree";
  *
  * The tileKey convention for runKpiBatch refs:
  *   <kpiId>           base query (global params applied)
- *   <kpiId>__prior    delta cards: same params + compare:'prior'
+ *   <kpiId>__prior    delta cards/comparison tables: same params + compare:'prior'
  *   <kpiId>__series   sparkline cards: same params + series:'daily'
  *   <kpiId>__pins     map tiles: the per-complaint pin companion source
  */
@@ -66,6 +66,9 @@ export function isSparklineKind(kind) {
 export function isMapKind(kind) {
   return MAP_KINDS.has(kind);
 }
+export function needsPriorComparison(def) {
+  return def?.viz?.comparison?.period === "prior";
+}
 
 /**
  * Map the dashboard filter bar -> the KpiQueryComposer param names.
@@ -116,9 +119,9 @@ export function tileParams(def, filters, hierOverrides) {
 /**
  * Build the per-tile refs map for runKpiBatch.
  *
- * The prior/series refs are gated on viz.kind (the only series signal exposed by
- * the catalog tile — supportsSeries is not serialised), so non-card tiles only
- * issue the single base query.
+ * Series refs are gated on viz.kind (the only series signal exposed by the
+ * catalog tile — supportsSeries is not serialised). Prior refs are requested
+ * for scalar cards and for tables that explicitly declare viz.comparison.
  */
 export function buildRefs(tiles, kpis, filters, hierOverrides) {
   const refs = {};
@@ -132,7 +135,7 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
 
     refs[kpiId] = { kpiId, params: { ...base } };
 
-    if (isCardKind(kind)) {
+    if (isCardKind(kind) || needsPriorComparison(def)) {
       refs[`${kpiId}__prior`] = { kpiId, params: { ...base, compare: "prior" } };
     }
     if (isSparklineKind(kind)) {
@@ -177,13 +180,14 @@ export function buildPublicRefsKey(tiles, kpis) {
  * Serialisable fingerprint of everything buildRefs reads, used as the batch
  * effect's dependency key. Includes each tile's viz.kind (a def flipping
  * card<->chart must re-trigger even when ids/params are unchanged) AND each
- * tile's applied hierLevel override — without the latter the batch effect
+ * tile's comparison contract and applied hierLevel override — without those the batch effect
  * would never refire on a "Group by" change (R7c).
  */
 export function buildRefsKey(tiles, kpis, filters, hierOverrides) {
   return JSON.stringify({
     ids: tiles.map((t) => t.kpiId),
     kinds: tiles.map((t) => kpis[t.kpiId]?.viz?.kind),
+    comparisons: tiles.map((t) => kpis[t.kpiId]?.viz?.comparison ?? null),
     gp: globalParams(filters),
     hier: tiles.map((t) => appliedHierLevel(kpis[t.kpiId], hierOverrides)),
     // A tenant whose catalog gains the per-layer pin def must refire the batch:

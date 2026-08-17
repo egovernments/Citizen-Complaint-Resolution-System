@@ -27,6 +27,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { assertDashboardCatalogContract } from './dashboard-catalog-contract.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
@@ -58,6 +59,7 @@ for (const [code, key] of [['dss.KpiDefinition', 'x-unique']]) {
 if (kpiDefinitions.some((k) => !k || typeof k.id !== 'string')) {
   throw new Error('every KpiDefinition record must carry a string id');
 }
+assertDashboardCatalogContract(kpiDefinitions);
 
 const banner = `/**
  * GENERATED — do not hand-edit. Regenerate with:

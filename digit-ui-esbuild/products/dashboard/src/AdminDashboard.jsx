@@ -40,6 +40,7 @@ import {
   isCardKind,
   isSparklineKind,
   isMapKind,
+  needsPriorComparison,
   buildRefs,
   buildRefsKey,
   buildPublicRefs,
@@ -287,7 +288,8 @@ function persistHierOverrides(overrides) {
  *
  * So we keep columns/rows/scope/asOf verbatim, and additionally hoist:
  *   value    <- base scalar (rows[0][valueKey] / single measure)
- *   prior    <- __prior scalar
+ *   prior    <- __prior scalar (cards)
+ *   priorRows<- __prior rows (comparison tables)
  *   sparkline<- __series rows -> ordered numeric series
  */
 function assembleResult(kpiId, def, results) {
@@ -315,6 +317,11 @@ function assembleResult(kpiId, def, results) {
       const p = scalarFromResult(priorRes, valueKey);
       if (p != null) assembled.prior = p;
     }
+  }
+
+  if (needsPriorComparison(def)) {
+    const priorRes = results?.[`${kpiId}__prior`];
+    assembled.priorRows = priorRes?.rows || [];
   }
 
   // Daily sparkline series.
