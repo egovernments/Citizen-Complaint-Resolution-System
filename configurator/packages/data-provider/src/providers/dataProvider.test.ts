@@ -186,18 +186,20 @@ describe('createDigitDataProvider', () => {
       if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
         // "PGR_TEST" has exactly one real leaf (matches live: not zero —
         // presence-only disambiguation would tie here). "PGR" has several.
+        // Both definitions' leaf level is SUB_TYPE, so levelCode must be set
+        // here for the count to match each candidate's own leaf defaults.
         return [
           { id: 'leaf-test-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR_TEST.STRAY',
-            data: { hierarchyType: 'PGR_TEST', code: 'STRAY' }, isActive: true,
+            data: { hierarchyType: 'PGR_TEST', levelCode: 'SUB_TYPE', code: 'STRAY' }, isActive: true,
             auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
           { id: 'leaf-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_1',
-            data: { hierarchyType: 'PGR', code: 'EXISTING_1' }, isActive: true,
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'EXISTING_1' }, isActive: true,
             auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
           { id: 'leaf-2', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_2',
-            data: { hierarchyType: 'PGR', code: 'EXISTING_2' }, isActive: true,
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'EXISTING_2' }, isActive: true,
             auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
           { id: 'leaf-3', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'PGR.EXISTING_3',
-            data: { hierarchyType: 'PGR', code: 'EXISTING_3' }, isActive: true,
+            data: { hierarchyType: 'PGR', levelCode: 'SUB_TYPE', code: 'EXISTING_3' }, isActive: true,
             auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
         ];
       }
@@ -220,6 +222,92 @@ describe('createDigitDataProvider', () => {
 
     assert.ok(captured, 'mdmsCreate should have been called');
     assert.equal(captured!.hierarchyType, 'PGR');
+    assert.equal(captured!.levelCode, 'SUB_TYPE');
+  });
+
+  it('counts only ACTIVE rows at each candidate\'s own leaf level — inactive leaves and interior nodes don\'t count as usage', async () => {
+    // Reviewer finding on CCRS#1724: the usage sample must not count
+    // soft-deleted (isActive:false) rows or interior/non-leaf rows
+    // (CATEGORY/SECTOR/etc) — either can inflate a hierarchyType's raw row
+    // count without reflecting real complaint-type usage. HTYPE_B here has
+    // MORE total rows than HTYPE_A (6 vs 2), but only 1 of them is a
+    // genuine active leaf — the rest are inactive leaves and active
+    // interior nodes that must be excluded. HTYPE_A, with fewer total rows
+    // but 2 genuine active leaves, must win.
+    mock.method(client, 'mdmsSearch', async (_t: string, schema: string) => {
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchyDefinition') {
+        return [
+          {
+            id: 'def-a', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_A',
+            data: { hierarchyType: 'HTYPE_A', levels: [
+              { levelCode: 'CATEGORY', isLeafServiceCode: false },
+              { levelCode: 'SUB_TYPE', isLeafServiceCode: true },
+            ] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+          },
+          {
+            id: 'def-b', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B',
+            data: { hierarchyType: 'HTYPE_B', levels: [
+              { levelCode: 'CATEGORY', isLeafServiceCode: false },
+              { levelCode: 'SUB_TYPE', isLeafServiceCode: true },
+            ] },
+            isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 2, lastModifiedTime: 2 },
+          },
+        ];
+      }
+      if (schema === 'RAINMAKER-PGR.ComplaintHierarchy') {
+        return [
+          // HTYPE_A: 2 genuine active leaves — the real dominant one.
+          { id: 'a1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_A.A1',
+            data: { hierarchyType: 'HTYPE_A', levelCode: 'SUB_TYPE', code: 'A1' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'a2', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_A.A2',
+            data: { hierarchyType: 'HTYPE_A', levelCode: 'SUB_TYPE', code: 'A2' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          // HTYPE_B: only 1 genuine active leaf...
+          { id: 'b1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B1',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'SUB_TYPE', code: 'B1' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          // ...plus INACTIVE leaves that must NOT count...
+          { id: 'b-old-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B_OLD_1',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'SUB_TYPE', code: 'B_OLD_1' }, isActive: false,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'b-old-2', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B_OLD_2',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'SUB_TYPE', code: 'B_OLD_2' }, isActive: false,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'b-old-3', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B_OLD_3',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'SUB_TYPE', code: 'B_OLD_3' }, isActive: false,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          // ...plus ACTIVE but INTERIOR (non-leaf) rows that must NOT count either.
+          { id: 'b-cat-1', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B_CAT_1',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'CATEGORY', code: 'B_CAT_1' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+          { id: 'b-cat-2', tenantId: 'pg', schemaCode: schema, uniqueIdentifier: 'HTYPE_B.B_CAT_2',
+            data: { hierarchyType: 'HTYPE_B', levelCode: 'CATEGORY', code: 'B_CAT_2' }, isActive: true,
+            auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 } },
+        ];
+      }
+      return [];
+    });
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsCreate', async (_t: string, _s: string, _u: string, data: Record<string, unknown>) => {
+      captured = data;
+      return {
+        id: 'new-id', tenantId: 'pg', schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+        uniqueIdentifier: 'HTYPE_A.NEW_TYPE', data, isActive: true,
+        auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+      };
+    });
+
+    const dp = createDigitDataProvider(client, 'pg');
+    await dp.create('complaint-hierarchy', {
+      data: { serviceCode: 'NEW_TYPE', name: 'New Type', department: 'DEPT_X', slaHours: 24, active: true },
+    });
+
+    assert.ok(captured, 'mdmsCreate should have been called');
+    assert.equal(captured!.hierarchyType, 'HTYPE_A');
     assert.equal(captured!.levelCode, 'SUB_TYPE');
   });
 

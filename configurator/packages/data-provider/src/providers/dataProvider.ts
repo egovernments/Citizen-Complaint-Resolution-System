@@ -261,6 +261,14 @@ async function resolveNewLeafDefaults(
   // order would silently decide the winner again. Count occurrences and
   // pick the candidate with the MOST usage, not just "any at all".
   //
+  // Count only ACTIVE rows at each candidate's OWN leaf level (its
+  // {hierarchyType, levelCode} from leafDefaultsFromDefinition), not every
+  // row that merely shares the hierarchyType (CCRS#1724 review): interior
+  // nodes (CATEGORY/SECTOR/etc) and soft-deleted leaves aren't real
+  // complaint-type usage, and a hierarchyType with a deep tree of interior
+  // scaffolding but few actual complaint types could otherwise outscore
+  // the genuinely dominant one.
+  //
   // This lookup gets its OWN try/catch, separate from the `definitions`
   // fetch above (CCRS#1724 review): a transient failure here must degrade
   // to the oldest already-fetched definition, not discard the successful
@@ -268,14 +276,22 @@ async function resolveNewLeafDefaults(
   // constants, which match neither real definition and would reproduce
   // the exact invisible-complaint-type bug (CCRS#1713) this is fixing.
   try {
-    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 500 });
+    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { isActive: true, limit: 500 });
     const usageCounts = new Map<string, number>();
     for (const r of sample) {
-      const ht = (r.data as { hierarchyType?: unknown } | undefined)?.hierarchyType;
-      if (typeof ht === 'string') usageCounts.set(ht, (usageCounts.get(ht) ?? 0) + 1);
+      if (!r.isActive) continue;
+      const data = r.data as { hierarchyType?: unknown; levelCode?: unknown } | undefined;
+      if (typeof data?.hierarchyType === 'string' && typeof data?.levelCode === 'string') {
+        const key = `${data.hierarchyType}::${data.levelCode}`;
+        usageCounts.set(key, (usageCounts.get(key) ?? 0) + 1);
+      }
     }
     const byUsage = definitions
-      .map((d) => ({ def: d, count: usageCounts.get((d.data as { hierarchyType?: unknown } | undefined)?.hierarchyType as string) ?? 0 }))
+      .map((d) => {
+        const leafDefaults = leafDefaultsFromDefinition(d)!;
+        const key = `${leafDefaults.hierarchyType}::${leafDefaults.levelCode}`;
+        return { def: d, count: usageCounts.get(key) ?? 0 };
+      })
       .filter((x) => x.count > 0)
       .sort((a, b) => b.count - a.count);
     if (byUsage.length > 0) {
