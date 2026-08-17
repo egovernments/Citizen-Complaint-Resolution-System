@@ -751,3 +751,36 @@ test("the shim never touches document.title", () => {
   });
   assert.equal(t.sandbox.document.title, undefined, "document.title must be left alone");
 });
+
+test("endpointUrl is host-allowlisted, not just scriptUrl (CWE-201)", () => {
+  const i = loadShim({ respond: () => [] }).internal;
+  const R = i.REASONS;
+
+  // An allowlisted script paired with an off-allowlist beacon destination is
+  // the exact exfiltration shape the script-only check missed.
+  const matomoExfil = {
+    code: "x", type: "MATOMO", enabled: true, siteId: "1",
+    scriptUrl: "https://matomo.mz.gov.mz/matomo.js",
+    endpointUrl: "https://evil.example.com/collect",
+  };
+  let v = i.validate(matomoExfil);
+  assert.equal(v.ok, false, "matomo off-allowlist endpoint must be rejected");
+  assert.equal(v.reason, R.SCRIPT_URL_HOST_NOT_ALLOWED);
+
+  // http endpoint on an otherwise allowlisted host is still refused.
+  v = i.validate({ ...matomoExfil, endpointUrl: "http://matomo.mz.gov.mz/matomo.php" });
+  assert.equal(v.ok, false);
+  assert.equal(v.reason, R.SCRIPT_URL_NOT_HTTPS);
+
+  // Same-origin relative endpoint stays valid (self-hosted behind our nginx).
+  v = i.validate({ ...matomoExfil, endpointUrl: "/matomo/matomo.php" });
+  assert.equal(v.ok, true, "same-origin endpoint must remain allowed");
+
+  // PostHog: api_host derives from endpointUrl, so it gets the same treatment.
+  v = i.validate({ code: "p", type: "POSTHOG", enabled: true, apiKey: "k", endpointUrl: "https://evil.example.com" });
+  assert.equal(v.ok, false, "posthog off-allowlist api_host must be rejected");
+
+  // PostHog with no endpointUrl falls back to the vendor default and is fine.
+  v = i.validate({ code: "p", type: "POSTHOG", enabled: true, apiKey: "k" });
+  assert.equal(v.ok, true);
+});
