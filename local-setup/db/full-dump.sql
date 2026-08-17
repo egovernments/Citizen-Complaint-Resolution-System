@@ -3208,6 +3208,7 @@ COPY public.eg_ms_role (name, code, description, createddate, createdby, lastmod
 COPY public.eg_pgr_address_v2 (tenantid, id, parentid, doorno, plotno, buildingname, street, landmark, city, pincode, locality, district, region, state, country, latitude, longitude, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails) FROM stdin;
 pg.citest	d9a5d6a5-b455-492e-a5f4-b8251df2df15	9a36f8f0-747c-4d56-a0a1-5852a1395e9f	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	null
 pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d56e	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	null
+pg	22222222-3333-4444-8555-666666666666	11111111-2222-4333-8444-555555555555	\N	\N	\N	Lawrence Road	Near Company Bagh	pg	143001	SUN01_LOCALITY	\N	\N	\N	\N	31.634000	74.872300	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	null
 \.
 
 
@@ -3218,6 +3219,7 @@ pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d
 COPY public.eg_pgr_service_v2 (id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, applicationstatus, rating, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
 6a63f17f-7c15-4432-98ca-ea625840d56e	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000185	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	t
 9a36f8f0-747c-4d56-a0a1-5852a1395e9f	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000186	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	t
+11111111-2222-4333-8444-555555555555	pg	BurningOfGarbage	PG-PGR-2026-05-13-000187	Seeded complaint with real coordinates for the geo-link regression test	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "Health & Sanitation", "serviceName": "Burning of garbage"}	CLOSEDAFTERRESOLUTION	\N	web	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	t
 \.
 
 
@@ -3485,6 +3487,10 @@ cb276065-655b-442a-a203-3d9731470804	pg.citest	PGR	PG-PGR-2026-05-13-000185	RATE
 2adda6be-758d-4bdf-aaec-fa5cede93ebe	pg.citest	PGR	PG-PGR-2026-05-13-000186	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552529	1778664552529	pgr-services	431999818	\N	f
 8a840e0d-2623-456d-803b-c257500594ce	pg.citest	PGR	PG-PGR-2026-05-13-000186	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552714	1778664552714	pgr-services	431999633	\N	f
 0291b94b-30a8-4ff4-a5c4-4cd8a299d49a	pg.citest	PGR	PG-PGR-2026-05-13-000186	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	79006ea0-100c-4332-8390-60edff9328c1	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552865	1778664552865	pgr-services	431999482	\N	f
+a1000000-0000-4000-8000-000000000001	pg	PGR	PG-PGR-2026-05-13-000187	APPLY	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552347	1778664552347	pgr-services	432000000	\N	f
+a1000000-0000-4000-8000-000000000002	pg	PGR	PG-PGR-2026-05-13-000187	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552529	1778664552529	pgr-services	431999818	\N	f
+a1000000-0000-4000-8000-000000000003	pg	PGR	PG-PGR-2026-05-13-000187	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552714	1778664552714	pgr-services	431999633	\N	f
+a1000000-0000-4000-8000-000000000004	pg	PGR	PG-PGR-2026-05-13-000187	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552865	1778664552865	pgr-services	431999482	\N	f
 \.
 
 
