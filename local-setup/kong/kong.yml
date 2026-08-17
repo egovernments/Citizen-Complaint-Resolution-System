@@ -94,8 +94,11 @@ plugins:
         -- openEndpointsWhitelist.contains(getPath().value()) — NOT prefix (a prefix would over-open,
         -- e.g. anonymous /localization/messages/v1/_upsert). AUTH_OPTIONAL = open ∪ mixed, kept
         -- VERBATIM-in-sync with env.yaml egov-open/-mixed-mode-endpoints-whitelist (+ the
-        -- boundary-service search paths CCRS migrated to in #1); a CI check enforces the two match
-        -- (Phase 3). See docs/parity-item5-gateway-rbac-design.md.
+        -- boundary-service search paths CCRS migrated to in #1), except for the two explicitly
+        -- documented Kong-only public-dashboard aliases below. The Spring gateway does not strip
+        -- anonymous client-supplied userInfo, so those aliases must stay protected there. A CI check
+        -- enforces both the shared set and that intentional exception (Phase 3). See
+        -- docs/parity-item5-gateway-rbac-design.md.
         --
         -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
         -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
@@ -134,6 +137,15 @@ plugins:
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
           -- flips. POST-only, size- and rate-limited at the route (see below).
           ["/otel/v1/metrics"]=true, ["/otel/v1/logs"]=true,
+          -- Public-dashboard API aliases. Only these aliases are anonymous; the
+          -- existing /v2/analytics/{packs,catalog/_search,_query} employee paths
+          -- stay protected. The public controller methods ignore RequestInfo and
+          -- force the PUBLIC floor, while this pre-function also strips spoofed
+          -- userInfo from no-token bodies (defence in depth). Keep these Kong-only:
+          -- Spring's mixed-mode gateway does not provide the same normalization.
+          -- They are exact AUTH_OPTIONAL matches and exact regex routes below.
+          ["/pgr-services/v2/analytics/public/packs"]=true,
+          ["/pgr-services/v2/analytics/public/_query"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -563,6 +575,47 @@ services:
   - rainmaker
   - pgr
   routes:
+  # Credential-free dashboard aliases are more specific than the general PGR
+  # prefix route. Anchored regexes keep the route-level public rate/size limits
+  # from applying to similarly-prefixed employee or future analytics endpoints.
+  - name: pgr-public-analytics-packs-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/packs$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-query-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/_query$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
   - name: pgr-route
     paths:
     - /pgr-services

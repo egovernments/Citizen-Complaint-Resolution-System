@@ -20,9 +20,8 @@ module.exports = {
         }
       },
       {
-        // Match .jsx too: the src/dashboard/* feature is authored in .jsx,
-        // which this rule (preset-react) must transpile — a bare /\.js$/
-        // silently skips them and webpack fails on the JSX syntax.
+        // Match .jsx as well as .js so preset-react transpiles both — a bare
+        // /\.js$/ silently skips .jsx and webpack then fails on JSX syntax.
         test: /\.(jsx?)$/,
         exclude: /node_modules/,
         use: {
@@ -48,9 +47,8 @@ module.exports = {
     ],
   },
   resolve: {
-    // Without this, extensionless imports like `./dashboard/AdminDashboard`
-    // only resolve .js — webpack's defaults don't include .jsx — so the
-    // .jsx dashboard modules fail to resolve.
+    // webpack's defaults don't include .jsx, so extensionless imports of a
+    // .jsx module would fail to resolve without this.
     extensions: [".js", ".jsx", ".json"],
   },
   output: {

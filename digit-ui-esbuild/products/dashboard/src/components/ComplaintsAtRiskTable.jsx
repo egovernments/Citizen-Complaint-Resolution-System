@@ -27,8 +27,8 @@ const buildColumns = (t) => [
 ];
 
 const ComplaintsAtRiskTable = ({ rows = [] }) => {
-  const { t, language } = useDashboardT();
-  const COLUMNS = useMemo(() => buildColumns(t), [t, language]);
+  const { t, language, i18nTick } = useDashboardT();
+  const COLUMNS = useMemo(() => buildColumns(t), [t, language, i18nTick]);
   const tableStyles = DATA_TABLE_STYLES;
   const slaStyles = SLA_RISK_TABLE_STYLES;
   const { sortState, handleSort, sortRows } = useTableSort(COLUMNS, {
