@@ -364,7 +364,7 @@ cmd_button(
 #   - Proxy:         18000 (external access point)
 #   - Admin API:     18001
 #   - Manager GUI:   18002
-#   - Status:        18100
+#   - Status:        18100 (loopback only — serves unauthenticated /metrics)
 #
 # Core Services:
 #   - MDMS:          18094
