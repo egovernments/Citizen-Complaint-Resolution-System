@@ -126,7 +126,7 @@ their own. End-to-end:
 The first deploy:
 - installs Docker + Compose, configures insecure-registries if needed
 - creates `/opt/digit/`, syncs configs (`otel/`, `nginx/`, `kong/`,
-  `db/`, `seeds/`, `gatus/`, `jupyter/`, `configs/`, `docker/`,
+  `db/`, `seeds/`, `gatus/`, `dataloader/`, `configs/`, `docker/`,
   plus both compose files)
 - initialises + unseals OpenBao, seeds `bootstrap_secrets` (once)
 - writes per-tenant `/opt/digit/.env` from OpenBao

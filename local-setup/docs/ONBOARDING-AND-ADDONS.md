@@ -11,7 +11,7 @@ that matches how your stack is deployed:
 | Path | Interface | Best for | Where it's available |
 |------|-----------|----------|----------------------|
 | **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` + `build_configurator: true` |
-| **[Jupyter DataLoader](#b-jupyter-dataloader-scripted)** | Jupyter notebook (Python) | Developers, scripted/local setups | Any stack (Docker Compose, Tilt, Ansible) |
+| **[Python DataLoader](#b-python-dataloader-scripted)** | `CRSLoader` Python library | Developers, scripted/local setups | Any stack (Docker Compose, Tilt, Ansible) |
 | **[MCP `city_setup_from_xlsx`](#c-mcp-automation)** | REST / MCP tool | CI, fully-automated onboarding | Deploys with `enable_mcp: true` + `nginx_features.mcp: true` |
 
 > **Order always matters:** Tenant → Boundaries → Masters → Employees. Each
@@ -160,42 +160,53 @@ e.g. `ke`) — those drive the JVM `STATE_LEVEL_TENANT_ID` pins. Re-run
 
 ---
 
-## B. Jupyter DataLoader (scripted)
+## B. Python DataLoader (scripted)
 
-Available on every stack (Docker Compose, Tilt, Ansible). The `DataLoader_v2`
-notebook runs the same phases in Python, driven by the XLSX templates bundled
-under `jupyter/dataloader/templates/`.
+Available on every stack (Docker Compose, Tilt, Ansible). `CRSLoader` runs the
+same phases in Python, driven by the XLSX templates bundled under
+`dataloader/templates/`.
 
-### 1. Open Jupyter Lab
+> **The Jupyter Lab service was removed in #1743.** The library it hosted did
+> not go anywhere — it moved from `local-setup/jupyter/dataloader/` to
+> **`local-setup/dataloader/`** and is still the single source of truth for
+> every dataloader path, including the CI scripts. What changed is that you
+> drive it from a Python script instead of notebook cells; the calls below are
+> unchanged.
 
-**Docker Compose / Tilt (local):** reachable through Kong —
+### 1. Set up a Python environment
 
-```text
-http://localhost:18000/jupyter/lab?token=digit-crs-local
-```
-
-The default token is `digit-crs-local` (override via `JUPYTER_TOKEN` in
-`docker-compose.yml`).
-
-**Ansible (remote target):** the host nginx does **not** publish a `/jupyter`
-location, so there is no public URL — tunnel to the container's host-bound port
-instead. This stack also starts Jupyter with an empty token, so no `?token=` is
-needed:
+Run this from `local-setup/`, on any machine that can reach the deployment's
+Kong endpoint — it does not have to be the server.
 
 ```bash
-ssh -L 18888:127.0.0.1:18888 <target>
-# then open http://localhost:18888/jupyter/lab
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install requests openpyxl pandas python-dotenv
 ```
 
-In the file browser, open **DataLoader_v2.ipynb**.
+The virtualenv is not optional on Ubuntu 24.04, Debian 12+, Fedora 38+ or
+Homebrew Python — a bare `pip install` there fails with PEP 668
+`error: externally-managed-environment`.
+
+**If you would rather work interactively**, everything below also works
+line-by-line in `python3 -i`, or in your own Jupyter/IPython install pointed at
+this virtualenv. Nothing about the loader required the bundled container.
 
 ### 2. Configure + create the tenant (Phase 1)
 
-The first configuration cell logs in **and** creates the tenant — there is no
-separate "run Phase 1" cell. Edit the values, then run it:
+Start your script with the imports and the login. This both logs in **and**
+creates the tenant:
 
 ```python
-URL          = "http://kong:8000"   # Kong gateway inside the Docker network — leave as-is
+import sys
+sys.path.insert(0, "dataloader")     # run from local-setup/
+from crs_loader import CRSLoader
+```
+
+Then:
+
+```python
+URL          = "http://localhost:18000"  # Kong, from wherever you are running this
 USERNAME     = "ADMIN"
 PASSWORD     = "eGov@123"
 TENANT_ID    = "pg"                  # root tenant you log in against
@@ -217,19 +228,35 @@ that root — schemas and essential MDMS data are copied from `pg` first.
 
 ### 3. Run the remaining phases in order
 
-| Cell | Call | What it does |
+Append these to the same script, in this order — each validates codes the
+previous one created.
+
+| Phase | Call | What it does |
 |------|------|--------------|
 | Phase 2a | `loader.load_hierarchy(name, levels, target_tenant, output_dir="upload")` | Defines the boundary hierarchy and writes an Excel template to `upload/` |
 | Phase 2b | `loader.load_boundaries(<file>, target_tenant, hierarchy_type)` | Uploads the filled boundary sheet; creates entities + parent/child relationships |
 | Phase 3  | `loader.load_common_masters(<file>, target_tenant)` | Departments, designations, complaint types |
 | Phase 4  | `loader.load_employees(<file>, target_tenant)` | HRMS employees with roles, departments, jurisdictions |
 | Phase 5  | `loader.load_localizations(<file>, target_tenant)` | *Optional* — bulk translation messages (and, optionally, a new UI language) |
-| Phase 6  | `loader.load_workflow("templates/PgrWorkflowConfig.json", target_tenant)` | The PGR complaint-workflow state machine |
+| Phase 6  | `loader.load_workflow("dataloader/templates/PgrWorkflowConfig.json", target_tenant)` | The PGR complaint-workflow state machine |
 
-The bundled templates live in `jupyter/dataloader/templates/`
+The bundled templates live in `dataloader/templates/`
 (`Boundary_Master.xlsx`, `Common and Complaint Master.xlsx`, the employee
 master, `localization.xlsx`, `PgrWorkflowConfig.json`). Copy and edit them for
 your city.
+
+**Prefer a ready-made script?** `scripts/ci-dataloader-xlsx.py` already does all
+nine steps — templates, tenant, boundaries, masters, employees, workflow,
+localization and a create → assign → resolve verification — from one county
+input spreadsheet. It is the closest thing to a one-command version of this
+section:
+
+```bash
+DIGIT_URL=http://localhost:18000 \
+BOOT_TENANT=pg.myorg \
+INPUT_XLSX=data/county-data.xlsx \
+python3 scripts/ci-dataloader-xlsx.py
+```
 
 ### Rollback
 

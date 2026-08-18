@@ -1257,7 +1257,7 @@
           db:       ../db
           seeds:    ../seeds
           gatus:    ../gatus
-          jupyter:  ../jupyter
+          dataloader: ../dataloader
           scripts:  ../scripts
           keycloak: ../keycloak
 
@@ -1384,7 +1384,7 @@
     # Same shape of overwrite-on-redeploy bug as the four above, for two
     # siblings the original fix missed:
     #   - egov-inbox PARENT_LEVEL_TENANT_ID: mz
-    #   - digit-mcp / jupyter DIGIT_TENANT: pg
+    #   - digit-mcp DIGIT_TENANT: pg
     # Both are tenant-shaped values the verbatim compose `copy:` resets
     # to upstream defaults on every deploy. Defensive same-pattern fix.
     - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
@@ -1393,7 +1393,7 @@
         regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
         replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
 
-    - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose
+    - name: Set DIGIT_TENANT (digit-mcp) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
@@ -3309,7 +3309,7 @@
       ansible.builtin.shell: |
         # Only flag genuinely broken states. Many services don't define
         # a healthcheck at all (default-data-handler, digit-gatus,
-        # digit-otel-collector, digit-jupyter, etc.) and show plain "Up X"
+        # digit-otel-collector, digit-gatus, etc.) and show plain "Up X"
         # with no health suffix — that's normal, not unhealthy.
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
@@ -4652,7 +4652,7 @@
     # The dump (db/full-dump.sql) ships with pg.citest pre-bootstrapped
     # (CI-ADMIN with HRMS, PGR workflow loaded, complaint types). So the
     # tests work out of the box — no dataloader prerequisite.
-    # postman/ + jupyter/ trees are already synced to {{ digit_dir }} by
+    # postman/ + dataloader/ trees are already synced to {{ digit_dir }} by
     # the "Synchronize config directories" task above — no separate copy
     # step here, just reference the synced paths.
     - name: "Install Newman (Postman CLI runner)"
@@ -4747,7 +4747,7 @@
       register: postman_lifecycle
       changed_when: false
 
-    # CRSLoader end-to-end test — proves the Jupyter notebook flow
+    # CRSLoader end-to-end test — proves the full dataloader flow
     # (bootstrap a tenant from `pg`, load every phase, rollback) works.
     # Runs against `pg.cietee` — a dedicated throwaway tenant that
     # user-seed.sh provisions with ADMIN. The test's cleanup nukes MDMS
@@ -4770,10 +4770,10 @@
         extra_args: --break-system-packages
       changed_when: false
 
-    - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+    - name: "CI — CRSLoader E2E (10-phase dataloader flow, throwaway tenant)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
-        cd {{ digit_dir }}/jupyter/dataloader
+        cd {{ digit_dir }}/dataloader
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
         DIGIT_USERNAME=ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -4896,7 +4896,7 @@
         state: directory
       loop:
         - scripts
-        - jupyter/dataloader/templates/localisations
+        - dataloader/templates/localisations
         - data
 
       when: run_ci_tests | default(false)
@@ -4925,14 +4925,17 @@
     # at local-setup/scripts/ and is run as part of the core CI block above,
     # not gated on run_ci_tests.)
 
-    # Use OUR canonical, deduped dataloader (local-setup/jupyter/) — not
+    # Use OUR canonical, deduped dataloader (local-setup/dataloader/) — not
     # a sibling repo's copy. The sibling copy used to drift (e.g. it had
     # a `menuPathName` field that the MDMS schema rejects, breaking the
     # complaint-type create call). Single source of truth.
-    - name: "Synchronize DataLoader library (from local-setup/jupyter/)"
+    #
+    # The destination must stay a SIBLING of ci-tests/scripts/: the copied
+    # scripts resolve the library as SCRIPT_DIR/../dataloader.
+    - name: "Synchronize DataLoader library (from local-setup/dataloader/)"
       synchronize:
-        src: "../jupyter/dataloader/"
-        dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
+        src: "../dataloader/"
+        dest: "{{ digit_dir }}/ci-tests/dataloader/"
       when: run_ci_tests | default(false)
 
     - name: Copy county input XLSX (Bomet)

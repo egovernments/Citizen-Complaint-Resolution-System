@@ -1,6 +1,6 @@
 # Local Setup Guide (Resource-Constrained)
 
-Run the full DIGIT CRS stack on a single machine with ~4GB RAM. This guide covers Docker Compose setup, data loading via Jupyter notebook, and API testing via Postman.
+Run the full DIGIT CRS stack on a single machine with ~4GB RAM. This guide covers Docker Compose setup, data loading with the CRSLoader library, and API testing via Postman.
 
 ## Prerequisites
 
@@ -64,23 +64,34 @@ Browser / Postman
 
 Direct service ports are also exposed for debugging (e.g., `:18094` for MDMS, `:18107` for User). See the full port list in `docker-compose.yml`.
 
-## Data Loading with Jupyter Notebook
+## Data Loading with the CRSLoader library
 
-The Jupyter notebook provides a guided, interactive workflow for setting up a new tenant with all required master data.
+`CRSLoader` (`local-setup/dataloader/`) sets up a new tenant with all the master data it
+needs. It is the same library the CI dataloaders use, so what you run by hand and what CI
+runs are the same code path.
 
-### Start Jupyter
+> The Jupyter Lab service that used to host this as a notebook was removed in #1743. The
+> library moved from `local-setup/jupyter/dataloader/` to `local-setup/dataloader/`; the
+> phases and calls below are unchanged.
+
+### Set up
 
 ```bash
-# Jupyter is included in docker compose (disabled by default in Tilt)
-# Access at http://localhost:18888
-docker compose up -d jupyter
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install requests openpyxl pandas python-dotenv
 ```
 
-Or use Tilt's "Start Jupyter" button if running via `tilt up`.
+```python
+import sys
+sys.path.insert(0, "dataloader")
+from crs_loader import CRSLoader
 
-### DataLoader_v2.ipynb — 6-Phase Workflow
+loader = CRSLoader("http://localhost:18000")
+loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
+```
 
-Open `jupyter/dataloader/DataLoader_v2.ipynb` in Jupyter Lab. The notebook walks through:
+### The 6-phase workflow
 
 | Phase | What It Does | Key Inputs |
 |-------|-------------|------------|
@@ -189,7 +200,7 @@ The Postman complaints demo requires the employee to have a proper **HRMS record
 
 If you created users via `_createnovalidate` (user-only, no HRMS), PGR Assign will fail with `DEPARTMENT_NOT_FOUND`.
 
-**Use the Jupyter notebook Phase 4 (Employees)** or the CI dataloader to create proper HRMS employees.
+**Use the DataLoader's Phase 4 (Employees)** or the CI dataloader to create proper HRMS employees.
 
 ### Helper Script
 

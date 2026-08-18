@@ -30,10 +30,6 @@
       "label": "Kong API Gateway",
       "onAutoForward": "silent"
     },
-    "18888": {
-      "label": "Jupyter Lab",
-      "onAutoForward": "notify"
-    },
     "18889": {
       "label": "Gatus Health Dashboard",
       "onAutoForward": "silent"

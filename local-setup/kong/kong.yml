@@ -729,16 +729,6 @@ services:
     paths:
     - /digit-ui
     strip_path: false
-- name: jupyter-service
-  url: http://digit-jupyter:8888
-  tags:
-  - tools
-  - jupyter
-  routes:
-  - name: jupyter-route
-    paths:
-    - /jupyter
-    strip_path: false
 - name: indexer-service
   url: http://egov-indexer:8080
   tags:

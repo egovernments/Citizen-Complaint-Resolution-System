@@ -143,8 +143,6 @@ EXEMPT = {
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
     "openbao": "deploy-time secrets store: no runtime dependents, binds 127.0.0.1 only",
-    # Tooling, not part of the serving stack.
-    "jupyter": "dev tool, not a serving dependency",
     "gatus": "the monitor itself",
 }
 

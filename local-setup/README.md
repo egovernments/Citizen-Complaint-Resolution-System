@@ -97,7 +97,6 @@ Expected output: each service prints `OK` or `healthy`.
 | What | URL |
 |------|-----|
 | DIGIT UI (Employee login) | http://localhost:18000/digit-ui/employee |
-| Jupyter Lab (DataLoader) | http://localhost:18000/jupyter/lab?token=digit-crs-local |
 | Kong Gateway (API base) | http://localhost:18000 |
 | Gatus Health Dashboard | http://localhost:18889 |
 
@@ -182,7 +181,6 @@ Same URLs as Docker Compose:
 | What | URL |
 |------|-----|
 | DIGIT UI (Employee login) | http://localhost:18000/digit-ui/employee |
-| Jupyter Lab (DataLoader) | http://localhost:18000/jupyter/lab?token=digit-crs-local |
 | Tilt Dashboard | http://localhost:10350 |
 
 ### Step 5: Stop
@@ -316,7 +314,7 @@ For a local/sandbox deploy (`domain: localhost`, `tls_enabled: false`), use
 ### Next: onboard a tenant
 
 Once the stack is up, create your city and load its master data — via the
-browser **configurator wizard** or the Jupyter DataLoader. See the
+browser **configurator wizard** or the Python DataLoader. See the
 [Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md).
 
 ### What the Ansible playbook deploys
@@ -342,7 +340,6 @@ Between them these include:
 | **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
 | **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
 | **Frontend** | DIGIT UI (React), Kong API Gateway |
-| **Tools** | Jupyter Lab (DataLoader) |
 | **Seeds** | Tenant data, security config, workflow config, localization, user accounts |
 
 ### Files & configuration
@@ -378,28 +375,45 @@ all creating the same data:
 | Path | Interface | Available on |
 |------|-----------|--------------|
 | **Configurator wizard** | Browser — upload one XLSX per phase | Ansible deploys with `nginx_features.configurator: true` + `build_configurator: true` |
-| **Jupyter DataLoader** | `DataLoader_v2.ipynb` (Python) | Any stack (Docker Compose, Tilt, Ansible) |
+| **Python DataLoader** | `CRSLoader` (`local-setup/dataloader/`) | Any stack (Docker Compose, Tilt, Ansible) |
 | **MCP `city_setup_from_xlsx`** | REST / automation | `enable_mcp: true`; the REST shim (`/v1/*`) additionally needs `nginx_features.mcp: true` |
 
 > **Order always matters:** Tenant → Boundaries → Masters → Employees. Each
 > phase validates codes created by the previous one.
 
-### Quick path — Jupyter DataLoader
+### Quick path — one command
 
-For a local Docker Compose / Tilt stack, open Jupyter Lab at
-http://localhost:18000/jupyter/lab?token=digit-crs-local (token configurable via
-`JUPYTER_TOKEN`) and open **DataLoader_v2.ipynb**. The first configuration cell
-both logs in **and** creates the tenant — edit and run it:
+`scripts/ci-dataloader-xlsx.py` does the whole thing from a single county
+spreadsheet: templates → tenant → boundaries → masters → employees → workflow →
+localization, then verifies a create → assign → resolve round trip.
+
+```bash
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate    # PEP 668 — see the note below
+pip install requests openpyxl pandas python-dotenv
+
+DIGIT_URL=http://localhost:18000 \
+BOOT_TENANT=pg.myorg \
+INPUT_XLSX=data/county-data.xlsx \
+python3 scripts/ci-dataloader-xlsx.py
+```
+
+### Scripted path — the CRSLoader library
+
+For finer control, drive the same library (`local-setup/dataloader/`) yourself.
+The login call also creates the tenant:
 
 ```python
-URL          = "http://kong:8000"   # Kong gateway inside the Docker network — leave as-is
-USERNAME     = "ADMIN"
-PASSWORD     = "eGov@123"
+import sys
+sys.path.insert(0, "dataloader")     # run from local-setup/
+from crs_loader import CRSLoader
+
+URL          = "http://localhost:18000"
 TENANT_ID    = "pg"                  # root tenant you log in against
 TARGET_TENANT = "pg.myorg"           # <-- your new tenant (pattern: <state>.<city>)
 
 loader = CRSLoader(URL)
-loader.login(username=USERNAME, password=PASSWORD, tenant_id=TENANT_ID)
+loader.login(username="ADMIN", password="eGov@123", tenant_id=TENANT_ID)
 loader.create_tenant(TARGET_TENANT, "My Org", users=[
     {"username": "ADMIN", "password": "eGov@123", "name": "Admin",
      "roles": ["SUPERUSER", "EMPLOYEE", "CSR", "GRO", "DGRO", "PGR_LME", "PGR_VIEWER", "CITIZEN"]}
@@ -407,11 +421,11 @@ loader.create_tenant(TARGET_TENANT, "My Org", users=[
 loader.login(username="ADMIN", password="eGov@123", tenant_id=TARGET_TENANT)
 ```
 
-Then run the remaining cells top to bottom: **2a** boundary template → **2b**
-load boundaries → **3** common masters → **4** employees → **5** localizations
+Then run the remaining phases in order: **2a** boundary template → **2b** load
+boundaries → **3** common masters → **4** employees → **5** localizations
 (optional) → **6** workflow. See the
-[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md#b-jupyter-dataloader-scripted)
-for the per-phase details and template shapes.
+[Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md#b-python-dataloader-scripted)
+for the per-phase calls and template shapes.
 
 ### Rollback
 
@@ -558,7 +572,6 @@ The last 3 lines are the values to pass to Newman.
 
 | Service | Port | Description |
 |---------|------|-------------|
-| Jupyter Lab | via Kong (:18000/jupyter) | DataLoader notebook for tenant setup |
 | Gatus | 18889 | Health monitoring dashboard |
 
 ### Resource Usage
@@ -660,19 +673,6 @@ curl http://localhost:18000/digit-ui/globalConfigs.js
 docker compose restart digit-ui
 ```
 
-### Jupyter not loading
-
-```bash
-# Check if Jupyter container is running
-docker compose ps jupyter
-
-# If it shows unhealthy or stopped:
-docker compose restart jupyter
-
-# Access directly (bypassing Kong) to test:
-# http://localhost:18888/jupyter/lab?token=digit-crs-local
-```
-
 ### Out of memory / containers keep restarting
 
 Increase Docker's memory allocation to at least 8 GB. In Docker Desktop: Settings > Resources > Memory.
@@ -735,13 +735,11 @@ local-setup/
 │   └── notif-mdms-seed/            # Notification MDMS seed data
 ├── configs/
 │   └── egov-persister/             # Persister YAML configs (9 files)
-├── jupyter/
-│   ├── Dockerfile                  # Jupyter container build
-│   └── dataloader/
-│       ├── DataLoader_v2.ipynb     # Interactive data loader notebook
-│       ├── crs_loader.py           # Loader library (used by notebook + CI)
-│       ├── unified_loader.py       # Low-level MDMS/HRMS API wrapper
-│       └── templates/              # Excel templates + bundled localisations
+├── dataloader/                     # CRSLoader library — the single source of
+│   │                               # truth for every dataloader path
+│   ├── crs_loader.py               # Loader library (used by scripts/ + CI)
+│   ├── unified_loader.py           # Low-level MDMS/HRMS API wrapper
+│   └── templates/                  # Excel templates + bundled localisations
 ├── scripts/
 │   ├── ci-dataloader-xlsx.py       # XLSX-driven county E2E (Bomet)
 │   ├── ci-dataloader-v2-regression.py  # DataLoader v2 regression tests

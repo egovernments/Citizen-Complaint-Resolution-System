@@ -152,7 +152,7 @@ jobs:
 
           # Verify telemetry.py has browser-like UA
           echo -n "  telemetry.py user-agent ... "
-          if grep -q 'Mozilla' jupyter/dataloader/telemetry.py; then
+          if grep -q 'Mozilla' dataloader/telemetry.py; then
             echo "OK"
           else
             echo "FAIL (browser-like user-agent missing)"

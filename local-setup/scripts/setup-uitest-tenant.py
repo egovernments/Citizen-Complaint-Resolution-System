@@ -2,7 +2,7 @@
 """Create uitest.city1 tenant using CRSLoader (the real onboarding flow)."""
 
 import sys
-sys.path.insert(0, '/root/code/digit-ui-fix/local-setup/jupyter/dataloader')
+sys.path.insert(0, '/root/code/digit-ui-fix/local-setup/dataloader')
 
 from crs_loader import CRSLoader
 
