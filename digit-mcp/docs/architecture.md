@@ -10,8 +10,8 @@ the trade-offs accepted.
 
 DIGIT MCP Server bridges Claude (via the Model Context Protocol) to the DIGIT
 eGov platform -- India's open-source digital governance infrastructure for
-municipalities and state governments. The server exposes 60 tools organized
-into 14 groups, covering 16 DIGIT services: Auth, User, MDMS v2, Boundary,
+municipalities and state governments. The server exposes 70 tools organized
+into 15 groups, covering 16 DIGIT services: Auth, User, MDMS v2, Boundary,
 Boundary Management, HRMS, PGR, Workflow, Localization, Filestore,
 Access Control, ID Generation, Location, Encryption, plus Distributed Tracing
 (Grafana Tempo) and Infrastructure Monitoring (Kafka, Persister, PostgreSQL).
@@ -36,7 +36,7 @@ src/
 
 ## 2. Progressive Disclosure
 
-**Problem.** 60 tools overwhelm the LLM's context window. When every tool
+**Problem.** 70 tools overwhelm the LLM's context window. When every tool
 description is included in the system prompt, the model spends tokens parsing
 irrelevant tools and may choose poorly among too many options.
 
@@ -46,9 +46,9 @@ management) and `docs` (documentation search). Clients call `enable_tools` to
 unlock additional groups. When groups change, the server sends a
 `tools/list_changed` MCP notification so clients re-fetch the tool list.
 
-14 groups: `core`, `mdms`, `boundary`, `masters`, `employees`, `localization`,
+15 groups: `core`, `mdms`, `boundary`, `masters`, `employees`, `localization`,
 `pgr`, `admin`, `idgen`, `location`, `encryption`, `docs`, `monitoring`,
-`tracing`. The `core` group cannot be disabled. Set `MCP_ENABLE_ALL_GROUPS=1`
+`tracing`, `snapshot`. The `core` group cannot be disabled. Set `MCP_ENABLE_ALL_GROUPS=1`
 to pre-enable everything (used by integration tests).
 
 **Implementation.** `ToolRegistry` (`src/tools/registry.ts`) holds an in-memory

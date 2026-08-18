@@ -58,11 +58,19 @@ const IDENTITIES: Record<string, { userName: string; tenantId: string; roles: st
   'tok-provisioned': { userName: 'prov-1', tenantId: 'pg', roles: ['CITIZEN'] },
 };
 
+/** Flipped by the outage test to make the stub fail like a downed egov-user. */
+let stubOutage = false;
+
 function startStubDigit(): Promise<{ server: Server; port: number }> {
   return new Promise((resolve) => {
     const server = createServer((req, res) => {
       const url = new URL(req.url || '/', 'http://stub');
       if (url.pathname === '/user/_details') {
+        if (stubOutage) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end('{"error":"upstream unavailable"}');
+          return;
+        }
         const token = url.searchParams.get('access_token') || '';
         const id = IDENTITIES[token];
         if (!id) {
@@ -314,15 +322,34 @@ await test('C.2 bulk dispatch authorizes', async () => {
   assert.equal(r.status, 403, `bulk returned ${r.status}`);
 });
 
-await test('C.3 streamed dispatch authorizes', async () => {
+await test('C.3 streamed dispatch authorizes BEFORE committing 200', async () => {
+  // A denial must be a real 403, not a 200 stream carrying `event: error` —
+  // any client keying on the status code reads the latter as success.
   const res = await fetch(`${base}/v1/tenant/bootstrap?stream=1`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: 'Bearer tok-emp' },
     body: JSON.stringify({ target_tenant: 'x' }),
   });
-  const text = await res.text();
-  assert.match(text, /event: error/, 'SSE denial must emit an error event');
-  assert.match(text, /requires one of these roles/, 'and carry the tier denial');
+  assert.equal(res.status, 403, `SSE denial returned ${res.status}`);
+  assert.match(await res.text(), /requires one of these roles/);
+});
+
+await test('C.7 an unknown tool is not distinguishable before authenticating', async () => {
+  // 404-for-unknown vs 401-for-known let an anonymous caller enumerate the
+  // whole tool surface by diffing status codes.
+  const known = await call('/v1/tools/tenant_cleanup', { body: {} });
+  const unknown = await call('/v1/tools/no_such_tool_xyz', { body: {} });
+  assert.equal(known.status, 401);
+  assert.equal(unknown.status, 401, 'an unknown tool leaked a distinguishable 404');
+});
+
+await test('C.8 /v1/version withholds build detail from anonymous callers', async () => {
+  const anon = await call('/v1/version');
+  assert.equal(anon.status, 200, 'must stay usable as a liveness probe');
+  assert.equal(anon.json.gitSha, undefined, 'build metadata leaked');
+  assert.equal(anon.json.nodeVersion, undefined, 'runtime version leaked');
+  const authed = await call('/v1/version', { token: 'tok-admin' });
+  assert.ok('nodeVersion' in authed.json, 'an authenticated caller should still see it');
 });
 
 await test('C.4 tenant export authorizes (not a registered tool)', async () => {
@@ -415,6 +442,21 @@ await test('E.5 the audit line carries the resolved caller, not a spoofed IP', a
     'expected the caller identity or an untrusted-XFF note');
   const toolLines = log.split('\n').filter((l) => l.includes('"event":"tool_call"'));
   assert.ok(!toolLines.some((l) => l.includes('9.9.9.9')), 'a spoofed X-Forwarded-For reached the audit trail');
+});
+
+await test('E.6 an identity-service outage is 503, not "invalid token"', async () => {
+  // A 5xx or an unreachable egov-user reported as 401 sends the operator after
+  // credentials while the platform is down — and makes the viewer discard a
+  // perfectly good token, forcing a re-login across the fleet.
+  stubOutage = true;
+  try {
+    // A token the cache has not seen, so it must go to the wire.
+    const r = await call('/api/stats', { token: 'tok-never-seen-before' });
+    assert.equal(r.status, 503, `expected 503, got ${r.status}: ${r.body.slice(0, 120)}`);
+    assert.match(String(r.json.error), /not a problem with your credentials/);
+  } finally {
+    stubOutage = false;
+  }
 });
 
 // =========================================================================
