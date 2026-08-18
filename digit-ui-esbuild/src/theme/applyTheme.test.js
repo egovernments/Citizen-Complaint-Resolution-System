@@ -494,11 +494,12 @@ test("v3 backfill: no primary in record → nothing invented", () => {
 
 // ── v3 full-shape records (issue #1035 follow-up) ───────────────────────────
 // There is no committed preset catalog — MDMS (a tenant's own
-// common-masters.ThemeConfig row, seeded per-deployment) is the single
-// source of truth for real theme colors; see local-setup/scripts/seed-theme.py
-// and local-setup/ansible/README.md. These fixtures are synthetic — they
-// exist only to exercise applyTheme() against a FULL v3 record (every role
-// populated, not just the handful the other tests above set), including the
+// common-masters.ThemeConfig row, set per-deployment via the Configurator)
+// is the single source of truth for real theme colors; see
+// local-setup/ansible/README.md's "Set the OOTB theme" section. These
+// fixtures are synthetic — they exist only to exercise applyTheme() against
+// a FULL v3 record (every role populated, not just the handful the other
+// tests above set), including the
 // "button-primary-bg-default deliberately differs from primary-main"
 // contrast-exception shape a real record can have.
 const SYNTHETIC_V3_THEME = {
