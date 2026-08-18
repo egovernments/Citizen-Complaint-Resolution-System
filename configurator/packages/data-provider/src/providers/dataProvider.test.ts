@@ -1,7 +1,7 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DigitApiClient } from '../client/DigitApiClient.js';
-import { createDigitDataProvider } from './dataProvider.js';
+import { createDigitDataProvider, __setMdmsSearchAllLimitsForTesting } from './dataProvider.js';
 
 describe('createDigitDataProvider', () => {
   let client: DigitApiClient;
@@ -9,6 +9,13 @@ describe('createDigitDataProvider', () => {
   beforeEach(() => {
     client = new DigitApiClient({ url: 'https://test.example.com', stateTenantId: 'pg' });
     client.setAuth('token', { userName: 'admin', name: 'Admin', tenantId: 'pg' });
+  });
+
+  afterEach(() => {
+    // mdmsSearchAllBatchSize/MaxBatches are module-level state shared across
+    // tests — always restore defaults so one test's override can't leak into
+    // the next.
+    __setMdmsSearchAllLimitsForTesting();
   });
 
   it('returns a DataProvider with all 9 methods', () => {
@@ -174,11 +181,14 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
   });
 
-  it('uses the real mdmsCount total for a generic MDMS list, not a page-size heuristic (issue #953)', async () => {
+  it('uses the real mdmsCount total for a generic MDMS list, pushing isActive down to both calls (issue #953)', async () => {
     // Departments/Designations previously faked `total` from the page just fetched
     // (`offset + perPage + 1` while a full page kept coming back), so the "X of Y"
     // footer grew every time you clicked "next" instead of showing a stable total.
-    const ALL = Array.from({ length: 730 }, (_, i) => ({
+    // Mixing in inactive rows also guards the isActive push-down: without it, mdmsSearch
+    // and mdmsCount would page through/count the inactive rows too and the total would
+    // be wrong (or the fetch would cost far more round trips than necessary).
+    const ACTIVE = Array.from({ length: 730 }, (_, i) => ({
       id: i,
       tenantId: 'pg',
       schemaCode: 'common-masters.Department',
@@ -187,13 +197,25 @@ describe('createDigitDataProvider', () => {
       isActive: true,
       auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
     }));
+    const INACTIVE = Array.from({ length: 50 }, (_, i) => ({
+      id: 1000 + i,
+      tenantId: 'pg',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_OLD_${i}`,
+      data: { code: `DEPT_OLD_${i}`, name: `Old Dept ${i}`, active: false },
+      isActive: false,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+    const bySelector = (isActive: boolean | undefined) =>
+      isActive === false ? INACTIVE : isActive === true ? ACTIVE : [...ACTIVE, ...INACTIVE];
 
-    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number }) => {
+    const mdmsSearchMock = mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number; isActive?: boolean }) => {
       const offset = options?.offset ?? 0;
       const limit = options?.limit ?? 100;
-      return ALL.slice(offset, offset + limit);
+      return bySelector(options?.isActive).slice(offset, offset + limit);
     });
-    mock.method(client, 'mdmsCount', async () => ALL.length);
+    const mdmsCountMock = mock.method(client, 'mdmsCount', async (_t: string, _s: string, options?: { isActive?: boolean }) =>
+      bySelector(options?.isActive).length);
 
     const dp = createDigitDataProvider(client, 'pg');
     const page1 = await dp.getList('departments', {
@@ -207,9 +229,18 @@ describe('createDigitDataProvider', () => {
       filter: {},
     });
 
-    assert.equal(page1.total, 730);
+    assert.equal(page1.total, 730, 'total must come from the active-only count, not all 780 rows');
     assert.equal(page2.total, 730, 'total must stay stable across pages instead of growing');
     assert.equal(page1.data.length, 25);
+    assert.ok(mdmsCountMock.mock.calls.length > 0, 'mdmsCount must actually be called, not left dead');
+    assert.ok(
+      mdmsCountMock.mock.calls.every((call) => (call.arguments[2] as { isActive?: boolean } | undefined)?.isActive === true),
+      'mdmsCount must be called with isActive:true so its total agrees with what mdmsSearch pages through',
+    );
+    assert.ok(
+      mdmsSearchMock.mock.calls.every((call) => (call.arguments[2] as { isActive?: boolean } | undefined)?.isActive === true),
+      'isActive must be pushed down to mdmsSearch, not filtered client-side after fetching everything',
+    );
   });
 
   it('does not truncate a full-tree MDMS fetch at a single page (issue #953)', async () => {
@@ -234,6 +265,7 @@ describe('createDigitDataProvider', () => {
       const limit = options?.limit ?? 100;
       return ALL.slice(offset, offset + limit);
     });
+    mock.method(client, 'mdmsCount', async () => ALL.length);
 
     const dp = createDigitDataProvider(client, 'pg');
     const result = await dp.getList('complaint-hierarchy', {
@@ -246,10 +278,50 @@ describe('createDigitDataProvider', () => {
     assert.ok(calls > 1, 'must page through mdms-v2 rather than a single capped fetch');
   });
 
+  it('dedupes overlapping rows if mdms-v2 ever returns more than requested, instead of inflating the total', async () => {
+    // Regression guard for issue found in review: a server that treats `limit` as a
+    // hint (or resends a boundary row) could hand back the SAME record across two
+    // consecutive batches. mdmsSearchAll must dedupe by uniqueIdentifier and advance
+    // offset by the page's ACTUAL length, or the total handed to react-admin inflates.
+    __setMdmsSearchAllLimitsForTesting(10, 50);
+    const ALL = Array.from({ length: 25 }, (_, i) => ({
+      id: i,
+      tenantId: 'pg',
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: `DEPT_${i}`,
+      data: { code: `DEPT_${i}`, name: `Dept ${i}`, active: true },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }));
+
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number }) => {
+      const offset = options?.offset ?? 0;
+      const limit = options?.limit ?? 10;
+      // Deliberately re-serve the previous batch's last row instead of the clean,
+      // non-overlapping slice the other tests use.
+      const start = Math.max(0, offset - 1);
+      return ALL.slice(start, start + limit);
+    });
+    mock.method(client, 'mdmsCount', async () => ALL.length);
+
+    const dp = createDigitDataProvider(client, 'pg');
+    const result = await dp.getList('departments', {
+      pagination: { page: 1, perPage: 25 },
+      sort: { field: 'id', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.total, 25, 'overlapping rows must be deduped, not double-counted into the total');
+  });
+
   it('sorts the full active set before paginating, not each fetched page independently', async () => {
     // mdms-v2's MdmsCriteria has no sort parameter. Ids ascending here map to names
     // DESCENDING, so a naive "sort whatever page got fetched" would only sort within
-    // a page and misorder the boundary between page 1 and page 2.
+    // a page and misorder the boundary between page 1 and page 2. The batch size is
+    // forced well below the 60-row fixture so the sort must actually span multiple
+    // mdmsSearchAll batches — otherwise per-page and full-set sorting are identical
+    // and this test can't tell them apart.
+    __setMdmsSearchAllLimitsForTesting(10, 20);
     const ALL = Array.from({ length: 60 }, (_, i) => ({
       id: i,
       tenantId: 'pg',
@@ -265,6 +337,7 @@ describe('createDigitDataProvider', () => {
       const limit = options?.limit ?? 100;
       return ALL.slice(offset, offset + limit);
     });
+    mock.method(client, 'mdmsCount', async () => ALL.length);
 
     const dp = createDigitDataProvider(client, 'pg');
     const page1 = await dp.getList('departments', {
@@ -283,21 +356,27 @@ describe('createDigitDataProvider', () => {
     assert.equal(page1.total, 60);
   });
 
-  it('throws instead of silently truncating when a schema never reaches a last page', async () => {
-    // Simulates mdms-v2 always returning a full page (bad offset handling, an
-    // ignored criterion, etc.) so mdmsSearchAll never sees a short page to stop on.
-    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number }) => {
-      const limit = options?.limit ?? 1000;
+  it('throws instead of silently truncating when a schema never reaches its own reported count', async () => {
+    // Simulates mdms-v2 always returning a full page (bad offset handling, an ignored
+    // criterion, etc.) while mdmsCount reports far more rows than paging ever reaches,
+    // so mdmsSearchAll hits its safety ceiling before catching up. Limits are forced
+    // down so this doesn't have to allocate hundreds of thousands of fixture records
+    // to prove the point.
+    __setMdmsSearchAllLimitsForTesting(5, 3);
+    mock.method(client, 'mdmsSearch', async (_t: string, _s: string, options?: { limit?: number; offset?: number }) => {
+      const limit = options?.limit ?? 5;
+      const offset = options?.offset ?? 0;
       return Array.from({ length: limit }, (_, i) => ({
-        id: i,
+        id: offset + i,
         tenantId: 'pg',
         schemaCode: 'common-masters.Department',
-        uniqueIdentifier: `DEPT_${i}`,
-        data: { code: `DEPT_${i}`, name: `Dept ${i}`, active: true },
+        uniqueIdentifier: `DEPT_${offset + i}`,
+        data: { code: `DEPT_${offset + i}`, name: `Dept ${offset + i}`, active: true },
         isActive: true,
         auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
       }));
     });
+    mock.method(client, 'mdmsCount', async () => 1000);
 
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
@@ -306,7 +385,7 @@ describe('createDigitDataProvider', () => {
         sort: { field: 'id', order: 'ASC' },
         filter: {},
       }),
-      /did not finish paging/,
+      /records reported by mdmsCount/,
     );
   });
 });
