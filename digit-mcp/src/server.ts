@@ -9,7 +9,7 @@ import { ALL_GROUPS } from './types/index.js';
 import type { ErrorCategory } from './types/index.js';
 import { mcpLogger } from './logger.js';
 import { sessionStore } from './services/session-store.js';
-import { checkToolAccess } from './services/auth.js';
+import { AuthRequiredError, checkToolAccess } from './services/auth.js';
 import { digitApi } from './services/digit-api.js';
 import { telemetry } from './services/telemetry.js';
 import { ApiClientError } from './services/digit-api.js';
@@ -171,6 +171,12 @@ export function createServer(options?: CreateServerOptions): Server {
       if (error instanceof ApiClientError) {
         category = error.category;
         code = error.statusCode;
+      } else if (error instanceof AuthRequiredError || (error instanceof Error && error.name === 'AuthRequiredError')) {
+        // Without this the most common failure in token mode — a tool called
+        // with no usable credentials — reported as category 'internal', which
+        // tells the agent to retry rather than to authenticate.
+        category = 'auth';
+        code = 401;
       } else if (error instanceof Error && error.name === 'ValidationError') {
         category = 'validation';
         code = 400;

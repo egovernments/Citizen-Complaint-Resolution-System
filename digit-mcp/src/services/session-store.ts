@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
+import { getRequestContext } from './request-context.js';
 import { redactDeep } from '../utils/redact.js';
 import { telemetry as matomo } from './telemetry.js';
 
@@ -127,6 +128,12 @@ class SessionStore {
 
   // --- HTTP context (set from request headers) ---
 
+  /**
+   * Session-level "last seen from" fields. On the HTTP transport the session
+   * row is process-wide while requests are not, so treat these as coarse: the
+   * authoritative per-call attribution is the ip/ua/user stamped onto each
+   * event by `callerContext()` from the request scope.
+   */
   setHttpContext(userAgent: string, clientIp: string): void {
     if (!this.session) return;
 
@@ -141,6 +148,20 @@ class SessionStore {
   }
 
   // --- Auto-tracking (called from server.ts) ---
+
+  /**
+   * Who made the call being recorded, from the request-scoped context.
+   * Empty under stdio, where the session fields already identify the one owner.
+   */
+  private callerContext(): Record<string, unknown> {
+    const ctx = getRequestContext();
+    if (!ctx) return {};
+    return {
+      ip: ctx.ip || undefined,
+      userAgent: ctx.userAgent || undefined,
+      user: ctx.userName,
+    };
+  }
 
   recordToolCall(tool: string, args: Record<string, unknown>): number {
     if (!this.session) return 0;
@@ -157,6 +178,7 @@ class SessionStore {
       type: 'tool_call',
       tool,
       args: sanitized,
+      ...this.callerContext(),
     });
 
     // Postgres (fire-and-forget)

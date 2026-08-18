@@ -29,7 +29,9 @@ ENV SESSION_DB_HOST=localhost
 ENV SESSION_DB_PORT=15433
 ENV SESSION_DB_NAME=mcp_sessions
 ENV SESSION_DB_USER=mcp
-# No default password baked into the image — supply SESSION_DB_PASSWORD at run time.
+# SESSION_DB_PASSWORD is deliberately not set here. src/services/db.ts still
+# falls back to the local-compose default so `docker compose up` works, but it
+# warns on the HTTP transport — supply a real value in any networked deploy.
 EXPOSE 3000
 
 # Run unprivileged. Previously this ran as root, which turned any file-write bug

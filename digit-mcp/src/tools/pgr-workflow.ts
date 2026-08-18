@@ -266,6 +266,13 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
           // IMPORTANT: Use type EMPLOYEE (not CITIZEN) because DIGIT's OAuth only supports
           // password auth for EMPLOYEE-type users. CITIZEN-type uses OTP only.
           // The CITIZEN *role* is what PGR checks for RATE/REOPEN permissions.
+          //
+          // On tiers: pgr_create is employee-tier but provisions a user, while
+          // user_create is admin-tier. That is deliberate, not an oversight —
+          // filing on behalf of a citizen is ordinary counter work, and the
+          // account created here holds only the CITIZEN role, so checkToolAccess
+          // (which keys on roles, not type) still refuses it every staff tool.
+          // user_create can mint arbitrary roles, which is why it sits higher.
           const newCitizenPassword = defaultProvisioningPassword();
           citizenUser = await digitApi.userCreate({
             name: citizenName,
