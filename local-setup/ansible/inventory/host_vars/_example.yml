@@ -423,7 +423,7 @@ novu_bridge_channel: "sms"
 # DIFFERENT hosts. Prefer novu_public_base_url above — it sets all four at
 # once and keeps the paths aligned with the nginx location blocks.
 # novu_api_public_url:  "https://pilot.example.org/novu-api"
-# novu_ws_public_url:   "https://pilot.example.org/novu-ws"
+# novu_ws_public_url:   "https://ws.pilot.example.org" # origin only; Socket.IO uses /socket.io
 # novu_api_root_url:    "https://pilot.example.org/novu-api"
 # novu_front_base_url:  "https://pilot.example.org/novu"
 # novu_node_env: "production"
