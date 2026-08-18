@@ -392,7 +392,14 @@ export function resolveArtifactPath(userPath: string): string {
   return real;
 }
 
-function isInside(candidate: string, base: string): boolean {
+/**
+ * Is `candidate` the same path as `base`, or inside it?
+ *
+ * Exported so the static-file guard in index.ts uses this one implementation:
+ * two copies of a path-containment check drift, and the weaker copy is the one
+ * nobody remembers to fix.
+ */
+export function isInside(candidate: string, base: string): boolean {
   return candidate === base || candidate.startsWith(base + sep);
 }
 
@@ -545,6 +552,39 @@ export function isCachedCaller(authHeader: string | string[] | undefined): boole
   return !!cached && Date.now() - cached.at < TOKEN_CACHE_TTL_MS;
 }
 
+/**
+ * Make room without wiping the map.
+ *
+ * `clear()` at the cap meant that cycling through more distinct tokens than the
+ * cap inside one TTL window repeatedly emptied the cache, sending every
+ * recently-cached caller back to egov-user — a thundering herd against the
+ * service the cache exists to protect, triggerable with legitimately issued
+ * tokens. Drop what has already expired first; if that frees nothing, drop the
+ * oldest entries only.
+ */
+function evictIfFull(now: number): void {
+  if (tokenCache.size < TOKEN_CACHE_MAX) return;
+
+  for (const [token, entry] of tokenCache) {
+    if (now - entry.at >= TOKEN_CACHE_TTL_MS) tokenCache.delete(token);
+  }
+  if (tokenCache.size < TOKEN_CACHE_MAX) return;
+
+  // Map iterates in insertion order, and entries are never re-inserted on a
+  // cache hit, so the front of the map is the oldest.
+  const excess = tokenCache.size - TOKEN_CACHE_MAX + 1;
+  let dropped = 0;
+  for (const token of tokenCache.keys()) {
+    tokenCache.delete(token);
+    if (++dropped >= excess) break;
+  }
+}
+
+/** Test/ops hook: current occupancy of the introspection cache. */
+export function tokenCacheStats(): { size: number; max: number; ttlMs: number } {
+  return { size: tokenCache.size, max: TOKEN_CACHE_MAX, ttlMs: TOKEN_CACHE_TTL_MS };
+}
+
 /** Test/ops hook: drop every cached introspection result. */
 export function clearTokenCache(): void {
   tokenCache.clear();
@@ -615,7 +655,7 @@ export async function authenticateBearer(
     };
   }
 
-  if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.clear();
+  evictIfFull(now);
   tokenCache.set(token, { user, at: now });
   return { ok: true, caller: { token, user: cloneUser(user) } };
 }

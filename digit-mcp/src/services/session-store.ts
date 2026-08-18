@@ -163,12 +163,13 @@ class SessionStore {
     };
   }
 
-  recordToolCall(tool: string, args: Record<string, unknown>): number {
+  /** `redacted` lets a caller that already redacted these args avoid a second walk. */
+  recordToolCall(tool: string, args: Record<string, unknown>, redacted?: Record<string, unknown>): number {
     if (!this.session) return 0;
 
     this.seq++;
     const ts = new Date().toISOString();
-    const sanitized = sanitizeArgs(args);
+    const sanitized = redacted ?? sanitizeArgs(args);
 
     // JSONL (always)
     this.appendEventJsonl({

@@ -1,7 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
-import { defaultProvisioningPassword } from '../services/auth.js';
+import { defaultProvisioningPassword, ensureAuthenticated } from '../services/auth.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
 import type { PaginationOptions } from '../utils/pagination.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength } from '../utils/validation.js';
@@ -11,6 +11,10 @@ import { applyFieldMask } from '../utils/field-mask.js';
 export function registerUserTools(registry: ToolRegistry): void {
   registry.register({
     name: 'user_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'user',
     risk: 'read',
@@ -390,13 +394,4 @@ export function registerUserTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}
+

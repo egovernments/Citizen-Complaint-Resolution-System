@@ -18,11 +18,13 @@ import {
   getAuthMode,
   isAdminCaller,
   isCachedCaller,
+  isInside,
   parseBearer,
   resolveClientIp,
   type ValidatedCaller,
 } from './services/auth.js';
 import { runWithRequestContext, setContextUser } from './services/request-context.js';
+import { redactDeep } from './utils/redact.js';
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -117,9 +119,9 @@ if (transportMode === 'stdio') {
     let filePath = urlPath === '/' ? '/index.html' : urlPath;
     const resolved = resolve(join(UI_DIR, filePath));
 
-    // Path traversal protection. The trailing separator matters: without it a
-    // sibling directory sharing the prefix (`ui-evil` next to `ui`) passes.
-    if (resolved !== UI_DIR && !resolved.startsWith(UI_DIR + sep)) {
+    // Same containment helper as the artifact guard — one implementation, so a
+    // future edge-case fix cannot land on only one of them.
+    if (!isInside(resolved, UI_DIR)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' });
       res.end('Forbidden');
       return;
@@ -210,9 +212,14 @@ if (transportMode === 'stdio') {
     if (auth && auth.username && auth.password && auth.tenant_id) {
       try {
         await digitApi.login(auth.username, auth.password, auth.tenant_id);
-        const user = digitApi.getAuthInfo().user;
-        setContextUser(user?.userName);
-        return { ok: true, caller: user ? { token: '', user } : null };
+        // Carry the token login actually minted. Returning '' here made
+        // `applyValidatedCaller` install an empty token that `isAuthenticated()`
+        // accepted while `encHeaders()` treated as absent — so a body.auth
+        // streamed call reached egov-enc-service with no Authorization header,
+        // silently reopening the decryption oracle H2 closed.
+        const info = digitApi.getAuthInfo();
+        setContextUser(info.user?.userName);
+        return { ok: true, caller: info.user && info.token ? { token: info.token, user: info.user } : null };
       } catch (err) {
         return { ok: false, status: 401, error: err instanceof Error ? err.message : String(err) };
       }
@@ -336,8 +343,12 @@ if (transportMode === 'stdio') {
     // every call produced an access-log line and nothing in the session store,
     // which is the half the operator console reads.
     await sessionStore.ensureSession('http');
-    const seq = sessionStore.recordToolCall(tool.name, toolArgs);
-    mcpLogger.toolCall(tool.name, toolArgs);
+    // Redact once and hand the same copy to both sinks: each used to run the
+    // full recursive walk over the same object, doubling the cost on every
+    // call for no benefit.
+    const redacted = redactDeep(toolArgs) as Record<string, unknown>;
+    const seq = sessionStore.recordToolCall(tool.name, toolArgs, redacted);
+    mcpLogger.toolCall(tool.name, toolArgs, redacted);
     const start = Date.now();
     try {
       const raw = await tool.handler(toolArgs);
@@ -428,11 +439,7 @@ if (transportMode === 'stdio') {
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      jsonResponse(res, 404, { success: false, error: `Unknown tool: ${toolName}` });
-      return;
-    }
+
     // Authenticate and authorize before committing the 200. An SSE stream that
     // opens successfully and then emits `event: error` reads as success to any
     // client keying on the status code, which is every ordinary HTTP client.
@@ -440,6 +447,7 @@ if (transportMode === 'stdio') {
     // Re-running authenticateRest there would mean a second OAuth login for
     // every body.auth caller — the form ansible and the onboarding runbook use.
     let caller: ValidatedCaller | null = null;
+    let streamedTool: ToolMetadata | undefined;
     const pre = await withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       try {
@@ -447,7 +455,13 @@ if (transportMode === 'stdio') {
         if (authResult === null) return { status: 401, body: { success: false, error: 'Authentication required.' } };
         if (!authResult.ok) return { status: authResult.status, body: { success: false, error: authResult.error } };
         caller = authResult.caller;
-        return authorizeRest(toolName, tool.access, authResult.caller);
+        // Resolved after authentication, like dispatchTool and runBulk. Today
+        // every call site passes a hardcoded name, so this is not an oracle —
+        // it is consistency, so that a future caller passing user input does
+        // not silently reopen one.
+        streamedTool = restRegistry.getTool(toolName);
+        if (!streamedTool) return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
+        return authorizeRest(toolName, streamedTool.access, authResult.caller);
       } finally {
         digitApi.restoreAuth(snap);
       }
@@ -479,7 +493,7 @@ if (transportMode === 'stdio') {
           if (caller) applyValidatedCaller(caller);
           const { auth: _ignored, ...toolArgs } = args;
           void _ignored;
-          await auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => {
+          await auditedCall(streamedTool!, toolArgs as Record<string, unknown>, (parsed) => {
             writeEvent('done', parsed);
           });
         } catch (err) {

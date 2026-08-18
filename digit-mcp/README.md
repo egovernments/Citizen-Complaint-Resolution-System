@@ -62,7 +62,7 @@ curl -s -u egov-user-client: \
   https://<digit-host>/user/oauth/token | jq -r .access_token
 ```
 
-Tools are tiered `public` / `employee` / `admin` (6 / 30 / 34 of the 70). The
+Tools are tiered `public` / `employee` / `admin` (6 / 25 / 39 of the 70). The
 recipe above mints an employee token; a citizen account reaches the public
 tools only. If an admin-tier tool returns 403, the message names both
 the roles it needs and the roles you hold — see `MCP_ADMIN_ROLES` in

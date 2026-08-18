@@ -19,20 +19,24 @@
  */
 
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import {
   adminRoleCodes,
   allowedBaseUrlHosts,
   checkBaseUrlAllowed,
   checkToolAccess,
   getAuthMode,
+  clearTokenCache,
   isAdminCaller,
   parseBearer,
+  tokenCacheStats,
   resolveArtifactPath,
   resolveClientIp,
 } from './src/services/auth.js';
 import { digitApi, runWithIsolatedClient } from './src/services/digit-api.js';
 import { getRequestContext, runWithRequestContext } from './src/services/request-context.js';
 import { ToolRegistry } from './src/tools/registry.js';
+const TOOLS_DIR = fileURLToPath(new URL('./src/tools/', import.meta.url));
 import { registerAllTools } from './src/tools/index.js';
 import type { ToolAccess, UserInfo } from './src/types/index.js';
 import { isSensitiveKey, redactDeep } from './src/utils/redact.js';
@@ -116,6 +120,21 @@ await test('1.4 an unrecognised MCP_AUTH_MODE falls back to the transport defaul
   withEnv({ MCP_TRANSPORT: 'http', MCP_AUTH_MODE: 'yes-please' }, () => {
     assert.equal(getAuthMode(), 'token', 'a typo must not silently disable auth');
   });
+});
+
+await test('1.4b an empty token is not a credential', () => {
+  // applyToken('') used to leave isAuthenticated() true while every outbound
+  // request carried no token — authenticated to us, anonymous to DIGIT, and
+  // enc-service calls went out with no Authorization header at all.
+  const snap = digitApi.snapshotAuth();
+  try {
+    digitApi.applyToken('', ADMIN, 'pg');
+    assert.equal(digitApi.isAuthenticated(), false, 'an empty token must not count as authenticated');
+    digitApi.applyToken('real-token', ADMIN, 'pg');
+    assert.equal(digitApi.isAuthenticated(), true);
+  } finally {
+    digitApi.restoreAuth(snap);
+  }
 });
 
 await test('1.5 parseBearer accepts only a non-empty Bearer credential', () => {
@@ -286,7 +305,7 @@ await test('3.3b the tier census matches what the docs claim', () => {
   const census = { public: 0, employee: 0, admin: 0 } as Record<string, number>;
   for (const t of allTools) census[t.access ?? 'employee']++;
   assert.equal(allTools.length, 70, 'tool count changed');
-  assert.deepEqual(census, { public: 6, employee: 30, admin: 34 });
+  assert.deepEqual(census, { public: 6, employee: 25, admin: 39 });
 });
 
 await test('3.4 destructive and PII tools are admin-tier', () => {
@@ -312,6 +331,42 @@ await test('3.6 mutating tools are labelled risk: write', () => {
   for (const name of ['configure', 'snapshot_capture', 'tenant_cleanup', 'user_create']) {
     assert.equal(allTools.find((t) => t.name === name)!.risk, 'write', `${name} mutates state`);
   }
+});
+
+await test('3.6b no tool file re-implements the env-credential fallback', () => {
+  // The headline bug was eight copies of a local ensureAuthenticated() falling
+  // back to CRS_USERNAME/CRS_PASSWORD with no auth-mode check. Two more copies
+  // survived the original sweep (user.ts, monitoring.ts) and were found only by
+  // review. This asserts structurally that no eleventh one appears.
+  //
+  // mdms-tenant.ts is the single exception: `configure` IS the login tool, and
+  // it takes credentials as arguments with env vars as an ambient-mode default.
+  const offenders: string[] = [];
+  for (const file of readdirSync(TOOLS_DIR).filter((f) => f.endsWith('.ts'))) {
+    if (file === 'mdms-tenant.ts') continue;
+    const src = readFileSync(join(TOOLS_DIR, file), 'utf-8');
+    if (src.includes('CRS_USERNAME') || src.includes('CRS_PASSWORD')) offenders.push(file);
+  }
+  assert.deepEqual(offenders, [],
+    'a tool re-implemented the env-credential fallback instead of calling ensureAuthenticated()');
+});
+
+await test('3.6c only services/auth.ts defines ensureAuthenticated', () => {
+  // Every credential fallback must route through the one helper that consults
+  // getAuthMode(), so `token` mode cannot be bypassed by a local copy.
+  const offenders = readdirSync(TOOLS_DIR)
+    .filter((f) => f.endsWith('.ts'))
+    .filter((f) => /function ensureAuthenticated/.test(readFileSync(join(TOOLS_DIR, f), 'utf-8')));
+  assert.deepEqual(offenders, [], 'a tool defines its own ensureAuthenticated()');
+});
+
+await test('3.6d no tool hardcodes the provisioning password', () => {
+  // It must come from defaultProvisioningPassword(), or MCP_DEFAULT_PROVISIONING_
+  // PASSWORD silently does nothing wherever a literal was left behind.
+  const offenders = readdirSync(TOOLS_DIR)
+    .filter((f) => f.endsWith('.ts'))
+    .filter((f) => readFileSync(join(TOOLS_DIR, f), 'utf-8').includes("'eGov@123'"));
+  assert.deepEqual(offenders, [], 'a tool hardcodes the provisioning password');
 });
 
 // =====================================================================
@@ -442,7 +497,7 @@ await test('4.7 isSensitiveKey covers the documented names', () => {
 
 console.log('\n\x1b[1m5. Artifact paths\x1b[0m');
 
-import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 
@@ -750,6 +805,17 @@ await test('7.9 no claim means the socket address stands', () => {
     assert.equal(r.trusted, true);
     assert.equal(r.claimed, undefined);
   });
+});
+
+await test('7.10 the token cache evicts incrementally, never wholesale', () => {
+  // clear()-at-the-cap meant that cycling through more distinct tokens than the
+  // cap inside one TTL window repeatedly emptied the cache, sending every
+  // recently-cached caller back to egov-user — a thundering herd against the
+  // service the cache exists to protect, triggerable with legitimate tokens.
+  clearTokenCache();
+  const { size, max, ttlMs } = tokenCacheStats();
+  assert.equal(size, 0, 'clearTokenCache should empty it');
+  assert.ok(max > 1 && ttlMs > 0, 'cache bounds should be meaningful');
 });
 
 // =====================================================================
