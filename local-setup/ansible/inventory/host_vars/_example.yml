@@ -7,9 +7,12 @@
 #   1. cp inventory/host_vars/_example.yml \
 #         inventory/host_vars/mytenant.yml
 #   2. Fill in the values below for your environment.
-#   3. Add `mytenant:` under `digit:` in inventory/hosts.yml.
-#   4. Make sure the controller can SSH to ansible_host as root.
-#   5. ./deploy.sh mytenant
+#   3. Remote target only: make sure the controller can SSH to
+#      ansible_host as root (localhost deploys keep
+#      `ansible_connection: local` below and need no SSH).
+#   4. ./deploy.sh mytenant
+#      (no inventory edit needed — deploy.sh regenerates
+#      inventory/hosts.yml from host_vars/*.yml on every run)
 #
 # Comments below explain every field. Anything marked "REQUIRED" must
 # be set; everything else has a sensible default in group_vars/digit.yml
