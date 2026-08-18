@@ -382,6 +382,43 @@ await test('4.6c a realistically deep payload is preserved, not placeholdered', 
   assert.ok(JSON.stringify(redactDeep(deep)).includes('kept'), 'real audit data was discarded');
 });
 
+await test('4.6b2 credential spellings that a word-segmenter cannot split', () => {
+  // The rewrite from substring matching to word matching lost these: `pwd`,
+  // `auth` and `token` are shorter than the glue-fallback's length floor, so
+  // `authtoken`, `accesstoken` and `userpwd` reached the audit trail. And
+  // `access_key` was dropped from the word list outright.
+  const out = redactDeep({
+    access_key: 'v', aws_access_key: 'v', AWS_ACCESS_KEY_ID: 'v',
+    authtoken: 'v', AUTHTOKEN: 'v', accesstoken: 'v', refreshtoken: 'v',
+    idtoken: 'v', oauth: 'v', xauth: 'v', userpwd: 'v', newpwd: 'v', pwd2: 'v',
+    secretKey: 'v', signingKey: 'v', client_secret: 'v', bearerToken: 'v',
+  }) as Record<string, unknown>;
+  for (const k of Object.keys(out)) {
+    assert.equal(out[k], '***', `${k} reached the audit trail`);
+  }
+});
+
+await test('4.6b3 `key` alone is not a credential', () => {
+  // Redacting every *Key would gut the audit trail; it counts only next to a
+  // qualifier (access/secret/private/signing/...).
+  const out = redactDeep({ sortKey: 'v', schemaKey: 'v', partitionKey: 'v' }) as Record<string, unknown>;
+  for (const k of Object.keys(out)) assert.equal(out[k], 'v', `${k} was over-redacted`);
+});
+
+await test('4.6d2 a SHARED but acyclic object is preserved, not "[circular]"', () => {
+  // A DAG is not a cycle. Marking on the way down without unmarking on the way
+  // up reports the second occurrence as circular and deletes real audit data —
+  // the same over-redaction this module was rewritten to stop.
+  const shared = { tenant: 'pg' };
+  const out = redactDeep({ source: shared, target: shared }) as any;
+  assert.deepEqual(out.source, { tenant: 'pg' });
+  assert.deepEqual(out.target, { tenant: 'pg' }, 'a shared sub-object was dropped as circular');
+
+  const leaf = { n: 1 };
+  const list = redactDeep({ list: [leaf, leaf, leaf] }) as any;
+  assert.deepEqual(list.list, [{ n: 1 }, { n: 1 }, { n: 1 }]);
+});
+
 await test('4.6d a cyclic object terminates instead of recursing', () => {
   const a: Record<string, unknown> = { name: 'a' };
   a.self = a;
@@ -656,6 +693,40 @@ await test('7.7b an IPv6 CIDR with a partial prefix masks within the group', () 
   withEnv({ MCP_TRUSTED_PROXIES: '2001:db8:8000::/33' }, () => {
     assert.equal(resolveClientIp('2001:db8:8000::1', '1.2.3.4').trusted, true);
     assert.equal(resolveClientIp('2001:db8:0::1', '1.2.3.4').trusted, false);
+  });
+});
+
+await test('7.9b a malformed MCP_TRUSTED_PROXIES entry means "ignore", not "trust all"', () => {
+  // `bits === 0` returned true before the range was ever validated, so a
+  // truncated or typo'd entry silently trusted every peer.
+  for (const entry of ['/0', 'garbage/0', '10.0.0.1/0x0', '10.0.0.1/-0', '10.0.0.1/00']) {
+    withEnv({ MCP_TRUSTED_PROXIES: entry }, () => {
+      assert.equal(resolveClientIp('203.0.113.9', '1.2.3.4').trusted, false,
+        `entry "${entry}" trusted an unrelated peer`);
+    });
+  }
+  // A well-formed /0 still means everything, in both families.
+  for (const entry of ['0.0.0.0/0', '::/0']) {
+    withEnv({ MCP_TRUSTED_PROXIES: entry }, () => {
+      assert.equal(resolveClientIp('203.0.113.9', '1.2.3.4').trusted, true, entry);
+    });
+  }
+});
+
+await test('7.9c an out-of-range IPv4 prefix is rejected, not rebased', () => {
+  // The v4-mapped rebase (bits - 96) is only correct when the range was WRITTEN
+  // in IPv6 form. Testing the normalised value cannot tell ::ffff:10.0.0.0/104
+  // from the typo 10.0.0.0/104 — and reading the typo as /8 turns one mistyped
+  // digit into trust for a whole network.
+  withEnv({ MCP_TRUSTED_PROXIES: '10.0.0.0/104' }, () => {
+    assert.equal(resolveClientIp('10.0.0.1', '1.2.3.4').trusted, false, '/104 on an IPv4 range must be rejected');
+  });
+  withEnv({ MCP_TRUSTED_PROXIES: '10.0.0.0/97' }, () => {
+    assert.equal(resolveClientIp('1.2.3.4', '9.9.9.9').trusted, false, '/97 must not become /1');
+  });
+  // The genuine v6 spelling still works.
+  withEnv({ MCP_TRUSTED_PROXIES: '::ffff:10.0.0.0/104' }, () => {
+    assert.equal(resolveClientIp('10.0.0.7', '1.2.3.4').trusted, true);
   });
 });
 

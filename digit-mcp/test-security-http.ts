@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -341,6 +341,61 @@ await test('C.7 an unknown tool is not distinguishable before authenticating', a
   const unknown = await call('/v1/tools/no_such_tool_xyz', { body: {} });
   assert.equal(known.status, 401);
   assert.equal(unknown.status, 401, 'an unknown tool leaked a distinguishable 404');
+});
+
+await test('C.6b an authorized SSE request still streams (single auth, not none)', async () => {
+  // runStreamed now authenticates once up front and re-applies the identity in
+  // the body block instead of authenticating again. The risk of that change is
+  // the opposite of a denial: an ALLOWED caller losing its identity and the
+  // stream failing or running unauthenticated.
+  const res = await fetch(`${base}/v1/tenant/cleanup?stream=1`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: 'Bearer tok-admin' },
+    body: JSON.stringify({ tenant_id: 'pg.ssetest' }),
+  });
+  assert.equal(res.status, 200, 'an admin SSE call must open the stream');
+  const text = await res.text();
+  assert.ok(/event: (progress|done|error)/.test(text), `no SSE frames: ${text.slice(0, 160)}`);
+  // Whatever the tool did, it must not have been refused for identity reasons.
+  assert.ok(!/requires one of these roles|Authentication required/.test(text),
+    `the re-applied identity was lost: ${text.slice(0, 200)}`);
+});
+
+await test('C.7b the bulk route is not an oracle either', () => {
+  // dispatchTool was fixed and runBulk was not; the sibling route enumerated
+  // the whole tool surface just as well.
+  return Promise.all([
+    call('/v1/tools/tenant_destroy/bulk', { body: { items: [{}] } }),
+    call('/v1/tools/no_such_tool_xyz/bulk', { body: { items: [{}] } }),
+  ]).then(([known, unknown]) => {
+    assert.equal(known.status, 401);
+    assert.equal(unknown.status, 401, 'the bulk route leaked a distinguishable 404');
+  });
+});
+
+await test('C.9 a REST-only deployment records to the session store', async () => {
+  // recordToolCall is a no-op until a session exists, and only /mcp created
+  // one — so the ansible/runbook path produced an access-log line and nothing
+  // the operator console can read.
+  const marker = `rest-only-${Date.now()}`;
+  await call('/v1/tools/discover_tools', { token: 'tok-admin', body: { _marker: marker } });
+  const events = join(dataDir, 'events.jsonl');
+  assert.ok(existsSync(events), 'no events.jsonl was written for a REST-only call');
+  assert.match(readFileSync(events, 'utf-8'), /"tool":"discover_tools"/);
+});
+
+await test('C.10 an oversized body is refused before authentication', async () => {
+  // readBody buffered without a cap, ahead of every gate, so one anonymous
+  // request could kill the process on its memory limit.
+  const res = await fetch(`${base}/v1/tools/discover_tools`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: 'x'.repeat(17 * 1024 * 1024),
+  }).catch((e) => ({ status: 0, err: String(e) } as never));
+  assert.ok([413, 0].includes((res as { status: number }).status),
+    `expected 413 (or a torn-down socket), got ${(res as { status: number }).status}`);
+  // And the server is still alive.
+  assert.equal((await call('/healthz')).status, 200, 'server died on an oversized body');
 });
 
 await test('C.8 /v1/version withholds build detail from anonymous callers', async () => {
