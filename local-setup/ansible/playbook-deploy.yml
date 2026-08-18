@@ -1295,6 +1295,20 @@
              | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
                        else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
 
+    # otp-publisher: same shape as MCP above. `build_otp_publisher: true` builds
+    # the vendored service on the box and tags it otp-publisher:local; otherwise
+    # pull the published image. The old default was the local-only tag in BOTH
+    # cases, so a tenant that enabled notifications without opting into the build
+    # selected an image that exists in no registry — `pull` skipped it
+    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
+    # Override with `otp_publisher_image:` in host_vars.
+    - name: "Resolve otp-publisher image tag"
+      ansible.builtin.set_fact:
+        otp_publisher_image: >-
+          {{ otp_publisher_image
+             | default('otp-publisher:local' if (build_otp_publisher | default(false))
+                       else 'egovio/otp-publisher:v2.12-beta') }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
