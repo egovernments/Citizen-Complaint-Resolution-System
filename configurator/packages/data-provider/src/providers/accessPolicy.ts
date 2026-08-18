@@ -28,6 +28,12 @@ export interface MastersCapability {
 export const ACTIONS_TEST_SCHEMA = 'ACCESSCONTROL-ACTIONS-TEST.actions-test';
 export const ROLEACTIONS_SCHEMA = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
 const SEARCH_ACTION_URL = '/mdms-v2/v2/_search';
+// Only matches mdms-v2 create/update URLs — by design, since only mdms-backed masters use
+// canEdit() today. A master whose write path goes through a different endpoint (legacy
+// /egov-mdms-create, HRMS, access-role/action) will always report canEdit=false here. If a
+// non-mdms-v2 resource (e.g. access-roles/access-actions, which already carry MDMS `schema`
+// keys in the registry) is ever wired to canEditResource(), its edit button will be
+// permanently hidden with no obvious cause (#1441 review).
 const WRITE_URL_RE = /^\/mdms-v2\/v2\/_(?:create|update)\/(.+)$/;
 
 // Page size for the exhaustive fetch below — both masters can run into the
