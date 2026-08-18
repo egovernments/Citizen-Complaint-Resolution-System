@@ -1431,6 +1431,15 @@
     "method": "POST",
     "resource": {
       "complaint": {
+        "scope": {
+          "axes": ["department", "jurisdiction"],
+          "roleScopes": {
+            "GRO": { "department": "ALL", "jurisdiction": "OWN" },
+            "PGR_LME": { "department": "OWN", "jurisdiction": "OWN" },
+            "SUPERVISOR": { "department": "OWN", "jurisdiction": "ALL" }
+          },
+          "default": { "department": "ALL", "jurisdiction": "OWN" }
+        },
         "attributes": {
           "citizen.mobileNumber": {
             "condition": {
@@ -1439,24 +1448,28 @@
                 { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
               ]
             },
-            "onDeny": { "strategy": "MASK_SHOW_LAST_N", "n": 2, "maskChar": "X" }
+            "onDeny": { "strategy": "REDACT" }
+          },
+          "citizen.name": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "REDACT" }
+          },
+          "citizen.userName": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "REDACT" }
           }
         }
       }
-    },
-    "condition": {
-      "or": [
-        { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
-        { "and": [
-            { "==": [ { "var": "user.type" }, "CITIZEN" ] },
-            { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
-        ]},
-        { "and": [
-            { "==": [ { "var": "user.type" }, "EMPLOYEE" ] },
-            { "in": [ { "var": "resource.complaint.department" }, { "var": "user.attributes.departments" } ] },
-            { "in": [ { "var": "resource.complaint.boundary" }, { "var": "user.attributes.jurisdictions" } ] }
-        ]}
-      ]
     }
   },
   {

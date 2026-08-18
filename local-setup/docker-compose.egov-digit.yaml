@@ -1035,6 +1035,14 @@ services:
     # Parameterized so deploys can pin a local ABAC-testing build via
     # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
     # the pgr-services image param below.
+    #
+    # TODO(before merging #1441 to master): the default below
+    # (egovio/egov-accesscontrol:abac-changes-cb6a372) is a per-feature-branch build —
+    # it carries the /access/v1/actions/mdms/_get endpoint this PR's ABAC engine
+    # depends on (verified live: pg tenant, 2026-08-18), but it is NOT a permanent
+    # release tag. If the abac-changes branch is deleted / the image is pruned, this
+    # default silently breaks every fresh `docker compose pull` on master. Retag to a
+    # stable release build carrying the same endpoint before merge (#1441 review).
     image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:abac-changes-cb6a372}
     container_name: egov-accesscontrol
     depends_on:

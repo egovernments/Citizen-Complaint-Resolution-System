@@ -55,12 +55,15 @@ describe('createDigitAuthProvider', () => {
     assert.equal(perms.masters.canEdit('common-masters.Department'), false);
   });
 
-  it('getPermissions returns empty roles and an open-by-default capability when no roles', async () => {
+  it('getPermissions returns empty roles and a deny-by-default capability when no roles', async () => {
+    // No roles = no identity to evaluate a policy against at all — distinct from "no policy
+    // configured for this tenant" (which stays open per-schema). Deny-by-default here matches
+    // useMastersCapability's posture for every other incomplete-identity path (#1441 review).
     client.setAuth('token', { userName: 'admin', name: 'Admin', tenantId: 'pg' });
     const auth = createDigitAuthProvider(client);
     const perms = await auth.getPermissions!({}) as { roles: string[]; masters: { canView: (s?: string) => boolean } };
     assert.deepEqual(perms.roles, []);
-    assert.equal(perms.masters.canView('common-masters.Department'), true);
+    assert.equal(perms.masters.canView('common-masters.Department'), false);
   });
 
   it('logout clears auth and returns redirect path', async () => {

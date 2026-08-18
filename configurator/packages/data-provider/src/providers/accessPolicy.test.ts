@@ -52,11 +52,19 @@ function stubClient(mdmsBySchema: Record<string, unknown[]>): DigitApiClient {
 }
 
 describe('loadMastersCapability', () => {
-  it('returns the open-by-default capability when the caller has no roles', async () => {
+  it('fails closed when the caller has no roles or no tenant to evaluate a policy against', async () => {
+    // No identity to evaluate against at all — distinct from "no policy configured for
+    // this tenant", which stays open per-schema via mastersConditions' empty fallback
+    // (see the next test). Deny-by-default here matches useMastersCapability's posture
+    // for every other incomplete-identity path (#1441 review).
     const client = stubClient({});
-    const cap = await loadMastersCapability(client, 'pg', []);
-    assert.equal(cap.canView('anything'), true);
-    assert.equal(cap.canEdit('anything'), false);
+    const noRoles = await loadMastersCapability(client, 'pg', []);
+    assert.equal(noRoles.canView('anything'), false);
+    assert.equal(noRoles.canEdit('anything'), false);
+
+    const noTenant = await loadMastersCapability(client, '', ['MDMS_ADMIN']);
+    assert.equal(noTenant.canView('anything'), false);
+    assert.equal(noTenant.canEdit('anything'), false);
   });
 
   it('canView is true when a master has no resource.masters entry (today\'s behavior)', async () => {

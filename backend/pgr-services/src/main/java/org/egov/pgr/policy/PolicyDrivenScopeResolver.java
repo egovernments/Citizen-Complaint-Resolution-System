@@ -34,21 +34,21 @@ import java.util.Set;
  * PrincipalScopeResolver#isPureCitizen}, which its own Javadoc already documents as the single
  * source of truth for that classification (shared with {@code EnrichmentService}) — that one is
  * meant to never drift, unlike the axis-resolution logic below. Everything else (HRMS lookup,
- * department/jurisdiction extraction, the deny-all sentinel) is intentionally duplicated here
- * rather than shared, so this class has no dependency on Dashboard's resolver for its own core
- * behavior. Unlike {@link PrincipalScopeResolver}, this class has NO hard-coded tenant-wide-role
- * bypass: whether a role is unrestricted on an axis is decided ENTIRELY by the authored
- * {@link ScopePolicy} (an explicit {@code ALL} for that role/axis), even when HRMS has no data at
- * all for the caller — see {@link #resolveEmployeeScopeViaPolicy}. Keep {@link
- * #DENY_ALL_DEPARTMENT} in sync with {@link PrincipalScopeResolver}'s copy until the migration
- * above happens.
+ * department/jurisdiction extraction) is intentionally duplicated here rather than shared, so this
+ * class has no dependency on Dashboard's resolver for its own core behavior — INCLUDING its own
+ * separate {@code __scope_denied__} sentinel literal, which must stay in sync with this module's
+ * copy ({@link ScopePolicyEngine#UNRESOLVED_SENTINEL}, via {@link PgrSearchScope#deniedAll}) until
+ * the migration above happens. Within this module, though, there is exactly ONE sentinel constant
+ * ({@link ScopePolicyEngine#UNRESOLVED_SENTINEL}) — {@link #denyAllScope} delegates to {@link
+ * PgrSearchScope#deniedAll} rather than keeping its own local copy (#1441 review). Unlike {@link
+ * PrincipalScopeResolver}, this class has NO hard-coded tenant-wide-role bypass: whether a role is
+ * unrestricted on an axis is decided ENTIRELY by the authored {@link ScopePolicy} (an explicit
+ * {@code ALL} for that role/axis), even when HRMS has no data at all for the caller — see
+ * {@link #resolveEmployeeScopeViaPolicy}.
  */
 @Component
 @Slf4j
 public class PolicyDrivenScopeResolver {
-
-    /** Sentinel department for a denied principal — matches no real row (fail-closed). */
-    private static final String DENY_ALL_DEPARTMENT = "__scope_denied__";
 
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
@@ -107,7 +107,7 @@ public class PolicyDrivenScopeResolver {
     }
 
     private PgrSearchScope denyAllScope(String tenantId, boolean stateLevel) {
-        return new PgrSearchScope(tenantId, stateLevel, null, List.of(DENY_ALL_DEPARTMENT), null);
+        return PgrSearchScope.deniedAll(tenantId, stateLevel);
     }
 
     /**

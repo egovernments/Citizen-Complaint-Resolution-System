@@ -264,16 +264,31 @@ public class PGRQueryBuilder {
             preparedStmtList.add(scope.citizenUuid);
         }
 
-        if (!CollectionUtils.isEmpty(scope.departmentCodes)) {
+        // null vs empty is deliberately NOT collapsed via CollectionUtils.isEmpty here: null means
+        // "axis not restricted" (skip the clause, matching every other axis's null/no-restriction
+        // semantic), but a non-null EMPTY list means "this axis IS restricted and resolved to zero
+        // allowed values" — ScopePolicyEngine.resolve always hands back a non-empty sentinel list
+        // instead of a true empty one for that case today, but this must independently enforce
+        // deny-all (not silently drop the axis and return unrestricted rows) if that contract ever
+        // regresses upstream (#1441 review).
+        if (scope.departmentCodes != null) {
             addClauseIfRequired(preparedStmtList, builder);
-            builder.append(" ser.additionaldetails->>'department' IN (").append(createQuery(scope.departmentCodes)).append(")");
-            addToPreparedStatement(preparedStmtList, scope.departmentCodes);
+            if (scope.departmentCodes.isEmpty()) {
+                builder.append(" 1 = 0 ");
+            } else {
+                builder.append(" ser.additionaldetails->>'department' IN (").append(createQuery(scope.departmentCodes)).append(")");
+                addToPreparedStatement(preparedStmtList, scope.departmentCodes);
+            }
         }
 
-        if (!CollectionUtils.isEmpty(scope.jurisdictionCodes)) {
+        if (scope.jurisdictionCodes != null) {
             addClauseIfRequired(preparedStmtList, builder);
-            builder.append(" ads.locality IN (").append(createQuery(scope.jurisdictionCodes)).append(")");
-            addToPreparedStatement(preparedStmtList, scope.jurisdictionCodes);
+            if (scope.jurisdictionCodes.isEmpty()) {
+                builder.append(" 1 = 0 ");
+            } else {
+                builder.append(" ads.locality IN (").append(createQuery(scope.jurisdictionCodes)).append(")");
+                addToPreparedStatement(preparedStmtList, scope.jurisdictionCodes);
+            }
         }
     }
 

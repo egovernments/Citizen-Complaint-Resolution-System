@@ -37,8 +37,16 @@ const WRITE_URL_RE = /^\/mdms-v2\/v2\/_(?:create|update)\/(.+)$/;
 // silently truncated out of the policy.
 const POLICY_FETCH_PAGE_SIZE = 500;
 
-const OPEN_CAPABILITY: MastersCapability = {
-  canView: () => true,
+// Used only when there's no tenant/role identity to evaluate a policy against
+// at all (see the `!tenantId || roles.length === 0` guard below) — NOT the
+// "no policy configured for this tenant" case, which is a per-schema decision
+// already handled by `mastersConditions`' empty-object fallback (§2.5 "no
+// entry = visible" still applies there). Deny-by-default here matches
+// `useMastersCapability`'s documented posture for every other incomplete-
+// identity path (pre-first-fetch, mid-refetch, fetch-failure) — this hook was
+// the one path that still fell through to OPEN_CAPABILITY (#1441 review).
+const DENY_CAPABILITY: MastersCapability = {
+  canView: () => false,
   canEdit: () => false,
 };
 
@@ -67,7 +75,7 @@ export async function loadMastersCapability(
   tenantId: string,
   roles: string[],
 ): Promise<MastersCapability> {
-  if (!tenantId || roles.length === 0) return OPEN_CAPABILITY;
+  if (!tenantId || roles.length === 0) return DENY_CAPABILITY;
 
   // Deliberately NOT caught here: a policy-fetch failure must propagate to the
   // caller as a rejected promise, not resolve into an empty policy that reads

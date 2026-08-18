@@ -72,6 +72,14 @@ DB_CONTAINER = os.environ.get("DB_CONTAINER", "docker-postgres")
 
 PLACEHOLDER_GEOMETRY = {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]}
 
+# The eGov@123 default is fine for the local-setup convention this script was written for, but
+# offers no protection if someone points DIGIT_URL at a non-local deployment without also
+# overriding DIGIT_PASSWORD (#1441 review).
+if "DIGIT_PASSWORD" not in os.environ and not any(h in URL for h in ("localhost", "127.0.0.1")):
+    print(f"WARNING: DIGIT_URL={URL} doesn't look local, but DIGIT_PASSWORD wasn't set — "
+          f"using the eGov@123 local-setup default against it. Set DIGIT_PASSWORD explicitly "
+          f"if this is a real deployment.", flush=True)
+
 
 def _post(path, body, timeout=40):
     data = json.dumps(body).encode()
@@ -334,19 +342,29 @@ def create_boundary_relationship(tok, tenant, code, btype, parent):
 def sql_insert_boundary_relationship(tenant, code, btype, parent, path):
     """Fallback for the observed Kafka/persister flakiness: boundary-relationships/_create
     returns 202 (accepted) and is consumed (offset advances, lag 0) but the row sometimes
-    never lands — direct insert, matching the exact column shape of a sibling row."""
+    never lands — direct insert, matching the exact column shape of a sibling row.
+
+    Values are passed as psql `-v` variables and substituted via `:'var'` (psql's quoted-literal
+    form, which escapes embedded quotes/backslashes) rather than formatted directly into the SQL
+    string — env-derived values (tenant/code/parent/path) containing a `'` would otherwise break
+    out of the string literal and corrupt the statement (#1441 review)."""
     ts = int(time.time() * 1000)
     sql = (
         "INSERT INTO boundary_relationship "
         "(id, tenantid, code, hierarchytype, boundarytype, parent, ancestralmaterializedpath, "
         "createdtime, createdby, lastmodifiedtime, lastmodifiedby) "
-        "VALUES (gen_random_uuid()::text, '%s', '%s', '%s', '%s', %s, %s, %d, 'system', %d, 'system') "
+        "VALUES (gen_random_uuid()::text, :'tenant', :'code', :'htype', :'btype', %s, %s, %d, 'system', %d, 'system') "
         "ON CONFLICT (tenantid, code, hierarchytype) DO NOTHING;"
-        % (tenant, code, HIERARCHY_TYPE, btype,
-           "'%s'" % parent if parent else "NULL",
-           "'%s'" % path if path else "NULL", ts, ts)
+        % (":'parent'" if parent else "NULL", ":'path'" if path else "NULL", ts, ts)
     )
-    subprocess.run(["docker", "exec", DB_CONTAINER, "psql", "-U", "egov", "-d", "egov", "-c", sql], check=True)
+    cmd = ["docker", "exec", DB_CONTAINER, "psql", "-U", "egov", "-d", "egov",
+           "-v", "tenant=" + tenant, "-v", "code=" + code, "-v", "htype=" + HIERARCHY_TYPE, "-v", "btype=" + btype]
+    if parent:
+        cmd += ["-v", "parent=" + parent]
+    if path:
+        cmd += ["-v", "path=" + path]
+    cmd += ["-c", sql]
+    subprocess.run(cmd, check=True)
 
 
 def seed_city_boundary(tok):

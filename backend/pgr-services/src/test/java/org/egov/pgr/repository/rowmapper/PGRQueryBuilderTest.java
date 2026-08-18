@@ -145,4 +145,33 @@ class PGRQueryBuilderTest {
 
         assertFalse(query.contains("ads.locality IN"));
     }
+
+    // A non-null EMPTY list means "this axis IS restricted and resolved to zero allowed values" —
+    // distinct from null ("axis not restricted"). ScopePolicyEngine.resolve always hands back a
+    // non-empty sentinel list instead today, but applyScope must independently deny-all here if
+    // that contract ever regresses upstream, rather than silently dropping the axis and returning
+    // unrestricted rows (#1441 review).
+    @Test
+    void emptyNonNullDepartmentCodesDenyAllRatherThanDroppingTheAxis() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of(), null);
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("1 = 0"));
+        assertFalse(query.contains("ser.additionaldetails->>'department' IN"));
+    }
+
+    @Test
+    void emptyNonNullJurisdictionCodesDenyAllRatherThanDroppingTheAxis() {
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, null, List.of());
+
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(query.contains("1 = 0"));
+        assertFalse(query.contains("ads.locality IN"));
+    }
 }

@@ -54,7 +54,11 @@ public class PolicyInputBuilder {
         Map<String, Object> complaint = new LinkedHashMap<>();
         complaint.put("accountId", service.getAccountId());
         complaint.put("department", extractDepartment(service));
-        complaint.put("tenantId", service.getTenantId());
+        // Deliberately no "tenantId" here: AccessPolicyRegistry.AXIS_FIELDS has no axis mapped to
+        // resource.complaint.tenantId, so a JsonLogic condition referencing it would silently
+        // consult an undefined value (Tier-2 drift risk, since Tier-1's SQL scope has no matching
+        // predicate either) — add it back only alongside a real axis wired into AXIS_FIELDS and the
+        // SQL side (#1441 review).
         complaint.put("boundary", extractBoundary(service));
 
         Map<String, Object> resource = new LinkedHashMap<>();

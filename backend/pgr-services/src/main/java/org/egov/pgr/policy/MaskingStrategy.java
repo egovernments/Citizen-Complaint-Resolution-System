@@ -49,11 +49,20 @@ public enum MaskingStrategy {
         if (value == null)
             return null;
 
-        String name = onDeny == null ? null : String.valueOf(onDeny.get("strategy"));
+        Object strategyParam = onDeny == null ? null : onDeny.get("strategy");
+        // Explicit guard rather than relying on String.valueOf(null) -> "null" -> a caught
+        // valueOf() throw: a missing/blank strategy is an expected, common authoring shape
+        // (policies that only set a masking rule once a strategy is actually chosen), not an
+        // exceptional one — no reason to pay for/rely on a hot-path throw to detect it.
+        if (strategyParam == null || String.valueOf(strategyParam).isBlank()) {
+            log.error("MaskingStrategy: missing 'strategy' — failing closed to REDACT");
+            return REDACT.mask(value, onDeny);
+        }
+        String name = String.valueOf(strategyParam);
         try {
             return valueOf(name).mask(value, onDeny);
         } catch (Exception e) {
-            log.error("MaskingStrategy: unrecognized/missing strategy '{}' — failing closed to REDACT", name);
+            log.error("MaskingStrategy: unrecognized strategy '{}' — failing closed to REDACT", name);
             return REDACT.mask(value, onDeny);
         }
     }
