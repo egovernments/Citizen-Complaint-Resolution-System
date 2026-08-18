@@ -743,6 +743,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       ? buildPublicRefs(tiles, kpis)
       : buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     dashboardMetrics.markBatchStart(reqId);
     // A changed query plan must not leave the prior values visible/exportable
     // beneath new filter labels while the replacement request is in flight.
@@ -755,9 +756,13 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       calendar: null,
     });
 
+    const requestOptions = {
+      signal: controller?.signal,
+      shouldContinue: () => reqId === reqIdRef.current,
+    };
     const request = publicMode
-      ? runPublicKpiBatch(refs, tenantId, pack?.maxBatchQueries)
-      : runKpiBatch(refs, tenantId, pack?.maxBatchQueries);
+      ? runPublicKpiBatch(refs, tenantId, pack?.maxBatchQueries, requestOptions)
+      : runKpiBatch(refs, tenantId, pack?.maxBatchQueries, requestOptions);
     request
       .then((res) => {
         if (reqId !== reqIdRef.current) return;
@@ -773,7 +778,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
         });
         dashboardMetrics.markAllWidgetsReady(
           countErrorWidgets(res?.errors, tiles.length),
-          reqId
+          reqId,
+          res?.roundTrips
         );
       })
       .catch((err) => {
@@ -793,6 +799,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
         });
         dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
+    return () => {
+      if (reqIdRef.current === reqId) reqIdRef.current += 1;
+      controller?.abort();
+    };
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refsKey, pack, tenantId, publicMode]);

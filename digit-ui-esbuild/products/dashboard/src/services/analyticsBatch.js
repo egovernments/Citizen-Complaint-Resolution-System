@@ -1,8 +1,8 @@
+import { chunkValues, runSequentialChunks } from "./sequentialChunks";
+
 /** Backend fallback for deployments that predate the advertised pack budget. */
 export const DEFAULT_MAX_BATCH_QUERIES = 50;
 
-/** Companion query keys emitted by queryPlan.js for one rendered tile. */
-const COMPANION_SUFFIXES = ["__prior", "__series", "__pins"];
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
 function objectMap(value) {
@@ -31,7 +31,11 @@ function canonicalError(value, fallback = null) {
     const fallbackCode = fallbackError?.code || fallbackError?.error;
     return {
       code: value,
-      message: String(fallbackCode === value && fallbackError?.message ? fallbackError.message : value),
+      message: String(
+        String(fallbackCode) === String(value) && fallbackError?.message
+          ? fallbackError.message
+          : value
+      ),
     };
   }
   if (value && typeof value === "object") {
@@ -77,11 +81,7 @@ export function normalizeAnalyticsBatch(payload) {
 export function chunkQueryRefs(refs, maxBatchQueries) {
   const entries = Object.entries(objectMap(refs));
   const limit = batchLimit(maxBatchQueries);
-  const chunks = [];
-  for (let offset = 0; offset < entries.length; offset += limit) {
-    chunks.push(Object.fromEntries(entries.slice(offset, offset + limit)));
-  }
-  return chunks;
+  return chunkValues(entries, limit).map((chunk) => Object.fromEntries(chunk));
 }
 
 /**
@@ -89,11 +89,17 @@ export function chunkQueryRefs(refs, maxBatchQueries) {
  * transport fails. Sequential execution preserves the backend cap's intent:
  * adding a second HTTP request must not double concurrent PostgreSQL pressure.
  */
-export async function runChunkedAnalyticsBatch(refs, maxBatchQueries, executeChunk) {
-  const chunks = chunkQueryRefs(refs, maxBatchQueries);
-  if (!chunks.length) {
-    return { results: {}, errors: null, partial: false, asOf: null, calendar: null, scope: null };
-  }
+export async function runChunkedAnalyticsBatch(
+  refs,
+  maxBatchQueries,
+  executeChunk,
+  options = {}
+) {
+  // Preserve the old transport contract for an empty/stale query plan: the
+  // backend still owns the authoritative asOf/calendar response and the call's
+  // telemetry. An empty plan is one request, not zero requests.
+  const boundedChunks = chunkQueryRefs(refs, maxBatchQueries);
+  const chunks = boundedChunks.length ? boundedChunks : [{}];
 
   const results = Object.create(null);
   const errors = Object.create(null);
@@ -104,9 +110,10 @@ export async function runChunkedAnalyticsBatch(refs, maxBatchQueries, executeChu
   let successfulChunks = 0;
   let firstFailure = null;
 
-  for (const chunk of chunks) {
-    try {
-      const response = normalizeAnalyticsBatch(await executeChunk(chunk));
+  const outcomes = await runSequentialChunks(chunks, executeChunk, options);
+  for (const { chunk, value, error } of outcomes) {
+    if (!error) {
+      const response = normalizeAnalyticsBatch(value);
       successfulChunks += 1;
       Object.assign(results, response.results);
       if (response.errors) Object.assign(errors, response.errors);
@@ -116,7 +123,7 @@ export async function runChunkedAnalyticsBatch(refs, maxBatchQueries, executeChu
       }
       if (calendar == null && response.calendar != null) calendar = response.calendar;
       if (scope == null && response.scope != null) scope = response.scope;
-    } catch (error) {
+    } else {
       firstFailure ||= error;
       partial = true;
       const message = errorMessage(error);
@@ -133,21 +140,16 @@ export async function runChunkedAnalyticsBatch(refs, maxBatchQueries, executeChu
   return {
     results,
     errors: Object.keys(errors).length ? errors : null,
-    partial: partial || Object.keys(errors).length > 0,
+    partial,
     asOf,
     calendar,
     scope,
+    roundTrips: chunks.length,
   };
 }
 
-/** Return the first failure that makes a rendered tile incomplete. */
+/** Return only the base-query failure that prevents a tile from rendering. */
 export function errorForTile(errors, kpiId) {
   if (!errors || !kpiId) return null;
-  if (hasOwn(errors, kpiId) && errors[kpiId]) return errors[kpiId];
-  for (const suffix of COMPANION_SUFFIXES) {
-    const key = `${kpiId}${suffix}`;
-    const companion = hasOwn(errors, key) ? errors[key] : null;
-    if (companion) return companion;
-  }
-  return null;
+  return hasOwn(errors, kpiId) && errors[kpiId] ? errors[kpiId] : null;
 }

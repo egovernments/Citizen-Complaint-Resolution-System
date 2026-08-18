@@ -81,6 +81,7 @@ test("chunks execute sequentially and merge every result exactly once", async ()
   assert.deepEqual(result.scope, { level: "tenant" });
   assert.equal(result.partial, false);
   assert.equal(result.errors, null);
+  assert.equal(result.roundTrips, 2);
 });
 
 test("one failed chunk retains successful tile data and marks only failed refs", async () => {
@@ -116,6 +117,38 @@ test("all failed chunks preserve the existing global failure path", async () => 
   );
 });
 
+test("an empty ref map still performs one request for freshness metadata", async () => {
+  const calls = [];
+  const result = await runChunkedAnalyticsBatch({}, 50, async (chunk) => {
+    calls.push(chunk);
+    return { results: {}, asOf: 123, calendar: { timeZone: "Africa/Nairobi" } };
+  });
+
+  assert.deepEqual(calls, [{}]);
+  assert.equal(result.asOf, 123);
+  assert.deepEqual(result.calendar, { timeZone: "Africa/Nairobi" });
+  assert.equal(result.roundTrips, 1);
+});
+
+test("a superseded generation never starts its next sequential chunk", async () => {
+  let current = true;
+  let calls = 0;
+  await assert.rejects(
+    runChunkedAnalyticsBatch(
+      refs(51),
+      50,
+      async () => {
+        calls += 1;
+        current = false;
+        return { results: {} };
+      },
+      { shouldContinue: () => current }
+    ),
+    { name: "AbortError" }
+  );
+  assert.equal(calls, 1);
+});
+
 test("legacy inline errors become canonical without disturbing successful results", () => {
   const ok = { columns: ["total"], rows: [{ total: 7 }] };
   const normalized = normalizeAnalyticsBatch({
@@ -134,7 +167,7 @@ test("legacy inline errors become canonical without disturbing successful result
   assert.equal(normalized.partial, true);
 });
 
-test("explicit errors are authoritative and companion failures resolve to the base tile", () => {
+test("explicit errors are authoritative and companion failures do not blank base data", () => {
   const normalized = normalizeAnalyticsBatch({
     results: {
       card__prior: { error: "legacy_code", message: "legacy detail" },
@@ -148,8 +181,18 @@ test("explicit errors are authoritative and companion failures resolve to the ba
     code: "invalid_param",
     message: "bad comparison",
   });
-  assert.equal(errorForTile(normalized.errors, "card"), normalized.errors.card__prior);
+  assert.equal(errorForTile(normalized.errors, "card"), null);
+  assert.equal(errorForTile(normalized.errors, "card__prior"), normalized.errors.card__prior);
   assert.equal(errorForTile(normalized.errors, "other"), null);
+});
+
+test("string errors reuse richer fallback messages across code types", () => {
+  const normalized = normalizeAnalyticsBatch({
+    results: { card: { error: "7", message: "specific detail" } },
+    errors: { card: "7" },
+  });
+
+  assert.deepEqual(normalized.errors.card, { code: "7", message: "specific detail" });
 });
 
 test("empty rows are successful data and reserved keys remain ordinary own keys", () => {
