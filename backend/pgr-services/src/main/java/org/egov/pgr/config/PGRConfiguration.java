@@ -333,6 +333,9 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.kafka.topic}")
     private String escalationKafkaTopic;
 
+    @Value("${pgr.escalation.states:PENDINGATLME,PENDINGFORASSIGNMENT}")
+    private String escalationStates;
+
     // Dashboard
     @Value("${pgr.dashboard.refresh.enabled:true}")
     private Boolean dashboardRefreshEnabled;
