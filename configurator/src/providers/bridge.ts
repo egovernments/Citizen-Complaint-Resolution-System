@@ -22,6 +22,7 @@ export {
   REGISTRY,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';
+export { DigitApiClient } from '@digit-mcp/data-provider';
 
 // Singleton client -- mirrors the existing apiClient pattern.
 // Created with an empty URL; configured later when the user logs in
