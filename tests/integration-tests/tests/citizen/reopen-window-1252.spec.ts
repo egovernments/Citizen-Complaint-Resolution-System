@@ -23,6 +23,14 @@ const COMPLAINT_ID = "12345";
 const reopenLink = (page: Page) =>
   page.locator(`a[href*="/citizen/pgr/reopen/${COMPLAINT_ID}"]`);
 
+/**
+ * A second, unrelated action on the same RESOLVED checkpoint. Asserting it is visible proves
+ * the timeline actually mounted and rendered its action links, so "no REOPEN link" means the
+ * window gate withheld it — not that the checkpoint never rendered at all.
+ */
+const rateLink = (page: Page) =>
+  page.locator(`a[href*="/citizen/pgr/rate/${COMPLAINT_ID}"]`);
+
 /** Stubs RAINMAKER-PGR.UIConstants so the timeline reads `reopenSlaMs` as its reopen window. */
 async function stubReopenWindow(page: Page, reopenSlaMs: number) {
   await page.route("**/mdms-v2/v1/_search*", async (route) => {
@@ -84,6 +92,16 @@ async function stubResolvedComplaint(page: Page, resolvedAgoMs: number) {
     nextState: "PENDINGFORASSIGNMENT",
   };
 
+  // RATE rides along on every stub as the control action — it is never gated by the reopen
+  // window, so its link is the proof-of-render for the "hides REOPEN" case.
+  const rateAction = {
+    action: "RATE",
+    roles: ["CITIZEN", "CFC", "CSR", "PGR_VIEWER"],
+    nextState: "CLOSEDAFTERRESOLUTION",
+  };
+
+  const stateActions = [reopenAction, rateAction];
+
   await page.route("**/egov-workflow-v2/egov-wf/businessservice/_search*", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -97,7 +115,7 @@ async function stubResolvedComplaint(page: Page, resolvedAgoMs: number) {
                 uuid: "resolved-state-uuid",
                 state: "RESOLVED",
                 isStateUpdatable: false,
-                actions: [reopenAction],
+                actions: stateActions,
               },
             ],
           },
@@ -120,10 +138,16 @@ async function stubResolvedComplaint(page: Page, resolvedAgoMs: number) {
             state: {
               uuid: "resolved-state-uuid",
               state: "RESOLVED",
+              // WorkflowService.getDetailsById maps each timeline entry's `status` from
+              // state.applicationStatus (NOT state.state) — packages/libraries/.../WorkFlow.js.
+              // Omit it and TimeLine.getCheckPoint falls through to its default case, so the
+              // RESOLVED checkpoint — the only thing that renders the REOPEN link — never
+              // mounts and every assertion below passes or fails for the wrong reason.
+              applicationStatus: "RESOLVED",
               isStateUpdatable: false,
-              actions: [reopenAction],
+              actions: stateActions,
             },
-            nextActions: [reopenAction],
+            nextActions: stateActions,
             timeline: [],
             auditDetails: { createdTime: lastModifiedTime - 3600 * 1000, lastModifiedTime },
             assigner: { name: "Jane Doe", mobileNumber: "9800000001" },
@@ -172,8 +196,10 @@ test.describe("Citizen PGR reopen window is driven by MDMS REOPENSLA #1252", () 
       await stubResolvedComplaint(page, reopenSlaMs * 1.5);
 
       await openComplaint(page);
-      // The page itself must have rendered — otherwise "no reopen link" is vacuously true.
-      await expect(page.locator("body")).toContainText(/Streetlight not working|streetlights/i);
+      // The RESOLVED checkpoint must have rendered its action links — otherwise "no reopen
+      // link" is vacuously true and this test would stay green even if the timeline never
+      // mounted. RATE is on the same checkpoint and is never gated by the window.
+      await expect(rateLink(page)).toBeVisible();
       await expect(reopenLink(page)).toHaveCount(0);
     });
 
