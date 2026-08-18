@@ -279,6 +279,16 @@ await test('3.3 no public tool is write-risk except the session recorders', () =
   assert.deepEqual(offenders, [], 'a public tool gained write risk');
 });
 
+await test('3.3b the tier census matches what the docs claim', () => {
+  // Pinned so prose and code cannot drift: the PR body and README quote these
+  // numbers, and they have already gone stale once. If this fails, a tier
+  // moved — update the docs in the same commit, not the number here alone.
+  const census = { public: 0, employee: 0, admin: 0 } as Record<string, number>;
+  for (const t of allTools) census[t.access ?? 'employee']++;
+  assert.equal(allTools.length, 70, 'tool count changed');
+  assert.deepEqual(census, { public: 6, employee: 30, admin: 34 });
+});
+
 await test('3.4 destructive and PII tools are admin-tier', () => {
   const mustBeAdmin = [
     'tenant_cleanup', 'tenant_destroy', 'decrypt_data', 'encrypt_data',
