@@ -609,3 +609,22 @@ main {
 .token-card button:hover {
   filter: brightness(1.1);
 }
+
+.token-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted, #8b949e);
+}
+
+.token-hint code {
+  display: block;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 4px;
+  background: var(--bg, #0d1117);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

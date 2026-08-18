@@ -6,6 +6,32 @@ import { fileURLToPath } from 'node:url';
 import { sanitizeUserContent } from '../utils/sanitize.js';
 
 const MCP_ENDPOINT = 'https://docs.digit.org/platform/~gitbook/mcp';
+
+/**
+ * Hosts `docs_get` may fetch from.
+ *
+ * The guard used to be `url.includes('docs.digit.org')` — a substring test on
+ * the WHOLE url, so `http://10.0.0.1/x?docs.digit.org` passed it. Combined with
+ * redirect-following and a verbatim body, that made a read-only documentation
+ * tool into an in-cluster HTTP fetch primitive: arbitrary internal GETs and a
+ * port scanner, reachable at the lowest access tier.
+ *
+ * Compare `url.hostname` — never the string — against this list.
+ */
+const ALLOWED_DOC_HOSTS = new Set(['docs.digit.org']);
+
+/** Cap on a fetched page, so a hostile or huge target can't exhaust memory. */
+const MAX_DOC_BYTES = 2 * 1024 * 1024;
+
+function isAllowedDocHost(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    return ALLOWED_DOC_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 const LOCAL_URL_PREFIX = 'local://';
 const ENGRAM_URL_PREFIX = 'engram://';
 
@@ -304,7 +330,10 @@ export function registerDocsTools(registry: ToolRegistry): void {
     name: 'docs_get',
     group: 'docs',
     category: 'docs',
-    access: 'public',
+    // Not 'public'. Even with the host allow-list this performs an outbound
+    // fetch from inside the cluster on caller-supplied input; the lowest tier
+    // should not be able to drive egress at all.
+    access: 'employee',
     risk: 'read',
     description:
       'Fetch the full markdown content of a DIGIT documentation page. Use docs_search first to find the URL, then pass it here to read the complete page. ' +
@@ -361,11 +390,13 @@ export function registerDocsTools(registry: ToolRegistry): void {
         }, null, 2);
       }
 
-      // Ensure it's a docs.digit.org URL
-      if (!url.includes('docs.digit.org')) {
+      // Host must be allow-listed. Checked on the parsed hostname, not with a
+      // substring match on the url — see ALLOWED_DOC_HOSTS.
+      if (!isAllowedDocHost(url)) {
         return JSON.stringify({
           success: false,
-          error: 'URL must be a docs.digit.org page, a local:// URL, or an engram:// URL',
+          error: `URL host is not permitted. Allowed: ${[...ALLOWED_DOC_HOSTS].join(', ')}. ` +
+            'Pass a docs.digit.org page, a local:// URL, or an engram:// URL.',
           hint: 'Use docs_search to find valid documentation URLs.',
         });
       }
@@ -384,7 +415,20 @@ export function registerDocsTools(registry: ToolRegistry): void {
       }
 
       try {
-        const response = await fetch(mdUrl);
+        // `redirect: 'manual'` — following redirects would hand the allow-list
+        // straight back: one hop off docs.digit.org and we are fetching whatever
+        // the redirect names. A redirect is reported, not chased.
+        const response = await fetch(mdUrl, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          return JSON.stringify({
+            success: false,
+            error: `The documentation host redirected (HTTP ${response.status}). Redirects are not followed.`,
+            hint: 'Use docs_search to get a current URL.',
+          }, null, 2);
+        }
         if (!response.ok) {
           return JSON.stringify({
             success: false,
@@ -404,13 +448,18 @@ export function registerDocsTools(registry: ToolRegistry): void {
           }, null, 2);
         }
 
-        const markdown = await response.text();
+        const raw = await response.text();
+        const markdown = raw.length > MAX_DOC_BYTES ? raw.slice(0, MAX_DOC_BYTES) : raw;
         // Return the original URL (not the .md one) so agents don't bypass docs_get
         const displayUrl = url.endsWith('.md') ? url.replace(/\.md$/, '') : url;
         return JSON.stringify({
           success: true,
           url: displayUrl,
-          content: markdown,
+          truncated: markdown.length < raw.length || undefined,
+          // Third-party content going straight into the agent's context. The
+          // search path already sanitized its snippets; this one did not, so
+          // the full page was an unfiltered injection channel.
+          content: sanitizeUserContent(markdown),
         }, null, 2);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

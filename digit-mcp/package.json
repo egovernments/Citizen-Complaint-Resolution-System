@@ -39,6 +39,7 @@
     "test:openapi": "tsx test-openapi-spec.ts",
     "test:safety": "tsx test-agent-safety.ts",
     "test:security": "tsx test-security.ts",
+    "test:security:http": "tsx test-security-http.ts",
     "engram": "tsx engram-agent.ts",
     "prepublishOnly": "npm run build"
   },

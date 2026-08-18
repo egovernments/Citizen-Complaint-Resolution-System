@@ -19,23 +19,29 @@
     </div>
   </header>
 
-  <div id="token-gate" class="token-gate hidden">
+  <div id="token-gate" class="token-gate hidden" role="dialog" aria-modal="true" aria-labelledby="token-title">
     <form id="token-form" class="token-card">
-      <h2>Sign in</h2>
+      <h2 id="token-title">Sign in</h2>
       <p class="token-help">
         This viewer reads recorded tool arguments and results, so it needs a DIGIT
         access token with an admin role. The token is kept in this tab only and is
         cleared when you close it.
       </p>
-      <p id="token-message" class="token-message hidden"></p>
+      <p id="token-message" class="token-message hidden" role="alert" aria-live="polite"></p>
+      <label class="token-label" for="token-input">DIGIT access token</label>
       <input
         type="password"
         id="token-input"
-        placeholder="DIGIT access token"
         autocomplete="off"
         spellcheck="false"
       >
       <button type="submit">Continue</button>
+      <p class="token-help token-hint">
+        Mint one from your DIGIT instance:
+        <code>curl -u egov-user-client: -d 'grant_type=password&amp;scope=read&amp;userType=EMPLOYEE'
+        --data-urlencode username=… --data-urlencode password=… --data-urlencode tenantId=pg
+        &lt;host&gt;/user/oauth/token</code>
+      </p>
     </form>
   </div>
 

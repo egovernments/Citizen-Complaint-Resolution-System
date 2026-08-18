@@ -42,9 +42,16 @@ releases:
     chart: ../../../../digit-mcp/helm/digit-mcp
     missingFileHandler: Warn
     values:
+      # Was ghcr.io/subhashini-egov/digit-mcp:2026-06-11 — a personal registry
+      # fed by a different repository, so nothing built from this tree ever
+      # reached the cluster. egovio/digit-mcp is what build/build-config.yml
+      # publishes from digit-mcp/Dockerfile.
+      #
+      # Pin a dated tag, not develop-<sha8>: the nightly prune keeps only the 5
+      # most recent sha tags, so a sha pin vanishes within about a week.
       - image:
-          repository: ghcr.io/subhashini-egov/digit-mcp
-          tag: "2026-06-11"
+          repository: egovio/digit-mcp
+          tag: "nightly-develop"
         service:
           type: ClusterIP
         env:

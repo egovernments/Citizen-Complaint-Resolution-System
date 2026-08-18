@@ -79,7 +79,8 @@ INSERT INTO engram_id_counters (category, next_id)
  * developer would otherwise have to set a var to get session persistence. On a
  * network transport it is a different matter: falling back to a password that
  * is published in this file is not a default, it is a shared secret with the
- * whole internet — so there we require it to be set and say so loudly.
+ * whole internet — so there we warn loudly rather than failing, because losing
+ * session persistence must not take the whole server down with it.
  *
  * (Dropping `ENV SESSION_DB_PASSWORD` from the Dockerfile alone did nothing:
  * the value was still compiled into dist/, just one layer further down.)

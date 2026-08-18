@@ -11,6 +11,14 @@ spec:
       {{- include "digit-mcp.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # Roll the pod when config or secrets change. Without this a
+        # ConfigMap-only change — flipping MCP_AUTH_MODE, say — leaves the pod
+        # spec byte-identical, so `helm upgrade` reports success and nothing
+        # restarts. With a moving image tag that is the only rollout trigger
+        # there is.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         {{- include "digit-mcp.selectorLabels" . | nindent 8 }}
     spec:
@@ -63,10 +71,17 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      # sizeLimit on every emptyDir: these are node ephemeral storage, and the
+      # access log and session JSONL are append-only with no rotation. An
+      # unbounded pod fills the node and triggers DiskPressure, which evicts
+      # neighbouring pods too — the blast radius is the node, not the pod.
       volumes:
         - name: logs
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: {{ .Values.storage.logsSizeLimit }}
         - name: data
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: {{ .Values.storage.dataSizeLimit }}
         - name: tmp
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: {{ .Values.storage.tmpSizeLimit }}

@@ -281,7 +281,7 @@ fails the whole `docker compose up`, not just MCP. Either:
 - `build_mcp: true` — build from the vendored in-tree source (no registry
   needed); or
 - leave it off and take the playbook's default, which resolves to the public
-  `ghcr.io/subhashini-egov/digit-mcp:<pinned-tag>` (see "Resolve MCP image tag"
+  `egovio/digit-mcp:nightly-develop` (see "Resolve MCP image tag"
   in `playbook-deploy.yml`). `MCP_IMAGE` is passed through verbatim — no
   `docker_registry` prefix is applied.
 

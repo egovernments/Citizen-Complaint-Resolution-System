@@ -35,8 +35,11 @@ export function registerDiscoverTools(registry: ToolRegistry): void {
     name: 'enable_tools',
     group: 'core',
     category: 'discovery',
-    access: 'public',
-    risk: 'read',
+    // Not public, and not a read. On /mcp the registry is per-request, but the
+    // REST shim shares one long-lived ToolRegistry across all callers, so this
+    // mutates state other callers observe.
+    access: 'employee',
+    risk: 'write',
     description:
       'Enable or disable tool groups on demand. Groups: mdms (tenant validation + MDMS search/create), boundary (boundary hierarchy + boundary management CRUD), masters (departments, designations, complaint types), employees (HRMS employee create/update/validate), localization (search/upsert UI labels), pgr (PGR complaints + workflow), admin (filestore upload/download + access control + user search/create), idgen (ID generation), location (geographic boundaries), encryption (encrypt/decrypt), docs (search DIGIT documentation at docs.digit.org + full OpenAPI 3.0 API catalog), monitoring (persister health, Kafka lag, DB counts, E2E parity), tracing (distributed trace search, debug API failures, find slow operations), snapshot (capture + diff system state across two setups). The "core" group is always enabled.',
     inputSchema: {

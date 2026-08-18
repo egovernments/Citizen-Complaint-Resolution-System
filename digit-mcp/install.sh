@@ -61,6 +61,11 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --client NAME   Target client: claude-code, cursor, windsurf, vscode"
       echo "  --mode MODE     Installation mode: remote (default) or local"
+      echo ""
+      echo "Environment:"
+      echo "  DIGIT_ACCESS_TOKEN  Bearer token for the hosted server (remote mode)."
+      echo "                      Required — /mcp authenticates every caller."
+      echo "                      May also be supplied via --env FILE."
       echo "  --dir PATH      Local install directory (default: ~/.digit-mcp)"
       echo "  --env FILE      Path to .env file with CRS_USERNAME, CRS_PASSWORD, etc."
       echo "  --yes, -y       Skip confirmation prompts"
@@ -205,6 +210,13 @@ write_config_remote() {
   dir="$(dirname "$config_path")"
   mkdir -p "$dir"
 
+  # --env applies here as well as in local mode: DIGIT_ACCESS_TOKEN is exactly
+  # the sort of value an operator keeps in an env file.
+  if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+  fi
+
   local token="${DIGIT_ACCESS_TOKEN:-}"
   if [[ -z "$token" && "$SKIP_PROMPTS" != "true" ]]; then
     echo ""
@@ -215,14 +227,19 @@ write_config_remote() {
     echo -e "${DIM}    -d 'grant_type=password&scope=read&userType=EMPLOYEE' \\${NC}"
     echo -e "${DIM}    --data-urlencode username=... --data-urlencode password=... \\${NC}"
     echo -e "${DIM}    --data-urlencode tenantId=pg <host>/user/oauth/token${NC}"
-    read -rsp "Access token: " token
+    # </dev/tty: the documented install path is `curl … | bash`, where stdin is
+    # the script itself, so a bare `read` would consume script text.
+    read -rsp "Access token: " token </dev/tty || true
     echo ""
   fi
 
   if [[ -z "$token" ]]; then
-    warn "No access token supplied — the server will reject every call with 401."
-    warn "Re-run with DIGIT_ACCESS_TOKEN=... or add the Authorization header to:"
-    warn "  ${config_path}"
+    err "No access token supplied."
+    err "The hosted server authenticates every caller, so a config without one"
+    err "returns 401 on every call. Re-run with:"
+    err "  DIGIT_ACCESS_TOKEN=<token> $0 --mode remote"
+    err "See the README for how to mint a token."
+    exit 1
   fi
 
   local server_entry
