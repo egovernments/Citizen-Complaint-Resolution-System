@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
@@ -23,7 +22,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
@@ -78,6 +76,19 @@ public class MDMSUtils {
     private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
     private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
     private final Map<String, TimedRows> notificationProviderTemplateCache = new ConcurrentHashMap<>();
+
+    // Department code->name map, cached per tenant with the same TTL/never-cache-empty/
+    // serve-stale-on-failure semantics as the notification masters above — a transient MDMS
+    // hiccup during department-scoped search (see getDepartmentCodeToNameMap) would otherwise
+    // silently drop dual-read matches for every request until the NEXT successful fetch, not just
+    // the one that hit the hiccup.
+    private static final class TimedMap {
+        final Map<String, String> value;
+        final long fetchedAt;
+        TimedMap(Map<String, String> value) { this.value = value; this.fetchedAt = System.currentTimeMillis(); }
+        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
+    }
+    private final Map<String, TimedMap> departmentCodeToNameCache = new ConcurrentHashMap<>();
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -320,8 +331,30 @@ public class MDMSUtils {
      * Best-effort — returns an empty map (never throws) on any MDMS failure, degrading to
      * code-only matching rather than failing the whole search over a lookup that's purely there to
      * widen matches, not restrict them.
+     *
+     * <p>Cached per tenant with the same TTL ({@code pgr.notification.mdms.cache.ttl.ms}) and
+     * never-cache-empty/serve-stale-on-failure semantics as the notification masters above — the
+     * Department master changes about as often as those do, and without this, a single transient
+     * MDMS hiccup would silently drop dual-read matches for EVERY department-scoped search until
+     * the next successful fetch, not just the one request that hit the hiccup.
      */
     public Map<String, String> getDepartmentCodeToNameMap(RequestInfo requestInfo, String tenantId) {
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedMap cached = departmentCodeToNameCache.get(tenantId);
+        if (cached != null && cached.fresh(ttl)) return cached.value;
+
+        Map<String, String> fetched = fetchDepartmentCodeToNameMap(requestInfo, tenantId);
+        if (!fetched.isEmpty()) {
+            departmentCodeToNameCache.put(tenantId, new TimedMap(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR genuinely no Department master configured. Never
+        // cache an empty result (retry next search); serve a stale non-empty entry if we have one
+        // rather than dropping dual-read matches during an MDMS blip.
+        return cached != null ? cached.value : fetched;
+    }
+
+    private Map<String, String> fetchDepartmentCodeToNameMap(RequestInfo requestInfo, String tenantId) {
         try {
             MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo, tenantId);
             Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
@@ -573,13 +606,15 @@ public class MDMSUtils {
         }
     }
 
+    /**
+     * Normalized (trim+uppercase, via {@link RoleCodes}) role codes for the outbound
+     * egov-accesscontrol request body — MUST use the same normalization
+     * {@code AccessPolicyRegistry}'s cache key is computed from, or a cached result for one
+     * caller's role spelling could be served to a different caller whose real (un-normalized)
+     * roles were never actually sent this way (#1441 review).
+     */
     private List<String> extractRoleCodes(RequestInfo requestInfo) {
-        if (requestInfo == null || requestInfo.getUserInfo() == null || requestInfo.getUserInfo().getRoles() == null)
-            return Collections.emptyList();
-        return requestInfo.getUserInfo().getRoles().stream()
-                .map(Role::getCode)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return new ArrayList<>(RoleCodes.normalize(requestInfo));
     }
 
 }

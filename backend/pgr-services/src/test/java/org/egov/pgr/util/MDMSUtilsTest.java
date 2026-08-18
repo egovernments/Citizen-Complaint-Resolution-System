@@ -118,6 +118,58 @@ class MDMSUtilsTest {
         assertTrue(result.isEmpty());
     }
 
+    // --- getDepartmentCodeToNameMap: cached, never-cache-empty, serve-stale-on-failure ----------
+
+    @Test
+    void departmentCodeToNameMapIsCachedWithinTtl() {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60_000L);
+        when(config.getMdmsHost()).thenReturn("http://localhost:8094");
+        when(config.getMdmsEndPoint()).thenReturn("/mdms-v2/v2/_search");
+        Map<String, Object> mdmsResponse = Map.of("MdmsRes", Map.of("common-masters", Map.of(
+                "Department", List.of(Map.of("code", "DEPT_1", "name", "Public Works")))));
+        when(serviceRequestRepository.fetchResult(any(), any())).thenReturn(mdmsResponse);
+
+        Map<String, String> first = mdmsUtils.getDepartmentCodeToNameMap(new RequestInfo(), "pg.city");
+        Map<String, String> second = mdmsUtils.getDepartmentCodeToNameMap(new RequestInfo(), "pg.city");
+
+        assertEquals(Map.of("DEPT_1", "Public Works"), first);
+        assertEquals(first, second);
+        verify(serviceRequestRepository, org.mockito.Mockito.times(1)).fetchResult(any(), any());
+    }
+
+    @Test
+    void departmentCodeToNameMapServesTheStaleEntryOnAFailureRatherThanDroppingIt() {
+        // TTL=0 means the cached entry is never considered fresh, so every call attempts a real
+        // fetch — but a FAILED re-fetch must fall back to the last-known-good map, not silently
+        // return empty and drop every dual-read match until the next successful fetch (#1441 review).
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(0L);
+        when(config.getMdmsHost()).thenReturn("http://localhost:8094");
+        when(config.getMdmsEndPoint()).thenReturn("/mdms-v2/v2/_search");
+        Map<String, Object> mdmsResponse = Map.of("MdmsRes", Map.of("common-masters", Map.of(
+                "Department", List.of(Map.of("code", "DEPT_1", "name", "Public Works")))));
+        when(serviceRequestRepository.fetchResult(any(), any()))
+                .thenReturn(mdmsResponse)
+                .thenThrow(new RuntimeException("mdms down"));
+
+        Map<String, String> first = mdmsUtils.getDepartmentCodeToNameMap(new RequestInfo(), "pg.city");
+        Map<String, String> second = mdmsUtils.getDepartmentCodeToNameMap(new RequestInfo(), "pg.city");
+
+        assertEquals(Map.of("DEPT_1", "Public Works"), first);
+        assertEquals(first, second, "a failed re-fetch must serve the stale cached map, not empty");
+    }
+
+    @Test
+    void departmentCodeToNameMapReturnsEmptyOnFailureWithNothingCachedYet() {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60_000L);
+        when(config.getMdmsHost()).thenReturn("http://localhost:8094");
+        when(config.getMdmsEndPoint()).thenReturn("/mdms-v2/v2/_search");
+        when(serviceRequestRepository.fetchResult(any(), any())).thenThrow(new RuntimeException("mdms down"));
+
+        Map<String, String> result = mdmsUtils.getDepartmentCodeToNameMap(new RequestInfo(), "pg.city");
+
+        assertTrue(result.isEmpty());
+    }
+
     private RequestInfo requestInfo(String roleCode) {
         User user = new User();
         user.setRoles(List.of(Role.builder().code(roleCode).build()));

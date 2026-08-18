@@ -11,6 +11,7 @@ import org.egov.pgr.util.MDMSUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -22,9 +23,12 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -90,6 +94,50 @@ class PolicyDrivenScopeResolverTest {
 
         assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
         verifyNoInteractions(mdmsUtils);
+    }
+
+    @Test
+    void hrmsLookupUrlEncodesSpecialCharactersInTheUsername() {
+        // An HRMS-linked username with '&'/'=' must not be able to inject extra query params or
+        // corrupt the query string — it has to survive as the LITERAL value of 'codes' (#1441 review).
+        when(config.getHrmsHost()).thenReturn("http://localhost:8092");
+        when(config.getHrmsEndPoint()).thenReturn("/egov-hrms/employees/_search");
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)), List.of());
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+
+        resolver.resolve(requestInfo("user&name=x", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(restTemplate).postForObject(urlCaptor.capture(), any(), eq(Map.class));
+        String url = urlCaptor.getValue();
+        assertFalse(url.contains("&name="), "the '&' must be encoded, not read as a new query param");
+        assertTrue(url.contains("codes=user%26name%3Dx"), "actual URL: " + url);
+    }
+
+    @Test
+    void inactiveDepartmentAssignmentIsExcludedFromScope() {
+        ScopePolicy policy = ScopePolicy.of(List.of("department"), Map.of("department", ScopeLevel.OWN));
+        stubHrms(List.of(
+                Map.of("department", "DEPT_OLD", "isCurrentAssignment", false),
+                Map.of("department", "DEPT_NEW", "isCurrentAssignment", true)), List.of());
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("DEPT_NEW"), scope.departmentCodes);
+    }
+
+    @Test
+    void inactiveJurisdictionIsExcludedFromScope() {
+        // A transferred employee's HRMS record still lists their previous ward as isActive=false —
+        // it must not stay permanently unioned into the scope after the transfer (#1441 review).
+        ScopePolicy policy = ScopePolicy.of(List.of("jurisdiction"), Map.of("jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of(
+                Map.of("boundary", "WARD_OLD", "isActive", false),
+                Map.of("boundary", "WARD_NEW", "isActive", true)));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("WARD_NEW"), scope.jurisdictionCodes);
     }
 
     @Test

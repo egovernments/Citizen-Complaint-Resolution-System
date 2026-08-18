@@ -44,4 +44,16 @@ public final class PgrSearchScope {
      * update-reconciliation) must pass this sentinel explicitly instead of {@code null}.
      */
     public static final PgrSearchScope UNRESTRICTED = new PgrSearchScope(null, false, null, null, null);
+
+    /**
+     * Fail-closed scope for a tenant/action with no resolvable policy — matches no real row
+     * (the same {@link ScopePolicyEngine#UNRESOLVED_SENTINEL} used for a required-but-unresolvable
+     * axis), regardless of the caller's role. Used by {@code SearchAccessPolicyService#resolveScope}
+     * so Tier-1 (SQL, this scope) and Tier-2 ({@code AccessPolicyRegistry#getCondition}) deny
+     * IDENTICALLY once {@code pgr.abac.strict-mode} is enabled — otherwise {@code count()} (which
+     * only ever applies Tier-1) and {@code search()} (which applies both) could disagree.
+     */
+    public static PgrSearchScope deniedAll(String tenantId, boolean tenantStateLevel) {
+        return new PgrSearchScope(tenantId, tenantStateLevel, null, List.of(ScopePolicyEngine.UNRESOLVED_SENTINEL), null);
+    }
 }

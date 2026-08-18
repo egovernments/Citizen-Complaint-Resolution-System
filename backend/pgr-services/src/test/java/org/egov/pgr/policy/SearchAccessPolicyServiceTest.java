@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -75,7 +76,7 @@ class SearchAccessPolicyServiceTest {
                 .thenReturn(List.of(action));
 
         AccessPolicyRegistry registry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
-        service = new SearchAccessPolicyService(null, registry, new PolicyEvaluator(), new PolicyInputBuilder());
+        service = new SearchAccessPolicyService(null, registry, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
     }
 
     @Test
@@ -196,7 +197,7 @@ class SearchAccessPolicyServiceTest {
         AccessPolicyRegistry registryWithScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
-                new SearchAccessPolicyService(mockResolver, registryWithScope, new PolicyEvaluator(), new PolicyInputBuilder());
+                new SearchAccessPolicyService(mockResolver, registryWithScope, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2);
@@ -213,7 +214,7 @@ class SearchAccessPolicyServiceTest {
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         SearchAccessPolicyService serviceWithMockResolver =
-                new SearchAccessPolicyService(mockResolver, registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder());
+                new SearchAccessPolicyService(mockResolver, registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2);
@@ -225,6 +226,27 @@ class SearchAccessPolicyServiceTest {
     }
 
     @Test
+    void resolveScopeDeniesInsteadOfApplyingTheDefaultWhenStrictModeIsEnabled() {
+        // count() never calls enforce() (Tier-2) the way search() does — without this, a tenant on
+        // the legacy hand-authored condition could get a count() that disagrees with what search()
+        // actually returns. Once pgr.abac.strict-mode is on, Tier-1 (this) must deny identically to
+        // Tier-2 (AccessPolicyRegistry#getCondition) for the exact same "no scope configured" case,
+        // so search() and count() can never disagree (#1441 review).
+        PGRConfiguration strictConfig = new PGRConfiguration();
+        strictConfig.setAbacStrictMode(true);
+        AccessPolicyRegistry registryNoScope = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), strictConfig);
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
+        SearchAccessPolicyService serviceWithStrictMode =
+                new SearchAccessPolicyService(mockResolver, registryNoScope, new PolicyEvaluator(), new PolicyInputBuilder(), strictConfig);
+        RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
+
+        PgrSearchScope scope = serviceWithStrictMode.resolveScope(requestInfo, TENANT_ID, 2);
+
+        assertEquals(List.of("__scope_denied__"), scope.departmentCodes);
+        verifyNoInteractions(mockResolver);
+    }
+
+    @Test
     void resolveScopeFailsClosedRatherThanApplyingTheDefaultDuringAnAccessControlOutage() {
         // Must NOT collapse an outage into "not configured" and silently apply the permissive
         // DEFAULT_SCOPE_POLICY while accesscontrol is down (CodeRabbit #3775816481).
@@ -233,7 +255,7 @@ class SearchAccessPolicyServiceTest {
         AccessPolicyRegistry registryUnavailable = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
-                new SearchAccessPolicyService(mockResolver, registryUnavailable, new PolicyEvaluator(), new PolicyInputBuilder());
+                new SearchAccessPolicyService(mockResolver, registryUnavailable, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         org.junit.jupiter.api.Assertions.assertThrows(AccessControlUnavailableException.class,
@@ -256,7 +278,7 @@ class SearchAccessPolicyServiceTest {
         AccessPolicyRegistry registryWithBadAxis = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
         PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
         SearchAccessPolicyService serviceWithMockResolver =
-                new SearchAccessPolicyService(mockResolver, registryWithBadAxis, new PolicyEvaluator(), new PolicyInputBuilder());
+                new SearchAccessPolicyService(mockResolver, registryWithBadAxis, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
         RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
 
         org.junit.jupiter.api.Assertions.assertThrows(MalformedScopePolicyException.class,

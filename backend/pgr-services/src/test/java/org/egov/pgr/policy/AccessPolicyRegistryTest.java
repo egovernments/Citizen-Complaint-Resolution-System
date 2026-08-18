@@ -108,13 +108,29 @@ class AccessPolicyRegistryTest {
     }
 
     @Test
-    void failsClosedWhenActionHasNoCondition() {
+    void allowsBackwardCompatiblyWhenActionHasNeitherConditionNorResource() {
+        // A genuinely bare action record (basic registration/visibility only, e.g. what plenty of
+        // real ACCESSCONTROL-ACTIONS-TEST rows look like) — must behave identically to no entry
+        // being visible at all, not fail closed, so tenants relying on this stay working as-is.
         Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
         RequestInfo requestInfo = requestInfo("CITIZEN");
         when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
                 .thenReturn(List.of(action));
 
-        assertNull(registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+        assertEquals("true", registry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
+    }
+
+    @Test
+    void failsClosedWhenActionHasNeitherConditionNorResourceAndStrictModeIsEnabled() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+        RequestInfo requestInfo = requestInfo("CITIZEN");
+        PGRConfiguration strictConfig = new PGRConfiguration();
+        strictConfig.setAbacStrictMode(true);
+        AccessPolicyRegistry strictRegistry = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), strictConfig);
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertNull(strictRegistry.getCondition(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city"));
     }
 
     @Test

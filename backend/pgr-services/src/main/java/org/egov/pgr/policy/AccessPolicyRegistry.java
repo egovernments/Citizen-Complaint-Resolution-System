@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.RoleCodes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -93,15 +94,28 @@ public class AccessPolicyRegistry {
      * role-action mapping, so once a tenant's ABAC policies are fully authored it should opt into
      * {@code pgr.abac.strict-mode=true} and get fail-closed here too, instead of relying on this
      * backward-compatible default forever.
+     *
+     * <p>{@code fetchAccessControlActions} calls egov-accesscontrol's ROLE-SCOPED
+     * {@code /access/v1/actions/mdms/_get} — "no entry visible" here is genuinely ambiguous between
+     * "this action was never configured for this deployment at all" and "this action exists, but
+     * NONE of this caller's roles have an ACCESSCONTROL-ROLEACTIONS mapping to it" (the exact shape
+     * of the DGRO incident this PR's own fix deleted the affected role over, rather than closing
+     * this detection gap). We can't cheaply tell those apart without an extra, role-agnostic MDMS
+     * lookup on every miss (this path is deliberately NOT cached — see the class Javadoc), so this
+     * logs LOUDLY with the caller's role codes, so "not configured yet" and "role mapping missing"
+     * are at least distinguishable by an operator correlating this line against the ROLEACTIONS
+     * master, without adding that extra call to every request.
      */
-    private String allowIfBackwardCompatibilityEnabled(String actionUrl, String tenantId) {
+    private String allowIfBackwardCompatibilityEnabled(String actionUrl, String tenantId, RequestInfo requestInfo) {
+        String roles = roleKey(requestInfo);
         if (config.isAbacStrictMode()) {
-            log.error("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — pgr.abac.strict-mode is enabled, failing closed",
-                    actionUrl, tenantId);
+            log.error("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' roles='{}' — pgr.abac.strict-mode is enabled, failing closed",
+                    actionUrl, tenantId, roles);
             return null;
         }
-        log.info("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' — policy not defined, allowing (backward compatible; set pgr.abac.strict-mode=true to fail closed instead)",
-                actionUrl, tenantId);
+        log.warn("AccessPolicyRegistry: no ACCESSCONTROL-ACTIONS-TEST entry visible for url='{}' tenant='{}' roles='{}' — allowing (backward compatible; set pgr.abac.strict-mode=true to fail closed instead). "
+                        + "This is indistinguishable from a role missing its ACCESSCONTROL-ROLEACTIONS mapping for this action (the DGRO incident pattern) — if these roles SHOULD have this action, check ROLEACTIONS before assuming it's simply unconfigured.",
+                actionUrl, tenantId, roles);
         return ALWAYS_ALLOW_CONDITION;
     }
 
@@ -125,8 +139,12 @@ public class AccessPolicyRegistry {
      *       all; returns null, fail-closed (never falls through to the legacy {@code condition}
      *       field or {@link #ALWAYS_ALLOW_CONDITION} — those are for a CONFIRMED absence of scope
      *       config, not a broken one).</li>
-     *   <li>no {@code scope} block, and the entry has no {@code condition} field either — an
-     *       authoring mistake, not an absent policy; returns null, fail-closed.</li>
+     *   <li>the entry has neither a {@code resource.complaint.scope} block NOR a {@code condition}
+     *       field — this is the SAME "not configured for this resource" case as no entry being
+     *       visible at all (plenty of real ACCESSCONTROL-ACTIONS-TEST rows exist purely for
+     *       basic action registration/visibility, with neither field ever populated), so it takes
+     *       the SAME {@link #allowIfBackwardCompatibilityEnabled} path — backward compatible by
+     *       default, fails closed only once {@code pgr.abac.strict-mode} is opted into.</li>
      *   <li>no {@code scope} block, but a hand-authored {@code condition} exists — returns it
      *       verbatim (legacy path, unchanged).</li>
      * </ul>
@@ -141,7 +159,7 @@ public class AccessPolicyRegistry {
             return null;
         }
         if (action == null) {
-            return allowIfBackwardCompatibilityEnabled(actionUrl, tenantId);
+            return allowIfBackwardCompatibilityEnabled(actionUrl, tenantId, requestInfo);
         }
 
         Optional<ScopePolicy> scopePolicy;
@@ -163,9 +181,10 @@ public class AccessPolicyRegistry {
 
         Object condition = action.get("condition");
         if (condition == null) {
-            log.error("AccessPolicyRegistry: ACCESSCONTROL-ACTIONS-TEST entry for url='{}' tenant='{}' has no 'condition' — failing closed",
-                    actionUrl, tenantId);
-            return null;
+            // Neither resource.complaint.scope NOR condition was ever authored on this entry — a
+            // genuinely bare action record (basic registration/visibility only), not a broken
+            // configuration. Same backward-compatible treatment as no entry being visible at all.
+            return allowIfBackwardCompatibilityEnabled(actionUrl, tenantId, requestInfo);
         }
 
         try {
@@ -358,17 +377,14 @@ public class AccessPolicyRegistry {
      * Stable, order-independent key for the caller's role set — {@code /access/v1/actions/mdms/_get}
      * is role-scoped (a role with no ACCESSCONTROL-ROLEACTIONS mapping to this action simply won't
      * see it), so a resolved entry must never be reused for a caller with a different role set.
+     * Uses the SAME normalization ({@link RoleCodes#normalize}) as the actual outbound request
+     * body ({@code MDMSUtils#fetchAccessControlActions}) — this key must never be computed from a
+     * different role-code representation than what was actually sent, or a cached result for one
+     * caller's role spelling could be served to a different caller whose real roles wouldn't have
+     * matched it.
      */
     private static String roleKey(RequestInfo requestInfo) {
-        if (requestInfo == null || requestInfo.getUserInfo() == null || requestInfo.getUserInfo().getRoles() == null)
-            return "";
-        return requestInfo.getUserInfo().getRoles().stream()
-                .filter(r -> r != null && r.getCode() != null)
-                .map(r -> r.getCode().trim().toUpperCase())
-                .filter(c -> !c.isEmpty())
-                .distinct()
-                .sorted()
-                .collect(java.util.stream.Collectors.joining(","));
+        return RoleCodes.normalize(requestInfo).stream().sorted().collect(java.util.stream.Collectors.joining(","));
     }
 
     /**

@@ -2,6 +2,7 @@ package org.egov.pgr.policy;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Tier-2 PDP for the reference access-control rule: a citizen sees only their own complaints, an
@@ -42,26 +44,40 @@ public class SearchAccessPolicyService {
     private final AccessPolicyRegistry registry;
     private final PolicyEvaluator evaluator;
     private final PolicyInputBuilder inputBuilder;
+    private final PGRConfiguration config;
 
     @Autowired
     public SearchAccessPolicyService(PolicyDrivenScopeResolver policyDrivenScopeResolver, AccessPolicyRegistry registry,
-                                      PolicyEvaluator evaluator, PolicyInputBuilder inputBuilder) {
+                                      PolicyEvaluator evaluator, PolicyInputBuilder inputBuilder, PGRConfiguration config) {
         this.policyDrivenScopeResolver = policyDrivenScopeResolver;
         this.registry = registry;
         this.evaluator = evaluator;
         this.inputBuilder = inputBuilder;
+        this.config = config;
     }
 
     /**
-     * Fetches the MDMS-authored {@code resource.complaint.scope} for this action (falling back to
-     * {@link #DEFAULT_SCOPE_POLICY} when not configured — the same "policy not defined, backward
-     * compatible" principle {@link AccessPolicyRegistry#getCondition} already applies), then
-     * resolves the caller's scope against it via {@link PolicyDrivenScopeResolver}.
+     * Fetches the MDMS-authored {@code resource.complaint.scope} for this action, then resolves the
+     * caller's scope against it via {@link PolicyDrivenScopeResolver}. When no scope is configured:
+     * {@code count()} never calls {@link #enforce} (Tier-2) the way {@code search()} does — a SQL
+     * {@code COUNT} can't cheaply apply a per-row JsonLogic condition — so without this, a tenant
+     * still on a hand-authored (pre-scope-block) {@code condition} could get a {@code count()} that
+     * disagrees with what {@code search()} actually returns for the same criteria. Once
+     * {@link PGRConfiguration#isAbacStrictMode()} is enabled, Tier-1 (this) and Tier-2
+     * ({@code AccessPolicyRegistry#getCondition}) deny IDENTICALLY instead — the same explicit
+     * rollout gate, applied uniformly to both tiers so {@code count()} and {@code search()} can
+     * never disagree once a deployment has opted in. With the gate off (today's default), this
+     * still falls back to {@link #DEFAULT_SCOPE_POLICY}, same as before.
      */
     public PgrSearchScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
-        ScopePolicy scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint")
-                .orElse(DEFAULT_SCOPE_POLICY);
-        return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy);
+        Optional<ScopePolicy> scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
+        if (scopePolicy.isEmpty() && config.isAbacStrictMode()) {
+            log.error("SearchAccessPolicyService: no resource.complaint.scope configured for url='{}' tenant='{}' — pgr.abac.strict-mode is enabled, failing closed (Tier-1, matching AccessPolicyRegistry#getCondition's Tier-2 fail-closed)",
+                    AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, tenantId);
+            boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
+            return PgrSearchScope.deniedAll(tenantId, stateLevel);
+        }
+        return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy.orElse(DEFAULT_SCOPE_POLICY));
     }
 
     /**

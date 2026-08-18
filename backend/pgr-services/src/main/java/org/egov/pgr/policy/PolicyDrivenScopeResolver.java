@@ -8,16 +8,17 @@ import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.RoleCodes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Config-driven ({@link ScopePolicy}) counterpart of {@link PrincipalScopeResolver}, for PGR
@@ -160,11 +161,7 @@ public class PolicyDrivenScopeResolver {
     }
 
     private static Set<String> extractRoleCodes(User u) {
-        return u.getRoles() == null ? Set.of() : u.getRoles().stream()
-                .filter(r -> r != null && r.getCode() != null)
-                .map(r -> r.getCode().trim().toUpperCase())
-                .filter(c -> !c.isEmpty())
-                .collect(Collectors.toSet());
+        return RoleCodes.normalize(u);
     }
 
     /**
@@ -234,8 +231,13 @@ public class PolicyDrivenScopeResolver {
         JsonNode jurisdictionNodes = emp.get("jurisdictions");
         if (jurisdictionNodes != null && jurisdictionNodes.isArray()) {
             for (JsonNode j : jurisdictionNodes) {
+                // Mirrors extractDepartments' isCurrentAssignment check — HRMS jurisdiction
+                // records carry the same isActive semantic (eg_hrms_jurisdiction.isActive), so a
+                // stale/superseded jurisdiction (e.g. after a transfer) must not stay unioned into
+                // the caller's scope forever.
+                boolean active = j.path("isActive").asBoolean(true);
                 String boundary = j.path("boundary").asText(null);
-                if (boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
+                if (active && boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
             }
         }
         return jurisdictions;
@@ -246,8 +248,15 @@ public class PolicyDrivenScopeResolver {
      * JSON array node (or null). Uses the internal gateway host from egov.hrms.host.
      */
     private JsonNode searchHrmsByCode(RequestInfo requestInfo, String tenantId, String userName) {
-        String url = config.getHrmsHost() + config.getHrmsEndPoint()
-                + "?tenantId=" + tenantId + "&codes=" + userName;
+        // Built via UriComponentsBuilder (query params encoded), not raw string concatenation: an
+        // HRMS-linked username containing '&', '=', '%', or '#' (plausible for email-based/SSO
+        // usernames) would otherwise corrupt the query string and resolve the wrong employee — the
+        // exact record this resolver's department/jurisdiction scope values come from.
+        String url = UriComponentsBuilder.fromHttpUrl(config.getHrmsHost() + config.getHrmsEndPoint())
+                .queryParam("tenantId", tenantId)
+                .queryParam("codes", userName)
+                .encode()
+                .toUriString();
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("RequestInfo", requestInfo);
         Object resp = restTemplate.postForObject(url, req, Map.class);
