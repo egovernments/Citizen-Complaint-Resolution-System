@@ -231,13 +231,13 @@ On your **control machine** (laptop/CI server):
 
 | Tool | Install |
 |------|---------|
-| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pip3 install --user ansible`, then `ansible-galaxy install -r ansible/requirements.yml` |
+| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pipx install --include-deps ansible` (or `sudo apt install ansible`). On Ubuntu 23.04+ / Debian 12+, `pip3 install --user ansible` fails with a PEP 668 "externally-managed-environment" error — use pipx/apt or a venv instead. Then, from `local-setup/`: `ansible-galaxy install -r ansible/requirements.yml` |
 | Node.js 20 | Required on the controller — the digit-ui and configurator builds run here |
-| SSH access to the target | Key-based `root` login (no password) |
+| SSH access to the target | Key-based `root` login (no password). **Remote targets only** — when the target is the control machine itself, set `ansible_host: localhost` + `ansible_connection: local` in host_vars (as `_example.yml` and the `localhost-*.yml.example` templates do) and no SSH setup is needed. |
 
 The **target machine** needs:
 - Ubuntu (fresh install), 8 vCPU / 16 GB RAM / 50 GB disk
-- Reachable over SSH as `root`
+- Reachable over SSH as `root` (not needed for localhost deploys — see above)
 
 ### Step 1: Create the tenant's host_vars
 
@@ -269,8 +269,10 @@ build_configurator: true
 ### Step 2: Deploy
 
 ```bash
-./deploy.sh <tenant>                 # full deploy
-./deploy.sh <tenant> --check --diff  # dry-run: no changes, show every diff
+./deploy.sh <tenant>                              # full deploy
+./deploy.sh <tenant> --check --diff --tags compose-config  # dry-run: no changes, show config diffs
+# (a bare `--check --diff` over the full playbook fails at the health-gate
+#  tasks — shell commands can't run in check mode)
 ```
 
 `deploy.sh` is tenant-agnostic — it forwards any extra flags to

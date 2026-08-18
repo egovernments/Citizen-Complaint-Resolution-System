@@ -12,6 +12,48 @@
   # fact-gathering, so `ansible_system` is undefined here.
   become: "{{ deploy_become | default(true) }}"
 
+  # Derived compose vars live at PLAY level (lazily evaluated), not set_fact:
+  # a set_fact is skipped by --start-at-task, which used to make every resume
+  # past it die with "'compose_profiles' is undefined". Play vars are
+  # available to any task regardless of where the run starts. Inputs are all
+  # inventory vars (host_vars/group_vars), so evaluation order doesn't matter.
+  vars:
+    # Observability levels are CUMULATIVE (#1657): each includes the ones
+    # above it. otel-collector lives in `obs-metrics`, not `obs-traces`: JVM
+    # metrics reach Prometheus via otel-collector:8889, so dropping it costs
+    # metrics too. Validated by the "Validate observability_level" task.
+    _obs_profiles: >-
+      {{
+        ([]
+          + (['obs-metrics'] if (observability_level | default('traces')) in ['metrics', 'logs', 'traces'] else [])
+          + (['obs-logs']    if (observability_level | default('traces')) in ['logs', 'traces']            else [])
+          + (['obs-traces']  if (observability_level | default('traces')) == 'traces'                      else [])
+        )
+      }}
+    compose_profiles: >-
+      {{
+        ([]
+          + (['search']        if enable_search_stack  | default(false) else [])
+          + (['mcp']           if enable_mcp           | default(false) else [])
+          + (['notifications'] if enable_novu          | default(false) else [])
+          + (['keycloak']      if enable_keycloak      | default(false) else [])
+          + (['otp']           if enable_otp_services  | default(false) else [])
+          + _obs_profiles
+        ) | join(',')
+      }}
+    # The per-tenant overlay lives on the CONTROLLER (local-setup/
+    # docker-compose.<tenant>.yml); `is exists` evaluates there, mirroring
+    # the delegated stat that gates the overlay copy task.
+    compose_files: >-
+      {{
+        '-f docker-compose.egov-digit.yaml' +
+        (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+        ' -f docker-compose.migrations.yml' +
+        ' -f docker-compose.monitoring.yml' +
+        (' -f docker-compose.' ~ inventory_hostname ~ '.yml'
+         if (playbook_dir ~ '/../docker-compose.' ~ inventory_hostname ~ '.yml') is exists else '')
+      }}
+
   # Apple-Silicon Macs must pull amd64 images under Rosetta — Mac host_vars
   # sets `docker_default_platform: linux/amd64`. Undefined on Linux ->
   # empty string, which Docker treats as "use host platform" (linux/amd64
@@ -1472,32 +1514,8 @@
           the deploy rather than shrinking it.
       when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
 
-    - name: "Compute compose profiles for this tenant"
-      vars:
-        _obs: "{{ observability_level | default('traces') }}"
-        # collector lives in `metrics`, not `traces`: JVM metrics reach
-        # Prometheus via otel-collector:8889, so dropping it costs metrics too.
-        _obs_profiles: >-
-          {{
-            ([]
-              + (['obs-metrics'] if _obs in ['metrics', 'logs', 'traces'] else [])
-              + (['obs-logs']    if _obs in ['logs', 'traces']            else [])
-              + (['obs-traces']  if _obs == 'traces'                      else [])
-            )
-          }}
-      ansible.builtin.set_fact:
-        compose_profiles: >-
-          {{
-            ([]
-              + (['search']        if enable_search_stack  | default(false) else [])
-              + (['mcp']           if enable_mcp           | default(false) else [])
-              + (['notifications'] if enable_novu          | default(false) else [])
-              + (['keycloak']      if enable_keycloak      | default(false) else [])
-              + (['otp']           if enable_otp_services  | default(false) else [])
-              + _obs_profiles
-            ) | join(',')
-          }}
-
+    # compose_profiles itself is defined at play level (see vars: at the top
+    # of the play) so --start-at-task resumes still see it.
     - name: "Show active compose profiles"
       ansible.builtin.debug:
         msg: "Active compose profiles for {{ inventory_hostname }}: {{ compose_profiles or '(none — lean stack)' }}"
@@ -1508,17 +1526,8 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
-      ansible.builtin.set_fact:
-        compose_files: >-
-          {{
-            '-f docker-compose.egov-digit.yaml' +
-            (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
-            ' -f docker-compose.migrations.yml' +
-            ' -f docker-compose.monitoring.yml' +
-            (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
-          }}
-
+    # compose_files is defined at play level (see vars: at the top of the
+    # play) so --start-at-task resumes still see it.
     - name: "Show compose file stack"
       ansible.builtin.debug:
         msg: "compose files for {{ inventory_hostname }}: {{ compose_files }}"
@@ -1909,6 +1918,10 @@
 
     # ==================== Health Check ====================
     - name: Wait for Kong gateway to be healthy (up to 10 min)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' kong-gateway
       register: kong_health
       retries: 60
@@ -1987,6 +2000,10 @@
 
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
       register: persister_health
       retries: 30
@@ -1995,6 +2012,10 @@
       changed_when: false
 
     - name: Wait for egov-hrms to be healthy (JVM startup ~3 min)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
       register: hrms_health
       retries: 30
@@ -2206,6 +2227,10 @@
     # below), so the /digit-ui/ probe lives in the validation block at
     # the end of the play, AFTER nginx has been reloaded.
     - name: "digit-ui mode=hmr — verify /digit-ui/ serves 200 via esbuild"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_early_check
       retries: 30
@@ -2312,6 +2337,10 @@
     # service it was never asked to run. Consistent with the enable_mcp
     # gating on the mcp-bootstrap tasks below.
     - name: Wait for digit-mcp health (up to 2 min)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: curl -sf http://127.0.0.1:13101/healthz -o /dev/null
       register: mcp_health
       retries: 12
@@ -2334,12 +2363,19 @@
         mode: '0700'
 
     - name: "OpenBao — wait for container to bind 18200"
+      # Read-only probe — must really run during --check so the init-status
+      # check below has a live endpoint to hit.
+      check_mode: false
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 18200
         timeout: 60
 
     - name: "OpenBao — check init status"
+      # Read-only GET — must really run during --check: the init/unseal block
+      # conditionals below dereference bao_init_status.json, which doesn't
+      # exist if this task is skipped by check mode.
+      check_mode: false
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/init
         status_code: [200]
@@ -2379,6 +2415,9 @@
       no_log: true
 
     - name: "OpenBao — read seal status"
+      # Read-only GET — must really run during --check: the unseal task's
+      # conditional dereferences bao_seal_status.json.
+      check_mode: false
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/seal-status
         status_code: [200]
@@ -2436,6 +2475,9 @@
     # etc. now read from OpenBao instead of compose-inline defaults.
     # ============================================================
     - name: "OpenBao — read tenant secrets for compose env"
+      # Read-only GET — must really run during --check: grafana_admin_pw and
+      # the .env writes below dereference bao_secrets.json.
+      check_mode: false
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         headers:
@@ -2709,6 +2751,10 @@
     # validation 503s (sealed/standby). Darwin only: on Linux the
     # post-OpenBao recreate is a plain up -d that doesn't recreate openbao.
     - name: "OpenBao — wait for API again after converge#2 (Darwin)"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/seal-status
         status_code: [200]
@@ -3336,6 +3382,10 @@
     # broken. Always hits 127.0.0.1:18000 regardless of tls_enabled since
     # we're probing from the server itself.
     - name: "validate — core services healthy through Kong"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ upstream_kong_port }}{{ item.path }}"
         status_code: [200]
@@ -3362,6 +3412,10 @@
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
     # The hostname itself doesn't have to be DNS-resolvable.
     - name: "validate — public UI returns 200"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/digit-ui/"
         status_code: [200]
@@ -3400,6 +3454,10 @@
       when: nginx_features.mcp | default(false)
 
     - name: "validate — auth flow: ADMIN can mint a token"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
@@ -3719,6 +3777,10 @@
       when: state_root != 'pg'
 
     - name: "post-bootstrap — wait for egov-user healthy before restarting egov-hrms"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.shell: >-
         curl -sf http://127.0.0.1:{{ upstream_kong_port }}/user/health -o /dev/null
       register: user_ready
@@ -3823,6 +3885,10 @@
     # state_root) sails through and the deploy reports success — that is
     # exactly how the ethiopia HRMS outage went unnoticed on 2026-06-11.
     - name: "post-bootstrap — wait for egov-hrms healthy after restart"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
       register: hrms_health_post
       retries: 30
@@ -3845,6 +3911,10 @@
     # send intentionally-bad creds so this readiness check doesn't
     # couple to ADMIN existence on the tenant.
     - name: "post-bootstrap — wait for egov-user via Kong to be ready after restart"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
@@ -3898,7 +3968,7 @@
       register: mcp_rekey_root
       failed_when: >-
         mcp_rekey_root.status != 200 or
-        not (mcp_rekey_root.json.admin_user_provisioned | default(false))
+        not (mcp_rekey_root.json.summary.admin_user_provisioned | default(false))
       when: state_root != 'pg'
       no_log: true
 
@@ -3920,9 +3990,109 @@
       register: mcp_rekey_city
       failed_when: >-
         mcp_rekey_city.status != 200 or
-        not (mcp_rekey_city.json.admin_user_provisioned | default(false))
+        not (mcp_rekey_city.json.summary.admin_user_provisioned | default(false))
       when: state_root != 'pg' and tenant_id != state_root
       no_log: true
+
+    # ────────────────────────────────────────────────────────────────
+    # pg.citest CI fixtures. Four dump defects break the complaints-demo
+    # lifecycle on any state_root != pg deploy; repair them all here so the
+    # bundled collection genuinely works out of the box:
+    #   1. CI-ADMIN was stored under pg's enc key — once STATE_LEVEL flips,
+    #      login fails with "Invalid login credentials" (same mechanism as
+    #      the ADMIN re-key above). Re-create via _createnovalidate: the
+    #      duplicate check can't see the old ciphertext row on first run,
+    #      and returns DuplicateUserName (treated as ok) on re-deploys.
+    #   2. The dump's HRMS employee/assignment/jurisdiction rows point at the
+    #      OLD user uuid — workflow ASSIGN then fails with "Department of the
+    #      user ... not found". Repoint them at the live uuid.
+    #   3. The dump's assignment department is DEPT_5, but every creatable
+    #      complaint type (ServiceDefs ∩ ComplaintHierarchy) belongs to
+    #      DEPT_3 or DEPT_1 — ASSIGN fails INVALID_ASSIGNMENT for all of
+    #      them. Set DEPT_3 and clone a DEPT_1 assignment so any random pick
+    #      can be assigned.
+    #   4. The dump ships no boundary rows for pg.citest at all, so PGR
+    #      Create fails INVALID_BOUNDARY_CODE — seed the JLC477 locality the
+    #      collection files complaints against.
+    - name: "post-bootstrap — re-seed pg.citest CI fixtures (CI-ADMIN + JLC477 boundary)"
+      ansible.builtin.shell: |
+        set -e
+        roles='[
+          {"code":"SUPERUSER","name":"Super User","tenantId":"pg.citest"},
+          {"code":"EMPLOYEE","name":"Employee","tenantId":"pg.citest"},
+          {"code":"CITIZEN","name":"Citizen","tenantId":"pg.citest"},
+          {"code":"CSR","name":"Customer Service Rep","tenantId":"pg.citest"},
+          {"code":"GRO","name":"Grievance Routing Officer","tenantId":"pg.citest"},
+          {"code":"DGRO","name":"Department GRO","tenantId":"pg.citest"},
+          {"code":"PGR_VIEWER","name":"PGR Viewer","tenantId":"pg.citest"},
+          {"code":"PGR_LME","name":"PGR Last-Mile Employee","tenantId":"pg.citest"},
+          {"code":"SUPERVISOR","name":"Supervisor","tenantId":"pg.citest"},
+          {"code":"AUTO_ESCALATE","name":"Auto Escalate","tenantId":"pg.citest"}
+        ]'
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"CI-ADMIN","name":"CI Admin","mobileNumber":"9999999911","emailId":"ci-admin@digit.org","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"pg.citest","password":"eGov@123","roles":'"$roles"'}}'
+        resp=$(curl -s -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+        if printf '%s' "$resp" | grep -q '"userName"'; then
+          echo "CHANGED CI-ADMIN re-seeded under live enc key"
+        elif printf '%s' "$resp" | grep -q DuplicateUserName; then
+          echo "CI-ADMIN already valid under live enc key"
+        else
+          echo "CI-ADMIN re-seed failed: $(printf '%s' "$resp" | head -c 200)" >&2
+          exit 1
+        fi
+        auth=$(curl -s -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/oauth/token" \
+          -H 'Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=' \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          -d 'grant_type=password&username=CI-ADMIN&password=eGov%40123&tenantId=pg.citest&userType=EMPLOYEE&scope=read')
+        token=$(printf '%s' "$auth" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+        [ -n "$token" ] || { echo "CI-ADMIN login still failing after re-seed" >&2; exit 1; }
+        new_uuid=$(printf '%s' "$auth" | sed -n 's/.*"uuid":"\([^"]*\)".*/\1/p')
+        [ -n "$new_uuid" ] || { echo "could not parse CI-ADMIN uuid from token response" >&2; exit 1; }
+        old_uuid=$(docker exec docker-postgres psql -U egov -d egov -tA \
+          -c "select uuid from eg_hrms_employee where code='CI-ADMIN' and tenantid='pg.citest' limit 1")
+        if [ -z "$old_uuid" ]; then
+          echo "no CI-ADMIN HRMS employee row in dump — skipping HRMS repoint" >&2
+        elif [ "$old_uuid" != "$new_uuid" ]; then
+          docker exec docker-postgres psql -U egov -d egov \
+            -c "alter table eg_hrms_assignment alter constraint fk_eghrms_assignment_employeeid deferrable" \
+            -c "alter table eg_hrms_jurisdiction alter constraint fk_eghrms_jurisdiction_employeeid deferrable"
+          docker exec docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -c "
+            begin; set constraints all deferred;
+            update eg_hrms_employee set uuid='$new_uuid' where uuid='$old_uuid' and code='CI-ADMIN';
+            update eg_hrms_assignment set employeeid='$new_uuid' where employeeid='$old_uuid';
+            update eg_hrms_jurisdiction set employeeid='$new_uuid' where employeeid='$old_uuid';
+            commit;"
+          echo "CHANGED HRMS fixture rows repointed $old_uuid -> $new_uuid"
+        else
+          echo "HRMS fixture rows already point at live CI-ADMIN uuid"
+        fi
+        # Departments: DEPT_5 in the dump matches no creatable complaint type.
+        docker exec docker-postgres psql -U egov -d egov -v ON_ERROR_STOP=1 -c "
+          update eg_hrms_assignment set department='DEPT_3'
+            where employeeid='$new_uuid' and department='DEPT_5';
+          insert into eg_hrms_assignment
+            (uuid, employeeid, position, department, designation, fromdate,
+             tenantid, createdby, createddate, iscurrentassignment)
+          select 'ci-admin-dept1-fixture', employeeid, position, 'DEPT_1',
+                 designation, fromdate, tenantid, createdby, createddate, true
+            from eg_hrms_assignment
+            where employeeid='$new_uuid' and department='DEPT_3'
+              and not exists (select 1 from eg_hrms_assignment
+                              where uuid='ci-admin-dept1-fixture')
+            limit 1;"
+        bresp=$(curl -s -X POST "http://127.0.0.1:{{ upstream_kong_port }}/boundary-service/boundary/_create" \
+          -H 'Content-Type: application/json' \
+          -d '{"RequestInfo":{"apiId":"digit","authToken":"'"$token"'"},"Boundary":[{"tenantId":"pg.citest","code":"JLC477","geometry":null}]}')
+        if printf '%s' "$bresp" | grep -q '"code":"JLC477"'; then
+          echo "CHANGED JLC477 boundary seeded on pg.citest"
+        elif printf '%s' "$bresp" | grep -q DUPLICATE_CODE; then
+          echo "JLC477 boundary already present on pg.citest"
+        else
+          echo "JLC477 boundary seed failed: $(printf '%s' "$bresp" | head -c 200)" >&2
+          exit 1
+        fi
+      register: citest_fixture_seed
+      changed_when: "'CHANGED' in (citest_fixture_seed.stdout | default(''))"
+      when: state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────
     # Configurator UI localization seed. The configurator's own chrome —
@@ -3936,6 +4106,10 @@
     # by (tenant, locale, module, code).
     # ────────────────────────────────────────────────────────────────
     - name: "configurator-i18n — mint ADMIN token at state_root for localization upsert"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
@@ -4021,6 +4195,10 @@
         - enable_novu | default(false)
 
     - name: "novu-bootstrap — wait for novu-api health"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: http://127.0.0.1:14002/v1/health-check
         status_code: [200]
@@ -4278,6 +4456,10 @@
     # /token-exchange/); without that the services are only reachable
     # inside the egov-network.
     - name: "validate — keycloak per-tenant realm reachable via /auth/"
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/auth/realms/{{ state_tenant_id }}/.well-known/openid-configuration"
         status_code: [200]
@@ -4380,6 +4562,9 @@
       failed_when: false
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
+      # Read-only probe — must really run during --check: the assert below
+      # dereferences mdms_probe.json.
+      check_mode: false
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/egov-mdms-service/v1/_search"
         method: POST
@@ -4392,7 +4577,9 @@
         body:
           RequestInfo:
             apiId: "Rainmaker"
-            authToken: "{{ auth_probe.json.access_token }}"
+            # default('') so a --start-at-task resume that skipped the auth
+            # probe still works — MDMS search does not require a token.
+            authToken: "{{ auth_probe.json.access_token | default('', true) if auth_probe is defined else '' }}"
           MdmsCriteria:
             tenantId: "{{ bootstrap_tenant | default('pg') }}"
             moduleDetails:
@@ -4437,8 +4624,10 @@
     # way (consistent with the other enable_mcp-gated MCP tasks).
     - name: Show MCP health status
       debug:
-        msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
-      when: enable_mcp | default(false)
+        msg: "DIGIT-MCP: {{ 'HEALTHY' if (mcp_health.rc | default(1)) == 0 else 'UNHEALTHY or not probed (non-critical)' }}"
+      # mcp_health.rc defaulted so a --start-at-task resume that skipped the
+      # MCP wait doesn't blow up on an undefined register.
+      when: enable_mcp | default(false) and mcp_health is defined
 
     # ==================== Observability stack health (#1613) ====================
     # These stay NON-FATAL on purpose: the observability stack is not a serving
@@ -4462,6 +4651,10 @@
     # slow -- and it is non-fatal either way, so the cost of being wrong is one
     # inaccurate line, against 7.5 min on the tail of every deploy.
     - name: Wait for observability stack health (up to 30s each)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: "curl -sf {{ item.url }} -o /dev/null"
       register: observability_health
       retries: 6
@@ -4503,6 +4696,10 @@
     # without this reset they would keep unknown/legacy credentials and nobody
     # could log in to the UI we just closed off.
     - name: Wait for Grafana health (up to 2 min)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: curl -sf http://127.0.0.1:13000/api/health -o /dev/null
       register: grafana_health
       retries: 12
@@ -4541,7 +4738,10 @@
         grafana_pw_reset.rc != 0
         or 'Admin password changed successfully' not in grafana_pw_reset.stdout
       no_log: true
-      when: grafana_health.rc == 0
+      # grafana_admin_pw comes from the OpenBao read earlier in the play; a
+      # --start-at-task resume that skipped it just skips this alignment (it
+      # re-applies on the next full deploy).
+      when: grafana_health.rc == 0 and grafana_admin_pw is defined
 
     # Grafana never came up. Non-fatal, matching the Loki gate above — the
     # dashboards are not a serving dependency — but say so loudly, because the
@@ -5029,6 +5229,10 @@
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Wait for DIGIT UI to serve pages (up to 10 min)
+      # Read-only probe — must really run during --check (a skipped shell in
+      # check mode returns no stdout, so the until-loop would burn every retry
+      # and fail the dry-run).
+      check_mode: false
       shell: curl -sf http://127.0.0.1:18080/digit-ui/ -o /dev/null
       register: ui_health
       retries: 60
