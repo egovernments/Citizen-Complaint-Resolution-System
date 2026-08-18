@@ -6,8 +6,6 @@ import { redactDeep } from './utils/redact.js';
 class McpLogger {
   public readonly logPath: string;
   private stream: WriteStream;
-  private ip = '';
-  private ua = '';
 
   constructor() {
     this.logPath = process.env.MCP_LOG_FILE || '/var/log/digit-mcp/access.log';
@@ -16,21 +14,17 @@ class McpLogger {
   }
 
   /**
-   * Fallback client context, used when there is no per-request scope (stdio).
-   * On the HTTP transport the context comes from AsyncLocalStorage instead —
-   * see `peer()` — because concurrent requests would otherwise overwrite these
-   * fields and cross-attribute each other's tool calls.
+   * Client context for the call being logged.
+   *
+   * Read from the request scope rather than from instance fields: on the HTTP
+   * transport two concurrent requests would overwrite shared fields and
+   * cross-attribute each other's tool calls. Empty under stdio, where the
+   * session record already identifies the single owner.
    */
-  setRequestContext(ip: string, userAgent: string): void {
-    this.ip = ip;
-    this.ua = userAgent;
-  }
-
-  /** Client context for the call being logged, request-scoped where available. */
   private peer(): { ip?: string; ua?: string; user?: string } {
     const ctx = getRequestContext();
-    if (ctx) return { ip: ctx.ip || undefined, ua: ctx.userAgent || undefined, user: ctx.userName };
-    return { ip: this.ip || undefined, ua: this.ua || undefined };
+    if (!ctx) return {};
+    return { ip: ctx.ip || undefined, ua: ctx.userAgent || undefined, user: ctx.userName };
   }
 
   /** Write a structured JSON log line */
