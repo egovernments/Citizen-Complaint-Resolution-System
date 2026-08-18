@@ -34,7 +34,8 @@ class McpLogger {
   }
 
   /** Log a tool call (called from server.ts CallTool handler) */
-  toolCall(toolName: string, args: Record<string, unknown>): void {
+  /** `redacted` lets a caller that already redacted these args avoid a second walk. */
+  toolCall(toolName: string, args: Record<string, unknown>, redacted?: Record<string, unknown>): void {
     const peer = this.peer();
     this.log({
       event: 'tool_call',
@@ -42,7 +43,7 @@ class McpLogger {
       ua: peer.ua,
       user: peer.user,
       tool: toolName,
-      args: this.sanitize(args),
+      args: redacted ?? this.sanitize(args),
     });
   }
 

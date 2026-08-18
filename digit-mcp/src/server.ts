@@ -8,6 +8,7 @@ import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
 import type { ErrorCategory } from './types/index.js';
 import { mcpLogger } from './logger.js';
+import { redactDeep } from './utils/redact.js';
 import { sessionStore } from './services/session-store.js';
 import { AuthRequiredError, checkToolAccess } from './services/auth.js';
 import { digitApi } from './services/digit-api.js';
@@ -127,10 +128,12 @@ export function createServer(options?: CreateServerOptions): Server {
 
     const start = Date.now();
     const sanitizedArgs = (args || {}) as Record<string, unknown>;
-    mcpLogger.toolCall(name, sanitizedArgs);
+    // One redaction pass shared by both sinks.
+    const redactedArgs = redactDeep(sanitizedArgs) as Record<string, unknown>;
+    mcpLogger.toolCall(name, sanitizedArgs, redactedArgs);
 
     // Record tool call in session + telemetry
-    const seq = sessionStore.recordToolCall(name, sanitizedArgs);
+    const seq = sessionStore.recordToolCall(name, sanitizedArgs, redactedArgs);
     telemetry.toolCall(name, tool.group);
 
     try {

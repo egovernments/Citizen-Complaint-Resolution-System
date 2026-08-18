@@ -1,7 +1,9 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { lstatSync, realpathSync } from 'node:fs';
+import { isInside } from '../services/auth.js';
 import { fileURLToPath } from 'node:url';
 import { sanitizeUserContent } from '../utils/sanitize.js';
 
@@ -130,15 +132,48 @@ async function searchLocalDocs(query: string): Promise<Array<{ title: string; li
 }
 
 /**
+ * Resolve a caller-supplied filename inside `baseDir`, following symlinks.
+ *
+ * The blacklist this replaces (`includes('..') || includes('/')`) rejects the
+ * spellings of traversal but not the mechanism: a single path segment with no
+ * slash can still be a symlink pointing out of the directory, and `readFile`
+ * follows it. That matters most for the engram directory, whose contents are
+ * written by the agent from earlier sessions.
+ *
+ * Same shape as `resolveArtifactPath` — compare real paths on both sides, and
+ * refuse a symlink at the destination outright.
+ */
+function resolveDocPath(baseDir: string, filename: string): string | null {
+  if (!filename || filename.includes('/') || filename.includes('\\')) return null;
+  const base = realpathOrSelf(resolve(baseDir));
+  const candidate = resolve(base, filename);
+  if (!isInside(candidate, base)) return null;
+  try {
+    if (lstatSync(candidate).isSymbolicLink()) return null;
+  } catch {
+    return null; // does not exist
+  }
+  return realpathOrSelf(candidate) === candidate && isInside(candidate, base) ? candidate : null;
+}
+
+function realpathOrSelf(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
+/**
  * Read a local doc file by its local:// URL.
  */
 async function getLocalDoc(localUrl: string): Promise<{ title: string; content: string } | null> {
   const filename = localUrl.replace(LOCAL_URL_PREFIX, '');
-  // Prevent path traversal
-  if (filename.includes('..') || filename.includes('/')) return null;
+  const path = resolveDocPath(DOCS_DIR, filename);
+  if (!path) return null;
 
   try {
-    const content = await readFile(join(DOCS_DIR, filename), 'utf-8');
+    const content = await readFile(path, 'utf-8');
     const titleMatch = content.match(/^#\s+(.+)/m);
     return {
       title: titleMatch ? titleMatch[1] : filename.replace('.md', ''),
@@ -210,10 +245,11 @@ async function searchEngramDocs(query: string): Promise<Array<{ title: string; l
  */
 async function getEngramDoc(engramUrl: string): Promise<{ title: string; content: string } | null> {
   const filename = engramUrl.replace(ENGRAM_URL_PREFIX, '');
-  if (filename.includes('..') || filename.includes('/')) return null;
+  const path = resolveDocPath(ENGRAMS_DIR, filename);
+  if (!path) return null;
 
   try {
-    const content = await readFile(join(ENGRAMS_DIR, filename), 'utf-8');
+    const content = await readFile(path, 'utf-8');
     const titleMatch = content.match(/^#\s+(.+)/m);
     return {
       title: titleMatch ? titleMatch[1] : filename.replace('.md', ''),

@@ -2,6 +2,7 @@ import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { rpkDescribeGroup, persisterLogs, psqlCountAll, psqlCountOne } from '../services/shell.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 // ──────────────────────────────────────────
 // Module-level cache for db_counts deltas
@@ -440,14 +441,11 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
       let parity: { status: string; pgrCount?: number; workflowCount?: number; missingInWorkflow?: string[]; detail?: string; error?: string } | null = null;
       if (!skipProbes.has('parity')) {
         try {
-          if (!digitApi.isAuthenticated()) {
-            const username = process.env.CRS_USERNAME;
-            const password = process.env.CRS_PASSWORD;
-            const loginTenant = process.env.CRS_TENANT_ID || tenantId;
-            if (username && password) {
-              await digitApi.login(username, password, loginTenant);
-            }
-          }
+          // Centralized helper, not a local re-implementation: this was a
+          // tenth copy of the "no credentials => act as the container's ADMIN"
+          // fallback, with no auth-mode check. `optional` preserves the probe's
+          // degrade-rather-than-fail contract.
+          await ensureAuthenticated({ optional: true });
 
           if (digitApi.isAuthenticated()) {
             const pgrResults = await digitApi.pgrSearch(tenantId, { limit: 100, offset: 0 });
