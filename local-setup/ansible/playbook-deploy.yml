@@ -183,9 +183,28 @@
     # `node esbuild.build.js`. `container` mode skips this entirely:
     # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
     # writable under become:false, and Mac always runs container mode.
+    # There is no default repo URL any more (#1503). The SPA source is in this
+    # monorepo and CI publishes it as egovio/digit-ui-esbuild, so the ordinary
+    # deploy pulls the bundle image and never clones. Fail fast rather than
+    # cloning a surprise fork when a mode that DOES need source has none.
+    - name: "digit-ui — a source-building mode needs digit_ui_esbuild_repo"
+      ansible.builtin.assert:
+        that:
+          - (digit_ui_esbuild_repo | default('')) | length > 0
+        fail_msg: >-
+          digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
+          target, but digit_ui_esbuild_repo is empty. Either set
+          digit_ui_bundle_image (static mode — the default,
+          egovio/digit-ui-esbuild:nightly-develop) and skip the build entirely,
+          or point digit_ui_esbuild_repo at a source tree to clone.
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
+
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
-        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        repo: "{{ digit_ui_esbuild_repo }}"
         dest: /opt/digit-ui-esbuild
         version: "{{ digit_ui_esbuild_branch | default('main') }}"
         update: yes
@@ -197,6 +216,7 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        - (digit_ui_esbuild_repo | default('')) | length > 0
         # When a prebuilt bundle image is pinned (static mode), the git
         # tree is not the source of what nginx serves — leave it alone so
         # a deploy can't silently regress build/ to an older checkout.

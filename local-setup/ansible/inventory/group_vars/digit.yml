@@ -245,23 +245,28 @@ mcp_repo: "{{ digit_dir }}/digit-mcp"
 mcp_repo_url: "-"
 mcp_ref: main
 
-# Where the digit-ui SPA source lives. Auto-cloned onto the target at
-# /opt/digit-ui-esbuild by the playbook. Override in host_vars to point
-# at a fork.
-digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
+# Optional git source for the digit-ui SPA, cloned onto the target at
+# /opt/digit-ui-esbuild. EMPTY BY DEFAULT (#1503): the SPA source lives in this
+# monorepo at digit-ui-esbuild/ and CI publishes it nightly as the image below,
+# so no deploy needs to clone anything. Set this in host_vars only to build a
+# fork's source on the box — and note it is only consulted by `hmr` mode, or by
+# `static` mode with digit_ui_bundle_image deliberately blanked out.
+digit_ui_esbuild_repo: ""
 digit_ui_esbuild_branch: main
 
-# Prebuilt digit-ui bundle (static mode) — the ROBUST alternative to building
-# the SPA on-host. When set, the playbook pulls this image and extracts its
-# baked /var/web/digit-ui into build/, skipping the on-host node/npm/esbuild
-# build entirely (no Node-version / missing-npm fragility). The image below is
-# public and pulls off-VPC.
+# Prebuilt digit-ui bundle (static mode) — the DEFAULT, and the robust
+# alternative to building the SPA on-host. The playbook pulls this image and
+# extracts its baked /var/web/digit-ui into build/, skipping the on-host
+# node/npm/esbuild build entirely (no Node-version / missing-npm fragility) and
+# skipping the git clone with it.
 #
-# Left commented so existing tenants keep their current on-host build. To make
-# the bundle the default for ALL tenants, uncomment this line; to opt in for a
-# single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
-# does). Set to "" in host_vars to force an on-host build even if this is on.
-# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
+# This is the multi-arch egovio Docker Hub build of THIS repo's
+# digit-ui-esbuild/ tree, rebuilt every night from develop
+# (build/build-config.yml → image-name: digit-ui-esbuild). Pin a
+# develop-<sha> / v2.12-beta tag in host_vars for a reproducible deploy.
+# Set to "" in host_vars to force an on-host build instead, which then needs
+# digit_ui_esbuild_repo pointed at a source tree.
+digit_ui_bundle_image: "egovio/digit-ui-esbuild:nightly-develop"
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and

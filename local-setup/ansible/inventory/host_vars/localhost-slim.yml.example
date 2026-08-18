@@ -19,12 +19,10 @@
 ansible_host: localhost
 ansible_connection: local
 
-# WORKAROUND, remove once the registry cert is renewed: the Let's Encrypt
-# wildcard for *.preview.egov.theflywheel.in expired 2026-07-25 and image
-# pulls fail with "x509: certificate has expired". Fresh box, so no
-# existing entries to preserve (on shared boxes, ALWAYS carry the box's
-# existing entries forward — this list REPLACES, it does not merge).
-insecure_registries: ["registry.preview.egov.theflywheel.in"]
+# No insecure registries: every image now comes from Docker Hub (egovio/*),
+# which serves valid TLS. On a shared box, ALWAYS carry the box's existing
+# entries forward — this list REPLACES, it does not merge.
+insecure_registries: []
 
 domain: localhost
 tls_enabled: false
