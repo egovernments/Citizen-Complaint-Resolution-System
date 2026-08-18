@@ -4800,6 +4800,102 @@
     "locale": "pt_BR"
   },
   {
+    "code": "app.fields.departments",
+    "message": "Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.departments",
+    "message": "विभाग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.departments",
+    "message": "Départements",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.departments",
+    "message": "Departamentos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.departments_primary_help",
+    "message": "First one checked becomes the primary department (used for routing).",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.departments_primary_help",
+    "message": "चेक किया गया पहला विभाग प्राथमिक विभाग बन जाता है (रूटिंग के लिए उपयोग किया जाता है)।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.departments_primary_help",
+    "message": "Le premier élément coché devient le département principal (utilisé pour le routage).",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.departments_primary_help",
+    "message": "O primeiro selecionado se torna o departamento principal (usado para roteamento).",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Complaint Sub-Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "शिकायत उप-प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Sous-type de plainte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.complaint_sub_type",
+    "message": "Subtipo de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.keywords_help",
+    "message": "Comma-separated search keywords.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.keywords_help",
+    "message": "अल्पविराम से अलग किए गए खोज कीवर्ड।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.keywords_help",
+    "message": "Mots-clés de recherche séparés par des virgules.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.keywords_help",
+    "message": "Palavras-chave de pesquisa separadas por vírgula.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
     "code": "ERR_INVALID_MOBILE_NUMBER",
     "message": "Please enter a valid mobile number",
     "module": "configurator-ui",

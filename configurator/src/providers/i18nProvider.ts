@@ -147,6 +147,13 @@ const customEnglishMessages: TranslationMessages = {
       citizen: 'Citizen',
       locality: 'Locality',
       mobile_login_username_help: "Used as the citizen's login username.",
+      parent_code: 'Parent Code',
+      order: 'Order',
+      keywords: 'Keywords',
+      departments: 'Departments',
+      departments_primary_help: 'First one checked becomes the primary department (used for routing).',
+      complaint_sub_type: 'Complaint Sub-Type',
+      keywords_help: 'Comma-separated search keywords.',
     },
     list: {
       refresh: 'Refresh',

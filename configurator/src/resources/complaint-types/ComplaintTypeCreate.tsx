@@ -1,4 +1,4 @@
-import type { RaRecord } from 'ra-core';
+import { useTranslate, type RaRecord } from 'ra-core';
 import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormMultiSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { localizationService } from '@/api/services/localization';
@@ -11,6 +11,7 @@ const defaultRecord = {
 
 export function ComplaintTypeCreate() {
   const { locales } = useAvailableLocales();
+  const translate = useTranslate();
 
   // After the MDMS record is saved, seed `SERVICEDEFS.*` localization keys
   // for every locale the tenant declares. Without this a freshly-added
@@ -70,19 +71,19 @@ export function ComplaintTypeCreate() {
       {/* The grouping key is the parent node's code in the ComplaintHierarchy
           tree (replaces the old free-text menuPath). Optional here — leaves
           created standalone sit ungrouped until parented. */}
-      <DigitFormInput source="parentCode" label="Parent (group code)" />
+      <DigitFormInput source="parentCode" label={translate('app.fields.parent_code')} />
       <DigitFormMultiSelect
         source="departments"
-        label="Departments"
+        label={translate('app.fields.departments')}
         reference="departments"
         validate={v.required}
-        help="First one checked becomes the primary department (used for routing)."
+        help={translate('app.fields.departments_primary_help')}
       />
-      <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-      <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
-      <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
-      <DigitFormInput source="keywords" label="Keywords" help="Comma-separated search keywords." />
-      <DigitFormInput source="order" label="Display order" type="number" />
+      <DigitFormInput source="slaHours" label={translate('app.fields.sla_hours')} type="number" validate={v.slaHours} />
+      <DigitFormInput source="name" label={translate('app.fields.complaint_sub_type')} validate={v.name} />
+      <DigitFormCodeInput source="serviceCode" label={translate('app.fields.service_code')} deriveFrom="name" validate={v.codeRequired} />
+      <DigitFormInput source="keywords" label={translate('app.fields.keywords')} help={translate('app.fields.keywords_help')} />
+      <DigitFormInput source="order" label={translate('app.fields.order')} type="number" />
     </DigitCreate>
   );
 }

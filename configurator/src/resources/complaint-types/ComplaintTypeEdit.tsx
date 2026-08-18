@@ -1,3 +1,4 @@
+import { useTranslate } from 'ra-core';
 import { DigitEdit, DigitFormInput, DigitFormMultiSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { BooleanInput } from '@/admin/widgets';
@@ -12,23 +13,24 @@ function transform(data: Record<string, unknown>) {
 }
 
 export function ComplaintTypeEdit() {
+  const translate = useTranslate();
   return (
     <DigitEdit title="Edit Complaint Type" transform={transform}>
       <FieldSection title="Details">
         <div className="space-y-4">
           {/* Grouping key — parent node code in the ComplaintHierarchy tree
               (replaces the old free-text menuPath). */}
-          <DigitFormInput source="parentCode" label="Parent (group code)" />
+          <DigitFormInput source="parentCode" label={translate('app.fields.parent_code')} />
           <DigitFormMultiSelect
             source="departments"
-            label="Departments"
+            label={translate('app.fields.departments')}
             reference="departments"
             validate={v.required}
-            help="First one checked becomes the primary department (used for routing)."
+            help={translate('app.fields.departments_primary_help')}
           />
-          <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-          <DigitFormInput source="keywords" label="Keywords" help="Comma-separated search keywords." />
-          <DigitFormInput source="order" label="Display order" type="number" />
+          <DigitFormInput source="slaHours" label={translate('app.fields.sla_hours')} type="number" validate={v.slaHours} />
+          <DigitFormInput source="keywords" label={translate('app.fields.keywords')} help={translate('app.fields.keywords_help')} />
+          <DigitFormInput source="order" label={translate('app.fields.order')} type="number" />
           {/* The active flag was previously omitted from this dedicated
               edit form, so operators had no way to enable/disable a
               complaint type — `ComplaintTypeList` rendered a Status
@@ -38,9 +40,9 @@ export function ComplaintTypeEdit() {
               boolean so the MDMS update doesn't reject with
               "expected type: Boolean, found: String" — same fix
               Chakshu shipped for the generic edit path in #46. */}
-          <BooleanInput source="active" label="Active" />
-          <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
-          <DigitFormInput source="serviceCode" label="Service Code" disabled />
+          <BooleanInput source="active" label={translate('app.fields.active')} />
+          <DigitFormInput source="name" label={translate('app.fields.complaint_sub_type')} validate={v.name} />
+          <DigitFormInput source="serviceCode" label={translate('app.fields.service_code')} disabled />
         </div>
       </FieldSection>
     </DigitEdit>
