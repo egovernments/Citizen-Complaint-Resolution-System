@@ -1,10 +1,19 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/chakshugautam/digit-mcp
-  # Empty => Chart.AppVersion, so a release is pinned to a known build rather
-  # than whatever ":latest" happens to be at pull time. Override per deploy.
-  tag: ""
+  # The image this repo builds. `digit-mcp` is declared in build/build-config.yml
+  # and published by .github/workflows/build-images.yml, so the Dockerfile in
+  # this directory is the one that ends up running.
+  #
+  # The chart previously pointed at ghcr.io/chakshugautam/digit-mcp — a personal
+  # registry fed by a different repository. Nothing in this tree reached the
+  # cluster through it, so a fix merged here would never have shipped.
+  repository: egovio/digit-mcp
+  # Tags published by that pipeline are `develop-<sha8>`, `develop-YYYYMMDD`,
+  # `nightly-develop` and release tags. Pin a `develop-<sha8>` per environment;
+  # nightly-develop is the moving default. (Chart.AppVersion is NOT a valid tag
+  # here — the chart version and the image pipeline are independent.)
+  tag: nightly-develop
   pullPolicy: IfNotPresent
 
 service:
@@ -41,8 +50,14 @@ env:
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...
+  #
+  # CRS_USERNAME/CRS_PASSWORD are only used by the ambient-mode fallback, which
+  # MCP_AUTH_MODE=token disables. They remain here for a loopback/stdio deploy.
   CRS_USERNAME: ""
   CRS_PASSWORD: ""
+  # Session-viewer database. Unset => the published local-compose default, which
+  # is not a credential; set it on any real deployment.
+  SESSION_DB_PASSWORD: ""
 
 resources:
   requests:

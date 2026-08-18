@@ -8,9 +8,19 @@ import { handlePgrDashboard } from './api/pgr-dashboard.js';
 import { ToolRegistry } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
+import type { ToolAccess } from './types/index.js';
 import { digitApi, runWithIsolatedClient } from './services/digit-api.js';
-import { getAuthMode, resolveClientIp } from './services/auth.js';
-import type { UserInfo } from './types/index.js';
+import {
+  adminRoleCodes,
+  applyValidatedCaller,
+  authenticateBearer,
+  checkToolAccess,
+  getAuthMode,
+  isAdminCaller,
+  resolveClientIp,
+  type ValidatedCaller,
+} from './services/auth.js';
+import { runWithRequestContext, setContextUser } from './services/request-context.js';
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -124,27 +134,39 @@ if (transportMode === 'stdio') {
   }
 
   /**
-   * Authenticate the caller. Accepted forms:
-   *   1. Authorization: Bearer <token>            — token already minted upstream
+   * Authenticate a caller on the REST shim. Accepted forms:
+   *   1. Authorization: Bearer <token>                  — introspected against egov-user
    *   2. body.auth = { username, password, tenant_id }  — OAuth login first
-   * Returns null when no auth was supplied (caller should 401), or an
-   * error message string when the supplied creds were rejected.
+   *
+   * Returns null when no auth was supplied (caller should 401), or an error
+   * when the supplied credentials were rejected. On success the validated
+   * caller is returned so the dispatcher can authorize the tool.
+   *
+   * Two things changed here, and both were the same hole C1 closed on /mcp:
+   *
+   *   - Form 1 used to accept ANY non-empty string as a bearer token and take
+   *     the state tenant from a caller-supplied X-State-Tenant header. It now
+   *     goes through the same introspection as /mcp, so a token that egov-user
+   *     doesn't recognise is a 401 and the tenant comes from the token.
+   *   - A third form fell back to CRS_USERNAME/CRS_PASSWORD whenever the env
+   *     was configured, which made an anonymous REST caller the container's
+   *     stored ADMIN. It is now gated on `ambient` mode, exactly like
+   *     `ensureAuthenticated()` — so it still serves a developer's own stdio
+   *     process and never a network peer.
    */
   async function authenticateRest(
     req: IncomingMessage,
     body: Record<string, unknown>,
-  ): Promise<{ ok: true } | { ok: false; status: number; error: string } | null> {
-    const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+  ): Promise<{ ok: true; caller: ValidatedCaller | null } | { ok: false; status: number; error: string } | null> {
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
     // Form 1: Authorization: Bearer <token>
-    if (authHeader && /^Bearer\s+/i.test(authHeader)) {
-      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-      if (!token) return { ok: false, status: 401, error: 'Empty bearer token' };
-      // We don't have userInfo from the token alone; the caller can pass
-      // the state tenant via X-State-Tenant header so MDMS calls resolve.
-      const stateTenant = (req.headers['x-state-tenant'] as string | undefined) || null;
-      digitApi.applyToken(token, null, stateTenant);
-      return { ok: true };
+    if (authHeader) {
+      const result = await authenticateBearer(authHeader);
+      if (!result.ok) return result;
+      applyValidatedCaller(result.caller);
+      setContextUser(result.caller.user.userName);
+      return { ok: true, caller: result.caller };
     }
 
     // Form 2: body.auth = { username, password, tenant_id }
@@ -152,31 +174,51 @@ if (transportMode === 'stdio') {
     if (auth && auth.username && auth.password && auth.tenant_id) {
       try {
         await digitApi.login(auth.username, auth.password, auth.tenant_id);
-        return { ok: true };
+        const user = digitApi.getAuthInfo().user;
+        setContextUser(user?.userName);
+        return { ok: true, caller: user ? { token: '', user } : null };
       } catch (err) {
         return { ok: false, status: 401, error: err instanceof Error ? err.message : String(err) };
       }
     }
 
-    // Form 3: fall back to CRS_USERNAME / CRS_PASSWORD env vars if present.
-    // This mirrors the JSON-RPC path's ensureAuthenticated() so REST callers
-    // running on the same MCP container don't have to repeat the creds in
-    // every body. Skipped if the env isn't configured — caller still gets 401.
-    const envUser = process.env.CRS_USERNAME;
-    const envPass = process.env.CRS_PASSWORD;
-    if (envUser && envPass) {
-      const envTenant = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-      try {
-        if (!digitApi.isAuthenticated()) {
-          await digitApi.login(envUser, envPass, envTenant);
+    // Form 3: env credentials — ambient mode only. See the note above.
+    if (getAuthMode() === 'ambient') {
+      const envUser = process.env.CRS_USERNAME;
+      const envPass = process.env.CRS_PASSWORD;
+      if (envUser && envPass) {
+        const envTenant = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
+        try {
+          if (!digitApi.isAuthenticated()) {
+            await digitApi.login(envUser, envPass, envTenant);
+          }
+          return { ok: true, caller: null };
+        } catch (err) {
+          return { ok: false, status: 401, error: `env auth failed: ${err instanceof Error ? err.message : String(err)}` };
         }
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, status: 401, error: `env auth failed: ${err instanceof Error ? err.message : String(err)}` };
       }
     }
 
     return null; // caller will translate to 401
+  }
+
+  /**
+   * Authorize a REST tool call. Same tiers, same helper, same denial message as
+   * the MCP path — `checkToolAccess` is transport-agnostic on purpose, so the
+   * two doors cannot drift into disagreeing about who may run what.
+   */
+  function authorizeRest(
+    toolName: string,
+    access: ToolAccess | undefined,
+    caller: ValidatedCaller | null,
+  ): { status: number; body: unknown } | null {
+    const denial = checkToolAccess(toolName, access, caller?.user ?? null);
+    if (!denial) return null;
+    mcpLogger.log({ event: 'tool_denied', transport: 'rest', tool: toolName, reason: denial });
+    return {
+      status: 403,
+      body: { success: false, error: denial, category: 'auth', code: 403, requiredAccess: access ?? 'employee' },
+    };
   }
 
   /**
@@ -190,49 +232,17 @@ if (transportMode === 'stdio') {
    *
    * `ambient` mode: no check (stdio, or an operator who explicitly opted in).
    */
-  const TOKEN_CACHE_TTL_MS = 30_000;
-  const TOKEN_CACHE_MAX = 500;
-  const tokenCache = new Map<string, { user: UserInfo; at: number }>();
-
   async function authenticateMcp(
     req: IncomingMessage,
   ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
     if (getAuthMode() !== 'token') return { ok: true };
 
-    const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
-    if (!authHeader || !/^Bearer\s+/i.test(authHeader)) {
-      return {
-        ok: false,
-        status: 401,
-        error: 'Authentication required: send Authorization: Bearer <DIGIT access token>.',
-      };
-    }
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token) return { ok: false, status: 401, error: 'Empty bearer token.' };
+    const result = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+    if (!result.ok) return result;
 
-    const now = Date.now();
-    const cached = tokenCache.get(token);
-    if (cached && now - cached.at < TOKEN_CACHE_TTL_MS) {
-      applyValidatedUser(token, cached.user);
-      return { ok: true };
-    }
-
-    const user = await digitApi.validateToken(token);
-    if (!user) {
-      tokenCache.delete(token);
-      return { ok: false, status: 401, error: 'Invalid or expired access token.' };
-    }
-
-    if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.clear();
-    tokenCache.set(token, { user, at: now });
-    applyValidatedUser(token, user);
+    applyValidatedCaller(result.caller);
+    setContextUser(result.caller.user.userName);
     return { ok: true };
-  }
-
-  function applyValidatedUser(token: string, user: UserInfo): void {
-    const tenantId = user.tenantId || '';
-    const root = tenantId.includes('.') ? tenantId.split('.')[0] : tenantId;
-    digitApi.applyToken(token, user, root || null);
   }
 
   // Map known low-level Spring / DIGIT errors to human-friendly explanations
@@ -299,6 +309,9 @@ if (transportMode === 'stdio') {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
         }
 
+        const denied = authorizeRest(toolName, tool.access, authResult.caller);
+        if (denied) return denied;
+
         // Strip the auth envelope before forwarding the args to the tool,
         // so the tool's input schema validation doesn't trip on it.
         const { auth: _ignored, ...toolArgs } = args;
@@ -364,6 +377,11 @@ if (transportMode === 'stdio') {
             writeEvent('error', { success: false, error: authResult.error });
             return;
           }
+          const denied = authorizeRest(toolName, tool.access, authResult.caller);
+          if (denied) {
+            writeEvent('error', denied.body);
+            return;
+          }
           const { auth: _ignored, ...toolArgs } = args;
           void _ignored;
           const raw = await tool.handler(toolArgs as Record<string, unknown>);
@@ -414,6 +432,9 @@ if (transportMode === 'stdio') {
         if (!authResult.ok) {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
         }
+
+        const denied = authorizeRest(toolName, boundTool.access, authResult.caller);
+        if (denied) return denied;
 
         type ItemResult = { ok: boolean; status: number; body: unknown };
         const results: ItemResult[] = new Array(items.length);
@@ -533,7 +554,23 @@ if (transportMode === 'stdio') {
 
   // --- HTTP server ---
 
-  const httpServer = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  /**
+   * Every request runs inside a request context, so the logger and session
+   * store attribute each tool call to the caller that actually made it rather
+   * than to whichever request most recently overwrote a shared field.
+   */
+  const httpServer = http.createServer((req: IncomingMessage, res: ServerResponse) => {
+    const userAgent = String(req.headers['user-agent'] || '');
+    const forwarded = (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) as string | undefined;
+    const peer = resolveClientIp(req.socket.remoteAddress, forwarded);
+    void runWithRequestContext({ ip: peer.ip, userAgent }, () => handleHttpRequest(req, res, peer));
+  });
+
+  async function handleHttpRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    peer: ReturnType<typeof resolveClientIp>,
+  ): Promise<void> {
     const url = req.url || '';
     const pathname = url.split('?')[0];
 
@@ -684,6 +721,14 @@ if (transportMode === 'stdio') {
               jsonResponse(res, authResult.status, { success: false, error: authResult.error });
               return;
             }
+            // Not a registered tool, so it needs the tier stated explicitly.
+            // The bundle is every MDMS record the tenant owns — admin-tier data
+            // by the same standard that puts mdms_search's writers there.
+            const exportDenied = authorizeRest('tenant_export', 'admin', authResult.caller);
+            if (exportDenied) {
+              jsonResponse(res, exportDenied.status, exportDenied.body);
+              return;
+            }
             const bundle = await exportTenant(targetTenant, body.schemas as string[] | undefined, body.limit as number | undefined);
             jsonResponse(res, 200, bundle);
           } catch (err) {
@@ -703,6 +748,16 @@ if (transportMode === 'stdio') {
     // so the frontend can render forms / build clients dynamically. Each
     // entry includes a `responseShape` hint when known.
     if (req.method === 'GET' && pathname === '/v1/tools') {
+      // Mirrors discover_tools' `public` tier: no role requirement, but in
+      // token mode the caller must still present a valid token, so the admin
+      // tool surface isn't enumerable by an anonymous peer.
+      if (getAuthMode() === 'token') {
+        const listAuth = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+        if (!listAuth.ok) {
+          jsonResponse(res, listAuth.status, { success: false, error: listAuth.error });
+          return;
+        }
+      }
       jsonResponse(res, 200, {
         tools: restRegistry.getAllTools().map((t) => ({
           name: t.name,
@@ -762,6 +817,39 @@ if (transportMode === 'stdio') {
     }
 
     // PGR Dashboard API
+    // ── /api/* gate ────────────────────────────────────────────────────────
+    // The observability routes below are not tool dispatch, so they never went
+    // through checkToolAccess — yet /api/sessions/:id/events serves recorded
+    // tool arguments and result prefixes for every session the server has run,
+    // and /api/pgr/dashboard serves complaint data. They were reachable with no
+    // credentials at all.
+    //
+    // One gate for the whole namespace rather than five call sites, so a route
+    // added later is authenticated by default instead of by remembering to.
+    // Admin tier: this is the same data the admin-tier tools produce.
+    if (pathname.startsWith('/api/') && getAuthMode() === 'token') {
+      const apiAuth = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+      if (!apiAuth.ok) {
+        jsonResponse(res, apiAuth.status, { error: apiAuth.error });
+        return;
+      }
+      if (!isAdminCaller(apiAuth.caller.user)) {
+        mcpLogger.log({
+          event: 'api_denied',
+          path: pathname,
+          user: apiAuth.caller.user.userName,
+          reason: 'not an admin-tier caller',
+        });
+        jsonResponse(res, 403, {
+          error:
+            `The session viewer requires one of these roles: ${adminRoleCodes().join(', ')}. ` +
+            `Caller "${apiAuth.caller.user.userName}" holds none of them.`,
+        });
+        return;
+      }
+      setContextUser(apiAuth.caller.user.userName);
+    }
+
     if (req.method === 'GET' && pathname === '/api/pgr/dashboard') {
       await handlePgrDashboard(res, parseQuery(url));
       return;
@@ -787,23 +875,15 @@ if (transportMode === 'stdio') {
         }
 
         await sessionStore.ensureSession('http');
-        const userAgent = req.headers['user-agent'] || '';
-        // N3: X-Forwarded-For is caller-controlled. Honour it only when the peer
-        // is a configured trusted proxy (MCP_TRUSTED_PROXIES); otherwise record
-        // the socket address. Previously the header always won, so any direct
-        // caller chose the IP that showed up in the audit trail.
-        const forwarded = (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) as string | undefined;
-        const resolvedIp = resolveClientIp(req.socket.remoteAddress, forwarded);
-        if (resolvedIp.claimed) {
+        if (peer.claimed) {
           mcpLogger.log({
             event: 'untrusted_forwarded_for',
-            peer: resolvedIp.ip,
-            claimed: resolvedIp.claimed,
+            peer: peer.ip,
+            claimed: peer.claimed,
             note: 'X-Forwarded-For ignored: peer is not in MCP_TRUSTED_PROXIES',
           });
         }
-        mcpLogger.setRequestContext(resolvedIp.ip, userAgent);
-        sessionStore.setHttpContext(String(userAgent), resolvedIp.ip);
+        sessionStore.setHttpContext(String(req.headers['user-agent'] || ''), peer.ip);
 
         const server = createServer({ enableAllGroups: true });
         const transport = new StreamableHTTPServerTransport({
@@ -989,7 +1069,7 @@ if (transportMode === 'stdio') {
     // --- 404 ---
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
-  });
+  }
 
   httpServer.listen(port, '0.0.0.0', () => {
     mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath });

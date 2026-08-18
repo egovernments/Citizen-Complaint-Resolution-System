@@ -635,9 +635,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // that clients auto-approving read-risk tools would never be asked about.
       // The caller now has to ask for it explicitly.
       const provisionRoles = args.provision_roles === true;
+      const tenantFellBack =
+        !!explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId;
       let rolesProvisioned: string[] | null = null;
       let rolesProvisionSkipped: Record<string, unknown> | null = null;
-      if (!provisionRoles && explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId) {
+      if (tenantFellBack && !provisionRoles) {
         rolesProvisionSkipped = {
           targetTenant: explicitRoot,
           loggedInOn: usedLoginTenant,
@@ -646,8 +648,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             `on the target tenant. Re-run configure with provision_roles: true to grant the standard role set ` +
             `(includes SUPERUSER), or assign roles explicitly with user_role_add.`,
         };
-      }
-      if (provisionRoles && explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId) {
+      } else if (tenantFellBack && provisionRoles) {
         try {
           const auth = digitApi.getAuthInfo();
           const searchTenant = auth.user?.tenantId || usedLoginTenant;

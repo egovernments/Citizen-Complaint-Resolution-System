@@ -41,3 +41,10 @@ jobs:
       # environment (test-integration, test-e2e-new-tenant, …) stay out of CI.
       - name: Unit tests (no environment required)
         run: npx tsx test-master-localizations.ts
+
+      # The security boundary (auth modes, tool access tiers, redaction,
+      # artifact confinement, forwarded-for trust, request isolation). These are
+      # invariants a refactor can silently break, so they gate the build rather
+      # than living in a reviewer's memory. Refs #1641.
+      - name: Security boundary tests
+        run: npm run test:security

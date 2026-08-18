@@ -194,6 +194,10 @@ select_mode() {
 }
 
 # ── Write JSON config (portable, no jq required) ────────────────────────────
+#
+# The hosted server authenticates every caller: it introspects the bearer token
+# against egov-user and runs the tools as that user. There is no anonymous
+# access, so the config has to carry a token.
 write_config_remote() {
   local config_path="$1"
   local client="$2"
@@ -201,15 +205,39 @@ write_config_remote() {
   dir="$(dirname "$config_path")"
   mkdir -p "$dir"
 
+  local token="${DIGIT_ACCESS_TOKEN:-}"
+  if [[ -z "$token" && "$SKIP_PROMPTS" != "true" ]]; then
+    echo ""
+    bold "DIGIT access token:"
+    echo -e "${DIM}The hosted server runs tools as you, so it needs your token.${NC}"
+    echo -e "${DIM}Get one from your DIGIT instance:${NC}"
+    echo -e "${DIM}  curl -u egov-user-client:egov-user-secret \\${NC}"
+    echo -e "${DIM}    -d 'grant_type=password&scope=read&userType=EMPLOYEE' \\${NC}"
+    echo -e "${DIM}    --data-urlencode username=... --data-urlencode password=... \\${NC}"
+    echo -e "${DIM}    --data-urlencode tenantId=pg <host>/user/oauth/token${NC}"
+    read -rsp "Access token: " token
+    echo ""
+  fi
+
+  if [[ -z "$token" ]]; then
+    warn "No access token supplied — the server will reject every call with 401."
+    warn "Re-run with DIGIT_ACCESS_TOKEN=... or add the Authorization header to:"
+    warn "  ${config_path}"
+  fi
+
   local server_entry
   server_entry=$(cat <<'ENTRY'
 {
       "type": "http",
-      "url": "MCP_URL_PLACEHOLDER"
+      "url": "MCP_URL_PLACEHOLDER",
+      "headers": {
+        "Authorization": "Bearer MCP_TOKEN_PLACEHOLDER"
+      }
     }
 ENTRY
 )
   server_entry="${server_entry/MCP_URL_PLACEHOLDER/$MCP_REMOTE_URL}"
+  server_entry="${server_entry/MCP_TOKEN_PLACEHOLDER/$token}"
 
   write_mcp_entry "$config_path" "$client" "$server_entry"
 }

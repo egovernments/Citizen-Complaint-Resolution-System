@@ -72,6 +72,34 @@ INSERT INTO engram_id_counters (category, next_id)
   ON CONFLICT DO NOTHING;
 `;
 
+/**
+ * Session-DB password.
+ *
+ * The compose default stays, because the local stack ships with it and every
+ * developer would otherwise have to set a var to get session persistence. On a
+ * network transport it is a different matter: falling back to a password that
+ * is published in this file is not a default, it is a shared secret with the
+ * whole internet — so there we require it to be set and say so loudly.
+ *
+ * (Dropping `ENV SESSION_DB_PASSWORD` from the Dockerfile alone did nothing:
+ * the value was still compiled into dist/, just one layer further down.)
+ */
+const COMPOSE_DEFAULT_SESSION_DB_PASSWORD = 'mcp123';
+
+function sessionDbPassword(): string {
+  const configured = process.env.SESSION_DB_PASSWORD;
+  if (configured) return configured;
+
+  if (process.env.MCP_TRANSPORT === 'http') {
+    console.error(
+      '[session-db] SESSION_DB_PASSWORD is not set. Falling back to the published ' +
+      'local-compose default, which is not a credential on a network deployment. ' +
+      'Set SESSION_DB_PASSWORD (helm: --set secret.SESSION_DB_PASSWORD=...).'
+    );
+  }
+  return COMPOSE_DEFAULT_SESSION_DB_PASSWORD;
+}
+
 class Db {
   private pool: PgPool | null = null;
   private healthy = false;
@@ -87,7 +115,7 @@ class Db {
           port: parseInt(process.env.SESSION_DB_PORT || '15433', 10),
           database: process.env.SESSION_DB_NAME || 'mcp_sessions',
           user: process.env.SESSION_DB_USER || 'mcp',
-          password: process.env.SESSION_DB_PASSWORD || 'mcp123',
+          password: sessionDbPassword(),
         };
 
     this.pool = new Pool({ ...config, max: 5, idleTimeoutMillis: 30_000 });
