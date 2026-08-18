@@ -169,7 +169,7 @@ services:
 
   # MDMS Backend
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:mdms-count-api-3ac4f8e
     container_name: mdms-backend
     depends_on:
       pgbouncer:

@@ -271,9 +271,39 @@ function clientPaginate(records: RaRecord[], page: number, perPage: number): RaR
 
 // --- Service-specific fetchers ---
 
+// Internal paging batch size for mdmsSearchAll — NOT a result cap. A tenant with more rows
+// than this just costs more round trips; nothing is ever truncated at this number.
+const MDMS_SEARCH_ALL_BATCH_SIZE = 1000;
+// Safety ceiling in case mdms-v2 ever returns full pages forever (bad offset handling, a
+// criterion mdms-v2 silently ignores, etc.) — far beyond any real DIGIT master data today.
+const MDMS_SEARCH_ALL_MAX_BATCHES = 200;
+
+/**
+ * Fetches every record for a schema, paging through mdms-v2 (which has no way to return
+ * "everything" in one call) instead of truncating at a single hardcoded limit. Issue #953:
+ * a tenant with 630 ComplaintHierarchy rows was silently capped at the old `{ limit: 500 }`
+ * single-shot fetch, before the leaf-adapter even got a chance to filter them.
+ */
+async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: string): Promise<MdmsRecord[]> {
+  const all: MdmsRecord[] = [];
+  let offset = 0;
+  for (let batch = 0; batch < MDMS_SEARCH_ALL_MAX_BATCHES; batch++) {
+    const page = await client.mdmsSearch(tenant, schema, { limit: MDMS_SEARCH_ALL_BATCH_SIZE, offset });
+    all.push(...page);
+    if (page.length < MDMS_SEARCH_ALL_BATCH_SIZE) return all;
+    offset += MDMS_SEARCH_ALL_BATCH_SIZE;
+  }
+  // Still getting full pages after the safety ceiling — returning `all` here would
+  // silently hand getList/getOne/getMany an incomplete tree. Fail loudly instead.
+  throw new Error(
+    `mdmsSearchAll: schema "${schema}" on tenant "${tenant}" did not finish paging after ` +
+      `${MDMS_SEARCH_ALL_MAX_BATCHES * MDMS_SEARCH_ALL_BATCH_SIZE} records; refusing to return a partial result.`,
+  );
+}
+
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   const tenant = pickTenant(tenantId, filter);
-  const records = await client.mdmsSearch(tenant, config.schema!, { limit: 500 });
+  const records = await mdmsSearchAll(client, tenant, config.schema!);
   if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
 }
@@ -926,25 +956,24 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       }
 
       // MDMS resources without the leaf-adapter (all schemas except
-      // complaint-hierarchy): push limit/offset to the server when no
-      // client-side filter is active so the API is called with the actual
-      // page size instead of a fixed 500. MDMS v2 does not return a total
-      // count, so we use a heuristic: a full page means "there may be more"
-      // (next button enabled), a partial page means "last page".
+      // complaint-hierarchy), with no client-side filter active. mdms-v2's
+      // MdmsCriteria has no sort parameter, so a single server-paginated page
+      // can't represent the globally-sorted order — sorting just that page
+      // (as a single `{ limit: perPage, offset }` fetch used to) reshuffles
+      // each page independently instead of the full set. Page through every
+      // active record (mdmsSearchAll), sort in memory, then slice the
+      // requested page; the total then falls out of the same fetch instead
+      // of a separate `_count` call that could race with it.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const offset = (page - 1) * perPage;
-          // isActive:true so the server paginates over active rows only. The
-          // client-side .filter below stays as a defensive fallback for any MDMS
-          // that ignores the criterion (degrades to old behavior, never worse).
-          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset, isActive: true });
-          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const sorted = clientSort(data, field, order);
-          const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
-          return { data: sorted, total };
+          const all = await mdmsSearchAll(client, tenant, config.schema!);
+          const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(active, field, order);
+          const data = clientPaginate(sorted, page, perPage);
+          return { data, total: active.length };
         }
       }
 
