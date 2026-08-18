@@ -1,14 +1,23 @@
 import React, { useCallback, useMemo } from "react";
 import {
   COMPLAINT_TYPE_OPTIONS,
+  DEPARTMENT_OPTIONS,
   GEOGRAPHY_OPTIONS,
   buildDefaultFilters,
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
 import GeographyTreeFilter from "./GeographyTreeFilter";
-import PopoverMenu, { PopoverMenuItem, PopoverMenuGroupLabel } from "./ui/PopoverMenu";
+import { nodeDisplayLabel } from "./ComplaintTypeTreeFilter";
+import { boundaryDisplayLabel } from "./GeographyTreeFilter";
+import MultiSelectFilter from "./MultiSelectFilter";
 import useDashboardT from "../i18n/useDashboardT";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+import {
+  normalizeHierarchySelections,
+  normalizeStringList,
+  removeHierarchySelection,
+} from "../utils/multiSelectFilters";
 
 const FunnelIcon = () => (
   <svg
@@ -27,73 +36,6 @@ const FunnelIcon = () => (
   </svg>
 );
 
-const FilterChevron = () => (
-  <svg
-    className="dashboard-filter-inline-chevron"
-    xmlns="http://www.w3.org/2000/svg"
-    width="10"
-    height="10"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-/**
- * Degrade path for the complaint-type filter when no usable/pruned hierarchy
- * exists (flat tenant, MDMS fetch failure, empty scoped distincts): the same
- * flat {id,label,group?} option list the old native <select> showed, now
- * rendered through the shared PopoverMenu primitive (owner design pass — no
- * native selects). Consecutive same-group runs get a non-interactive group
- * label, exactly where the old <optgroup>s sat; the wire contract is
- * untouched (a bare leaf-code string through onFilterChange).
- */
-const FlatComplaintTypeMenu = ({ options, value, loading, onChange, t }) => {
-  const selected = options.find((opt) => opt.id === value);
-  return (
-    <PopoverMenu
-      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
-      chip={loading ? t("DASHBOARD_COMMON_LOADING", "Loading…") : selected?.label ?? String(value)}
-      chipTitle={selected?.label}
-      disabled={loading}
-      panelWidth={272}
-    >
-      {({ close }) => {
-        const rows = [];
-        let lastGroup = null;
-        for (const opt of options) {
-          if (opt.group && opt.group !== lastGroup) {
-            rows.push(
-              <PopoverMenuGroupLabel key={`group-${opt.group}`}>{opt.group}</PopoverMenuGroupLabel>
-            );
-          }
-          lastGroup = opt.group || null;
-          rows.push(
-            <PopoverMenuItem
-              key={opt.id}
-              selected={opt.id === value}
-              title={opt.label}
-              onSelect={() => {
-                onChange(opt.id);
-                close();
-              }}
-            >
-              {opt.label}
-            </PopoverMenuItem>
-          );
-        }
-        return <div className="dashboard-popover-list">{rows}</div>;
-      }}
-    </PopoverMenu>
-  );
-};
-
 const DashboardFilters = ({
   filters,
   onFilterChange,
@@ -108,17 +50,75 @@ const DashboardFilters = ({
   const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
+  const departmentOptions = filterOptions?.department ?? DEPARTMENT_OPTIONS;
   const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
   const geographyTree = filterOptions?.geographyTree ?? null;
 
   // Date fallbacks resolve from buildDefaultFilters(timeZone) at render time — never
   // GLOBAL_FILTER_FIELDS' module-load defaultValue, which would freeze on whatever
   // calendar day the JS bundle happened to first evaluate in the browser's local zone.
-  const defaultFilters = useMemo(() => buildDefaultFilters(timeZone), [timeZone]);
+  const defaultFilters = useMemo(() => buildDefaultFilters(timeZone), [
+    timeZone,
+  ]);
   const dateFrom = filters?.dateFrom ?? defaultFilters.dateFrom;
   const dateTo = filters?.dateTo ?? defaultFilters.dateTo;
-  const geography = filters?.geography ?? "all";
-  const complaintType = filters?.complaintType ?? "all";
+  const geographies = normalizeHierarchySelections(filters?.geographies);
+  const complaintTypes = normalizeHierarchySelections(filters?.complaintTypes);
+  const departments = normalizeStringList(filters?.departments);
+  const applyLabel = t("DASHBOARD_FILTERS_APPLY", "Apply");
+  const cancelLabel = t("DASHBOARD_FILTERS_CANCEL", "Cancel");
+  const noMatchesLabel = t(
+    "DASHBOARD_FILTERS_NO_MATCHES",
+    "No matching options"
+  );
+
+  const flatHierarchyValues = (selections) =>
+    selections.map((selection) => selection.code);
+  const flatHierarchySelections = (codes) =>
+    normalizeStringList(codes).map((code) => ({
+      code,
+      path: null,
+      leaf: true,
+      codes: [code],
+    }));
+
+  const activeChips = [
+    ...geographies.map((selection) => ({
+      key: `geography-${selection.code}`,
+      label: geographyTree
+        ? boundaryDisplayLabel(geographyTree, selection.code)
+        : geographyOptions.find((option) => option.id === selection.code)
+            ?.label ?? dimensionLabel(selection.code, "boundary"),
+      onRemove: () =>
+        onFilterChange(
+          "geographies",
+          removeHierarchySelection(geographies, selection.code)
+        ),
+    })),
+    ...complaintTypes.map((selection) => ({
+      key: `complaint-${selection.code}`,
+      label: complaintTypeTree
+        ? nodeDisplayLabel(complaintTypeTree, selection.code)
+        : complaintTypeOptions.find((option) => option.id === selection.code)
+            ?.label ?? dimensionLabel(selection.code, "complaintType"),
+      onRemove: () =>
+        onFilterChange(
+          "complaintTypes",
+          removeHierarchySelection(complaintTypes, selection.code)
+        ),
+    })),
+    ...departments.map((code) => ({
+      key: `department-${code}`,
+      label:
+        departmentOptions.find((option) => option.id === code)?.label ??
+        dimensionLabel(code, "department"),
+      onRemove: () =>
+        onFilterChange(
+          "departments",
+          departments.filter((department) => department !== code)
+        ),
+    })),
+  ];
 
   const openCalendar = useCallback((input) => {
     if (!input) return;
@@ -137,98 +137,144 @@ const DashboardFilters = ({
     <div className="dashboard-filters-bar tw-mb-4">
       <div className="dashboard-filters-card">
         <div className="dashboard-filters-row">
-        <div className="dashboard-filters-heading">
-          <FunnelIcon />
-          <span className="dashboard-filters-title">{t("DASHBOARD_FILTERS_TITLE", "Filters")}</span>
-        </div>
-
-        <div className="dashboard-filters-date-range">
-          <div className="dashboard-filter-inline-date-wrap">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => onFilterChange("dateFrom", e.target.value)}
-              onClick={(e) => openCalendar(e.currentTarget)}
-              aria-label={t("DASHBOARD_FILTERS_FROM_DATE", "From date")}
-              className="dashboard-filter-inline-date"
-            />
+          <div className="dashboard-filters-heading">
+            <FunnelIcon />
+            <span className="dashboard-filters-title">
+              {t("DASHBOARD_FILTERS_TITLE", "Filters")}
+            </span>
           </div>
-          <span className="dashboard-filters-date-arrow" aria-hidden>
-            →
-          </span>
-          <div className="dashboard-filter-inline-date-wrap">
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => onFilterChange("dateTo", e.target.value)}
-              onClick={(e) => openCalendar(e.currentTarget)}
-              aria-label={t("DASHBOARD_FILTERS_TO_DATE", "To date")}
-              className="dashboard-filter-inline-date"
-            />
-          </div>
-        </div>
 
-        {geographyTree ? (
-          // Boundary drill-down (CCSD-2171): Província → Distrito → Município
-          // via the shared tree panel; leaf → ward, interior → boundaryPath.
-          <GeographyTreeFilter
-            tree={geographyTree}
-            filters={filters}
-            onFilterChange={onFilterChange}
-            t={t}
-          />
-        ) : (
-          <div className="dashboard-filter-inline-select-wrap">
-            <select
-              value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
-              disabled={filterOptionsLoading && geographyOptions.length <= 1}
-              onChange={(e) => onFilterChange("geography", e.target.value)}
-              aria-label={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
-              className="dashboard-filter-inline-select"
-            >
-              {filterOptionsLoading && geographyOptions.length <= 1 ? (
-                <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
-              ) : (
-                geographyOptions.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))
+          <div className="dashboard-filters-date-range">
+            <div className="dashboard-filter-inline-date-wrap">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => onFilterChange("dateFrom", e.target.value)}
+                onClick={(e) => openCalendar(e.currentTarget)}
+                aria-label={t("DASHBOARD_FILTERS_FROM_DATE", "From date")}
+                className="dashboard-filter-inline-date"
+              />
+            </div>
+            <span className="dashboard-filters-date-arrow" aria-hidden>
+              →
+            </span>
+            <div className="dashboard-filter-inline-date-wrap">
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => onFilterChange("dateTo", e.target.value)}
+                onClick={(e) => openCalendar(e.currentTarget)}
+                aria-label={t("DASHBOARD_FILTERS_TO_DATE", "To date")}
+                className="dashboard-filter-inline-date"
+              />
+            </div>
+          </div>
+
+          {geographyTree ? (
+            <GeographyTreeFilter
+              tree={geographyTree}
+              filters={filters}
+              onFilterChange={onFilterChange}
+              t={t}
+            />
+          ) : (
+            <MultiSelectFilter
+              options={geographyOptions}
+              values={flatHierarchyValues(geographies)}
+              label={t("DASHBOARD_FILTERS_WARDS", "Wards")}
+              allLabel={t("DASHBOARD_FILTERS_ALL_WARDS", "All wards")}
+              ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
+              loading={filterOptionsLoading && geographyOptions.length <= 1}
+              searchable
+              searchPlaceholder={t(
+                "DASHBOARD_FILTERS_SEARCH_WARDS",
+                "Search wards"
               )}
-            </select>
-            <FilterChevron />
+              applyLabel={applyLabel}
+              cancelLabel={cancelLabel}
+              emptyLabel={noMatchesLabel}
+              onChange={(codes) =>
+                onFilterChange("geographies", flatHierarchySelections(codes))
+              }
+            />
+          )}
+
+          {complaintTypeTree ? (
+            // Staged, ABAC-pruned hierarchy multi-select. Hierarchy nodes expand
+            // to exact scoped service codes before the query is issued.
+            <ComplaintTypeTreeFilter
+              tree={complaintTypeTree}
+              filters={filters}
+              onFilterChange={onFilterChange}
+              t={t}
+            />
+          ) : (
+            <MultiSelectFilter
+              options={complaintTypeOptions}
+              values={flatHierarchyValues(complaintTypes)}
+              label={t("DASHBOARD_FILTERS_COMPLAINT_TYPES", "Complaint types")}
+              allLabel={t("DASHBOARD_FILTERS_ALL_TYPES", "All types")}
+              ariaLabel={t(
+                "DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER",
+                "Complaint type filter"
+              )}
+              loading={filterOptionsLoading && complaintTypeOptions.length <= 1}
+              applyLabel={applyLabel}
+              cancelLabel={cancelLabel}
+              emptyLabel={noMatchesLabel}
+              onChange={(codes) =>
+                onFilterChange("complaintTypes", flatHierarchySelections(codes))
+              }
+            />
+          )}
+
+          <MultiSelectFilter
+            options={departmentOptions}
+            values={departments}
+            label={t("DASHBOARD_FILTERS_DEPARTMENTS", "Departments")}
+            allLabel={t("DASHBOARD_FILTERS_ALL_DEPARTMENTS", "All departments")}
+            ariaLabel={t(
+              "DASHBOARD_FILTERS_DEPARTMENT_FILTER",
+              "Department filter"
+            )}
+            loading={filterOptionsLoading && departmentOptions.length <= 1}
+            applyLabel={applyLabel}
+            cancelLabel={cancelLabel}
+            emptyLabel={noMatchesLabel}
+            onChange={(codes) => onFilterChange("departments", codes)}
+          />
+
+          <button
+            type="button"
+            onClick={onClearFilters}
+            disabled={!canClear}
+            className="dashboard-filters-clear-inline"
+            aria-disabled={!canClear}
+          >
+            {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
+          </button>
+        </div>
+        {activeChips.length > 0 && (
+          <div
+            className="dashboard-active-filter-chips"
+            aria-label={t("DASHBOARD_FILTERS_ACTIVE", "Active filters")}
+          >
+            {activeChips.map((chip) => (
+              <span key={chip.key} className="dashboard-active-filter-chip">
+                <span>{chip.label}</span>
+                <button
+                  type="button"
+                  onClick={chip.onRemove}
+                  aria-label={`${t("DASHBOARD_FILTERS_REMOVE", "Remove")} ${
+                    chip.label
+                  }`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
           </div>
         )}
-
-        {complaintTypeTree ? (
-          // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",
-          // reset), ABAC-pruned; leaf → serviceCode, interior → complaintPath.
-          <ComplaintTypeTreeFilter
-            tree={complaintTypeTree}
-            filters={filters}
-            onFilterChange={onFilterChange}
-            t={t}
-          />
-        ) : (
-          <FlatComplaintTypeMenu
-            options={complaintTypeOptions}
-            value={complaintType}
-            loading={filterOptionsLoading && complaintTypeOptions.length <= 1}
-            onChange={(id) => onFilterChange("complaintType", id)}
-            t={t}
-          />
-        )}
-
-        <button
-          type="button"
-          onClick={onClearFilters}
-          disabled={!canClear}
-          className="dashboard-filters-clear-inline"
-          aria-disabled={!canClear}
-        >
-          {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
-        </button>
-        </div>
       </div>
     </div>
   );

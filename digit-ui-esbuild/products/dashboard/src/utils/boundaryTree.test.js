@@ -37,6 +37,8 @@ function bundle(entry) {
 const {
   buildBoundaryTree,
   pruneBoundaryTree,
+  wardCodesUnder,
+  geographyMultiSelectionFromCode,
   geographySelectionFromCode,
   clearedGeographySelection,
   geographyParams,
@@ -57,14 +59,22 @@ const API_ROOTS = [
         code: "katembe",
         boundaryType: "Distrito",
         children: [
-          { code: "municipio_maputo_katembe", boundaryType: "Municipio", children: [] },
+          {
+            code: "municipio_maputo_katembe",
+            boundaryType: "Municipio",
+            children: [],
+          },
         ],
       },
       {
         code: "kanyaka",
         boundaryType: "Distrito",
         children: [
-          { code: "municipio_maputo_kanyaka", boundaryType: "Municipio", children: [] },
+          {
+            code: "municipio_maputo_kanyaka",
+            boundaryType: "Municipio",
+            children: [],
+          },
         ],
       },
     ],
@@ -76,7 +86,9 @@ const API_ROOTS = [
       {
         code: "DISTRITO_001",
         boundaryType: "Distrito",
-        children: [{ code: "MUNICIPIO_001", boundaryType: "Municipio", children: [] }],
+        children: [
+          { code: "MUNICIPIO_001", boundaryType: "Municipio", children: [] },
+        ],
       },
     ],
   },
@@ -102,7 +114,10 @@ test("buildBoundaryTree handles empty/missing input", () => {
 
 test("pruneBoundaryTree keeps only branches with scoped wards, attaches strays", () => {
   const tree = buildBoundaryTree(API_ROOTS);
-  const pruned = pruneBoundaryTree(tree, ["municipio_maputo_katembe", "stray_ward"]);
+  const pruned = pruneBoundaryTree(tree, [
+    "municipio_maputo_katembe",
+    "stray_ward",
+  ]);
   // katembe branch survives, kanyaka + the QA province do not
   assert.ok(pruned.byCode.has("maputo_cidade"));
   assert.ok(pruned.byCode.has("katembe"));
@@ -122,13 +137,33 @@ test("pruneBoundaryTree with no scoped wards / no tree → null (flat fallback)"
   assert.equal(pruneBoundaryTree(null, ["x"]), null);
 });
 
+test("multi-select hierarchy nodes expand only to ABAC-scoped ward codes", () => {
+  const pruned = pruneBoundaryTree(buildBoundaryTree(API_ROOTS), [
+    "municipio_maputo_katembe",
+    "municipio_maputo_kanyaka",
+    "stray_ward",
+  ]);
+  assert.deepEqual(wardCodesUnder(pruned, "maputo_cidade").sort(), [
+    "municipio_maputo_kanyaka",
+    "municipio_maputo_katembe",
+  ]);
+  assert.deepEqual(geographyMultiSelectionFromCode(pruned, "katembe"), {
+    code: "katembe",
+    path: "maputo_cidade|katembe",
+    leaf: false,
+    codes: ["municipio_maputo_katembe"],
+  });
+});
+
 test("geographyParams: leaf → ward (today's wire shape), interior → boundaryPath", () => {
   const tree = buildBoundaryTree(API_ROOTS);
   const leaf = geographySelectionFromCode(tree, "municipio_maputo_katembe");
   assert.deepEqual(geographyParams(leaf), { ward: "municipio_maputo_katembe" });
 
   const interior = geographySelectionFromCode(tree, "katembe");
-  assert.deepEqual(geographyParams(interior), { boundaryPath: "maputo_cidade|katembe" });
+  assert.deepEqual(geographyParams(interior), {
+    boundaryPath: "maputo_cidade|katembe",
+  });
 
   assert.deepEqual(geographyParams(clearedGeographySelection()), {});
   // legacy persisted string-only state (leaf flag undefined) → leaf ward
@@ -143,7 +178,9 @@ test("interior path failing backend validation is NOT sent (unfiltered beats 400
 });
 
 test("isValidBoundaryPath accepts pipe paths, rejects SQL-ish garbage", () => {
-  assert.ok(isValidBoundaryPath("maputo_cidade|katembe|municipio_maputo_katembe"));
+  assert.ok(
+    isValidBoundaryPath("maputo_cidade|katembe|municipio_maputo_katembe")
+  );
   assert.ok(isValidBoundaryPath("mz"));
   for (const bad of ["a b", "x%y", "a;b", "x'y", "", null, "a".repeat(513)]) {
     assert.equal(isValidBoundaryPath(bad), false, String(bad));
@@ -156,7 +193,10 @@ test("repairGeographySelection: exact wins, vanished walks up pipe path, else cl
 
   // exact node survives
   assert.equal(
-    repairGeographySelection(pruned, { code: "katembe", path: "maputo_cidade|katembe" }).code,
+    repairGeographySelection(pruned, {
+      code: "katembe",
+      path: "maputo_cidade|katembe",
+    }).code,
     "katembe"
   );
   // vanished ward (kanyaka pruned) → nearest surviving ancestor by pipe-prefix
@@ -167,7 +207,8 @@ test("repairGeographySelection: exact wins, vanished walks up pipe path, else cl
   assert.equal(repaired.code, "maputo_cidade");
   // nothing valid → cleared
   assert.equal(
-    repairGeographySelection(pruned, { code: "ghost", path: "other|ghost" }).code,
+    repairGeographySelection(pruned, { code: "ghost", path: "other|ghost" })
+      .code,
     "all"
   );
   // "all" / no tree → cleared, never throws
@@ -176,18 +217,32 @@ test("repairGeographySelection: exact wins, vanished walks up pipe path, else cl
 });
 
 test("normalizeGeographyValue: trio object, legacy bare string, cleared", () => {
-  assert.deepEqual(normalizeGeographyValue("w1"), { code: "w1", path: null, leaf: true });
+  assert.deepEqual(normalizeGeographyValue("w1"), {
+    code: "w1",
+    path: null,
+    leaf: true,
+  });
   assert.deepEqual(normalizeGeographyValue("all"), clearedGeographySelection());
   assert.deepEqual(normalizeGeographyValue(null), clearedGeographySelection());
   assert.deepEqual(
-    normalizeGeographyValue({ code: "katembe", path: "maputo_cidade|katembe", leaf: false }),
+    normalizeGeographyValue({
+      code: "katembe",
+      path: "maputo_cidade|katembe",
+      leaf: false,
+    }),
     { code: "katembe", path: "maputo_cidade|katembe", leaf: false }
   );
-  assert.deepEqual(normalizeGeographyValue({ code: "all" }), clearedGeographySelection());
+  assert.deepEqual(
+    normalizeGeographyValue({ code: "all" }),
+    clearedGeographySelection()
+  );
 });
 
 test("humanizeBoundaryCode never surfaces raw underscores/pipes", () => {
-  assert.equal(humanizeBoundaryCode("municipio_maputo_katembe"), "Municipio Maputo Katembe");
+  assert.equal(
+    humanizeBoundaryCode("municipio_maputo_katembe"),
+    "Municipio Maputo Katembe"
+  );
   assert.equal(humanizeBoundaryCode("a|b|distrito_x"), "Distrito X");
   assert.equal(humanizeBoundaryCode(""), "");
 });

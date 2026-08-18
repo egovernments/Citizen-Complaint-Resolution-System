@@ -300,8 +300,28 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_ACTIVE",
+    "message": "Filtros ativos",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_DEPARTMENTS",
+    "message": "Todos os departamentos",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "Todos os tipos",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_APPLY",
+    "message": "Aplicar",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_CANCEL",
+    "message": "Cancelar",
     "module": "rainmaker-dashboard"
   },
   {
@@ -325,6 +345,26 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPES",
+    "message": "Tipos de reclamação",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT",
+    "message": "Departamento",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT_FILTER",
+    "message": "Filtro de departamento",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENTS",
+    "message": "Departamentos",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_FROM",
     "message": "De",
     "module": "rainmaker-dashboard"
@@ -337,6 +377,21 @@
   {
     "code": "DASHBOARD_FILTERS_GEOGRAPHY",
     "message": "Geografia",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_NO_MATCHES",
+    "message": "Nenhuma opção correspondente",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_REMOVE",
+    "message": "Remover",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_SEARCH_WARDS",
+    "message": "Pesquisar bairros",
     "module": "rainmaker-dashboard"
   },
   {
@@ -357,6 +412,16 @@
   {
     "code": "DASHBOARD_FILTERS_WARD_FILTER",
     "message": "Filtro de bairro",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_WARDS",
+    "message": "Bairros",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
+    "message": "Tudo em",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1211,11 +1276,6 @@
   },
   {
     "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
-    "message": "Tudo em",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
     "message": "Tudo em",
     "module": "rainmaker-dashboard"
   },

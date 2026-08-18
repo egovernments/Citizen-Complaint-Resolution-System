@@ -300,8 +300,28 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_ACTIVE",
+    "message": "Active filters",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_ALL_DEPARTMENTS",
+    "message": "All departments",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_ALL_TYPES",
     "message": "All types",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_APPLY",
+    "message": "Apply",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_CANCEL",
+    "message": "Cancel",
     "module": "rainmaker-dashboard"
   },
   {
@@ -325,6 +345,26 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_FILTERS_COMPLAINT_TYPES",
+    "message": "Complaint types",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT",
+    "message": "Department",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENT_FILTER",
+    "message": "Department filter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_DEPARTMENTS",
+    "message": "Departments",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_FILTERS_FROM",
     "message": "From",
     "module": "rainmaker-dashboard"
@@ -337,6 +377,21 @@
   {
     "code": "DASHBOARD_FILTERS_GEOGRAPHY",
     "message": "Geography",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_NO_MATCHES",
+    "message": "No matching options",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_REMOVE",
+    "message": "Remove",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_SEARCH_WARDS",
+    "message": "Search wards",
     "module": "rainmaker-dashboard"
   },
   {
@@ -357,6 +412,16 @@
   {
     "code": "DASHBOARD_FILTERS_WARD_FILTER",
     "message": "Ward filter",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_FILTERS_WARDS",
+    "message": "Wards",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
+    "message": "All in",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1211,11 +1276,6 @@
   },
   {
     "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
-    "message": "All in",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_GEO_FILTER_ALL_IN",
     "message": "All in",
     "module": "rainmaker-dashboard"
   },

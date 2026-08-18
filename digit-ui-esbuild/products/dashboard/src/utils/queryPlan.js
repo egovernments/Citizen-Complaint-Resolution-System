@@ -1,6 +1,7 @@
 import { appliedHierLevel } from "./hierLevelGrouping";
 import { complaintTypeParams } from "./complaintTypeTree";
 import { geographyParams } from "./boundaryTree";
+import { normalizeStringList, selectedCodes } from "./multiSelectFilters";
 
 /**
  * Query-plan helpers for the catalog dashboard (extracted from
@@ -20,7 +21,10 @@ export const CARD_KINDS = new Set([
   "number-tile-sparkline",
   "sparkline-card",
 ]);
-export const SPARKLINE_KINDS = new Set(["number-tile-sparkline", "sparkline-card"]);
+export const SPARKLINE_KINDS = new Set([
+  "number-tile-sparkline",
+  "sparkline-card",
+]);
 export const MAP_KINDS = new Set(["map", "choropleth-map"]);
 
 // The internal pin source: map tiles fetch this alongside their ward aggregates
@@ -82,27 +86,39 @@ export function isMapKind(kind) {
  */
 export function globalParams(filters) {
   const params = {};
-  // Geography node selection (CCSD-2171): leaf ward → ward (exact ward_code,
-  // today's wire shape), interior province/district → boundaryPath (subtree
-  // on boundary_path; pre-boundaryPath backends ignore the unknown param, so
-  // interior selections degrade to unfiltered, never an error). Legacy
-  // string-only persisted state (no path/leaf) behaves exactly like today.
-  Object.assign(
-    params,
-    geographyParams({
-      code: filters?.geography,
-      path: filters?.geographyPath,
-      leaf: filters?.geographyLeaf,
-    })
-  );
-  Object.assign(
-    params,
-    complaintTypeParams({
-      code: filters?.complaintType,
-      path: filters?.complaintTypePath,
-      leaf: filters?.complaintTypeLeaf,
-    })
-  );
+  if (Array.isArray(filters?.geographies)) {
+    const wards = selectedCodes(filters.geographies);
+    if (wards.length === 1) params.ward = wards[0];
+    else if (wards.length > 1) params.wards = wards;
+  } else {
+    // One-release persisted-state compatibility for the v4 scalar selection.
+    Object.assign(
+      params,
+      geographyParams({
+        code: filters?.geography,
+        path: filters?.geographyPath,
+        leaf: filters?.geographyLeaf,
+      })
+    );
+  }
+
+  if (Array.isArray(filters?.complaintTypes)) {
+    const serviceCodes = selectedCodes(filters.complaintTypes);
+    if (serviceCodes.length === 1) params.serviceCode = serviceCodes[0];
+    else if (serviceCodes.length > 1) params.serviceCodes = serviceCodes;
+  } else {
+    Object.assign(
+      params,
+      complaintTypeParams({
+        code: filters?.complaintType,
+        path: filters?.complaintTypePath,
+        leaf: filters?.complaintTypeLeaf,
+      })
+    );
+  }
+
+  const departments = normalizeStringList(filters?.departments);
+  if (departments.length) params.departments = departments;
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
     params.dateFrom = filters.dateFrom; // yyyy-MM-dd
     params.dateTo = filters.dateTo; // yyyy-MM-dd
@@ -144,10 +160,16 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
     refs[kpiId] = { kpiId, params: { ...base } };
 
     if (isCardKind(kind)) {
-      refs[`${kpiId}__prior`] = { kpiId, params: { ...base, compare: "prior" } };
+      refs[`${kpiId}__prior`] = {
+        kpiId,
+        params: { ...base, compare: "prior" },
+      };
     }
     if (isSparklineKind(kind)) {
-      refs[`${kpiId}__series`] = { kpiId, params: { ...base, series: "daily" } };
+      refs[`${kpiId}__series`] = {
+        kpiId,
+        params: { ...base, series: "daily" },
+      };
     }
     if (isMapKind(kind)) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
@@ -179,7 +201,9 @@ export function buildPublicRefs(tiles, kpis) {
 export function buildPublicRefsKey(tiles, kpis) {
   return JSON.stringify({
     public: true,
-    ids: (tiles || []).map((tile) => tile?.kpiId).filter((id) => id && kpis?.[id]),
+    ids: (tiles || [])
+      .map((tile) => tile?.kpiId)
+      .filter((id) => id && kpis?.[id]),
     versions: (tiles || []).map((tile) => kpis?.[tile?.kpiId]?.version ?? null),
   });
 }

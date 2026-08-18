@@ -2,16 +2,16 @@ import React, { useEffect, useRef, useState } from "react";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import PopoverMenu, { PopoverMenuItem } from "./ui/PopoverMenu";
+import HierarchyMultiSelectFilter from "./HierarchyMultiSelectFilter";
 import {
   ALL,
   TRAIL_ELLIPSIS,
   ancestorsOf,
   browseBaseCode,
   childrenOf,
-  clearedSelection,
+  complaintMultiSelectionFromCode,
   humanizeTypeCode,
   nodeOf,
-  selectionFromCode,
   truncateTrail,
 } from "../utils/complaintTypeTree";
 
@@ -195,86 +195,24 @@ export function ComplaintTypeTreePanel({
   );
 }
 
-/** Chip content for the applied code: trailing segments + elision marker. */
-function chipModel(tree, code, allTypesLabel) {
-  const node = nodeOf(tree, code);
-  if (!node) return { segments: [allTypesLabel], elided: false, title: allTypesLabel };
-  const chain = [...ancestorsOf(tree, code), code].map((c) => nodeDisplayLabel(tree, c));
-  const segments = chain.slice(-2);
-  return {
-    segments,
-    elided: chain.length > 2,
-    title: chain.join(" › "),
-  };
-}
-
 const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) => {
   const { t: tHook } = useDashboardT();
   const t = tProp || tHook;
-
-  const code = filters?.complaintType ?? ALL;
-  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
-  const { segments, elided, title } = chipModel(tree, code, allTypesLabel);
-
-  // UNCHANGED wire/persistence contract: applies emit the selection trio
-  // (leaf → serviceCode, interior → complaintPath) through onFilterChange.
-  const apply = (nextCode) => {
-    onFilterChange(
-      "complaintType",
-      nextCode === ALL ? clearedSelection() : selectionFromCode(tree, nextCode)
-    );
-  };
-
-  const chip = (
-    <span className="dashboard-popover-trigger-trail">
-      {elided && (
-        <>
-          <span className="dashboard-popover-trigger-seg dashboard-popover-trigger-seg--muted" aria-hidden>
-            …
-          </span>
-          <span className="dashboard-popover-trigger-sep" aria-hidden>
-            ›
-          </span>
-        </>
-      )}
-      {segments.map((segment, index) => (
-        <React.Fragment key={`${index}-${segment}`}>
-          {index > 0 && (
-            <span className="dashboard-popover-trigger-sep" aria-hidden>
-              ›
-            </span>
-          )}
-          <span
-            className={`dashboard-popover-trigger-seg${
-              index < segments.length - 1 ? " dashboard-popover-trigger-seg--muted" : ""
-            }`}
-          >
-            {segment}
-          </span>
-        </React.Fragment>
-      ))}
-    </span>
-  );
-
   return (
-    <PopoverMenu
+    <HierarchyMultiSelectFilter
+      tree={tree}
+      selections={filters?.complaintTypes ?? []}
+      label={t("DASHBOARD_FILTERS_COMPLAINT_TYPES", "Complaint types")}
+      allLabel={t("DASHBOARD_FILTERS_ALL_TYPES", "All types")}
       ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
-      chipTitle={title}
-      chip={chip}
-      panelWidth={288}
-    >
-      {({ close }) => (
-        <ComplaintTypeTreePanel
-          tree={tree}
-          appliedCode={code}
-          t={t}
-          onApply={(nextCode) => {
-            apply(nextCode);
-            close();
-          }}
-        />
-      )}
-    </PopoverMenu>
+      labelFor={nodeDisplayLabel}
+      selectionFromCode={complaintMultiSelectionFromCode}
+      allInLabel={t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")}
+      applyLabel={t("DASHBOARD_FILTERS_APPLY", "Apply")}
+      cancelLabel={t("DASHBOARD_FILTERS_CANCEL", "Cancel")}
+      emptyLabel={t("DASHBOARD_FILTERS_NO_MATCHES", "No matching options")}
+      onChange={(selections) => onFilterChange("complaintTypes", selections)}
+    />
   );
 };
 

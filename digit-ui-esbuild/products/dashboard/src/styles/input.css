@@ -589,7 +589,7 @@
   }
 
   .dashboard-filters-card {
-    @apply tw-flex tw-items-center tw-rounded tw-border tw-border-border tw-bg-surface tw-px-2.5 tw-py-1.5;
+    @apply tw-flex tw-flex-col tw-items-stretch tw-gap-1.5 tw-rounded tw-border tw-border-border tw-bg-surface tw-px-2.5 tw-py-1.5;
     min-width: 0;
     max-width: 100%;
   }
@@ -717,6 +717,10 @@
     @apply tw-border-foreground;
   }
 
+  .dashboard-popover-trigger--active {
+    background-color: color-mix(in srgb, var(--muted, #f5f4f1) 55%, var(--surface, #ffffff));
+  }
+
   .dashboard-popover-trigger:disabled {
     opacity: 0.5;
     cursor: default;
@@ -748,6 +752,18 @@
 
   .dashboard-popover-trigger-value {
     @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-normal;
+  }
+
+  .dashboard-multiselect-trigger-content {
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-gap-1.5;
+  }
+
+  .dashboard-multiselect-trigger-label {
+    @apply tw-min-w-0 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-multiselect-count {
+    @apply tw-inline-flex tw-h-4 tw-min-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-full tw-bg-foreground tw-px-1 tw-text-[9px] tw-font-semibold tw-leading-none tw-text-surface;
   }
 
   /* ml-auto pins the caret to the chip's right edge (px-2, like the
@@ -887,6 +903,87 @@
      complaint-type degrade path's category groups). */
   .dashboard-menu-group-label {
     @apply tw-px-2 tw-pb-1 tw-pt-2 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider tw-text-muted-foreground;
+  }
+
+  /* Staged multi-select controls. Applying once per panel keeps a checkbox
+     interaction from issuing the dashboard's full KPI query batch. */
+  .dashboard-multiselect-panel {
+    @apply tw-flex tw-min-h-0 tw-flex-col tw-overflow-hidden;
+  }
+
+  .dashboard-multiselect-search {
+    @apply tw-m-2 tw-mb-1 tw-h-8 tw-shrink-0 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-px-2 tw-text-[12px] tw-text-foreground tw-outline-none;
+    font-family: inherit;
+  }
+
+  .dashboard-multiselect-search:focus {
+    @apply tw-border-foreground;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  .dashboard-multiselect-options {
+    max-height: 16rem;
+  }
+
+  .dashboard-multiselect-empty {
+    @apply tw-px-2 tw-py-4 tw-text-center tw-text-[12px] tw-text-muted-foreground;
+  }
+
+  .dashboard-multiselect-result-trail {
+    @apply tw-mt-0.5 tw-block tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-[10px] tw-font-normal tw-text-muted-foreground;
+  }
+
+  .dashboard-multiselect-footer {
+    @apply tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-border-border tw-p-2;
+  }
+
+  .dashboard-multiselect-footer-actions {
+    @apply tw-flex tw-items-center tw-gap-1;
+  }
+
+  .dashboard-multiselect-clear,
+  .dashboard-multiselect-cancel,
+  .dashboard-multiselect-apply {
+    @apply tw-m-0 tw-h-7 tw-cursor-pointer tw-rounded-sm tw-border tw-px-2 tw-text-[11px] tw-font-medium;
+    font-family: inherit;
+  }
+
+  .dashboard-multiselect-clear,
+  .dashboard-multiselect-cancel {
+    @apply tw-border-transparent tw-bg-transparent tw-text-muted-foreground hover:tw-text-foreground;
+  }
+
+  .dashboard-multiselect-apply {
+    @apply tw-border-foreground tw-bg-foreground tw-text-surface;
+  }
+
+  .dashboard-multiselect-clear:focus-visible,
+  .dashboard-multiselect-cancel:focus-visible,
+  .dashboard-multiselect-apply:focus-visible {
+    @apply tw-outline-none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+  }
+
+  .dashboard-active-filter-chips {
+    @apply tw-flex tw-flex-wrap tw-items-center tw-gap-1 tw-border-t tw-border-border tw-pt-1.5;
+  }
+
+  .dashboard-active-filter-chip {
+    @apply tw-inline-flex tw-h-6 tw-max-w-full tw-items-center tw-gap-1 tw-rounded-full tw-bg-muted tw-pl-2 tw-pr-1 tw-text-[10px] tw-font-medium tw-text-foreground;
+  }
+
+  .dashboard-active-filter-chip > span {
+    @apply tw-max-w-[14rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-active-filter-chip > button {
+    @apply tw-m-0 tw-inline-flex tw-h-4 tw-w-4 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-full tw-border-0 tw-bg-transparent tw-p-0 tw-text-[13px] tw-leading-none tw-text-muted-foreground hover:tw-bg-surface hover:tw-text-foreground;
+    font-family: inherit;
+  }
+
+  .dashboard-active-filter-chip > button:focus-visible {
+    @apply tw-outline-none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
   }
 
   /* Widget-header wrapper for the per-widget settings gear: right-aligned

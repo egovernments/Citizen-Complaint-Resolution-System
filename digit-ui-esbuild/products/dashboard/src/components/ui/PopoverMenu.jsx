@@ -112,6 +112,7 @@ const ChevronRightIcon = () => (
  */
 export const PopoverMenuItem = ({
   selected,
+  multiple = false,
   descend = false,
   muted = false,
   title,
@@ -123,7 +124,7 @@ export const PopoverMenuItem = ({
   return (
     <button
       type="button"
-      role={checkable ? "menuitemradio" : "menuitem"}
+      role={checkable ? (multiple ? "menuitemcheckbox" : "menuitemradio") : "menuitem"}
       aria-checked={checkable ? !!selected : undefined}
       aria-current={!checkable && selected ? "true" : undefined}
       data-menu-item=""
@@ -256,6 +257,7 @@ const PopoverMenu = ({
       const root = panelRef.current;
       if (!root) return;
       const target =
+        root.querySelector("[data-popover-autofocus]") ||
         root.querySelector('[data-menu-item][data-selected="true"]') ||
         root.querySelector(ITEM_SELECTOR);
       target?.focus();

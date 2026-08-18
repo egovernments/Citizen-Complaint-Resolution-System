@@ -14,7 +14,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -46,9 +49,18 @@ import java.util.regex.Pattern;
  *   <li>{@code ward} — a boundary/ward code; narrows to {@code ward_code = ?} <em>iff</em> the grain
  *       has a filterable {@code ward_code}. A client narrowing WITHIN the user's RBAC scope; it can
  *       never widen (row-scope is still injected on top by {@link AnalyticsPlanner#plan}).</li>
+ *   <li>{@code wards} — the multi-select form of {@code ward}; a bounded non-empty string array
+ *       narrowed with {@code ward_code IN (...)}, with every literal still JDBC-bound.</li>
  *   <li>{@code serviceCode} — a complaint type LEAF; narrows to {@code service_code = ?} iff
  *       filterable. This stays the param for leaf selections (exact match, works on every grain
  *       incl. daily); {@code complaintPath} below is for interior nodes only.</li>
+ *   <li>{@code serviceCodes} — the multi-select form of {@code serviceCode}; hierarchy selections
+ *       are expanded by the dashboard to their ABAC-scoped exact leaf codes and narrowed with
+ *       {@code service_code IN (...)}, so multi-select works on facts, events and daily.</li>
+ *   <li>{@code departments} — selected department codes narrowed with
+ *       {@code department_code IN (...)}. This remains an additional client narrowing: the
+ *       server-resolved department scope is independently applied by the planner, so the two lists
+ *       intersect and a request can never widen ABAC access.</li>
  *   <li>{@code complaintPath} — a complaint-hierarchy INTERIOR node's dot-path (e.g.
  *       {@code SANITATION.SEWAGE}); narrows to the node's whole subtree via a delimiter-guarded
  *       {@code complaint_node_path} subtree predicate ({@code = ? OR LIKE ?||'.%'}) iff the grain
@@ -117,6 +129,10 @@ public class KpiQueryComposer {
     private static final long MS_PER_DAY = 86_400_000L;
     /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
     private static final int MAX_SERIES_DAYS = 366;
+    /** Maximum options emitted by the scoped DISTINCT filter-option query. */
+    static final int MAX_MULTI_FILTER_VALUES = 300;
+    /** Generous bound for one ward/service/department code; values remain JDBC-bound. */
+    static final int MAX_MULTI_FILTER_VALUE_LENGTH = 512;
     /**
      * Trend axis for a pinned def's sparkline when the request carries neither a date range nor a
      * window param — a pinned window is too narrow to be a trend (dtd would be one point).
@@ -283,13 +299,23 @@ public class KpiQueryComposer {
      */
     private void applyNarrowingParams(ObjectNode next, Grain g, JsonNode params, List<String> paramsIgnoredOut) {
         // ---- narrowing dimension filters (only if the grain supports the column) ----
-        if (params.hasNonNull("ward")) {
+        rejectScalarAndPlural(params, "ward", "wards");
+        rejectScalarAndPlural(params, "serviceCode", "serviceCodes");
+
+        if (params.hasNonNull("wards")) {
+            applyInFilter(next, g, "ward_code", stringListParam(params, "wards"));
+        } else if (params.hasNonNull("ward")) {
             String ward = params.get("ward").asText();
             if (!ward.isEmpty() && !"all".equals(ward)) applyEqFilter(next, g, "ward_code", ward);
         }
-        if (params.hasNonNull("serviceCode")) {
+        if (params.hasNonNull("serviceCodes")) {
+            applyInFilter(next, g, "service_code", stringListParam(params, "serviceCodes"));
+        } else if (params.hasNonNull("serviceCode")) {
             String svc = params.get("serviceCode").asText();
             if (!svc.isEmpty() && !"all".equals(svc)) applyEqFilter(next, g, "service_code", svc);
+        }
+        if (params.hasNonNull("departments")) {
+            applyInFilter(next, g, "department_code", stringListParam(params, "departments"));
         }
         if (params.hasNonNull("complaintPath")) {
             String path = params.get("complaintPath").asText();
@@ -819,6 +845,49 @@ public class KpiQueryComposer {
             return;   // graceful skip — never inject an unknown column.
         }
         mergeableFilterObject(query, col).put("eq", value);
+    }
+
+    /** Add {@code col IN (...)} after validating and de-duplicating a dashboard multi-select. */
+    private void applyInFilter(ObjectNode query, Grain g, String col, List<String> values) {
+        if (!g.filterable.contains(col)) {
+            log.debug("grain '{}' does not allow filtering on '{}'; skipping narrowing param", g.name, col);
+            return;
+        }
+        ArrayNode in = query.arrayNode();
+        values.forEach(in::add);
+        mergeableFilterObject(query, col).set("in", in);
+    }
+
+    /**
+     * Parse one plural filter param. Presence is deliberate: an empty/malformed selection must be
+     * rejected instead of silently turning into an unfiltered dashboard response.
+     */
+    private List<String> stringListParam(JsonNode params, String name) {
+        JsonNode raw = params.get(name);
+        if (raw == null || !raw.isArray() || raw.size() == 0)
+            throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty string array");
+        if (raw.size() > MAX_MULTI_FILTER_VALUES)
+            throw new IllegalArgumentException("invalid_param: " + name + " may contain at most "
+                    + MAX_MULTI_FILTER_VALUES + " values");
+
+        Set<String> unique = new LinkedHashSet<>();
+        for (JsonNode item : raw) {
+            if (!item.isTextual())
+                throw new IllegalArgumentException("invalid_param: " + name + " values must be strings");
+            String value = item.asText().trim();
+            if (value.isEmpty() || "all".equals(value) || value.length() > MAX_MULTI_FILTER_VALUE_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name
+                        + " values must be non-empty codes no longer than " + MAX_MULTI_FILTER_VALUE_LENGTH);
+            unique.add(value);
+        }
+        return new ArrayList<>(unique);
+    }
+
+    /** A caller must use either the legacy scalar or the plural form, never both. */
+    private void rejectScalarAndPlural(JsonNode params, String scalar, String plural) {
+        if (params.hasNonNull(scalar) && params.hasNonNull(plural))
+            throw new IllegalArgumentException("invalid_param: use either " + scalar + " or " + plural
+                    + ", not both");
     }
 
     // ---- helpers ----

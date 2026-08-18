@@ -24,6 +24,7 @@ const ENTRY = `
 import React from "react";
 import ReactDOMServer from "react-dom/server";
 import ComplaintTypeTreeFilter, { ComplaintTypeTreePanel } from "./ComplaintTypeTreeFilter.jsx";
+import DashboardFilters from "./DashboardFilters.jsx";
 import GroupByLevelSelect from "./GroupByLevelSelect.jsx";
 import { PopoverMenuItem } from "./ui/PopoverMenu.jsx";
 import { buildComplaintTree } from "../utils/complaintTypeTree";
@@ -37,10 +38,15 @@ export const renderGroupBy = (props) =>
   ReactDOMServer.renderToStaticMarkup(React.createElement(GroupByLevelSelect, props));
 export const renderMenuItem = (props, label) =>
   ReactDOMServer.renderToStaticMarkup(React.createElement(PopoverMenuItem, props, label));
+export const renderDashboardFilters = (props) =>
+  ReactDOMServer.renderToStaticMarkup(React.createElement(DashboardFilters, props));
 `;
 
 function bundleEntry() {
-  const out = path.join(os.tmpdir(), `tree-controls-smoke.${process.pid}.cjs.js`);
+  const out = path.join(
+    os.tmpdir(),
+    `tree-controls-smoke.${process.pid}.cjs.js`
+  );
   esbuild.buildSync({
     stdin: {
       contents: ENTRY,
@@ -66,14 +72,25 @@ function bundleEntry() {
   return require(out);
 }
 
-const { renderFilter, renderPanel, renderGroupBy, renderMenuItem, buildComplaintTree } =
-  bundleEntry();
+const {
+  renderFilter,
+  renderPanel,
+  renderGroupBy,
+  renderMenuItem,
+  renderDashboardFilters,
+  buildComplaintTree,
+} = bundleEntry();
 
 // t: echo the seed English so assertions read naturally (the real runtime
 // echoes the KEY when unseeded — copy is not what this smoke verifies).
 const t = (key, seedEnglish) => seedEnglish || key;
 
-const rec = (code, parentCode, name) => ({ code, name: name || code, parentCode, active: true });
+const rec = (code, parentCode, name) => ({
+  code,
+  name: name || code,
+  parentCode,
+  active: true,
+});
 
 // ke PGR_TEST-shaped 4-level hierarchy: Category → Type → SubType → leaf.
 // (WaterMuddy additionally carries a 5th-level child so a browse position
@@ -107,36 +124,59 @@ test("chip smoke: root state shows All types with menu semantics", () => {
   assert.doesNotMatch(html, /<select/);
 });
 
-test("chip smoke: depth-1 interior selection shows its label", () => {
+test("chip smoke: one hierarchy selection shows the type label and count", () => {
   const html = renderFilter({
     tree: DEEP_TREE,
-    filters: { complaintType: "Infra" },
+    filters: {
+      complaintTypes: [
+        { code: "Infra", path: "Infra", leaf: false, codes: ["WaterMuddy"] },
+      ],
+    },
     onFilterChange: noop,
     t,
   });
-  assert.match(html, /Infrastructure/);
+  assert.match(html, /Complaint types/);
+  assert.match(html, /dashboard-multiselect-count[^>]*>1</);
+  assert.match(html, /dashboard-popover-trigger--active/);
   assert.doesNotMatch(html, /<select/);
 });
 
-test("chip smoke: deep leaf shows parent › leaf with elision marker", () => {
+test("chip smoke: multiple selections show their count without widening the bar", () => {
   const html = renderFilter({
     tree: DEEP_TREE,
-    filters: { complaintType: "WaterMuddy" },
+    filters: {
+      complaintTypes: [
+        {
+          code: "WaterMuddy",
+          path: "Infra.Water.WaterQuality.WaterMuddy",
+          leaf: true,
+          codes: ["WaterMuddy"],
+        },
+        {
+          code: "Pothole",
+          path: "Roads.Pothole",
+          leaf: true,
+          codes: ["Pothole"],
+        },
+      ],
+    },
     onFilterChange: noop,
     t,
   });
-  // "… › Water quality › Muddy water" — nearest ancestor + leaf, middle elided.
-  assert.match(html, /Water quality/);
-  assert.match(html, /Muddy water/);
-  assert.match(html, /dashboard-popover-trigger-seg--muted/);
-  // full trail is recoverable from the title
-  assert.match(html, /title="Infrastructure › Water supply › Water quality › Muddy water"/);
+  assert.match(html, /dashboard-multiselect-count[^>]*>2</);
+  assert.match(html, /title="Complaint types: 2"/);
+  assert.doesNotMatch(html, /WaterMuddy/);
 });
 
 /* ---------------- panel states ---------------- */
 
 test("panel smoke: root — categories listed, no All-in row, reset pinned", () => {
-  const html = renderPanel({ tree: DEEP_TREE, appliedCode: "all", onApply: noop, t });
+  const html = renderPanel({
+    tree: DEEP_TREE,
+    appliedCode: "all",
+    onApply: noop,
+    t,
+  });
   assert.match(html, /role="menuitem"/);
   assert.match(html, /Infrastructure/);
   assert.match(html, /Roads/);
@@ -148,7 +188,12 @@ test("panel smoke: root — categories listed, no All-in row, reset pinned", () 
 });
 
 test("panel smoke: interior — trail, All-in row, children", () => {
-  const html = renderPanel({ tree: DEEP_TREE, appliedCode: "Water", onApply: noop, t });
+  const html = renderPanel({
+    tree: DEEP_TREE,
+    appliedCode: "Water",
+    onApply: noop,
+    t,
+  });
   // browse opens AT the applied interior node
   assert.match(html, /dashboard-popover-trail/);
   assert.match(html, /All in Water supply/);
@@ -159,7 +204,12 @@ test("panel smoke: interior — trail, All-in row, children", () => {
 });
 
 test("panel smoke: leaf — opens at parent with the leaf checked among siblings", () => {
-  const html = renderPanel({ tree: DEEP_TREE, appliedCode: "WaterSmelly", onApply: noop, t });
+  const html = renderPanel({
+    tree: DEEP_TREE,
+    appliedCode: "WaterSmelly",
+    onApply: noop,
+    t,
+  });
   assert.match(html, /All in Water quality/);
   assert.match(html, /Muddy water/);
   assert.match(html, /data-selected="true"[^>]*>[\s\S]*?Smelly water/);
@@ -167,7 +217,12 @@ test("panel smoke: leaf — opens at parent with the leaf checked among siblings
 });
 
 test("panel smoke: 4-level-deep leaf — full trail fits, every level labeled", () => {
-  const html = renderPanel({ tree: DEEP_TREE, appliedCode: "WaterSmelly", onApply: noop, t });
+  const html = renderPanel({
+    tree: DEEP_TREE,
+    appliedCode: "WaterSmelly",
+    onApply: noop,
+    t,
+  });
   // browse opens at WaterQuality (depth 3): all › Infrastructure › Water
   // supply › Water quality — exactly TRAIL_MAX, no elision needed.
   assert.match(html, /All types/);
@@ -201,7 +256,10 @@ test("menu-item smoke: applied descend row announces via aria-current", () => {
   // An interior child that IS the applied subtree (ComplaintTypeTreePanel
   // passes selected=true + descend when browsing the applied node's parent):
   // plain menuitem (navigation row), no aria-checked, aria-current instead.
-  const html = renderMenuItem({ selected: true, descend: true, onSelect: noop }, "Water supply");
+  const html = renderMenuItem(
+    { selected: true, descend: true, onSelect: noop },
+    "Water supply"
+  );
   assert.match(html, /role="menuitem"/);
   assert.match(html, /aria-current="true"/);
   assert.doesNotMatch(html, /aria-checked/);
@@ -214,6 +272,48 @@ test("menu-item smoke: applied descend row announces via aria-current", () => {
   assert.match(radio, /role="menuitemradio"/);
   assert.match(radio, /aria-checked="true"/);
   assert.doesNotMatch(radio, /aria-current/);
+});
+
+test("filter bar smoke: ward, type and department selections stay compact and removable", () => {
+  const html = renderDashboardFilters({
+    filters: {
+      dateFrom: "2026-08-01",
+      dateTo: "2026-08-18",
+      dateRangeActive: true,
+      geographies: [
+        { code: "WARD_1", path: null, leaf: true, codes: ["WARD_1"] },
+      ],
+      complaintTypes: [
+        { code: "Pothole", path: null, leaf: true, codes: ["Pothole"] },
+      ],
+      departments: ["ROADS"],
+    },
+    filterOptions: {
+      geography: [
+        { id: "all", label: "All wards" },
+        { id: "WARD_1", label: "Ward 1" },
+      ],
+      complaintType: [
+        { id: "all", label: "All types" },
+        { id: "Pothole", label: "Pothole" },
+      ],
+      department: [
+        { id: "all", label: "All departments" },
+        { id: "ROADS", label: "Roads" },
+      ],
+    },
+    onFilterChange: noop,
+    onClearFilters: noop,
+    timeZone: "Africa/Nairobi",
+  });
+  assert.match(html, /Ward 1/);
+  assert.match(html, /Pothole/);
+  assert.match(html, /Roads/);
+  assert.match(html, /dashboard-active-filter-chip/g);
+  assert.match(html, /aria-label="Remove Ward 1"/);
+  assert.match(html, /aria-label="Remove Pothole"/);
+  assert.match(html, /aria-label="Remove Roads"/);
+  assert.doesNotMatch(html, /<select/);
 });
 
 /* ---------------- Group-by chip ---------------- */
