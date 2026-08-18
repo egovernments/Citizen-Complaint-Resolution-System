@@ -76,7 +76,10 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:v2.12-beta}"
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}"
+# ^ same tag docker-compose.egov-digit.yaml pins, deliberately: v2.12-beta is a
+#   DIFFERENT digest, so diverging here would give you one bridge via compose and
+#   another via this script.
 # ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
 #   template) WhatsApp path needs this PR branch's build, published to public
 #   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.

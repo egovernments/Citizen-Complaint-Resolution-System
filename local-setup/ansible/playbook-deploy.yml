@@ -1635,7 +1635,12 @@
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
-    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # `npm run build` the SPA here (files/digit-ui-build.sh). With no
+    # digit_ui_esbuild_repo set — the default since #1503 — the repo argument is
+    # the "-" sentinel, i.e. VENDORED: build the monorepo's own
+    # digit-ui-esbuild/ tree in place, no clone. This path therefore needs no
+    # git source of its own, which is why the source-mode assert above does not
+    # cover it. Set digit_ui_esbuild_repo to build a fork instead.
     # The bundle is laid into the digit-ui container AFTER up -d via tar (see
     # the "lay digit-ui build into container" task below) — NOT a bind-mount:
     # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
@@ -1660,7 +1665,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
-        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ (digit_ui_esbuild_repo | default('')) or '-' }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
       environment:
         REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
@@ -2087,6 +2092,11 @@
     - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
       ansible.builtin.shell: |
         set -euo pipefail
+        # `docker cp` refuses a destination whose PARENT does not exist
+        # ("invalid output path: directory ... does not exist"). The git clone
+        # used to create /opt/digit-ui-esbuild as a side effect; this path skips
+        # the clone, so on a fresh target nothing else makes it. Create it here.
+        mkdir -p /opt/digit-ui-esbuild
         docker pull {{ digit_ui_bundle_image }}
         id=$(docker create {{ digit_ui_bundle_image }})
         trap 'docker rm -f "$id" >/dev/null' EXIT
