@@ -17,6 +17,10 @@ const $detailHeader = document.getElementById('detail-header');
 const $eventsContainer = document.getElementById('events-container');
 const $warningBanner = document.getElementById('warning-banner');
 const $autoRefresh = document.getElementById('auto-refresh');
+const $tokenGate = document.getElementById('token-gate');
+const $tokenForm = document.getElementById('token-form');
+const $tokenInput = document.getElementById('token-input');
+const $tokenMessage = document.getElementById('token-message');
 
 // --- Helpers ---
 
@@ -53,8 +57,69 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// --- Auth ---
+//
+// The /api/* routes now require a DIGIT access token with an admin role. The
+// viewer is a static page with no backend of its own, so it asks for the token
+// and keeps it in sessionStorage — cleared when the tab closes, never written
+// to localStorage or to a URL where it would end up in history or a referrer.
+
+const TOKEN_KEY = 'digit-mcp-token';
+
+function getToken() {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function setToken(token) {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private-mode browsers: the token just doesn't persist across reloads */
+  }
+}
+
+function showTokenGate(message) {
+  stopAutoRefresh();
+  $tokenMessage.textContent = message || '';
+  $tokenMessage.classList.toggle('hidden', !message);
+  $tokenGate.classList.remove('hidden');
+  $tokenInput.value = '';
+  $tokenInput.focus();
+}
+
+function hideTokenGate() {
+  $tokenGate.classList.add('hidden');
+}
+
+/**
+ * Sentinel thrown when a request is rejected for auth reasons. Callers stop
+ * rendering rather than painting a half-empty dashboard over the gate.
+ */
+const AUTH_FAILED = Symbol('auth-failed');
+
 async function apiFetch(path) {
-  const res = await fetch(path);
+  const token = getToken();
+  const res = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    let detail = '';
+    try {
+      detail = (await res.json()).error || '';
+    } catch {
+      /* non-JSON body */
+    }
+    if (res.status === 401) setToken('');
+    showTokenGate(detail || 'Authentication required.');
+    throw AUTH_FAILED;
+  }
+
   const data = await res.json();
   if (data.error) {
     $warningBanner.classList.remove('hidden');
@@ -111,7 +176,9 @@ async function loadSessions() {
   $sessionsContainer.querySelectorAll('.session-card').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.id;
-      selectSession(id);
+      selectSession(id).catch((err) => {
+        if (err !== AUTH_FAILED) throw err;
+      });
     });
   });
 }
@@ -362,10 +429,17 @@ function renderEvent(e) {
 function startAutoRefresh() {
   stopAutoRefresh();
   refreshTimer = setInterval(async () => {
-    await loadStats();
-    await loadSessions();
-    if (activeSessionId) {
-      await selectSession(activeSessionId);
+    try {
+      await loadStats();
+      await loadSessions();
+      if (activeSessionId) {
+        await selectSession(activeSessionId);
+      }
+    } catch (err) {
+      // A token that expired mid-session lands here. apiFetch has already
+      // stopped the timer and shown the gate; swallow so the interval doesn't
+      // keep throwing into the console every tick.
+      if (err !== AUTH_FAILED) throw err;
     }
   }, REFRESH_INTERVAL);
 }
@@ -385,11 +459,27 @@ $autoRefresh.addEventListener('change', () => {
   }
 });
 
+$tokenForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const token = $tokenInput.value.trim();
+  if (!token) return;
+  setToken(token);
+  hideTokenGate();
+  init();
+});
+
 // --- Init ---
 
 async function init() {
-  await loadStats();
-  await loadSessions();
+  try {
+    await loadStats();
+    await loadSessions();
+  } catch (err) {
+    // apiFetch has already shown the gate; anything else is worth surfacing.
+    if (err !== AUTH_FAILED) throw err;
+    return;
+  }
+  hideTokenGate();
   if ($autoRefresh.checked) {
     startAutoRefresh();
   }

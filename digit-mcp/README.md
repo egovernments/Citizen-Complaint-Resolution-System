@@ -38,11 +38,33 @@ Add to `~/.claude.json` or project `.mcp.json`:
   "mcpServers": {
     "DIGIT-MCP": {
       "type": "http",
-      "url": "https://mcp.egov.theflywheel.in/mcp"
+      "url": "https://mcp.egov.theflywheel.in/mcp",
+      "headers": {
+        "Authorization": "Bearer <your DIGIT access token>"
+      }
     }
   }
 }
 ```
+
+The hosted endpoint requires a DIGIT access token. It is introspected against
+egov-user on every call, and the tools run as *you* — the server never
+substitutes its own credentials for a network caller. Get a token from the
+OAuth endpoint of the DIGIT instance you are targeting:
+
+```bash
+curl -s -u egov-user-client:egov-user-secret \
+  -d 'grant_type=password&scope=read&userType=EMPLOYEE' \
+  --data-urlencode "username=$USER" \
+  --data-urlencode "password=$PASS" \
+  --data-urlencode "tenantId=pg" \
+  https://<digit-host>/user/oauth/token | jq -r .access_token
+```
+
+Tools are tiered `public` / `employee` / `admin`; a citizen account can reach
+the public ones only. If an admin-tier tool returns 403, the message names both
+the roles it needs and the roles you hold — see `MCP_ADMIN_ROLES` in
+[`helm/digit-mcp/values.yaml`](helm/digit-mcp/values.yaml).
 
 Or for local stdio:
 
@@ -73,7 +95,10 @@ Add to your MCP settings (`.cursor/mcp.json`, `.windsurf/mcp.json`, or VS Code M
 {
   "mcpServers": {
     "DIGIT-MCP": {
-      "url": "https://mcp.egov.theflywheel.in/mcp"
+      "url": "https://mcp.egov.theflywheel.in/mcp",
+      "headers": {
+        "Authorization": "Bearer <your DIGIT access token>"
+      }
     }
   }
 }
