@@ -10,6 +10,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'filestore_get_urls',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'filestore',
     risk: 'read',
@@ -135,6 +139,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'access_roles_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'access-control',
     risk: 'read',
@@ -174,6 +182,10 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'access_actions_search',
+    // Admin, not the employee default: a read that returns citizen/employee PII
+    // or maps a tenant's access-control topology is reconnaissance for anyone
+    // below that tier, and its sibling WRITE tools in this same file are admin.
+    access: 'admin',
     group: 'admin',
     category: 'access-control',
     risk: 'read',

@@ -103,7 +103,10 @@ class DigitApiClient {
   }
 
   isAuthenticated(): boolean {
-    return this.authToken !== null;
+    // An empty string is not a credential. Treating it as one meant a caller
+    // could be "authenticated" while every outbound request carried no token —
+    // authenticated to us, anonymous to DIGIT.
+    return !!this.authToken;
   }
 
   /** Password of the current session's login, when known (null for

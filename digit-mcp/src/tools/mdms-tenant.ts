@@ -542,8 +542,13 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       }
 
       const env = digitApi.getEnvironmentInfo();
-      const username = (args.username as string) || process.env.CRS_USERNAME;
-      const password = (args.password as string) || process.env.CRS_PASSWORD;
+      // Env credentials are a convenience for the process owner (stdio), not a
+      // substitute identity for a network caller. In token mode the caller is
+      // already authenticated as themselves; falling back here would let an
+      // admin on one tenant silently adopt the container's ADMIN account.
+      const ambient = getAuthMode() === 'ambient';
+      const username = (args.username as string) || (ambient ? process.env.CRS_USERNAME : undefined);
+      const password = (args.password as string) || (ambient ? process.env.CRS_PASSWORD : undefined);
       const explicitTenantId = (args.tenant_id as string) || (args.state_tenant as string);
       const defaultLoginTenant = process.env.CRS_TENANT_ID || env.stateTenantId;
 
@@ -616,7 +621,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             hint: `Login failed against tenants: ${triedTenants}. ` +
               `IMPORTANT: HRMS employee usernames are the EMPLOYEE CODE (e.g. "EMP-LIVE-000057"), NOT the mobile number. ` +
               `Check the employee_create response for the "code" field and use that as the username. ` +
-              `Default password is "eGov@123".`,
+              `Default password is the configured provisioning password (MCP_DEFAULT_PROVISIONING_PASSWORD).`,
           },
           null,
           2
@@ -3120,7 +3125,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (adminRecord?.uuid) userPayload.uuid = adminRecord.uuid;
               if (adminRecord?.id) userPayload.id = adminRecord.id;
               if (!adminRecord?.uuid) {
-                userPayload.password = process.env.CRS_PASSWORD || 'eGov@123';
+                userPayload.password = process.env.CRS_PASSWORD || defaultProvisioningPassword();
               }
 
               // PGR's validateDepartment checks that the assignee's HRMS
@@ -3202,7 +3207,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                   try {
                     const users = await digitApi.userSearch(target, { uuid: [u.uuid as string], limit: 1 });
                     if (users.length > 0) {
-                      await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || 'eGov@123' });
+                      await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || defaultProvisioningPassword() });
                     }
                   } catch { /* non-fatal */ }
                 }
@@ -3776,7 +3781,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             // Only set password on a fresh user — sending it for an existing
             // user is what trips DuplicateUserName on some HRMS builds.
             if (!cityAdminRecord?.uuid) {
-              userPayload.password = process.env.CRS_PASSWORD || 'eGov@123';
+              userPayload.password = process.env.CRS_PASSWORD || defaultProvisioningPassword();
             }
 
             const now = Date.now();
@@ -3818,7 +3823,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 try {
                   const users = await digitApi.userSearch(root, { uuid: [user.uuid as string], limit: 1 });
                   if (users.length > 0) {
-                    await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || 'eGov@123' });
+                    await digitApi.userUpdate({ ...users[0], password: process.env.CRS_PASSWORD || defaultProvisioningPassword() });
                   }
                 } catch { /* non-fatal */ }
               }
