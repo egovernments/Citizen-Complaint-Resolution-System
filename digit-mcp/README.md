@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ChakshuGautam/digit-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ChakshuGautam/digit-mcp/actions/workflows/ci.yml)
 
-MCP server + data provider for the [DIGIT](https://docs.digit.org) eGov platform — **60 MCP tools** across **14 groups**, a **shared TypeScript API client** (`@digit-mcp/data-provider`), and a **react-admin DataProvider/AuthProvider** for building DIGIT frontends.
+MCP server + data provider for the [DIGIT](https://docs.digit.org) eGov platform — **70 MCP tools** across **16 groups**, a **shared TypeScript API client** (`@digit-mcp/data-provider`), and a **react-admin DataProvider/AuthProvider** for building DIGIT frontends.
 
 Only 11 tools load initially (`core` + `docs`). The rest unlock on demand via `enable_tools`, so agents aren't overwhelmed with options they don't need yet.
 
@@ -48,21 +48,23 @@ Add to `~/.claude.json` or project `.mcp.json`:
 ```
 
 The hosted endpoint requires a DIGIT access token. It is introspected against
-egov-user on every call, and the tools run as *you* — the server never
+egov-user (cached for 30s), and the tools run as *you* — the server never
 substitutes its own credentials for a network caller. Get a token from the
-OAuth endpoint of the DIGIT instance you are targeting:
+OAuth endpoint of the DIGIT instance you are targeting. Note the trailing colon
+on `-u`: DIGIT's client secret is empty.
 
 ```bash
-curl -s -u egov-user-client:egov-user-secret \
+curl -s -u egov-user-client: \
   -d 'grant_type=password&scope=read&userType=EMPLOYEE' \
-  --data-urlencode "username=$USER" \
-  --data-urlencode "password=$PASS" \
+  --data-urlencode "username=$DIGIT_USER" \
+  --data-urlencode "password=$DIGIT_PASS" \
   --data-urlencode "tenantId=pg" \
   https://<digit-host>/user/oauth/token | jq -r .access_token
 ```
 
-Tools are tiered `public` / `employee` / `admin`; a citizen account can reach
-the public ones only. If an admin-tier tool returns 403, the message names both
+Tools are tiered `public` / `employee` / `admin` (6 / 29 / 35 of the 70). The
+recipe above mints an employee token; a citizen account reaches the public
+tools only. If an admin-tier tool returns 403, the message names both
 the roles it needs and the roles you hold — see `MCP_ADMIN_ROLES` in
 [`helm/digit-mcp/values.yaml`](helm/digit-mcp/values.yaml).
 
@@ -108,7 +110,7 @@ Add to your MCP settings (`.cursor/mcp.json`, `.windsurf/mcp.json`, or VS Code M
 
 ## CLI
 
-The `digit` CLI provides the same 56 tools as the MCP server, auto-generated from the shared tool registry. No per-tool CLI code — adding an MCP tool automatically adds a CLI command.
+The `digit` CLI provides the same 70 tools as the MCP server, auto-generated from the shared tool registry. No per-tool CLI code — adding an MCP tool automatically adds a CLI command.
 
 ### Install
 
@@ -180,7 +182,7 @@ docker run -p 3000:3000 \
   -e CRS_ENVIRONMENT=chakshu-digit \
   -e CRS_USERNAME=ADMIN \
   -e CRS_PASSWORD=eGov@123 \
-  ghcr.io/chakshugautam/digit-mcp:latest
+  egovio/digit-mcp:nightly-develop
 
 # Health check
 curl http://localhost:3000/healthz
@@ -190,10 +192,15 @@ curl http://localhost:3000/healthz
 
 ```bash
 helm install digit-mcp ./helm/digit-mcp \
-  --set env.CRS_ENVIRONMENT=chakshu-digit \
+  --set image.tag=nightly-develop \
+  --set env.CRS_ENVIRONMENT=self-hosted \
+  --set secret.SESSION_DB_PASSWORD=<session-db-password> \
   --set secret.CRS_USERNAME=ADMIN \
   --set secret.CRS_PASSWORD=eGov@123
 ```
+
+`CRS_USERNAME`/`CRS_PASSWORD` are only used by the ambient-mode fallback, which
+`MCP_AUTH_MODE=token` (the default on the HTTP transport) disables.
 
 See [`helm/digit-mcp/values.yaml`](helm/digit-mcp/values.yaml) for all options.
 
@@ -259,7 +266,7 @@ enable_tools(["tracing"]) → trace_debug → trace_get
 | [Building a PGR UI](docs/ui.md) | Complete guide to building complaint management frontends |
 | [Architecture](docs/architecture.md) | Server internals, transport, progressive disclosure |
 | [CLI Architecture](docs/cli-architecture.md) | How the CLI is auto-generated from the tool registry |
-| [API Reference](docs/api/README.md) | All 60 tools with parameters and examples |
+| [API Reference](docs/api/README.md) | All 70 tools with parameters and examples |
 | [OpenAPI Spec](docs/openapi.yaml) | Machine-readable API specification |
 
 ## Data Provider (`@digit-mcp/data-provider`)
@@ -355,6 +362,14 @@ getResourceBySchema('RAINMAKER-PGR.ServiceDefs');  // → complaint-types config
 | `CRS_PASSWORD` | — | DIGIT admin password |
 | `CRS_TENANT_ID` | from env config | Tenant for authentication |
 | `MCP_ENABLE_ALL_GROUPS` | — | Set to `1` to enable all tool groups on startup |
+| `MCP_AUTH_MODE` | `token` on http, `ambient` on stdio | Whether network callers must present a validated token. `ambient` makes every anonymous caller act as `CRS_USERNAME` — loopback-bound sockets only |
+| `MCP_ADMIN_ROLES` | `SUPERUSER,MDMS_ADMIN,SYSTEM_ADMIN,STADMIN` | Role codes that satisfy an `admin`-tier tool |
+| `MCP_ALLOWED_BASE_URLS` | the configured `CRS_API_URL` | Hosts `configure`'s `base_url` may be pointed at |
+| `MCP_ARTIFACT_DIR` | `$SESSION_DATA_DIR/artifacts` | Directory snapshot artifacts are confined to |
+| `MCP_TRUSTED_PROXIES` | — (never trusted) | Peers whose `X-Forwarded-For` is honoured; IPv4/IPv6 addresses or CIDRs, or `*` |
+| `MCP_DEFAULT_PROVISIONING_PASSWORD` | `eGov@123` | Password given to accounts this server **creates**. A published default — override it |
+| `MCP_CORS_ORIGINS` | — | Origins allowed to call `/v1/*` and `/api/*` cross-origin |
+| `SESSION_DB_PASSWORD` | `mcp123` | Session-viewer database password. Published default — set it on any networked deploy |
 
 ## Environments
 
@@ -400,7 +415,7 @@ src/
 │   ├── digit-api.ts      # DIGIT API client (auth, multi-tenant, all services)
 │   ├── session-store.ts  # PostgreSQL session tracking
 │   └── telemetry.ts      # Matomo analytics
-├── tools/                # 60 tools across 16 registration files
+├── tools/                # 70 tools across 18 registration files
 │   ├── registry.ts       # ToolRegistry (group enable/disable lifecycle)
 │   └── index.ts          # registerAllTools() aggregator
 ├── utils/

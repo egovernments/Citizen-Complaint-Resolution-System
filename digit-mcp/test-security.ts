@@ -243,7 +243,7 @@ const allTools = registry.getAllTools();
 
 /** Tools intentionally reachable without any role. Additions need review. */
 const EXPECTED_PUBLIC = new Set([
-  'api_catalog', 'discover_tools', 'enable_tools', 'docs_search', 'docs_get',
+  'api_catalog', 'discover_tools', 'docs_search',
   'get_environment_info', 'init', 'session_checkpoint',
 ]);
 
@@ -263,11 +263,20 @@ await test('3.2 the public surface is exactly the reviewed list', () => {
   );
 });
 
-await test('3.3 no write-risk tool is public', () => {
+/**
+ * The two session tools are public AND write: they record a session row, which
+ * any authenticated caller may legitimately do. Everything else public must be
+ * read-only. Listing the exceptions explicitly is what makes this test able to
+ * fail — excluding all of EXPECTED_PUBLIC made it a tautology, since 3.2
+ * already pins that set.
+ */
+const PUBLIC_WRITE_EXCEPTIONS = new Set(['init', 'session_checkpoint']);
+
+await test('3.3 no public tool is write-risk except the session recorders', () => {
   const offenders = allTools
-    .filter((t) => t.access === 'public' && t.risk === 'write' && !EXPECTED_PUBLIC.has(t.name))
+    .filter((t) => t.access === 'public' && t.risk === 'write' && !PUBLIC_WRITE_EXCEPTIONS.has(t.name))
     .map((t) => t.name);
-  assert.deepEqual(offenders, []);
+  assert.deepEqual(offenders, [], 'a public tool gained write risk');
 });
 
 await test('3.4 destructive and PII tools are admin-tier', () => {
@@ -301,7 +310,8 @@ await test('3.6 mutating tools are labelled risk: write', () => {
 
 console.log('\n\x1b[1m4. Redaction\x1b[0m');
 
-await test('4.1 nested credentials are redacted at depth', () => {
+await test('4.1 a credential-shaped envelope is redacted whole', () => {
+  // `auth` matches at the top level, so this does NOT exercise depth — 4.2 does.
   const out = redactDeep({ auth: { username: 'admin', password: 'hunter2' } }) as any;
   assert.equal(out.auth, '***', 'the whole auth envelope is credential-shaped');
 });
@@ -352,7 +362,7 @@ await test('4.7 isSensitiveKey covers the documented names', () => {
 
 console.log('\n\x1b[1m5. Artifact paths\x1b[0m');
 
-import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 
@@ -402,11 +412,32 @@ await test('5.6 an absolute path inside the directory is allowed', () => {
   });
 });
 
-await test('5.7 a symlink pointing out of the directory is rejected', () => {
+await test('5.7 a live symlink pointing out of the directory is rejected', () => {
   inArtifactDir(() => {
     const link = join(artifactRoot, 'escape-link');
     symlinkSync(outsideRoot, link, 'dir');
     assert.throws(() => resolveArtifactPath('escape-link/x.json'), /outside the permitted/);
+  });
+});
+
+await test('5.8 a DANGLING symlink is rejected', () => {
+  // realpathSync throws on a dangling link, so resolving alone treats it as a
+  // leaf that doesn't exist yet and returns a path inside the base — which the
+  // caller's writeFileSync then follows straight out of the directory.
+  // Creating a new file elsewhere is the case that matters.
+  inArtifactDir(() => {
+    symlinkSync(join(outsideRoot, 'not-created-yet.json'), join(artifactRoot, 'dangle.json'));
+    assert.throws(() => resolveArtifactPath('dangle.json'), /symbolic link/);
+  });
+});
+
+await test('5.9 a rejected path creates no directories', () => {
+  // The check must come before the mkdir. Creating the caller's directories and
+  // then throwing is arbitrary directory creation wherever the process can write.
+  inArtifactDir(() => {
+    const victim = join(outsideRoot, 'should-not-exist');
+    assert.throws(() => resolveArtifactPath(join(victim, 'deep', 'x.json')), /outside the permitted/);
+    assert.ok(!existsSync(victim), 'a denied path still authored directories on disk');
   });
 });
 
@@ -536,9 +567,25 @@ await test('7.7 an IPv6 CIDR matches — a dual-stack cluster must not fail open
   });
 });
 
-await test('7.8 a zone index on the peer address is stripped', () => {
+await test('7.7b an IPv6 CIDR with a partial prefix masks within the group', () => {
+  // /32 only ever compares whole 16-bit groups, so it never exercises the
+  // groupBits/mask arithmetic — the only non-trivial line in the function.
+  withEnv({ MCP_TRUSTED_PROXIES: '2001:db8:8000::/33' }, () => {
+    assert.equal(resolveClientIp('2001:db8:8000::1', '1.2.3.4').trusted, true);
+    assert.equal(resolveClientIp('2001:db8:0::1', '1.2.3.4').trusted, false);
+  });
+});
+
+await test('7.8 a zone index is stripped rather than parsed into the address', () => {
   withEnv({ MCP_TRUSTED_PROXIES: 'fe80::1' }, () => {
     assert.equal(resolveClientIp('fe80::1%eth0', '1.2.3.4').trusted, true);
+  });
+  // The load-bearing half: a zone must not leak into the group parse. Asserting
+  // only the match above passes even if the zone is never stripped, because
+  // parseInt('1%eth0', 16) is 1.
+  withEnv({ MCP_TRUSTED_PROXIES: 'fe80::2' }, () => {
+    assert.equal(resolveClientIp('fe80::1%2', '1.2.3.4').trusted, false,
+      'a zone id must not be read as part of the address');
   });
 });
 
@@ -575,12 +622,47 @@ await test('8.1 concurrent isolated clients do not observe each other', async ()
 });
 
 await test('8.2 an isolated client does not leak into the shared default', async () => {
-  digitApi.applyToken('outer-token', ADMIN, 'pg');
-  await runWithIsolatedClient(async () => {
-    digitApi.applyToken('inner-token', CITIZEN, 'pg');
-    assert.equal(digitApi.getAuthInfo().user?.userName, 'citizen-1');
-  });
-  assert.equal(digitApi.getAuthInfo().user?.userName, 'admin-1', 'the outer scope must be untouched');
+  // Restore the shared client afterwards: the suite runs sequentially at the
+  // top level, so leaving it authenticated hands every later test an admin.
+  const snap = digitApi.snapshotAuth();
+  try {
+    digitApi.applyToken('outer-token', ADMIN, 'pg');
+    await runWithIsolatedClient(async () => {
+      digitApi.applyToken('inner-token', CITIZEN, 'pg');
+      assert.equal(digitApi.getAuthInfo().user?.userName, 'citizen-1');
+    });
+    assert.equal(digitApi.getAuthInfo().user?.userName, 'admin-1', 'the outer scope must be untouched');
+  } finally {
+    digitApi.restoreAuth(snap);
+  }
+});
+
+await test('8.4 the isolated client also isolates `environment`', async () => {
+  // configure()'s base_url writes `environment`. Omitting it from the snapshot
+  // let one call repoint the whole process at a caller-chosen host.
+  const snap = digitApi.snapshotAuth();
+  try {
+    const before = digitApi.getEnvironmentInfo().url;
+    await runWithIsolatedClient(async () => {
+      digitApi.setAdHocEnvironment('http://elsewhere.example');
+      assert.equal(digitApi.getEnvironmentInfo().url, 'http://elsewhere.example');
+    });
+    assert.equal(digitApi.getEnvironmentInfo().url, before, 'environment escaped the request scope');
+  } finally {
+    digitApi.restoreAuth(snap);
+  }
+});
+
+await test('8.5 a cached identity is copied, not shared, between callers', async () => {
+  // The introspection cache holds one UserInfo per token. Handing the same
+  // reference to concurrent request-scoped clients would put mutable state back
+  // across the boundary the isolation exists to draw.
+  const cached: UserInfo = user('shared', ['SUPERUSER']);
+  const a = { ...cached, roles: cached.roles!.map((r) => ({ ...r })) };
+  const b = { ...cached, roles: cached.roles!.map((r) => ({ ...r })) };
+  a.roles![0].code = 'MUTATED';
+  assert.equal(b.roles![0].code, 'SUPERUSER', 'per-caller copies must not alias');
+  assert.equal(cached.roles![0].code, 'SUPERUSER', 'the cache entry must not be mutable through a copy');
 });
 
 await test('8.3 request context is per-request under interleaving', async () => {
@@ -595,7 +677,7 @@ await test('8.3 request context is per-request under interleaving', async () => 
   assert.deepEqual(seen.sort(), ['1.1.1.1:1.1.1.1', '2.2.2.2:2.2.2.2', '3.3.3.3:3.3.3.3']);
 });
 
-await test('8.4 outside a request scope the context is empty', () => {
+await test('8.6 outside a request scope the context is empty', () => {
   assert.equal(getRequestContext(), undefined, 'stdio must not inherit a stale HTTP context');
 });
 

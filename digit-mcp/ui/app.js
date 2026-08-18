@@ -115,7 +115,9 @@ async function apiFetch(path) {
     } catch {
       /* non-JSON body */
     }
-    if (res.status === 401) setToken('');
+    // Clear on 403 as well as 401: a wrong-role token is just as unusable, and
+    // keeping it means the next reload silently replays it back into the gate.
+    setToken('');
     showTokenGate(detail || 'Authentication required.');
     throw AUTH_FAILED;
   }
@@ -177,7 +179,9 @@ async function loadSessions() {
     card.addEventListener('click', () => {
       const id = card.dataset.id;
       selectSession(id).catch((err) => {
-        if (err !== AUTH_FAILED) throw err;
+        // Re-throwing inside a .catch produces a fresh unhandled rejection
+        // rather than reaching window.onerror, so surface it instead.
+        if (err !== AUTH_FAILED) console.error('[viewer] failed to load session', err);
       });
     });
   });
@@ -439,7 +443,7 @@ function startAutoRefresh() {
       // A token that expired mid-session lands here. apiFetch has already
       // stopped the timer and shown the gate; swallow so the interval doesn't
       // keep throwing into the console every tick.
-      if (err !== AUTH_FAILED) throw err;
+      if (err !== AUTH_FAILED) console.error('[viewer] refresh failed', err);
     }
   }, REFRESH_INTERVAL);
 }
@@ -476,7 +480,10 @@ async function init() {
     await loadSessions();
   } catch (err) {
     // apiFetch has already shown the gate; anything else is worth surfacing.
-    if (err !== AUTH_FAILED) throw err;
+    if (err !== AUTH_FAILED) {
+      console.error('[viewer] initial load failed', err);
+      return;
+    }
     return;
   }
   hideTokenGate();

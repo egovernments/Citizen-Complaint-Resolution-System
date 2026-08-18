@@ -46,5 +46,12 @@ jobs:
       # artifact confinement, forwarded-for trust, request isolation). These are
       # invariants a refactor can silently break, so they gate the build rather
       # than living in a reviewer's memory. Refs #1641.
-      - name: Security boundary tests
+      - name: Security boundary tests (policy)
         run: npm run test:security
+
+      # Enforcement, over a real socket against a stub egov-user. The unit
+      # suite proves the tier decision is right; this proves it is actually
+      # called, on every route. Deleting the authorization wiring passes the
+      # unit suite and fails this one.
+      - name: Security boundary tests (enforcement)
+        run: npm run test:security:http

@@ -9,12 +9,20 @@ image:
   # registry fed by a different repository. Nothing in this tree reached the
   # cluster through it, so a fix merged here would never have shipped.
   repository: egovio/digit-mcp
-  # Tags published by that pipeline are `develop-<sha8>`, `develop-YYYYMMDD`,
-  # `nightly-develop` and release tags. Pin a `develop-<sha8>` per environment;
-  # nightly-develop is the moving default. (Chart.AppVersion is NOT a valid tag
+  # Tags published by that pipeline: `develop-<sha8>`, `develop-YYYYMMDD`,
+  # `nightly-develop`, and release tags. (Chart.AppVersion is NOT a valid tag
   # here — the chart version and the image pipeline are independent.)
+  #
+  # `develop-<sha8>` tags are PRUNED by the nightly job — it keeps only the 5
+  # most recent — so a sha pin silently disappears within about a week, taking
+  # your rollback target with it. Pin a `develop-YYYYMMDD` or a release tag for
+  # anything long-lived.
   tag: nightly-develop
-  pullPolicy: IfNotPresent
+  # Always, not IfNotPresent: the default tag moves. With IfNotPresent a node
+  # that has the tag cached never re-pulls, so two replicas can run different
+  # code indefinitely and `helm upgrade` is a no-op. If you pin an immutable
+  # tag or a digest, IfNotPresent is the better choice.
+  pullPolicy: Always
 
 service:
   # ClusterIP only. /mcp and /v1/* expose admin-capable tooling; do not put an
@@ -31,7 +39,7 @@ env:
   # DIGIT API base the shim proxies to (in-cluster gateway service).
   CRS_API_URL: "http://gateway.egov:8080"
   CRS_ENV_NAME: "CCRS"
-  # Require a validated DIGIT token on /mcp and /v1/*. Do not set this to
+  # Require a validated DIGIT token on /mcp, /v1/* and /api/*. Do not set this to
   # "ambient" unless the socket is bound to loopback — ambient makes every
   # anonymous caller act as CRS_USERNAME.
   MCP_AUTH_MODE: token
@@ -44,9 +52,13 @@ env:
   # Role codes that satisfy a tool's access: 'admin' requirement. Empty => the
   # built-in defaults (SUPERUSER, MDMS_ADMIN, SYSTEM_ADMIN, STADMIN).
   MCP_ADMIN_ROLES: ""
-  # Peers whose X-Forwarded-For may be trusted (IPv4/CIDR list, or "*" behind an
-  # ingress that overwrites the header). Empty => never trust it.
+  # Peers whose X-Forwarded-For may be trusted: IPv4 or IPv6 addresses and
+  # CIDRs, or "*" behind an ingress that overwrites the header. Empty => never
+  # trust it.
   MCP_TRUSTED_PROXIES: ""
+  # Password assigned to accounts this server CREATES (never to an existing
+  # one). Defaults to the published "eGov@123" if unset — override it.
+  MCP_DEFAULT_PROVISIONING_PASSWORD: ""
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...
@@ -58,6 +70,14 @@ secret:
   # Session-viewer database. Unset => the published local-compose default, which
   # is not a credential; set it on any real deployment.
   SESSION_DB_PASSWORD: ""
+
+# Bounds for the three emptyDir volumes (see deployment.yaml). The access log
+# and session JSONL are append-only and unrotated, so these are what stop a
+# chatty pod from filling the node.
+storage:
+  logsSizeLimit: 512Mi
+  dataSizeLimit: 1Gi
+  tmpSizeLimit: 128Mi
 
 resources:
   requests:

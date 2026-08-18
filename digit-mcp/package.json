@@ -41,6 +41,7 @@
     "test:dashboard-catalog": "node --test scripts/dashboard-catalog-contract.test.mjs",
     "test:dashboard-bootstrap": "tsx --test test-dashboard-bootstrap.ts",
     "test:security": "tsx test-security.ts",
+    "test:security:http": "tsx test-security-http.ts",
     "engram": "tsx engram-agent.ts",
     "prepublishOnly": "npm run build"
   },
