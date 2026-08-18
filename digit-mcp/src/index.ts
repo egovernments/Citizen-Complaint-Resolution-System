@@ -17,6 +17,7 @@ import {
   checkToolAccess,
   getAuthMode,
   isAdminCaller,
+  isCachedCaller,
   parseBearer,
   resolveClientIp,
   type ValidatedCaller,
@@ -62,10 +63,40 @@ if (transportMode === 'stdio') {
     res.end(JSON.stringify(data));
   }
 
+  /**
+   * Maximum accepted request body. Bulk tenant payloads are the large case;
+   * 16 MB is well clear of those and well clear of the pod's memory limit.
+   */
+  const MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+  class PayloadTooLargeError extends Error {
+    constructor() {
+      super(`Request body exceeds the ${MAX_BODY_BYTES} byte limit.`);
+      this.name = 'PayloadTooLargeError';
+    }
+  }
+
+  /**
+   * Read a request body, bounded.
+   *
+   * Unbounded, this defeated every gate in front of it: the body is buffered
+   * before any route can authenticate, so one anonymous request with a large
+   * chunked body killed the process on its memory limit — a reliable
+   * crash-loop from a peer holding no credentials.
+   */
   function readBody(req: IncomingMessage): Promise<string> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      let total = 0;
+      req.on('data', (chunk: Buffer) => {
+        total += chunk.length;
+        if (total > MAX_BODY_BYTES) {
+          reject(new PayloadTooLargeError());
+          req.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
       req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
       req.on('error', reject);
     });
@@ -299,6 +330,12 @@ if (transportMode === 'stdio') {
     toolArgs: Record<string, unknown>,
     onResult: (parsed: unknown) => T,
   ): Promise<T> {
+    // `recordToolCall` is a no-op until a session exists, and only the /mcp
+    // handler used to create one — so on a REST-only deployment (which is what
+    // the ansible playbook and the xlsx onboarding runbook actually drive)
+    // every call produced an access-log line and nothing in the session store,
+    // which is the half the operator console reads.
+    await sessionStore.ensureSession('http');
     const seq = sessionStore.recordToolCall(tool.name, toolArgs);
     mcpLogger.toolCall(tool.name, toolArgs);
     const start = Date.now();
@@ -399,12 +436,17 @@ if (transportMode === 'stdio') {
     // Authenticate and authorize before committing the 200. An SSE stream that
     // opens successfully and then emits `event: error` reads as success to any
     // client keying on the status code, which is every ordinary HTTP client.
+    // Authenticate once, up front, and carry the result into the streamed body.
+    // Re-running authenticateRest there would mean a second OAuth login for
+    // every body.auth caller — the form ansible and the onboarding runbook use.
+    let caller: ValidatedCaller | null = null;
     const pre = await withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       try {
         const authResult = await authenticateRest(req, args);
         if (authResult === null) return { status: 401, body: { success: false, error: 'Authentication required.' } };
         if (!authResult.ok) return { status: authResult.status, body: { success: false, error: authResult.error } };
+        caller = authResult.caller;
         return authorizeRest(toolName, tool.access, authResult.caller);
       } finally {
         digitApi.restoreAuth(snap);
@@ -432,20 +474,9 @@ if (transportMode === 'stdio') {
         const snap = digitApi.snapshotAuth();
         setProgressEmitter((e) => writeEvent('progress', e));
         try {
-          const authResult = await authenticateRest(req, args);
-          if (authResult === null) {
-            writeEvent('error', { success: false, error: 'Authentication required.' });
-            return;
-          }
-          if (!authResult.ok) {
-            writeEvent('error', { success: false, error: authResult.error });
-            return;
-          }
-          const denied = authorizeRest(toolName, tool.access, authResult.caller);
-          if (denied) {
-            writeEvent('error', denied.body);
-            return;
-          }
+          // Re-apply the identity resolved above; restoreAuth in the pre-flight
+          // block discarded it, and re-authenticating would double the cost.
+          if (caller) applyValidatedCaller(caller);
           const { auth: _ignored, ...toolArgs } = args;
           void _ignored;
           await auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => {
@@ -478,11 +509,9 @@ if (transportMode === 'stdio') {
     auth: Record<string, string> | undefined,
     req: IncomingMessage,
   ): Promise<{ status: number; body: unknown }> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
-    }
-    const boundTool = tool;
+    // Resolved after authentication, like dispatchTool: 404-for-unknown vs
+    // 401-for-known enumerates the whole tool surface anonymously, and fixing
+    // only the non-bulk route left the sibling wide open.
     return withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       try {
@@ -496,6 +525,11 @@ if (transportMode === 'stdio') {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
         }
 
+        const boundTool = restRegistry.getTool(toolName);
+        if (!boundTool) {
+          return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
+        }
+
         const denied = authorizeRest(toolName, boundTool.access, authResult.caller);
         if (denied) return denied;
 
@@ -503,7 +537,10 @@ if (transportMode === 'stdio') {
         const results: ItemResult[] = new Array(items.length);
         let nextIdx = 0;
 
-        async function worker(): Promise<void> {
+        // An arrow const, not a hoisted `function` declaration: a declaration is
+        // hoisted above the `if (!boundTool)` guard, so TypeScript will not
+        // narrow the captured const inside it.
+        const worker = async (): Promise<void> => {
           while (true) {
             const i = nextIdx++;
             if (i >= items.length) return;
@@ -517,7 +554,7 @@ if (transportMode === 'stdio') {
               results[i] = { ok: false, status: 500, body: { success: false, ...normalizeError(msg) } };
             }
           }
-        }
+        };
 
         const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
         await Promise.all(workers);
@@ -667,8 +704,13 @@ if (transportMode === 'stdio') {
       // gitSha / buildTime / nodeVersion tell an unauthenticated caller exactly
       // which build is running and therefore which CVEs apply. The service name
       // and uptime stay open so the endpoint remains usable as a liveness probe.
+      // Cache-hit only. Calling authenticateBearer here would drive a full
+      // /user/_details round trip per request from an ANONYMOUS caller (only
+      // successes are cached), turning the one endpoint documented as an open
+      // liveness probe into a 1:1 amplifier against egov-user — and blocking
+      // this response for the introspection timeout when that service hangs.
       const detailed = getAuthMode() !== 'token' ||
-        (await authenticateBearer(req.headers['authorization'] || req.headers['Authorization'])).ok;
+        isCachedCaller(req.headers['authorization'] || req.headers['Authorization']);
       jsonResponse(res, 200, {
         service: 'digit-mcp',
         version: detailed ? (process.env.MCP_VERSION || '1.0.0') : undefined,
@@ -708,7 +750,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('tenant_bootstrap', body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -731,7 +774,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('city_setup', body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -767,7 +811,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('tenant_cleanup', toolArgs, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -810,7 +855,8 @@ if (transportMode === 'stdio') {
           }
         });
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -868,7 +914,8 @@ if (transportMode === 'stdio') {
         const result = await runBulk(bulkMatch[1], items, concurrency, body.auth, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -882,7 +929,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool(toolMatch[1], body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }

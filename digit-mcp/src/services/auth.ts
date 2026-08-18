@@ -256,14 +256,26 @@ function isTrustedProxy(peer: string): boolean {
 }
 
 function ipInCidr(ip: string, cidr: string): boolean {
-  const [rangeRaw, bitsRaw] = cidr.split('/');
-  const range = normalizeIp(rangeRaw.trim());
+  const [rangeRaw = '', bitsRaw = ''] = cidr.split('/');
+  const rawRange = rangeRaw.trim();
+  const range = normalizeIp(rawRange);
+
+  // Validate the range BEFORE anything can short-circuit to `true`. A truncated
+  // or typo'd entry must mean "ignore this entry", never "trust every peer" —
+  // `garbage/0` and `/0` both used to return true for any address.
+  if (!isIPv4(range) && !isIPv6(range)) return false;
+  // Reject a prefix that isn't a bare decimal integer: parseInt is lenient
+  // enough to read '0x0' and '-0' as 0.
+  if (!/^\d+$/.test(bitsRaw.trim())) return false;
 
   const bits = parseInt(bitsRaw, 10);
   if (!Number.isInteger(bits) || bits < 0) return false;
-  // A /0 prefix matches every address, in either family. Handled up front so
-  // `::/0` doesn't have to survive the v6 group walk to reach the same answer.
-  if (bits === 0) return true;
+
+  // A /0 prefix means "every address" — but only when the range is actually
+  // all-zeros. `10.0.0.1/0` is numerically a wildcard and is, in a config file,
+  // a typo for /32; reading it as "trust every peer" is the wrong way to be
+  // wrong. `0.0.0.0/0` and `::/0` still mean what they say.
+  if (bits === 0) return range === '0.0.0.0' || /^[0:]+$/.test(range);
 
   // IPv6 is matched group-wise rather than via 32-bit ints. A dual-stack
   // cluster hands us IPv6 peers, and silently failing to match them would
@@ -283,9 +295,13 @@ function ipInCidr(ip: string, cidr: string): boolean {
   }
 
   // ::ffff:10.0.0.0/104 means 10.0.0.0/8 once the peer has been collapsed to
-  // its IPv4 form. Rebase the prefix rather than rejecting it.
+  // its IPv4 form. Rebase the prefix rather than rejecting it — but gate that
+  // on the range having ACTUALLY been written in IPv6 form. Testing the
+  // normalized value cannot tell `::ffff:10.0.0.0/104` (intended) from
+  // `10.0.0.0/104` (a typo), and silently reading the typo as /8 turns one
+  // mistyped digit into trust for a whole network.
   let v4bits = bits;
-  if (bits > 32 && isIPv4(ip) && isIPv4(range)) v4bits = bits - 96;
+  if (bits > 32 && isIPv4(ip) && isIPv4(range) && isIPv6(rawRange)) v4bits = bits - 96;
   if (v4bits < 0 || v4bits > 32 || !isIPv4(ip) || !isIPv4(range)) return false;
   const toInt = (v: string): number | null => {
     const parts = v.split('.');
@@ -516,6 +532,18 @@ export type BearerAuthResult =
 const TOKEN_CACHE_TTL_MS = 30_000;
 const TOKEN_CACHE_MAX = 500;
 const tokenCache = new Map<string, { user: UserInfo; at: number }>();
+
+/**
+ * True when this bearer is ALREADY a known-good token, without going to the
+ * wire. For endpoints that want to reveal a little more to a real caller but
+ * must not let an anonymous one drive traffic to egov-user.
+ */
+export function isCachedCaller(authHeader: string | string[] | undefined): boolean {
+  const token = parseBearer(authHeader);
+  if (!token) return false;
+  const cached = tokenCache.get(token);
+  return !!cached && Date.now() - cached.at < TOKEN_CACHE_TTL_MS;
+}
 
 /** Test/ops hook: drop every cached introspection result. */
 export function clearTokenCache(): void {

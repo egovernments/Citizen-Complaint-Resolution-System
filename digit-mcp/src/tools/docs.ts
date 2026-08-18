@@ -23,6 +23,33 @@ const ALLOWED_DOC_HOSTS = new Set(['docs.digit.org']);
 /** Cap on a fetched page, so a hostile or huge target can't exhaust memory. */
 const MAX_DOC_BYTES = 2 * 1024 * 1024;
 
+/** Read a response body up to `limit` bytes, abandoning the rest. */
+async function readCapped(response: Response, limit: number): Promise<{ text: string; truncated: boolean }> {
+  const body = response.body;
+  if (!body) return { text: '', truncated: false };
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.length;
+      if (total > limit) {
+        chunks.push(value.subarray(0, value.length - (total - limit)));
+        truncated = true;
+        break;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return { text: Buffer.concat(chunks).toString('utf-8'), truncated };
+}
+
 function isAllowedDocHost(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
@@ -213,9 +240,12 @@ async function searchDocs(query: string): Promise<Array<{ title: string; link: s
         arguments: { query },
       },
     }),
+    // Bounded like docs_get: a fixed host is not an unbounded one, and any
+    // authenticated caller can drive this.
+    signal: AbortSignal.timeout(15_000),
   });
 
-  const text = await response.text();
+  const { text } = await readCapped(response, MAX_DOC_BYTES);
   const results: Array<{ title: string; link: string; content: string }> = [];
 
   // Parse SSE response
@@ -448,14 +478,18 @@ export function registerDocsTools(registry: ToolRegistry): void {
           }, null, 2);
         }
 
-        const raw = await response.text();
-        const markdown = raw.length > MAX_DOC_BYTES ? raw.slice(0, MAX_DOC_BYTES) : raw;
+        // Read incrementally and stop at the cap. `await response.text()`
+        // buffers the whole body first, so slicing afterwards bounds only what
+        // is RETURNED — the memory was already spent, which is not what the
+        // limit is for.
+        const raw = await readCapped(response, MAX_DOC_BYTES);
+        const markdown = raw.text;
         // Return the original URL (not the .md one) so agents don't bypass docs_get
         const displayUrl = url.endsWith('.md') ? url.replace(/\.md$/, '') : url;
         return JSON.stringify({
           success: true,
           url: displayUrl,
-          truncated: markdown.length < raw.length || undefined,
+          truncated: raw.truncated || undefined,
           // Third-party content going straight into the agent's context. The
           // search path already sanitized its snippets; this one did not, so
           // the full page was an unfiltered injection channel.
