@@ -1,7 +1,6 @@
-/** Build-time feature flags for intentionally retained legacy surfaces. */
-export function isEnabledFlag(value: unknown): boolean {
-  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
+import { isEnabledFlag } from '../../../ui-shared/featureFlags';
+
+export { isEnabledFlag } from '../../../ui-shared/featureFlags';
 
 /**
  * The pre-catalog PGR dashboard is retained only as a rollback aid. It must be

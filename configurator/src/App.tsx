@@ -164,7 +164,7 @@ function ManagementAdmin() {
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route
             path="/pgr-dashboard"
-            element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/" replace />}
+            element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
           />
           <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
           <Route path="/org-chart" element={<OrgChartPage />} />

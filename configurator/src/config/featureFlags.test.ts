@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isEnabledFlag } from './featureFlags';
+import { isEnabledFlag } from '../../../ui-shared/featureFlags';
 
 describe('isEnabledFlag', () => {
   it.each(['1', 'true', 'TRUE', ' yes ', 'On'])('enables the explicit value %s', (value) => {

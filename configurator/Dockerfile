@@ -1,3 +1,5 @@
+# Build from the repository root (`docker build -f configurator/Dockerfile .`)
+# so both SPAs consume the same ui-shared feature-flag parser.
 # digit-configurator — static SPA built with Vite, served by nginx under
 # /configurator/. Mirrors local-setup/ansible/files/configurator-build.sh so the
 # nightly image matches the proven on-box build:
@@ -12,12 +14,13 @@ ARG NODE_IMAGE=node:20-bookworm-slim
 ARG BASE_PATH=/configurator/
 
 FROM ${NODE_IMAGE} AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY packages ./packages
+WORKDIR /app/configurator
+COPY configurator/package.json configurator/package-lock.json ./
+COPY configurator/packages ./packages
 # Install (fallback to install if the lockfile drifted, matching the on-box script).
 RUN npm ci || npm install
-COPY . .
+COPY ui-shared /app/ui-shared
+COPY configurator .
 # Build any file: sub-package that has a build script (vite needs their dist/).
 RUN for sp in packages/*/; do \
       [ -f "${sp}package.json" ] || continue; \
@@ -35,7 +38,7 @@ FROM nginx:1.27-alpine
 ARG BASE_PATH
 # Static bundle lives under the base path so absolute asset URLs (/configurator/…)
 # resolve both when run standalone and when extracted into a host-nginx tree.
-COPY --from=build /app/dist /usr/share/nginx/html${BASE_PATH}
+COPY --from=build /app/configurator/dist /usr/share/nginx/html${BASE_PATH}
 # `root` (not `alias`) + try_files: with the bundle physically under the base
 # path, $uri maps straight to disk and the SPA fallback is the base index.html —
 # avoids the well-known alias+try_files path-doubling footgun and serves

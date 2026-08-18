@@ -19,9 +19,19 @@ export async function run() {
       timeout: NAV_TIMEOUT,
     });
 
-    const legacyEnabled = /^(1|true|yes|on)$/i.test(
-      process.env.ENABLE_LEGACY_PGR_DASHBOARD || '',
-    );
+    const bakedFlag = await page.evaluate(() => window.__CCRS_BUILD_FLAGS__?.legacyPgrDashboardEnabled);
+    const bakedRaw = await page.evaluate(() => window.__CCRS_BUILD_FLAGS__?.legacyPgrDashboardRaw);
+    if (typeof bakedFlag !== 'boolean' || typeof bakedRaw !== 'string') {
+      throw new Error('Built Configurator did not publish its legacy-dashboard flag contract');
+    }
+    const expectedRaw = process.env.VITE_ENABLE_LEGACY_PGR_DASHBOARD;
+    if (expectedRaw !== undefined && expectedRaw !== bakedRaw) {
+      throw new Error(
+        `Legacy-dashboard build flag mismatch: test expected VITE_ENABLE_LEGACY_PGR_DASHBOARD=${JSON.stringify(expectedRaw)}, ` +
+        `but the loaded bundle was built with ${JSON.stringify(bakedRaw)}`,
+      );
+    }
+    const legacyEnabled = bakedFlag;
 
     if (!legacyEnabled) {
       const url = page.url();
