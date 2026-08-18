@@ -36,7 +36,9 @@ describe('upsertMapConfig tenant guard', () => {
         schemaCode: SCHEMA,
         uniqueIdentifier: 'DEFAULT',
         isActive: true,
-        data: { code: 'DEFAULT', wardHighlightColor: '#111111' },
+        // This is also the shape Phase 2 sees after default-data-handler seeds
+        // a tenant: presentation defaults exist, while geometry does not yet.
+        data: { code: 'DEFAULT', baseMapTheme: 'voyager', wardHighlightColor: '#111111' },
         auditDetails: { createdBy: 'x' },
       },
     ]);
@@ -49,7 +51,11 @@ describe('upsertMapConfig tenant guard', () => {
     expect(body.Mdms.uniqueIdentifier).toBe('DEFAULT');
     expect(body.Mdms.id).toBe('row-1');
     // Patch merges over the existing data.
-    expect(body.Mdms.data).toMatchObject({ wardHighlightColor: '#111111', defaultZoom: 12 });
+    expect(body.Mdms.data).toMatchObject({
+      baseMapTheme: 'voyager',
+      wardHighlightColor: '#111111',
+      defaultZoom: 12,
+    });
   });
 
   it('does NOT update a record inherited from a parent tenant — it shadows with a create', async () => {

@@ -85,6 +85,13 @@ MDMS read errors are swallowed — a missing schema or record never breaks the m
 
 ## How it gets set
 
+**Seeded for every tenant.** The default-data-handler creates a minimal
+`DEFAULT` row whenever it provisions a tenant. The row establishes the neutral
+presentation defaults (`voyager` tiles and `#FFA74F` ward highlighting), but
+deliberately carries no centre, boundary tenant or geocoding extent. Because the
+row is tenant-owned, later state-root presentation changes are not inherited by
+that tenant; operators can still edit the tenant directly in management.
+
 **Automatically, at onboarding (preferred).** Configurator Phase 2 already
 fetches the OSM boundary polygons, so the centroid/bounding-box of the onboarded
 area *is* the correct centre, zoom and search extent. `deriveMapPosition`
@@ -102,7 +109,9 @@ own-vs-inherited guard).
 ## Schema registration & migration
 
 On a **fresh** install the default-data-handler seeds the schema from
-`schema/RAINMAKER-PGR.json` at startup.
+`schema/RAINMAKER-PGR.json` and the minimal tenant-owned `DEFAULT` row from
+`mdmsData/RAINMAKER-PGR/RAINMAKER-PGR.MapConfig.json` at startup. The same
+default row is created for tenants provisioned later through the handler.
 
 On a box that carries the earlier hand-registered **colour-keyed** schema
 (`x-unique: ["wardHighlightColor"]`), that schema squats the code — and mdms-v2
