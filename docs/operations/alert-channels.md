@@ -204,7 +204,7 @@ bearer token on the request.
 
 ## Option B — Gatus native alerting (endpoint down)
 
-The health dashboard at `/status/` already checks ~50 endpoints every 30 seconds. It can
+The health dashboard at `/status/` already checks up to 57 endpoints every 30 seconds. It can
 notify you directly, and it is the **only thing watching the containers that emit no
 metrics** — Postgres, Redis, Kafka, Kong, Elasticsearch, nginx and the sign-in service. That makes it the
 highest-value alerting you can add, and the fastest.

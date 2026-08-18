@@ -305,7 +305,7 @@ Notes:
 
 ### Synthetic alerts and the dead-man's switch
 
-**Endpoint checks.** The Gatus health dashboard at `/status/` already probes ~50 endpoints
+**Endpoint checks.** The Gatus health dashboard at `/status/` already probes up to 57 endpoints
 every 30 seconds, but it does not notify anyone by default. Turning on **Gatus's own
 alerting** gives you "service X is down" notifications without any Grafana rules at all —
 it is the cheapest coverage you can add, and it is the only thing that watches the

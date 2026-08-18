@@ -20,6 +20,7 @@ all.
 - [Are the monitoring services important to keep up?](#are-the-monitoring-services-important-to-keep-up)
 - [Grafana dashboards — what each one shows](#grafana-dashboards--what-each-one-shows)
 - [The health dashboard's groups](#the-health-dashboards-groups)
+  - [Why your dashboard has fewer groups](#why-your-dashboard-has-fewer-groups)
 - [What each service does](#what-each-service-does)
 - [Metric and log coverage — what is and isn't watched](#metric-and-log-coverage--what-is-and-isnt-watched)
 - [Data retention](#data-retention)
@@ -99,7 +100,7 @@ Two rules that do not bend:
    node-exporter ────────────────────────────▶ Prometheus  (host CPU/RAM/disk)
         (only on deployments from 2026-07-22 onward)
 
-   Gatus ──HTTP/TCP probes──▶ every service    (health, in-memory)
+   Gatus ──HTTP/TCP probes──▶ every service    (health, SQLite on disk)
 
    Grafana reads Prometheus + Loki + Tempo, and is where alerts are defined.
 ```
@@ -121,7 +122,7 @@ recovered afterwards.
 
 | Service | What stops working if it goes down | Is data lost? |
 |---|---|---|
-| **gatus** | The health dashboard at `/status/` is unreachable — you lose the fastest "is anything down" check | Yes — its history is held in memory only, so the record of what was red is gone |
+| **gatus** | The health dashboard at `/status/` is unreachable — you lose the fastest "is anything down" check | **No** — history is on disk (SQLite) and survives the restart. Nothing is probed while it is down, so that window is simply blank |
 | **grafana** | You cannot view *anything*: no dashboards, no logs, no metrics. Alert rules stop being evaluated too | **No.** Collection carries on regardless, and everything reappears when Grafana returns |
 | **prometheus** | Nothing records measurements — memory, CPU, restarts, request timings | Yes — a permanent gap in the graphs covering the period it was down |
 | **loki** | Log messages are not stored | **Yes, and this is the costly one.** Anything written while it is down is gone for good |
@@ -298,21 +299,51 @@ When it does have data, the readings that matter:
 
 ## The health dashboard's groups
 
-The health dashboard sorts its ~50 checks into ten groups. Which group a red tile sits in
-tells you how serious it is before you know anything else about it.
+The dashboard sorts its checks into **12 groups**. Which group a red tile sits in tells you
+how serious it is before you know anything else about it, so read the group first and the
+service name second.
 
-| Group | What's in it | A red tile here means |
-|---|---|---|
-| **Infrastructure** | Database, connection pooler, cache, message broker, file storage | **The most serious thing on the page.** Nothing above it can work — treat it as an outage and escalate immediately |
-| **Core Services** | The shared platform: user accounts, workflow, master data, employees, boundaries, translations, ID generation, authorisation, encryption, file metadata, and the two Kafka writers | A service many features depend on. Expect several unrelated-looking symptoms at once |
-| **API Gateway** | Kong and its proxies — every API request in the system passes through here | Requests cannot be routed. Users see "502" or a blank screen |
-| **Application** | The complaint service itself and the web front end | The product people actually use |
-| **Search** | Elasticsearch, the indexer and the inbox service | Inbox and search break. Filing complaints still works |
-| **Notifications** | The notification platform, its bridge, and the config and preference services | SMS / email / WhatsApp stop going out. Everything else is unaffected |
-| **OTP** | One-time-password delivery for sign-in | Users cannot receive the code they need to log in |
-| **Sign-in / identity** | The identity provider, its database, and the token exchange service | Signing in fails |
-| **MCP** | Integration tooling | No effect on citizens or staff using the system |
-| **API Tests** | Real calls against live APIs — different from the rest, see below | Read the note below before acting on it |
+The catalogue defines **57 checks**. You will usually see fewer, because most groups are
+switched on or off to match what this deployment actually runs — see
+[Why your dashboard has fewer groups](#why-your-dashboard-has-fewer-groups) below. The
+groups are listed here worst-first, not in dashboard order.
+
+| Group | Checks | What's in it | A red tile here means |
+|---|---|---|---|
+| **Infrastructure** | 5 | PostgreSQL, PgBouncer, Redis, Redpanda (Kafka), MinIO | **The most serious thing on the page.** Nothing above it can work — treat it as an outage and escalate immediately |
+| **API Gateway** | 5 | Kong proxy, Kong admin, Kong status, and the user + workflow proxies. Every API request passes through here | Requests cannot be routed. Users see "502" or a blank screen |
+| **Core Services** | 15 | The shared platform: MDMS and MDMS backend, user, workflow, HRMS, boundary and boundary-management, localization, ID generation, access control, encryption, filestore, URL shortening, the persister, and the audit service | A service many features depend on. Expect several unrelated-looking symptoms at once |
+| **Application** | 3 | PGR services, the DIGIT UI, and the configurator | The product people actually use |
+| **API Tests** | 3 | Real calls against live APIs — different from the rest, see below | Read the note below before acting on it |
+| **Keycloak** | 3 | Keycloak, its Postgres, and the token exchange service. *Labelled `Keycloak` on the dashboard; this is the sign-in / identity group* | Signing in fails — but only on deployments that use Keycloak SSO rather than OTP login |
+| **Search** | 3 | Elasticsearch, the indexer, the inbox service | Inbox and search break. Filing complaints still works |
+| **OTP** | 3 | OTP service, user-OTP, notification-SMS — one-time-password delivery for sign-in | Users cannot receive the code they need to log in |
+| **Notifications** | 9 | Novu (API, websocket, dashboard, Mongo), the bridge and its endpoint, the config and user-preferences services, and the OTP publisher | SMS / email / WhatsApp stop going out. Everything else is unaffected |
+| **Observability** | 5 | Grafana, Prometheus, Loki, Tempo, the OTel collector | You lose visibility, not function. Nobody is blocked — see [Are the monitoring services important to keep up?](#are-the-monitoring-services-important-to-keep-up) |
+| **MCP** | 2 | The MCP server and its Postgres — integration tooling | No effect on citizens or staff using the system |
+| **Public Endpoint** | 1 | The TLS certificate on the public domain | The certificate is expiring or already invalid. Browsers will start refusing the site — act *before* it goes red if you can |
+
+### Why your dashboard has fewer groups
+
+Only **Infrastructure**, **Core Services**, **Application** and **API Tests** are always
+present. Every other group is gated on a per-deployment toggle, so a group that is absent
+usually means that feature was never deployed — not that something is broken:
+
+| Group | Present when |
+|---|---|
+| Notifications | the Novu notification stack is deployed |
+| Observability | the monitoring stack is deployed |
+| Keycloak | Keycloak SSO is in use, rather than OTP login |
+| Search | Elasticsearch / indexer / inbox are deployed |
+| OTP | real OTP delivery is enabled, rather than the mocked local OTP |
+| MCP | the MCP integration server is deployed |
+| Public Endpoint | the deployment terminates TLS on a real domain |
+
+A few individual checks are gated the same way — the audit service inside Core Services, the
+configurator inside Application, and the two proxies inside API Gateway.
+
+**Ask before you chase.** If a whole group has vanished since you last looked, that is a
+deployment change, not an outage — raise it with us rather than debugging it.
 
 **API Tests is the group worth understanding.** Every other group asks a service one simple
 question — *are you alive?* — by calling its health endpoint. A service can answer that
@@ -396,7 +427,7 @@ If notifications stop, check in this order: the provider account (credit, creden
 | **JVM metrics** (Prometheus) | The 16 instrumented Java services: `boundary-service`, `digit-config-service`, `egov-accesscontrol`, `egov-enc-service`, `egov-filestore`, `egov-hrms`, `egov-idgen`, `egov-indexer`, `egov-persister`, `egov-user`, `egov-workflow-v2`, `inbox`, `mdms-backend`, `novu-bridge`, `pgr-services`, plus dashboard web metrics | Postgres, Redis, Kafka, Kong, Elasticsearch, MinIO, nginx, the sign-in / identity service, Node services |
 | **Logs** (Loki) | **Every container** — around 44 of them | Nothing, as long as promtail is running |
 | **Traces** (Tempo) | Requests through instrumented Java services and Kong | Direct database or broker activity |
-| **Health checks** (Gatus) | ~50 endpoints across every group, including infrastructure | Anything not in the endpoint catalogue |
+| **Health checks** (Gatus) | up to 57 endpoints across 12 groups, including infrastructure | Anything not in the endpoint catalogue; groups whose feature is switched off on this deployment |
 | **Host metrics** (node-exporter) | CPU, RAM, disk, network, filesystem | **Not present on deployments installed before 2026-07-22** |
 
 The practical takeaway: for the non-Java containers, **Gatus tells you if it is alive and
@@ -414,7 +445,7 @@ reported today can still be investigated at all.
 | Metrics | Prometheus | **15 days** |
 | Logs — searchable, in Grafana | Loki | **72 hours (3 days)** |
 | Traces | Tempo | **24 hours** |
-| Health-check history | Gatus | in-memory; lost the moment the container restarts |
+| Health-check history | Gatus | on disk (SQLite), survives restarts; bounded per endpoint at ~100 results and ~50 events |
 | Container logs — the raw files on the server | Docker, on disk | Capped by the Docker daemon at **10 files × 100 MB = 1 GB per container**, oldest rotated away first |
 
 Two consequences worth knowing:

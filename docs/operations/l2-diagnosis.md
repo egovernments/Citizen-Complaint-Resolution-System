@@ -6,6 +6,14 @@ services, read logs across the whole stack, and change configuration.
 **Your job:** take what L1 captured and identify **which component is failing and why** —
 far enough that the fix is either yours to apply or clearly a product defect to send on.
 
+**What should reach you:** anything that needs the server, a log, the database, or a
+configuration file the UI does not expose — plus every question of *why*. Work that has a
+screen (creating users, editing master data, loading the onboarding spreadsheets) is L1's,
+even when it looks administrative; see
+[Who does what](README.md#who-does-what--the-l1--l2-line). If those requests are reaching
+you, the usual cause is that the service desk has no Configurator / HRMS admin login — fix
+that once rather than absorbing the queue.
+
 This assumes [L1 first response](l1-first-response.md) has been worked, or that you're
 starting cold and have done it yourself. Every query and panel name here is real and was run
 against a live deployment.
@@ -348,20 +356,43 @@ is a deployment change, not something to apply on the box**, because anything ed
 
 | Limit | Where it lives | Notes |
 |---|---|---|
-| **JVM heap** (`-Xmx`) | `JAVA_TOOL_OPTIONS` or `JAVA_OPTS` per service in the compose file | This is the ceiling that actually causes `OutOfMemoryError`. Currently ~6.3 GB of heap is allocated across the JVM services |
-| **Container memory** | not set today | The deployed compose has **no `mem_limit` on any container**, so a container can use as much host RAM as it asks for. Only the JVM heap bounds it |
-| **Container CPU** | not set today | No `cpus` limit either — services compete freely for host CPU |
+| **JVM heap** (`-Xmx`) | `JAVA_TOOL_OPTIONS` or `JAVA_OPTS` per service in the compose file | This is the ceiling that actually causes `OutOfMemoryError`. 22 services declare `-Xmx`, totalling **~12.8 GB** — more than a 16 GB host has, so they rely on not all peaking at once |
+| **Container memory** | `deploy.resources.limits.memory` per service in the compose file | Set on **10 of the 60 services**, not on the rest — see below |
+| **Container CPU** | not set today | No `cpus` limit on any service in the deployed compose — they compete freely for host CPU |
 | **Host size** | your infrastructure | If the host itself is short of RAM or cores, no per-service change helps |
 
-Two consequences worth understanding before asking for more:
+**Which containers are actually capped.** Only the observability stack and the OTP services:
+
+| Service | Cap | | Service | Cap |
+|---|---|---|---|---|
+| `prometheus` | 512M | | `egov-otp` | 512M |
+| `loki` | 512M | | `user-otp` | 512M |
+| `tempo` | 384M | | `egov-notification-sms` | 512M |
+| `otel-collector` | 320M | | | |
+| `grafana` | 256M | | | |
+| `promtail` | 128M | | | |
+| `gatus` | 64M | | | |
+
+Everything else — every JVM service, Postgres, Redpanda, Kafka, Elasticsearch, MinIO, Kong,
+Novu — has **no container memory limit**, so only the JVM heap bounds it.
+
+> The caps use `deploy.resources.limits.memory`, not the older top-level `mem_limit` key.
+> Compose V2 applies them identically outside Swarm; if you grep for `mem_limit` you will
+> wrongly conclude nothing is capped.
+
+Three consequences worth understanding before asking for more:
 
 - **Heap is not the whole footprint.** A JVM's actual memory use runs well above `-Xmx` —
   metaspace, thread stacks, code cache and direct buffers typically add a few hundred MB per
   service. Raising every heap by 512 MB costs the host considerably more than the sum of the
   increases.
-- **With no container memory limit, a leak takes the host down rather than the container.**
-  The Linux OOM killer then picks a victim, usually the largest JVM, which may not be the
-  service at fault.
+- **On an uncapped container, a leak takes the host down rather than the container.** The
+  Linux OOM killer then picks a victim, usually the largest JVM, which may not be the service
+  at fault. That is exactly why the observability containers *are* capped: monitoring is
+  overhead, and it should not be able to evict the workload it exists to watch.
+- **A capped container behaves differently when it runs out.** It is killed on its own,
+  restarts, and shows up as a restart count rather than as host-wide memory pressure. If
+  `prometheus` or `loki` keeps restarting, suspect its cap first.
 
 ### What to send us
 
