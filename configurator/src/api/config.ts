@@ -1,5 +1,7 @@
 // DIGIT Environment Configuration
 
+import { resolveConfig, resolvePositiveNumber } from './runtimeConfig';
+
 /** Auto-detect API base URL from the current origin. Each deployment serves
  *  the configurator and DIGIT APIs from the same domain via nginx. */
 export function getApiBaseUrl(): string {
@@ -9,21 +11,27 @@ export function getApiBaseUrl(): string {
 
 // Root (state-level) tenant the deployment is configured for.
 //
-// The configurator is a STANDALONE Vite app — it does NOT expose digit-ui's
-// `window.globalConfigs` global (nothing injects a globalConfigs.js <script>
-// into this app's index.html), so reading `window.globalConfigs` here always
-// misses. The real config channel for a Vite build is a build-time env var:
-// the ansible deploy renders `VITE_STATE_TENANT_ID` from host_vars
-// `state_tenant_id` and passes it to `vite build` (see
-// local-setup/ansible/files/configurator-build.sh). A city tenant like
-// "mz.maputo" collapses to its root segment "mz". Empty when unset
-// (dev/standalone) — callers fall back to a neutral hint.
+// Resolved at RUNTIME from `<base>/config.js` (`window.__CONFIGURATOR_CONFIG__`,
+// rendered per-tenant by the ansible deploy from host_vars `state_tenant_id`),
+// falling back to the build-time `VITE_STATE_TENANT_ID` so dev and any
+// build-with-env workflow are unchanged. See ./runtimeConfig.ts for why this
+// moved off build-time-only. A city tenant like "mz.maputo" collapses to its
+// root segment "mz".
+//
+// Defaults to 'pg' — the tenant the seed dump always creates — so an
+// unconfigured deployment points at something that exists rather than leaving
+// the login form's tenant field blank. This mirrors the other three settings,
+// which have always had in-code defaults (public Overpass, '/turbopass', 300);
+// STATE_TENANT_ID was the only one without, which is why a blank config.js used
+// to mean "retype the tenant on every login".
+export const DEFAULT_STATE_TENANT_ID = 'pg';
 export const STATE_TENANT_ID: string =
-  (import.meta.env.VITE_STATE_TENANT_ID as string | undefined)?.trim() || '';
+  resolveConfig('STATE_TENANT_ID', import.meta.env.VITE_STATE_TENANT_ID) ||
+  DEFAULT_STATE_TENANT_ID;
 
-/** Root (state) tenant code for this deployment, e.g. "mz". Derived from the
- *  build-time `VITE_STATE_TENANT_ID` (a city code collapses to its root
- *  segment). Empty string when the build wasn't given one. */
+/** Root (state) tenant code for this deployment, e.g. "mz". A city code
+ *  collapses to its root segment. Never empty: falls back to
+ *  DEFAULT_STATE_TENANT_ID ('pg', the tenant the seed dump always creates). */
 export function getConfiguredRootTenant(): string {
   return STATE_TENANT_ID.split('.')[0];
 }
@@ -116,9 +124,21 @@ export const OAUTH_CONFIG = {
 //    needs a representative set, and city/county hierarchies are well under).
 //
 // Configurable so a deployment whose boundary-service raises/lowers the cap
-// can match it without a code change: set VITE_BOUNDARY_SEARCH_LIMIT.
-export const BOUNDARY_SEARCH_LIMIT: number =
-  Number(import.meta.env.VITE_BOUNDARY_SEARCH_LIMIT) || 300;
+// can match it without a code change: set BOUNDARY_SEARCH_LIMIT in config.js
+// (or the build-time VITE_BOUNDARY_SEARCH_LIMIT).
+//
+// The 300 below is applied by resolvePositiveNumber only when the configured
+// value is blank, non-numeric, or non-positive — NOT by `|| 300`, which would
+// also swallow a deliberately-configured 0 and quietly contradict the
+// documented precedence. 0/negatives are still rejected, but explicitly: this
+// is a page size, so asking boundary-service for 0 entities yields an empty
+// overview map, which no operator means by "set the limit". See
+// resolvePositiveNumber in ./runtimeConfig.
+export const DEFAULT_BOUNDARY_SEARCH_LIMIT = 300;
+export const BOUNDARY_SEARCH_LIMIT: number = resolvePositiveNumber(
+  resolveConfig('BOUNDARY_SEARCH_LIMIT', import.meta.env.VITE_BOUNDARY_SEARCH_LIMIT),
+  DEFAULT_BOUNDARY_SEARCH_LIMIT,
+);
 
 // Default employee password
 export const DEFAULT_PASSWORD = 'eGov@123';
