@@ -88,7 +88,8 @@ export function buildComplaintTree(records) {
     if (reachable.has(node.code)) continue;
     reachable.add(node.code);
     node.path =
-      node.recordPath || (parentPath ? `${parentPath}.${node.code}` : node.code);
+      node.recordPath ||
+      (parentPath ? `${parentPath}.${node.code}` : node.code);
     delete node.recordPath;
     for (const child of node.children) stack.push([child, node.path]);
   }
@@ -113,7 +114,10 @@ export function buildComplaintTree(records) {
 export function pruneComplaintTree(tree, scopedLeafCodes) {
   if (!tree) return null;
   const scoped = new Set(
-    (Array.isArray(scopedLeafCodes) ? scopedLeafCodes : [...(scopedLeafCodes || [])])
+    (Array.isArray(scopedLeafCodes)
+      ? scopedLeafCodes
+      : [...(scopedLeafCodes || [])]
+    )
       .map((c) => String(c ?? "").trim())
       .filter(Boolean)
   );
@@ -144,7 +148,39 @@ export function pruneComplaintTree(tree, scopedLeafCodes) {
     roots.push(stray);
   }
 
-  return roots.length ? { byCode, roots } : null;
+  return roots.length ? { byCode, roots, scopedCodes: scoped } : null;
+}
+
+/** Exact ABAC-scoped service codes represented by one hierarchy node. */
+export function complaintCodesUnder(tree, code) {
+  const node = nodeOf(tree, code);
+  if (!node) return [];
+  const scoped = tree?.scopedCodes instanceof Set ? tree.scopedCodes : null;
+  if (!scoped) {
+    const out = [];
+    const stack = [node];
+    while (stack.length) {
+      const current = stack.pop();
+      if (current.isLeaf) out.push(current.code);
+      stack.push(...current.children);
+    }
+    return out;
+  }
+  return [...scoped].filter((candidate) => {
+    const candidateNode = nodeOf(tree, candidate);
+    const candidatePath = String(candidateNode?.path ?? "");
+    return (
+      candidatePath === node.path || candidatePath.startsWith(`${node.path}.`)
+    );
+  });
+}
+
+/** Persisted multi-select entry: semantic node plus exact scoped service-code expansion. */
+export function complaintMultiSelectionFromCode(tree, code) {
+  const selection = selectionFromCode(tree, code);
+  return selection.code === ALL
+    ? null
+    : { ...selection, codes: complaintCodesUnder(tree, code) };
 }
 
 /** Node for a code, or null ("all" is the virtual root — also null). */
@@ -212,8 +248,13 @@ export const TRAIL_ELLIPSIS = "…<elided>";
  * recoverable by stepping up. Short trails come back untouched (same array).
  */
 export function truncateTrail(entries, max = 4) {
-  if (!Array.isArray(entries) || entries.length <= max || max < 3) return entries;
-  return [entries[0], TRAIL_ELLIPSIS, ...entries.slice(entries.length - (max - 2))];
+  if (!Array.isArray(entries) || entries.length <= max || max < 3)
+    return entries;
+  return [
+    entries[0],
+    TRAIL_ELLIPSIS,
+    ...entries.slice(entries.length - (max - 2)),
+  ];
 }
 
 /**
@@ -291,8 +332,10 @@ export function repairSelection(tree, selection) {
     let ancestor = null;
     for (const node of tree.byCode.values()) {
       const nodePath = String(node.path ?? "");
-      if (!nodePath || (nodePath !== path && !path.startsWith(`${nodePath}.`))) continue;
-      if (!ancestor || nodePath.length > String(ancestor.path).length) ancestor = node;
+      if (!nodePath || (nodePath !== path && !path.startsWith(`${nodePath}.`)))
+        continue;
+      if (!ancestor || nodePath.length > String(ancestor.path).length)
+        ancestor = node;
     }
     if (ancestor) return selectionFromCode(tree, ancestor.code);
   }

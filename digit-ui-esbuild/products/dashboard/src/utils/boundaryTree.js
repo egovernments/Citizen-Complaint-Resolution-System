@@ -82,7 +82,10 @@ export function buildBoundaryTree(rootNodes) {
 export function pruneBoundaryTree(tree, scopedWardCodes) {
   if (!tree) return null;
   const scoped = new Set(
-    (Array.isArray(scopedWardCodes) ? scopedWardCodes : [...(scopedWardCodes || [])])
+    (Array.isArray(scopedWardCodes)
+      ? scopedWardCodes
+      : [...(scopedWardCodes || [])]
+    )
       .map((c) => String(c ?? "").trim())
       .filter(Boolean)
   );
@@ -112,7 +115,39 @@ export function pruneBoundaryTree(tree, scopedWardCodes) {
     roots.push(stray);
   }
 
-  return roots.length ? { byCode, roots } : null;
+  return roots.length ? { byCode, roots, scopedCodes: scoped } : null;
+}
+
+/** Exact ABAC-scoped ward codes represented by one boundary hierarchy node. */
+export function wardCodesUnder(tree, code) {
+  const node = tree?.byCode?.get(String(code)) || null;
+  if (!node) return [];
+  const scoped = tree?.scopedCodes instanceof Set ? tree.scopedCodes : null;
+  if (!scoped) {
+    const out = [];
+    const stack = [node];
+    while (stack.length) {
+      const current = stack.pop();
+      if (current.isLeaf) out.push(current.code);
+      stack.push(...current.children);
+    }
+    return out;
+  }
+  return [...scoped].filter((candidate) => {
+    const candidateNode = tree.byCode.get(candidate);
+    const candidatePath = String(candidateNode?.path ?? "");
+    return (
+      candidatePath === node.path || candidatePath.startsWith(`${node.path}|`)
+    );
+  });
+}
+
+/** Persisted multi-select entry: semantic node plus exact scoped ward-code expansion. */
+export function geographyMultiSelectionFromCode(tree, code) {
+  const selection = geographySelectionFromCode(tree, code);
+  return selection.code === ALL
+    ? null
+    : { ...selection, codes: wardCodesUnder(tree, code) };
 }
 
 /** The persisted selection trio for applying a boundary node. */
@@ -174,8 +209,10 @@ export function repairGeographySelection(tree, selection) {
     let ancestor = null;
     for (const node of tree.byCode.values()) {
       const nodePath = String(node.path ?? "");
-      if (!nodePath || (nodePath !== path && !path.startsWith(`${nodePath}|`))) continue;
-      if (!ancestor || nodePath.length > String(ancestor.path).length) ancestor = node;
+      if (!nodePath || (nodePath !== path && !path.startsWith(`${nodePath}|`)))
+        continue;
+      if (!ancestor || nodePath.length > String(ancestor.path).length)
+        ancestor = node;
     }
     if (ancestor) return geographySelectionFromCode(tree, ancestor.code);
   }

@@ -1,12 +1,9 @@
-import React from "react";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
-import PopoverMenu from "./ui/PopoverMenu";
-import { ComplaintTypeTreePanel } from "./ComplaintTypeTreeFilter";
-import { ALL, ancestorsOf, nodeOf } from "../utils/complaintTypeTree";
+import HierarchyMultiSelectFilter from "./HierarchyMultiSelectFilter";
+import { nodeOf } from "../utils/complaintTypeTree";
 import {
-  clearedGeographySelection,
-  geographySelectionFromCode,
+  geographyMultiSelectionFromCode,
   humanizeBoundaryCode,
 } from "../utils/boundaryTree";
 
@@ -33,90 +30,26 @@ export function boundaryDisplayLabel(tree, code) {
   return resolved === String(code) ? humanizeBoundaryCode(code) : resolved;
 }
 
-/** Chip content for the applied code: trailing segments + elision marker. */
-function chipModel(tree, code, allWardsLabel) {
-  const node = nodeOf(tree, code);
-  if (!node) return { segments: [allWardsLabel], elided: false, title: allWardsLabel };
-  const chain = [...ancestorsOf(tree, code), code].map((c) => boundaryDisplayLabel(tree, c));
-  const segments = chain.slice(-2);
-  return {
-    segments,
-    elided: chain.length > 2,
-    title: chain.join(" › "),
-  };
-}
-
 const GeographyTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) => {
   const { t: tHook } = useDashboardT();
   const t = tProp || tHook;
-
-  const code = filters?.geography ?? ALL;
-  const allWardsLabel = t("DASHBOARD_FILTERS_ALL_WARDS", "All wards");
-  const { segments, elided, title } = chipModel(tree, code, allWardsLabel);
-
-  // Applies emit the selection trio through onFilterChange (leaf → ward,
-  // interior → boundaryPath); the flat fallback select's bare-string contract
-  // is untouched for tenants/failures without a tree.
-  const apply = (nextCode) => {
-    onFilterChange(
-      "geography",
-      nextCode === ALL ? clearedGeographySelection() : geographySelectionFromCode(tree, nextCode)
-    );
-  };
-
-  const chip = (
-    <span className="dashboard-popover-trigger-trail">
-      {elided && (
-        <>
-          <span className="dashboard-popover-trigger-seg dashboard-popover-trigger-seg--muted" aria-hidden>
-            …
-          </span>
-          <span className="dashboard-popover-trigger-sep" aria-hidden>
-            ›
-          </span>
-        </>
-      )}
-      {segments.map((segment, index) => (
-        <React.Fragment key={`${index}-${segment}`}>
-          {index > 0 && (
-            <span className="dashboard-popover-trigger-sep" aria-hidden>
-              ›
-            </span>
-          )}
-          <span
-            className={`dashboard-popover-trigger-seg${
-              index < segments.length - 1 ? " dashboard-popover-trigger-seg--muted" : ""
-            }`}
-          >
-            {segment}
-          </span>
-        </React.Fragment>
-      ))}
-    </span>
-  );
-
   return (
-    <PopoverMenu
+    <HierarchyMultiSelectFilter
+      tree={tree}
+      selections={filters?.geographies ?? []}
+      label={t("DASHBOARD_FILTERS_WARDS", "Wards")}
+      allLabel={t("DASHBOARD_FILTERS_ALL_WARDS", "All wards")}
       ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
-      chipTitle={title}
-      chip={chip}
-      panelWidth={288}
-    >
-      {({ close }) => (
-        <ComplaintTypeTreePanel
-          tree={tree}
-          appliedCode={code}
-          t={t}
-          labelFor={boundaryDisplayLabel}
-          allLabel={allWardsLabel}
-          allInLabel={t("DASHBOARD_GEO_FILTER_ALL_IN", "All in")}
-          onApply={(nextCode) => {
-            apply(nextCode);
-            close();
-          }}
-        />
-      )}
-    </PopoverMenu>
+      labelFor={boundaryDisplayLabel}
+      selectionFromCode={geographyMultiSelectionFromCode}
+      allInLabel={t("DASHBOARD_GEO_FILTER_ALL_IN", "All in")}
+      searchable
+      searchPlaceholder={t("DASHBOARD_FILTERS_SEARCH_WARDS", "Search wards")}
+      applyLabel={t("DASHBOARD_FILTERS_APPLY", "Apply")}
+      cancelLabel={t("DASHBOARD_FILTERS_CANCEL", "Cancel")}
+      emptyLabel={t("DASHBOARD_FILTERS_NO_MATCHES", "No matching options")}
+      onChange={(selections) => onFilterChange("geographies", selections)}
+    />
   );
 };
 
