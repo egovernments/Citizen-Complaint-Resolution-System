@@ -14,7 +14,12 @@ initContainers:
     enabled: true
     schemaTable: "mdms_v2_schema"
     image:
-      repository: "mdms-v2-db"
+      # PARITY: repo normalized to egovio/ to match the app image below (was bare
+      # "mdms-v2-db", which relied on a local containerd import — ImagePullBackOff
+      # on a fresh cluster). Tag intentionally stays on maven-jdk21-9f83afb: the
+      # app's mdms-count-api-3ac4f8e tag only adds POST /v2/_count on top of this
+      # base with zero SQL delta, so this migrator is still the correct one to run.
+      repository: "egovio/mdms-v2-db"
       tag: "maven-jdk21-9f83afb"
 
 # Container Configs

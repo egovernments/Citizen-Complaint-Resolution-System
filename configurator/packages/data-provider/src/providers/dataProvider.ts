@@ -283,36 +283,72 @@ function clientPaginate(records: RaRecord[], page: number, perPage: number): RaR
 
 // Internal paging batch size for mdmsSearchAll — NOT a result cap. A tenant with more rows
 // than this just costs more round trips; nothing is ever truncated at this number.
-const MDMS_SEARCH_ALL_BATCH_SIZE = 1000;
-// Safety ceiling in case mdms-v2 ever returns full pages forever (bad offset handling, a
+const DEFAULT_MDMS_SEARCH_ALL_BATCH_SIZE = 1000;
+// Safety ceiling in case mdms-v2 ever returns pages forever (bad offset handling, a
 // criterion mdms-v2 silently ignores, etc.) — far beyond any real DIGIT master data today.
-const MDMS_SEARCH_ALL_MAX_BATCHES = 200;
+const DEFAULT_MDMS_SEARCH_ALL_MAX_BATCHES = 200;
+let mdmsSearchAllBatchSize = DEFAULT_MDMS_SEARCH_ALL_BATCH_SIZE;
+let mdmsSearchAllMaxBatches = DEFAULT_MDMS_SEARCH_ALL_MAX_BATCHES;
+
+/**
+ * Test-only hook so unit tests can exercise mdmsSearchAll's multi-batch and
+ * safety-ceiling logic with small fixtures instead of hundreds of thousands of
+ * allocated records. Never called from a production code path.
+ */
+export function __setMdmsSearchAllLimitsForTesting(batchSize = DEFAULT_MDMS_SEARCH_ALL_BATCH_SIZE, maxBatches = DEFAULT_MDMS_SEARCH_ALL_MAX_BATCHES): void {
+  mdmsSearchAllBatchSize = batchSize;
+  mdmsSearchAllMaxBatches = maxBatches;
+}
 
 /**
  * Fetches every record for a schema, paging through mdms-v2 (which has no way to return
  * "everything" in one call) instead of truncating at a single hardcoded limit. Issue #953:
  * a tenant with 630 ComplaintHierarchy rows was silently capped at the old `{ limit: 500 }`
  * single-shot fetch, before the leaf-adapter even got a chance to filter them.
+ *
+ * Bounded by `mdmsCount` (same criteria) rather than "did the last page come back short":
+ * a short/empty page is not a trustworthy end-of-data signal on its own — an environment
+ * that enforces a server-side max-limit below our batch size would return a short page
+ * while rows remain, silently reintroducing #953. `criteria` (e.g. isActive) is passed to
+ * both calls so the count and the fetched rows agree on what's being counted/paged, and
+ * `offset` advances by the page's actual length (not the requested batch size) with a
+ * uniqueIdentifier dedupe, so a server that ever returns more or fewer rows than asked
+ * can't produce gaps or duplicates.
  */
-async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: string): Promise<MdmsRecord[]> {
+async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: string, criteria?: { isActive?: boolean }): Promise<MdmsRecord[]> {
+  const expectedTotal = await client.mdmsCount(tenant, schema, criteria);
   const all: MdmsRecord[] = [];
+  const seen = new Set<string>();
   let offset = 0;
-  for (let batch = 0; batch < MDMS_SEARCH_ALL_MAX_BATCHES; batch++) {
-    const page = await client.mdmsSearch(tenant, schema, { limit: MDMS_SEARCH_ALL_BATCH_SIZE, offset });
-    all.push(...page);
-    if (page.length < MDMS_SEARCH_ALL_BATCH_SIZE) return all;
-    offset += MDMS_SEARCH_ALL_BATCH_SIZE;
+  let batches = 0;
+  while (all.length < expectedTotal && batches < mdmsSearchAllMaxBatches) {
+    batches += 1;
+    const page = await client.mdmsSearch(tenant, schema, { limit: mdmsSearchAllBatchSize, offset, ...criteria });
+    if (page.length === 0) break;
+    for (const record of page) {
+      if (seen.has(record.uniqueIdentifier)) continue;
+      seen.add(record.uniqueIdentifier);
+      all.push(record);
+    }
+    offset += page.length;
   }
-  // Still getting full pages after the safety ceiling — returning `all` here would
-  // silently hand getList/getOne/getMany an incomplete tree. Fail loudly instead.
-  throw new Error(
-    `mdmsSearchAll: schema "${schema}" on tenant "${tenant}" did not finish paging after ` +
-      `${MDMS_SEARCH_ALL_MAX_BATCHES * MDMS_SEARCH_ALL_BATCH_SIZE} records; refusing to return a partial result.`,
-  );
+  if (all.length < expectedTotal) {
+    // Either the safety ceiling was hit while mdms-v2 kept returning rows, or paging
+    // stopped short of mdmsCount's own total — returning `all` here would silently hand
+    // getList/getOne/getMany fewer records than mdms-v2 itself says exist. Fail loudly.
+    throw new Error(
+      `mdmsSearchAll: schema "${schema}" on tenant "${tenant}" retrieved ${all.length} of ` +
+        `${expectedTotal} records reported by mdmsCount; refusing to return a partial result.`,
+    );
+  }
+  return all;
 }
 
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   const tenant = pickTenant(tenantId, filter);
+  // No isActive push-down here: the leaf-adapter (adaptHierarchyLeaves) needs inactive
+  // rows too, to resolve a leaf's parent name even when that parent has since been
+  // deactivated. Non-leaf-adapter callers filter isActive themselves below.
   const records = await mdmsSearchAll(client, tenant, config.schema!);
   if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
@@ -985,15 +1021,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       // can't represent the globally-sorted order — sorting just that page
       // (as a single `{ limit: perPage, offset }` fetch used to) reshuffles
       // each page independently instead of the full set. Page through every
-      // active record (mdmsSearchAll), sort in memory, then slice the
-      // requested page; the total then falls out of the same fetch instead
-      // of a separate `_count` call that could race with it.
+      // active record (mdmsSearchAll, with isActive pushed to the server so
+      // we don't also pay for every soft-deleted row), sort in memory, then
+      // slice the requested page. mdmsSearchAll bounds itself on mdmsCount
+      // with the SAME isActive criteria, so the total it hands back always
+      // agrees with what was actually paged through.
       if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
         const filter = filterValues;
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const all = await mdmsSearchAll(client, tenant, config.schema!);
+          const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
+          // Defensive fallback for any MDMS build that ignores the isActive criterion —
+          // degrades to filtering client-side, never worse than the pre-push-down behavior.
           const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
           const sorted = clientSort(active, field, order);
           const data = clientPaginate(sorted, page, perPage);
