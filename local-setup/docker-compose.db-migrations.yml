@@ -681,7 +681,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:abac-changes-cb6a372
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:

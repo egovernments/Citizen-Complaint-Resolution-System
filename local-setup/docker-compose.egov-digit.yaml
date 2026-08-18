@@ -1032,7 +1032,18 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    # Parameterized so deploys can pin a local ABAC-testing build via
+    # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
+    # the pgr-services image param below.
+    #
+    # TODO(before merging #1441 to master): the default below
+    # (egovio/egov-accesscontrol:abac-changes-cb6a372) is a per-feature-branch build —
+    # it carries the /access/v1/actions/mdms/_get endpoint this PR's ABAC engine
+    # depends on (verified live: pg tenant, 2026-08-18), but it is NOT a permanent
+    # release tag. If the abac-changes branch is deleted / the image is pruned, this
+    # default silently breaks every fresh `docker compose pull` on master. Retag to a
+    # stable release build carrying the same endpoint before merge (#1441 review).
+    image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:abac-changes-cb6a372}
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -1067,12 +1078,16 @@ services:
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18090:8090
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
+    # No healthcheck: both the pinned default (egovio/egov-accesscontrol:abac-changes-cb6a372)
+    # and the abac-local build are minimal/distroless images with no shell and no wget/curl —
+    # confirmed by `docker exec`ing each of /bin/sh, wget, curl, ls, all of which fail with
+    # "executable file not found in $PATH". Docker/Compose healthchecks always exec a command
+    # INSIDE the container; there is no way to run one here short of changing the image itself
+    # (a Digit-Core build concern, not this compose file). Do not add a CMD-SHELL wget/curl
+    # check back — it will sit "unhealthy" forever and, combined with a dependent's
+    # `condition: service_healthy`, hard-fails every deploy despite the app being genuinely up
+    # (verified via logs: Tomcat/Spring Boot start fine and serve real traffic). Dependents
+    # needing ordering must use `condition: service_started`, not `service_healthy`.
     networks:
     - egov-network
 
@@ -1522,6 +1537,12 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
+      egov-accesscontrol:
+        # service_healthy is unavailable — see the "No healthcheck" note on egov-accesscontrol's
+        # own service block above; this still orders pgr-services' start after the container
+        # starts, which is what PGR startup actually needs (fail-closed access-control lookups
+        # already handle "not up yet" at the application layer).
+        condition: service_started
       otel-collector:
         condition: service_started
     volumes:
@@ -1548,7 +1569,18 @@ services:
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_ENC_HOST: http://egov-enc-service:1234
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
+      # Explicit ABAC rollout gate (org.egov.pgr.policy.AccessPolicyRegistry#getCondition, #1441
+      # review). Left "false" (backward compatible) deliberately: this stack serves multiple
+      # tenants (e.g. new/onboarded ones) that don't yet have a resource.complaint.scope/condition
+      # authored on the ACCESSCONTROL-ACTIONS-TEST action 2008 record for /pgr-services/v2/request/_search
+      # — flipping this to "true" makes PGR search fail closed (empty results) for EVERY tenant
+      # this instance serves that lacks that policy, not just the ones that have it. Only set this
+      # to "true" once every tenant this deployment serves has action 2008's resource/condition
+      # (or resource.complaint.scope) fully authored — e.g. the reference tenant `pg` already does,
+      # via db/full-dump.sql's seed data, but others onboarded later may not.
+      PGR_ABAC_STRICT_MODE: "false"
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
       # consumed by EscalationScheduler#getStateLevelTenantId). Without

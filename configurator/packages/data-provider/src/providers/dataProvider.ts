@@ -171,13 +171,65 @@ function mapLeafToServiceDef(
   };
 }
 
+// Used only when a tenant has no ComplaintHierarchyDefinition yet — a fresh
+// tenant bootstrapping its first leaf row before ever visiting "Complaint
+// Hierarchies" to declare one. Every real tenant's definition overrides these.
+const FALLBACK_HIERARCHY_TYPE = 'PGR';
+const FALLBACK_LEAF_LEVEL_CODE = 'SUB_TYPE';
+
+interface HierarchyDefinitionLevel {
+  levelCode?: string;
+  isLeafServiceCode?: boolean;
+}
+
+/** Resolve {hierarchyType, levelCode} for a NEW leaf row from the tenant's
+ *  actual RAINMAKER-PGR.ComplaintHierarchyDefinition, rather than a hardcoded
+ *  literal — both are tenant-configurable (levelCode especially: a tenant can
+ *  name its leaf level anything, not always "SUB_TYPE"; see review on
+ *  CCRS#1719). Picks the first active definition and the level it marks
+ *  isLeafServiceCode. Falls back to the FALLBACK_* constants only when no
+ *  definition exists at all, or the lookup fails. */
+async function resolveNewLeafDefaults(
+  client: DigitApiClient,
+  tenantId: string,
+): Promise<{ hierarchyType: string; levelCode: string }> {
+  try {
+    const definitions = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true });
+    const def = definitions.find((d) => d.isActive);
+    const data = def?.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
+    const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
+    const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
+    const leafLevel = levels.find((l) => l.isLeafServiceCode);
+    if (hierarchyType && leafLevel?.levelCode) {
+      return { hierarchyType, levelCode: leafLevel.levelCode };
+    }
+  } catch {
+    // fall through to the bootstrap default below
+  }
+  return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+}
+
 /** Translate an inbound complaint-type form payload (legacy ServiceDefs
  *  vocabulary) into a ComplaintHierarchy LEAF row for writing. `serviceCode`
  *  becomes the row `code`; the adapter-only synthetic fields (menuPath /
  *  menuPathName / serviceCode) are dropped — grouping derives from parentCode.
- *  The metadata strip (id / `_*`) is left to the caller. */
-function serviceDefToLeafWrite(data: Record<string, unknown>): Record<string, unknown> {
+ *  The metadata strip (id / `_*`) is left to the caller.
+ *
+ *  `newLeafDefaults`, when passed, stamps hierarchyType/levelCode for a brand
+ *  new row that doesn't have them yet (CREATE — see resolveNewLeafDefaults).
+ *  Omit it on UPDATE: dataProvider.update() merges this output onto the
+ *  freshly-fetched existing record, so an edit that never touches these
+ *  fields correctly keeps whatever the record already has, rather than this
+ *  function silently overwriting them with a default (CCRS#1719 review). */
+function serviceDefToLeafWrite(
+  data: Record<string, unknown>,
+  newLeafDefaults?: { hierarchyType: string; levelCode: string },
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
+  if (newLeafDefaults) {
+    if (!out.hierarchyType) out.hierarchyType = newLeafDefaults.hierarchyType;
+    if (!out.levelCode) out.levelCode = newLeafDefaults.levelCode;
+  }
   // serviceCode -> code (the leaf's code IS the serviceCode stored on a
   // complaint). Populate `code` from a filled Service Code whenever `code` is
   // absent OR blank — the create form carries `code: ""` (empty string, not
@@ -1171,7 +1223,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const incoming = config.leafServiceDefAdapter
-          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
+          ? serviceDefToLeafWrite(
+              params.data as Record<string, unknown>,
+              await resolveNewLeafDefaults(client, tenantId),
+            )
           : (params.data as Record<string, unknown>);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
