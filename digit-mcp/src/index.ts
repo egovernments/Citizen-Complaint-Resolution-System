@@ -8,7 +8,7 @@ import { handlePgrDashboard } from './api/pgr-dashboard.js';
 import { ToolRegistry } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
-import type { ToolAccess } from './types/index.js';
+import type { ToolAccess, ToolMetadata } from './types/index.js';
 import { digitApi, runWithIsolatedClient } from './services/digit-api.js';
 import {
   adminRoleCodes,
@@ -17,6 +17,7 @@ import {
   checkToolAccess,
   getAuthMode,
   isAdminCaller,
+  parseBearer,
   resolveClientIp,
   type ValidatedCaller,
 } from './services/auth.js';
@@ -161,7 +162,10 @@ if (transportMode === 'stdio') {
     const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
     // Form 1: Authorization: Bearer <token>
-    if (authHeader) {
+    // Gated on the Bearer scheme specifically. Claiming Form 1 for ANY
+    // Authorization header made a proxy-injected or browser-cached `Basic`
+    // header a hard 401, shadowing the body.auth credentials the caller sent.
+    if (parseBearer(authHeader)) {
       const result = await authenticateBearer(authHeader);
       if (!result.ok) return result;
       applyValidatedCaller(result.caller);
@@ -280,6 +284,46 @@ if (transportMode === 'stdio') {
     return { error: raw, raw };
   }
 
+  /**
+   * Run a tool from the REST shim, recording it the same way the MCP path does.
+   *
+   * `src/server.ts` wraps every MCP tool call in mcpLogger + sessionStore, but
+   * the REST paths called `tool.handler()` directly — so every successful
+   * /v1/* invocation, including tenant_destroy and user_role_add, left no trace
+   * at all. Only denials were logged, which is the opposite of what an audit
+   * trail is for.
+   */
+  async function auditedCall<T>(
+    tool: ToolMetadata,
+    toolArgs: Record<string, unknown>,
+    onResult: (parsed: unknown) => T,
+  ): Promise<T> {
+    const seq = sessionStore.recordToolCall(tool.name, toolArgs);
+    mcpLogger.toolCall(tool.name, toolArgs);
+    const start = Date.now();
+    try {
+      const raw = await tool.handler(toolArgs);
+      const durationMs = Date.now() - start;
+      mcpLogger.toolResult(tool.name, durationMs, false);
+      sessionStore.recordToolResult(
+        seq,
+        tool.name,
+        durationMs,
+        false,
+        tool.sensitiveOutput ? `[redacted: ${raw.length} chars]` : raw,
+      );
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
+      return onResult(parsed);
+    } catch (err) {
+      const durationMs = Date.now() - start;
+      const message = err instanceof Error ? err.message : String(err);
+      mcpLogger.toolResult(tool.name, durationMs, true);
+      sessionStore.recordToolResult(seq, tool.name, durationMs, true, '', message);
+      throw err;
+    }
+  }
+
   async function dispatchTool(
     toolName: string,
     args: Record<string, unknown>,
@@ -317,10 +361,7 @@ if (transportMode === 'stdio') {
         const { auth: _ignored, ...toolArgs } = args;
         void _ignored;
 
-        const result = await tool.handler(toolArgs as Record<string, unknown>);
-        let parsed: unknown;
-        try { parsed = JSON.parse(result); } catch { parsed = { raw: result }; }
-        return { status: 200, body: parsed };
+        return auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => ({ status: 200, body: parsed }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const norm = normalizeError(msg);
@@ -384,10 +425,9 @@ if (transportMode === 'stdio') {
           }
           const { auth: _ignored, ...toolArgs } = args;
           void _ignored;
-          const raw = await tool.handler(toolArgs as Record<string, unknown>);
-          let parsed: unknown;
-          try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
-          writeEvent('done', parsed);
+          await auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => {
+            writeEvent('done', parsed);
+          });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           writeEvent('error', { success: false, ...normalizeError(msg) });
@@ -445,11 +485,10 @@ if (transportMode === 'stdio') {
             const i = nextIdx++;
             if (i >= items.length) return;
             try {
-              const raw = await boundTool.handler(items[i]);
-              let parsed: unknown;
-              try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
-              const ok = !!(parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).success !== false);
-              results[i] = { ok, status: 200, body: parsed };
+              results[i] = await auditedCall(boundTool, items[i], (parsed) => {
+                const ok = !!(parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).success !== false);
+                return { ok, status: 200, body: parsed };
+              });
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               results[i] = { ok: false, status: 500, body: { success: false, ...normalizeError(msg) } };
@@ -579,7 +618,11 @@ if (transportMode === 'stdio') {
     // can call /v1/* from a different origin without extra ops setup
     // (assuming MCP_CORS_ORIGINS is configured).
     applyCors(req, res);
-    if (req.method === 'OPTIONS' && pathname.startsWith('/v1/')) {
+    // Preflight is answered before any auth gate, for every namespace a browser
+    // can reach. A preflight carries no credentials by design, so gating it
+    // returns 401 and the real request is never sent — which silently breaks
+    // every cross-origin consumer of /api/* and /mcp.
+    if (req.method === 'OPTIONS' && (pathname.startsWith('/v1/') || pathname.startsWith('/api/') || pathname === '/mcp')) {
       res.writeHead(204).end();
       return;
     }

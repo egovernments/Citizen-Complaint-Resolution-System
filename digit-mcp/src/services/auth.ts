@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync } from 'node:fs';
+import { lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { isIPv4, isIPv6 } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -307,7 +307,6 @@ export function resolveArtifactPath(userPath: string): string {
   const base = realPath(configured);
 
   const lexical = isAbsolute(userPath) ? resolve(userPath) : resolve(base, userPath);
-  mkdirSync(dirname(lexical), { recursive: true });
 
   // Compare real paths on BOTH sides. Comparing a lexical candidate against a
   // real base rejects legitimate input whenever any ancestor is a symlink
@@ -315,6 +314,11 @@ export function resolveArtifactPath(userPath: string): string {
   // lexically on both sides would miss a symlink *inside* the directory
   // pointing out of it. Resolving both is what makes the check mean
   // "the same place", rather than "the same spelling".
+  //
+  // `realPath` handles a leaf that doesn't exist yet, so this needs no mkdir —
+  // which matters, because creating the caller's directories BEFORE deciding
+  // whether the path is allowed would let a rejected call still author
+  // directories anywhere the process can write.
   const real = realPath(lexical);
   if (!isInside(real, base)) {
     throw new Error(
@@ -322,11 +326,38 @@ export function resolveArtifactPath(userPath: string): string {
       'Pass a bare filename, or set MCP_ARTIFACT_DIR to change the location.'
     );
   }
+
+  // Reject a symlink at the destination outright.
+  //
+  // A LIVE symlink is already caught by the realPath comparison above. A
+  // DANGLING one is not: realpathSync throws on it, so realPath() treats it as
+  // a leaf that does not exist yet and hands back a path that sits inside the
+  // base — which writeFileSync then happily follows out of the directory.
+  // Creating a *new* file elsewhere is the case that matters, so this is the
+  // gap that has to close, not the one the prefix check already covers.
+  if (isSymlink(real)) {
+    throw new Error(
+      `Path "${userPath}" resolves to a symbolic link, which artifact paths may not be. ` +
+      `Remove the link at ${real}, or pass a different filename.`
+    );
+  }
+
+  // Only now, once the destination is known to be confined, create it.
+  mkdirSync(dirname(real), { recursive: true });
   return real;
 }
 
 function isInside(candidate: string, base: string): boolean {
   return candidate === base || candidate.startsWith(base + sep);
+}
+
+/** True when `p` is a symlink. A path that does not exist is not a symlink. */
+function isSymlink(p: string): boolean {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    return false; // ENOENT — a new file, which is the normal case
+  }
 }
 
 /**
