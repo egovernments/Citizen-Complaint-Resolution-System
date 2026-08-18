@@ -2,7 +2,7 @@
 
 > Complete reference for all 60 DIGIT MCP Server tools, grouped by domain.
 
-Tools are organized into 14 groups. Only `core` and `docs` are enabled by default — use [`enable_tools`](tools/enable_tools.md) to unlock additional groups.
+Tools are organized into 15 groups. Only `core` and `docs` are enabled by default — use [`enable_tools`](tools/enable_tools.md) to unlock additional groups.
 
 ---
 

@@ -3652,8 +3652,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
         const activeCount = filteredRecords.filter((r) => r.isActive).length;
         return JSON.stringify({
-          success: true,
+          // NOT `success: true`. Every other tool uses that to mean "the thing
+          // you asked for happened", and automation branches on it — reporting
+          // a no-op as success is how a cleanup silently stops running.
+          success: false,
           dry_run: true,
+          code: 'CONFIRMATION_REQUIRED',
           message: `Preview only — nothing was changed. ${activeCount} active MDMS record(s) would be deactivated on "${tenantId}".`,
           tenantId,
           wouldDeactivate: {

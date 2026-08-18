@@ -87,11 +87,16 @@ INSERT INTO engram_id_counters (category, next_id)
  */
 const COMPOSE_DEFAULT_SESSION_DB_PASSWORD = 'mcp123';
 
+let sessionDbWarningLogged = false;
+
 function sessionDbPassword(): string {
   const configured = process.env.SESSION_DB_PASSWORD;
   if (configured) return configured;
 
-  if (process.env.MCP_TRANSPORT === 'http') {
+  // `initialize()` nulls the pool on a failed connect, so its `if (this.pool)`
+  // guard doesn't hold and a second caller re-enters — printing this twice.
+  if (process.env.MCP_TRANSPORT === 'http' && !sessionDbWarningLogged) {
+    sessionDbWarningLogged = true;
     console.error(
       '[session-db] SESSION_DB_PASSWORD is not set. Falling back to the published ' +
       'local-compose default, which is not a credential on a network deployment. ' +

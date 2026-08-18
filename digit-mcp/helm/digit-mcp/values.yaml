@@ -49,6 +49,14 @@ env:
   MCP_ALLOWED_BASE_URLS: ""
   # Directory snapshot artifacts are confined to (must be writable; see volumes).
   MCP_ARTIFACT_DIR: /app/data/artifacts
+  # Session viewer database. The image defaults to localhost:15433, which has no
+  # listener in a pod — sessions silently were not persisted and /api/stats
+  # returned "Database not available". Point these at a real Postgres, or leave
+  # them empty and accept JSONL-only session recording.
+  SESSION_DB_HOST: ""
+  SESSION_DB_PORT: "5432"
+  SESSION_DB_NAME: mcp_sessions
+  SESSION_DB_USER: mcp
   # Role codes that satisfy a tool's access: 'admin' requirement. Empty => the
   # built-in defaults (SUPERUSER, MDMS_ADMIN, SYSTEM_ADMIN, STADMIN).
   MCP_ADMIN_ROLES: ""

@@ -16,6 +16,10 @@ COPY packages/data-provider/package.json packages/data-provider/package.json
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist dist/
 COPY --from=builder /app/packages/data-provider/dist packages/data-provider/dist/
+# The session viewer is served from disk at runtime (serveStatic resolves
+# ../ui relative to dist/). Without this the image 404s on `/` and every
+# /api/* consumer of it — including the sign-in gate — is unreachable.
+COPY ui/ ui/
 # Writable paths, owned by the unprivileged runtime user. The logger mkdir's its
 # own directory at import time, so it has to exist and be writable before we drop
 # privileges. `artifacts` backs MCP_ARTIFACT_DIR (snapshot output confinement).

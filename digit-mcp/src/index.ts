@@ -25,7 +25,7 @@ import { runWithRequestContext, setContextUser } from './services/request-contex
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, extname, resolve } from 'node:path';
+import { join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const transportMode = process.env.MCP_TRANSPORT === 'http' ? 'http' : 'stdio';
@@ -86,8 +86,9 @@ if (transportMode === 'stdio') {
     let filePath = urlPath === '/' ? '/index.html' : urlPath;
     const resolved = resolve(join(UI_DIR, filePath));
 
-    // Path traversal protection
-    if (!resolved.startsWith(UI_DIR)) {
+    // Path traversal protection. The trailing separator matters: without it a
+    // sibling directory sharing the prefix (`ui-evil` next to `ui`) passes.
+    if (resolved !== UI_DIR && !resolved.startsWith(UI_DIR + sep)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' });
       res.end('Forbidden');
       return;
@@ -330,11 +331,9 @@ if (transportMode === 'stdio') {
     req: IncomingMessage,
     progressCb?: (event: ProgressEvent) => void,
   ): Promise<{ status: number; body: unknown }> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
-    }
-
+    // Resolved inside the lock, AFTER authentication: answering 404 for an
+    // unknown tool and 401 for a known one let an anonymous caller enumerate
+    // the whole tool surface by diffing status codes.
     return withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       if (progressCb) setProgressEmitter(progressCb);
@@ -351,6 +350,11 @@ if (transportMode === 'stdio') {
         }
         if (!authResult.ok) {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
+        }
+
+        const tool = restRegistry.getTool(toolName);
+        if (!tool) {
+          return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
         }
 
         const denied = authorizeRest(toolName, tool.access, authResult.caller);
@@ -392,6 +396,25 @@ if (transportMode === 'stdio') {
       jsonResponse(res, 404, { success: false, error: `Unknown tool: ${toolName}` });
       return;
     }
+    // Authenticate and authorize before committing the 200. An SSE stream that
+    // opens successfully and then emits `event: error` reads as success to any
+    // client keying on the status code, which is every ordinary HTTP client.
+    const pre = await withRestLock(async () => {
+      const snap = digitApi.snapshotAuth();
+      try {
+        const authResult = await authenticateRest(req, args);
+        if (authResult === null) return { status: 401, body: { success: false, error: 'Authentication required.' } };
+        if (!authResult.ok) return { status: authResult.status, body: { success: false, error: authResult.error } };
+        return authorizeRest(toolName, tool.access, authResult.caller);
+      } finally {
+        digitApi.restoreAuth(snap);
+      }
+    });
+    if (pre) {
+      jsonResponse(res, pre.status, pre.body);
+      return;
+    }
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -641,12 +664,17 @@ if (transportMode === 'stdio') {
     // GET /v1/version — server identity + build metadata. Lets the frontend
     // verify the deployed MCP has a known fix.
     if (req.method === 'GET' && pathname === '/v1/version') {
+      // gitSha / buildTime / nodeVersion tell an unauthenticated caller exactly
+      // which build is running and therefore which CVEs apply. The service name
+      // and uptime stay open so the endpoint remains usable as a liveness probe.
+      const detailed = getAuthMode() !== 'token' ||
+        (await authenticateBearer(req.headers['authorization'] || req.headers['Authorization'])).ok;
       jsonResponse(res, 200, {
         service: 'digit-mcp',
-        version: process.env.MCP_VERSION || '1.0.0',
-        gitSha: process.env.MCP_GIT_SHA || null,
-        buildTime: process.env.MCP_BUILD_TIME || null,
-        nodeVersion: process.version,
+        version: detailed ? (process.env.MCP_VERSION || '1.0.0') : undefined,
+        gitSha: detailed ? (process.env.MCP_GIT_SHA || null) : undefined,
+        buildTime: detailed ? (process.env.MCP_BUILD_TIME || null) : undefined,
+        nodeVersion: detailed ? process.version : undefined,
         startedAt: new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString(),
         uptimeSec: Math.floor(process.uptime()),
         features: ['v1/tenant/bootstrap', 'v1/tenant/city', 'v1/tenant/cleanup', 'v1/tenant/:id/export', 'v1/tools/:name', 'v1/tools/:name/bulk', 'sse-progress', 'cors'],
@@ -885,8 +913,9 @@ if (transportMode === 'stdio') {
         });
         jsonResponse(res, 403, {
           error:
-            `The session viewer requires one of these roles: ${adminRoleCodes().join(', ')}. ` +
-            `Caller "${apiAuth.caller.user.userName}" holds none of them.`,
+            `${pathname} requires one of these roles: ${adminRoleCodes().join(', ')}. ` +
+            `Caller "${apiAuth.caller.user.userName}" holds none of them. ` +
+            'Set MCP_ADMIN_ROLES if this deployment uses different admin role codes.',
         });
         return;
       }
@@ -1114,9 +1143,15 @@ if (transportMode === 'stdio') {
     res.end(JSON.stringify({ error: 'Not found' }));
   }
 
-  httpServer.listen(port, '0.0.0.0', () => {
+  // The ambient-mode warning says "only use this on a loopback-bound socket",
+  // which was impossible to comply with while the bind address was hardcoded.
+  // Ambient + HTTP therefore defaults to loopback; set MCP_BIND to override.
+  const bindAddress =
+    process.env.MCP_BIND || (getAuthMode() === 'ambient' ? '127.0.0.1' : '0.0.0.0');
+
+  httpServer.listen(port, bindAddress, () => {
     mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath });
-    console.error(`DIGIT MCP server listening on http://0.0.0.0:${port}/mcp`);
+    console.error(`DIGIT MCP server listening on http://${bindAddress}:${port}/mcp`);
     console.error(`Session viewer: http://0.0.0.0:${port}/`);
     console.error(`Health check: http://0.0.0.0:${port}/healthz`);
     console.error(`Logging to: ${mcpLogger.logPath}`);

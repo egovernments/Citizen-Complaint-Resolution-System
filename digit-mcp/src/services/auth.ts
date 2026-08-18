@@ -3,7 +3,7 @@ import { isIPv4, isIPv6 } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { getEnvironment } from '../config/environments.js';
-import { digitApi } from './digit-api.js';
+import { digitApi, TokenIntrospectionError } from './digit-api.js';
 import type { ToolAccess, UserInfo } from '../types/index.js';
 
 /**
@@ -193,13 +193,18 @@ export function resolveClientIp(
 }
 
 function normalizeIp(value: string): string {
-  // ::ffff:10.0.0.1 -> 10.0.0.1
-  const m = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(value);
-  if (m) return m[1];
-  // Strip a zone index (fe80::1%eth0) and lower-case, so IPv6 literals compare
-  // consistently regardless of how the platform renders them.
+  // Strip a zone index (fe80::1%eth0) first, so it never reaches the parser.
   const zoneless = value.split('%')[0];
-  return isIPv6(zoneless) ? expandIpv6(zoneless) : zoneless;
+  if (!isIPv6(zoneless)) return zoneless;
+
+  // Any IPv4-mapped form collapses to its IPv4 spelling — ::ffff:10.0.0.1 and
+  // 0:0:0:0:0:ffff:0a00:0001 are the same peer, and only handling the shorthand
+  // meant a fully-spelled one never matched an IPv4 entry.
+  const groups = ipv6Groups(zoneless);
+  if (groups && groups[5] === 0xffff && groups.slice(0, 5).every((g) => g === 0)) {
+    return [groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff].join('.');
+  }
+  return expandIpv6(zoneless);
 }
 
 /** Canonical fully-expanded IPv6 form, so `::1` and `0:0:...:1` compare equal. */
@@ -212,10 +217,26 @@ function expandIpv6(value: string): string {
 function ipv6Groups(value: string): number[] | null {
   if (!isIPv6(value)) return null;
   const [head, tail] = value.split('::') as [string, string | undefined];
-  const parse = (part: string): number[] =>
-    part ? part.split(':').filter(Boolean).map((h) => parseInt(h, 16)) : [];
+  // A trailing dotted quad (::ffff:1.2.3.4, 64:ff9b::192.0.2.1) is two groups,
+  // not one hex number: parseInt('1.2.3.4', 16) is 1, which silently produced a
+  // wrong address and could false-match an IPv6 CIDR.
+  const parse = (part: string): number[] => {
+    if (!part) return [];
+    const out: number[] = [];
+    for (const piece of part.split(':').filter(Boolean)) {
+      if (piece.includes('.')) {
+        const octets = piece.split('.').map(Number);
+        if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return [NaN];
+        out.push((octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]);
+      } else {
+        out.push(parseInt(piece, 16));
+      }
+    }
+    return out;
+  };
   const left = parse(head);
   const right = tail === undefined ? [] : parse(tail);
+  if ([...left, ...right].some((n) => !Number.isInteger(n))) return null;
   if (tail === undefined) return left.length === 8 ? left : null;
   const fill = 8 - left.length - right.length;
   if (fill < 0) return null;
@@ -237,8 +258,12 @@ function isTrustedProxy(peer: string): boolean {
 function ipInCidr(ip: string, cidr: string): boolean {
   const [rangeRaw, bitsRaw] = cidr.split('/');
   const range = normalizeIp(rangeRaw.trim());
+
   const bits = parseInt(bitsRaw, 10);
   if (!Number.isInteger(bits) || bits < 0) return false;
+  // A /0 prefix matches every address, in either family. Handled up front so
+  // `::/0` doesn't have to survive the v6 group walk to reach the same answer.
+  if (bits === 0) return true;
 
   // IPv6 is matched group-wise rather than via 32-bit ints. A dual-stack
   // cluster hands us IPv6 peers, and silently failing to match them would
@@ -257,7 +282,11 @@ function ipInCidr(ip: string, cidr: string): boolean {
     return true;
   }
 
-  if (bits > 32 || !isIPv4(ip) || !isIPv4(range)) return false;
+  // ::ffff:10.0.0.0/104 means 10.0.0.0/8 once the peer has been collapsed to
+  // its IPv4 form. Rebase the prefix rather than rejecting it.
+  let v4bits = bits;
+  if (bits > 32 && isIPv4(ip) && isIPv4(range)) v4bits = bits - 96;
+  if (v4bits < 0 || v4bits > 32 || !isIPv4(ip) || !isIPv4(range)) return false;
   const toInt = (v: string): number | null => {
     const parts = v.split('.');
     if (parts.length !== 4) return null;
@@ -272,7 +301,7 @@ function ipInCidr(ip: string, cidr: string): boolean {
   const a = toInt(ip);
   const b = toInt(range);
   if (a === null || b === null) return false;
-  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  const mask = v4bits === 0 ? 0 : (0xffffffff << (32 - v4bits)) >>> 0;
   return (a & mask) === (b & mask);
 }
 
@@ -399,13 +428,16 @@ export function allowedBaseUrlHosts(): string[] {
     .filter(Boolean)
     .map(normalizeHost);
 
-  if (configured.length > 0) return configured;
-
+  // The configured DIGIT host is ALWAYS allowed. Making the env var replace it
+  // meant that authorising one extra instance silently de-authorised the
+  // server's own CRS_API_URL — a surprising way to break `configure`.
+  let own: string[] = [];
   try {
-    return [normalizeHost(getEnvironment().url)];
+    own = [normalizeHost(getEnvironment().url)];
   } catch {
-    return [];
+    own = [];
   }
+  return [...new Set([...own, ...configured])];
 }
 
 function normalizeHost(value: string): string {
@@ -433,6 +465,15 @@ export function checkBaseUrlAllowed(baseUrl: string): string | null {
     const url = new URL(baseUrl);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return `base_url must use http or https (got "${url.protocol}").`;
+    }
+    // A path prefix is legitimate — DIGIT is sometimes mounted under one — and
+    // `..` needs no guard here because the URL parser has already collapsed it
+    // (`https://h/a/../..` parses with pathname `/`).
+    //
+    // Embedded credentials do need one: they are a classic way to make a URL
+    // read as one host to a human and resolve to another.
+    if (url.username || url.password) {
+      return 'base_url must not embed credentials.';
     }
     host = url.host.toLowerCase();
   } catch {
@@ -505,7 +546,9 @@ export async function authenticateBearer(
     return {
       ok: false,
       status: 401,
-      error: 'Authentication required: send Authorization: Bearer <DIGIT access token>.',
+      error:
+        'Authentication required: send Authorization: Bearer <DIGIT access token>. ' +
+        'Mint one from your DIGIT instance at POST /user/oauth/token.',
     };
   }
 
@@ -515,15 +558,49 @@ export async function authenticateBearer(
     return { ok: true, caller: { token, user: cloneUser(cached.user) } };
   }
 
-  const user = await digitApi.validateToken(token);
+  let user: UserInfo | null;
+  try {
+    // Single-flight: N concurrent requests bearing the same cold token would
+    // otherwise fire N introspections, which is exactly the load an egov-user
+    // brownout least needs.
+    user = await introspectOnce(token);
+  } catch (err) {
+    if (err instanceof TokenIntrospectionError) {
+      return {
+        ok: false,
+        status: 503,
+        error:
+          'Cannot verify your token right now: the identity service is unreachable. ' +
+          'This is not a problem with your credentials — retry shortly. ' +
+          `(${err.message})`,
+      };
+    }
+    throw err;
+  }
+
   if (!user) {
     tokenCache.delete(token);
-    return { ok: false, status: 401, error: 'Invalid or expired access token.' };
+    return {
+      ok: false,
+      status: 401,
+      error: 'Invalid or expired access token. Mint a new one from /user/oauth/token.',
+    };
   }
 
   if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.clear();
   tokenCache.set(token, { user, at: now });
   return { ok: true, caller: { token, user: cloneUser(user) } };
+}
+
+/** In-flight introspections, so one cold token costs one round trip. */
+const inFlight = new Map<string, Promise<UserInfo | null>>();
+
+function introspectOnce(token: string): Promise<UserInfo | null> {
+  const existing = inFlight.get(token);
+  if (existing) return existing;
+  const p = digitApi.validateToken(token).finally(() => inFlight.delete(token));
+  inFlight.set(token, p);
+  return p;
 }
 
 /**

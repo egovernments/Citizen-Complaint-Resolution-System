@@ -17,6 +17,18 @@ export interface AuthSnapshot {
   environment?: Environment;
 }
 
+/**
+ * Introspection could not be completed — as distinct from completing and
+ * rejecting the token. Surfaced as 503, so an egov-user outage does not look
+ * like every caller's credentials expiring at once.
+ */
+export class TokenIntrospectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TokenIntrospectionError';
+  }
+}
+
 export class ApiClientError extends Error {
   public errors: ApiError[];
   public statusCode: number;
@@ -126,6 +138,12 @@ class DigitApiClient {
    * "sent a header".
    */
   async validateToken(token: string): Promise<UserInfo | null> {
+    // `?access_token=` is egov-user's contract for this endpoint — it reads a
+    // @RequestParam, which is also how the gateway calls it. That does put the
+    // token in egov-user's and the gateway's access logs on every
+    // introspection (once per 30s per active token, given the cache). Moving it
+    // to a header would need a verified egov-user change first: guessing wrong
+    // fails closed, i.e. every caller gets a 401.
     const url = `${this.environment.url}${this.endpoint('USER_DETAILS')}?access_token=${encodeURIComponent(token)}`;
     try {
       const response = await fetch(url, {
@@ -142,11 +160,23 @@ class DigitApiClient {
         }),
         signal: AbortSignal.timeout(10_000),
       });
+      // A 4xx is egov-user telling us the token is no good. A 5xx is egov-user
+      // failing to answer — a different thing, and reporting it as "invalid
+      // token" sends the operator after credentials while the platform is down.
+      if (response.status >= 500) {
+        throw new TokenIntrospectionError(
+          `egov-user returned HTTP ${response.status} while validating the token.`,
+        );
+      }
       if (!response.ok) return null;
       const data = (await response.json()) as { UserRequest?: UserInfo };
       return data?.UserRequest ?? null;
-    } catch {
-      return null;
+    } catch (err) {
+      if (err instanceof TokenIntrospectionError) throw err;
+      // Network error, DNS failure, or the 10s timeout. Also not a bad token.
+      throw new TokenIntrospectionError(
+        `Could not reach egov-user to validate the token: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -1248,11 +1278,6 @@ const clientContext = new AsyncLocalStorage<DigitApiClient>();
 /** Run `fn` with a fresh DigitApiClient visible to everything it awaits. */
 export function runWithIsolatedClient<T>(fn: () => Promise<T>): Promise<T> {
   return clientContext.run(new DigitApiClient(), fn);
-}
-
-/** True when the caller is executing inside an isolated client scope. */
-export function hasIsolatedClient(): boolean {
-  return clientContext.getStore() !== undefined;
 }
 
 export const digitApi: DigitApiClient = new Proxy(defaultClient, {

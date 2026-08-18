@@ -357,6 +357,39 @@ await test('4.6 pathological nesting terminates', () => {
   assert.ok(!out.includes('"p"'), 'a deep credential must not survive the depth limit');
 });
 
+await test('4.6b ordinary words containing a credential substring survive', () => {
+  // `auth` used to swallow author/authority, `token` used to swallow tokenize.
+  // Over-redaction is not free: it removes the arguments an audit trail exists
+  // to record.
+  const out = redactDeep({
+    author: 'ada', authority: 'local', tokenize: true, authored_at: 'x',
+    // ...while the real credential shapes still go.
+    access_token: 'T', 'X-Auth-Token': 'T', apiKey: 'K', myPassword: 'P',
+  }) as any;
+  assert.equal(out.author, 'ada');
+  assert.equal(out.authority, 'local');
+  assert.equal(out.tokenize, true);
+  assert.equal(out.authored_at, 'x');
+  for (const k of ['access_token', 'X-Auth-Token', 'apiKey', 'myPassword']) {
+    assert.equal(out[k], '***', `${k} must be redacted`);
+  }
+});
+
+await test('4.6c a realistically deep payload is preserved, not placeholdered', () => {
+  // mdms_create / tenant_bootstrap arguments nest well past the old limit of 8.
+  let deep: Record<string, unknown> = { leaf: 'kept' };
+  for (let i = 0; i < 20; i++) deep = { nested: deep };
+  assert.ok(JSON.stringify(redactDeep(deep)).includes('kept'), 'real audit data was discarded');
+});
+
+await test('4.6d a cyclic object terminates instead of recursing', () => {
+  const a: Record<string, unknown> = { name: 'a' };
+  a.self = a;
+  const out = redactDeep(a) as any;
+  assert.equal(out.name, 'a');
+  assert.equal(out.self, '[circular]');
+});
+
 await test('4.7 isSensitiveKey covers the documented names', () => {
   for (const k of ['password', 'secret', 'token', 'credential', 'auth', 'apikey']) {
     assert.ok(isSensitiveKey(k), `${k} should be sensitive`);
@@ -496,6 +529,46 @@ await test('6.6 the port is part of the host comparison', () => {
   withEnv({ MCP_AUTH_MODE: 'token', MCP_ALLOWED_BASE_URLS: 'digit.example:8080' }, () => {
     assert.equal(checkBaseUrlAllowed('http://digit.example:8080'), null);
     assert.ok(checkBaseUrlAllowed('http://digit.example:9090'), 'a different port is a different target');
+  });
+});
+
+await test('6.4b embedded credentials are rejected; a path prefix is not', () => {
+  withEnv({ MCP_AUTH_MODE: 'token', MCP_ALLOWED_BASE_URLS: 'digit.example' }, () => {
+    assert.match(checkBaseUrlAllowed('https://user:pw@digit.example')!, /credentials/);
+    // A plain path prefix stays legal — DIGIT is sometimes mounted under one.
+    assert.equal(checkBaseUrlAllowed('https://digit.example/digit'), null);
+    // `..` needs no explicit guard: the URL parser collapses it to `/` before
+    // the check runs, so there is nothing left to traverse with.
+    assert.equal(checkBaseUrlAllowed('https://digit.example/a/../..'), null);
+  });
+});
+
+await test('6.8 an explicit allow-list EXTENDS the configured host, never replaces it', () => {
+  // Replacing it meant authorising one extra instance silently de-authorised
+  // the server's own CRS_API_URL, breaking `configure` in a baffling way.
+  withEnv({ MCP_AUTH_MODE: 'token', MCP_ALLOWED_BASE_URLS: undefined }, () => {
+    const own = allowedBaseUrlHosts();
+    withEnv({ MCP_ALLOWED_BASE_URLS: 'other.example' }, () => {
+      const both = allowedBaseUrlHosts();
+      assert.ok(both.includes('other.example'), 'the configured extra host is missing');
+      for (const h of own) assert.ok(both.includes(h), `own host ${h} was de-authorised`);
+    });
+  });
+});
+
+await test('7.7c IPv4-mapped IPv6 forms parse to the right address', () => {
+  // parseInt('1.2.3.4', 16) is 1 — the dotted quad has to expand to two groups,
+  // or a v4-mapped peer silently compares as a different address entirely.
+  withEnv({ MCP_TRUSTED_PROXIES: '10.0.0.1' }, () => {
+    assert.equal(resolveClientIp('0:0:0:0:0:ffff:10.0.0.1', '1.2.3.4').ip, '1.2.3.4',
+      'a fully-spelled v4-mapped peer must normalise to its IPv4 form');
+  });
+  withEnv({ MCP_TRUSTED_PROXIES: '::ffff:10.0.0.0/104' }, () => {
+    assert.equal(resolveClientIp('10.0.0.7', '1.2.3.4').trusted, true,
+      'a v4-mapped CIDR is the natural dual-stack spelling and must match');
+  });
+  withEnv({ MCP_TRUSTED_PROXIES: '::/0' }, () => {
+    assert.equal(resolveClientIp('10.5.5.5', '1.2.3.4').trusted, true, '::/0 matches everything');
   });
 });
 

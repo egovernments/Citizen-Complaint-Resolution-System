@@ -7,6 +7,12 @@ import { validateTenantId, validateMobileNumber, rejectControlChars, validateStr
 export function registerHrmsTools(registry: ToolRegistry): void {
   registry.register({
     name: 'employee_create',
+    // Returns a plaintext provisioning password (loginCredentials /
+    // citizenLogin). The session store keeps a 200-char prefix of every result
+    // in Postgres and the JSONL log, so without this the credential is
+    // persisted — harmless while the default is the published eGov@123, a real
+    // leak the moment an operator sets a strong one.
+    sensitiveOutput: true,
     group: 'employees',
     category: 'hrms',
     access: 'admin',

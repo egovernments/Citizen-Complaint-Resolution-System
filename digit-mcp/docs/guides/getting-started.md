@@ -90,6 +90,8 @@ Response:
 
 If you set `CRS_USERNAME` and `CRS_PASSWORD` as environment variables in Step 1, the server auto-authenticates on the first API call and you can skip this step entirely.
 
+**Stdio only.** On the HTTP transport the server requires a validated bearer token from every caller and never substitutes its own credentials — env auto-login is exactly the behaviour that made an anonymous caller an admin. Set `MCP_AUTH_MODE=ambient` to restore it, and only on a loopback-bound socket.
+
 ---
 
 ## Step 3: Discover Available Tools
@@ -106,7 +108,7 @@ Response (abbreviated):
 ```json
 {
   "success": true,
-  "message": "8 of 59 tools enabled",
+  "message": "8 of 70 tools enabled",
   "groups": {
     "core": {
       "enabled": true,
@@ -151,7 +153,7 @@ Response:
     "mdms": ["validate_tenant", "mdms_search", "mdms_create", "tenant_bootstrap", "..."]
   },
   "activeGroups": ["core", "docs", "pgr", "masters", "mdms"],
-  "toolCount": "25 of 59 tools now enabled"
+  "toolCount": "25 of 70 tools now enabled"
 }
 ```
 
@@ -247,7 +249,7 @@ If a service shows `"unhealthy"`, check that the DIGIT Docker environment is run
 |------|------|---------|
 | 1 | *(config file)* | Point your MCP client at `dist/index.js` with credentials |
 | 2 | [`configure`](../api/tools/configure.md) | Authenticate with DIGIT (or rely on auto-login via env vars) |
-| 3 | [`discover_tools`](../api/tools/discover_tools.md) | See all 14 groups and 59 tools |
+| 3 | [`discover_tools`](../api/tools/discover_tools.md) | See all 15 groups and 70 tools |
 | 4 | [`enable_tools`](../api/tools/enable_tools.md) | Unlock the groups you need |
 | 5 | [`mdms_get_tenants`](../api/tools/mdms_get_tenants.md) | Find available tenants |
 | 6 | [`health_check`](../api/tools/health_check.md) | Verify services are up |
@@ -260,7 +262,7 @@ If a service shows `"unhealthy"`, check that the DIGIT Docker environment is run
 - **[PGR Complaint Lifecycle](pgr-lifecycle.md)** -- Create, assign, resolve, and rate complaints through the full workflow
 - **[Debugging & Monitoring](debugging.md)** -- Trace API failures, inspect Kafka lag, and monitor persister health
 - **[Architecture](../architecture.md)** -- Understand progressive disclosure, dual transport, and the multi-tenant model
-- **[API Reference](../api/README.md)** -- Detailed per-tool documentation for all 59 tools
+- **[API Reference](../api/README.md)** -- Detailed per-tool documentation for all 70 tools
 
 ---
 
@@ -270,7 +272,7 @@ If a service shows `"unhealthy"`, check that the DIGIT Docker environment is run
 
 Most tools require authentication. Either:
 
-1. Set `CRS_USERNAME` and `CRS_PASSWORD` environment variables in your MCP client config (recommended -- enables auto-login), or
+1. Set `CRS_USERNAME` and `CRS_PASSWORD` environment variables in your MCP client config (stdio only -- enables auto-login; ignored on the HTTP transport, which requires a bearer token per caller), or
 2. Call [`configure`](../api/tools/configure.md) explicitly at the start of your session.
 
 ### Tools not appearing
