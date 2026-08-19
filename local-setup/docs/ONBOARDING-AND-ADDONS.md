@@ -552,7 +552,12 @@ from crs_loader import CRSLoader
 Then:
 
 ```python
-URL          = "http://localhost:18000"  # Kong, from wherever you are running this
+# Where the deployment answers, from wherever you are running this script:
+#   Ansible deploy  http://<your-domain>       (or https:// when tls_enabled)
+#   Compose / Tilt  http://localhost:18000     (Kong)
+# On a separate machine, localhost is YOUR machine — use the deployment's
+# hostname, or the loader will quietly find nothing to talk to.
+URL          = "http://<your-domain>"
 USERNAME     = "ADMIN"
 PASSWORD     = "eGov@123"
 TENANT_ID    = "pg"                  # root tenant you log in against

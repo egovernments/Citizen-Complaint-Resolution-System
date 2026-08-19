@@ -193,7 +193,10 @@ If `serviceCode` is not set, the collection picks a random complaint type.
 The CI dataloader script creates a complete tenant with an HRMS employee in one command. Use this before running the complaints demo:
 
 ```bash
-# Install Python dependencies (one time)
+# Install Python dependencies (one time), in a virtualenv — a bare pip install
+# fails with PEP 668 error: externally-managed-environment on Ubuntu 24.04,
+# Debian 12+, Fedora 38+ and Homebrew Python.
+python3 -m venv .venv && source .venv/bin/activate
 pip install requests openpyxl pandas python-dotenv
 
 # Run the dataloader

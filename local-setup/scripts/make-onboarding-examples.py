@@ -136,11 +136,26 @@ def complaint_hierarchy_workbook(levels):
         # One complaint type handled by two departments: the first is primary.
         ["Health", "Pests", "Mosquito breeding site", "HEALTH,WATER", 72, "mosquito, stagnant water"],
     ]
+    # The rows above are authored for a three-level hierarchy. Reshape only the
+    # PATH part to however many levels the operator defined, and keep the three
+    # fixed leaf columns intact — they are positional, so slicing the whole row
+    # slides the department into a level column and the SLA into the department.
     n = len(levels)
     if n != 3:
-        # Trim or pad the path columns so the sheet always matches the levels
-        # the operator defined in the wizard.
-        rows = [r[:n] + [r[2]] * max(0, n - 3) + r[3:] for r in rows]
+        reshaped = []
+        for row in rows:
+            path, fixed = list(row[:3]), list(row[3:])
+            if n < 3:
+                # Keep the outermost group and the leaf; drop the middle levels.
+                path = [path[0]] + path[-(n - 1):]
+            else:
+                # Repeat the sub-category to fill the extra levels. The leaf and
+                # its immediate parent stay put, so the generated serviceCode
+                # (parent + leaf) is unchanged and still unique per row.
+                path = path[:2] + [path[1]] * (n - 3) + path[2:]
+            assert len(path) == n, (n, path)
+            reshaped.append(path + fixed)
+        rows = reshaped
     wb = Workbook()
     ws = wb.active
     ws.title = "ComplaintHierarchy"

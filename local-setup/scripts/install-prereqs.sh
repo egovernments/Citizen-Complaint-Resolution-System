@@ -11,7 +11,8 @@
 #   git, curl, rsync, unzip           via your distro's package manager
 #   python3 + venv + pip              via your distro's package manager
 #   Node.js 20 + npm                  NodeSource on Debian/RHEL, distro repo elsewhere
-#   ansible, ansible-lint, yamllint   into a private venv, symlinked to ~/.local/bin
+#   ansible-core (<2.19), ansible-lint, yamllint   into a private venv,
+#                                     symlinked into ~/.local/bin
 #   the ansible collections           ansible-galaxy -r ansible/requirements.yml
 #
 # Supported: Debian/Ubuntu (+Mint, Pop!_OS), RHEL/Fedora/Rocky/Alma/CentOS
@@ -31,8 +32,16 @@ set -euo pipefail
 # ── Constants ────────────────────────────────────────────────────────────────
 
 readonly NODE_MAJOR=20          # matches ansible/tasks/ensure-node20.yml
-readonly PY_MIN_MINOR=8         # 3.8+; ansible-core 2.17+ wants 3.10+ but the
-                                # venv install will say so itself if too old
+readonly PY_MIN_MINOR=9         # the oldest ansible-core this playbook accepts
+                                # (2.15) needs 3.9; newer ones want 3.10/3.11
+                                # and pip resolves to whatever this Python
+                                # supports
+
+# The playbook BREAKS on ansible-core >= 2.19 — see WINDOWS-QUICKSTART.md, and
+# the "Conditional result was ..." failures it produces at play start. An
+# unpinned `pip install ansible` happily lands on 2.21, so pin it here and
+# verify afterwards rather than trusting the resolver.
+readonly ANSIBLE_CORE_MAX="2.19"
 readonly VENV_DIR="${DIGIT_ANSIBLE_VENV:-$HOME/.local/share/digit-ansible}"
 readonly BIN_DIR="$HOME/.local/bin"
 readonly VENV_TOOLS=(ansible ansible-playbook ansible-galaxy ansible-config
@@ -323,8 +332,18 @@ install_ansible() {
   # --upgrade keeps re-runs cheap and idempotent; pip's own resolver decides
   # whether anything actually changes.
   "$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip wheel
-  "$VENV_DIR/bin/python" -m pip install --quiet --upgrade ansible ansible-lint yamllint \
-    || { err "pip install of ansible failed — see the output above"; return 0; }
+
+  # A constraints file, not just a version spec on the command line: it also
+  # stops ansible-lint from pulling a newer ansible-core in as a dependency.
+  local constraints="$VENV_DIR/digit-constraints.txt"
+  printf 'ansible-core<%s\n' "$ANSIBLE_CORE_MAX" > "$constraints"
+
+  # ansible-core, not the batteries-included `ansible` package: the collections
+  # this playbook needs are installed from requirements.yml a step later, so the
+  # 800-odd bundled ones are pure download.
+  "$VENV_DIR/bin/python" -m pip install --quiet --upgrade -c "$constraints" \
+      ansible-core ansible-lint yamllint \
+    || { err "pip install of ansible-core failed — see the output above"; return 0; }
 
   mkdir -p "$BIN_DIR"
   local t linked=0
@@ -351,6 +370,32 @@ install_ansible() {
   local ver
   ver="$("$VENV_DIR/bin/ansible" --version 2>/dev/null | head -1)" || ver=""
   [ -n "$ver" ] && ok "$ver"
+
+  check_ansible_core "$VENV_DIR/bin/ansible"
+}
+
+# Read the core version out of `ansible --version` and fail if it is at or above
+# the ceiling. Belt and braces over the constraints file: a resolver surprise
+# here costs a whole deploy, and the failure it produces mid-play
+# ("Conditional result was ...") does not point back at the version.
+check_ansible_core() {
+  local bin="$1" line core
+  line="$("$bin" --version 2>/dev/null | head -1)" || return 0
+  core="$(printf '%s' "$line" | sed -n 's/.*core \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')"
+  if [ -z "$core" ]; then
+    warn "could not read the ansible-core version from: $line"
+    return 0
+  fi
+  # Numeric compare on major.minor without bc.
+  local cmaj cmin xmaj xmin
+  cmaj="${core%%.*}"; cmin="${core#*.}"
+  xmaj="${ANSIBLE_CORE_MAX%%.*}"; xmin="${ANSIBLE_CORE_MAX#*.}"
+  if [ "$cmaj" -gt "$xmaj" ] || { [ "$cmaj" -eq "$xmaj" ] && [ "$cmin" -ge "$xmin" ]; }; then
+    err "ansible-core $core is too new — the playbook requires < $ANSIBLE_CORE_MAX.
+           Pin it by hand:  $VENV_DIR/bin/pip install 'ansible-core<$ANSIBLE_CORE_MAX'"
+  else
+    ok "ansible-core $core (< $ANSIBLE_CORE_MAX, as the playbook requires)"
+  fi
 }
 
 # ── 5. Ansible collections ───────────────────────────────────────────────────
@@ -394,6 +439,12 @@ verify() {
       err "$t is missing"
     fi
   done
+
+  # The one that matters is whichever `ansible` deploy.sh will actually find,
+  # which may be a distro package shadowing ours rather than the venv.
+  if command -v ansible >/dev/null 2>&1; then
+    check_ansible_core "$(command -v ansible)"
+  fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
