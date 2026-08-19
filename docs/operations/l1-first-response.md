@@ -10,6 +10,12 @@ citizen.
 **Not your job:** working out *why*. If you find yourself forming a theory about the cause,
 that's L2's work — capture what you've found and pass it on.
 
+**This page is only half of L1.** The other half is *requests* rather than faults — creating
+a user, adding a department or a complaint type, loading master data. Those are all done
+through the product's own admin screens and they are yours, not L2's; the rule is
+[**if there is a screen for it, it is L1**](README.md#who-does-what--the-l1--l2-line). This
+page covers the fault half.
+
 You do all of this from a web browser. You never touch the server, and **nothing in this
 checklist changes anything** — every step is looking, not changing. You cannot break the
 system by following this page.
@@ -43,7 +49,7 @@ described as menu clicks, so you don't have to memorise addresses.
 
 | Page | URL | What it is |
 |---|---|---|
-| **Health dashboard** | `https://<your-domain>/status/` | A page that automatically tries about 50 parts of the system every 30 seconds and colours each one green or red |
+| **Health dashboard** | `https://<your-domain>/status/` | A page that automatically tries up to 57 parts of the system every 30 seconds and colours each one green or red |
 | **Grafana** | `https://<your-domain>/grafana/` | The system's own recordings — memory, errors, logs — shown as charts and lists |
 
 **About Grafana**, because it looks intimidating the first time: it is a *viewer*. It reads
@@ -62,8 +68,11 @@ step below.
 | A **second test login**, ideally in a different office | Step 1 | Ask a colleague to try instead, and note whose account was used |
 | The **maintenance window**, written on your [cheat sheet](cheatsheet.md) | Step 3 | Ask L2 before reporting restarts |
 
-An admin login to the Configurator or HRMS is **not** assumed anywhere here. Some entries in
-[known-issues.md](known-issues.md) need one — if yours doesn't have it, those are L2's.
+An admin login to the Configurator or HRMS is **not** assumed anywhere on this page — the
+fault checklist is read-only throughout. You should still have one, because the request half
+of L1 (creating users, editing master data) is done entirely through those screens, and some
+entries in [known-issues.md](known-issues.md) need one too. If you don't have one yet, ask
+your system administrator for it; until then, those items are L2's.
 
 ← back to **[Operations handbook](README.md)** · one-page version:
 **[cheatsheet.md](cheatsheet.md)**
