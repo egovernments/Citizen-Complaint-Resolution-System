@@ -197,7 +197,7 @@ The CI dataloader script creates a complete tenant with an HRMS employee in one 
 # fails with PEP 668 error: externally-managed-environment on Ubuntu 24.04,
 # Debian 12+, Fedora 38+ and Homebrew Python.
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 
 # Run the dataloader
 DIGIT_URL=http://localhost:18000 \
@@ -243,7 +243,7 @@ CI dataloaders use, so the two paths exercise the same code.
 ```bash
 cd local-setup
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 ```
 
 The virtualenv is not optional on Ubuntu 24.04, Debian 12+, Fedora 38+ or
@@ -257,9 +257,12 @@ resolve check:
 ```bash
 DIGIT_URL=http://localhost:18000 \
 BOOT_TENANT=pg.myorg \
-INPUT_XLSX=data/county-data.xlsx \
+INPUT_XLSX="data/Bomet county health common complains items - R.xlsx" \
 python3 scripts/ci-dataloader-xlsx.py
 ```
+
+`INPUT_XLSX` is your own county spreadsheet. The Bomet sample above is the only
+one in the repo — there is no `county-data.xlsx`.
 
 **Phase by phase**, when you want control over each step:
 
