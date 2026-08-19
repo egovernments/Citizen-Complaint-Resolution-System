@@ -187,7 +187,9 @@ public class ServiceRequestValidatorTest {
     // ── validateReOpen: window source and anti-forgery (#925, #1252) ───────────
 
     private static final long WINDOW_MS = 6 * 60 * 60 * 1000L;   // MDMS REOPENSLA
-    private static final long PROPERTY_MS = 10L * 24 * 60 * 60 * 1000L; // pgr.complain.idle.time
+    // Deliberately NOT the shipped pgr.complain.idle.time default (259200000) — an arbitrary,
+    // clearly-wider value, so a test that passes can only mean the MDMS window was used.
+    private static final long PROPERTY_MS = 10L * 24 * 60 * 60 * 1000L;
 
     @Test
     void reopen_withinMdmsWindow_passes() {
