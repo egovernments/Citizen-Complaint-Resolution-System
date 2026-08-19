@@ -46,11 +46,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -93,9 +90,7 @@
         "sparklineMeasureKey": "total"
       },
       "params": [],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -161,11 +156,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -233,11 +225,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -298,9 +287,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -372,9 +359,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -441,9 +426,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -511,9 +494,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -566,11 +547,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -631,11 +609,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -695,9 +670,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -751,9 +724,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -838,11 +809,8 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -899,9 +867,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -970,11 +936,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -1059,14 +1022,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -1170,9 +1126,7 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1317,9 +1271,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1381,9 +1333,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1452,11 +1402,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -1676,9 +1623,7 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1753,14 +1698,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -1875,11 +1813,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -2085,14 +2020,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -2153,9 +2081,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2219,9 +2145,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2292,9 +2216,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2365,11 +2287,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -2434,9 +2353,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2463,19 +2380,7 @@
         "deltaLabel": "vs prior period",
         "sparklineMeasureKey": "total"
       },
-      "rbac": {
-        "visibleTo": [
-          "SUPERVISOR",
-          "PGR_SUPERVISOR",
-          "GRO",
-          "DGRO",
-          "PGR_LME",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
       "query": {
         "grain": "facts",
         "measures": [
@@ -2525,12 +2430,7 @@
         "valueKey": "ratio",
         "deltaLabel": "vs prior period"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "grain": "facts",
         "measures": [
@@ -2630,12 +2530,7 @@
         ],
         "dimensionKey": "created_date"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {
@@ -2689,11 +2584,7 @@
         "valueKey": "open",
         "dimensionKey": "snapshot_date"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended",
       "query": {
         "sort": [
           {
@@ -2787,12 +2678,7 @@
         "dimensionKey": "ward_code",
         "sortBySegment": "breached"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "grain": "daily",
         "limit": 120,
@@ -2855,12 +2741,7 @@
         "denominatorKey": "sla_elapsed",
         "scatterProfile": "departmentBreachCaseload"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {
@@ -2990,12 +2871,7 @@
         ],
         "dimensionKey": "ward_code"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {
@@ -3099,11 +2975,7 @@
         "valueKey": "open",
         "dimensionKey": "ward_code"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended",
       "query": {
         "sort": [
           {
@@ -3197,12 +3069,7 @@
         ],
         "dimensionKey": "source"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {
@@ -3316,12 +3183,7 @@
         ],
         "dimensionKey": "service_code"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {
@@ -3453,12 +3315,7 @@
         ],
         "dimensionKey": "ward_code"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports",
       "query": {
         "sort": [
           {

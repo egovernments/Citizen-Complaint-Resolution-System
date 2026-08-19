@@ -4,7 +4,6 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "required": [
     "id",
-    "roles",
     "tiles",
     "layout"
   ],
@@ -15,12 +14,13 @@
     "id": {
       "type": "string"
     },
-    "roles": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Role codes this pack applies to; server picks best match for caller's token"
+    "requiredActionUrl": {
+      "type": "string",
+      "description": "The egov-accesscontrol capability action URL a caller must hold for this pack to be a match candidate (e.g. /pgr-services/v2/analytics/_query); server picks the best-match pack for the caller's resolved capabilities"
+    },
+    "public": {
+      "type": "boolean",
+      "description": "True marks this pack as the credential-free public dashboard's default; absent/false = not public"
     },
     "tiles": {
       "type": "array",

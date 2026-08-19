@@ -4,15 +4,7 @@
     "data": {
       "id": "supervisor-default",
       "description": "Default supervisor dashboard pack — complaint metrics, officer SLA chart, map, and at-risk table",
-      "roles": [
-        "SUPERVISOR",
-        "PGR_SUPERVISOR",
-        "GRO",
-        "DGRO",
-        "PGR_LME",
-        "PGR_ADMIN",
-        "SUPERUSER"
-      ],
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
       "tiles": [
         "cl_resolution_rate_count",
         "rs_breach_total",
@@ -112,9 +104,7 @@
     "data": {
       "id": "public-default",
       "description": "Curated public dashboard — aggregate complaint totals, trends, and service performance",
-      "roles": [
-        "PUBLIC"
-      ],
+      "public": true,
       "tiles": [
         "cl_new_created_count",
         "cl_resolution_rate_count",
