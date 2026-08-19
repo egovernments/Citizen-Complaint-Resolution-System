@@ -299,11 +299,6 @@ twilio_whatsapp_from: "whatsapp:+14155238886"
 # Slim: false — it would be pointing PGR at a delivery path that is not running.
 pgr_notification_config_driven: false
 
-# Build novu-bridge / pgr-services from source on this box instead of pulling
-# the published images. Values: true | false. Slow; only for testing a change.
-build_novu_bridge: false
-build_pgr_services: false
-
 # Which channel the bridge delivers on. Values: sms | whatsapp | email.
 novu_bridge_channel: "sms"
 

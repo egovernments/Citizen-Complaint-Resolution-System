@@ -99,11 +99,13 @@ Replace `<your-domain>` with your deployment's domain throughout this handbook.
 | **Logs** | `https://<your-domain>/grafana/d/digit-loki-logs/` | The actual error text |
 | **Service metrics** | `https://<your-domain>/grafana/d/digit-jvm/` | Memory, CPU, restarts, OOM |
 
-> **Access note.** Grafana on these deployments is configured with anonymous access at
-> **Admin** level (`GF_AUTH_ANONYMOUS_ENABLED=true`, login form disabled). You do not need a
-> password — but it also means anyone who knows the URL has full Grafana access. If your
-> deployment is reachable from the public internet, raise it with us and we will put it
-> behind your VPN or an authentication proxy. See
+> **Access note.** Grafana asks for a login. The user is `admin`; the password is
+> generated on the first deploy and stored in this deployment's OpenBao, so **ask your
+> system administrator for it** — it is not a shared default you can guess. Anonymous
+> access is off unless the deployment explicitly sets `grafana_anonymous_enabled: true`,
+> and even then it grants **Viewer**, never Admin. If your deployment does have anonymous
+> access on and is reachable from the public internet, raise it with us: a Viewer can run
+> arbitrary Loki queries, and the logs contain live session tokens. See
 > [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
 >
 > **Credentials.** Nothing in the first-response checklist needs a password. For the things
