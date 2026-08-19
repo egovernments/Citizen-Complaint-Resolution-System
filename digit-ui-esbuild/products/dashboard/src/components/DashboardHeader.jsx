@@ -238,7 +238,7 @@ const DashboardHeader = ({
             type="button"
             onClick={onResetLayout}
             className="dashboard-header-btn dashboard-header-reset"
-            title={t("DASHBOARD_HEADER_RESET_LAYOUT", "Reset layout")}
+            title={t("DASHBOARD_HEADER_RESET", "Reset")}
           >
             {t("DASHBOARD_HEADER_RESET", "Reset")}
           </button>}

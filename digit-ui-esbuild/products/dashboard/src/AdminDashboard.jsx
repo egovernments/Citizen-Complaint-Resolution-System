@@ -900,6 +900,18 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     },
     [clearFilters]
   );
+  // The header's "Reset" button and the filter bar's "Clear" link are two
+  // independent controls over two independent stores — resetLayout (from
+  // useCatalogLayout) only rebuilds the KPI grid geometry, it never touches
+  // filter state. Without also calling clearFilters here, "Reset" left the
+  // complaint-type tree filter (and every other filter) exactly as the user
+  // had set it, while "Clear" correctly restored it to "All types" — the
+  // exact inconsistency reported in egovernments/CCRS#1471.
+  const handleResetLayout = useCallback(() => {
+    dashboardMetrics.markInteraction("filter");
+    resetLayout();
+    clearFilters();
+  }, [resetLayout, clearFilters]);
 
   return (
     <DashboardLayout
@@ -909,7 +921,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       visibleLayoutIds={visibleLayoutIds}
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
-      onResetLayout={resetLayout}
+      onResetLayout={handleResetLayout}
       onDragWidgetStart={handleDragWidgetStart}
       onDragWidgetEnd={handleDragWidgetEnd}
       onExport={handleExport}

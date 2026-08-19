@@ -500,11 +500,6 @@
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Reset layout",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_HEADER_ROLE_SCOPE_TOOLTIP",
     "message": "Dashboard tiles are scoped to your role by the analytics catalog",
     "module": "rainmaker-dashboard"
