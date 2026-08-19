@@ -128,12 +128,6 @@ No inventory edit is needed. `deploy.sh` regenerates `inventory/hosts.yml` from 
 ./deploy.sh mybox -K
 ```
 
-Dry-run first if you want to see what would change:
-
-```bash
-./deploy.sh mybox --check --diff
-```
-
 The first run installs Docker and Compose, creates `/opt/digit/`, syncs configs, initialises
 and unseals OpenBao and seeds secrets, loads `db/full-dump.sql` into Postgres, pulls or
 builds images, starts the stack, and waits on health gates. Later runs are idempotent — only
