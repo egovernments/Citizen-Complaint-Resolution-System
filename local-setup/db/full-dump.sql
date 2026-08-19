@@ -3181,6 +3181,8 @@ accesscontrol-roleaction-2646-supervisor	pg	SUPERVISOR.2646	ACCESSCONTROL-ROLEAC
 accesscontrol-roleaction-2647-pgr_viewer	pg	PGR_VIEWER.2647	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2647, "rolecode": "PGR_VIEWER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 accesscontrol-roleaction-2647-ticket_report_viewer	pg	TICKET_REPORT_VIEWER.2647	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2647, "rolecode": "TICKET_REPORT_VIEWER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 accesscontrol-roleaction-2648-ticket_report_viewer	pg	TICKET_REPORT_VIEWER.2648	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2648, "rolecode": "TICKET_REPORT_VIEWER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
+accesscontrol-roleaction-2646-mdms_admin	pg	MDMS_ADMIN.2646	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2646, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
+accesscontrol-roleaction-2646-hrms_admin	pg	HRMS_ADMIN.2646	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2646, "rolecode": "HRMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 \.
 
 

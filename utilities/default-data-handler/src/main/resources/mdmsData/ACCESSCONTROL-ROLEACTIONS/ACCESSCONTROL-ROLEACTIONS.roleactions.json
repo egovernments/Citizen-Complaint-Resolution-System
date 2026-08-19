@@ -3120,5 +3120,19 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1841
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1842
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1843
   }
 ]

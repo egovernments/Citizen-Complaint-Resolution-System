@@ -1,6 +1,8 @@
 package org.egov.pgr.analytics;
 
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
+import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.model.DashboardPack;
 import org.egov.pgr.analytics.model.KpiDefinition;
 import org.egov.pgr.policy.AccessControlUnavailableException;
@@ -18,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -42,9 +47,11 @@ class AnalyticsCapabilityServiceTest {
 
     @Test
     void grantsOnlyTheActionsAccessControlSaysTheCallerReaches() {
-        when(registry.isActionVisible(anyString(), any(), eq(TENANT))).thenReturn(false);
-        when(registry.isActionVisible(eq(AnalyticsCapabilities.ACCESS), any(), eq(TENANT))).thenReturn(true);
-        when(registry.isActionVisible(eq(AnalyticsCapabilities.QUERY), any(), eq(TENANT))).thenReturn(true);
+        // Accesscontrol answers with every url the caller's roles reach, including plenty that have
+        // nothing to do with analytics; only the analytics ones become capabilities.
+        when(registry.visibleActionUrls(any(), eq(TENANT))).thenReturn(java.util.Set.of(
+                AnalyticsCapabilities.ACCESS, AnalyticsCapabilities.QUERY,
+                "/pgr-services/v2/request/_search"));
 
         AnalyticsCapabilities capabilities = service.resolve(requestInfo(), TENANT);
 
@@ -59,7 +66,7 @@ class AnalyticsCapabilityServiceTest {
         // "Denied" and "we could not ask" look identical from a capability set, and one of them is
         // an incident. Letting the outage collapse into an empty grant would render an empty
         // dashboard that looks like a permissions problem.
-        when(registry.isActionVisible(anyString(), any(), anyString()))
+        when(registry.visibleActionUrls(any(), anyString()))
                 .thenThrow(new AccessControlUnavailableException("accesscontrol down"));
 
         assertThrows(AccessControlUnavailableException.class, () -> service.resolve(requestInfo(), TENANT));
@@ -135,7 +142,32 @@ class AnalyticsCapabilityServiceTest {
         assertFalse(AnalyticsCapabilityFixtures.full().canSee(publicPack));
     }
 
+    @Test
+    void resolvesEveryCapabilityInOneAccessControlCall() {
+        // The underlying lookup returns the caller's whole action list, so asking per url would
+        // fetch the same payload nine times — on an endpoint every employee's home page hits.
+        when(registry.visibleActionUrls(any(), eq(TENANT))).thenReturn(java.util.Set.of());
+
+        service.resolve(requestInfo(), TENANT);
+
+        verify(registry, times(1)).visibleActionUrls(any(), eq(TENANT));
+        verify(registry, never()).isActionVisible(anyString(), any(), anyString());
+    }
+
+    @Test
+    void aCallerWithNoRolesIsDeniedRatherThanReportedAsAnOutage() {
+        // An anonymous request to an employee endpoint is a denial. Letting the registry's refusal
+        // surface would answer it 503 "service unavailable" instead of 403.
+        AnalyticsCapabilities capabilities = service.resolve(RequestInfo.builder().build(), TENANT);
+
+        assertTrue(capabilities.granted().isEmpty());
+        verify(registry, never()).visibleActionUrls(any(), anyString());
+    }
+
     private static RequestInfo requestInfo() {
-        return RequestInfo.builder().authToken("token").build();
+        User user = new User();
+        user.setUuid("emp-1");
+        user.setRoles(java.util.List.of(Role.builder().code("SUPERVISOR").build()));
+        return RequestInfo.builder().authToken("token").userInfo(user).build();
     }
 }
