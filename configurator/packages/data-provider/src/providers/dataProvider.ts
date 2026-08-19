@@ -153,12 +153,29 @@ function mapLeafToServiceDef(
   parentNameByCode: Map<string, string>,
 ): Record<string, unknown> {
   const parentCode = data.parentCode == null ? '' : String(data.parentCode);
+  // Records saved before `departments` existed only carry the singular
+  // `department` — fall back to it (same convention ComplaintTypeList/Show
+  // already use for rendering) so editing a legacy row doesn't load an
+  // empty, required multi-select that blocks Save until the operator
+  // re-picks a department blind (CCRS#1724 review). The bulk-import path
+  // (ComplaintHierarchySetup) stamps `department: 'NA'` for rows with no
+  // real department, so that sentinel — and whitespace-only garbage — must
+  // be treated as ABSENT rather than seeded as a real selected department;
+  // a genuine value is trimmed but keeps its original case.
+  const legacyDepartment = typeof data.department === 'string' ? data.department.trim() : '';
+  const hasLegacyDepartment = legacyDepartment !== '' && legacyDepartment.toUpperCase() !== 'NA';
+  const departments =
+    Array.isArray(data.departments) && data.departments.length
+      ? data.departments
+      : hasLegacyDepartment
+        ? [legacyDepartment]
+        : [];
   return {
     ...data,
     serviceCode: data.code,
     name: data.name,
     department: data.department,
-    departments: data.departments,
+    departments,
     slaHours: data.slaHours,
     keywords: data.keywords,
     order: data.order,
@@ -182,31 +199,131 @@ interface HierarchyDefinitionLevel {
   isLeafServiceCode?: boolean;
 }
 
+function leafDefaultsFromDefinition(
+  def: MdmsRecord,
+): { hierarchyType: string; levelCode: string } | undefined {
+  const data = def.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
+  const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
+  const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
+  const leafLevel = levels.find((l) => l.isLeafServiceCode);
+  return hierarchyType && leafLevel?.levelCode ? { hierarchyType, levelCode: leafLevel.levelCode } : undefined;
+}
+
 /** Resolve {hierarchyType, levelCode} for a NEW leaf row from the tenant's
  *  actual RAINMAKER-PGR.ComplaintHierarchyDefinition, rather than a hardcoded
  *  literal — both are tenant-configurable (levelCode especially: a tenant can
  *  name its leaf level anything, not always "SUB_TYPE"; see review on
- *  CCRS#1719). Picks the first active definition and the level it marks
- *  isLeafServiceCode. Falls back to the FALLBACK_* constants only when no
- *  definition exists at all, or the lookup fails. */
+ *  CCRS#1719).
+ *
+ *  A tenant can have more than one ACTIVE definition — observed live: a
+ *  leftover 4-level "test" hierarchyType (exactly one leaf ever created
+ *  under it) sitting alongside the real 2-level one backing 999+ real
+ *  complaint types, both isActive:true. Picking "whichever comes first" is
+ *  order-dependent on MDMS's unspecified result ordering — confirmed live to
+ *  actually flip between otherwise-identical requests — so a create could
+ *  silently tag a brand new complaint type with the wrong hierarchyType,
+ *  making it invisible everywhere else in the app that reads the real one.
+ *
+ *  Disambiguation, in order: (1) a single active definition needs none;
+ *  (2) with multiple, prefer whichever hierarchyType has the MOST existing
+ *  leaf rows in a small bounded sample — cheap, and only reached at all for
+ *  a tenant already in this ambiguous state. Counting matters, not just
+ *  presence: the live leftover-hierarchyType case above has exactly one
+ *  real leaf under it too, so "has any usage at all" ties with the
+ *  dominant, actually-live one and silently falls back to array order
+ *  again — an earlier version of this fix had exactly that bug, caught by
+ *  testing live rather than just against mocks; (3) with no usage signal
+ *  for any candidate either (e.g. a fresh tenant mid-migration between two
+ *  definitions, nothing created under either yet), prefer the
+ *  earliest-created active definition as the most likely original one.
+ *  Falls back to the FALLBACK_* constants only when no definition exists at
+ *  all, or the lookup fails outright. */
 async function resolveNewLeafDefaults(
   client: DigitApiClient,
   tenantId: string,
 ): Promise<{ hierarchyType: string; levelCode: string }> {
+  let definitions: MdmsRecord[];
   try {
-    const definitions = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true });
-    const def = definitions.find((d) => d.isActive);
-    const data = def?.data as { hierarchyType?: unknown; levels?: unknown } | undefined;
-    const hierarchyType = typeof data?.hierarchyType === 'string' ? data.hierarchyType : undefined;
-    const levels = Array.isArray(data?.levels) ? (data.levels as HierarchyDefinitionLevel[]) : [];
-    const leafLevel = levels.find((l) => l.isLeafServiceCode);
-    if (hierarchyType && leafLevel?.levelCode) {
-      return { hierarchyType, levelCode: leafLevel.levelCode };
+    definitions = (await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchyDefinition', { isActive: true }))
+      .filter((d) => d.isActive && leafDefaultsFromDefinition(d));
+  } catch {
+    return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+  }
+  if (definitions.length === 0) {
+    return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+  }
+  if (definitions.length === 1) {
+    return leafDefaultsFromDefinition(definitions[0])!;
+  }
+
+  // `auditDetails` is optional on MdmsRecord — `?? 0` would sort a definition
+  // with a missing/malformed createdTime as the OLDEST possible (epoch),
+  // making it win over every definition with a real, known creation time it
+  // has no evidence of actually predating. Known timestamps sort first (by
+  // value); unknown ones sort after all known ones, and ties (including
+  // multiple unknowns) break on uniqueIdentifier so the result never depends
+  // on MDMS's unspecified array order — the exact failure mode this
+  // disambiguation exists to avoid.
+  const oldestOfKnown = () => {
+    const sorted = [...definitions].sort((a, b) => {
+      const at = a.auditDetails?.createdTime;
+      const bt = b.auditDetails?.createdTime;
+      const aKnown = typeof at === 'number';
+      const bKnown = typeof bt === 'number';
+      if (aKnown && bKnown && at !== bt) return at - bt;
+      if (aKnown !== bKnown) return aKnown ? -1 : 1;
+      return a.uniqueIdentifier.localeCompare(b.uniqueIdentifier);
+    });
+    return leafDefaultsFromDefinition(sorted[0])!;
+  };
+
+  // Presence alone isn't enough here — a stray one-off leftover row under
+  // the wrong hierarchyType (exactly the live scenario this is fixing)
+  // would tie with a candidate that has real, dominant usage, and array
+  // order would silently decide the winner again. Count occurrences and
+  // pick the candidate with the MOST usage, not just "any at all".
+  //
+  // Count only ACTIVE rows at each candidate's OWN leaf level (its
+  // {hierarchyType, levelCode} from leafDefaultsFromDefinition), not every
+  // row that merely shares the hierarchyType (CCRS#1724 review): interior
+  // nodes (CATEGORY/SECTOR/etc) and soft-deleted leaves aren't real
+  // complaint-type usage, and a hierarchyType with a deep tree of interior
+  // scaffolding but few actual complaint types could otherwise outscore
+  // the genuinely dominant one.
+  //
+  // This lookup gets its OWN try/catch, separate from the `definitions`
+  // fetch above (CCRS#1724 review): a transient failure here must degrade
+  // to the oldest already-fetched definition, not discard the successful
+  // `definitions` fetch and fall through to the hardcoded bootstrap
+  // constants, which match neither real definition and would reproduce
+  // the exact invisible-complaint-type bug (CCRS#1713) this is fixing.
+  try {
+    const sample = await client.mdmsSearch(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', { isActive: true, limit: 500 });
+    const usageCounts = new Map<string, number>();
+    for (const r of sample) {
+      if (!r.isActive) continue;
+      const data = r.data as { hierarchyType?: unknown; levelCode?: unknown } | undefined;
+      if (typeof data?.hierarchyType === 'string' && typeof data?.levelCode === 'string') {
+        const key = `${data.hierarchyType}::${data.levelCode}`;
+        usageCounts.set(key, (usageCounts.get(key) ?? 0) + 1);
+      }
+    }
+    const byUsage = definitions
+      .map((d) => {
+        const leafDefaults = leafDefaultsFromDefinition(d)!;
+        const key = `${leafDefaults.hierarchyType}::${leafDefaults.levelCode}`;
+        return { def: d, count: usageCounts.get(key) ?? 0 };
+      })
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count);
+    if (byUsage.length > 0) {
+      return leafDefaultsFromDefinition(byUsage[0].def)!;
     }
   } catch {
-    // fall through to the bootstrap default below
+    return oldestOfKnown();
   }
-  return { hierarchyType: FALLBACK_HIERARCHY_TYPE, levelCode: FALLBACK_LEAF_LEVEL_CODE };
+
+  return oldestOfKnown();
 }
 
 /** Translate an inbound complaint-type form payload (legacy ServiceDefs
@@ -1317,9 +1434,34 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // any of these fields makes the _update payload fail with
         // INVALID_REQUEST_ADDITIONALPROPERTIES* (closes
         // egovernments/CCRS#472 — Department update).
+        const rawData = { ...(params.data as Record<string, unknown>) };
+        if (config.leafServiceDefAdapter) {
+          // The datagrid's inline "Department" cell editor (ComplaintTypeList)
+          // predates `departments` and only knows the legacy singular field —
+          // it submits {...record, department: newVal}, leaving whatever
+          // `departments` the record already had untouched. Left alone, that
+          // would point `department` (backend routing) and `departments`
+          // (what List/Show render, preferring it whenever non-empty)  at
+          // DIFFERENT departments: the cell would show no visible change
+          // while the actual routing department silently changed underneath
+          // (reviewer finding on CCRS#1724). When `department` changed but
+          // the submitted `departments` is byte-for-byte what the record
+          // already had — the signature of that inline edit specifically,
+          // as opposed to an edit made through the dedicated Edit form's
+          // multi-select, which always submits an intentionally-updated
+          // array — resync `departments` so both fields move together.
+          const existingData = existing.data as { department?: unknown; departments?: unknown } | undefined;
+          const incomingDept = rawData.department;
+          const deptChanged = typeof incomingDept === 'string' && incomingDept !== existingData?.department;
+          const departmentsUntouched =
+            JSON.stringify(rawData.departments ?? null) === JSON.stringify(existingData?.departments ?? null);
+          if (deptChanged && departmentsUntouched) {
+            rawData.departments = [incomingDept];
+          }
+        }
         const incoming = config.leafServiceDefAdapter
-          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
-          : (params.data as Record<string, unknown>);
+          ? serviceDefToLeafWrite(rawData)
+          : rawData;
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;

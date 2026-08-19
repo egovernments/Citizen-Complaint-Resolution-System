@@ -1,17 +1,17 @@
-import type { RaRecord } from 'ra-core';
-import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { useTranslate, type RaRecord } from 'ra-core';
+import { DigitCreate, DigitFormCodeInput, DigitFormInput, DigitFormMultiSelect, v } from '@/admin';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { localizationService } from '@/api/services/localization';
 import { digitClient } from '@/providers/bridge';
 
 const defaultRecord = {
   active: true,
-  keywords: 'complaint',
   order: 0,
 };
 
 export function ComplaintTypeCreate() {
   const { locales } = useAvailableLocales();
+  const translate = useTranslate();
 
   // After the MDMS record is saved, seed `SERVICEDEFS.*` localization keys
   // for every locale the tenant declares. Without this a freshly-added
@@ -56,22 +56,34 @@ export function ComplaintTypeCreate() {
     await localizationService.cacheBust();
   };
 
+  // `department` (the schema's single "primary" field, used by backend
+  // routing/validation) is derived from the first checked entry in
+  // `departments` rather than collected separately — the schema itself says
+  // department is just "the primary of this list", so asking for both would
+  // just invite them to disagree.
+  const transform = (data: Record<string, unknown>) => {
+    const departments = Array.isArray(data.departments) ? (data.departments as string[]) : [];
+    return { ...data, department: departments[0] };
+  };
+
   return (
-    <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
+    <DigitCreate title="Create Complaint Type" record={defaultRecord} transform={transform} afterCreate={afterCreate}>
       {/* The grouping key is the parent node's code in the ComplaintHierarchy
           tree (replaces the old free-text menuPath). Optional here — leaves
           created standalone sit ungrouped until parented. */}
-      <DigitFormInput source="parentCode" label="Parent (group code)" />
-      <DigitFormSelect
-        source="department"
-        label="Department"
+      <DigitFormInput source="parentCode" label={translate('app.fields.parent_code')} />
+      <DigitFormMultiSelect
+        source="departments"
+        label={translate('app.fields.departments')}
         reference="departments"
-        placeholder="Select department..."
         validate={v.required}
+        help={translate('app.fields.departments_primary_help')}
       />
-      <DigitFormInput source="slaHours" label="SLA (hours)" type="number" validate={v.slaHours} />
-      <DigitFormInput source="name" label="Complaint Sub-Type" validate={v.name} />
-      <DigitFormCodeInput source="serviceCode" label="Service Code" deriveFrom="name" validate={v.codeRequired} />
+      <DigitFormInput source="slaHours" label={translate('app.fields.sla_hours')} type="number" validate={v.slaHours} />
+      <DigitFormInput source="name" label={translate('app.fields.complaint_sub_type')} validate={v.name} />
+      <DigitFormCodeInput source="serviceCode" label={translate('app.fields.service_code')} deriveFrom="name" validate={v.codeRequired} />
+      <DigitFormInput source="keywords" label={translate('app.fields.keywords')} help={translate('app.fields.keywords_help')} />
+      <DigitFormInput source="order" label={translate('app.fields.order')} type="number" />
     </DigitCreate>
   );
 }

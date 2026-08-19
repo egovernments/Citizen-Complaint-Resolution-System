@@ -48,6 +48,8 @@ export { DigitFormCodeInput } from './DigitFormCodeInput';
 export type { DigitFormCodeInputProps } from './DigitFormCodeInput';
 export { DigitFormSelect } from './DigitFormSelect';
 export type { DigitFormSelectProps } from './DigitFormSelect';
+export { DigitFormMultiSelect } from './DigitFormMultiSelect';
+export type { DigitFormMultiSelectProps } from './DigitFormMultiSelect';
 export { WorkflowActionSelect } from './WorkflowActionSelect';
 export type { WorkflowActionSelectProps } from './WorkflowActionSelect';
 export * as v from './validation';
