@@ -2231,13 +2231,86 @@
     # is documented in CLAUDE.md / handoff between this PR and the
     # sister UI PR. Update both ends together.
     # ============================================================
-    - name: "digit-ui-v2 — ensure /opt/digit-ui-v2 repo present + on chosen branch"
+    # Source selection. The citizen SPA is VENDORED in-tree at CCRS
+    # `digit-ui-v2/` (alongside `ui-shared/`, which its build imports), so the
+    # DEFAULT is to ship the source this checkout actually contains — same
+    # rule the configurator and turbopass builds already follow. The previous
+    # default cloned an external fork branch, which meant a deploy that did not
+    # override `digit_ui_v2_repo` silently built a different codebase than the
+    # one under review: build-time contracts added here (e.g.
+    # VITE_ENABLE_LEGACY_PGR_DASHBOARD) were passed to a build that had no code
+    # reading them, so the legacy dashboard stayed visible by default.
+    #
+    # Setting `digit_ui_v2_repo` still selects the clone path, for transitional
+    # or standalone use. Either way the build dir stays
+    # /opt/digit-ui-v2/digit-ui-v2 with ui-shared as its sibling, matching the
+    # repo-root-relative import in src/config/featureFlags.ts.
+    - name: "digit-ui-v2 — clone external source (only when digit_ui_v2_repo is set)"
       ansible.builtin.git:
-        repo: "{{ digit_ui_v2_repo | default('https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git') }}"
+        repo: "{{ digit_ui_v2_repo }}"
         dest: /opt/digit-ui-v2
-        version: "{{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }}"
+        version: "{{ digit_ui_v2_branch | default('HEAD') }}"
         update: true
         force: true
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - digit_ui_v2_repo is defined
+        - (digit_ui_v2_repo | default('')) | length > 0
+
+    - name: "digit-ui-v2 — ensure vendored source dirs on target"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /opt/digit-ui-v2
+        - /opt/digit-ui-v2/digit-ui-v2
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - (digit_ui_v2_repo | default('')) | length == 0
+
+    # node_modules/dist stay on the target between runs (the npm-install task
+    # below is mtime-gated), so never delete them from the controller copy.
+    - name: "digit-ui-v2 — sync vendored source (digit-ui-v2/ + ui-shared/) to target"
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../../{{ item }}/"
+        dest: "/opt/digit-ui-v2/{{ item }}/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+          - "--exclude=.git"
+      loop:
+        - digit-ui-v2
+        - ui-shared
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - (digit_ui_v2_repo | default('')) | length == 0
+
+    # Fail loudly rather than silently building a source tree that predates the
+    # build-time flag contract — the failure mode the external-fork default hid.
+    - name: "digit-ui-v2 — stat build-flag contract in the selected source"
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dui2_flag_contract
+      loop:
+        - /opt/digit-ui-v2/digit-ui-v2/src/config/featureFlags.ts
+        - /opt/digit-ui-v2/ui-shared/featureFlags.ts
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — assert the selected source reads VITE_ENABLE_LEGACY_PGR_DASHBOARD"
+      ansible.builtin.assert:
+        that:
+          - dui2_flag_contract.results | map(attribute='stat.exists') | select | list | length == 2
+        fail_msg: >-
+          /opt/digit-ui-v2 does not contain src/config/featureFlags.ts and
+          ui-shared/featureFlags.ts. The source selected by digit_ui_v2_repo /
+          digit_ui_v2_branch predates the VITE_ENABLE_LEGACY_PGR_DASHBOARD
+          contract, so the legacy PGR dashboard would ship visible regardless of
+          enable_legacy_pgr_dashboard. Unset digit_ui_v2_repo to build the
+          vendored in-tree source, or point it at a revision that has the flag.
+        success_msg: "digit-ui-v2 source reads the build-time feature-flag contract"
       when: enable_digit_ui_v2 | default(false)
 
     # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).

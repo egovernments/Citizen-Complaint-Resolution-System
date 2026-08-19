@@ -214,7 +214,7 @@ digit_ui_mode: static
 #
 # New citizen-facing SPA served at /citizen/ (separate from the
 # legacy /digit-ui/ esbuild bundle). When true, the playbook:
-#   1. Clones {{ digit_ui_v2_repo }}@{{ digit_ui_v2_branch }} to
+#   1. Copies the VENDORED in-tree source (digit-ui-v2/ + ui-shared/) to
 #      /opt/digit-ui-v2 on the target.
 #   2. `npm install` + `npm run build` (Vite) with the VITE_* env-var
 #      contract baked into the bundle.
@@ -229,11 +229,16 @@ enable_digit_ui_v2: false
 # hidden, while the code and /pgr-services/v2/dashboard API remain intact.
 enable_legacy_pgr_dashboard: false
 
-# Git source for the citizen SPA. Cloned on the TARGET (not the
-# controller) so native Vite binaries (esbuild, lightningcss) match
-# the runtime arch.
-digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
-digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
+# Optional external git source for the citizen SPA, for transitional or
+# standalone use. LEAVE UNSET on normal deploys: the default builds the
+# vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
+# matches this checkout — including build-time contracts such as
+# VITE_ENABLE_LEGACY_PGR_DASHBOARD, which an older external revision would
+# not read. When set, the repo is cloned on the TARGET (not the controller)
+# so native Vite binaries (esbuild, lightningcss) match the runtime arch, and
+# the deploy fails fast if that revision lacks the feature-flag modules.
+# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+# digit_ui_v2_branch: "develop"
 
 # digit-integration-tests dashboards. Builds the react-admin catalog dashboard
 # from the VENDORED in-tree source (tests/integration-tests/) and serves both
