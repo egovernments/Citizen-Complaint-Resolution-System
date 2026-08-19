@@ -500,11 +500,6 @@
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Repor disposição",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_HEADER_ROLE_SCOPE_TOOLTIP",
     "message": "Os mosaicos do painel são limitados à sua função pelo catálogo de análise",
     "module": "rainmaker-dashboard"
