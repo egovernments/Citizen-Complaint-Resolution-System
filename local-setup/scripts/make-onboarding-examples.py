@@ -19,9 +19,23 @@ Writes five files, in upload order:
     05-employees.xlsx                  Phase 4
 
 Sheet names matter: the parser looks for them by name and falls back to the
-first sheet only for the tenant file. Column headers are matched
-case-insensitively, ignoring `*` and extra whitespace, so "Tenant Code*" and
-"tenantCode" both work.
+first sheet only for the tenant file.
+
+Column headers matter more than they look, and the rule is not uniform:
+
+  * Tenant sheet only — matched leniently (case-insensitive, `*` and extra
+    whitespace ignored, substring accepted), so "Tenant Code*", "Tenant Code"
+    and "tenantCode" are the same column.
+  * Boundary / Department / Designation / Employee — each field has a fixed
+    list of accepted spellings (e.g. `code`, `Code`, `boundaryCode`). Anything
+    outside that list is not seen.
+  * Complaint hierarchy level columns — matched **exactly** against the level
+    codes you typed into the wizard, with the single concession that `_` may
+    be written as a space. A renamed level column silently reads as empty and
+    the row is rejected as "missing <level>".
+
+This script emits the exact strings each parser expects, so the generated
+files import as-is. Edit a header by hand and you are on your own.
 
 Needs openpyxl:  pip install openpyxl
 """
@@ -68,12 +82,14 @@ def tenant_workbook(root, city, city_title, lat, lng, district):
         [[f"{city_title} City Council", f"{root}.{city}", "City", "",
           lat, lng, city_title, district]],
     )
-    # Kept for backwards compatibility. The recommended path is to upload the
-    # images in step 1.2, which fills these in with filestore ids for you.
+    # Header only — a row of empty strings reads as a data row with four blank
+    # fields, not as "nothing to import". Kept for backwards compatibility; the
+    # recommended path is to upload the images in step 1.2, which fills these in
+    # with filestore ids for you.
     write_sheet(
         wb.create_sheet("Tenant Branding Details"),
         ["Banner URL", "Logo URL", "Logo URL (White)", "State Logo"],
-        [["", "", "", ""]],
+        [],
     )
     return wb
 

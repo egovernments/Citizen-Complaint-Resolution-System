@@ -254,10 +254,16 @@ and the ids are recorded against the tenant.
 <details>
 <summary><b>Under the hood — column matching, and the coordinates</b></summary>
 
-Headers are matched leniently: case-insensitive, ignoring `*`, collapsing
-whitespace, and accepting a substring. `Tenant Code*`, `Tenant Code`,
-`tenantCode` and `tenant_code` are all the same column. Only the **first data
-row** is read — one tenant per file.
+Headers on **this sheet** are matched leniently: case-insensitive, ignoring
+`*`, collapsing whitespace, and accepting a substring. `Tenant Code*`,
+`Tenant Code`, `tenantCode` and `tenant_code` are all the same column. Only the
+**first data row** is read — one tenant per file.
+
+Do not generalise that to the later phases. The boundary, department,
+designation and employee sheets each match a fixed list of spellings per field,
+and the complaint-hierarchy level columns are matched **exactly** against the
+level codes you defined (a `_` may be written as a space, and that is the only
+latitude). Rename one of those headers and the column reads as empty.
 
 `Tenant Code*` is validated against `^[A-Za-z][A-Za-z0-9.]*$`: it must start
 with a letter, and dots are the only punctuation.

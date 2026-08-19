@@ -78,9 +78,10 @@ state_tenant_id: mycountry
 # are stored. Must start with `<state_root>.`
 tenant_id: mycountry.mycity
 
-# CHANGE ME — the tenant the citizen app defaults to, and the tenant the
-# optional CI test suite runs against. Must be state_root itself or sit
-# under it.
+# CHANGE ME — only the opt-in CI test suite reads this, as BOOT_TENANT /
+# DIGIT_TENANT, so it does nothing unless run_ci_tests is true. Set it anyway:
+# preflight checks it is state_root itself or sits under it, and getting it
+# right now saves a failed deploy the day you turn the tests on.
 boot_tenant: mycountry.mycity
 
 # CHANGE ME — the tenant the SPA lands on after login. Point it at the CITY

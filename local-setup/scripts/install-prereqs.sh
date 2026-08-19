@@ -53,7 +53,7 @@ readonly ANSIBLE_DIR="$SCRIPT_DIR/../ansible"
 
 CHECK_ONLY=0
 FAILED=0
-NOTES=()
+NOTES=("")   # placeholder stripped before use; see install_base
 
 # ── Output helpers ───────────────────────────────────────────────────────────
 
@@ -100,6 +100,18 @@ fi
 # never on a box where everything is already installed, and never in --check
 # mode. Returns non-zero if it cannot get it, so the caller can report which
 # packages the operator has to install by hand instead of aborting the run.
+# Run a command as root. `$SUDO cmd` works when SUDO is "sudo" and also when it
+# is empty (the word just vanishes) — but NOT when the command needs sudo's own
+# flags: `$SUDO -E bash -` becomes `-E bash -` for a root user and dies with
+# "-E: command not found". Anything needing sudo options goes through here.
+run_root() {
+  if [ -n "$SUDO" ]; then
+    sudo -E "$@"
+  else
+    "$@"
+  fi
+}
+
 SUDO_PRIMED=0
 prime_sudo() {
   [ -z "$SUDO" ] && return 0
@@ -186,11 +198,14 @@ pkg_install() {
 
 install_base() {
   step "Base tools (git, curl, rsync, unzip)"
-  local want=() have=()
+  # Seeded with a placeholder that is stripped below: `${#arr[@]}` on an empty
+  # array is an unbound-variable error under `set -u` on bash 4.2/4.3.
+  local want=("") have=("")
   local t
   for t in git curl rsync unzip; do
     if command -v "$t" >/dev/null 2>&1; then have+=("$t"); else want+=("$t"); fi
   done
+  have=("${have[@]:1}"); want=("${want[@]:1}")
   [ "${#have[@]}" -gt 0 ] && skip "already present: ${have[*]}"
   if [ "${#want[@]}" -eq 0 ]; then
     return 0
@@ -282,11 +297,11 @@ install_node() {
   case "$FAMILY" in
     debian)
       pkg_install ca-certificates gnupg || return 0
-      curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | $SUDO -E bash -
+      curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | run_root bash -
       APT_UPDATED=1
       DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq nodejs ;;
     rhel)
-      curl -fsSL "https://rpm.nodesource.com/setup_${NODE_MAJOR}.x" | $SUDO -E bash -
+      curl -fsSL "https://rpm.nodesource.com/setup_${NODE_MAJOR}.x" | run_root bash -
       $SUDO "$PKG_MGR" install -y -q nodejs ;;
     arch)
       pkg_install nodejs npm || return 0 ;;
@@ -307,7 +322,8 @@ install_ansible() {
   step "Ansible, ansible-lint and yamllint"
 
   if [ "$CHECK_ONLY" -eq 1 ]; then
-    local t missing=()
+    local t
+    local missing=()
     for t in ansible-playbook ansible-lint yamllint; do
       command -v "$t" >/dev/null 2>&1 || missing+=("$t")
     done
@@ -315,6 +331,12 @@ install_ansible() {
       skip "$(ansible --version | head -1)"
     else
       warn "would create a venv at $VENV_DIR and install: ${missing[*]}"
+    fi
+    # Still check the ceiling. An existing ansible-core >= 2.19 is exactly the
+    # condition the pin exists to prevent, and reporting the box as ready when
+    # the deploy cannot run would defeat the point of --check.
+    if command -v ansible >/dev/null 2>&1; then
+      check_ansible_core "$(command -v ansible)"
     fi
     return 0
   fi
@@ -463,6 +485,7 @@ main() {
   install_collections
   [ "$CHECK_ONLY" -eq 1 ] || verify
 
+  NOTES=("${NOTES[@]:1}")
   if [ "${#NOTES[@]}" -gt 0 ]; then
     step "Read this"
     local n
