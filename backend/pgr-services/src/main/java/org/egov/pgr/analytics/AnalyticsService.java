@@ -106,7 +106,14 @@ public class AnalyticsService {
         if (body.has("queries")) validateBatchSize(body.get("queries"));
         // Action 2008's authored policy, resolved by the ABAC engine — the identical scope
         // /v2/request/_search runs under, so the two surfaces cannot disagree about a caller.
-        PgrSearchScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
+        //
+        // The anonymous surface has no identity to resolve, so it never asks. Sending it down the
+        // policy path would fail the request outright: with no roles there is no role-scoped action
+        // lookup to make, and the engine correctly refuses rather than guessing. Its scope is the
+        // tenant aggregate, and what it may SEE is decided by the catalog's own `public` markers.
+        PgrSearchScope scope = capabilities.isPublicSurface()
+                ? AnalyticsRowScopeResolver.publicSurfaceScope(tenantId, isStateLevel(tenantId, stateLevelLen))
+                : scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         boolean publicFloor = capabilities.isPublicSurface();
 
         // Data freshness and request time are deliberately separate. factsAsOfMs may be null for an
@@ -190,6 +197,11 @@ public class AnalyticsService {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
         return out;
+    }
+
+    /** Same state-level test the scope resolvers use, for the anonymous tenant-only scope. */
+    private static boolean isStateLevel(String tenantId, int stateLevelLen) {
+        return tenantId != null && tenantId.split("\\.").length == stateLevelLen;
     }
 
     /** Reject oversized batches before principal resolution or any SQL execution. */

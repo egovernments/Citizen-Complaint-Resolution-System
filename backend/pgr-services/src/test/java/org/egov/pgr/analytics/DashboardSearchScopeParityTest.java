@@ -9,6 +9,7 @@ import org.egov.pgr.policy.AccessPolicyRegistry;
 import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.policy.PolicyDrivenScopeResolver;
 import org.egov.pgr.policy.ScopePolicy;
+import org.egov.pgr.policy.ScopePolicyEngine;
 import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.Principals;
@@ -156,6 +157,40 @@ class DashboardSearchScopeParityTest {
         assertEquals(onSearch.jurisdictionCodes, onDashboard.jurisdictionCodes);
         assertEquals(onSearch.tenantId, onDashboard.tenantId);
         assertEquals(onSearch.tenantStateLevel, onDashboard.tenantStateLevel);
+    }
+
+    @Test
+    void theTenantSwitchNeverOverturnsADenial() {
+        // The engine expresses "you may see nothing" as a department list holding one sentinel.
+        // Treating that as an ordinary department axis and dropping it — which #1280's switch does
+        // to a real axis — would turn every deny into an unrestricted tenant-wide scope: an
+        // unauthorized tenant, an unresolvable principal, or strict mode with no policy would all
+        // start returning every row.
+        when(catalog.isDepartmentScopingDisabled(TENANT)).thenReturn(true);
+        stubHrms(List.of(), List.of());   // no HRMS record -> the engine denies
+        RequestInfo requestInfo = employee("emp-nobody", "PGR_LME");
+
+        PgrSearchScope onSearch = searchScope.resolveScope(requestInfo, TENANT, STATE_LEVEL_LEN);
+        PgrSearchScope onDashboard = dashboardScope.resolve(requestInfo, TENANT, STATE_LEVEL_LEN);
+
+        assertEquals(List.of(ScopePolicyEngine.UNRESOLVED_SENTINEL), onSearch.departmentCodes);
+        assertEquals(describe(onSearch), describe(onDashboard),
+                "a denied scope must survive the tenant department-scoping switch untouched");
+    }
+
+    @Test
+    void aCallerOutsideTheirOwnTenantSubtreeIsDeniedEvenWithTheSwitchOn() {
+        // The same fail-open, reached the other way: the tenant-affiliation check denies, and the
+        // switch must not undo it.
+        when(catalog.isDepartmentScopingDisabled(anyString())).thenReturn(true);
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)), List.of());
+        RequestInfo outsider = employee("emp-elsewhere", "PGR_LME");
+        outsider.getUserInfo().setTenantId("pg.othercity");
+
+        PgrSearchScope scope = dashboardScope.resolve(outsider, TENANT, STATE_LEVEL_LEN);
+
+        assertEquals(List.of(ScopePolicyEngine.UNRESOLVED_SENTINEL), scope.departmentCodes,
+                "an unauthorized tenant must stay denied");
     }
 
     // ---- helpers ----------------------------------------------------------------------------

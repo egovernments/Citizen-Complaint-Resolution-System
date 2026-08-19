@@ -3,6 +3,7 @@ package org.egov.pgr.analytics;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.policy.ScopePolicyEngine;
 import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -48,6 +49,15 @@ public class AnalyticsRowScopeResolver {
         // behind with the resolver it used to live in, because dropping it silently would empty
         // those tenants' dashboards. It IS a second policy source, and folding it into action
         // 2008's own roleScopes is the right end state — tracked separately, not done here.
+        //
+        // It must never touch a DENIED scope. The engine expresses "this caller may see nothing"
+        // as a department list holding one sentinel value, so a naive "drop the department axis"
+        // would turn every deny — an unauthorized tenant, an unresolvable principal, strict mode
+        // with no policy — into a fully unrestricted tenant-wide scope. The switch turns an axis
+        // off; it does not overturn a decision.
+        if (isDenied(scope))
+            return scope;
+
         if (scope.departmentCodes != null && catalog.isDepartmentScopingDisabled(tenantId)) {
             log.info("department scoping disabled by DashboardConfig for tenant {} — dropping the department axis "
                     + "from the policy-resolved scope", tenantId);
@@ -55,6 +65,15 @@ public class AnalyticsRowScopeResolver {
                     null, scope.jurisdictionCodes);
         }
         return scope;
+    }
+
+    /**
+     * Whether this scope is the engine's deny-all. Recognised by the sentinel it carries rather
+     * than by a flag, because that is how {@link PgrSearchScope#deniedAll} expresses it.
+     */
+    static boolean isDenied(PgrSearchScope scope) {
+        return scope.departmentCodes != null
+                && scope.departmentCodes.contains(ScopePolicyEngine.UNRESOLVED_SENTINEL);
     }
 
     /** The tenant-only scope the anonymous public dashboard runs under. Never an authored policy. */
