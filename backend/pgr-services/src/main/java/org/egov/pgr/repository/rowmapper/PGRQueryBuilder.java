@@ -98,9 +98,13 @@ public class PGRQueryBuilder {
                 String[] tenantIdChunks = tenantId.split("\\.");
 
                 if (tenantIdChunks.length == config.getStateLevelTenantIdLength()) {
+                    // Same delimiter-safety as the scope predicate below. Note this branch also
+                    // caught an empty tenantId, which used to bind the pattern '%' and match every
+                    // row of every tenant; it now binds '' and '.%', which match nothing.
                     addClauseIfRequired(preparedStmtList, builder);
-                    builder.append(" ser.tenantid LIKE ? ");
-                    preparedStmtList.add(criteria.getTenantId() + '%');
+                    builder.append(" (ser.tenantid = ? OR ser.tenantid LIKE ?) ");
+                    preparedStmtList.add(tenantId);
+                    preparedStmtList.add(escapeLikeLiteral(tenantId) + ".%");
                 } else {
                     addClauseIfRequired(preparedStmtList, builder);
                     builder.append(" ser.tenantid=? ");
@@ -220,8 +224,13 @@ public class PGRQueryBuilder {
         return builder;
     }
 
+    /** Escapes LIKE metacharacters in server-derived text before a wildcard is appended to it. */
+    static String escapeLikeLiteral(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     /**
-     * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
+     * Injects the RBAC scope's WHERE predicates. The same axes as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
      * department-scope, and — per {@link PgrSearchScope}'s own Javadoc — the tenant axis itself),
      * plus PGR search's own jurisdiction axis (exact-match on the complaint's address locality —
@@ -250,8 +259,15 @@ public class PGRQueryBuilder {
         if (scope.tenantId != null) {
             addClauseIfRequired(preparedStmtList, builder);
             if (scope.tenantStateLevel) {
-                builder.append(" ser.tenantId LIKE ? ");
-                preparedStmtList.add(scope.tenantId + '%');
+                // The subtree is the tenant ITSELF plus everything under a '.' beneath it. A bare
+                // `LIKE value || '%'` also matches a SIBLING whose id merely starts with the same
+                // characters — with state.level.tenantid.length=1 that means root `ke` reading
+                // every row of the unrelated root `kenya` — which is a cross-tenant read. The
+                // delimiter has to be part of the pattern, and LIKE metacharacters in a tenant id
+                // have to be escaped, or an id containing '_' would match any character there.
+                builder.append(" (ser.tenantId = ? OR ser.tenantId LIKE ?) ");
+                preparedStmtList.add(scope.tenantId);
+                preparedStmtList.add(escapeLikeLiteral(scope.tenantId) + ".%");
             } else {
                 builder.append(" ser.tenantId = ? ");
                 preparedStmtList.add(scope.tenantId);
