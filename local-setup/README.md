@@ -390,13 +390,19 @@ localization, then verifies a create → assign → resolve round trip.
 ```bash
 cd local-setup
 python3 -m venv .venv && source .venv/bin/activate    # PEP 668 — see the note below
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 
 DIGIT_URL=http://localhost:18000 \
 BOOT_TENANT=pg.myorg \
-INPUT_XLSX=data/county-data.xlsx \
+INPUT_XLSX="data/Bomet county health common complains items - R.xlsx" \
 python3 scripts/ci-dataloader-xlsx.py
 ```
+
+`INPUT_XLSX` is **your** county spreadsheet. The only one in the repo is the
+Bomet sample used above; there is no `county-data.xlsx`. Point it at your own
+file once you have one — the script reads whatever path you give it, and
+defaults to `county-data.xlsx` in the working directory if you omit the
+variable entirely.
 
 ### Scripted path — the CRSLoader library
 
@@ -499,8 +505,12 @@ If `serviceCode` is not set, the collection picks a random complaint type.
 The CI dataloader script creates a complete tenant with an HRMS employee in one command. Use this before running the complaints demo:
 
 ```bash
-# Install Python dependencies (one time)
-pip install requests openpyxl pandas python-dotenv
+# Install Python dependencies (one time), in a virtualenv — a bare pip install
+# fails with PEP 668 error: externally-managed-environment on Ubuntu 24.04,
+# Debian 12+, Fedora 38+ and Homebrew Python.
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r dataloader/requirements.txt
 
 # Run the dataloader
 DIGIT_URL=http://localhost:18000 \

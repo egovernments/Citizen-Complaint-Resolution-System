@@ -331,12 +331,16 @@ the library itself moved to `local-setup/dataloader/` and is unchanged.)
 ```bash
 cd local-setup
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 
 # One command, all phases, from a county spreadsheet:
 DIGIT_URL=http://localhost:18000 BOOT_TENANT=pg.mycity \
-INPUT_XLSX=data/county-data.xlsx python3 scripts/ci-dataloader-xlsx.py
+INPUT_XLSX="data/Bomet county health common complains items - R.xlsx" \
+python3 scripts/ci-dataloader-xlsx.py
 ```
+
+`INPUT_XLSX` is your own county spreadsheet — the Bomet file above is the only
+one bundled, and there is no `county-data.xlsx` in the repo.
 
 For per-phase control, import `crs_loader` directly — see
 [ONBOARDING-AND-ADDONS.md § B](ONBOARDING-AND-ADDONS.md#b-python-dataloader-scripted).
@@ -362,8 +366,12 @@ The scripts read these; the defaults suit a local Compose stack:
 DIGIT_URL=http://localhost:18000     # Kong gateway
 DIGIT_USERNAME=ADMIN
 DIGIT_PASSWORD=eGov@123
-DIGIT_TENANT=pg
+ROOT_TENANT=pg                       # tenant you authenticate against
 ```
+The tenant being *created* is named per script, not by a shared variable:
+`ci-dataloader-xlsx.py` reads `BOOT_TENANT` (default `ke.bomet`) plus
+`INPUT_XLSX`, and `ci-dataloader.py` reads `TARGET_TENANT` (default
+`pg.citest`). There is no `DIGIT_TENANT` — nothing reads it.
 
 ## Gatus Health Monitoring Dashboard
 

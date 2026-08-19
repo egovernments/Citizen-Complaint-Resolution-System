@@ -181,7 +181,7 @@ Kong endpoint — it does not have to be the server.
 ```bash
 cd local-setup
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 ```
 
 The virtualenv is not optional on Ubuntu 24.04, Debian 12+, Fedora 38+ or
@@ -254,9 +254,15 @@ section:
 ```bash
 DIGIT_URL=http://localhost:18000 \
 BOOT_TENANT=pg.myorg \
-INPUT_XLSX=data/county-data.xlsx \
+INPUT_XLSX="data/Bomet county health common complains items - R.xlsx" \
 python3 scripts/ci-dataloader-xlsx.py
 ```
+
+`INPUT_XLSX` is **your** county spreadsheet. The only one in the repo is the
+Bomet sample used above; there is no `county-data.xlsx`. Point it at your own
+file once you have one — the script reads whatever path you give it, and
+defaults to `county-data.xlsx` in the working directory if you omit the
+variable entirely.
 
 ### Rollback
 

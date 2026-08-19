@@ -1261,6 +1261,23 @@
           scripts:  ../scripts
           keycloak: ../keycloak
 
+    # Upgrade path for #1743. `synchronize` only writes what is in the list
+    # above — it never removes a directory that has dropped out of it. A host
+    # deployed before the Jupyter removal therefore keeps two stale copies of
+    # the loader on disk:
+    #   {{ digit_dir }}/jupyter/            (old `jupyter: ../jupyter` entry)
+    #   {{ digit_dir }}/ci-tests/jupyter/   (old rsync destination)
+    # Leaving them is not cosmetic: the second is a full second copy of the
+    # library, and a script whose sys.path resolution drifts can import the
+    # pre-move version and silently run old code.
+    - name: "Remove pre-#1743 Jupyter/dataloader directories left by an earlier deploy"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ digit_dir }}/jupyter"
+        - "{{ digit_dir }}/ci-tests/jupyter"
+
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
     - name: Synchronize docker build context dirs
@@ -3309,7 +3326,7 @@
       ansible.builtin.shell: |
         # Only flag genuinely broken states. Many services don't define
         # a healthcheck at all (default-data-handler, digit-gatus,
-        # digit-otel-collector, digit-gatus, etc.) and show plain "Up X"
+        # digit-otel-collector, etc.) and show plain "Up X"
         # with no health suffix — that's normal, not unhealthy.
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished

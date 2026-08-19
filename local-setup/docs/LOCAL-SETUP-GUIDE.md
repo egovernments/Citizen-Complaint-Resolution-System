@@ -79,7 +79,7 @@ runs are the same code path.
 ```bash
 cd local-setup
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests openpyxl pandas python-dotenv
+pip install -r dataloader/requirements.txt
 ```
 
 ```python
@@ -105,15 +105,19 @@ loader.login(username="ADMIN", password="eGov@123", tenant_id="pg")
 
 ### Configuration
 
-Set these variables in the first notebook cell:
+Set these at the top of your script:
 
 ```python
-URL = "http://kong:8000"          # Kong inside Docker network
+URL = "http://localhost:18000"     # Kong, as published on the host
 USERNAME = "ADMIN"                 # Superuser
 PASSWORD = "eGov@123"
 TENANT_ID = "pg"                   # Root tenant (for login)
 TARGET_TENANT = "pg.mycity"        # Your new tenant
 ```
+
+`http://kong:8000` is the address *inside* the Docker network — it resolves
+only from another container on `egov-network`. Running the loader on the host,
+which is the normal case, use the published port.
 
 ### What Gets Created
 
@@ -126,12 +130,13 @@ After running all phases:
 
 ### Rollback
 
-The notebook includes rollback functions if something goes wrong:
+Every phase has an inverse, if something goes wrong:
 
 ```python
-loader.rollback_common_masters(TARGET_TENANT)  # Remove masters
-loader.rollback_tenant(TARGET_TENANT)           # Remove tenant
-loader.full_reset(TARGET_TENANT)                # Complete reset
+loader.rollback_common_masters(TARGET_TENANT)   # Remove masters
+loader.rollback_tenant(TARGET_TENANT)            # Remove tenant
+loader.full_reset("ADMIN", TARGET_TENANT)        # Everything — hierarchy FIRST,
+                                                 # then the tenant
 ```
 
 ## API Testing with Postman
@@ -214,8 +219,10 @@ bash scripts/run-postman.sh all
 For CI or quick testing without the notebook, `scripts/ci-dataloader.py` automates the full setup:
 
 ```bash
-# Install Python dependencies
-pip install requests openpyxl pandas python-dotenv
+# Install Python dependencies, in a virtualenv (PEP 668)
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r dataloader/requirements.txt
 
 # Run the dataloader
 DIGIT_URL=http://localhost:18000 \
