@@ -145,8 +145,10 @@ services:
       - egov-network
 
   # MDMS Backend
+  # mdms-count-api-3ac4f8e adds POST /v2/_count (issue #953: real totals for the
+  # configurator's MDMS list pagination — see configurator DigitApiClient.mdmsCount).
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:mdms-count-api-3ac4f8e
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -534,7 +536,7 @@ services:
       - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:abac-changes-cb6a372
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:

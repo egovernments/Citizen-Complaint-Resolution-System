@@ -166,8 +166,9 @@ Attach **text**, not photographs of screens — text can be searched.
 
 ### Always
 
-1. **Health dashboard screenshot** — if something is red. Gatus keeps its history in memory
-   and loses it on restart, so capture it the moment you see it.
+1. **Health dashboard screenshot** — if something is red. Gatus keeps its history on disk
+   now, so it survives a restart, but it only holds about the last 100 results per endpoint
+   — on a flapping check that is a couple of hours. Capture it while you can see it.
 2. **The failing request** — browser F12 → **Network** → reproduce → click the red row →
    screenshot showing the **URL, status code and response body**. This one attachment
    identifies the responsible service more often than anything else.

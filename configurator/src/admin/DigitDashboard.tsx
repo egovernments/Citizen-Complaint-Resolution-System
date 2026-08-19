@@ -3,6 +3,8 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import {
   Building2,
   MapPin,
@@ -29,11 +31,23 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'access-roles': Shield,
 };
 
+/**
+ * Cards only render `total`, never `data.length`. Keep perPage at 1 so PGR
+ * `_search` / other paged APIs do not pull a 500-row payload just to badge
+ * a count — MDMS v2 still walks every page inside getList because it has
+ * no total field.
+ *
+ * LocalizationList pins every AVAILABLE_LOCALES column, so the card must use
+ * the same `locales` filter or it counts only en_IN and the list counts the
+ * union across languages.
+ */
+const LOCALIZATION_LOCALES = AVAILABLE_LOCALES.map((l) => l.locale);
+
 function ResourceCard({ resource }: { resource: string }) {
-  const { total, isPending } = useGetList(resource, {
+  const { total, isPending, error } = useGetList(resource, {
     pagination: { page: 1, perPage: 1 },
     sort: { field: 'id', order: 'ASC' },
-    filter: {},
+    filter: resource === 'localization' ? { locales: LOCALIZATION_LOCALES } : {},
   });
 
   const navigate = useNavigate();
@@ -53,8 +67,13 @@ function ResourceCard({ resource }: { resource: string }) {
           </div>
           <div>
             <p className="text-2xl font-bold text-foreground">
-              {isPending ? '...' : (total ?? 0)}
+              {isPending ? '...' : error ? '—' : (total ?? 0)}
             </p>
+            {error ? (
+              <p className="text-xs text-destructive mt-0.5 truncate max-w-[14rem]" title={error instanceof Error ? error.message : String(error)}>
+                {error instanceof Error ? error.message : 'Error loading data'}
+              </p>
+            ) : null}
             <p className="text-sm text-muted-foreground">{label}</p>
           </div>
         </div>
@@ -65,9 +84,10 @@ function ResourceCard({ resource }: { resource: string }) {
 
 export function DigitDashboard() {
   const translate = useTranslate();
+  const { canViewResource } = useMastersCapability();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
-    (r) => ICONS[r] // only show resources that have icons
+    (r) => ICONS[r] && canViewResource(r) // only show resources that have icons and the role can see
   );
 
   return (

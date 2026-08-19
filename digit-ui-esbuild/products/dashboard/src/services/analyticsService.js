@@ -5,6 +5,7 @@ import {
   getTenantId,
   toRequestError,
 } from "./authService";
+import { runChunkedAnalyticsBatch } from "./analyticsBatch";
 
 // Re-exported for existing importers; authService is the definition.
 export { getTenantId };
@@ -19,7 +20,7 @@ export function getAnalyticsBase() {
 
 const ANALYTICS_BASE = getAnalyticsBase();
 
-async function postAnalytics(path, body) {
+async function postAnalytics(path, body, signal) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   // The analytics API is the dashboard's primary data path, so it is the one
   // surface allowed to conclude the session is dead (sessionCritical defaults
@@ -36,6 +37,7 @@ async function postAnalytics(path, body) {
         RequestInfo: buildRequestInfo("dashboard"),
         ...body,
       }),
+      signal,
     });
   } catch (error) {
     const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -63,7 +65,7 @@ async function postAnalytics(path, body) {
  * anonymous PUBLIC contract, so this transport always sends a role-less
  * RequestInfo and performs exactly one request.
  */
-async function postPublicAnalytics(path, body) {
+async function postPublicAnalytics(path, body, signal) {
   const url = `${ANALYTICS_BASE}/public${path}`;
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   let response;
@@ -72,6 +74,7 @@ async function postPublicAnalytics(path, body) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...withTraceHeaders({}) },
       credentials: "omit",
+      signal,
       body: JSON.stringify({
         RequestInfo: {
           apiId: "Rainmaker",
@@ -131,8 +134,13 @@ export function fetchCatalog(tenantId) {
  * refs: { [tileKey]: { kpiId, params } }
  * Returns { results: { [tileKey]: { columns, rows, asOf, scope } }, partial, errors }
  */
-export function runKpiBatch(refs, tenantId) {
-  return postAnalytics("/_query", { tenantId, queries: refs });
+export function runKpiBatch(refs, tenantId, maxBatchQueries, options = {}) {
+  return runChunkedAnalyticsBatch(
+    refs,
+    maxBatchQueries,
+    (queries) => postAnalytics("/_query", { tenantId, queries }, options.signal),
+    options
+  );
 }
 
 /** Curated PUBLIC pack. The response itself contains the safe tile descriptors. */
@@ -141,6 +149,11 @@ export function fetchPublicPack(tenantId) {
 }
 
 /** PUBLIC data path. The backend accepts only curated, base kpiId references. */
-export function runPublicKpiBatch(refs, tenantId) {
-  return postPublicAnalytics("/_query", { tenantId, queries: refs });
+export function runPublicKpiBatch(refs, tenantId, maxBatchQueries, options = {}) {
+  return runChunkedAnalyticsBatch(
+    refs,
+    maxBatchQueries,
+    (queries) => postPublicAnalytics("/_query", { tenantId, queries }, options.signal),
+    options
+  );
 }

@@ -8,6 +8,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
@@ -114,5 +115,71 @@ describe('docker-compose.egov-digit.yaml', () => {
     expect(compose).toMatch(
       /image: \$\{MCP_IMAGE:-ghcr\.io\/subhashini-egov\/digit-mcp:[0-9-]+\}/
     );
+  });
+});
+
+describe('Novu workflow creation deployment contract', () => {
+  const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
+  const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));
+  const novuIngress = read('devops/deploy-as-code/charts/backbone-services/novu/templates/ingress.yaml');
+  const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
+  const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
+  const novuEnv = read('backend/novu-bridge/config/.env.novu');
+  const dotenvLoader = path.join(
+    REPO_ROOT,
+    'backend/novu-bridge/config/load-dotenv.sh'
+  );
+
+  test('Helm gives browser code public API/WS URLs rather than cluster-only service names', () => {
+    expect(novuValues).toContain('publicOrigin: "https://domain.com"');
+    expect(novuValues).toContain('value: {{ printf "%s/novu-api" .Values.ingress.publicOrigin | quote }}');
+    expect(novuValues).toContain('value: {{ .Values.ingress.publicOrigin | quote }}');
+    // The worker correctly uses an in-cluster API URL; only values injected
+    // into browser JavaScript must be public.
+    expect(dashboardValues).not.toContain('value: {{ printf "http://%s:%d" .Values.api.name');
+    expect(dashboardValues).not.toContain('value: {{ printf "http://%s:%d" .Values.ws.name');
+  });
+
+  test('Helm exposes API, websocket, and stock-dashboard absolute SPA routes', () => {
+    expect(novuIngress).toContain('.Values.ingress.api.path');
+    expect(novuIngress).toContain('.Values.ingress.ws.path');
+    expect(novuIngress).toContain('range list "/env"');
+    expect(novuIngress).toContain('"/auth/sign-in"');
+    expect(novuIngress).toContain('"/integrations"');
+    expect(novuIngress).toContain('"/assets"');
+    expect(novuIngress).toContain('path: "/socket.io"');
+    expect(novuIngress).toContain('name: {{ .Values.ingress.ws.service.name }}');
+  });
+
+  test('Compose routes Novu Socket.IO at the root path its 2.3.0 client actually uses', () => {
+    expect(composeEnv).toContain(
+      "NOVU_WS_PUBLIC_URL={{ novu_ws_public_url | default(novu_public_origin) }}"
+    );
+    expect(composeNginx).toContain('location /socket.io/');
+    expect(composeNginx).toContain('proxy_pass http://127.0.0.1:14003/socket.io/;');
+  });
+
+  test('the tracked SMS body is quoted and dotenv loading preserves spaces and explicit env', () => {
+    expect(novuEnv).toContain(
+      "NOVU_SMS_BODY='Complaint {{payload.complaintNo}} status is {{payload.status}}'"
+    );
+
+    const probe = String.raw`
+      set -euo pipefail
+      source "$1"
+      load_dotenv_defaults <(printf '%s\n' 'NOVU_SMS_BODY=Complaint {{payload.complaintNo}} status is {{payload.status}}')
+      printf '%s\n' "$NOVU_SMS_BODY"
+      NOVU_SMS_BODY='caller wins'
+      load_dotenv_defaults <(printf '%s\n' 'NOVU_SMS_BODY=file loses')
+      printf '%s\n' "$NOVU_SMS_BODY"
+    `;
+    const output = execFileSync('bash', ['-c', probe, 'bash', dotenvLoader], {
+      encoding: 'utf8',
+    }).trim().split('\n');
+
+    expect(output).toEqual([
+      'Complaint {{payload.complaintNo}} status is {{payload.status}}',
+      'caller wins',
+    ]);
   });
 });

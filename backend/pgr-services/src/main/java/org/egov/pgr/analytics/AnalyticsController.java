@@ -91,6 +91,7 @@ public class AnalyticsController {
                 out.put("tiles", Collections.emptyList());
                 out.put("defaultLayout", Collections.emptyList());
                 out.put("packId", null);
+                out.put("maxBatchQueries", AnalyticsService.MAX_BATCH_QUERIES);
                 // A 200 response lets the anonymous shell render an intentional unavailable
                 // screen. No KPI descriptors, layouts, counts, or query data leave the service.
                 return ResponseEntity.ok(out);
@@ -113,6 +114,7 @@ public class AnalyticsController {
             out.put("defaultLayout", pack.map(DashboardPack::getLayout).orElse(Collections.emptyList()));
             out.put("asOf", System.currentTimeMillis());
             out.put("packId", pack.map(DashboardPack::getId).orElse(null));
+            out.put("maxBatchQueries", AnalyticsService.MAX_BATCH_QUERIES);
             // Deliberately no recordCount: even a matching public pack must not become a
             // tenant-volume enumeration primitive.
             return ResponseEntity.ok(out);
@@ -263,6 +265,7 @@ public class AnalyticsController {
             // are unchanged for callers that do match a pack.
             int stateLen = config.getStateLevelTenantIdLength() == null ? 1 : config.getStateLevelTenantIdLength();
             out.put("recordCount", pack.isPresent() ? service.recordCount(tenantId, stateLen) : null);
+            out.put("maxBatchQueries", AnalyticsService.MAX_BATCH_QUERIES);
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));

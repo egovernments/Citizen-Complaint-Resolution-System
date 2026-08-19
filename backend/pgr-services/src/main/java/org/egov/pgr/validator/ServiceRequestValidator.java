@@ -271,6 +271,11 @@ public class ServiceRequestValidator {
      */
     private void validateSearchParam(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
+        if(requestInfo == null || requestInfo.getUserInfo() == null
+                || requestInfo.getUserInfo().getType() == null
+                || requestInfo.getUserInfo().getType().trim().isEmpty())
+            throw new CustomException("INVALID_REQUESTINFO","RequestInfo.userInfo is required to search complaints");
+
         if(requestInfo.getUserInfo().getType().equalsIgnoreCase("EMPLOYEE" ) && criteria.isEmpty())
             throw new CustomException("INVALID_SEARCH","Search without params is not allowed");
 
