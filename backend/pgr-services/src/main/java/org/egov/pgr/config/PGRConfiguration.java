@@ -127,21 +127,17 @@ public class PGRConfiguration {
     @Value("${egov.mdms.search.endpoint}")
     private String mdmsEndPoint;
 
-    //Accesscontrol — Tier-2 PDP condition lookup, see org.egov.pgr.policy
+    // Accesscontrol — egov-accesscontrol is the ONLY PDP; see org.egov.pgr.accesscontrol.
+    // AccessControlDecisionClient talks to these two endpoints exclusively — pgr-services has no
+    // other path to an authorization decision.
     @Value("${egov.accesscontrol.host}")
     private String accessControlHost;
 
-    @Value("${egov.accesscontrol.actions.mdms.get.path}")
-    private String accessControlActionsMdmsGetPath;
+    @Value("${egov.accesscontrol.policy.resolve.path:/access/v1/policy/_resolve}")
+    private String accessControlResolvePath;
 
-    // Explicit rollout gate for org.egov.pgr.policy.AccessPolicyRegistry#getCondition: false (the
-    // default) preserves today's backward-compatible behavior — a missing/invisible
-    // ACCESSCONTROL-ACTIONS-TEST entry for an action allows, same as before ABAC existed. A tenant
-    // only gets the ABAC-strict "missing action fails closed" behavior once it explicitly opts in
-    // here, after its policies are fully authored — never as a silent default that could brick an
-    // existing deployment's PGR search on the next redeploy.
-    @Value("${pgr.abac.strict-mode:false}")
-    private boolean abacStrictMode;
+    @Value("${egov.accesscontrol.policy.evaluate.path:/access/v1/policy/resources/_evaluate}")
+    private String accessControlEvaluatePath;
 
     //HRMS
     @Value("${egov.hrms.host}")

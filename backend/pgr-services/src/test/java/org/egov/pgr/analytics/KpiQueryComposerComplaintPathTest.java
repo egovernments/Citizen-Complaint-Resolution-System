@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +25,8 @@ public class KpiQueryComposerComplaintPathTest {
     private final AnalyticsCatalog catalog = new AnalyticsCatalog();
     private final KpiQueryComposer composer = new KpiQueryComposer(catalog);
     private final AnalyticsPlanner planner = new AnalyticsPlanner(catalog);
-    private final AnalyticsScope stateScope = new AnalyticsScope("ke", true, null, null, null);
+    private final PgrRowScope stateScope =
+            new PgrRowScope("ke", true, java.util.List.of(), null, null);
     /** complaintPath filtering doesn't depend on wall-clock time; one fixed calendar keeps the suite deterministic. */
     private final BusinessCalendar calendar =
             BusinessCalendar.of(java.time.ZoneId.of("Africa/Nairobi"), 1_700_000_000_000L);
@@ -55,7 +57,7 @@ public class KpiQueryComposerComplaintPathTest {
         assertEquals("SELECT service_code AS service_code, count(*) AS total"
                 + " FROM complaint_facts"
                 + " WHERE (complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"
-                + " AND created_at >= ? AND created_at < ? AND tenant_id LIKE ?"
+                + " AND created_at >= ? AND created_at < ? AND (tenant_id = ? OR tenant_id LIKE ?)"
                 + " GROUP BY 1 ORDER BY total DESC NULLS LAST LIMIT 8", p.sql);
         // eq arm binds the raw path, the LIKE arm the LIKE-escaped path — '.' guard is in the SQL,
         // so 'SANITATION' can never match a 'SANITATIONX.…' sibling.
@@ -200,17 +202,18 @@ public class KpiQueryComposerComplaintPathTest {
 
     @Test
     public void abacRowScopeIsStillAppliedOnTopOfTheSubtreeFilter() {
-        AnalyticsScope constrained = new AnalyticsScope("ke.nairobi", false, null,
-                "KENYA.NAIROBI", java.util.List.of("DEPT_SANITATION"));
+        PgrRowScope constrained = new PgrRowScope("ke.nairobi", false, java.util.List.of(),
+                java.util.List.of("DEPT_SANITATION"), java.util.List.of("NAIROBI"));
         JsonNode merged = composer.mergeParams(byTypeBase(), json("{\"complaintPath\":\"SANITATION\"}"), calendar);
         AnalyticsPlanner.Planned p = planner.plan(merged, constrained, calendar);
         assertTrue(p.sql.contains("(complaint_node_path = ? OR complaint_node_path LIKE ? || '.%')"), p.sql);
         assertTrue(p.sql.contains("tenant_id = ?"), p.sql);                 // city tenant scope
-        assertTrue(p.sql.contains("boundary_path LIKE ?"), p.sql);          // jurisdiction subtree scope
+        // jurisdiction scope: segment equality on the '|'-joined path, never a prefix LIKE
+        assertTrue(p.sql.contains("unnest(string_to_array(boundary_path, '|'))"), p.sql);
         assertTrue(p.sql.contains("department_code IN (?)"), p.sql);        // department scope
         // scope literals ride AFTER the param filter literals — injected on top, never replaced
         assertTrue(p.params.containsAll(java.util.List.of(
-                "SANITATION", "ke.nairobi", "KENYA.NAIROBI%", "DEPT_SANITATION")), p.params.toString());
+                "SANITATION", "ke.nairobi", "NAIROBI", "DEPT_SANITATION")), p.params.toString());
     }
 
     // ---- planner: subtree op is gated to prefix-filterable path columns ----

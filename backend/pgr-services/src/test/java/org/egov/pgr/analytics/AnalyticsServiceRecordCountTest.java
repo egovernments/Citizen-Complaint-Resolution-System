@@ -38,7 +38,7 @@ public class AnalyticsServiceRecordCountTest {
     @BeforeEach
     public void setUp() {
         // null config -> the shared DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS (5 minutes)
-        service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics(), null);
+        service = new AnalyticsService(null, null, jdbc, null, null, new AnalyticsMetrics(), null);
         ReflectionTestUtils.setField(service, "recordCountClock", (LongSupplier) clock::get);
     }
 
@@ -106,7 +106,7 @@ public class AnalyticsServiceRecordCountTest {
         // config cache; here a 1s TTL instead of the 5m default.
         org.egov.pgr.config.PGRConfiguration cfg = mock(org.egov.pgr.config.PGRConfiguration.class);
         when(cfg.getAnalyticsConfigCacheTtlMs()).thenReturn(1_000L);
-        service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics(), cfg);
+        service = new AnalyticsService(null, null, jdbc, null, null, new AnalyticsMetrics(), cfg);
         ReflectionTestUtils.setField(service, "recordCountClock", (LongSupplier) clock::get);
         when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L, 20L);
 

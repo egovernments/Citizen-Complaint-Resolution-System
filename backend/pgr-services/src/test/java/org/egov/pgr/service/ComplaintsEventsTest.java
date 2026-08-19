@@ -1,8 +1,6 @@
 package org.egov.pgr.service;
 
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.policy.FieldVisibilityService;
-import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -54,9 +52,7 @@ public class ComplaintsEventsTest {
     @Mock
     private EncryptionDecryptionService encryptionDecryptionService;
     @Mock
-    private SearchAccessPolicyService searchAccessPolicyService;
-    @Mock
-    private FieldVisibilityService fieldVisibilityService;
+    private SearchAccessService searchAccessService;
 
     @InjectMocks
     private PGRService pgrService;

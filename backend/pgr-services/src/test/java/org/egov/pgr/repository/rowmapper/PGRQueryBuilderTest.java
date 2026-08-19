@@ -1,7 +1,7 @@
 package org.egov.pgr.repository.rowmapper;
 
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 /**
  * Verifies the RBAC scope predicates added for the access-control policy reference rule
  * (citizen-self / employee-department / tenant search scoping) — that a null scope is fail-closed
- * (throws, rather than silently unrestricting), and that {@link PgrSearchScope#UNRESTRICTED} is
+ * (throws, rather than silently unrestricting), and that {@link PgrRowScope#UNRESTRICTED} is
  * the only way to opt out, leaving the query byte-for-byte unaffected for plainSearch/legacy callers.
  */
 @ExtendWith(MockitoExtension.class)
@@ -55,29 +55,33 @@ class PGRQueryBuilderTest {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
 
-        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, PgrRowScope.UNRESTRICTED);
 
         assertFalse(query.contains("accountId"));
         assertFalse(query.contains("department"));
     }
 
     @Test
-    void stateLevelScopeAddsTenantLikePredicate() {
+    void stateLevelScopeMatchesTheTenantAndItsSubtreeButNotASibling() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg", true, null, null, null);
+        PgrRowScope scope = new PgrRowScope("pg", true, List.of(), null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
-        assertTrue(query.contains("ser.tenantId LIKE ?"));
-        assertTrue(preparedStmtList.contains("pg%"));
+        // `LIKE 'pg%'` alone would also match the unrelated tenant `pgx.city`; the delimiter has
+        // to be in the pattern, and the tenant itself matched separately.
+        assertTrue(query.contains("(ser.tenantId = ? OR ser.tenantId LIKE ?)"), query);
+        assertTrue(preparedStmtList.contains("pg"));
+        assertTrue(preparedStmtList.contains("pg.%"));
+        assertFalse(preparedStmtList.contains("pg%"));
     }
 
     @Test
     void cityLevelScopeAddsTenantEqualsPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, null, null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -89,11 +93,11 @@ class PGRQueryBuilderTest {
     void citizenScopeAddsAccountIdPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of("citizen-1"), null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
-        assertTrue(query.contains("ser.accountId = ?"));
+        assertTrue(query.contains("ser.accountId IN"));
         assertTrue(preparedStmtList.contains("citizen-1"));
     }
 
@@ -101,7 +105,7 @@ class PGRQueryBuilderTest {
     void departmentScopeAddsInPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION", "ROADS"), null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), List.of("SANITATION", "ROADS"), null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -114,11 +118,11 @@ class PGRQueryBuilderTest {
     void countQueryAppliesTheSameScope() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, "citizen-1", null, null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of("citizen-1"), null, null);
 
         String query = queryBuilder.getCountQuery(criteria, preparedStmtList, null, scope);
 
-        assertTrue(query.contains("ser.accountId = ?"));
+        assertTrue(query.contains("ser.accountId IN"));
         assertEquals(1, preparedStmtList.stream().filter("citizen-1"::equals).count());
     }
 
@@ -126,7 +130,7 @@ class PGRQueryBuilderTest {
     void jurisdictionScopeAddsLocalityInPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION"), List.of("WARD_5", "WARD_6"));
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), List.of("SANITATION"), List.of("WARD_5", "WARD_6"));
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -139,7 +143,7 @@ class PGRQueryBuilderTest {
     void nullJurisdictionCodesAddNoLocalityPredicate() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of("SANITATION"), null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), List.of("SANITATION"), null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -155,7 +159,7 @@ class PGRQueryBuilderTest {
     void emptyNonNullDepartmentCodesDenyAllRatherThanDroppingTheAxis() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, List.of(), null);
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), List.of(), null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
@@ -167,7 +171,7 @@ class PGRQueryBuilderTest {
     void emptyNonNullJurisdictionCodesDenyAllRatherThanDroppingTheAxis() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.city").build();
         List<Object> preparedStmtList = new ArrayList<>();
-        PgrSearchScope scope = new PgrSearchScope("pg.city", false, null, null, List.of());
+        PgrRowScope scope = new PgrRowScope("pg.city", false, List.of(), null, List.of());
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 

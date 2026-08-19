@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -35,7 +36,7 @@ public class AnalyticsPlanner {
         }
     }
 
-    public Planned plan(JsonNode q, AnalyticsScope scope, BusinessCalendar calendar){
+    public Planned plan(JsonNode q, PgrRowScope scope, BusinessCalendar calendar){
         String grainName = q.hasNonNull("grain") ? q.get("grain").asText() : inferGrain(q);
         Grain g = catalog.grain(grainName);
         if (g == null) throw new IllegalArgumentException("unknown_grain: " + grainName);
@@ -335,41 +336,74 @@ public class AnalyticsPlanner {
         }
     }
 
-    // ---------- RBAC scope (server-injected) ----------
-    private void applyScope(AnalyticsScope scope, Grain g, List<String> conj, List<Object> params){
+    // ---------- row scope (decided by egov-accesscontrol, applied here) ----------
+
+    /**
+     * Turns the PDP's typed scope into WHERE predicates. Every value is a bind parameter; nothing
+     * a decision carries is ever concatenated into SQL.
+     *
+     * <p>An axis the caller is restricted on but the grain cannot express is a hard failure, not a
+     * dropped predicate: the events and daily grains lack some of these columns, and quietly
+     * omitting the constraint there is precisely how a department-scoped user once read every
+     * department's rows.
+     */
+    private void applyScope(PgrRowScope scope, Grain g, List<String> conj, List<Object> params){
         if (scope.tenantId != null) {
-            if (scope.tenantStateLevel) {
-                conj.add(g.tenantColumn + " LIKE ?");
-                params.add(escapeLikeLiteral(scope.tenantId) + "%");
+            if (scope.tenantSubtree) {
+                // The tenant itself, plus everything under a '.' beneath it. A bare prefix LIKE
+                // would also match a sibling tenant whose id merely starts the same way — `ke`
+                // matching `kenya` — which is a cross-tenant read.
+                conj.add("(" + g.tenantColumn + " = ? OR " + g.tenantColumn + " LIKE ?)");
+                params.add(scope.tenantId);
+                params.add(escapeLikeLiteral(scope.tenantId) + ".%");
             }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
-        // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
-        // must NOT have the constraint silently dropped (that leaked cross-department / cross-citizen
-        // data on the events & daily grains, which lack these columns). Reject instead.
-        if (scope.citizenUuid != null) {
+
+        if (!scope.citizenUuids.isEmpty()) {
             if (g.citizenColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce citizen self-scope");
-            conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid);
+            conj.add(g.citizenColumn + " IN (" + placeholders(scope.citizenUuids.size()) + ")");
+            params.addAll(scope.citizenUuids);
         }
-        if (scope.boundaryPrefix != null) {
-            if (g.boundaryColumn == null)
-                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
-            conj.add(g.boundaryColumn + " LIKE ?");
-            params.add(escapeLikeLiteral(scope.boundaryPrefix) + "%");
-        }
-        // department scope: restrict to the union of the principal's HRMS assignment departments.
-        // NULL department_code rows won't match an IN list → correctly excluded.
-        if (scope.departmentCodes != null && !scope.departmentCodes.isEmpty()) {
+
+        // null = the axis is unrestricted; a non-null EMPTY list = restricted to nothing, which is
+        // a deny, never a skipped predicate.
+        if (scope.departmentCodes != null) {
             if (g.departmentColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce department scope");
-            String placeholders = scope.departmentCodes.stream().map(x -> "?").collect(Collectors.joining(", "));
-            conj.add(g.departmentColumn + " IN (" + placeholders + ")");
-            params.addAll(scope.departmentCodes);
+            if (scope.departmentCodes.isEmpty()) {
+                conj.add("1 = 0");
+            } else {
+                // A NULL department_code never matches an IN list, so unclassified rows stay out.
+                conj.add(g.departmentColumn + " IN (" + placeholders(scope.departmentCodes.size()) + ")");
+                params.addAll(scope.departmentCodes);
+            }
+        }
+
+        if (scope.jurisdictionCodes != null) {
+            if (g.boundaryColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
+            if (scope.jurisdictionCodes.isEmpty()) {
+                conj.add("1 = 0");
+            } else {
+                // boundary_path is a '|'-joined ancestor chain, so a row is inside a jurisdiction
+                // exactly when that code is one of its SEGMENTS. Splitting the path and comparing
+                // segments for equality makes that a delimiter-safe test by construction: a prefix
+                // LIKE would let jurisdiction `WARD_1` swallow `WARD_10`, and a substring match
+                // would let it swallow any code that merely contains it.
+                conj.add("EXISTS (SELECT 1 FROM unnest(string_to_array(" + g.boundaryColumn
+                        + ", '|')) AS seg WHERE seg IN (" + placeholders(scope.jurisdictionCodes.size()) + "))");
+                params.addAll(scope.jurisdictionCodes);
+            }
         }
     }
 
-    /** Escape caller-controlled text before appending a SQL LIKE wildcard. */
+    private static String placeholders(int count) {
+        return String.join(", ", Collections.nCopies(count, "?"));
+    }
+
+    /** Escape server-derived text before appending a SQL LIKE wildcard. */
     static String escapeLikeLiteral(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }

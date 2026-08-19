@@ -87,25 +87,24 @@ public class KpiCatalogService {
     }
 
     /**
-     * Returns all published KpiDefinitions that are visible to the given caller roles,
-     * scoped to the state-root tenant derived from tenantId.
-     * Returns an empty list (never throws) when the dss module does not exist in MDMS.
+     * Every published KpiDefinition this caller's resolved capabilities reach, from the state-root
+     * tenant derived from {@code tenantId}. Returns an empty list (never throws) when the dss
+     * module does not exist in MDMS.
      */
-    public List<KpiDefinition> getVisibleDefs(String tenantId, Set<String> callerRoles) {
+    public List<KpiDefinition> getVisibleDefs(String tenantId, AnalyticsAccess access) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         List<KpiDefinition> all = fetchDefs(stateRoot);
         return all.stream()
                 .filter(KpiDefinition::isPublished)
-                .filter(d -> d.isVisibleTo(callerRoles))
+                .filter(access::canSee)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Returns the first DashboardPack whose roles overlap the caller's roles, searching
-     * from MDMS for the state-root tenant. Returns Optional.empty() when none match or
-     * when the dss module does not exist.
+     * The first DashboardPack this caller's capabilities select, from MDMS for the state-root
+     * tenant. Returns Optional.empty() when none match or when the dss module does not exist.
      */
-    public Optional<DashboardPack> getBestPack(String tenantId, Set<String> callerRoles,
+    public Optional<DashboardPack> getBestPack(String tenantId, AnalyticsAccess access,
                                                List<KpiDefinition> visibleDefs) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         Set<String> visibleIds = visibleDefs.stream()
@@ -113,7 +112,7 @@ public class KpiCatalogService {
                 .collect(Collectors.toSet());
 
         return fetchPacks(stateRoot).stream()
-                .filter(p -> p.matchesRoles(callerRoles))
+                .filter(access::canSee)
                 // Filter pack tiles down to only what the caller can actually see
                 .peek(p -> {
                     if (p.getTiles() != null)
@@ -127,8 +126,9 @@ public class KpiCatalogService {
     }
 
     /**
-     * Returns a single KpiDefinition by id (no visibility check — the caller must apply
-     * isVisibleTo separately). Returns Optional.empty() when not found or MDMS unavailable.
+     * A single KpiDefinition by id, with NO visibility check — the caller must apply
+     * {@link AnalyticsAccess#canSee} separately. Returns Optional.empty() when not found or MDMS
+     * is unavailable.
      */
     public Optional<KpiDefinition> getDef(String kpiId, String tenantId) {
         String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);

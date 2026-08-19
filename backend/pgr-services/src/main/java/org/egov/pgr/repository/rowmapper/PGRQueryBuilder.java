@@ -1,7 +1,7 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,21 +49,21 @@ public class PGRQueryBuilder {
 
 
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList) {
-        return getPGRSearchQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+        return getPGRSearchQuery(criteria, preparedStmtList, null, PgrRowScope.UNRESTRICTED);
     }
 
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla) {
-        return getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, PgrSearchScope.UNRESTRICTED);
+        return getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, PgrRowScope.UNRESTRICTED);
     }
 
     /**
      * @param scope server-derived RBAC restriction (citizen-self / employee-department), or
-     *              {@link PgrSearchScope#UNRESTRICTED} for an explicitly-approved unrestricted
+     *              {@link PgrRowScope#UNRESTRICTED} for an explicitly-approved unrestricted
      *              caller (e.g. plainSearch). NEVER sourced from client-controlled request fields
-     *              — see {@link org.egov.pgr.policy.SearchAccessPolicyService}. Never pass
+     *              — see {@link org.egov.pgr.service.SearchAccessService}. Never pass
      *              {@code null}: see {@link #applyScope}.
      */
-    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope) {
+    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrRowScope scope) {
 
         StringBuilder builder = buildFilteredQuery(criteria, preparedStmtList, scope);
 
@@ -79,7 +79,7 @@ public class PGRQueryBuilder {
      * query — deliberately WITHOUT ordering or pagination, since a count must reflect the full
      * scoped result set regardless of the requested page/limit.
      */
-    private StringBuilder buildFilteredQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, PgrSearchScope scope) {
+    private StringBuilder buildFilteredQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, PgrRowScope scope) {
 
         StringBuilder builder = new StringBuilder(QUERY);
 
@@ -98,9 +98,12 @@ public class PGRQueryBuilder {
                 String[] tenantIdChunks = tenantId.split("\\.");
 
                 if (tenantIdChunks.length == config.getStateLevelTenantIdLength()) {
+                    // Same delimiter-safety as the scope's SUBTREE predicate below: a bare
+                    // `LIKE 'pg%'` also matches the unrelated tenant `pgx.city`.
                     addClauseIfRequired(preparedStmtList, builder);
-                    builder.append(" ser.tenantid LIKE ? ");
-                    preparedStmtList.add(criteria.getTenantId() + '%');
+                    builder.append(" (ser.tenantid = ? OR ser.tenantid LIKE ?) ");
+                    preparedStmtList.add(tenantId);
+                    preparedStmtList.add(escapeLikeLiteral(tenantId) + ".%");
                 } else {
                     addClauseIfRequired(preparedStmtList, builder);
                     builder.append(" ser.tenantid=? ");
@@ -220,48 +223,61 @@ public class PGRQueryBuilder {
         return builder;
     }
 
+    /** Escapes LIKE metacharacters in server-derived text before a wildcard is appended to it. */
+    static String escapeLikeLiteral(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
     /**
      * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
-     * department-scope, and — per {@link PgrSearchScope}'s own Javadoc — the tenant axis itself),
+     * department-scope, and — per {@link PgrRowScope}'s own Javadoc — the tenant axis itself),
      * plus PGR search's own jurisdiction axis (exact-match on the complaint's address locality —
-     * see {@code PgrSearchScope#jurisdictionCodes}, distinct from the analytics module's own
+     * see {@code PgrRowScope#jurisdictionCodes}, distinct from the analytics module's own
      * hierarchical {@code boundaryPrefix}, which stays unwired here).
      *
      * <p>{@code scope == null} is fail-closed, not "unrestricted": a missing scope on this path is
      * a wiring bug (a caller forgot to resolve/pass one), and silently treating that as no
      * restriction is exactly the RBAC hole this method exists to prevent. An intentionally
      * unrestricted caller (plainSearch, internal fetch-by-id/update-reconciliation) must pass
-     * {@link PgrSearchScope#UNRESTRICTED} explicitly.
+     * {@link PgrRowScope#UNRESTRICTED} explicitly.
      */
-    private void applyScope(PgrSearchScope scope, StringBuilder builder, List<Object> preparedStmtList) {
+    private void applyScope(PgrRowScope scope, StringBuilder builder, List<Object> preparedStmtList) {
         if (scope == null)
             throw new IllegalStateException("PGRQueryBuilder: scope must not be null on a scoped search/count "
-                    + "path — pass PgrSearchScope.UNRESTRICTED explicitly for an approved unrestricted caller.");
+                    + "path — pass PgrRowScope.UNRESTRICTED explicitly for an approved unrestricted caller.");
 
-        if (scope == PgrSearchScope.UNRESTRICTED)
+        if (scope == PgrRowScope.UNRESTRICTED)
             return;
 
-        // The tenant this scope was authorized against (see PolicyDrivenScopeResolver, which
-        // validates the requested tenant against the caller's own tenant/subtree before ever
+        // The tenant this scope was authorized against (resolved server-side by egov-accesscontrol,
+        // which validates the requested tenant against the caller's own tenant/subtree before ever
         // producing a non-deny scope) — applied here rather than trusted solely from
         // criteria.getTenantId() above, so an authorization decision always reaches SQL as data,
         // never just as an unchecked echo of client input.
         if (scope.tenantId != null) {
             addClauseIfRequired(preparedStmtList, builder);
-            if (scope.tenantStateLevel) {
-                builder.append(" ser.tenantId LIKE ? ");
-                preparedStmtList.add(scope.tenantId + '%');
+            if (scope.tenantSubtree) {
+                // The subtree is the tenant ITSELF plus everything under a '.' beneath it. A bare
+                // `LIKE value || '%'` also matches a SIBLING whose id merely starts with the same
+                // characters — `pg.foo` would match `pg.foobar` — which is a cross-tenant read, so
+                // the delimiter has to be part of the pattern. Underscores and percent signs in a
+                // tenant id are escaped for the same reason: unescaped, `_` matches any character.
+                builder.append(" (ser.tenantId = ? OR ser.tenantId LIKE ?) ");
+                preparedStmtList.add(scope.tenantId);
+                preparedStmtList.add(escapeLikeLiteral(scope.tenantId) + ".%");
             } else {
                 builder.append(" ser.tenantId = ? ");
                 preparedStmtList.add(scope.tenantId);
             }
         }
 
-        if (scope.citizenUuid != null) {
+        // citizenUuids uses empty-vs-non-empty (not null-vs-empty): an empty list IS "no ownership
+        // restriction" per the PDP's own ResolvedScope#citizenUuids contract — see PgrRowScope.
+        if (!CollectionUtils.isEmpty(scope.citizenUuids)) {
             addClauseIfRequired(preparedStmtList, builder);
-            builder.append(" ser.accountId = ? ");
-            preparedStmtList.add(scope.citizenUuid);
+            builder.append(" ser.accountId IN (").append(createQuery(scope.citizenUuids)).append(")");
+            addToPreparedStatement(preparedStmtList, scope.citizenUuids);
         }
 
         // null vs empty is deliberately NOT collapsed via CollectionUtils.isEmpty here: null means
@@ -294,14 +310,14 @@ public class PGRQueryBuilder {
 
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList){
-        return getCountQuery(criteria, preparedStmtList, null, PgrSearchScope.UNRESTRICTED);
+        return getCountQuery(criteria, preparedStmtList, null, PgrRowScope.UNRESTRICTED);
     }
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla){
-        return getCountQuery(criteria, preparedStmtList, serviceCodeToSla, PgrSearchScope.UNRESTRICTED);
+        return getCountQuery(criteria, preparedStmtList, serviceCodeToSla, PgrRowScope.UNRESTRICTED);
     }
 
-    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrSearchScope scope){
+    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, PgrRowScope scope){
         StringBuilder builder = buildFilteredQuery(criteria, preparedStmtList, scope);
         return COUNT_WRAPPER.replace("{INTERNAL_QUERY}", builder.toString());
     }

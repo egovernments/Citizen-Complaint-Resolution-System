@@ -2,13 +2,11 @@ package org.egov.pgr.service;
 
 import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.IdGenRepository;
 import org.egov.pgr.util.PGRUtils;
@@ -36,15 +34,12 @@ public class EnrichmentService {
 
     private UserService userService;
 
-    private PrincipalScopeResolver principalScopeResolver;
-
     @Autowired
-    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService, PrincipalScopeResolver principalScopeResolver) {
+    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService) {
         this.utils = utils;
         this.idGenRepository = idGenRepository;
         this.config = config;
         this.userService = userService;
-        this.principalScopeResolver = principalScopeResolver;
     }
 
 
@@ -144,37 +139,33 @@ public class EnrichmentService {
     }
 
     /**
-     * Derives record-level ownership scoping (userIds) for a search. Split out of
+     * Derives the mobileNumber-lookup half of a search's userIds. Split out of
      * {@link #enrichSearchRequest} so the /_count path can apply the SAME scoping without also
      * picking up the pagination defaults — the count query wraps the search query including its
      * LIMIT, so defaulting the limit there would cap the returned count.
+     *
+     * <p>Record-level OWNERSHIP (a citizen may only see their own complaints) is no longer decided
+     * here: it comes entirely from egov-accesscontrol's resolved scope ({@code citizenUuids}),
+     * applied as a SQL predicate alongside everything else in {@code PGRQueryBuilder#applyScope}.
+     * This method only ever narrows {@code userIds} to a mobileNumber's matching accounts — safe
+     * regardless of who's asking, because that access-control ownership predicate is ANDed with it:
+     * a citizen who submits someone else's mobileNumber gets an empty intersection, never their
+     * complaints, and never a stranger's.
      *
      * @param requestInfo the authenticated principal
      * @param criteria the search criteria, mutated in place
      */
     public void scopeSearchCriteria(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
-        // userIds is the ownership axis (`ser.accountId IN (userIds)`) and is derived here from the
-        // authenticated principal — it is NEVER an input. RequestsApiController's @InitBinder already
+        // userIds is the mobileNumber-lookup axis (`ser.accountId IN (userIds)`) and is derived here
+        // from the search criteria — it is NEVER an input. RequestsApiController's @InitBinder already
         // disallows binding it (@JsonIgnore alone does NOT stop @ModelAttribute query-param binding),
         // so this is the service-layer backstop: any entry point added without that binder config
         // would otherwise let a client-supplied userIds ride straight into the clause. Clearing it
-        // here keeps ownership true by construction rather than by convention.
+        // here keeps this axis true by construction rather than by convention.
         criteria.setUserIds(null);
 
-        // CCRS #1071: a pure citizen may only see their OWN complaints. Force userIds to the
-        // authenticated uuid and drop any client-supplied mobileNumber. Without this a citizen could
-        // search by another user's mobileNumber (reading their complaints — an IDOR) or omit all
-        // filters and read every complaint (unscoped). Employees / internal principals are unaffected
-        // and may still look up complaints by mobileNumber.
-        if (principalScopeResolver.isPureCitizen(requestInfo)) {
-            criteria.setUserIds(Collections.singleton(requestInfo.getUserInfo().getUuid()));
-            criteria.setMobileNumber(null);
-        } else if (criteria.getMobileNumber() != null) {
-            // Derive the tenant for the mobileNumber -> userIds lookup. isPureCitizen() already
-            // returned false — which INCLUDES the null RequestInfo/UserInfo case — so guard the
-            // fallback to UserInfo.getTenantId() against an NPE, and skip enrichment when no
-            // tenant can be resolved (rather than crash). Valid requests are unaffected.
+        if (criteria.getMobileNumber() != null) {
             String tenantId = criteria.getTenantId();
             if (tenantId == null && requestInfo != null && requestInfo.getUserInfo() != null) {
                 tenantId = requestInfo.getUserInfo().getTenantId();

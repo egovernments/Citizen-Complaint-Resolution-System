@@ -1,9 +1,8 @@
 package org.egov.pgr.service;
 
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.policy.FieldVisibilityService;
-import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -56,8 +55,7 @@ public class PGRServiceCountScopingTest {
     @Mock private PGRUtils pgrUtils;
     @Mock private ExtendedAttributesValidationService extendedAttributesValidationService;
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
-    @Mock private SearchAccessPolicyService searchAccessPolicyService;
-    @Mock private FieldVisibilityService fieldVisibilityService;
+    @Mock private SearchAccessService searchAccessService;
 
     private PGRService pgrService;
 
@@ -66,7 +64,7 @@ public class PGRServiceCountScopingTest {
         pgrService = new PGRService(enrichmentService, userService, workflowService,
                 serviceRequestValidator, validator, producer, config, repository, mdmsUtils,
                 complaintDomainEventService, pgrUtils, extendedAttributesValidationService,
-                encryptionDecryptionService, searchAccessPolicyService, fieldVisibilityService);
+                encryptionDecryptionService, searchAccessService);
     }
 
     private RequestInfo requestInfo() {
@@ -102,8 +100,15 @@ public class PGRServiceCountScopingTest {
         verify(repository, never()).getCount(any(), any());
     }
 
+    /** Every count path goes through one resolved scope; these tests exercise what comes after it. */
+    private void givenUnrestrictedScope() {
+        when(searchAccessService.resolveScope(any(), any()))
+                .thenReturn(SearchAccessService.ScopeResolution.of(PgrRowScope.UNRESTRICTED));
+    }
+
     @Test
     void count_mobileNumberResolvingToUser_counts() {
+        givenUnrestrictedScope();
         RequestSearchCriteria criteria = new RequestSearchCriteria();
         criteria.setTenantId("mz.maputo");
         criteria.setMobileNumber("9999999999");
@@ -119,6 +124,7 @@ public class PGRServiceCountScopingTest {
 
     @Test
     void count_scopedNonEmptyCriteria_validatesScopesAndCounts() {
+        givenUnrestrictedScope();
         RequestSearchCriteria criteria = new RequestSearchCriteria();
         criteria.setTenantId("mz.maputo");
         when(repository.getCount(any(), any())).thenReturn(50);

@@ -4,11 +4,8 @@ package org.egov.pgr.service;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.accesscontrol.ResourceEvaluationResponse;
 import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.policy.AccessPolicyRegistry;
-import org.egov.pgr.policy.FieldVisibilityService;
-import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -65,9 +62,7 @@ public class PGRService {
 
     private EncryptionDecryptionService encryptionDecryptionService;
 
-    private SearchAccessPolicyService searchAccessPolicyService;
-
-    private FieldVisibilityService fieldVisibilityService;
+    private SearchAccessService searchAccessService;
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
@@ -76,8 +71,7 @@ public class PGRService {
                       ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
                       ExtendedAttributesValidationService extendedAttributesValidationService,
                       EncryptionDecryptionService encryptionDecryptionService,
-                      SearchAccessPolicyService searchAccessPolicyService,
-                      FieldVisibilityService fieldVisibilityService) {
+                      SearchAccessService searchAccessService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -91,8 +85,7 @@ public class PGRService {
         this.pgrUtils = pgrUtils;
         this.extendedAttributesValidationService = extendedAttributesValidationService;
         this.encryptionDecryptionService = encryptionDecryptionService;
-        this.searchAccessPolicyService = searchAccessPolicyService;
-        this.fieldVisibilityService = fieldVisibilityService;
+        this.searchAccessService = searchAccessService;
     }
 
 
@@ -166,7 +159,9 @@ public class PGRService {
             return new ArrayList<>();
 
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
+        SearchAccessService.ScopeResolution resolution = searchAccessService.resolveScope(requestInfo, tenantIdForScope);
+        if (resolution.denyAll)
+            return new ArrayList<>();
 
         if (criteria.getAssignee() != null) {
             String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
@@ -180,12 +175,13 @@ public class PGRService {
 
         criteria.setIsPlainSearch(false);
 
-        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria, scope);
+        List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria, resolution.scope);
 
         if(CollectionUtils.isEmpty(serviceWrappers))
             return new ArrayList<>();;
 
-        serviceWrappers = searchAccessPolicyService.enforce(requestInfo, tenantIdForScope, scope, serviceWrappers);
+        ResourceEvaluationResponse decisions = searchAccessService.evaluate(requestInfo, tenantIdForScope, serviceWrappers);
+        serviceWrappers = searchAccessService.dropDenied(serviceWrappers, decisions);
 
         if(CollectionUtils.isEmpty(serviceWrappers))
             return new ArrayList<>();
@@ -197,8 +193,7 @@ public class PGRService {
                 : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
-        fieldVisibilityService.apply(requestInfo, tenantIdForScope, scope,
-                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "complaint", enrichedServiceWrappers);
+        searchAccessService.applyMasks(enrichedServiceWrappers, decisions);
 
         // NOTE: do not re-sort enrichedServiceWrappers here. It used to be
         // regrouped into a createdTime-descending TreeMap unconditionally,
@@ -318,8 +313,10 @@ public class PGRService {
 
         criteria.setIsPlainSearch(false);
         String tenantIdForScope = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-        PgrSearchScope scope = searchAccessPolicyService.resolveScope(requestInfo, tenantIdForScope, config.getStateLevelTenantIdLength());
-        Integer count = repository.getCount(criteria, scope);
+        SearchAccessService.ScopeResolution resolution = searchAccessService.resolveScope(requestInfo, tenantIdForScope);
+        if (resolution.denyAll)
+            return 0;
+        Integer count = repository.getCount(criteria, resolution.scope);
         return count;
     }
 
@@ -353,12 +350,11 @@ public class PGRService {
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
         // plainSearch stays record-level unrestricted (see PGRRepository/PGRQueryBuilder — no scope
-        // threaded into the query) AND, deliberately, unrestricted at the field-visibility level too:
-        // _plainsearch is a distinct endpoint from _search and must not reuse _search's
-        // ACCESSCONTROL-ACTIONS-TEST action/policy (id 2008) for field masking here — that policy's
-        // scope/attributes were authored for _search's semantics, not this endpoint's. If
-        // _plainsearch needs field-level masking, it needs its own action + policy end-to-end
-        // (row AND field), not a borrowed one.
+        // threaded into the query) AND, deliberately, unrestricted at the field-visibility level
+        // too. _plainsearch is a distinct endpoint from _search and must not borrow _search's
+        // action: that policy's scope and attributes were authored for _search's semantics, not
+        // this endpoint's. If _plainsearch ever needs masking, it needs its own action and policy
+        // end to end — row and field — authored for what it actually does.
 
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){

@@ -2,9 +2,6 @@ package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.common.contract.request.User;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -43,15 +40,9 @@ public class AnalyticsServiceCalendarTest {
     @Mock private AnalyticsPlanner planner;
     @Mock private JdbcTemplate jdbc;
     @Mock private KpiCatalogService kpiCatalogService;
-    @Mock private PrincipalScopeResolver scopeResolver;
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
-    }
-
-    private RequestInfo requestInfoWithRole(String role) {
-        User u = User.builder().uuid("u1").roles(List.of(Role.builder().code(role).build())).build();
-        return RequestInfo.builder().userInfo(u).build();
     }
 
     // ---- batch: one resolved zone + one request clock reading, shared by every entry ----
@@ -59,7 +50,7 @@ public class AnalyticsServiceCalendarTest {
     @Test
     public void batchEntriesShareExactlyOneCalendarAndOneAsOfResolution() {
         AnalyticsService service = new AnalyticsService(planner, null, jdbc, kpiCatalogService,
-                scopeResolver, null, new AnalyticsMetrics(), null);
+                null, new AnalyticsMetrics(), null);
 
         long fixedAsOf = 1_700_000_000_000L;   // deliberately stale fact refresh timestamp
         long fixedNow = 1_718_442_000_000L;    // request wall clock
@@ -67,8 +58,6 @@ public class AnalyticsServiceCalendarTest {
         when(jdbc.queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class)))
                 .thenReturn(fixedAsOf);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
-        when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
@@ -79,7 +68,7 @@ public class AnalyticsServiceCalendarTest {
                 + "\"c\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}"
                 + "}}");
 
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, AnalyticsAccessFixtures.full(), "ke", 1);
 
         // resolveTimeZone and the asOf query each fire exactly once per request, not once per entry.
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
@@ -110,21 +99,19 @@ public class AnalyticsServiceCalendarTest {
     @Test
     public void emptyFactsKeepNullableAsOfWithoutBreakingRequestCalendar() {
         AnalyticsService service = new AnalyticsService(planner, null, jdbc, kpiCatalogService,
-                scopeResolver, null, new AnalyticsMetrics(), null);
+                null, new AnalyticsMetrics(), null);
         long fixedNow = 1_718_442_000_000L;
         ReflectionTestUtils.setField(service, "requestClock", (LongSupplier) () -> fixedNow);
 
         when(jdbc.queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class)))
                 .thenReturn((Long) null);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
-        when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, AnalyticsAccessFixtures.full(), "ke", 1);
 
         assertTrue(out.containsKey("asOf"));
         assertNull(out.get("asOf"));
@@ -136,19 +123,17 @@ public class AnalyticsServiceCalendarTest {
     @Test
     public void singleQueryArmAlsoResolvesTheCalendarExactlyOnce() {
         AnalyticsService service = new AnalyticsService(planner, null, jdbc, kpiCatalogService,
-                scopeResolver, null, new AnalyticsMetrics(), null);
+                null, new AnalyticsMetrics(), null);
 
         when(jdbc.queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class)))
                 .thenReturn(1_700_000_000_000L);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Africa/Nairobi"));
-        when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        service.query(body, AnalyticsAccessFixtures.full(), "ke", 1);
 
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
         verify(jdbc, times(1)).queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class));
@@ -162,7 +147,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void dailyAvgFromWeeklyDividesByElapsedDaysSinceSundayWeekStart() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         // 2024-06-19 is a Wednesday; the FE-semantic Sunday week start is 2024-06-16.
         // elapsed = floor((Wed 15:00 - Sun 00:00) / 1 day) = 3 (Sun->Mon->Tue->Wed is 3 full days, + 15h).
         BusinessCalendar cal = calAt(ZoneId.of("Africa/Nairobi"), 2024, 6, 19, 15);
@@ -176,7 +161,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void dailyAvgFromWeeklyWithoutElapsedFlagIsNull() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         BusinessCalendar cal = calAt(ZoneId.of("Africa/Nairobi"), 2024, 6, 19, 15);
         JsonNode compose = json("{\"type\":\"dailyAvgFromWeekly\"}");
         assertNull(service.computeCompose("dailyAvgFromWeekly", compose, List.of(Map.of("total", 70.0)), cal));
@@ -184,7 +169,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void hourlyAvgFromDailyDividesByElapsedHoursSinceMidnight() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         BusinessCalendar cal = calAt(ZoneId.of("Asia/Kolkata"), 2024, 6, 15, 15);   // 15:00 local
         assertEquals(15L, service.elapsedHoursSinceStartOfDay(cal));
 
@@ -195,7 +180,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void elapsedTimesAreClampedToAtLeastOne() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         // Just after midnight: both elapsed-day and elapsed-hour must floor to >= 1, never 0
         // (a 0 divisor would blow up the *_Avg ratio).
         BusinessCalendar justAfterMidnight = BusinessCalendar.of(ZoneId.of("Africa/Nairobi"),
@@ -206,7 +191,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void openRateComplementUsesPctThenFallsBackToTotal() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         BusinessCalendar cal = calAt(ZoneId.of("Africa/Nairobi"), 2024, 6, 15, 12);
         JsonNode compose = json("{\"type\":\"openRateComplement\"}");
         assertEquals(75.0, service.computeCompose("openRateComplement", compose, List.of(Map.of("pct", 0.25)), cal), 1e-9);
@@ -215,7 +200,7 @@ public class AnalyticsServiceCalendarTest {
 
     @Test
     public void netBacklogDailyIsInflowMinusOutflow() {
-        AnalyticsService service = new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
+        AnalyticsService service = new AnalyticsService(null, null, null, null, null, new AnalyticsMetrics(), null);
         BusinessCalendar cal = calAt(ZoneId.of("Africa/Nairobi"), 2024, 6, 15, 12);
         JsonNode compose = json("{\"type\":\"netBacklogDaily\"}");
         Double v = service.computeCompose("netBacklogDaily", compose,

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.accesscontrol.PgrRowScope;
 import org.egov.pgr.repository.rowmapper.DocumentRowMapper;
 import org.egov.pgr.repository.rowmapper.PGRQueryBuilder;
 import org.egov.pgr.repository.rowmapper.PGRRowMapper;
@@ -74,19 +74,19 @@ public class PGRRepository {
      * @return
      */
     public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria){
-        return getServiceWrappers(criteria, PgrSearchScope.UNRESTRICTED);
+        return getServiceWrappers(criteria, PgrRowScope.UNRESTRICTED);
     }
 
     /**
      * searches services based on search criteria, restricted to the given (server-derived, never
-     * client-controlled) RBAC scope. {@link PgrSearchScope#UNRESTRICTED} applies no additional
+     * client-controlled) RBAC scope. {@link PgrRowScope#UNRESTRICTED} applies no additional
      * restriction — used by plainSearch (intentionally cross-tenant) and internal fetch-by-id
      * callers (update-reconciliation), never by omission/null.
      * @param criteria
      * @param scope
      * @return
      */
-    public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria, PgrSearchScope scope){
+    public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria, PgrRowScope scope){
         List<Service> services = getServices(criteria, scope);
         List<String> serviceRequestids = services.stream().map(Service::getServiceRequestId).collect(Collectors.toList());
         Map<String, Workflow> idToWorkflowMap = new HashMap<>();
@@ -105,17 +105,17 @@ public class PGRRepository {
      * @return
      */
     public List<Service> getServices(RequestSearchCriteria criteria) {
-        return getServices(criteria, PgrSearchScope.UNRESTRICTED);
+        return getServices(criteria, PgrRowScope.UNRESTRICTED);
     }
 
     /**
      * searches services based on search criteria, restricted to the given RBAC scope
-     * ({@link PgrSearchScope#UNRESTRICTED} = no restriction, never null).
+     * ({@link PgrRowScope#UNRESTRICTED} = no restriction, never null).
      * @param criteria
      * @param scope
      * @return
      */
-    public List<Service> getServices(RequestSearchCriteria criteria, PgrSearchScope scope) {
+    public List<Service> getServices(RequestSearchCriteria criteria, PgrRowScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
@@ -160,17 +160,17 @@ public class PGRRepository {
      * @return
      */
     public Integer getCount(RequestSearchCriteria criteria) {
-        return getCount(criteria, PgrSearchScope.UNRESTRICTED);
+        return getCount(criteria, PgrRowScope.UNRESTRICTED);
     }
 
     /**
      * Returns the count based on the search criteria, restricted to the given RBAC scope
-     * ({@link PgrSearchScope#UNRESTRICTED} = no restriction, never null).
+     * ({@link PgrRowScope#UNRESTRICTED} = no restriction, never null).
      * @param criteria
      * @param scope
      * @return
      */
-    public Integer getCount(RequestSearchCriteria criteria, PgrSearchScope scope) {
+    public Integer getCount(RequestSearchCriteria criteria, PgrRowScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
