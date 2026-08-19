@@ -36,8 +36,9 @@ describe('upsertMapConfig tenant guard', () => {
         schemaCode: SCHEMA,
         uniqueIdentifier: 'DEFAULT',
         isActive: true,
-        // This is also the shape Phase 2 sees after default-data-handler seeds
-        // a tenant: presentation defaults exist, while geometry does not yet.
+        // Presentation values already set, geometry not yet — the shape a
+        // tenant carries once it owns a row (state root after the
+        // default-data-handler seed, or a city after an earlier Phase 2).
         data: { code: 'DEFAULT', baseMapTheme: 'voyager', wardHighlightColor: '#111111' },
         auditDetails: { createdBy: 'x' },
       },
@@ -83,6 +84,39 @@ describe('upsertMapConfig tenant guard', () => {
     // ...and the new record is keyed on the stable singleton key, never a value.
     expect(body.Mdms.data.code).toBe('DEFAULT');
     expect(body.Mdms.uniqueIdentifier).toBe('DEFAULT');
+  });
+
+  it('carries the root-seeded presentation defaults into a new city record', async () => {
+    // Production shape after the default-data-handler seeds the state root
+    // only: the city owns nothing, so its search returns the root's DEFAULT
+    // row. Phase 2 must shadow it while keeping the seeded tiles/ward colour —
+    // that inheritance is why the seed is NOT replayed per tenant.
+    searchReturns([
+      {
+        id: 'root-seed',
+        tenantId: 'ke',
+        schemaCode: SCHEMA,
+        uniqueIdentifier: 'DEFAULT',
+        isActive: true,
+        data: { code: 'DEFAULT', baseMapTheme: 'voyager', wardHighlightColor: '#FFA74F' },
+      },
+    ]);
+
+    await mdmsService.upsertMapConfig('ke.bomet', {
+      boundaryTenantId: 'ke.bomet',
+      defaultZoom: 12,
+    });
+
+    const [url, body] = lastCall();
+    expect(url).toContain('_create');
+    expect(body.Mdms.tenantId).toBe('ke.bomet');
+    expect(body.Mdms.data).toMatchObject({
+      code: 'DEFAULT',
+      baseMapTheme: 'voyager',
+      wardHighlightColor: '#FFA74F',
+      boundaryTenantId: 'ke.bomet',
+      defaultZoom: 12,
+    });
   });
 
   it('creates a fresh record when the tenant has none at all', async () => {
