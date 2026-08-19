@@ -37,6 +37,19 @@ const renderTenantLogos = (stateInfo, tenants) => {
   });
 };
 
+// State-level tenant onboarding can leave more than one common-masters.StateInfo
+// row visible for a given search (e.g. one for the parent root tenant and one
+// for the child state tenant). `code` is the uppercase root tenant code, so
+// match it against the tenant actually being loaded instead of assuming the
+// first array entry belongs to this tenant; fall back to [0] when nothing
+// matches so single-record deployments keep working unchanged.
+const pickStateInfo = (stateInfoList, stateCode) => {
+  const list = stateInfoList || [];
+  return (
+    list.find((info) => info?.code?.toUpperCase() === stateCode?.toUpperCase()) || list[0] || {}
+  );
+};
+
 export const StoreService = {
   getInitData: () => {
     return Storage.get("initData");
@@ -68,7 +81,7 @@ export const StoreService = {
       // return;
     }
     const { MdmsRes } = await MdmsService.init(stateCode);
-    const stateInfo = MdmsRes["common-masters"]?.StateInfo?.[0] || {};
+    const stateInfo = pickStateInfo(MdmsRes["common-masters"]?.StateInfo, stateCode);
     const uiHomePage = MdmsRes["common-masters"]?.uiHomePage?.[0] || {};
     return {
       languages: stateInfo.hasLocalisation ? stateInfo.languages : [{ label: "ENGLISH", value: Digit.Utils.getDefaultLanguage() }],
@@ -92,7 +105,7 @@ export const StoreService = {
   digitInitData: async (stateCode, enabledModules, modulePrefix) => {
 
     const { MdmsRes } = await MdmsService.init(stateCode);
-    const stateInfo = MdmsRes["common-masters"]?.StateInfo?.[0] || {};
+    const stateInfo = pickStateInfo(MdmsRes["common-masters"]?.StateInfo, stateCode);
     const uiHomePage = MdmsRes["common-masters"]?.uiHomePage?.[0] || {};
 
     const themeConfig = MdmsRes["common-masters"]?.ThemeConfig?.[0];
