@@ -55,11 +55,38 @@ public class ServiceRequestValidator {
         Map<String,String> errorMap = new HashMap<>();
         validateUserData(request,errorMap);
         validateSource(request.getService().getSource());
+        validateDescription(request, errorMap);
         validateBoundary(request);
         validateMDMS(request, mdmsData);
         if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
         if(!errorMap.isEmpty())
             throw new CustomException(errorMap);
+    }
+
+
+    /**
+     * Validates the complaint description carries meaningful content, not just
+     * digits/whitespace (e.g. "000000000000000000"). Unconditional — unlike
+     * ExtendedAttributesValidationService's own description check, which only
+     * runs for complaints using the extended-attributes template feature, this
+     * runs for every complaint. Mirrors the citizen UI's own validation
+     * (CreateComplaintConfig.js) so it can't be bypassed by calling the create
+     * API directly.
+     * @param request The request of creating a complaint
+     * @param errorMap HashMap to capture any errors
+     */
+    private void validateDescription(ServiceRequest request, Map<String, String> errorMap){
+
+        String description = request.getService().getDescription();
+
+        if(description == null || description.isBlank()){
+            errorMap.put("DESCRIPTION_REQUIRED","description is mandatory");
+            return;
+        }
+
+        if(!description.matches("^(?=(?:[\\s\\S]*?\\p{L}){3})[\\s\\S]+$"))
+            errorMap.put("DESCRIPTION_INVALID","description must contain meaningful text (at least 3 letters)");
+
     }
 
 
