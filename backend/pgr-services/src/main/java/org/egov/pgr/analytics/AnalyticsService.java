@@ -7,6 +7,7 @@ import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.egov.pgr.analytics.model.KpiDefinition;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -70,7 +71,7 @@ public class AnalyticsService {
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
     private final KpiCatalogService kpiCatalogService;
-    private final PrincipalScopeResolver scopeResolver;
+    private final AnalyticsRowScopeResolver scopeResolver;
     private final KpiQueryComposer queryComposer;
     private final AnalyticsMetrics metrics;
     private final PGRConfiguration config;
@@ -79,7 +80,7 @@ public class AnalyticsService {
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
-                            KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
+                            KpiCatalogService kpiCatalogService, AnalyticsRowScopeResolver scopeResolver,
                             KpiQueryComposer queryComposer, AnalyticsMetrics metrics,
                             PGRConfiguration config){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
@@ -116,7 +117,9 @@ public class AnalyticsService {
                                        int stateLevelLen, QueryTelemetry tel){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         if (body.has("queries")) validateBatchSize(body.get("queries"));
-        AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
+        // Action 2008's authored policy, resolved by the ABAC engine — the identical scope
+        // /v2/request/_search runs under, so the two surfaces cannot disagree about a caller.
+        PgrSearchScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
         boolean publicFloor = isPublicFloor(callerRoles);
 
@@ -336,7 +339,7 @@ public class AnalyticsService {
      * with the kpiId path). Ports the 4 ops from the FE {@code composeKpi.js}: {@code dailyAvgFromWeekly},
      * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
      */
-    private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
+    private Map<String,Object> maybeComposeResult(JsonNode queryNode, PgrSearchScope scope,
                                                   String tenantId, Set<String> callerRoles,
                                                   QueryTelemetry tel, String entryName,
                                                   BusinessCalendar calendar) {
@@ -542,7 +545,7 @@ public class AnalyticsService {
      *                  single arm); compose sources share their composed entry's name
      * @param kpiId     the resolved KPI id, or {@code "inline"} for inline-grammar queries
      */
-    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
+    private Map<String,Object> runOne(JsonNode q, PgrSearchScope scope, QueryTelemetry tel,
                                       String entryName, String kpiId, BusinessCalendar calendar){
         // #1462: a pinned-window def whose interval falls outside the selected date range is
         // unanswerable, not empty-by-filter. Return no rows WITHOUT running SQL, flagged so the tile
@@ -676,13 +679,14 @@ public class AnalyticsService {
         return m;
     }
 
-    private Map<String,Object> scopeInfo(AnalyticsScope s){
+    /** A description of the scope actually applied, for the response envelope. Never the policy. */
+    private Map<String,Object> scopeInfo(PgrSearchScope s){
         Map<String,Object> m = new LinkedHashMap<>();
         m.put("tenantId", s.tenantId);
         m.put("level", s.tenantStateLevel ? "state" : "city");
         if (s.citizenUuid != null) m.put("restrictedTo", "own-records");
-        if (s.boundaryPrefix != null) m.put("boundaryPrefix", s.boundaryPrefix);
-        if (s.departmentCodes != null && !s.departmentCodes.isEmpty()) m.put("departments", s.departmentCodes);
+        if (s.departmentCodes != null) m.put("departments", s.departmentCodes);
+        if (s.jurisdictionCodes != null) m.put("jurisdictions", s.jurisdictionCodes);
         return m;
     }
 
@@ -695,7 +699,7 @@ public class AnalyticsService {
     }
 
     /**
-     * Extract role codes from RequestInfo.userInfo.roles — mirrors AnalyticsScope role extraction.
+     * Extract role codes from RequestInfo.userInfo.roles, for catalog visibility only.
      * An anonymous caller (no userInfo, or userInfo with no roles) degrades to the {@link #PUBLIC_ROLE}
      * floor — NOT to an empty set (which {@link KpiDefinition#isVisibleTo} would have read as "no
      * ceiling => visible", the old fail-open that let anonymous read every visibleTo:[] tile).

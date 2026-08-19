@@ -5,7 +5,7 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.KpiCatalogService;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.when;
  * config-driven via {@link ScopePolicy}: which axes are required (level {@code OWN}) vs
  * unrestricted (level {@code ALL}) for a given caller's roles is read from MDMS, resolved by
  * {@link ScopePolicyEngine}. Deliberately a separate test file/class from
- * {@code PrincipalScopeResolverTest} (Dashboard/Analytics' own {@code ScopeAxis}-based tests) —
+ * {@code AnalyticsRowScopeResolverTest} (the dashboard's adapter over this same resolver) —
  * see {@link PolicyDrivenScopeResolver}'s Javadoc for why the two resolvers are kept apart.
  */
 @ExtendWith(MockitoExtension.class)
@@ -62,11 +62,10 @@ class PolicyDrivenScopeResolverTest {
         ObjectMapper mapper = new ObjectMapper();
         // isPureCitizen is pure role/type inspection — safe to use a real instance here rather
         // than mocking, since none of these tests exercise its HRMS-calling siblings.
-        PrincipalScopeResolver principalScopeResolver = new PrincipalScopeResolver(config, restTemplate, mapper, catalog);
         // Unstubbed mdmsUtils.getDepartmentCodeToNameMap defaults to an empty map (Mockito's
         // built-in empty-collection default), which is exactly "no dual-read expansion available"
         // — the department-code lists these tests assert on are left unchanged.
-        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, principalScopeResolver, mdmsUtils);
+        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, new Principals(), mdmsUtils);
     }
 
     @Test

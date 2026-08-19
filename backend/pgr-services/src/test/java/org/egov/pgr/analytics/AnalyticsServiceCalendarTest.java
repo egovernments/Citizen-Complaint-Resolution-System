@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.policy.PgrSearchScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -43,7 +44,7 @@ public class AnalyticsServiceCalendarTest {
     @Mock private AnalyticsPlanner planner;
     @Mock private JdbcTemplate jdbc;
     @Mock private KpiCatalogService kpiCatalogService;
-    @Mock private PrincipalScopeResolver scopeResolver;
+    @Mock private AnalyticsRowScopeResolver scopeResolver;
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
@@ -68,7 +69,7 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn(fixedAsOf);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
@@ -118,7 +119,7 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn((Long) null);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
@@ -142,7 +143,7 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn(1_700_000_000_000L);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Africa/Nairobi"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());

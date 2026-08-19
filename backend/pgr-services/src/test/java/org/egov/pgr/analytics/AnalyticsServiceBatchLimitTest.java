@@ -19,7 +19,7 @@ public class AnalyticsServiceBatchLimitTest {
         for (int i = 0; i <= AnalyticsService.MAX_BATCH_QUERIES; i++)
             queries.putObject("q" + i).put("kpiId", "cl_test");
 
-        PrincipalScopeResolver scopeResolver = mock(PrincipalScopeResolver.class);
+        AnalyticsRowScopeResolver scopeResolver = mock(AnalyticsRowScopeResolver.class);
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         AnalyticsService service = new AnalyticsService(
                 null, null, jdbc, null, scopeResolver, null, new AnalyticsMetrics(), null);
