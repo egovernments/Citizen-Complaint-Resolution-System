@@ -276,12 +276,16 @@ The authoritative reference for all of it is
 
 **The machine you deploy to:**
 
-| | Minimum | Comfortable |
+| | What the deploy expects | Comfortable |
 |---|---|---|
-| CPU | 4 cores | 8 cores |
+| CPU | 8 vCPU | 8+ |
 | RAM | 16 GB | 32 GB |
-| Free disk | 50 GB | 100 GB |
+| Free disk | 60 GB | 100 GB |
 | OS | Ubuntu 22.04 or 24.04 | same |
+
+Fewer cores works — it is just slower, since most of a first deploy is
+downloading and building. 16 GB is the figure to take seriously: below it the
+JVM services start competing and containers get killed.
 
 Fedora, Rocky, Alma and Debian also work. Ubuntu is what gets tested on every
 change, so it is the one to pick if you have a choice.
@@ -484,8 +488,10 @@ there is nothing to run here.
 ./deploy.sh mycity
 ```
 
-That is the whole command. It takes **30–60 minutes** the first time, mostly
-downloading images; later runs take a few minutes.
+That is the whole command. Expect **30–60 minutes** on a first run and a few
+minutes after that. Pulling the stack alone is around ten minutes on Linux, and
+the quickstart config additionally builds the onboarding wizard, the UI bundle
+and the tenant-creation service from source on top of that.
 
 Ansible prints nothing while a long task is running, which looks like a hang.
 It is not. Watch progress in a second terminal:
