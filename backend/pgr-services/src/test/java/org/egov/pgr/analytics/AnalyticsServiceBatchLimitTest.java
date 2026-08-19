@@ -25,7 +25,7 @@ public class AnalyticsServiceBatchLimitTest {
                 null, null, jdbc, null, scopeResolver, null, new AnalyticsMetrics(), null);
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.query(body, null, "ke", 1));
+                () -> service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1));
 
         assertTrue(error.getMessage().startsWith("invalid_param"), error.getMessage());
         assertTrue(error.getMessage().contains(String.valueOf(AnalyticsService.MAX_BATCH_QUERIES)));

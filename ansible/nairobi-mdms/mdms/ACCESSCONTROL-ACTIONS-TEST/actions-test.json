@@ -26229,5 +26229,1013 @@
       "parentModule": "",
       "navigationURL": "/digit-ui/employee/dashboard"
     }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2640,
+      "url": "/pgr-services/v2/analytics/_access",
+      "name": "Analytics Access",
+      "displayName": "Analytics Access Capabilities",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2641,
+      "url": "/pgr-services/v2/analytics/_query",
+      "name": "Analytics Query",
+      "displayName": "Analytics Query",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2642,
+      "url": "/pgr-services/v2/analytics/packs",
+      "name": "Analytics Packs",
+      "displayName": "Analytics Packs",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2643,
+      "url": "/pgr-services/v2/analytics/catalog/_search",
+      "name": "Analytics Catalog Search",
+      "displayName": "Analytics Catalog Search",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2644,
+      "url": "/pgr-services/v2/analytics/_schema",
+      "name": "Analytics Schema",
+      "displayName": "Analytics Schema",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2645,
+      "url": "/pgr-services/v2/analytics/config/_refresh",
+      "name": "Analytics Config Refresh",
+      "displayName": "Analytics Config Refresh",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2646,
+      "url": "/pgr-services/v2/analytics/capabilities/officer",
+      "name": "Analytics Capability Officer",
+      "displayName": "Analytics Capability Officer",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2647,
+      "url": "/pgr-services/v2/analytics/capabilities/reports",
+      "name": "Analytics Capability Reports",
+      "displayName": "Analytics Capability Reports",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "id": 2648,
+      "url": "/pgr-services/v2/analytics/capabilities/reports-extended",
+      "name": "Analytics Capability Reports Extended",
+      "displayName": "Analytics Capability Reports Extended",
+      "orderNumber": 0,
+      "parentModule": "",
+      "enabled": false,
+      "serviceCode": "pgr-services",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
   }
 ]

@@ -80,7 +80,7 @@ public class AnalyticsServiceCalendarTest {
                 + "\"c\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}"
                 + "}}");
 
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         // resolveTimeZone and the asOf query each fire exactly once per request, not once per entry.
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
@@ -125,7 +125,7 @@ public class AnalyticsServiceCalendarTest {
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         assertTrue(out.containsKey("asOf"));
         assertNull(out.get("asOf"));
@@ -149,7 +149,7 @@ public class AnalyticsServiceCalendarTest {
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
         verify(jdbc, times(1)).queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class));

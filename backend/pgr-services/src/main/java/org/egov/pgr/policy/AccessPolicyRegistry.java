@@ -120,6 +120,27 @@ public class AccessPolicyRegistry {
     }
 
     /**
+     * Whether this caller can reach {@code actionUrl} at all.
+     *
+     * <p>{@code /access/v1/actions/mdms/_get} is role-scoped: an action comes back only when one of
+     * the caller's roles has an ACCESSCONTROL-ROLEACTIONS mapping to it. So "is this action visible"
+     * IS the capability question, answered by egov-accesscontrol against the same role-action master
+     * that governs every other action — no second grant model, and nothing for this service to
+     * interpret.
+     *
+     * <p>Distinct from {@link #getCondition}, which asks what an action's policy SAYS. This asks
+     * only whether the caller is granted it. An action with no policy at all is still a perfectly
+     * good capability grant, which is exactly what the dashboard's endpoint actions are.
+     *
+     * @throws AccessControlUnavailableException if accesscontrol could not be consulted — callers
+     *         must fail closed rather than read that as "not granted", which would look identical
+     *         to a legitimate denial during an outage.
+     */
+    public boolean isActionVisible(String actionUrl, RequestInfo requestInfo, String tenantId) {
+        return getAction(actionUrl, requestInfo, tenantId) != null;
+    }
+
+    /**
      * Returns the raw JsonLogic condition JSON for the given action url + tenant (resolved using
      * the caller's roles). Outcomes:
      * <ul>

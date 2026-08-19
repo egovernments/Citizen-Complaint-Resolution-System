@@ -46,11 +46,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -93,9 +90,7 @@
         "sparklineMeasureKey": "total"
       },
       "params": [],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -161,11 +156,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -217,7 +209,7 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
-        "subtitle": "Reopened ÷ resolved",
+        "subtitle": "Reopened \u00f7 resolved",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE"
       },
       "params": [
@@ -233,11 +225,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -298,9 +287,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -345,7 +332,7 @@
         "compose": null,
         "pii": false,
         "title": "First-assignment rate",
-        "subtitle": "Never reassigned ÷ assigned",
+        "subtitle": "Never reassigned \u00f7 assigned",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
@@ -372,9 +359,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -414,7 +399,7 @@
         "compose": null,
         "pii": false,
         "title": "SLA compliance rate",
-        "subtitle": "Resolved within SLA ÷ all filed",
+        "subtitle": "Resolved within SLA \u00f7 all filed",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
@@ -441,9 +426,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -511,9 +494,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -566,11 +547,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -631,11 +609,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -695,9 +670,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -751,9 +724,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -838,11 +809,8 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -899,9 +867,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -954,7 +920,7 @@
         "compose": null,
         "pii": false,
         "title": "Department-wise resolution rate",
-        "subtitle": "Resolved ÷ filed per department",
+        "subtitle": "Resolved \u00f7 filed per department",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE"
       },
       "params": [
@@ -970,11 +936,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -1059,14 +1022,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -1170,9 +1126,7 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1317,9 +1271,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1381,9 +1333,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1452,11 +1402,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -1676,9 +1623,7 @@
           "allowed": []
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -1753,14 +1698,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -1875,11 +1813,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -2085,14 +2020,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PGR_SUPERVISOR",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "SUPERVISOR"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
     }
   },
   {
@@ -2153,9 +2081,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2219,9 +2145,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2292,9 +2216,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2346,7 +2268,7 @@
         "compose": null,
         "pii": false,
         "title": "Flow ratio by department",
-        "subtitle": "Resolved ÷ created",
+        "subtitle": "Resolved \u00f7 created",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
         "numeratorKey": "resolved",
         "denominatorKey": "filed",
@@ -2365,11 +2287,8 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+      "public": true
     }
   },
   {
@@ -2406,7 +2325,7 @@
         "compose": null,
         "pii": false,
         "title": "SLA non-compliance rate",
-        "subtitle": "Breached SLA ÷ all complaints",
+        "subtitle": "Breached SLA \u00f7 all complaints",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
@@ -2434,9 +2353,7 @@
           ]
         }
       ],
-      "rbac": {
-        "visibleTo": []
-      }
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2463,19 +2380,6 @@
         "deltaLabel": "vs prior period",
         "sparklineMeasureKey": "total"
       },
-      "rbac": {
-        "visibleTo": [
-          "SUPERVISOR",
-          "PGR_SUPERVISOR",
-          "GRO",
-          "DGRO",
-          "PGR_LME",
-          "PGR_ADMIN",
-          "SUPERUSER",
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
       "query": {
         "grain": "facts",
         "measures": [
@@ -2500,7 +2404,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": true
+      "supportsSeries": true,
+      "requiredActionUrl": "/pgr-services/v2/analytics/_query"
     }
   },
   {
@@ -2519,17 +2424,11 @@
         "accent": "teal",
         "format": "decimalTwo",
         "compose": null,
-        "subtitle": "Resolved in period ÷ created in period",
+        "subtitle": "Resolved in period \u00f7 created in period",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
         "valueKey": "ratio",
         "deltaLabel": "vs prior period"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "grain": "facts",
@@ -2568,7 +2467,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -2630,12 +2530,6 @@
         ],
         "dimensionKey": "created_date"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
       "query": {
         "sort": [
           {
@@ -2670,7 +2564,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -2688,11 +2583,6 @@
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
         "valueKey": "open",
         "dimensionKey": "snapshot_date"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -2731,7 +2621,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended"
     }
   },
   {
@@ -2748,7 +2639,7 @@
         "format": "integer",
         "compose": null,
         "stackKey": "sla_status_bucket",
-        "subtitle": "All complaints by SLA state — per ward",
+        "subtitle": "All complaints by SLA state \u2014 per ward",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
         "valueKey": "total",
@@ -2787,12 +2678,6 @@
         "dimensionKey": "ward_code",
         "sortBySegment": "breached"
       },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
-      },
       "query": {
         "grain": "daily",
         "limit": 120,
@@ -2822,7 +2707,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -2854,12 +2740,6 @@
         "numeratorKey": "breached",
         "denominatorKey": "sla_elapsed",
         "scatterProfile": "departmentBreachCaseload"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -2918,7 +2798,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -2989,12 +2870,6 @@
           "avg_csat"
         ],
         "dimensionKey": "ward_code"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -3080,7 +2955,8 @@
       ],
       "status": "published",
       "version": "1.1.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -3098,11 +2974,6 @@
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
         "valueKey": "open",
         "dimensionKey": "ward_code"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -3141,7 +3012,8 @@
       ],
       "status": "published",
       "version": "1.0.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended"
     }
   },
   {
@@ -3196,12 +3068,6 @@
           "avg_csat"
         ],
         "dimensionKey": "source"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -3260,7 +3126,8 @@
       ],
       "status": "published",
       "version": "1.1.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -3315,12 +3182,6 @@
           "ideal_sla_ms"
         ],
         "dimensionKey": "service_code"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -3385,7 +3246,8 @@
       ],
       "status": "published",
       "version": "1.2.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   },
   {
@@ -3444,7 +3306,7 @@
           "column": "total",
           "gte": 3
         },
-        "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
+        "subtitle": "Ward \u00d7 subtype pairs with \u2265 3 complaints in period",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
         "valueKey": "total",
@@ -3452,12 +3314,6 @@
           "total"
         ],
         "dimensionKey": "ward_code"
-      },
-      "rbac": {
-        "visibleTo": [
-          "TICKET_REPORT_VIEWER",
-          "PGR_VIEWER"
-        ]
       },
       "query": {
         "sort": [
@@ -3510,7 +3366,8 @@
       ],
       "status": "published",
       "version": "1.3.0",
-      "supportsSeries": false
+      "supportsSeries": false,
+      "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
     }
   }
 ]
