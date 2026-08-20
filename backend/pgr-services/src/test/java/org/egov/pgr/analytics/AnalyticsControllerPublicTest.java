@@ -92,6 +92,8 @@ public class AnalyticsControllerPublicTest {
         assertEquals("public-default", response.getBody().get("packId"));
         assertEquals(true, response.getBody().get("enabled"));
         assertEquals(1, ((List<?>) response.getBody().get("tiles")).size());
+        assertEquals(AnalyticsService.MAX_BATCH_QUERIES,
+                response.getBody().get("maxBatchQueries"));
         assertFalse(response.getBody().containsKey("recordCount"));
         verify(service, never()).recordCount(anyString(), anyInt());
     }
@@ -122,6 +124,8 @@ public class AnalyticsControllerPublicTest {
         assertEquals(Collections.emptyList(), response.getBody().get("tiles"));
         assertEquals(Collections.emptyList(), response.getBody().get("defaultLayout"));
         assertNull(response.getBody().get("packId"));
+        assertEquals(AnalyticsService.MAX_BATCH_QUERIES,
+                response.getBody().get("maxBatchQueries"));
         verify(kpiCatalogService, never()).getVisibleDefs(anyString(), anySet());
         verify(kpiCatalogService, never()).getBestPack(anyString(), anySet(), anyList());
         verifyNoInteractions(service);

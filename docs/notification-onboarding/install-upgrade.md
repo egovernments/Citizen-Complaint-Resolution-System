@@ -34,7 +34,7 @@ An upgrade has two distinct parts, and they use the playbook differently:
 
 | Part | What it does | How you run it |
 |---|---|---|
-| **A. Bring up + wire the Novu stack** | starts the 8 notification containers, bootstraps the Twilio integration + workflows, wires `NOVU_API_KEY`, force-recreates `novu-bridge` | a **full** `./deploy.sh <tenant>` (these tasks are gated on `enable_novu`, not tag-scoped) |
+| **A. Bring up + wire the Novu stack** | starts the 9 notification containers, bootstraps the Twilio integration + workflows, wires `NOVU_API_KEY`, force-recreates `novu-bridge` | a **full** `./deploy.sh <tenant>` (these tasks are gated on `enable_novu`, not tag-scoped) |
 | **B. Seed the 3 MDMS masters** | creates `NotificationRouting` / `NotificationTemplate` / `NotificationProviderTemplate` at the state root, idempotently | `./deploy.sh <tenant> --tags notifications` (repeatable, standalone) |
 
 > `--tags notifications` runs **only the seed** (part B). Bringing the Novu
@@ -49,7 +49,7 @@ An upgrade has two distinct parts, and they use the playbook differently:
 Edit `inventory/host_vars/<tenant>.yml` (do **not** change `db_fast_path`):
 
 ```yaml
-enable_novu: true                        # +8 containers, ~+1 GB RAM
+enable_novu: true                        # +9 containers, ~+1 GB RAM
 pgr_notification_config_driven: true     # cut THIS tenant onto the config-driven path
 
 novu_api_key: ""                         # empty on the first pass (Step 2)
@@ -75,7 +75,7 @@ cd local-setup/ansible
 ./deploy.sh <tenant>
 ```
 
-This starts the 8 notification containers **alongside** your running stack and
+This starts the 9 notification containers **alongside** your running stack and
 recreates `pgr-services` / `novu-bridge` with the config-driven env. Existing
 Postgres data is untouched (`db_fast_path` stays `false`).
 
@@ -143,6 +143,6 @@ confirm real delivery in the Novu dashboard / Twilio console
 
 Set `pgr_notification_config_driven: false` and redeploy `pgr-services` — PGR
 falls back to the legacy notification path immediately. The Novu stack can keep
-running harmlessly, or set `enable_novu: false` and redeploy to remove the 8
+running harmlessly, or set `enable_novu: false` and redeploy to remove the 9
 containers. Because the cutover is a single per-tenant flag, you can roll a
 fleet forward (or back) one tenant at a time.

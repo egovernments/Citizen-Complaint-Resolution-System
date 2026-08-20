@@ -1,6 +1,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DigitApiClient } from './DigitApiClient.js';
+import { ApiClientError, isSessionExpired } from './errors.js';
 
 describe('DigitApiClient', () => {
   let client: DigitApiClient;
@@ -86,6 +87,125 @@ describe('DigitApiClient.mdmsCreate phantom-200', () => {
     await assert.rejects(
       () => client.mdmsCreate('pg', 'RAINMAKER-PGR.NotificationRouting', 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS', {}),
       /MDMS_DUPLICATE/,
+    );
+  });
+});
+
+describe('DigitApiClient.boundaryHierarchySearch pagination', () => {
+  it('walks offset until a short page when listing all types', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    const first = Array.from({ length: 100 }, (_, i) => ({ hierarchyType: `PW_${i}` }));
+    const second = [{ hierarchyType: 'ADMIN' }];
+    const offsets: number[] = [];
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async (_path: unknown, body: Record<string, unknown>) => {
+        const criteria = body.BoundaryTypeHierarchySearchCriteria as { offset: number; limit: number };
+        offsets.push(criteria.offset);
+        return { BoundaryHierarchy: criteria.offset === 0 ? first : second };
+      };
+
+    const result = await client.boundaryHierarchySearch('ke');
+    assert.equal(result.length, 101);
+    assert.deepEqual(offsets, [0, 100]);
+    assert.equal(result[100].hierarchyType, 'ADMIN');
+  });
+
+  it('does not page when looking up a single hierarchyType', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let calls = 0;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => {
+        calls += 1;
+        return { BoundaryHierarchy: [{ hierarchyType: 'ADMIN' }] };
+      };
+    const result = await client.boundaryHierarchySearch('ke', 'ADMIN');
+    assert.equal(calls, 1);
+    assert.equal(result[0].hierarchyType, 'ADMIN');
+  });
+});
+
+describe('DigitApiClient paged-search guard', () => {
+  it('throws rather than returning a truncated total when the page guard is hit', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let calls = 0;
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => {
+        calls += 1;
+        return {
+          BoundaryHierarchy: Array.from({ length: DigitApiClient.SEARCH_PAGE_SIZE }, (_, i) => ({
+            hierarchyType: `TYPE_${calls}_${i}`,
+          })),
+        };
+      };
+
+    await assert.rejects(
+      () => client.boundaryHierarchySearch('ke'),
+      /truncated after 200 pages/,
+    );
+    assert.equal(calls, DigitApiClient.SEARCH_MAX_PAGES);
+  });
+});
+
+describe('DigitApiClient.request session handling', () => {
+  it('routes a bodyless 401 to the session-expired handler instead of a JSON parse error', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    let expired = 0;
+    DigitApiClient.setSessionExpiredHandler(() => { expired += 1; });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(null, { status: 401 })) as typeof fetch;
+
+    try {
+      await assert.rejects(
+        () => client.mdmsSearch('ke', 'common-masters.Department'),
+        (err: unknown) => {
+          assert.ok(err instanceof ApiClientError);
+          assert.equal(err.statusCode, 401);
+          assert.equal(err.errors[0].code, 'SESSION_EXPIRED');
+          return true;
+        },
+      );
+      assert.equal(expired, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+      DigitApiClient.setSessionExpiredHandler(null);
+    }
+  });
+
+  it('reports an HTML error page as an HTTP error, not a parse failure', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('<html>404 Not Found</html>', {
+      status: 404,
+      headers: { 'Content-Type': 'text/html' },
+    })) as typeof fetch;
+
+    try {
+      await assert.rejects(
+        () => client.mdmsSearch('ke', 'common-masters.Department'),
+        (err: unknown) => {
+          assert.ok(err instanceof ApiClientError);
+          assert.equal(err.statusCode, 404);
+          assert.equal(err.errors[0].code, 'HTTP_404');
+          return true;
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('isSessionExpired', () => {
+  it('matches InvalidAccessTokenException from access-control / Kong', () => {
+    assert.equal(
+      isSessionExpired(400, [{ code: 'InvalidAccessTokenException', message: 'InvalidAccessTokenException' }]),
+      true,
+    );
+  });
+  it('does not match ordinary validation errors', () => {
+    assert.equal(
+      isSessionExpired(400, [{ code: 'INVALID_SEARCH', message: 'tenantId is required' }]),
+      false,
     );
   });
 });

@@ -93,6 +93,7 @@ export function useCatalog(tenantId, { publicMode = false } = {}) {
             tiles: filteredTiles,
             layout: packLayout,
             enabled: !publicMode || packRes?.enabled !== false,
+            maxBatchQueries: packRes?.maxBatchQueries ?? null,
           },
           packMeta,
           error: null,

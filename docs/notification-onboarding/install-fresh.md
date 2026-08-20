@@ -22,7 +22,7 @@ Four things must all be true for a complaint transition to deliver a message:
 
 | Piece | Turned on by | Notes |
 |---|---|---|
-| **Novu delivery stack** (8 containers) | `enable_novu: true` | `digit-config-service`, `digit-user-preferences-service`, `novu-bridge`, `novu-api`, `novu-worker`, `novu-ws`, `novu-dashboard`, `novu-mongo`. ~+1 GB RAM. |
+| **Novu delivery stack** (9 containers) | `enable_novu: true` | `digit-config-service`, `digit-user-preferences-service`, `novu-bridge`, `novu-api`, `novu-worker`, `novu-ws`, `novu-dashboard`, `novu-mongo`, `otp-publisher`. ~+1 GB RAM. |
 | **PGR on the config-driven path** | `pgr_notification_config_driven: true` | PGR reads the MDMS masters, renders per recipient, emits one event per `(recipient × channel)`. Default `false` = legacy hardcoded path. |
 | **The 3 MDMS masters seeded** | the notif-seed tasks (run automatically on a full deploy when the gate above is on) | `RAINMAKER-PGR.NotificationRouting`, `.NotificationTemplate`, `.NotificationProviderTemplate`, at the **state root** (e.g. `ke`). |
 | **A real Novu API key + a provider** | `novu_api_key` + `twilio_*` | Self-hosted Novu mints the key on first sign-up → two-deploy flow (below). |
@@ -43,7 +43,7 @@ onboarded.
 db_fast_path: true                       # dump-seeded first boot (fresh installs only)
 
 # --- notifications ---
-enable_novu: true                        # 8-container notifications profile
+enable_novu: true                        # 9-container notifications profile
 pgr_notification_config_driven: true     # PGR reads the MDMS masters + emits per-recipient events
 # seed_notifications: true               # implied by the flag above; set explicitly to force
 
@@ -80,7 +80,7 @@ cd local-setup/ansible
 
 A single deploy does everything:
 
-- Brings up the full stack **including** the 8 notification containers.
+- Brings up the full stack **including** the 9 notification containers.
 - **Mints the Novu API key programmatically** — since `novu_api_key` is empty,
   the playbook waits for `novu-api` to be healthy, then runs
   [`novu-mint-key.sh`](../../backend/novu-bridge/config/novu-mint-key.sh): one

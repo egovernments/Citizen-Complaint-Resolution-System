@@ -7,7 +7,7 @@
 3. **`MigrationUtils.getServiceCodeToSLAMap` is live, not "if still wired"** — `MigrationService.java:87` calls it. The draft hedged ("if still wired; else mark legacy"). It is wired; it must be repointed.
 4. **`digit-ui-v2` (a whole separate Vite frontend) was missed** — `digit-ui-v2/src/hooks/useServiceDefs.ts`, `CitizenComplaintCreatePage.tsx`, `CitizenComplaintsListPage.tsx`, `CitizenComplaintShowPage.tsx`, `packages/data-provider/*`, `src/api/types.ts` all read `RAINMAKER-PGR.ServiceDefs` and split `menuPath`. The draft's "cross-frontend fallout" line named only `packages/modules/pgr` and `frontend/micro-ui/web`. digit-ui-v2 is nightly-built and deployed (recent commits `bf6cb79d`, `4ff431de`) → must be in scope or explicitly deferred.
 5. **`digit-mcp` server + skills missed** — `digit-mcp/src/tools/pgr-workflow.ts`, `mdms-tenant.ts`, `utils/xlsx-loader.ts`, `utils/xlsx-reader.ts`, `api/pgr-dashboard.ts`, `data/openapi-spec.ts`, plus `validate_complaint_types` doc and the `digit-tenant-setup` skill all hardcode `ServiceDefs`. These drive the XLSX onboarding skill referenced in this environment.
-6. **`utilities/crs_dataloader/*` is separate from `local-setup/jupyter/dataloader/*`** — the draft only listed the local-setup loader. There is a second loader tree (`crs_loader.py`, `unified_loader.py`, `unified_loader_v1.py`, `dataloader_ui.py`) that also writes ServiceDefs/menuPath.
+6. **`utilities/crs_dataloader/*` is separate from `local-setup/dataloader/*`** — the draft only listed the local-setup loader. There is a second loader tree (`crs_loader.py`, `unified_loader.py`, `unified_loader_v1.py`, `dataloader_ui.py`) that also writes ServiceDefs/menuPath.
 7. **Indexer/persister + chatbot + k6 confirmed but under-specified** — `configs/egov-indexer/pgr-services.yml`, `pgr-migration-batch-indexer.yml` (and their `local-setup/configs` copies), `xstate-chatbot/.../egov-pgr.js`, `performance/k6/scenarios/pgr-lifecycle.js` all reference ServiceDefs/menuPath. The draft mentioned these in passing; they need owners assigned.
 8. **Integration/e2e tests missed** — `tests/integration-tests/tests/admin/complaint-types.spec.ts`, `complaints.spec.ts`, `configurator-mdms-fixes-2026-04-29.spec.ts`, `recently-shipped-fixes.spec.ts`, `onboarding/phase3-validation.spec.ts`, plus `local-setup/tests/e2e/common/mdms-servicedef.ts` and `complaint-type-localization.spec.ts`. These will fail post-cutover.
 9. **`local-setup/db/full-dump.sql`** contains seeded ServiceDefs/menuPath data — any reseed-from-dump path reintroduces the dead master.
@@ -201,7 +201,7 @@ Key invariant for data safety: **leaf `code` is preserved verbatim from the old 
 
 | File | Change |
 |---|---|
-| `local-setup/jupyter/dataloader/unified_loader.py` (`read_complaint_types` 378-467), `crs_loader.py` (`load` ~1176), `test_crs_loader_e2e.py` | Create `ComplaintHierarchy` leaf rows (`code`=serviceCode, `parentCode`=group) + group nodes; drop `menuPath`. |
+| `local-setup/dataloader/unified_loader.py` (`read_complaint_types` 378-467), `crs_loader.py` (`load` ~1176), `test_crs_loader_e2e.py` | Create `ComplaintHierarchy` leaf rows (`code`=serviceCode, `parentCode`=group) + group nodes; drop `menuPath`. |
 | `utilities/crs_dataloader/{crs_loader.py,unified_loader.py,unified_loader_v1.py,dataloader_ui.py,test_crs_loader_e2e.py}` *(MISSED BY DRAFT — second loader tree)* | Same changes; this is a separate copy of the loader. |
 | `local-setup/scripts/{ci-dataloader.py,ci-dataloader-crossroot.py,ci-dataloader-xlsx.py}` | Verify CI loaders still pass against the new master. |
 | `local-setup/db/full-dump.sql` *(MISSED BY DRAFT)* | Contains seeded ServiceDefs/menuPath rows. Regenerate the dump from a migrated tenant, or any reseed-from-dump path reintroduces the dead master. |
@@ -309,7 +309,7 @@ The key reframe: we built the **additive on-ramp**; the target needs the **break
 | **P3** | Configurator: registry/data-provider, ingest writer, parser merge, complaint-types resource delete/re-target, localization, types, weekly-report, 2 test suites; rework migrate button | **L** | P0, P1 |
 | **P4** | DIGIT-UI esbuild: `getServiceDefs`→leaf rows, pickers/resolver, 2 details pages, inbox/list/customizations, dedup `useServiceDefs`, flat-fallback decision | **L** | P0; pairs with P2 for lockstep |
 | **P4b** | Other frontends: **digit-ui-v2**, `frontend/micro-ui/web`, `packages/modules/pgr` (or explicit defer + feature-gate) | **L** | P0; same cutover window as P4 |
-| **P5** | Onboarding: both loader trees (`local-setup/jupyter/dataloader`, `utilities/crs_dataloader`), CI loaders, **`full-dump.sql` regen**, Excel sample verification | **M** | P0 |
+| **P5** | Onboarding: both loader trees (`local-setup/dataloader`, `utilities/crs_dataloader`), CI loaders, **`full-dump.sql` regen**, Excel sample verification | **M** | P0 |
 | **P5b** | digit-mcp server + skills + openapi-spec | **M** | P0, P3 |
 | **P6** | Integrations: egov-indexer configs (+local-setup copies), xstate-chatbot, k6, integration + e2e + smoke tests | **M** | P2 |
 | **P7** | Docs: feature, design, migration/upgrade runbook + rollback; update auto-memory note | **M** | all |

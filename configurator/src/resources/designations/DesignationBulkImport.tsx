@@ -5,6 +5,7 @@ import { parseDesignationExcel } from '@/utils/excelParser';
 import { mdmsService } from '@/api';
 import type { DesignationExcelRow, Designation, Department } from '@/api/types';
 import { useApp } from '../../App';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 type DesignationBulkRow = DesignationExcelRow & BulkRow;
 
@@ -52,6 +53,7 @@ function buildTemplate(tenant: string, depts: Department[]): Blob {
 
 export function DesignationBulkImport() {
   const { state } = useApp();
+  const { canEditResource } = useMastersCapability();
   const tenantId = state.tenant;
 
   const [existing, setExisting] = useState<Designation[]>([]);
@@ -157,6 +159,7 @@ export function DesignationBulkImport() {
       columns={columns}
       createOne={createOne}
       entityLabel={{ singular: 'designation', plural: 'designations' }}
+      canImport={canEditResource('designations')}
     />
   );
 }
