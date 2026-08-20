@@ -19,6 +19,7 @@ export {
   getResourceIdField,
   getResourceLabel,
   getResourceBySchema,
+  isAccessControlGated,
   REGISTRY,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';

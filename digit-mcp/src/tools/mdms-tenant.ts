@@ -610,7 +610,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               existingRoles.filter((r) => r.tenantId === explicitRoot).map((r) => r.code),
             );
 
-            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER'];
+            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN'];
             const newRoles = standardRoles
               .filter((code) => !existingForTarget.has(code))
               .map((code) => ({ code, name: code, tenantId: explicitRoot }));
@@ -1246,6 +1246,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
             { code: 'DGRO', name: 'Department GRO' },
             { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+            { code: 'LOC_ADMIN', name: 'Localisation Admin' },
             { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
           ].map((r) => ({ ...r, tenantId: target }));
           const newUser = {
@@ -1571,6 +1573,79 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         throw lastErr;
       }
 
+      // Pages through mdmsV2SearchRaw until a page comes back shorter than PAGE_SIZE — a single
+      // capped fetch (the previous behavior) silently truncated any schema with more rows than
+      // the limit. ACCESSCONTROL-ACTIONS-TEST.actions-test routinely has 500+ rows on a real
+      // source tenant, so a `{ limit: 500 }` one-shot call was dropping whichever action records
+      // happened to fall past the 500th — including, on at least one deployment, the
+      // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
+      // to edit those masters in the configurator despite being correctly role-mapped.
+      //
+      // mdms-v2 orders results by createdtime DESC with no tiebreaker, and a bulk-seeded schema
+      // (e.g. ACCESSCONTROL-ACTIONS-TEST.actions-test, where ~329/330 rows share one
+      // createdtime from a single default-data-handler insert) has an unstable sort order across
+      // that tie — offset-based pages can then return the same row twice and skip another,
+      // silently dropping it from `all` even though total row count matched expectations. Dedup
+      // by uniqueIdentifier (mdms-v2's actual identity key) closes that gap; the count cross-check
+      // below is a hard signal that something was still missed if it ever fires.
+      //
+      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS schema. If a
+      // schema's result order isn't stable across separate offset-based requests, an unbounded
+      // loop would hang tenant_bootstrap forever; hitting the cap instead throws a loud,
+      // debuggable error.
+      async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
+        const PAGE_SIZE = 500;
+        const MAX_PAGES = 200;
+        const seen = new Map<string, MdmsRecord>();
+        let offset = 0;
+        let page: MdmsRecord[] = [];
+        for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
+          try {
+            page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          } catch (err) {
+            // Nothing fetched yet — propagate so the caller's own failure handling (fail the
+            // schema / `.catch(() => [])`) applies, same as before this dedup/partial-fetch logic
+            // existed. Once we've already accumulated real rows, though, a later page failing must
+            // NOT discard them — that's the "page 1 succeeds, page 2 fails, whole thing becomes []"
+            // bug this loop used to have (#1826 review finding #5).
+            if (seen.size === 0) throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: page at offset ${offset} failed (${msg}) — ` +
+              `returning the ${seen.size} row(s) already fetched instead of discarding them.`
+            );
+            page = [];
+            break;
+          }
+          for (const record of page) {
+            const key = record.uniqueIdentifier ?? `${schemaCode}#${offset}#${seen.size}`;
+            seen.set(key, record);
+          }
+          if (page.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        if (page.length === PAGE_SIZE) {
+          throw new Error(
+            `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
+            `without a short page — aborting instead of paging indefinitely.`,
+          );
+        }
+        const all = [...seen.values()];
+        try {
+          const expected = await digitApi.mdmsV2Count(tenant, schemaCode);
+          if (expected > 0 && all.length < expected) {
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: fetched ${all.length} unique rows but ` +
+              `_count reports ${expected} — pagination may have skipped rows under an unstable sort tie.`
+            );
+          }
+        } catch {
+          // Best-effort diagnostic only — an unreachable/unsupported _count endpoint must not
+          // fail the (already-successful) fetch itself.
+        }
+        return all;
+      }
+
       // ────────────────────────────────────────────────────────────────
       // Identity-rewrite map for record copy.
       //
@@ -1689,8 +1764,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // ThemeConfig when querying mz). Without the filter, the bootstrap
           // falsely sees the record as already present and skips copying it,
           // leaving the target tenant without its own copy.
-          const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
-          const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+          const [sourceRecords, targetRecords] = await Promise.all([
+            fetchAllMdmsV2Raw(source, schemaCode),
+            fetchAllMdmsV2Raw(target, schemaCode),
+          ]);
           const targetByUid = new Map(
             targetRecords
               .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1789,8 +1866,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             }
           }
         } catch (schemaErr) {
-          // Schema might not have data in source — that's OK
-          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+          // fetchAllMdmsV2Raw only throws on a genuine fetch failure (network/HTTP error, or the
+          // MAX_PAGES safety cap) — a schema that's simply empty at the source resolves to `[]`,
+          // not a rejection, so every path through here is a real failure. Recording it in
+          // results.data.failed (not just logging) is what makes `overallSuccess` correctly turn
+          // false instead of a bootstrap reporting success after silently skipping the schema.
+          const msg = schemaErr instanceof Error ? schemaErr.message : String(schemaErr);
+          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy failed: ${msg}`);
+          results.data.failed.push(`${schemaCode} (schema-level fetch failure): ${msg}`);
         }
       }
 
@@ -1812,7 +1895,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         for (const [schemaCode, records] of catalogFloor) {
           let existingUids = new Set<string>();
           try {
-            const rows = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+            const rows = await fetchAllMdmsV2Raw(target, schemaCode);
             existingUids = new Set(
               (rows || [])
                 .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1871,11 +1954,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let appendedTo = 0;
         let alreadyIn = 0;
         try {
-          const cityModuleRecords = await digitApi.mdmsV2SearchRaw(
-            tenantsScope,
-            'tenant.citymodule',
-            { limit: 100 },
-          );
+          const cityModuleRecords = await fetchAllMdmsV2Raw(tenantsScope, 'tenant.citymodule');
           for (const rec of cityModuleRecords) {
             const data = rec.data as Record<string, unknown>;
             const tenants = Array.isArray(data.tenants)
@@ -2026,8 +2105,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               });
           }
         }
-        const testRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', { limit: 500 });
-        const haveRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS.actions', { limit: 500 });
+        const [testRows, haveRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test'),
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions'),
+        ]);
         const haveUid = new Set(haveRows.map((r) => r.uniqueIdentifier));
         let bridged = 0;
         for (const r of testRows) {
@@ -2097,6 +2178,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
           { code: 'DGRO', name: 'Department GRO' },
           { code: 'SUPERUSER', name: 'Super User' },
+          // MDMS_ADMIN/LOC_ADMIN — needed for the bootstrap ADMIN to edit MDMS-v2-backed masters
+          // and localization messages through the configurator (its access-policy check gates
+          // create/update on these roles specifically; without them ADMIN is stuck view-only).
+          { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+          { code: 'LOC_ADMIN', name: 'Localisation Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -2253,8 +2339,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
       try {
         const [deptRows, desigRows] = await Promise.all([
-          digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 500 }).catch(() => []),
-          digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 500 }).catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
         ]);
         derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
       } catch (e) {
@@ -2579,14 +2665,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // city-scoped rows and misses root depts. Query BOTH and union
           // by code so ADMIN's assignments cover every PGR dept.
           const [cityDepts, rootDepts, cityDesigs, rootDesigs] = await Promise.all([
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 100 }).catch(() => []),
+            fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Department', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 100 }).catch(() => []),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Department').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
+            fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Designation', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Designation').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
           ]);
 
           // City must have its own MDMS row for every dept it wants to
@@ -3065,7 +3151,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
         const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [
