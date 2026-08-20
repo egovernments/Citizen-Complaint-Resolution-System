@@ -610,7 +610,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               existingRoles.filter((r) => r.tenantId === explicitRoot).map((r) => r.code),
             );
 
-            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER'];
+            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN'];
             const newRoles = standardRoles
               .filter((code) => !existingForTarget.has(code))
               .map((code) => ({ code, name: code, tenantId: explicitRoot }));
@@ -1246,6 +1246,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
             { code: 'DGRO', name: 'Department GRO' },
             { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+            { code: 'LOC_ADMIN', name: 'Localisation Admin' },
             { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
           ].map((r) => ({ ...r, tenantId: target }));
           const newUser = {
@@ -1571,6 +1573,25 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         throw lastErr;
       }
 
+      // Pages through mdmsV2SearchRaw until a page comes back shorter than PAGE_SIZE — a single
+      // capped fetch (the previous behavior) silently truncated any schema with more rows than
+      // the limit. ACCESSCONTROL-ACTIONS-TEST.actions-test routinely has 500+ rows on a real
+      // source tenant, so a `{ limit: 500 }` one-shot call was dropping whichever action records
+      // happened to fall past the 500th — including, on at least one deployment, the
+      // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
+      // to edit those masters in the configurator despite being correctly role-mapped.
+      async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
+        const PAGE_SIZE = 500;
+        const all: MdmsRecord[] = [];
+        let offset = 0;
+        for (;;) {
+          const page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          all.push(...page);
+          if (page.length < PAGE_SIZE) return all;
+          offset += PAGE_SIZE;
+        }
+      }
+
       // ────────────────────────────────────────────────────────────────
       // Identity-rewrite map for record copy.
       //
@@ -1689,8 +1710,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // ThemeConfig when querying mz). Without the filter, the bootstrap
           // falsely sees the record as already present and skips copying it,
           // leaving the target tenant without its own copy.
-          const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
-          const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+          const sourceRecords = await fetchAllMdmsV2Raw(source, schemaCode);
+          const targetRecords = await fetchAllMdmsV2Raw(target, schemaCode);
           const targetByUid = new Map(
             targetRecords
               .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -2026,8 +2047,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               });
           }
         }
-        const testRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', { limit: 500 });
-        const haveRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS.actions', { limit: 500 });
+        const testRows = await fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test');
+        const haveRows = await fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions');
         const haveUid = new Set(haveRows.map((r) => r.uniqueIdentifier));
         let bridged = 0;
         for (const r of testRows) {
@@ -2097,6 +2118,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
           { code: 'DGRO', name: 'Department GRO' },
           { code: 'SUPERUSER', name: 'Super User' },
+          // MDMS_ADMIN/LOC_ADMIN — needed for the bootstrap ADMIN to edit MDMS-v2-backed masters
+          // and localization messages through the configurator (its access-policy check gates
+          // create/update on these roles specifically; without them ADMIN is stuck view-only).
+          { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+          { code: 'LOC_ADMIN', name: 'Localisation Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -3065,7 +3091,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
         const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [
