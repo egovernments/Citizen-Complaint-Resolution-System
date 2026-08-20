@@ -1600,7 +1600,23 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let offset = 0;
         let page: MdmsRecord[] = [];
         for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
-          page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          try {
+            page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          } catch (err) {
+            // Nothing fetched yet — propagate so the caller's own failure handling (fail the
+            // schema / `.catch(() => [])`) applies, same as before this dedup/partial-fetch logic
+            // existed. Once we've already accumulated real rows, though, a later page failing must
+            // NOT discard them — that's the "page 1 succeeds, page 2 fails, whole thing becomes []"
+            // bug this loop used to have (#1826 review finding #5).
+            if (seen.size === 0) throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: page at offset ${offset} failed (${msg}) — ` +
+              `returning the ${seen.size} row(s) already fetched instead of discarding them.`
+            );
+            page = [];
+            break;
+          }
           for (const record of page) {
             const key = record.uniqueIdentifier ?? `${schemaCode}#${offset}#${seen.size}`;
             seen.set(key, record);
@@ -1850,8 +1866,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             }
           }
         } catch (schemaErr) {
-          // Schema might not have data in source — that's OK
-          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+          // fetchAllMdmsV2Raw only throws on a genuine fetch failure (network/HTTP error, or the
+          // MAX_PAGES safety cap) — a schema that's simply empty at the source resolves to `[]`,
+          // not a rejection, so every path through here is a real failure. Recording it in
+          // results.data.failed (not just logging) is what makes `overallSuccess` correctly turn
+          // false instead of a bootstrap reporting success after silently skipping the schema.
+          const msg = schemaErr instanceof Error ? schemaErr.message : String(schemaErr);
+          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy failed: ${msg}`);
+          results.data.failed.push(`${schemaCode} (schema-level fetch failure): ${msg}`);
         }
       }
 
