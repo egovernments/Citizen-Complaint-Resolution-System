@@ -125,16 +125,16 @@ describe('image pin immutability', () => {
   //
   // Renamed wholesale to the `egovio/*` Docker Hub org by e6323a09
   // ("chore(compose): move all image refs to egovio Docker Hub org"). The
-  // count is unchanged at seven — same images, same debt, new owner — so this
-  // update records a rename, not a relaxation. (Note the pre-rename names
-  // still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml}, which
-  // this test does not read: it scans the base compose only.)
+  // count went seven -> six when the Jupyter Lab service was removed (#1743);
+  // every other entry is the same image under a new owner, so this records a
+  // rename plus one genuine retirement, not a relaxation. (Note the pre-rename
+  // names still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml},
+  // which this test does not read: it scans the base compose only.)
   const FROZEN_LATEST_DEBT: Record<string, number> = {
     'egovio/pgbouncer:latest': 1,
     'egovio/tilt-demo-db-migrations:latest': 1,
     'egovio/curl:latest': 2, // two gate containers
     'egovio/gatus:latest': 1,
-    'egovio/tilt-demo-jupyter:latest': 1,
     'openbao/openbao:latest': 1,
     'egovio/novu-bridge-endpoint:latest': 1,
   };

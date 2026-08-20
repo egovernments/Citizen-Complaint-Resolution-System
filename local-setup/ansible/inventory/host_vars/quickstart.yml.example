@@ -1,0 +1,253 @@
+# ═══════════════════════════════════════════════════════════════════
+# QUICKSTART — a complete, working deployment config for ONE machine.
+#
+# This is the shortest path to a running DIGIT CRS stack. It deploys to
+# the machine you run `./deploy.sh` on (no SSH, no remote server), over
+# plain HTTP on http://localhost, and turns on the browser onboarding
+# wizard so you can create your city without writing any code.
+#
+#   cp inventory/host_vars/quickstart.yml.example \
+#      inventory/host_vars/mycity.yml
+#   # edit the CHANGE ME lines below
+#   ./deploy.sh mycity
+#
+# The file name you choose IS the deployment name: `mycity.yml` means
+# `./deploy.sh mycity`. Real host_vars files are gitignored — only the
+# `.example` files are tracked — so your secrets stay out of git.
+#
+# Every setting is explained. `inventory/host_vars/_example.yml` is the
+# full catalogue with every knob the playbook supports; this file is the
+# subset you actually need on day one.
+#
+# ── The seven CHANGE ME lines ──────────────────────────────────────
+#   state_root, state_tenant_id, tenant_id, boot_tenant,
+#   ui_state_tenant_id, login_tenant_allowlist   → your tenant names
+#   map_center                                   → your city's coordinates
+#   pgr_boundary_* / boundary_type               → your admin-area names
+#   core_mobile_configs                          → your country's phone rule
+#   core_postal_configs                          → your country's postcode rule
+#   bootstrap_secrets                            → your passwords
+# Everything else can stay exactly as it is.
+# ═══════════════════════════════════════════════════════════════════
+
+# ────────── Where to deploy ──────────
+
+# `localhost` + `local` means "this machine" — Ansible does not SSH
+# anywhere, it runs the tasks right here. For a remote server instead,
+# put its IP or hostname in ansible_host and delete ansible_connection
+# (the controller then needs key-based root SSH to that address).
+ansible_host: localhost
+ansible_connection: local
+
+# The hostname people type in the browser. `localhost` keeps everything
+# on this machine; for a real server use the public DNS name, because
+# this value becomes nginx's server_name and the Let's Encrypt cert name.
+domain: localhost
+
+# HTTPS needs a certificate at /etc/letsencrypt/live/<domain>/, which a
+# localhost deployment does not have. Leave this false here; set it true
+# once you have a real domain with certificates.
+tls_enabled: false
+
+# ────────── Tenant names ──────────
+#
+# A "tenant" is one organisation's slice of the system: its own data, its
+# own users, its own branding. Tenants are two levels deep:
+#
+#   mycountry          the ROOT tenant   — the country or state
+#   mycountry.mycity   the CITY tenant   — where complaints actually live
+#
+# Rules: lowercase letters, digits and one dot. Pick short, permanent
+# names — renaming a tenant after data exists is not supported.
+
+# CHANGE ME — the root. Setting this to anything other than `pg` makes the
+# deploy build your root tenant and your city tenant from scratch, copying
+# the schemas, workflow and localisation from the shipped demo tenant and
+# creating an ADMIN login in each. (`pg` is that shipped demo tenant. Leave
+# this as `pg` only if you deliberately want to use the demo data as-is.)
+state_root: mycountry
+
+# CHANGE ME — the tenant the browser apps bind to. Keep it equal to
+# state_root: the configurator's login screen takes its default tenant
+# from the first segment of this value, and that is where your ADMIN
+# login lives.
+state_tenant_id: mycountry
+
+# CHANGE ME — your city tenant. The deploy creates this one too, and it is
+# where boundaries, departments, complaint types, employees and complaints
+# are stored. Must start with `<state_root>.`
+tenant_id: mycountry.mycity
+
+# CHANGE ME — only the opt-in CI test suite reads this, as BOOT_TENANT /
+# DIGIT_TENANT, so it does nothing unless run_ci_tests is true. Set it anyway:
+# preflight checks it is state_root itself or sits under it, and getting it
+# right now saves a failed deploy the day you turn the tests on.
+boot_tenant: mycountry.mycity
+
+# CHANGE ME — the tenant the SPA lands on after login. Point it at the CITY
+# tenant: that is where the onboarding wizard stores boundaries, and the
+# citizen, employee and complaint screens all have to read the same tenant.
+ui_state_tenant_id: mycountry.mycity
+
+# CHANGE ME — which tenants appear in the login screen's City dropdown.
+# A tenant that is missing here cannot be logged into, even though it
+# exists. List both your root and your city.
+login_tenant_allowlist:
+  - mycountry
+  - mycountry.mycity
+
+# Hide employee-UI modules you are not running. `IM` is the inbox, which
+# needs the Elasticsearch search stack (off below) — leaving it visible
+# would show employees a screen that always errors.
+employee_module_denylist:
+  - IM
+
+# ────────── Your country and city ──────────
+
+# CHANGE ME — REQUIRED, and there is no default: the deploy fails to render
+# the UI config without it. Where the complaint map opens when the browser
+# has no GPS fix and the complaint has no location yet. Use your city
+# centre; any maps site will give you the numbers.
+map_center:
+  lat: 0.0
+  lng: 0.0
+
+# CHANGE ME — what your administrative areas are called, largest first.
+# These are labels shown on the complaint form, so use the words your
+# staff use. Examples:
+#   Kenya      County   / Sub-County / Ward
+#   India      State    / District   / Locality
+#   Portugal   Distrito / Concelho   / Freguesia
+# `boundary_type` is the smallest area a complaint can be pinned to, and
+# must be one of the levels you create during onboarding.
+pgr_boundary_highest_level: "County"
+pgr_boundary_lowest_level: "Ward"
+boundary_type: "Ward"
+
+# The name of the boundary hierarchy you create in the onboarding wizard.
+# One value for the WHOLE deployment — every tenant on this machine must
+# use the same hierarchy name, or one of them gets empty location
+# dropdowns. `ADMIN` is the default the wizard offers; keep it unless you
+# have a reason not to.
+hierarchy_type: "ADMIN"
+
+# CHANGE ME — the phone-number rule for your country. `countryCode` is the
+# prefix shown next to the input box; `mobileNumberRegex` is what the
+# server actually enforces on signup and on employee records. Get this
+# wrong and every citizen signup is rejected as INVALID_MOBILE_FORMAT.
+#   Kenya       +254 / ^0?[17][0-9]{8}$
+#   India       +91  / ^[6-9][0-9]{9}$
+#   Mozambique  +258 / ^8[0-9]{8}$
+core_mobile_configs:
+  countryCode: "+254"
+  mobileNumberRegex: "^0?[17][0-9]{8}$"
+
+# CHANGE ME — the postal-code rule, same idea.
+#   Kenya 5 digits / India 6 / Mozambique 4 / US ^[0-9]{5}(-[0-9]{4})?$
+core_postal_configs:
+  postalCodePattern: "^[0-9]{5}$"
+
+# Object-storage bucket name shown to the browser apps. Any string is fine
+# on a local deployment — file uploads go to the built-in MinIO service.
+asset_s3_bucket: "mycity-egov-assets"
+
+# Footer logos in the citizen and employee UI. Absolute URLs, or empty for
+# none. You can add these later without redeploying anything else.
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+# ────────── What to run ──────────
+
+# `container` serves the citizen/employee SPA from its published image —
+# no build on this machine, fastest first deploy. Use `static` to build
+# the bundle from source at deploy time, or `hmr` for live-reload while
+# developing the UI.
+digit_ui_mode: container
+
+# Build and serve the onboarding wizard (DIGIT Studio) at /configurator/.
+# BOTH of these are needed: `build_configurator` produces the app,
+# `nginx_features.configurator` makes it reachable. This is how you create
+# your city and load its data, so leave both on.
+build_configurator: true
+
+# The MCP service creates your root and city tenants during the deploy.
+# `build_mcp: true` builds it from the copy inside this repo, so nothing
+# has to be pulled from a private registry.
+enable_mcp: true
+build_mcp: true
+
+# Load the shipped database dump on first boot instead of migrating an
+# empty database from nothing. There is no slow path — a fresh install
+# needs this.
+#
+# It also recreates the Postgres container, which DESTROYS data held in an
+# anonymous Docker volume. The second flag is you confirming that is fine.
+# On a first-ever deploy it always is. On a machine that already ran DIGIT,
+# check before you set it.
+db_fast_path: true
+db_fast_path_ack_data_wipe: true
+
+# Off by default, and each one costs real memory:
+enable_search_stack: false     # Elasticsearch + indexer + employee inbox (~3 GB)
+enable_novu: false             # SMS / email / WhatsApp notifications (~1 GB, 8 containers)
+enable_keycloak: false         # single sign-on; DIGIT's own OTP login works without it
+enable_otp_services: false     # real SMS OTP; without it the login OTP is always 123456
+enable_digit_ui_v2: false      # the newer citizen SPA at /citizen/
+run_ci_tests: false            # adds 5–10 minutes of Postman + Playwright to every deploy
+requires_nairobi_mdms: false   # an external config submodule most deployments do not use
+install_claude_code: false
+
+# Which URL paths the host nginx serves. A service that is running but has
+# no path here is unreachable from a browser. Keep every key: the nginx
+# template reads several of them without a fallback, so deleting a line
+# fails the deploy instead of turning that path off.
+nginx_features:
+  configurator: true         # /configurator/ — the onboarding wizard
+  configurator_caching: false
+  status: true               # /status/ — the Gatus health dashboard
+  mcp: true                  # /mcp + /v1/* — the tenant-creation API
+  grafana: true              # /grafana/ — dashboards; asks for a login
+  brand_assets: false
+  api_pgr: false
+  keycloak: false
+  digit_ui_v2: false
+  integration_tests: false
+  integration_tests_runner: false
+
+# Tag prefix used as a fallback when an image is not pinned in the compose
+# file. `build_mcp: true` above means nothing is actually pulled from it,
+# but a value is required whenever enable_mcp is on.
+docker_registry: "egovio"
+
+# Registries Docker may talk to over plain HTTP. MUST be empty for any
+# public registry: Docker refuses to start if a TLS host is listed here,
+# which takes the whole stack down.
+insecure_registries: []
+
+# ────────── Passwords ──────────
+
+# Where this deployment's secrets are stored inside OpenBao (the secret
+# store the playbook runs for you). Just a path, not a secret itself.
+secrets_path: kv/digit/mycity
+
+# CHANGE ME — written into OpenBao on the FIRST deploy only. Editing them
+# here afterwards does nothing; change them in OpenBao instead.
+#
+# `elasticsearch_master_password` is the one exception: it must stay
+# exactly as written while db_fast_path is true. The shipped dump's
+# encryption keys were sealed with this value, and a different one makes
+# every encrypted row unreadable.
+bootstrap_secrets:
+  postgres_password: change-me-strong
+  mcp_db_password: change-me-strong
+  minio_root_user: minioadmin
+  minio_root_password: change-me-strong
+  elasticsearch_master_password: "asd@#$@$!132123"   # do not change while db_fast_path is true
+  egov_hrms_default_password: "eGov@123"             # first password for every employee you onboard
+
+# The ADMIN account the deploy creates in each tenant, and that you use to
+# log into the configurator. Uncomment to change them — the defaults are
+# ADMIN / eGov@123, which are PUBLIC KNOWLEDGE. Change them before this
+# machine is reachable by anyone else.
+# bootstrap_user: ADMIN
+# bootstrap_password: "eGov@123"
