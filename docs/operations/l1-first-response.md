@@ -60,6 +60,31 @@ described as menu clicks, so you don't have to memorise addresses.
 recordings the system already made and draws them on screen. It does not control the
 system, and clicking around in it cannot start, stop or change anything. Explore it freely.
 
+### The nine dashboards, and the two that are yours
+
+Grafana's **Dashboards** menu lists nine pages. **This checklist uses two of them**, and the
+other seven are L2's. That is not a restriction on you — it is which questions belong to
+which tier.
+
+| Dashboard | Used in | Whose |
+|---|---|---|
+| **DIGIT JVM Services** | [Step 3](#step-3--did-something-crash-or-run-out-of-memory) — two panels only | **Yours** |
+| **DIGIT — Logs (Loki)** | [Step 4](#step-4--what-does-the-log-say) | **Yours** |
+| Node Exporter Full, PostgreSQL Database, Kong API Gateway, Redpanda (Kafka) Broker, DIGIT Kafka Consumer Lag, DIGIT — Traces (Tempo), DIGIT — PGR Analytics Queries | — | L2's |
+
+The seven answer *why* something is failing — is the database the bottleneck, is it the
+gateway or the service behind it, which pipeline is stuck. Reading them correctly needs to
+know what normal looks like on this deployment, and
+[working out why is not your job](#l1--first-response). Looking at them cannot break
+anything, so look if you are curious — just don't put conclusions from them in a ticket.
+
+**One exception worth knowing:** if a caller reports something that sounds like *"everything
+is slow"* or you see the words **"no space left on device"** anywhere, say so explicitly in
+the handover. Those two point L2 straight at a specific dashboard, and naming the symptom in
+those words saves them a step.
+
+What every dashboard shows, if you want to read ahead: **[dashboards.md](dashboards.md)**.
+
 ### What you need before your first call
 
 Check you actually have these, and ask L2 for anything missing. Each one is assumed by a
