@@ -1580,25 +1580,54 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // happened to fall past the 500th — including, on at least one deployment, the
       // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
       // to edit those masters in the configurator despite being correctly role-mapped.
-      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS
-      // schema. If a schema's result order isn't stable across separate
-      // offset-based requests, an unbounded loop would hang tenant_bootstrap
-      // forever; hitting the cap instead throws a loud, debuggable error.
+      //
+      // mdms-v2 orders results by createdtime DESC with no tiebreaker, and a bulk-seeded schema
+      // (e.g. ACCESSCONTROL-ACTIONS-TEST.actions-test, where ~329/330 rows share one
+      // createdtime from a single default-data-handler insert) has an unstable sort order across
+      // that tie — offset-based pages can then return the same row twice and skip another,
+      // silently dropping it from `all` even though total row count matched expectations. Dedup
+      // by uniqueIdentifier (mdms-v2's actual identity key) closes that gap; the count cross-check
+      // below is a hard signal that something was still missed if it ever fires.
+      //
+      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS schema. If a
+      // schema's result order isn't stable across separate offset-based requests, an unbounded
+      // loop would hang tenant_bootstrap forever; hitting the cap instead throws a loud,
+      // debuggable error.
       async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
         const PAGE_SIZE = 500;
         const MAX_PAGES = 200;
-        const all: MdmsRecord[] = [];
+        const seen = new Map<string, MdmsRecord>();
         let offset = 0;
-        for (let page = 0; page < MAX_PAGES; page++) {
-          const rows = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
-          all.push(...rows);
-          if (rows.length < PAGE_SIZE) return all;
+        let page: MdmsRecord[] = [];
+        for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
+          page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          for (const record of page) {
+            const key = record.uniqueIdentifier ?? `${schemaCode}#${offset}#${seen.size}`;
+            seen.set(key, record);
+          }
+          if (page.length < PAGE_SIZE) break;
           offset += PAGE_SIZE;
         }
-        throw new Error(
-          `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
-          `without a short page — aborting instead of paging indefinitely.`,
-        );
+        if (page.length === PAGE_SIZE) {
+          throw new Error(
+            `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
+            `without a short page — aborting instead of paging indefinitely.`,
+          );
+        }
+        const all = [...seen.values()];
+        try {
+          const expected = await digitApi.mdmsV2Count(tenant, schemaCode);
+          if (expected > 0 && all.length < expected) {
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: fetched ${all.length} unique rows but ` +
+              `_count reports ${expected} — pagination may have skipped rows under an unstable sort tie.`
+            );
+          }
+        } catch {
+          // Best-effort diagnostic only — an unreachable/unsupported _count endpoint must not
+          // fail the (already-successful) fetch itself.
+        }
+        return all;
       }
 
       // ────────────────────────────────────────────────────────────────

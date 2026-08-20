@@ -11,6 +11,14 @@ let authInfo: { user: { uuid: string; tenantId: string } } = { user: { uuid: 'u1
 // the policy check only ever applies to `type: 'mdms'` resources (see useMastersCapability.tsx).
 let resourceConfigOverrides: Record<string, unknown> = {};
 
+// Mirrors resourceRegistry.ts's real allowlist: `type: 'mdms'` plus the two
+// non-'mdms'-typed exceptions that still carry a real mdms-v2 write action.
+const EXPLICITLY_GATED_TYPES = new Set(['access-role', 'access-action']);
+function isAccessControlGated(config: { type?: string } | undefined): boolean {
+  if (!config) return false;
+  return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type as string);
+}
+
 vi.mock('@/providers/bridge', () => ({
   getAuthProvider: () => ({ getPermissions }),
   onAuthChange: (listener: () => void) => {
@@ -18,6 +26,7 @@ vi.mock('@/providers/bridge', () => ({
     return () => {};
   },
   getResourceConfig: (name: string) => resourceConfigOverrides[name] ?? { type: 'mdms', schema: name },
+  isAccessControlGated: (config: { type?: string } | undefined) => isAccessControlGated(config),
   digitClient: { getAuthInfo: () => authInfo },
 }));
 
@@ -114,5 +123,21 @@ describe('canViewResource/canEditResource — the ACCESSCONTROL policy check onl
     }
     expect(canView).not.toHaveBeenCalled();
     expect(canEdit).not.toHaveBeenCalled();
+  });
+
+  it('still consults masters.canView/canEdit for access-roles/access-actions despite their non-mdms type (#1826 review — type===\'mdms\' alone silently ungated these)', async () => {
+    resourceConfigOverrides['access-roles'] = { type: 'access-role', schema: 'ACCESSCONTROL-ROLES.roles' };
+    resourceConfigOverrides['access-actions'] = { type: 'access-action', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test' };
+    const canView = vi.fn(() => false);
+    const canEdit = vi.fn(() => false);
+    getPermissions.mockResolvedValue({ roles: ['GRO'], masters: { canView, canEdit } });
+
+    const { result } = renderCapability();
+    await waitFor(() => expect(result.current.roles).toEqual(['GRO']));
+
+    expect(result.current.canViewResource('access-roles')).toBe(false);
+    expect(canView).toHaveBeenCalledWith('ACCESSCONTROL-ROLES.roles');
+    expect(result.current.canEditResource('access-actions')).toBe(false);
+    expect(canEdit).toHaveBeenCalledWith('ACCESSCONTROL-ACTIONS-TEST.actions-test');
   });
 });

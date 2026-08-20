@@ -12,6 +12,7 @@ export {
   REGISTRY, getResourceConfig, getAllResources,
   getDedicatedResources, getMdmsResources, getGenericMdmsResources,
   getResourceIdField, getResourceLabel, getResourceBySchema,
+  isAccessControlGated,
 } from './providers/resourceRegistry.js';
 export type { ResourceConfig, ResourceType } from './providers/resourceRegistry.js';
 
