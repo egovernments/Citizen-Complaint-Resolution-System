@@ -1580,16 +1580,25 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // happened to fall past the 500th — including, on at least one deployment, the
       // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
       // to edit those masters in the configurator despite being correctly role-mapped.
+      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS
+      // schema. If a schema's result order isn't stable across separate
+      // offset-based requests, an unbounded loop would hang tenant_bootstrap
+      // forever; hitting the cap instead throws a loud, debuggable error.
       async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
         const PAGE_SIZE = 500;
+        const MAX_PAGES = 200;
         const all: MdmsRecord[] = [];
         let offset = 0;
-        for (;;) {
-          const page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
-          all.push(...page);
-          if (page.length < PAGE_SIZE) return all;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const rows = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          all.push(...rows);
+          if (rows.length < PAGE_SIZE) return all;
           offset += PAGE_SIZE;
         }
+        throw new Error(
+          `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
+          `without a short page — aborting instead of paging indefinitely.`,
+        );
       }
 
       // ────────────────────────────────────────────────────────────────
@@ -1710,8 +1719,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // ThemeConfig when querying mz). Without the filter, the bootstrap
           // falsely sees the record as already present and skips copying it,
           // leaving the target tenant without its own copy.
-          const sourceRecords = await fetchAllMdmsV2Raw(source, schemaCode);
-          const targetRecords = await fetchAllMdmsV2Raw(target, schemaCode);
+          const [sourceRecords, targetRecords] = await Promise.all([
+            fetchAllMdmsV2Raw(source, schemaCode),
+            fetchAllMdmsV2Raw(target, schemaCode),
+          ]);
           const targetByUid = new Map(
             targetRecords
               .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1833,7 +1844,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         for (const [schemaCode, records] of catalogFloor) {
           let existingUids = new Set<string>();
           try {
-            const rows = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+            const rows = await fetchAllMdmsV2Raw(target, schemaCode);
             existingUids = new Set(
               (rows || [])
                 .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1892,11 +1903,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let appendedTo = 0;
         let alreadyIn = 0;
         try {
-          const cityModuleRecords = await digitApi.mdmsV2SearchRaw(
-            tenantsScope,
-            'tenant.citymodule',
-            { limit: 100 },
-          );
+          const cityModuleRecords = await fetchAllMdmsV2Raw(tenantsScope, 'tenant.citymodule');
           for (const rec of cityModuleRecords) {
             const data = rec.data as Record<string, unknown>;
             const tenants = Array.isArray(data.tenants)
@@ -2047,8 +2054,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               });
           }
         }
-        const testRows = await fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test');
-        const haveRows = await fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions');
+        const [testRows, haveRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test'),
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions'),
+        ]);
         const haveUid = new Set(haveRows.map((r) => r.uniqueIdentifier));
         let bridged = 0;
         for (const r of testRows) {
@@ -2279,8 +2288,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
       try {
         const [deptRows, desigRows] = await Promise.all([
-          digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 500 }).catch(() => []),
-          digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 500 }).catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
         ]);
         derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
       } catch (e) {
@@ -2605,14 +2614,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // city-scoped rows and misses root depts. Query BOTH and union
           // by code so ADMIN's assignments cover every PGR dept.
           const [cityDepts, rootDepts, cityDesigs, rootDesigs] = await Promise.all([
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 100 }).catch(() => []),
+            fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Department', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 100 }).catch(() => []),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Department').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
+            fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Designation', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Designation').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
           ]);
 
           // City must have its own MDMS row for every dept it wants to
