@@ -258,7 +258,10 @@ You are checking two things, and only reading numbers:
 **DIGIT JVM Services**.
 
 **Set the time window first.** At the **top right** there is a time control — it usually
-says something like *Last 6 hours*. Everything on the screen is only about that window, so
+says something like *Last 6 hours*.
+
+![The time range control at the top right of every dashboard, reading "Last 6 hours"](images/10-time-range-control.png)
+ Everything on the screen is only about that window, so
 if you set it wrong you will see nothing and think all is well. Set it to **Last 6 hours**,
 or wider if the caller says the problem started earlier.
 
@@ -269,10 +272,29 @@ window you chose.
 | Reading | What it means |
 |---|---|
 | **0** | Normal. Nothing ran out of memory in that window |
-| **Anything above 0** | A service ran out of memory. This is a real finding |
+| **Anything above 0** | **Check the panel below before treating it as a finding** — see the next paragraph |
 
 If it is above zero, look at the panel directly below it, **"Incidents — OOM / heap-space
 errors"**. That lists the actual error lines and names the service.
+
+![The OOM events panel reading 116 in red — on this deployment every one of them was an echo, not a crash](images/20-oom-events-echo.png)
+
+*The panel above was photographed on a healthy deployment. All 116 were Grafana and Loki
+echoing a search back into the log — there had been no crash at all. Read the next paragraph
+before acting on a number like this.*
+
+> **Check the service name before you escalate — this number has a known blind spot.**
+> Grafana and Loki are the monitoring tools themselves, and they write your *search text*
+> back into the log as an ordinary log line. So whenever anyone searches for the words
+> "OutOfMemoryError", this panel counts that search as though it were a crash. On a
+> deployment where L2 has been investigating, the number can read in the **hundreds** while
+> nothing has actually crashed.
+>
+> **How to tell in five seconds:** in the "Incidents" panel below, look at the service each
+> line came from. If every line is from **`grafana`** or **`loki`**, there were **no real
+> out-of-memory events** — record it as `OOM events: 0 (all grafana/loki echo)` and move on.
+> Only lines naming an actual DIGIT service — `pgr-services`, `egov-indexer`,
+> `egov-user` and so on — are real.
 
 **What to do about it:**
 
@@ -359,11 +381,13 @@ Open **Grafana** → left menu **Dashboards** → open **DIGIT — Logs (Loki)**
 **You do not need to write a query here.** This dashboard has three dropdowns across the
 top; set them and the logs appear underneath.
 
+![The three controls across the top of the Logs dashboard: Service, Level and Search regex](images/30-logs-controls.png)
+
 | Control | Set it to |
 |---|---|
-| **service** | The service you suspect, from Step 2 or Step 3. If you have no suspect, leave it as `.+`, which means "all of them" |
-| **level** | `ERROR` — this hides routine chatter and shows only failures |
-| **q** | Leave empty. Or paste a complaint number here to follow one specific case through the system |
+| **Service** | The service you suspect, from Step 2 or Step 3. If you have no suspect, leave it as `.+`, which means "all of them" |
+| **Level** | `ERROR` — this hides routine chatter and shows only failures |
+| **Search regex** | Leave empty. Or paste a complaint number here to follow one specific case through the system |
 
 Then set the **time range** (top right) to **start ten minutes before the problem began**.
 Not when the caller rang — when it started. Failures cascade, and you want to catch the

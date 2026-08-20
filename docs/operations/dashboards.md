@@ -109,7 +109,7 @@ on them is meant to be read.
 
 | Panel | Shape | What it shows and what the reading means |
 |---|---|---|
-| **OOM events (current range)** | Stat | A count of out-of-memory crashes in your time range. **`0` is the healthy answer.** Above `0` means a service ran out of memory and crashed during that window. The easiest panel on the dashboard to read |
+| **OOM events (current range)** | Stat | A count of out-of-memory crashes in your time range. **`0` is the healthy answer.** Above `0`, **check the panel below before believing it** — this panel's query does not exclude Grafana and Loki, which log your own search text back into the stream, so searching for "OutOfMemoryError" inflates it. A reading in the hundreds with every incident line naming `grafana` or `loki` means zero real crashes |
 | **Incidents — OOM / heap-space errors (last range)** | Logs | The actual crash messages behind the number above, naming the service. If the stat panel is above zero, copy your evidence from here |
 | **Right-sizing snapshot — heap profile per service (heap, MB)** | Table | One row per service: memory in use now, its peak in the last hour, its ceiling. The **headroom** column is the useful one — the percentage of its allowance still free. Low headroom means the service is close to crashing. A capacity judgement, so L2's to act on |
 | **Heap used (MB) — by service** | Timeseries | Memory in use over time. A healthy line **rises and falls repeatedly** — that is normal. A line that **drops to zero and climbs again from the bottom** is a service that crashed and restarted at that moment |
@@ -137,11 +137,13 @@ the Java ones.
 
 **Three controls sit across the top.** You do not need to write a query — set these and read:
 
+![The three controls across the top of the Logs dashboard: Service, Level and Search regex](images/30-logs-controls.png)
+
 | Control | What to do with it |
 |---|---|
-| **service** | Which service's messages to show. Leave it as `.+` to see all of them |
-| **level** | How serious a message is. Set it to **`ERROR`** to hide routine chatter. `WARN` is "worth noticing", `INFO` is normal commentary |
-| **q** | A free-text filter. Paste a complaint number or user ID here to follow one case across every service that touched it |
+| **Service** | Which service's messages to show. Leave it as `.+` to see all of them |
+| **Level** | How serious a message is. Set it to **`ERROR`** to hide routine chatter. `WARN` is "worth noticing", `INFO` is normal commentary |
+| **Search regex** | A free-text filter. Paste a complaint number or user ID here to follow one case across every service that touched it |
 
 | Panel | Shape | What it shows and what the reading means |
 |---|---|---|
@@ -200,6 +202,12 @@ the only signal that says so.
 | **Current lag by group** | Stat | The same figure right now, one number per group. Use it to say "`egov-indexer` is 40,000 messages behind" in a report |
 | **Lag by topic and partition** | Table | Which specific queue is backed up. A single partition lagging while the others are fine usually means one poisonous message the consumer keeps failing on |
 | **Consumers per group** | Timeseries | How many workers are attached to each group. **Dropping to `0` means nothing is processing that queue at all** — the consumer died or lost its connection to the broker |
+
+![Consumers per group: one line per pipeline, each holding a steady count, with two brief dips toward zero](images/50-consumers-per-group.png)
+
+*One line per pipeline, each sitting at a steady number. The two narrow dips toward the
+bottom are a consumer briefly detaching and rejoining — normal. A line that **reaches zero
+and stays there** is the failure this panel exists to catch.*
 
 There is a **group** dropdown at the top to focus on one pipeline.
 
@@ -380,6 +388,18 @@ distinction is the whole value of this dashboard:
 | **Kong Proxy Latency across all services** | Time spent **inside Kong itself** — routing, authentication, plugins | The gateway is the bottleneck. Rare, and a genuine finding. Normally a small number — single-digit to low-tens of milliseconds |
 | **Upstream time across all services** | Time Kong spent **waiting for the service behind it** | The service is the bottleneck, not the gateway. This is the usual answer — and it tells you to go and look at that service instead |
 | *…per Service* / *…per Route* | The same two splits, broken down | Names the specific API that is slow. Use these once the totals tell you which half to look at |
+
+**What the pair looks like in practice.** Both panels below cover the same six hours on the
+same deployment — note the vertical scales, which is the whole point:
+
+![Kong Proxy Latency across all services, peaking around 175ms with most traffic under 25ms](images/40-kong-proxy-latency.png)
+
+![Upstream time across all services over the same window, peaking near 5 seconds](images/41-kong-upstream-time.png)
+
+The gateway's own work stays in the **tens of milliseconds**. The services behind it spike to
+**five seconds**. Same requests, same window, two orders of magnitude apart — so a user
+reporting "that screen is slow" is describing the second graph, and there is nothing to fix
+in the gateway.
 
 > **Read these two together.** Upstream time high and proxy latency flat means "the gateway
 > is fine, the service behind it is slow" — which redirects the whole investigation. Both
