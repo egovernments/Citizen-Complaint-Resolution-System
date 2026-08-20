@@ -83,6 +83,7 @@ public class NovuClient {
         // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
         if (StringUtils.hasText(templateId)) {
             Map<String, Object> overrides = buildProviderTemplateOverrides(templateId, contentVariables);
+            applyWhatsappIntegrationOverride(overrides, channel);
             return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
         }
 
@@ -90,6 +91,24 @@ public class NovuClient {
     }
 
     private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
+
+    /**
+     * Novu selects the PRIMARY integration for a channel unless the trigger names an
+     * explicit {@code overrides.<channel>.integrationIdentifier}. WhatsApp-via-Twilio is
+     * an "sms"-channel step in Novu, so without this override a WhatsApp send would
+     * silently resolve to the primary (plain SMS, non-WhatsApp-registered) Twilio
+     * integration and be rejected by Twilio for a from/to channel mismatch. Only applies
+     * when {@code novu.bridge.integration.id.whatsapp} is configured; otherwise this is a
+     * no-op so deployments without a dedicated WhatsApp integration are unaffected.
+     */
+    private void applyWhatsappIntegrationOverride(Map<String, Object> overrides, String channel) {
+        if (!"WHATSAPP".equalsIgnoreCase(channel) || !StringUtils.hasText(config.getWhatsappIntegrationId())) {
+            return;
+        }
+        Map<String, Object> smsOverride = new HashMap<>();
+        smsOverride.put("integrationIdentifier", config.getWhatsappIntegrationId());
+        overrides.put("sms", smsOverride);
+    }
 
     /**
      * The exact {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
