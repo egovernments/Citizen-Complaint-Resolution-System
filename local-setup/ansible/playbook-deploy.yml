@@ -183,9 +183,28 @@
     # `node esbuild.build.js`. `container` mode skips this entirely:
     # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
     # writable under become:false, and Mac always runs container mode.
+    # There is no default repo URL any more (#1503). The SPA source is in this
+    # monorepo and CI publishes it as egovio/digit-ui-esbuild, so the ordinary
+    # deploy pulls the bundle image and never clones. Fail fast rather than
+    # cloning a surprise fork when a mode that DOES need source has none.
+    - name: "digit-ui — a source-building mode needs digit_ui_esbuild_repo"
+      ansible.builtin.assert:
+        that:
+          - (digit_ui_esbuild_repo | default('')) | length > 0
+        fail_msg: >-
+          digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
+          target, but digit_ui_esbuild_repo is empty. Either set
+          digit_ui_bundle_image (static mode — the default,
+          egovio/digit-ui-esbuild:nightly-develop) and skip the build entirely,
+          or point digit_ui_esbuild_repo at a source tree to clone.
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
+
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
-        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        repo: "{{ digit_ui_esbuild_repo }}"
         dest: /opt/digit-ui-esbuild
         version: "{{ digit_ui_esbuild_branch | default('main') }}"
         update: yes
@@ -197,6 +216,7 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        - (digit_ui_esbuild_repo | default('')) | length > 0
         # When a prebuilt bundle image is pinned (static mode), the git
         # tree is not the source of what nginx serves — leave it alone so
         # a deploy can't silently regress build/ to an older checkout.
@@ -1632,7 +1652,12 @@
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
-    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # `npm run build` the SPA here (files/digit-ui-build.sh). With no
+    # digit_ui_esbuild_repo set — the default since #1503 — the repo argument is
+    # the "-" sentinel, i.e. VENDORED: build the monorepo's own
+    # digit-ui-esbuild/ tree in place, no clone. This path therefore needs no
+    # git source of its own, which is why the source-mode assert above does not
+    # cover it. Set digit_ui_esbuild_repo to build a fork instead.
     # The bundle is laid into the digit-ui container AFTER up -d via tar (see
     # the "lay digit-ui build into container" task below) — NOT a bind-mount:
     # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
@@ -1657,7 +1682,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
-        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ (digit_ui_esbuild_repo | default('')) or '-' }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
       environment:
         REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
@@ -2084,6 +2109,11 @@
     - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
       ansible.builtin.shell: |
         set -euo pipefail
+        # `docker cp` refuses a destination whose PARENT does not exist
+        # ("invalid output path: directory ... does not exist"). The git clone
+        # used to create /opt/digit-ui-esbuild as a side effect; this path skips
+        # the clone, so on a fresh target nothing else makes it. Create it here.
+        mkdir -p /opt/digit-ui-esbuild
         docker pull {{ digit_ui_bundle_image }}
         id=$(docker create {{ digit_ui_bundle_image }})
         trap 'docker rm -f "$id" >/dev/null' EXIT
