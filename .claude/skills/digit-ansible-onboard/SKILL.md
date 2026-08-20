@@ -187,7 +187,6 @@ in from their answers and the actual probe results. Mark each line with
               fully idempotent — re-runnable any time
 
   Tunnel UIs  ssh -L 18200:127.0.0.1:18200 <ssh-target>   # OpenBao UI
-              ssh -L 18888:127.0.0.1:18888 <ssh-target>   # Jupyter
 
 ▼ CI verification (if Q8 included ci_tests)
 

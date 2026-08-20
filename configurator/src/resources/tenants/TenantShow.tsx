@@ -1,6 +1,7 @@
 import { DigitShow } from '@/admin';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { useRecordContext } from 'ra-core';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 function TenantDetail() {
   const record = useRecordContext();
@@ -53,8 +54,9 @@ function TenantDetail() {
 }
 
 export function TenantShow() {
+  const { canEditResource } = useMastersCapability();
   return (
-    <DigitShow title="Tenant Details" hasEdit>
+    <DigitShow title="Tenant Details" hasEdit={canEditResource('tenants')}>
       <TenantDetail />
     </DigitShow>
   );

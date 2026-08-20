@@ -10,7 +10,7 @@ WSL2 sections are Windows-specific.
 
 ~40 containers: all DIGIT core services, PGR, the employee UI, citizen SPA,
 configurator (DIGIT Studio), Kong, host nginx on port 80, Gatus health board,
-Grafana/Prometheus/Loki/Tempo observability, Jupyter DataLoader, OpenBao —
+Grafana/Prometheus/Loki/Tempo observability, OpenBao —
 on the dump-seeded `pg` / `pg.citya` tenants. Login works immediately.
 
 Two sizing profiles (see step 4):
@@ -130,7 +130,6 @@ Re-runs into a healthy stack are idempotent and take ~1–2 min.
 | Configurator (DIGIT Studio) | http://localhost/configurator/ |
 | Health dashboard (Gatus) | http://localhost/status/ |
 | Grafana | http://localhost:13000 |
-| Jupyter DataLoader | http://localhost:18000/jupyter/lab?token=digit-crs-local |
 
 The play's final `INFRA VALIDATION RESULTS` summary should show every row
 green before you ever open a browser.
