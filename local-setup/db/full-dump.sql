@@ -2273,6 +2273,7 @@ COPY public.eg_filestoremap (id, filestoreid, filename, contenttype, module, tag
 --
 
 COPY public.eg_hrms_assignment (uuid, employeeid, "position", department, designation, fromdate, todate, govtordernumber, reportingto, ishod, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, iscurrentassignment, isactive) FROM stdin;
+4609ebfd-f848-4d06-906b-929172e34e9d	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	14	DEPT_3	COMM	1704067200000	\N	\N	\N	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t	\N
 742417ef-5fd1-4a09-952f-bee528691ba4	165804ce-d0bb-4f2a-9472-e011571ea872	15	DEPT_3	COMM	1704067200000	\N	\N	58f8343a-e158-4de4-9985-693e1de93f6b	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	t	\N
 55fb9686-5a17-4693-bf13-2ee30d8b04e3	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	14	DEPT_3	COMM	1704067200000	\N	\N	165804ce-d0bb-4f2a-9472-e011571ea872	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	t	\N
 23970647-a6de-404b-810e-c5a382f690f7	58f8343a-e158-4de4-9985-693e1de93f6b	16	DEPT_3	COMM	1704067200000	\N	\N	\N	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617196	\N	\N	t	\N
@@ -2317,6 +2318,7 @@ COPY public.eg_hrms_empdocuments (uuid, employeeid, documentid, documentname, re
 --
 
 COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus, employeetype, active, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, reactivateemployee) FROM stdin;
+8385379214609367381	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	PGWCSR4	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	\N
 35	79006ea0-100c-4332-8390-60edff9328c1	CI-ADMIN	1704067200000	EMPLOYED	PERMANENT	t	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	f
 2449003278391985061	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	PGGRO1	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	\N
 1610042153096662826	165804ce-d0bb-4f2a-9472-e011571ea872	PGLME2	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	\N
@@ -2329,6 +2331,7 @@ COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus,
 --
 
 COPY public.eg_hrms_jurisdiction (uuid, employeeid, hierarchy, boundarytype, boundary, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
+29b05cb4-2db3-4b41-abe0-e45052dbc926	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	ADMIN	Locality	SUN01_LOCALITY	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t
 323cb027-3ed0-47de-8265-1f99a4ad2020	79006ea0-100c-4332-8390-60edff9328c1	REVENUE	City	pg.citest	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	t
 9ca7415f-4796-4748-a242-40987da3143f	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	t
 d77ac74f-9c94-4535-bba4-584cbf0eabad	165804ce-d0bb-4f2a-9472-e011571ea872	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	t
@@ -3207,6 +3210,7 @@ COPY public.eg_ms_role (name, code, description, createddate, createdby, lastmod
 COPY public.eg_pgr_address_v2 (tenantid, id, parentid, doorno, plotno, buildingname, street, landmark, city, pincode, locality, district, region, state, country, latitude, longitude, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails) FROM stdin;
 pg.citest	d9a5d6a5-b455-492e-a5f4-b8251df2df15	9a36f8f0-747c-4d56-a0a1-5852a1395e9f	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	null
 pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d56e	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	null
+pg	22222222-3333-4444-8555-666666666666	11111111-2222-4333-8444-555555555555	\N	\N	\N	Lawrence Road	Near Company Bagh	pg	143001	SUN01_LOCALITY	\N	\N	\N	\N	31.634000	74.872300	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	null
 \.
 
 
@@ -3217,6 +3221,7 @@ pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d
 COPY public.eg_pgr_service_v2 (id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, applicationstatus, rating, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
 6a63f17f-7c15-4432-98ca-ea625840d56e	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000185	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	t
 9a36f8f0-747c-4d56-a0a1-5852a1395e9f	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000186	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	t
+11111111-2222-4333-8444-555555555555	pg	BurningOfGarbage	PG-PGR-2026-05-13-000187	Seeded complaint with real coordinates for the geo-link regression test	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "Health & Sanitation", "serviceName": "Burning of garbage"}	CLOSEDAFTERRESOLUTION	\N	web	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	t
 \.
 
 
@@ -3257,6 +3262,7 @@ COPY public.eg_url_shortener (id, validform, validto, url) FROM stdin;
 --
 
 COPY public.eg_user (title, salutation, dob, locale, username, password, pwdexpirydate, mobilenumber, altcontactnumber, emailid, createddate, lastmodifieddate, createdby, lastmodifiedby, active, name, gender, pan, aadhaarnumber, type, version, guardian, guardianrelation, signature, accountlocked, bloodgroup, photo, identificationmark, tenantid, id, uuid, accountlockeddate, alternatemobilenumber, countrycode) FROM stdin;
+\N	\N	1990-01-01 00:00:00	\N	489366|Akbz2PLPzw2E3FZE7Ak0bdmUKjFMyzo=	$2a$10$PXw1FAYq8TI3uxT.CjKqtORHp0VPvbWPG1yxl1nZe/VSlNeValOe2	2026-11-09 08:39:35.269	489366|azmTrZSty49+YDbUaps6CTurligysHSFjdo=	\N	\N	2026-08-11 08:39:35.276	2026-08-11 08:39:35.276	29	29	t	489366|AkaEzMDvn58JB2jf7veWSVev22FC35ZfZLGc	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	55	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	\N	\N	+91
 \N	\N	\N	\N	489366|G0/w3vPTuvMVAWkFYIgjXgs97GHSfarXKMKbCd4=	$2a$10$lVGJ27y7QRJ0f46z4d6uDeTml6nt9cMaoc7XpUZ.ZhrEranpNPQ8W	2026-05-10 05:25:11.553	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	\N	2026-02-09 05:25:11.563	2026-02-09 05:25:11.563	\N	\N	t	489366|G2/Q/tPzmtNqGVMjQL+zclwglO6ImyjeulzdbteyJ/LZvBbUx2SFWEKY	2	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	pg	3	f80147a7-9711-4a56-9bd3-da4733a59df4	\N	\N	\N
 \N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$bpX.KI6M/WMsvI.1GdX3HeuRKI9F6Pc3gsfGyMtmuvJlnILvNkjfS	2026-08-11 09:00:05.401	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:00:05.411	2026-05-13 09:00:05.411	1	1	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	pg	20	f1a94c66-a4b5-46da-9492-07b7db54c69f	\N	\N	\N
 \N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$opgEKfQzL.6wLhDP2B8lRecOXULN4/jbP98BZoqzE1CHncrNTCh8W	2026-08-11 09:13:47.739	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.751	2026-05-13 09:13:47.751	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	29	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N
@@ -3331,6 +3337,8 @@ COPY public.eg_userrole (roleid, roleidtenantid, userid, tenantid, lastmodifiedd
 --
 
 COPY public.eg_userrole_v1 (role_code, role_tenantid, user_id, user_tenantid, lastmodifieddate) FROM stdin;
+EMPLOYEE	pg	55	pg	2026-08-11 08:39:35.279
+CSR	pg	55	pg	2026-08-11 08:39:35.279
 INTERNAL_MICROSERVICE_ROLE	pg	3	pg	2026-02-09 05:25:11.571
 CITIZEN	pg	20	pg	2026-05-13 09:00:05.415
 PGR_VIEWER	pg	29	pg	2026-05-13 09:13:47.758
@@ -3481,6 +3489,10 @@ cb276065-655b-442a-a203-3d9731470804	pg.citest	PGR	PG-PGR-2026-05-13-000185	RATE
 2adda6be-758d-4bdf-aaec-fa5cede93ebe	pg.citest	PGR	PG-PGR-2026-05-13-000186	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552529	1778664552529	pgr-services	431999818	\N	f
 8a840e0d-2623-456d-803b-c257500594ce	pg.citest	PGR	PG-PGR-2026-05-13-000186	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552714	1778664552714	pgr-services	431999633	\N	f
 0291b94b-30a8-4ff4-a5c4-4cd8a299d49a	pg.citest	PGR	PG-PGR-2026-05-13-000186	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	79006ea0-100c-4332-8390-60edff9328c1	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552865	1778664552865	pgr-services	431999482	\N	f
+a1000000-0000-4000-8000-000000000001	pg	PGR	PG-PGR-2026-05-13-000187	APPLY	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552347	1778664552347	pgr-services	432000000	\N	f
+a1000000-0000-4000-8000-000000000002	pg	PGR	PG-PGR-2026-05-13-000187	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552529	1778664552529	pgr-services	431999818	\N	f
+a1000000-0000-4000-8000-000000000003	pg	PGR	PG-PGR-2026-05-13-000187	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552714	1778664552714	pgr-services	431999633	\N	f
+a1000000-0000-4000-8000-000000000004	pg	PGR	PG-PGR-2026-05-13-000187	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552865	1778664552865	pgr-services	431999482	\N	f
 \.
 
 
@@ -4263,12 +4275,15 @@ ae49ac75-96a7-46e4-ab74-c26ab9d894ce	en_IN	CS_COMMON_INBOX	Inbox	pg	rainmaker-pg
 5437079a-3313-48a6-bdda-b3e57b82bff6	en_IN	CS_COMMON_NEXT	Next	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 1668de73-9861-4693-a15e-50a1da1885ed	en_IN	CS_COMMON_OPEN	Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b5337311-de30-4178-8f05-b370e4202e09	en_IN	CS_COMMON_PENDINGATLME	Pending at LME	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc823a3e-387d-4f4b-8f6a-8748c7f71009	en_IN	CS_COMMON_PENDINGATSUPERVISOR	Pending At Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 587ab442-cca1-4dcc-ae0b-633a8403e550	en_IN	CS_COMMON_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 5fadce20-585c-4ec2-aad3-522e79704566	en_IN	CS_COMMON_PINCODE_NOT_SERVICABLE	Sorry we are not providing service in this city	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 179cd06f-fd3c-42cd-87eb-bcc16c8f61fb	en_IN	CS_COMMON_RATING_SUBMIT_TEXT	By making your voice heard, you help us improve mSeva.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 e74a7355-4f52-4db9-82e3-4f7e8d5edb6d	en_IN	CS_COMMON_REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a9a6fdec-60ad-4e43-b186-c2be1fda1f72	en_IN	CS_COMMON_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 023a7e3f-7101-4f9e-b1b5-a73555952cb6	en_IN	CS_COMMON_REQUIRED_FIELDS_MISSING	Required fields missing	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b23b70dc-5425-47da-b52f-8d23f3ee6117	en_IN	CS_COMMON_RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7375322-d673-4a51-ba1c-ebdeea8e179c	en_IN	CS_COMMON_RESOLVED	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 93629ebe-92e0-4181-bffd-7f525876725f	en_IN	CS_COMMON_SEARCH_BY	SEARCH BY	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 f257e790-d35c-458f-84b8-f8114a84a2f4	en_IN	CS_COMMON_SELECT_EMPLOYEE	Select Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 8b730fdc-5ce7-4e49-8d7a-c5d320c271b9	en_IN	CS_COMMON_SKIP	Skip and Continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
@@ -6000,7 +6015,7 @@ SELECT pg_catalog.setval('public.seq_eg_tl_apl', 1, false);
 -- eg_user ids 40-42. Leaving it at 35 makes the sequence hand out 40 to the next
 -- citizen created at runtime and collide -> DuplicateKeyException on citizen _create,
 -- which fails citizen.setup and cascade-skips the entire suite.
-SELECT pg_catalog.setval('public.seq_eg_user', 50, true);
+SELECT pg_catalog.setval('public.seq_eg_user', 60, true);
 
 
 --
