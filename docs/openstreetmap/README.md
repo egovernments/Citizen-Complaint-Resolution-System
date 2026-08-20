@@ -1,16 +1,16 @@
-# OpenStreetMap in CCRS
+# OpenStreetMap in DIGIT CMS
 
-Every geospatial feature in CCRS — citizen complaint pin maps, configurator boundary
-onboarding, dashboard choropleths — sits on OpenStreetMap. Parts 10–30 describe the OSM
-ecosystem and stay true regardless of our code. Parts 40–50 describe our implementation
-and our history, and go stale when we ship.
+Every geospatial feature in the DIGIT Complaint Management System (DIGIT CMS) — citizen
+complaint pin maps, configurator boundary onboarding, dashboard choropleths — sits on
+OpenStreetMap. Parts 10–30 describe the OSM ecosystem and stay true regardless of our code.
+Parts 40–50 describe our implementation and our history, and go stale when we ship.
 
 | Part | Covers |
 |---|---|
 | [10 — Data](10-data.md) | The OSM data model, `admin_level`, ODbL, and where boundary data comes from (OSM and otherwise) |
 | [20 — Services](20-services.md) | Overpass and Nominatim: query shapes, quotas, the policies that bind us, and how to self-host |
 | [30 — Rendering](30-rendering.md) | Tiles, client libraries, providers, attribution |
-| [40 — Our implementation](40-ccrs-implementation.md) | Every CCRS call site, deploy flags, `boundary-service` quirks, known gaps |
+| [40 — Our implementation](40-cms-implementation.md) | Every CMS call site, deploy flags, `boundary-service` quirks, known gaps |
 | [50 — What we have onboarded](50-case-studies.md) | Maputo, Bomet, Nairobi: what worked, what OSM could not supply |
 
 Adjacent docs, not duplicated here: [`docs/map-config.md`](../map-config.md) is
@@ -50,4 +50,4 @@ Three constraints that have each cost us a bug:
 | Basemap tiles | every map | public CARTO / OSMF endpoints | **high — keyless courtesy endpoints** |
 
 The operator-side dependencies have been hardened; the citizen-side ones have not.
-[Part 40](40-ccrs-implementation.md) lists the specific gaps.
+[Part 40](40-cms-implementation.md) lists the specific gaps.

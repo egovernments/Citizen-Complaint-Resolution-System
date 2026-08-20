@@ -1,4 +1,4 @@
-# 40 — Our implementation
+# 40 — DIGIT CMS implementation
 
 The code is authoritative; fix this page when it drifts. File paths are given without line
 numbers, which decay immediately.

@@ -24,11 +24,11 @@ Two template placeholders: `{s}` is a subdomain rotation for HTTP/1.1 connection
 For a multi-language municipal platform, runtime label localisation is the strongest
 argument for vector: raster tile labels cannot follow the user's locale, so a Swahili or
 Portuguese UI still shows English map labels. That is the one constraint here that has
-actually bitten us — see [part 40](40-ccrs-implementation.md).
+actually bitten us — see [part 40](40-cms-implementation.md).
 
 ## Libraries
 
-CCRS uses **[Leaflet](https://leafletjs.com) 1.9** everywhere, called directly rather than
+DIGIT CMS uses **[Leaflet](https://leafletjs.com) 1.9** everywhere, called directly rather than
 through `react-leaflet` in newer code — the repo carries several React majors and
 `react-leaflet` couples to specific ones, failing at runtime rather than at build.
 [MapLibre GL JS](https://maplibre.org) (BSD-3, the open fork of Mapbox GL JS v1) is the

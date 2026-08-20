@@ -186,7 +186,7 @@ A country vector basemap is tens to low hundreds of MB; the planet is ~100 GB as
 For a deployment that must own its basemap, Planetiler → PMTiles → MapLibre removes the
 tile server, the render queue and the eviction problem at once. This is an option we have
 not taken, not current implementation — see the gaps in
-[part 40](40-ccrs-implementation.md).
+[part 40](40-cms-implementation.md).
 
 ### Operational notes
 

@@ -21,7 +21,7 @@ OSM, queried through Overpass and assembled with `osm2geojson`, supplied **70 po
 Of those 70 features, **68 matched kit codes**; the two that did not (`Ribjene`,
 `Bairro 7 de Setembro`) carry no `code` property at all and are silently dropped. All 70
 arrive as `MultiPolygon` and are therefore collapsed to a single ring by
-`coerceForBoundaryService` ([part 40](40-ccrs-implementation.md)).
+`coerceForBoundaryService` ([part 40](40-cms-implementation.md)).
 
 **The lesson:** OSM covered the top three levels completely and the fourth not at all. The
 quarteirão is the level closest to actual service delivery, and 94% of this tenant's
@@ -48,7 +48,7 @@ Two things this cost:
   matching — `Ndaraweta` against `NADARAWETA`, `Kapletundo` against `APLETUNDO`.
 - **Backfilling an existing tenant.** These wards already existed with placeholder
   geometry, and `boundary-service` has no `/boundary/_update`
-  ([part 40](40-ccrs-implementation.md)), so the geometry had to be written another way.
+  ([part 40](40-cms-implementation.md)), so the geometry had to be written another way.
   Getting geometry right during onboarding is much cheaper than adding it later.
 
 **The lesson:** for the level that carries legal and service-delivery meaning, the national
