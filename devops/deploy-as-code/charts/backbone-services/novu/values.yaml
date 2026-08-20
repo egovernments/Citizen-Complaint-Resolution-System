@@ -14,6 +14,9 @@ ingress:
   # DIFFERENT environment, inherited from the upstream import — so the
   # dashboard did not serve on the deployment's own domain at all.
   host: "domain.com"
+  # Browser-facing origin. Unlike Kubernetes service names, this must resolve
+  # from the operator's browser. The helmfile overrides this alongside host.
+  publicOrigin: "https://domain.com"
   path: "/novu(/|$)(.*)"
   # Populated per deployment by the helmfile, same secret every other ingress
   # in this tree uses.
@@ -22,6 +25,16 @@ ingress:
   service:
     name: "novu-dashboard"
     port: 4000
+  api:
+    path: "/novu-api(/|$)(.*)"
+    service:
+      name: "novu-api"
+      port: 3000
+  ws:
+    path: "/novu-ws(/|$)(.*)"
+    service:
+      name: "novu-ws"
+      port: 3002
 
 # Global defaults from Novu community .env example
 # Adjust these for your environment.
@@ -171,11 +184,11 @@ api:
     - name: NODE_ENV
       value: {{ .Values.global.nodeEnv | quote }}
     - name: API_ROOT_URL
-      value: {{ printf "%s:%d" .Values.global.hostName (int .Values.api.port) | quote }}
+      value: {{ printf "%s/novu-api" .Values.ingress.publicOrigin | quote }}
     - name: PORT
       value: {{ .Values.api.port | quote }}
     - name: FRONT_BASE_URL
-      value: {{ printf "%s:%d" .Values.global.hostName (int .Values.dashboard.port) | quote }}
+      value: {{ printf "%s/novu" .Values.ingress.publicOrigin | quote }}
     - name: MONGO_URL
       value: {{ printf "mongodb://%s:%s@%s:%d/novu-db?authSource=admin" .Values.mongodb.auth.username .Values.mongodb.auth.password .Values.mongodb.name (int .Values.mongodb.port) | quote }}
     - name: MONGO_MIN_POOL_SIZE
@@ -413,11 +426,13 @@ dashboard:
     port: 4000
   env: |
     - name: VITE_API_HOSTNAME
-      value: {{ printf "http://%s:%d" .Values.api.name (int .Values.api.port) | quote }}
+      value: {{ printf "%s/novu-api" .Values.ingress.publicOrigin | quote }}
     - name: VITE_SELF_HOSTED
       value: "true"
     - name: VITE_WEBSOCKET_HOSTNAME
-      value: {{ printf "http://%s:%d" .Values.ws.name (int .Values.ws.port) | quote }}
+      # socket.io-client uses the URL origin but defaults its transport path to
+      # /socket.io; putting /novu-ws here is silently discarded by Novu 2.3.0.
+      value: {{ .Values.ingress.publicOrigin | quote }}
     - name: VITE_BASE_PATH
       value: {{ .Values.dashboard.basePath | quote }}
     - name: VITE_PUBLIC_PATH

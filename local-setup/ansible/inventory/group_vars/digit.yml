@@ -79,9 +79,11 @@ enable_search_stack: false
 # Lowering this value on an existing box now TEARS DOWN the containers
 # that leave the selection, rather than orphaning them running (#1687).
 #
-# Footprints are the caps PROPOSED in #1612, which is still open — no
-# observability container has a `mem_limit` today, so these are a paper
-# budget and not an enforced ceiling or a measurement.
+# Footprints are approximate. The caps from #1612 have since landed as
+# `deploy.resources.limits.memory` in docker-compose.egov-digit.yaml:
+# prometheus 512M, loki 512M, tempo 384M, otel-collector 320M,
+# grafana 256M, promtail 128M, gatus 64M. So these are enforced ceilings
+# now, though the figures below are still budget rather than measurement.
 #
 # This matters because the boxes are small: 29 services declare ~12.8 GB
 # of max heap on machines that are commonly 16 GB and have NO swap, so

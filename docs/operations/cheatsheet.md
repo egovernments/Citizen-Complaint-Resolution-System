@@ -82,7 +82,7 @@ sum by (compose_service) (count_over_time({compose_project="digit"} |~ `(?i)erro
 |---|---|
 | **Logs** | **72 hours** |
 | **Metrics** | **15 days** |
-| **Health-check history** | **lost on restart — screenshot it** |
+| **Health-check history** | survives restarts (SQLite); ~100 results / 50 events per endpoint |
 
 ---
 

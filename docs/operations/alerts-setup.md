@@ -43,20 +43,22 @@ expected.
 
 **Two things to know about access:**
 
-- Grafana is configured for **anonymous Admin access with the login form disabled**
-  (`GF_AUTH_ANONYMOUS_ORG_ROLE: Admin`, `GF_AUTH_DISABLE_LOGIN_FORM: true`). You should be
-  able to create alert rules immediately, with no account. Two consequences worth knowing
-  before you start:
-  - **There is no user identity.** Grafana cannot record who created, edited or silenced a
-    rule, and anyone with the URL has the same power. **Keep your own written change log.**
-    If the instance is reachable from the public internet, ask us to put it behind your VPN
-    or an authenticating proxy.
-  - **There is also no way to sign in as a real user through the UI**, because the login
-    form is switched off. So before you invest an afternoon in building rules, do step 1 of
-    [Creating your first rule](#creating-your-first-rule-click-by-click) and **press Save
-    once**. If saving is rejected, don't work around it — tell us, and use the
-    [alerts-as-code path](#shipping-alerts-as-code-so-they-survive-a-rebuild) instead, which
-    does not depend on the UI at all.
+- **You need a Grafana login before you start.** The login form is enabled
+  (`GF_AUTH_DISABLE_LOGIN_FORM: "false"`), the user is `admin`, and the password is
+  generated on the first deploy and stored in OpenBao — your system administrator can
+  read it back with
+  `bao kv get -field=grafana_admin_password kv/digit/<deployment>`. Get it before you
+  invest an afternoon in building rules.
+  - **Anonymous access is a separate, off-by-default switch.** `GF_AUTH_ANONYMOUS_ENABLED`
+    follows the deployment's `grafana_anonymous_enabled`, which defaults to `false`, and
+    the anonymous role is pinned to **Viewer** in the compose file. A Viewer cannot create
+    alert rules, so if you are browsing without logging in, Save will be rejected — log in
+    rather than working around it.
+  - **Everyone shares the one `admin` account**, so Grafana cannot record who created,
+    edited or silenced a rule. **Keep your own written change log.** If the instance is
+    reachable from the public internet, ask us to put it behind your VPN or an
+    authenticating proxy — and note that a Viewer can run arbitrary Loki queries, which is
+    why anonymous access is not a safe default here.
 - Rules you create in the UI are stored in Grafana's own database inside the
   `grafana_data` Docker volume. They survive restarts and redeployments. They do **not**
   survive `docker compose down -v` — which is one more reason that command appears on the
@@ -305,7 +307,7 @@ Notes:
 
 ### Synthetic alerts and the dead-man's switch
 
-**Endpoint checks.** The Gatus health dashboard at `/status/` already probes ~50 endpoints
+**Endpoint checks.** The Gatus health dashboard at `/status/` already probes up to 57 endpoints
 every 30 seconds, but it does not notify anyone by default. Turning on **Gatus's own
 alerting** gives you "service X is down" notifications without any Grafana rules at all —
 it is the cheapest coverage you can add, and it is the only thing that watches the

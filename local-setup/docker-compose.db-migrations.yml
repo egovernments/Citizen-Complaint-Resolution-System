@@ -194,7 +194,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: enc_schema_version
+      # egov_enc_service_schema is the canonical name (db/flyway-history-map.yml);
+      # enc_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_enc_service_schema
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: none
       # DEV ONLY - override via .env or environment for non-local use
@@ -244,7 +247,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      # mdms_v2_schema is the canonical name (db/flyway-history-map.yml);
+      # mdms_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: mdms_v2_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
@@ -553,7 +559,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      # egov_workflow_v2_schema is the canonical name (db/flyway-history-map.yml);
+      # workflow_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_workflow_v2_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
@@ -649,7 +658,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      # boundary_service_schema is the canonical name (db/flyway-history-map.yml);
+      # boundary_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: boundary_service_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -681,7 +693,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:abac-changes-cb6a372
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -788,7 +800,10 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      # egov_filestore_schema is the canonical name (db/flyway-history-map.yml);
+      # filestore_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_filestore_schema
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
@@ -884,7 +899,10 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      # egov_hrms_schema is the canonical name (db/flyway-history-map.yml);
+      # hrms_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_hrms_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
@@ -1346,49 +1364,6 @@ services:
         limits:
           memory: 64M
           cpus: '0.1'
-    networks:
-      - egov-network
-
-  # ==================== Jupyter Lab for PGR Configuration ====================
-  jupyter:
-    build:
-      context: ./jupyter
-      dockerfile: Dockerfile
-    container_name: digit-jupyter
-    user: root
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      kong:
-        condition: service_healthy
-    environment:
-      DIGIT_URL: http://kong:8000
-      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
-      DIGIT_DIRECT_USER: http://egov-user:8107
-      DIGIT_DIRECT_PGR: http://pgr-services:8080
-      DIGIT_TENANT: pg
-      JUPYTER_ENABLE_LAB: "yes"
-    command: >
-      jupyter lab
-      --ip=0.0.0.0
-      --port=8888
-      --no-browser
-      --allow-root
-      --ServerApp.token=${JUPYTER_TOKEN:-digit-crs-local}
-      --ServerApp.password=''
-      --ServerApp.base_url=/jupyter
-      --ServerApp.allow_origin='*'
-    ports:
-      - "18888:8888"
-    volumes:
-      - ./jupyter/dataloader:/home/jovyan/work
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
     networks:
       - egov-network
 
