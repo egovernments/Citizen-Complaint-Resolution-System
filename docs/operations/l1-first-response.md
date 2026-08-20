@@ -26,15 +26,19 @@ system by following this page.
 
 ### Logins and passwords
 
-The two pages you'll use — the health dashboard and Grafana — **need no login on these
-deployments**. You open the URL and you're in. That is deliberate, so the service desk is
-never blocked waiting for an account.
+**The health dashboard needs no login.** Open the URL and you're in.
+
+**Grafana does need one**, and you should get it *before* your first call rather than during
+it. The user is `admin`, and the password is generated when the deployment is first built and
+stored in a secret store — so **ask your system administrator for it**. It is not a shared
+default and it cannot be guessed. Steps 3 and 4 below both need it.
 
 Everything else, ask your **system administrator** for:
 
 | If you need | Ask your system administrator |
 |---|---|
-| A password prompt appears on the health dashboard or Grafana | They'll tell you the right URL, or add you to the VPN |
+| **The Grafana password** (user is `admin`) | Needed for Steps 3 and 4. Ask for it before your first call |
+| A password prompt appears where you did not expect one | They'll tell you the right URL, or add you to the VPN |
 | The **Novu** notification dashboard (to see if a message was sent) | Access is not part of the service desk by default |
 | The **SMS / WhatsApp provider console** (to check credit or credentials) | Usually held by whoever owns the provider contract |
 | Access to the **server itself** | That is L2's, not yours — you never need it for this checklist |
@@ -50,7 +54,7 @@ described as menu clicks, so you don't have to memorise addresses.
 | Page | URL | What it is |
 |---|---|---|
 | **Health dashboard** | `https://<your-domain>/status/` | A page that automatically tries up to 57 parts of the system every 30 seconds and colours each one green or red |
-| **Grafana** | `https://<your-domain>/grafana/` | The system's own recordings — memory, errors, logs — shown as charts and lists |
+| **Grafana** | `https://<your-domain>/grafana/` | The system's own recordings — memory, errors, logs — shown as charts and lists. **Asks for a login** |
 
 **About Grafana**, because it looks intimidating the first time: it is a *viewer*. It reads
 recordings the system already made and draws them on screen. It does not control the
@@ -64,6 +68,8 @@ step below.
 | You need | Used in | If you don't have it |
 |---|---|---|
 | The two URLs above, reachable from your desk | Steps 2–4 | Ask L2 — Grafana may sit behind the VPN |
+| The **Grafana password** | Steps 3–4 | Ask your system administrator. Without it you can do Steps 0–2 and must hand over there |
+| To know this deployment's **observability level** | Step 4 | Ask L2. On a `metrics`-level deployment there are no logs to read — see Step 4 |
 | A **login of your own** for the system | Step 1 | You cannot confirm scope; say so in the ticket rather than guessing |
 | A **second test login**, ideally in a different office | Step 1 | Ask a colleague to try instead, and note whose account was used |
 | The **maintenance window**, written on your [cheat sheet](cheatsheet.md) | Step 3 | Ask L2 before reporting restarts |
@@ -142,8 +148,9 @@ alarm.
 
 ### What this page is
 
-The **health dashboard** is a page that tries about 50 different parts of the system every
-30 seconds and shows the result as a coloured tile. Green means that part answered. Red
+The **health dashboard** is a page that tries every part of the system — up to 57 checks,
+though most deployments run somewhat fewer — every 30 seconds, and shows each result as a
+coloured tile. Green means that part answered. Red
 means it did not. You don't run anything — the page is already doing it continuously, and
 you're reading the latest result.
 
@@ -310,6 +317,15 @@ you can put in a ticket.
 
 Logs are kept for **72 hours**, so a problem from last week has no log left. This is why
 reporting quickly matters.
+
+> **First check this step applies to your deployment.** Searchable logs come from a component
+> called Loki, and some deployments are configured without it to save memory and disk — see
+> [README § How much monitoring this deployment runs](README.md#how-much-monitoring-this-deployment-runs).
+> If **DIGIT — Logs (Loki)** is not in the dashboard list at all, that is a deployment
+> decision and **not a fault**. Skip to [Step 5](#step-5--resolve-or-escalate), and write in
+> the ticket: *"no log search on this deployment"* — L2 can still read logs on the server
+> itself. Ask L2 once which level you are on and note it on your
+> [cheat sheet](cheatsheet.md), so nobody rediscovers this mid-incident.
 
 ### How to get there
 

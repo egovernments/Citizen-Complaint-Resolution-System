@@ -18,6 +18,7 @@ to hand us a report we can act on straight away.
 | **About to report something to us** | **[incident-report.md](incident-report.md)** |
 | **Mid-incident and want one page** | **[cheatsheet.md](cheatsheet.md)** |
 | **Setting up monitoring** so you hear about problems first | **[alerts-setup.md](alerts-setup.md)** and **[alert-channels.md](alert-channels.md)** |
+| **Looking at a Grafana dashboard** and unsure what it means | **[dashboards.md](dashboards.md)** |
 | **Looking something up** | **[reference.md](reference.md)** |
 
 The handbook assumes a first line and a second line, and the two runbooks are written for
@@ -99,6 +100,11 @@ Replace `<your-domain>` with your deployment's domain throughout this handbook.
 | **Logs** | `https://<your-domain>/grafana/d/digit-loki-logs/` | The actual error text |
 | **Service metrics** | `https://<your-domain>/grafana/d/digit-jvm/` | Memory, CPU, restarts, OOM |
 
+Those four are all first response needs. Grafana carries **nine dashboards** in total —
+including the database, the API gateway, the message broker and the supervisor dashboard's
+own timings. What each one shows and which panels to read is
+**[dashboards.md](dashboards.md)**.
+
 > **Access note.** Grafana asks for a login. The user is `admin`; the password is
 > generated on the first deploy and stored in this deployment's OpenBao, so **ask your
 > system administrator for it** — it is not a shared default you can guess. Anonymous
@@ -108,10 +114,37 @@ Replace `<your-domain>` with your deployment's domain throughout this handbook.
 > arbitrary Loki queries, and the logs contain live session tokens. See
 > [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
 >
-> **Credentials.** Nothing in the first-response checklist needs a password. For the things
-> that do — the Novu notification dashboard, the SMS/WhatsApp provider console, or server
-> access — **ask your system administrator**. Never send credentials in a ticket or a chat
-> message, including to us.
+> **Credentials.** The health dashboard needs no login; Grafana does, so the service desk
+> needs that password in advance — see above. For everything else — the Novu notification
+> dashboard, the SMS/WhatsApp provider console, or server access — **ask your system
+> administrator**. Never send credentials in a ticket or a chat message, including to us.
+
+---
+
+## How much monitoring this deployment runs
+
+**Not every deployment collects everything.** Monitoring costs memory and disk, so a
+deployment picks one of three **observability levels**. The levels are cumulative, and the
+default is the full stack:
+
+| Level | You have | You do **not** have |
+|---|---|---|
+| **metrics** | Grafana, health dashboard, host / database / broker / gateway metrics, and every dashboard except the two below | **Logs (Loki)** and **Traces (Tempo)** |
+| **logs** | the above, plus searchable logs | **Traces (Tempo)** |
+| **traces** *(the default)* | everything in this handbook | — |
+
+**Why this matters more than it sounds.** Reading the logs is
+[Step 4 of the first-response checklist](l1-first-response.md#step-4--what-does-the-log-say)
+and most of the second line's method. On a **metrics**-level deployment there is no Loki to
+read them from — the log dashboard is simply not there. That is a deployment decision, not a
+fault, and nobody should spend an incident discovering it.
+
+> **Find out which level this deployment runs, and write it on your
+> [cheat sheet](cheatsheet.md), before you need it.** Ask us, or ask whoever runs your
+> deployment. It takes one question now and saves an hour later.
+
+Changing the level is a redeploy, not a switch on the box. If you are on **metrics** and want
+logs, that is a reasonable thing to ask us for — say so, and say why.
 
 ---
 
@@ -200,6 +233,7 @@ and whether it is **reproducible on demand**.
 | **[incident-report.md](incident-report.md)** | L1 + L2 | At every handover. The three-part template and evidence checklist |
 | **[alerts-setup.md](alerts-setup.md)** | L2 | Making the system tell you first. Rules, thresholds, provisioning |
 | **[alert-channels.md](alert-channels.md)** | L2 | Where alerts land — Slack, Chat, Teams, email, WhatsApp, SMS |
+| **[dashboards.md](dashboards.md)** | L1 + L2 | At a desk, with Grafana open. What each of the nine dashboards shows and which panels to read |
 | **[reference.md](reference.md)** | everyone | Lookup: service catalogue, coverage, retention, queries, glossary |
 
 ---
