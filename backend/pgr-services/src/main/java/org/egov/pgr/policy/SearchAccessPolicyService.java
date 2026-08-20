@@ -31,14 +31,30 @@ import java.util.Optional;
 public class SearchAccessPolicyService {
 
     /**
-     * In-code fallback when MDMS has no {@code resource.complaint.scope} configured for this action
-     * — reproduces PGR search's structural default (jurisdiction-based, department not part of its
-     * row-scoping model) via the SAME {@link ScopePolicyEngine} the MDMS-authored path uses, so
-     * "not configured" and "configured to match today's default" behave identically.
+     * In-code fallback for a LEGACY tenant that still has a hand-authored {@code condition} on this
+     * action but no {@code resource.complaint.scope} block — reproduces PGR search's old structural
+     * default (jurisdiction-based, department not part of its row-scoping model) via the SAME
+     * {@link ScopePolicyEngine} the MDMS-authored path uses. This must NOT be applied when the action
+     * has neither a {@code scope} block NOR a {@code condition} at all — see
+     * {@link #UNRESTRICTED_SCOPE_POLICY} and {@link AccessPolicyRegistry#isPolicyUnconfigured}.
      */
     private static final ScopePolicy DEFAULT_SCOPE_POLICY = ScopePolicy.of(
             List.of("department", "jurisdiction"),
             Map.of("department", ScopeLevel.ALL, "jurisdiction", ScopeLevel.OWN));
+
+    /**
+     * Tier-1 fallback when the action has genuinely nothing authored for it — no
+     * {@code resource.complaint.scope} block AND no legacy {@code condition} either (see
+     * {@link AccessPolicyRegistry#isPolicyUnconfigured}). Zero axes means {@link ScopePolicyEngine}
+     * never restricts department or jurisdiction for anyone, matching Tier-2
+     * ({@link AccessPolicyRegistry#getCondition}'s backward-compatible {@code true} for the same
+     * "unconfigured" action) instead of silently imposing {@link #DEFAULT_SCOPE_POLICY}'s
+     * jurisdiction requirement on a tenant that never configured ANY PGR search policy at all.
+     * Citizen self-scoping and tenant/subtree authorization in
+     * {@link PolicyDrivenScopeResolver#resolve} are unaffected — those are hardcoded, not
+     * axis-driven, and still apply regardless of this policy.
+     */
+    private static final ScopePolicy UNRESTRICTED_SCOPE_POLICY = ScopePolicy.of(List.of(), Map.of());
 
     private final PolicyDrivenScopeResolver policyDrivenScopeResolver;
     private final AccessPolicyRegistry registry;
@@ -67,17 +83,28 @@ public class SearchAccessPolicyService {
      * ({@code AccessPolicyRegistry#getCondition}) deny IDENTICALLY instead — the same explicit
      * rollout gate, applied uniformly to both tiers so {@code count()} and {@code search()} can
      * never disagree once a deployment has opted in. With the gate off (today's default), this
-     * still falls back to {@link #DEFAULT_SCOPE_POLICY}, same as before.
+     * falls back to {@link #DEFAULT_SCOPE_POLICY} only when the action has a legacy hand-authored
+     * {@code condition} (some restriction was already intended); an action with NEITHER a
+     * {@code scope} block NOR a {@code condition} — genuinely never configured — gets
+     * {@link #UNRESTRICTED_SCOPE_POLICY} instead, matching Tier-2's backward-compatible allow for
+     * the same case rather than silently requiring HRMS department/jurisdiction data nobody asked
+     * for. See {@link AccessPolicyRegistry#isPolicyUnconfigured}.
      */
     public PgrSearchScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
         Optional<ScopePolicy> scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
-        if (scopePolicy.isEmpty() && config.isAbacStrictMode()) {
+        if (scopePolicy.isPresent())
+            return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy.get());
+
+        if (config.isAbacStrictMode()) {
             log.error("SearchAccessPolicyService: no resource.complaint.scope configured for url='{}' tenant='{}' — pgr.abac.strict-mode is enabled, failing closed (Tier-1, matching AccessPolicyRegistry#getCondition's Tier-2 fail-closed)",
                     AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, tenantId);
             boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
             return PgrSearchScope.deniedAll(tenantId, stateLevel);
         }
-        return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy.orElse(DEFAULT_SCOPE_POLICY));
+
+        boolean unconfigured = registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
+        ScopePolicy fallback = unconfigured ? UNRESTRICTED_SCOPE_POLICY : DEFAULT_SCOPE_POLICY;
+        return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, fallback);
     }
 
     /**

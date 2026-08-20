@@ -344,6 +344,65 @@ class AccessPolicyRegistryTest {
                 AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
     }
 
+    // --- isPolicyUnconfigured(): Tier-1's signal for "genuinely never authored" -------------------
+
+    @Test
+    void isPolicyUnconfiguredIsTrueWhenNoActionIsVisibleAtAll() {
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of());
+
+        assertTrue(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsTrueWhenActionHasNeitherScopeNorCondition() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "enabled", true);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertTrue(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsFalseWhenAScopeBlockIsPresent() {
+        Map<String, Object> scope = Map.of("axes", List.of("department"), "default", Map.of("department", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertFalse(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsFalseWhenALegacyConditionIsPresentWithNoScopeBlock() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
+                "condition", Map.of("==", List.of(1, 1)));
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertFalse(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredThrowsOnAMalformedScopeRatherThanReturningTrue() {
+        // A present-but-broken scope block is an authoring mistake, not "unconfigured" — must
+        // propagate, never silently read as "apply the fully unrestricted fallback".
+        Map<String, Object> scope = Map.of("axes", List.of());
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertThrows(MalformedScopePolicyException.class, () -> registry.isPolicyUnconfigured(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
     @Test
     void getConditionGeneratesFromScopeWhenPresentIgnoringHandAuthoredCondition() {
         Map<String, Object> scope = Map.of(

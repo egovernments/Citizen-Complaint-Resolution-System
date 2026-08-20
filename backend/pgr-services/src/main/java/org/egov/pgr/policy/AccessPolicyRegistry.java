@@ -283,6 +283,29 @@ public class AccessPolicyRegistry {
     }
 
     /**
+     * True when this action's Tier-1 SQL scope has genuinely nothing authored for it at all — no
+     * {@code resource.<resourceType>.scope} block AND no legacy {@code condition} either — the SAME
+     * "not configured" case {@link #getCondition} treats as backward-compatible-allow (or no action
+     * visible at all). {@code SearchAccessPolicyService} uses this to decide its Tier-1 fallback: a
+     * legacy tenant with a hand-authored {@code condition} but no {@code scope} block still gets the
+     * structural {@code DEFAULT_SCOPE_POLICY} (some restriction was already intended, just not in the
+     * new shape), but an action with NEITHER must get a fully unrestricted Tier-1 scope — otherwise
+     * Tier-1 silently imposes a jurisdiction requirement nobody ever configured, while Tier-2 (this
+     * class' {@link #getCondition}) is already allowing everything for the exact same "unconfigured"
+     * action. Deliberately does NOT catch {@link MalformedScopePolicyException} — a present-but-broken
+     * {@code scope} block is an authoring mistake, not "unconfigured", and must propagate exactly like
+     * {@link #getScopePolicy} already does for the same case.
+     */
+    public boolean isPolicyUnconfigured(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
+        Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
+        if (action == null)
+            return true;
+        if (extractScopePolicy(action, resourceType).isPresent())
+            return false;
+        return action.get("condition") == null;
+    }
+
+    /**
      * Extracts and validates the field-visibility rules for {@code resourceType} from the same
      * Action's {@code resource} JSON object: {@code resource[resourceType].attributes} is a JSON
      * object keyed by field path, each value an independent {@code {condition, onDeny}} rule — any
