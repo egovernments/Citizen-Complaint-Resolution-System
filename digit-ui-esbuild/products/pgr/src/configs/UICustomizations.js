@@ -110,6 +110,31 @@ function cleanObject(obj) {
   return obj;
 }
 
+/** The createdBy uuid the PGR inbox scopes itself to, or null when it does not.
+ *
+ *  Reception officers file complaints on citizens' behalf but are neither the
+ *  accountId (that's the citizen) nor ever an assignee, so an unscoped inbox
+ *  shows them nothing of their own work. Applied only when reception is the
+ *  user's SOLE CMS role — a multi-role user (e.g. reception + supervisor) keeps
+ *  the wider view their other role is entitled to.
+ *
+ *  Exported as one function so the inbox SEARCH and the row's DETAIL LINK agree
+ *  by construction. They used to decide independently: the search read the role
+ *  list, while the link compared `auditDetails.createdBy` on the row. When that
+ *  field was absent from the inbox payload the link silently dropped the param,
+ *  the details page then queried unscoped, and the officer got "No Results
+ *  Found" on a complaint they had just clicked.
+ */
+export const receptionOnlyCreatedByUuid = () => {
+  const info = Digit.UserService.getUser()?.info;
+  const cmsRoles = (info?.roles || [])
+    .map((r) => r?.code)
+    .filter((c) => c && (c.startsWith("CMS_") || c === "SUPERUSER" || c === "ADMIN"));
+  const receptionOnly =
+    cmsRoles.includes("CMS_RECEPTION_OFFICER") && cmsRoles.every((c) => c === "CMS_RECEPTION_OFFICER");
+  return receptionOnly ? info?.uuid || null : null;
+};
+
 export const UICustomizations = {
   businessServiceMap,
   updatePayload: (applicationDetails, data, action, businessService) => {
@@ -1614,13 +1639,8 @@ export const UICustomizations = {
       // correct). Applied only when reception is the user's SOLE CMS role —
       // a multi-role user (e.g. reception + supervisor) keeps the wider view
       // their other role is entitled to.
-      const cmsRoles = (Digit.UserService.getUser()?.info?.roles || [])
-        .map((r) => r?.code)
-        .filter((c) => c && (c.startsWith("CMS_") || c === "SUPERUSER" || c === "ADMIN"));
-      if (cmsRoles.includes("CMS_RECEPTION_OFFICER") && cmsRoles.every((c) => c === "CMS_RECEPTION_OFFICER")) {
-        const ownUuid = Digit.UserService.getUser()?.info?.uuid;
-        if (ownUuid) params.createdBy = ownUuid;
-      }
+      const ownCreatedByUuid = receptionOnlyCreatedByUuid();
+      if (ownCreatedByUuid) params.createdBy = ownCreatedByUuid;
 
       // Search form fields
       if (searchForm.complaintNumber) {
@@ -1749,9 +1769,12 @@ export const UICustomizations = {
             <div style={{ display: "grid" }}>
               <span className="link" style={{ display: "grid" }}>
                 {(() => {
-                  const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
-                  const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy;
-                  const query = creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
+                  // Same source of truth as the inbox search (receptionOnlyCreatedByUuid).
+                  // Previously derived from the row's auditDetails.createdBy, which is not
+                  // guaranteed to be present in the inbox payload — when it was missing the
+                  // param dropped and the details page queried unscoped.
+                  const ownCreatedByUuid = receptionOnlyCreatedByUuid();
+                  const query = ownCreatedByUuid ? `?createdBy=${encodeURIComponent(ownCreatedByUuid)}` : "";
                   return (
                     <Link to={`/${window.contextPath}/employee/pgr/complaint-details/${value}${query}`}>
                       {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
@@ -1808,9 +1831,8 @@ export const UICustomizations = {
     MobileDetailsOnClick: (row, tenantId) => {
       const complaintNo = row?.["CS_COMMON_COMPLAINT_NO"];
       if (!complaintNo) return `/${window.contextPath}/employee/pgr/inbox-v2`;
-      const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
-      const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy || row?.businessObject?.service?.createdBy;
-      const query = creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
+      const ownCreatedByUuid = receptionOnlyCreatedByUuid();
+      const query = ownCreatedByUuid ? `?createdBy=${encodeURIComponent(ownCreatedByUuid)}` : "";
       return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}${query}`;
     },
   },

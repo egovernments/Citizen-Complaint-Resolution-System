@@ -754,7 +754,11 @@ const PGRAdminSearch = () => {
                   const dept = deptCell(deptOf(s));
                   const tint = deptTint(dept.code);
                   const statusLabel = tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus);
-                  const detailUrl = `/${window.contextPath}/employee/pgr/complaint-details/${s.serviceRequestId}`;
+                  // Mark the origin: admin search is cross-department, the plain
+                  // /v2/request/_search the details page uses by default is scoped to
+                  // the viewer. Without this a result outside their own scope opens to
+                  // an empty page. PGRDetails reads `src` and queries _admin/_search.
+                  const detailUrl = `/${window.contextPath}/employee/pgr/complaint-details/${s.serviceRequestId}?src=admin`;
                   return (
                     <tr key={s.serviceRequestId} onClick={() => history.push(detailUrl)}
                       title={tr("ES_PGR_ADMIN_VIEW", "View")}>
