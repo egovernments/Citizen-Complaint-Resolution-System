@@ -18,7 +18,7 @@ import { BASE_URL } from '../utils/env';
 import { getPersona, serviceCodesFor } from '../utils/personas';
 import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
-import { loginEmployeeBrowser, readInboxRows } from '../utils/employee-ui';
+import { loginEmployeeBrowser, readInboxRows, showAllInboxRows } from '../utils/employee-ui';
 
 const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
@@ -118,6 +118,15 @@ test.describe('employee inbox-v2 — search', () => {
 
     await page.locator('input[name="mobileNumber"]').fill(phone);
     await runSearch(page);
+    // Unlike the SRID search above, a mobile matches EVERY complaint that
+    // citizen ever filed — and the suite shares one citizen fixture, so this is
+    // dozens of rows by the time this spec runs. The inbox pages at 10 sorted by
+    // `sla ASC`, so the seeded complaint is usually not on page 1. Render the
+    // whole result set before asserting it is present; without this the test
+    // fails on where the row happens to sit rather than on whether the mobile
+    // filter works. (Verified server-side: _search with this mobileNumber
+    // returns only that citizen's complaints, and none for an unknown number.)
+    await showAllInboxRows(page);
     const rows = await readInboxRows(page);
     expect(rows.length, 'mobile search returns ≥1 row').toBeGreaterThan(0);
     expect(rows.some((r) => r.srid === srid), 'the seeded complaint is among the mobile matches').toBeTruthy();

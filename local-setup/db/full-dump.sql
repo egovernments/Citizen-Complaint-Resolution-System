@@ -2273,6 +2273,10 @@ COPY public.eg_filestoremap (id, filestoreid, filename, contenttype, module, tag
 --
 
 COPY public.eg_hrms_assignment (uuid, employeeid, "position", department, designation, fromdate, todate, govtordernumber, reportingto, ishod, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, iscurrentassignment, isactive) FROM stdin;
+4609ebfd-f848-4d06-906b-929172e34e9d	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	14	DEPT_3	COMM	1704067200000	\N	\N	\N	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t	\N
+742417ef-5fd1-4a09-952f-bee528691ba4	165804ce-d0bb-4f2a-9472-e011571ea872	15	DEPT_3	COMM	1704067200000	\N	\N	58f8343a-e158-4de4-9985-693e1de93f6b	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	t	\N
+55fb9686-5a17-4693-bf13-2ee30d8b04e3	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	14	DEPT_3	COMM	1704067200000	\N	\N	165804ce-d0bb-4f2a-9472-e011571ea872	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	t	\N
+23970647-a6de-404b-810e-c5a382f690f7	58f8343a-e158-4de4-9985-693e1de93f6b	16	DEPT_3	COMM	1704067200000	\N	\N	\N	f	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617196	\N	\N	t	\N
 6fa4c69d-53f3-404e-8bad-499353c5e15b	79006ea0-100c-4332-8390-60edff9328c1	13	DEPT_5	DESIG_1003	1704067200000	\N	\N	\N	f	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	t	\N
 \.
 
@@ -2314,7 +2318,11 @@ COPY public.eg_hrms_empdocuments (uuid, employeeid, documentid, documentname, re
 --
 
 COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus, employeetype, active, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, reactivateemployee) FROM stdin;
+8385379214609367381	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	PGWCSR4	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	\N
 35	79006ea0-100c-4332-8390-60edff9328c1	CI-ADMIN	1704067200000	EMPLOYED	PERMANENT	t	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	f
+2449003278391985061	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	PGGRO1	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	\N
+1610042153096662826	165804ce-d0bb-4f2a-9472-e011571ea872	PGLME2	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	\N
+6410931497055309284	58f8343a-e158-4de4-9985-693e1de93f6b	PGLME3	1704067200000	EMPLOYED	PERMANENT	t	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617196	\N	\N	\N
 \.
 
 
@@ -2323,7 +2331,11 @@ COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus,
 --
 
 COPY public.eg_hrms_jurisdiction (uuid, employeeid, hierarchy, boundarytype, boundary, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
+29b05cb4-2db3-4b41-abe0-e45052dbc926	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	ADMIN	Locality	SUN01_LOCALITY	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786437575211	\N	\N	t
 323cb027-3ed0-47de-8265-1f99a4ad2020	79006ea0-100c-4332-8390-60edff9328c1	REVENUE	City	pg.citest	pg.citest	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447473	\N	0	t
+9ca7415f-4796-4748-a242-40987da3143f	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318616812	\N	\N	t
+d77ac74f-9c94-4535-bba4-584cbf0eabad	165804ce-d0bb-4f2a-9472-e011571ea872	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617061	\N	\N	t
+c358f2cc-91fe-445d-9a0d-bffa79a71b5a	58f8343a-e158-4de4-9985-693e1de93f6b	ADMIN	State	PG_STATE	pg	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786318617196	\N	\N	t
 \.
 
 
@@ -2348,6 +2360,9 @@ COPY public.eg_hrms_servicehistory (uuid, employeeid, servicestatus, servicefrom
 --
 
 COPY public.eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
+a1d4e7b2-3c51-4f80-9a26-1de3f0c8b101	pg	DEPT_1	common-masters.Department	{"code": "DEPT_1", "name": "Street Lighting & Electrical", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+a1d4e7b2-3c51-4f80-9a26-1de3f0c8b103	pg	DEPT_3	common-masters.Department	{"code": "DEPT_3", "name": "Health & Sanitation", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+88435d49-54d0-4dc7-b6ed-e26264e48b42	pg	+91	common-masters.MobileNumberValidation	{"default": true, "countryCode": "+91", "mobileNumberRegex": "^[6-9][0-9]{9}$"}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786325655329	1786325655329
 tenant-root	pg	Tenant.pg	tenant.tenants	{"city": {"code": "PB", "name": "Punjab"}, "code": "pg", "name": "Punjab", "tenantId": "pg"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 role-dgro	pg	ACCESSCONTROL-ROLES.roles.DGRO	ACCESSCONTROL-ROLES.roles	{"code": "DGRO", "name": "Department GRO", "description": "Department Grievance Routing Officer"}	t	system-mdms-seed	system-mdms-seed	1770614667000	1770614667000
 role-pgr-viewer	pg	ACCESSCONTROL-ROLES.roles.PGR_VIEWER	ACCESSCONTROL-ROLES.roles	{"code": "PGR_VIEWER", "name": "PGR Viewer", "description": "PGR Viewer role"}	t	system-mdms-seed	system-mdms-seed	1770614667000	1770614667000
@@ -3104,7 +3119,7 @@ dashboard-config-data-002	pg	default	dss.DashboardConfig	{"id": "default", "allo
 9c2e1397-8a1e-49ac-83c0-50c784db5133	pg.citya	common-masters.Department.DEPT_4	common-masters.Department	{"code": "DEPT_4", "name": "Water Supply & Sewerage", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 form-validations-email-001	pg	email	common-masters.FormValidations	{"regex": "^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$", "fieldType": "email"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 form-validations-name-001	pg	name	common-masters.FormValidations	{"regex": "^(?!.*[ _-]{2})(?!^[\\\\s_-])(?!.*[\\\\s_-]$)(?=^[\\\\p{L}][\\\\p{L}\\\\p{N} _\\\\-\\\\(\\\\)]{0,29}$)^.*$", "fieldType": "name"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
-form-validations-postalcode-001	pg	postalCode	common-masters.FormValidations	{"regex": "^[0-9]{5}$", "fieldType": "postalCode"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-postalcode-001	pg	postalCode	common-masters.FormValidations	{"regex": "^[1-9][0-9]{5}$", "fieldType": "postalCode"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 complaint-hierarchy-definition-data	pg	PGR	RAINMAKER-PGR.ComplaintHierarchyDefinition	{"hierarchyType": "PGR", "active": true, "levels": [{"levelCode": "CATEGORY", "order": 1, "parentLevel": null, "isFreeText": false, "isLeafServiceCode": false, "label": "Category"}, {"levelCode": "SUB_TYPE", "order": 2, "parentLevel": "CATEGORY", "isFreeText": false, "isLeafServiceCode": true, "label": "Sub-Type"}]}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-001	pg	PGR.Garbage	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "CATEGORY", "code": "Garbage", "parentCode": null, "name": "Garbage", "order": 1, "active": true, "path": "Garbage"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-002	pg	PGR.StreetLights	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "CATEGORY", "code": "StreetLights", "parentCode": null, "name": "Street Lights", "order": 2, "active": true, "path": "StreetLights"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
@@ -3114,6 +3129,11 @@ complaint-hierarchy-data-005	pg	PGR.GarbageNeedsTobeCleared	RAINMAKER-PGR.Compla
 complaint-hierarchy-data-006	pg	PGR.NonSweepingOfRoad	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "SUB_TYPE", "code": "NonSweepingOfRoad", "parentCode": "Garbage", "name": "Non sweeping of road", "order": 5, "active": true, "path": "Garbage.NonSweepingOfRoad", "department": "DEPT_3", "slaHours": 336, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-007	pg	PGR.StreetLightNotWorking	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "SUB_TYPE", "code": "StreetLightNotWorking", "parentCode": "StreetLights", "name": "Streetlight not working", "order": 1, "active": true, "path": "StreetLights.StreetLightNotWorking", "department": "DEPT_1", "slaHours": 336, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-data-008	pg	PGR.NoStreetlight	RAINMAKER-PGR.ComplaintHierarchy	{"hierarchyType": "PGR", "levelCode": "SUB_TYPE", "code": "NoStreetlight", "parentCode": "StreetLights", "name": "No streetlight", "order": 6, "active": true, "path": "StreetLights.NoStreetlight", "department": "DEPT_1", "slaHours": 336, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, damage, fix"}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
+aab37726-63eb-4e16-bc1e-13624df9baa2	pg	DUPLICATE	RAINMAKER-PGR.RejectionReasons	{"code": "DUPLICATE", "name": "Duplicate complaint", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078515	1786319078515
+0feaf548-1ba4-4e22-b6be-8a3cd2f8604b	pg	INSUFFICIENT_INFO	RAINMAKER-PGR.RejectionReasons	{"code": "INSUFFICIENT_INFO", "name": "Insufficient information", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078605	1786319078605
+f1dc8ee5-a463-497c-8ea5-ee1f9bc5cfb1	pg	NOT_PUBLIC_INFRA	RAINMAKER-PGR.RejectionReasons	{"code": "NOT_PUBLIC_INFRA", "name": "Not on public infrastructure", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078475	1786319078475
+05f3d3b4-5617-4351-970e-16e07fa0bb65	pg	OUT_OF_SCOPE	RAINMAKER-PGR.RejectionReasons	{"code": "OUT_OF_SCOPE", "name": "Out of scope for this department", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078563	1786319078563
+c2a98c2d-edc2-4bbf-b9f1-28e7efcabcf5	pg	OUTSIDE_JURISDICTION	RAINMAKER-PGR.RejectionReasons	{"code": "OUTSIDE_JURISDICTION", "name": "Outside Punjab jurisdiction", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786319078432	1786319078432
 accesscontrol-action-2008	pg	2008	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2008, "url": "/pgr-services/v2/request/_search", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Search PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": "", "method": "POST", "resource": {"complaint": {"scope": {"axes": ["department", "jurisdiction"], "roleScopes": {"GRO": {"department": "ALL", "jurisdiction": "OWN"}, "PGR_LME": {"department": "OWN", "jurisdiction": "OWN"}, "SUPERVISOR": {"department": "OWN", "jurisdiction": "ALL"}}, "default": {"department": "ALL", "jurisdiction": "OWN"}}, "attributes": {"citizen.mobileNumber": {"condition": {"or": [{"==": [{"var": "user.attributes.tenantWide"}, true]}, {"==": [{"var": "resource.complaint.accountId"}, {"var": "user.uuid"}]}]}, "onDeny": {"strategy": "REDACT"}}, "citizen.name": {"condition": {"or": [{"==": [{"var": "user.attributes.tenantWide"}, true]}, {"==": [{"var": "resource.complaint.accountId"}, {"var": "user.uuid"}]}]}, "onDeny": {"strategy": "REDACT"}}, "citizen.userName": {"condition": {"or": [{"==": [{"var": "user.attributes.tenantWide"}, true]}, {"==": [{"var": "resource.complaint.accountId"}, {"var": "user.uuid"}]}]}, "onDeny": {"strategy": "REDACT"}}}}}}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 accesscontrol-roleaction-2008-supervisor	pg	SUPERVISOR.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2008, "rolecode": "SUPERVISOR", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 accesscontrol-roleaction-2008-pgrlme	pg	PGR_LME.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"actionid": 2008, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
@@ -3171,6 +3191,7 @@ form-validations-schema-001	pg	common-masters.FormValidations	Form field validat
 common-masters-mobilenumbervalidation-schema	pg	common-masters.MobileNumberValidation	Mobile Number Validation Configuration	{"$schema": "http://json-schema.org/draft-07/schema#", "title": "Mobile Number Validation", "type": "object", "required": ["countryCode", "mobileNumberRegex"], "x-unique": ["countryCode"], "properties": {"countryCode": {"type": "string"}, "mobileNumberRegex": {"type": "string"}, "default": {"type": "boolean", "default": false}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1770614667000	1770614667000
 complaint-hierarchy-definition-schema	pg	RAINMAKER-PGR.ComplaintHierarchyDefinition	Declares the ORDERED, CONFIGURABLE levels of a complaint-type hierarchy for a tenant.	{"type": "object", "title": "Complaint Hierarchy Definition", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["hierarchyType", "levels"], "x-unique": ["hierarchyType"], "properties": {"hierarchyType": {"type": "string"}, "active": {"type": "boolean"}, "levels": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["levelCode", "order"], "properties": {"levelCode": {"type": "string"}, "order": {"type": "number"}, "parentLevel": {"type": ["string", "null"]}, "isFreeText": {"type": "boolean"}, "isLeafServiceCode": {"type": "boolean"}, "label": {"type": "string"}}, "additionalProperties": false}}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
 complaint-hierarchy-schema	pg	RAINMAKER-PGR.ComplaintHierarchy	Single adjacency-list master for the whole complaint-type tree: interior level nodes and leaf sub-types in one table.	{"type": "object", "title": "Complaint Hierarchy", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["hierarchyType", "levelCode", "code", "name"], "x-unique": ["hierarchyType", "code"], "properties": {"hierarchyType": {"type": "string"}, "levelCode": {"type": "string"}, "code": {"type": "string"}, "parentCode": {"type": ["string", "null"]}, "name": {"type": "string"}, "order": {"type": "number"}, "active": {"type": "boolean"}, "path": {"type": "string"}, "department": {"type": "string"}, "departments": {"type": "array", "items": {"type": "string"}}, "slaHours": {"type": "number"}, "keywords": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system-mdms-seed	system-mdms-seed	1785200000000	1785200000000
+0a63077e-b809-4521-a9ff-218ef57dcf6a	pg	RAINMAKER-PGR.RejectionReasons	PGR rejection reasons shown in the GRO reject modal	{"type": "object", "required": ["code", "name", "active"], "x-unique": ["code"], "properties": {"code": {"type": "string"}, "name": {"type": "string"}, "active": {"type": "boolean", "default": true}}, "additionalProperties": false}	t	system-seed	system-seed	1786319062186	1786319062186
 \.
 
 
@@ -3189,6 +3210,7 @@ COPY public.eg_ms_role (name, code, description, createddate, createdby, lastmod
 COPY public.eg_pgr_address_v2 (tenantid, id, parentid, doorno, plotno, buildingname, street, landmark, city, pincode, locality, district, region, state, country, latitude, longitude, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails) FROM stdin;
 pg.citest	d9a5d6a5-b455-492e-a5f4-b8251df2df15	9a36f8f0-747c-4d56-a0a1-5852a1395e9f	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	null
 pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d56e	\N	\N	\N	\N	Test Landmark	City A		JLC477	City A	City A	\N	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	null
+pg	22222222-3333-4444-8555-666666666666	11111111-2222-4333-8444-555555555555	\N	\N	\N	Lawrence Road	Near Company Bagh	pg	143001	SUN01_LOCALITY	\N	\N	\N	\N	31.634000	74.872300	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	null
 \.
 
 
@@ -3199,6 +3221,7 @@ pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d
 COPY public.eg_pgr_service_v2 (id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, applicationstatus, rating, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
 6a63f17f-7c15-4432-98ca-ea625840d56e	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000185	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664524734	79006ea0-100c-4332-8390-60edff9328c1	1778664526028	t
 9a36f8f0-747c-4d56-a0a1-5852a1395e9f	pg.citest	IllegalCuttingOfTrees	PG-PGR-2026-05-13-000186	Illegal Cutting of trees	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "DEPT_5"}	CLOSEDAFTERRESOLUTION	\N	web	79006ea0-100c-4332-8390-60edff9328c1	1778664552313	79006ea0-100c-4332-8390-60edff9328c1	1778664552834	t
+11111111-2222-4333-8444-555555555555	pg	BurningOfGarbage	PG-PGR-2026-05-13-000187	Seeded complaint with real coordinates for the geo-link regression test	f1a94c66-a4b5-46da-9492-07b7db54c69f	{"department": "Health & Sanitation", "serviceName": "Burning of garbage"}	CLOSEDAFTERRESOLUTION	\N	web	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552313	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552834	t
 \.
 
 
@@ -3239,6 +3262,7 @@ COPY public.eg_url_shortener (id, validform, validto, url) FROM stdin;
 --
 
 COPY public.eg_user (title, salutation, dob, locale, username, password, pwdexpirydate, mobilenumber, altcontactnumber, emailid, createddate, lastmodifieddate, createdby, lastmodifiedby, active, name, gender, pan, aadhaarnumber, type, version, guardian, guardianrelation, signature, accountlocked, bloodgroup, photo, identificationmark, tenantid, id, uuid, accountlockeddate, alternatemobilenumber, countrycode) FROM stdin;
+\N	\N	1990-01-01 00:00:00	\N	489366|Akbz2PLPzw2E3FZE7Ak0bdmUKjFMyzo=	$2a$10$PXw1FAYq8TI3uxT.CjKqtORHp0VPvbWPG1yxl1nZe/VSlNeValOe2	2026-11-09 08:39:35.269	489366|azmTrZSty49+YDbUaps6CTurligysHSFjdo=	\N	\N	2026-08-11 08:39:35.276	2026-08-11 08:39:35.276	29	29	t	489366|AkaEzMDvn58JB2jf7veWSVev22FC35ZfZLGc	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	55	745ed9f7-d1bc-4155-a3f1-1435eb5e6358	\N	\N	+91
 \N	\N	\N	\N	489366|G0/w3vPTuvMVAWkFYIgjXgs97GHSfarXKMKbCd4=	$2a$10$lVGJ27y7QRJ0f46z4d6uDeTml6nt9cMaoc7XpUZ.ZhrEranpNPQ8W	2026-05-10 05:25:11.553	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	\N	2026-02-09 05:25:11.563	2026-02-09 05:25:11.563	\N	\N	t	489366|G2/Q/tPzmtNqGVMjQL+zclwglO6ImyjeulzdbteyJ/LZvBbUx2SFWEKY	2	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	pg	3	f80147a7-9711-4a56-9bd3-da4733a59df4	\N	\N	\N
 \N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$bpX.KI6M/WMsvI.1GdX3HeuRKI9F6Pc3gsfGyMtmuvJlnILvNkjfS	2026-08-11 09:00:05.401	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:00:05.411	2026-05-13 09:00:05.411	1	1	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	pg	20	f1a94c66-a4b5-46da-9492-07b7db54c69f	\N	\N	\N
 \N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$opgEKfQzL.6wLhDP2B8lRecOXULN4/jbP98BZoqzE1CHncrNTCh8W	2026-08-11 09:13:47.739	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.751	2026-05-13 09:13:47.751	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	29	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N
@@ -3248,6 +3272,9 @@ COPY public.eg_user (title, salutation, dob, locale, username, password, pwdexpi
 \N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$Xcm1/lgF.QkGzTRU0ojEd.R8fqgyrM65/4Cb3m4MTHuwOqBieQoFO	2026-08-11 09:13:48.129	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.138	2026-05-13 09:13:48.138	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citya	32	4990dce4-66a4-4752-85a3-7999e81245e5	\N	\N	\N
 \N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$v0Zr0y8aZAnKyhV0lEkpdu4gpK1Ahv8F2ekdJ.wGBtE5N5DTvLbwq	2026-08-11 09:13:48.248	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:48.258	2026-05-13 09:13:48.258	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	33	717d427c-e470-4ffd-86ab-683d6c97e0e2	\N	\N	\N
 \N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$gberk1ZRaqm7gb6/mGZcqOyHZ78h.PY2X52MSsSxhbvNCd2Mya3xq	2026-08-11 09:13:48.376	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.384	2026-05-13 09:13:48.384	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	34	2fca228c-6cc1-4f85-a82f-96d77d4cb61c	\N	\N	\N
+\N	\N	1990-01-01 00:00:00	\N	489366|Akbjye6sJFsOdk5DGABWvTcTD9wdJw==	$2a$10$3GP8gv4tKe0nEVzJ77zaFe.0lpvUeaX.Ok2/YDU5uSayypP6WwWC6	2026-11-07 23:36:56.885	489366|azmVq5Gty496ZUJ17YHPCZgyFDgtXZ5HoZk=	\N	\N	2026-08-09 23:36:56.893	2026-08-09 23:36:56.893	29	29	t	489366|AkaE3NP0nskrOlklEp+mcUc1mP9uWPdCCadK7jbn7GxoMb/1	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	40	21fc9b81-9e52-43a5-ac1a-00db84dc2a6a	\N	\N	+91
+\N	\N	1990-01-01 00:00:00	\N	489366|Akbo1uSvdFK7U1u0zpo8UOxml+i8uA==	$2a$10$ExP/m4.rabnv6hglvJ.YZeizBOcExpvN3LPt98tZLWs8U2tIok3kO	2026-11-07 23:36:57.116	489366|azmVq5Gty496ZvGpZ2sJ3mfJfhRIR0X33lg=	\N	\N	2026-08-09 23:36:57.122	2026-08-09 23:36:57.122	29	29	t	489366|AkaE18Duj58HPVYlEoS3eDGlDP7CkAVP1hV2NnAkHbo=	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	41	165804ce-d0bb-4f2a-9472-e011571ea872	\N	\N	+91
+\N	\N	1990-01-01 00:00:00	\N	489366|Akbo1uSuPB/uBYJQ7ZOKwMbZxJ3I3Q==	$2a$10$8YEi5IFP3uSSHTXn6ImVDuWVID0S0.snCASiW9fWTW8NOPfFa9icO	2026-11-07 23:36:57.249	489366|azmVq5Gty496Z58dHs1LkzKfp/BrTvNn9Oc=	\N	\N	2026-08-09 23:36:57.256	2026-08-09 23:36:57.256	29	29	t	489366|AkaE18Duj58HPVYlEoSoZUszQXDhBVy3QKOzsTrd1sJ+DQ==	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	42	58f8343a-e158-4de4-9985-693e1de93f6b	\N	\N	+91
 \.
 
 
@@ -3310,6 +3337,8 @@ COPY public.eg_userrole (roleid, roleidtenantid, userid, tenantid, lastmodifiedd
 --
 
 COPY public.eg_userrole_v1 (role_code, role_tenantid, user_id, user_tenantid, lastmodifieddate) FROM stdin;
+EMPLOYEE	pg	55	pg	2026-08-11 08:39:35.279
+CSR	pg	55	pg	2026-08-11 08:39:35.279
 INTERNAL_MICROSERVICE_ROLE	pg	3	pg	2026-02-09 05:25:11.571
 CITIZEN	pg	20	pg	2026-05-13 09:00:05.415
 PGR_VIEWER	pg	29	pg	2026-05-13 09:13:47.758
@@ -3359,6 +3388,18 @@ CSR	pg	35	pg.citest	2026-05-13 09:27:27.577
 CFC	pg	35	pg.citest	2026-05-13 09:27:27.577
 SUPERUSER	pg	35	pg.citest	2026-05-13 09:27:27.577
 DGRO	pg	35	pg.citest	2026-05-13 09:27:27.577
+EMPLOYEE	pg	40	pg	2026-08-09 23:36:56.895
+GRO	pg	40	pg	2026-08-09 23:36:56.895
+PGR_LME	pg	40	pg	2026-08-09 23:36:56.895
+CSR	pg	40	pg	2026-08-09 23:36:56.895
+EMPLOYEE	pg	41	pg	2026-08-09 23:36:57.124
+GRO	pg	41	pg	2026-08-09 23:36:57.124
+PGR_LME	pg	41	pg	2026-08-09 23:36:57.124
+CSR	pg	41	pg	2026-08-09 23:36:57.124
+EMPLOYEE	pg	42	pg	2026-08-09 23:36:57.258
+GRO	pg	42	pg	2026-08-09 23:36:57.258
+PGR_LME	pg	42	pg	2026-08-09 23:36:57.258
+CSR	pg	42	pg	2026-08-09 23:36:57.258
 \.
 
 
@@ -3367,25 +3408,27 @@ DGRO	pg	35	pg.citest	2026-05-13 09:27:27.577
 --
 
 COPY public.eg_wf_action_v2 (uuid, tenantid, currentstate, action, nextstate, roles, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
-ef191941-e2cb-4cc6-bd77-a13ef448904c	pg	eaf4ebb3-9a8e-4671-a82e-04c2fe73ac83	APPLY	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CITIZEN,CSR	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-7e40dec6-56b9-4698-8a2a-952385dddf47	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	ASSIGNEDBYAUTOESCALATION	9314d274-34ef-46d9-89e1-a337af700e94	AUTO_ESCALATE	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-5faa2d7d-8bcc-430b-8412-2054aebc13eb	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	COMMENT	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-4857d56d-1acf-43a9-af4f-062415d13f10	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-e57c2309-ea1c-49c3-b64c-bf99942d8641	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	REJECT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-159dca57-4178-4a65-9046-bcd4bef44a0b	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	COMMENT	1d486301-4c34-4b19-bf40-da0ebf546bef	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-41668123-c495-4049-b493-25df18307889	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	REJECT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-b249bdef-0265-46c5-b80f-b29c3c95c78d	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-9940896a-7b09-4659-8fe4-bd68fd2c5259	pg	9314d274-34ef-46d9-89e1-a337af700e94	REASSIGN	1d486301-4c34-4b19-bf40-da0ebf546bef	PGR_LME,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-f0c149fe-0de0-40b5-940c-4b0eeb7261fb	pg	9314d274-34ef-46d9-89e1-a337af700e94	COMMENT	9314d274-34ef-46d9-89e1-a337af700e94	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-5c80da5c-6fde-4656-ab2a-af045bd30832	pg	9314d274-34ef-46d9-89e1-a337af700e94	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	PGR_LME,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-44f0bb87-f682-4392-b86f-0ad16f6622d7	pg	9314d274-34ef-46d9-89e1-a337af700e94	FORWARD	04752227-e267-43e3-bfd8-6e48bdbfd97a	AUTO_ESCALATE	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-882aa517-b5f2-4fb6-bfd2-b079a05c1eb2	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	COMMENT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-d05728de-3da4-4887-ac13-db9fdcf053e4	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	REOPEN	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CFC,CITIZEN,CSR,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-7986cc6b-c15d-4d8c-9991-f6296a6338c9	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	RATE	3211859d-a96f-49e7-ab8b-6a1f271fe456	CFC,CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-2badb34c-cb6d-489f-8abc-c606c9cd2c07	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	CFC,CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-70347fa2-f092-46cb-830c-698eb505d0b4	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	REOPEN	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CFC,CITIZEN,CSR,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-016ba342-ae9c-480b-9364-e2618cb258b1	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	COMMENT	f4209bfa-9abe-4da9-b80f-3f43fced607c	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
-761ca2aa-dbc6-46cf-b257-3d8c2198e2ea	pg	09c5af9a-052f-4923-ae55-698b992cf7ec	RESOLVEBYSUPERVISOR	e80e3dd6-8336-4586-b84a-c191dcd80c98	SUPERVISOR	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	t
+761ca2aa-dbc6-46cf-b257-3d8c2198e2ea	pg	09c5af9a-052f-4923-ae55-698b992cf7ec	RESOLVEBYSUPERVISOR	f4209bfa-9abe-4da9-b80f-3f43fced607c	SUPERVISOR,GRO	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+b249bdef-0265-46c5-b80f-b29c3c95c78d	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+159dca57-4178-4a65-9046-bcd4bef44a0b	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	COMMENT	1d486301-4c34-4b19-bf40-da0ebf546bef	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+41668123-c495-4049-b493-25df18307889	pg	1d486301-4c34-4b19-bf40-da0ebf546bef	REJECT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+f0c149fe-0de0-40b5-940c-4b0eeb7261fb	pg	9314d274-34ef-46d9-89e1-a337af700e94	COMMENT	9314d274-34ef-46d9-89e1-a337af700e94	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+d9a108e2-eea1-4a4b-b593-090cee47d3ee	pg	9314d274-34ef-46d9-89e1-a337af700e94	ESCALATE	09c5af9a-052f-4923-ae55-698b992cf7ec	GRO,PGR_LME,PGR_VIEWER,SYSTEM,AUTO_ESCALATE	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786321129045	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+44f0bb87-f682-4392-b86f-0ad16f6622d7	pg	9314d274-34ef-46d9-89e1-a337af700e94	FORWARD	09c5af9a-052f-4923-ae55-698b992cf7ec	AUTO_ESCALATE,GRO	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+9940896a-7b09-4659-8fe4-bd68fd2c5259	pg	9314d274-34ef-46d9-89e1-a337af700e94	REASSIGN	1d486301-4c34-4b19-bf40-da0ebf546bef	PGR_LME,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+5c80da5c-6fde-4656-ab2a-af045bd30832	pg	9314d274-34ef-46d9-89e1-a337af700e94	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	PGR_LME,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+4857d56d-1acf-43a9-af4f-062415d13f10	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+7e40dec6-56b9-4698-8a2a-952385dddf47	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	ASSIGNEDBYAUTOESCALATION	9314d274-34ef-46d9-89e1-a337af700e94	AUTO_ESCALATE	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+5faa2d7d-8bcc-430b-8412-2054aebc13eb	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	COMMENT	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+4e6ad03b-5960-420d-bec3-b834b781b67c	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	ESCALATE	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	GRO,AUTO_ESCALATE,PGR_VIEWER	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+e57c2309-ea1c-49c3-b64c-bf99942d8641	pg	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	REJECT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	GRO,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+ef191941-e2cb-4cc6-bd77-a13ef448904c	pg	eaf4ebb3-9a8e-4671-a82e-04c2fe73ac83	APPLY	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CITIZEN,CSR	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+016ba342-ae9c-480b-9364-e2618cb258b1	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	COMMENT	f4209bfa-9abe-4da9-b80f-3f43fced607c	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+2badb34c-cb6d-489f-8abc-c606c9cd2c07	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	CFC,CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+70347fa2-f092-46cb-830c-698eb505d0b4	pg	f4209bfa-9abe-4da9-b80f-3f43fced607c	REOPEN	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CFC,CITIZEN,CSR,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+882aa517-b5f2-4fb6-bfd2-b079a05c1eb2	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	COMMENT	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+7986cc6b-c15d-4d8c-9991-f6296a6338c9	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	RATE	3211859d-a96f-49e7-ab8b-6a1f271fe456	CFC,CITIZEN	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
+d05728de-3da4-4887-ac13-db9fdcf053e4	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	REOPEN	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	CFC,CITIZEN,CSR,PGR_VIEWER	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778663385019	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1786323143141	t
 \.
 
 
@@ -3446,6 +3489,10 @@ cb276065-655b-442a-a203-3d9731470804	pg.citest	PGR	PG-PGR-2026-05-13-000185	RATE
 2adda6be-758d-4bdf-aaec-fa5cede93ebe	pg.citest	PGR	PG-PGR-2026-05-13-000186	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552529	1778664552529	pgr-services	431999818	\N	f
 8a840e0d-2623-456d-803b-c257500594ce	pg.citest	PGR	PG-PGR-2026-05-13-000186	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	79006ea0-100c-4332-8390-60edff9328c1	\N	300000	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552714	1778664552714	pgr-services	431999633	\N	f
 0291b94b-30a8-4ff4-a5c4-4cd8a299d49a	pg.citest	PGR	PG-PGR-2026-05-13-000186	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	79006ea0-100c-4332-8390-60edff9328c1	\N	\N	\N	79006ea0-100c-4332-8390-60edff9328c1	79006ea0-100c-4332-8390-60edff9328c1	1778664552865	1778664552865	pgr-services	431999482	\N	f
+a1000000-0000-4000-8000-000000000001	pg	PGR	PG-PGR-2026-05-13-000187	APPLY	c72ac8ac-4ed8-454f-9f1b-8e9baa85c7b3	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552347	1778664552347	pgr-services	432000000	\N	f
+a1000000-0000-4000-8000-000000000002	pg	PGR	PG-PGR-2026-05-13-000187	ASSIGN	9314d274-34ef-46d9-89e1-a337af700e94	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552529	1778664552529	pgr-services	431999818	\N	f
+a1000000-0000-4000-8000-000000000003	pg	PGR	PG-PGR-2026-05-13-000187	RESOLVE	f4209bfa-9abe-4da9-b80f-3f43fced607c	Test Comment	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	300000	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552714	1778664552714	pgr-services	431999633	\N	f
+a1000000-0000-4000-8000-000000000004	pg	PGR	PG-PGR-2026-05-13-000187	RATE	4e216e7b-d9cd-4328-ac8d-116c6e30fa3c	Test citizen comment for closure	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664552865	1778664552865	pgr-services	431999482	\N	f
 \.
 
 
@@ -3669,6 +3716,19 @@ COPY public.mdms_v2_schema (installed_rank, version, description, type, script, 
 --
 
 COPY public.message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
+d9cba529-7b2a-4ee1-a975-7690eb7fecd2	en_IN	PG_CITYA	City A	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+fe36e3bb-058b-478e-9592-90da5f88a7b3	en_IN	PG_CITYA_ADMIN_CITY	City A	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+28e8adca-feef-4cd0-9142-6dd0c3129243	en_IN	PG_CITYA_B1	Block 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+e9c7b883-f63a-4252-981f-829710ef6d02	en_IN	PG_CITYA_Z1	Zone 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+e27c18b7-a582-4282-91fa-bf9771be2b74	en_IN	PG_STATE	Punjab	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+5a37de57-9680-4d56-81f1-f9ae9de2cad5	en_IN	SUN01_LOCALITY	Sunrise Locality 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+f05273b5-517e-4bd8-96a3-6feee0091b0a	en_IN	SUN02_LOCALITY	Sunrise Locality 2	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+57b4dc8c-98b6-4f15-ac73-366e88c09ef9	en_IN	SUN03_LOCALITY	Sunrise Locality 3	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+f522ee3e-42b2-44cc-bd23-6ac2c48835b6	en_IN	W1_ADMIN_WARD	Ward 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+9af054c7-3e3f-406a-ba86-499dff57ed6d	en_IN	W2_ADMIN_WARD	Ward 2	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+03bdca4d-faa6-43bf-871d-4b4886429cf1	en_IN	W3_ADMIN_WARD	Ward 3	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+4569deea-3e69-4764-b838-68119dbff8f0	en_IN	Z1_ADMIN_ZONE	Zone 1	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
+7aed1c99-b8f0-476a-890b-627cfa222113	en_IN	Z2_ADMIN_ZONE	Zone 2	pg	rainmaker-boundary-admin	29	2026-08-10 00:56:22.348	\N	\N
 71d56f31-61b0-4cc5-8104-e5d0af1eeb89	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_1002	engineer	pg	rainmaker-common	1	2026-05-13 06:54:26.653	1	2026-05-13 08:00:49.978
 c23028f5-8bfc-4bd1-b40f-6eed6a0d35dc	en_IN	SERVICEDEFS_TABBROKEN	tab broken	pg	rainmaker-pgr	1	2026-05-13 06:54:27.142	1	2026-05-13 08:41:42.287
 5e42234f-421b-474d-944b-8e3a76a1a391	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_38	CI_SCOPE_DEPT_55272	pg	rainmaker-common	1	2026-05-13 06:54:32.818	\N	\N
@@ -4215,12 +4275,15 @@ ae49ac75-96a7-46e4-ab74-c26ab9d894ce	en_IN	CS_COMMON_INBOX	Inbox	pg	rainmaker-pg
 5437079a-3313-48a6-bdda-b3e57b82bff6	en_IN	CS_COMMON_NEXT	Next	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 1668de73-9861-4693-a15e-50a1da1885ed	en_IN	CS_COMMON_OPEN	Open	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b5337311-de30-4178-8f05-b370e4202e09	en_IN	CS_COMMON_PENDINGATLME	Pending at LME	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+cc823a3e-387d-4f4b-8f6a-8748c7f71009	en_IN	CS_COMMON_PENDINGATSUPERVISOR	Pending At Supervisor	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 587ab442-cca1-4dcc-ae0b-633a8403e550	en_IN	CS_COMMON_PENDINGFORASSIGNMENT	Pending for assignment	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 5fadce20-585c-4ec2-aad3-522e79704566	en_IN	CS_COMMON_PINCODE_NOT_SERVICABLE	Sorry we are not providing service in this city	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 179cd06f-fd3c-42cd-87eb-bcc16c8f61fb	en_IN	CS_COMMON_RATING_SUBMIT_TEXT	By making your voice heard, you help us improve mSeva.	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 e74a7355-4f52-4db9-82e3-4f7e8d5edb6d	en_IN	CS_COMMON_REJECT	Reject	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+a9a6fdec-60ad-4e43-b186-c2be1fda1f72	en_IN	CS_COMMON_REJECTED	Rejected	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 023a7e3f-7101-4f9e-b1b5-a73555952cb6	en_IN	CS_COMMON_REQUIRED_FIELDS_MISSING	Required fields missing	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 b23b70dc-5425-47da-b52f-8d23f3ee6117	en_IN	CS_COMMON_RESOLVE	Resolve	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+f7375322-d673-4a51-ba1c-ebdeea8e179c	en_IN	CS_COMMON_RESOLVED	Resolved	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 93629ebe-92e0-4181-bffd-7f525876725f	en_IN	CS_COMMON_SEARCH_BY	SEARCH BY	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 f257e790-d35c-458f-84b8-f8114a84a2f4	en_IN	CS_COMMON_SELECT_EMPLOYEE	Select Employee	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 8b730fdc-5ce7-4e49-8d7a-c5d320c271b9	en_IN	CS_COMMON_SKIP	Skip and Continue	pg	rainmaker-pgr	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
@@ -5734,6 +5797,11 @@ a48f098d-b50d-4910-bda3-f967e0e7e454	en_IN	WBH_MDMS_WORKFLOW_BUSINESSSERVICEMAST
 b195f803-345d-4251-982b-ac7aa8b6fa49	en_IN	DIGIT_TABLE_OF_CONTENTS	Privacy Policy	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 0ccc1700-3837-4573-888d-89baa382ad5f	en_IN	ES_BY_CLICKING	I agree to the DIGIT's	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
 77dd5342-5d3f-4e5b-be5c-fc10b3a98855	en_IN	ES_PRIVACY_POLICY	Privacy Policy	pg	digit-privacy-policy	1	2026-07-28 00:00:00	1	2026-07-28 00:00:00
+5a7e5aa3-8c30-498f-bf82-c3b417c633cb	en_IN	COMPLAINT_HIERARCHY.GARBAGE	Garbage	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
+7d8c24ea-c94a-4b6c-a168-20f284e06c7a	en_IN	COMPLAINT_HIERARCHY.STREETLIGHTS	Street Lights	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
+77350760-ea16-43c3-b794-fda90f0e4751	en_IN	CS_COMMON_CLOSEDAFTERREJECTION	Closed After Rejection	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
+1a49d98d-4077-4d36-a2bf-d5806d51dcea	en_IN	CS_COMMON_CLOSEDAFTERRESOLUTION	Closed After Resolution	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
+7d7ebadf-3919-47ec-be27-7b1123ff2a98	en_IN	ESCALATE	Escalate	pg	rainmaker-pgr	29	2026-08-10 00:24:35.127	\N	\N
 \.
 
 
@@ -5943,7 +6011,11 @@ SELECT pg_catalog.setval('public.seq_eg_tl_apl', 1, false);
 -- Name: seq_eg_user; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
-SELECT pg_catalog.setval('public.seq_eg_user', 35, true);
+-- Bumped 35 -> 50 for the seeded PGGRO1/PGLME2/PGLME3 employee users, which occupy
+-- eg_user ids 40-42. Leaving it at 35 makes the sequence hand out 40 to the next
+-- citizen created at runtime and collide -> DuplicateKeyException on citizen _create,
+-- which fails citizen.setup and cascade-skips the entire suite.
+SELECT pg_catalog.setval('public.seq_eg_user', 60, true);
 
 
 --
