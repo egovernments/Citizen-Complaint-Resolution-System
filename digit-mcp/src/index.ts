@@ -8,11 +8,27 @@ import { handlePgrDashboard } from './api/pgr-dashboard.js';
 import { ToolRegistry } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
-import { digitApi } from './services/digit-api.js';
+import type { ToolAccess, ToolMetadata } from './types/index.js';
+import { digitApi, runWithIsolatedClient } from './services/digit-api.js';
+import {
+  adminRoleCodes,
+  applyValidatedCaller,
+  authenticateBearer,
+  checkToolAccess,
+  getAuthMode,
+  isAdminCaller,
+  isCachedCaller,
+  isInside,
+  parseBearer,
+  resolveClientIp,
+  type ValidatedCaller,
+} from './services/auth.js';
+import { runWithRequestContext, setContextUser } from './services/request-context.js';
+import { redactDeep } from './utils/redact.js';
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, extname, resolve } from 'node:path';
+import { join, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const transportMode = process.env.MCP_TRANSPORT === 'http' ? 'http' : 'stdio';
@@ -49,10 +65,40 @@ if (transportMode === 'stdio') {
     res.end(JSON.stringify(data));
   }
 
+  /**
+   * Maximum accepted request body. Bulk tenant payloads are the large case;
+   * 16 MB is well clear of those and well clear of the pod's memory limit.
+   */
+  const MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+  class PayloadTooLargeError extends Error {
+    constructor() {
+      super(`Request body exceeds the ${MAX_BODY_BYTES} byte limit.`);
+      this.name = 'PayloadTooLargeError';
+    }
+  }
+
+  /**
+   * Read a request body, bounded.
+   *
+   * Unbounded, this defeated every gate in front of it: the body is buffered
+   * before any route can authenticate, so one anonymous request with a large
+   * chunked body killed the process on its memory limit — a reliable
+   * crash-loop from a peer holding no credentials.
+   */
   function readBody(req: IncomingMessage): Promise<string> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      let total = 0;
+      req.on('data', (chunk: Buffer) => {
+        total += chunk.length;
+        if (total > MAX_BODY_BYTES) {
+          reject(new PayloadTooLargeError());
+          req.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
       req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
       req.on('error', reject);
     });
@@ -73,8 +119,9 @@ if (transportMode === 'stdio') {
     let filePath = urlPath === '/' ? '/index.html' : urlPath;
     const resolved = resolve(join(UI_DIR, filePath));
 
-    // Path traversal protection
-    if (!resolved.startsWith(UI_DIR)) {
+    // Same containment helper as the artifact guard — one implementation, so a
+    // future edge-case fix cannot land on only one of them.
+    if (!isInside(resolved, UI_DIR)) {
       res.writeHead(403, { 'Content-Type': 'text/plain' });
       res.end('Forbidden');
       return;
@@ -122,27 +169,42 @@ if (transportMode === 'stdio') {
   }
 
   /**
-   * Authenticate the caller. Accepted forms:
-   *   1. Authorization: Bearer <token>            — token already minted upstream
+   * Authenticate a caller on the REST shim. Accepted forms:
+   *   1. Authorization: Bearer <token>                  — introspected against egov-user
    *   2. body.auth = { username, password, tenant_id }  — OAuth login first
-   * Returns null when no auth was supplied (caller should 401), or an
-   * error message string when the supplied creds were rejected.
+   *
+   * Returns null when no auth was supplied (caller should 401), or an error
+   * when the supplied credentials were rejected. On success the validated
+   * caller is returned so the dispatcher can authorize the tool.
+   *
+   * Two things changed here, and both were the same hole C1 closed on /mcp:
+   *
+   *   - Form 1 used to accept ANY non-empty string as a bearer token and take
+   *     the state tenant from a caller-supplied X-State-Tenant header. It now
+   *     goes through the same introspection as /mcp, so a token that egov-user
+   *     doesn't recognise is a 401 and the tenant comes from the token.
+   *   - A third form fell back to CRS_USERNAME/CRS_PASSWORD whenever the env
+   *     was configured, which made an anonymous REST caller the container's
+   *     stored ADMIN. It is now gated on `ambient` mode, exactly like
+   *     `ensureAuthenticated()` — so it still serves a developer's own stdio
+   *     process and never a network peer.
    */
   async function authenticateRest(
     req: IncomingMessage,
     body: Record<string, unknown>,
-  ): Promise<{ ok: true } | { ok: false; status: number; error: string } | null> {
-    const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+  ): Promise<{ ok: true; caller: ValidatedCaller | null } | { ok: false; status: number; error: string } | null> {
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
     // Form 1: Authorization: Bearer <token>
-    if (authHeader && /^Bearer\s+/i.test(authHeader)) {
-      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-      if (!token) return { ok: false, status: 401, error: 'Empty bearer token' };
-      // We don't have userInfo from the token alone; the caller can pass
-      // the state tenant via X-State-Tenant header so MDMS calls resolve.
-      const stateTenant = (req.headers['x-state-tenant'] as string | undefined) || null;
-      digitApi.applyToken(token, null, stateTenant);
-      return { ok: true };
+    // Gated on the Bearer scheme specifically. Claiming Form 1 for ANY
+    // Authorization header made a proxy-injected or browser-cached `Basic`
+    // header a hard 401, shadowing the body.auth credentials the caller sent.
+    if (parseBearer(authHeader)) {
+      const result = await authenticateBearer(authHeader);
+      if (!result.ok) return result;
+      applyValidatedCaller(result.caller);
+      setContextUser(result.caller.user.userName);
+      return { ok: true, caller: result.caller };
     }
 
     // Form 2: body.auth = { username, password, tenant_id }
@@ -150,31 +212,80 @@ if (transportMode === 'stdio') {
     if (auth && auth.username && auth.password && auth.tenant_id) {
       try {
         await digitApi.login(auth.username, auth.password, auth.tenant_id);
-        return { ok: true };
+        // Carry the token login actually minted. Returning '' here made
+        // `applyValidatedCaller` install an empty token that `isAuthenticated()`
+        // accepted while `encHeaders()` treated as absent — so a body.auth
+        // streamed call reached egov-enc-service with no Authorization header,
+        // silently reopening the decryption oracle H2 closed.
+        const info = digitApi.getAuthInfo();
+        setContextUser(info.user?.userName);
+        return { ok: true, caller: info.user && info.token ? { token: info.token, user: info.user } : null };
       } catch (err) {
         return { ok: false, status: 401, error: err instanceof Error ? err.message : String(err) };
       }
     }
 
-    // Form 3: fall back to CRS_USERNAME / CRS_PASSWORD env vars if present.
-    // This mirrors the JSON-RPC path's ensureAuthenticated() so REST callers
-    // running on the same MCP container don't have to repeat the creds in
-    // every body. Skipped if the env isn't configured — caller still gets 401.
-    const envUser = process.env.CRS_USERNAME;
-    const envPass = process.env.CRS_PASSWORD;
-    if (envUser && envPass) {
-      const envTenant = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-      try {
-        if (!digitApi.isAuthenticated()) {
-          await digitApi.login(envUser, envPass, envTenant);
+    // Form 3: env credentials — ambient mode only. See the note above.
+    if (getAuthMode() === 'ambient') {
+      const envUser = process.env.CRS_USERNAME;
+      const envPass = process.env.CRS_PASSWORD;
+      if (envUser && envPass) {
+        const envTenant = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
+        try {
+          if (!digitApi.isAuthenticated()) {
+            await digitApi.login(envUser, envPass, envTenant);
+          }
+          return { ok: true, caller: null };
+        } catch (err) {
+          return { ok: false, status: 401, error: `env auth failed: ${err instanceof Error ? err.message : String(err)}` };
         }
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, status: 401, error: `env auth failed: ${err instanceof Error ? err.message : String(err)}` };
       }
     }
 
     return null; // caller will translate to 401
+  }
+
+  /**
+   * Authorize a REST tool call. Same tiers, same helper, same denial message as
+   * the MCP path — `checkToolAccess` is transport-agnostic on purpose, so the
+   * two doors cannot drift into disagreeing about who may run what.
+   */
+  function authorizeRest(
+    toolName: string,
+    access: ToolAccess | undefined,
+    caller: ValidatedCaller | null,
+  ): { status: number; body: unknown } | null {
+    const denial = checkToolAccess(toolName, access, caller?.user ?? null);
+    if (!denial) return null;
+    mcpLogger.log({ event: 'tool_denied', transport: 'rest', tool: toolName, reason: denial });
+    return {
+      status: 403,
+      body: { success: false, error: denial, category: 'auth', code: 403, requiredAccess: access ?? 'employee' },
+    };
+  }
+
+  /**
+   * Authenticate a caller on the MCP (JSON-RPC) route.
+   *
+   * `token` mode: an `Authorization: Bearer <token>` header is required and is
+   * introspected against egov-user. A token that doesn't resolve is rejected —
+   * unlike the REST shim's Form 1, which accepts any non-empty string. The
+   * resolved user is applied so tools run as the caller, and the state tenant
+   * is derived from the token's own tenant rather than a caller-supplied header.
+   *
+   * `ambient` mode: no check (stdio, or an operator who explicitly opted in).
+   */
+  async function authenticateMcp(
+    req: IncomingMessage,
+  ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (getAuthMode() !== 'token') return { ok: true };
+
+    const result = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+    if (!result.ok) return result;
+
+    applyValidatedCaller(result.caller);
+    setContextUser(result.caller.user.userName);
+    return { ok: true };
   }
 
   // Map known low-level Spring / DIGIT errors to human-friendly explanations
@@ -212,17 +323,65 @@ if (transportMode === 'stdio') {
     return { error: raw, raw };
   }
 
+  /**
+   * Run a tool from the REST shim, recording it the same way the MCP path does.
+   *
+   * `src/server.ts` wraps every MCP tool call in mcpLogger + sessionStore, but
+   * the REST paths called `tool.handler()` directly — so every successful
+   * /v1/* invocation, including tenant_destroy and user_role_add, left no trace
+   * at all. Only denials were logged, which is the opposite of what an audit
+   * trail is for.
+   */
+  async function auditedCall<T>(
+    tool: ToolMetadata,
+    toolArgs: Record<string, unknown>,
+    onResult: (parsed: unknown) => T,
+  ): Promise<T> {
+    // `recordToolCall` is a no-op until a session exists, and only the /mcp
+    // handler used to create one — so on a REST-only deployment (which is what
+    // the ansible playbook and the xlsx onboarding runbook actually drive)
+    // every call produced an access-log line and nothing in the session store,
+    // which is the half the operator console reads.
+    await sessionStore.ensureSession('http');
+    // Redact once and hand the same copy to both sinks: each used to run the
+    // full recursive walk over the same object, doubling the cost on every
+    // call for no benefit.
+    const redacted = redactDeep(toolArgs) as Record<string, unknown>;
+    const seq = sessionStore.recordToolCall(tool.name, toolArgs, redacted);
+    mcpLogger.toolCall(tool.name, toolArgs, redacted);
+    const start = Date.now();
+    try {
+      const raw = await tool.handler(toolArgs);
+      const durationMs = Date.now() - start;
+      mcpLogger.toolResult(tool.name, durationMs, false);
+      sessionStore.recordToolResult(
+        seq,
+        tool.name,
+        durationMs,
+        false,
+        tool.sensitiveOutput ? `[redacted: ${raw.length} chars]` : raw,
+      );
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
+      return onResult(parsed);
+    } catch (err) {
+      const durationMs = Date.now() - start;
+      const message = err instanceof Error ? err.message : String(err);
+      mcpLogger.toolResult(tool.name, durationMs, true);
+      sessionStore.recordToolResult(seq, tool.name, durationMs, true, '', message);
+      throw err;
+    }
+  }
+
   async function dispatchTool(
     toolName: string,
     args: Record<string, unknown>,
     req: IncomingMessage,
     progressCb?: (event: ProgressEvent) => void,
   ): Promise<{ status: number; body: unknown }> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
-    }
-
+    // Resolved inside the lock, AFTER authentication: answering 404 for an
+    // unknown tool and 401 for a known one let an anonymous caller enumerate
+    // the whole tool surface by diffing status codes.
     return withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       if (progressCb) setProgressEmitter(progressCb);
@@ -241,15 +400,20 @@ if (transportMode === 'stdio') {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
         }
 
+        const tool = restRegistry.getTool(toolName);
+        if (!tool) {
+          return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
+        }
+
+        const denied = authorizeRest(toolName, tool.access, authResult.caller);
+        if (denied) return denied;
+
         // Strip the auth envelope before forwarding the args to the tool,
         // so the tool's input schema validation doesn't trip on it.
         const { auth: _ignored, ...toolArgs } = args;
         void _ignored;
 
-        const result = await tool.handler(toolArgs as Record<string, unknown>);
-        let parsed: unknown;
-        try { parsed = JSON.parse(result); } catch { parsed = { raw: result }; }
-        return { status: 200, body: parsed };
+        return auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => ({ status: 200, body: parsed }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const norm = normalizeError(msg);
@@ -275,11 +439,38 @@ if (transportMode === 'stdio') {
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      jsonResponse(res, 404, { success: false, error: `Unknown tool: ${toolName}` });
+
+    // Authenticate and authorize before committing the 200. An SSE stream that
+    // opens successfully and then emits `event: error` reads as success to any
+    // client keying on the status code, which is every ordinary HTTP client.
+    // Authenticate once, up front, and carry the result into the streamed body.
+    // Re-running authenticateRest there would mean a second OAuth login for
+    // every body.auth caller — the form ansible and the onboarding runbook use.
+    let caller: ValidatedCaller | null = null;
+    let streamedTool: ToolMetadata | undefined;
+    const pre = await withRestLock(async () => {
+      const snap = digitApi.snapshotAuth();
+      try {
+        const authResult = await authenticateRest(req, args);
+        if (authResult === null) return { status: 401, body: { success: false, error: 'Authentication required.' } };
+        if (!authResult.ok) return { status: authResult.status, body: { success: false, error: authResult.error } };
+        caller = authResult.caller;
+        // Resolved after authentication, like dispatchTool and runBulk. Today
+        // every call site passes a hardcoded name, so this is not an oracle —
+        // it is consistency, so that a future caller passing user input does
+        // not silently reopen one.
+        streamedTool = restRegistry.getTool(toolName);
+        if (!streamedTool) return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
+        return authorizeRest(toolName, streamedTool.access, authResult.caller);
+      } finally {
+        digitApi.restoreAuth(snap);
+      }
+    });
+    if (pre) {
+      jsonResponse(res, pre.status, pre.body);
       return;
     }
+
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -297,21 +488,14 @@ if (transportMode === 'stdio') {
         const snap = digitApi.snapshotAuth();
         setProgressEmitter((e) => writeEvent('progress', e));
         try {
-          const authResult = await authenticateRest(req, args);
-          if (authResult === null) {
-            writeEvent('error', { success: false, error: 'Authentication required.' });
-            return;
-          }
-          if (!authResult.ok) {
-            writeEvent('error', { success: false, error: authResult.error });
-            return;
-          }
+          // Re-apply the identity resolved above; restoreAuth in the pre-flight
+          // block discarded it, and re-authenticating would double the cost.
+          if (caller) applyValidatedCaller(caller);
           const { auth: _ignored, ...toolArgs } = args;
           void _ignored;
-          const raw = await tool.handler(toolArgs as Record<string, unknown>);
-          let parsed: unknown;
-          try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
-          writeEvent('done', parsed);
+          await auditedCall(streamedTool!, toolArgs as Record<string, unknown>, (parsed) => {
+            writeEvent('done', parsed);
+          });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           writeEvent('error', { success: false, ...normalizeError(msg) });
@@ -339,11 +523,9 @@ if (transportMode === 'stdio') {
     auth: Record<string, string> | undefined,
     req: IncomingMessage,
   ): Promise<{ status: number; body: unknown }> {
-    const tool = restRegistry.getTool(toolName);
-    if (!tool) {
-      return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
-    }
-    const boundTool = tool;
+    // Resolved after authentication, like dispatchTool: 404-for-unknown vs
+    // 401-for-known enumerates the whole tool surface anonymously, and fixing
+    // only the non-bulk route left the sibling wide open.
     return withRestLock(async () => {
       const snap = digitApi.snapshotAuth();
       try {
@@ -357,26 +539,36 @@ if (transportMode === 'stdio') {
           return { status: authResult.status, body: { success: false, error: authResult.error } };
         }
 
+        const boundTool = restRegistry.getTool(toolName);
+        if (!boundTool) {
+          return { status: 404, body: { success: false, error: `Unknown tool: ${toolName}` } };
+        }
+
+        const denied = authorizeRest(toolName, boundTool.access, authResult.caller);
+        if (denied) return denied;
+
         type ItemResult = { ok: boolean; status: number; body: unknown };
         const results: ItemResult[] = new Array(items.length);
         let nextIdx = 0;
 
-        async function worker(): Promise<void> {
+        // An arrow const, not a hoisted `function` declaration: a declaration is
+        // hoisted above the `if (!boundTool)` guard, so TypeScript will not
+        // narrow the captured const inside it.
+        const worker = async (): Promise<void> => {
           while (true) {
             const i = nextIdx++;
             if (i >= items.length) return;
             try {
-              const raw = await boundTool.handler(items[i]);
-              let parsed: unknown;
-              try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
-              const ok = !!(parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).success !== false);
-              results[i] = { ok, status: 200, body: parsed };
+              results[i] = await auditedCall(boundTool, items[i], (parsed) => {
+                const ok = !!(parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).success !== false);
+                return { ok, status: 200, body: parsed };
+              });
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               results[i] = { ok: false, status: 500, body: { success: false, ...normalizeError(msg) } };
             }
           }
-        }
+        };
 
         const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
         await Promise.all(workers);
@@ -475,7 +667,23 @@ if (transportMode === 'stdio') {
 
   // --- HTTP server ---
 
-  const httpServer = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  /**
+   * Every request runs inside a request context, so the logger and session
+   * store attribute each tool call to the caller that actually made it rather
+   * than to whichever request most recently overwrote a shared field.
+   */
+  const httpServer = http.createServer((req: IncomingMessage, res: ServerResponse) => {
+    const userAgent = String(req.headers['user-agent'] || '');
+    const forwarded = (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) as string | undefined;
+    const peer = resolveClientIp(req.socket.remoteAddress, forwarded);
+    void runWithRequestContext({ ip: peer.ip, userAgent }, () => handleHttpRequest(req, res, peer));
+  });
+
+  async function handleHttpRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+    peer: ReturnType<typeof resolveClientIp>,
+  ): Promise<void> {
     const url = req.url || '';
     const pathname = url.split('?')[0];
 
@@ -484,7 +692,11 @@ if (transportMode === 'stdio') {
     // can call /v1/* from a different origin without extra ops setup
     // (assuming MCP_CORS_ORIGINS is configured).
     applyCors(req, res);
-    if (req.method === 'OPTIONS' && pathname.startsWith('/v1/')) {
+    // Preflight is answered before any auth gate, for every namespace a browser
+    // can reach. A preflight carries no credentials by design, so gating it
+    // returns 401 and the real request is never sent — which silently breaks
+    // every cross-origin consumer of /api/* and /mcp.
+    if (req.method === 'OPTIONS' && (pathname.startsWith('/v1/') || pathname.startsWith('/api/') || pathname === '/mcp')) {
       res.writeHead(204).end();
       return;
     }
@@ -503,12 +715,22 @@ if (transportMode === 'stdio') {
     // GET /v1/version — server identity + build metadata. Lets the frontend
     // verify the deployed MCP has a known fix.
     if (req.method === 'GET' && pathname === '/v1/version') {
+      // gitSha / buildTime / nodeVersion tell an unauthenticated caller exactly
+      // which build is running and therefore which CVEs apply. The service name
+      // and uptime stay open so the endpoint remains usable as a liveness probe.
+      // Cache-hit only. Calling authenticateBearer here would drive a full
+      // /user/_details round trip per request from an ANONYMOUS caller (only
+      // successes are cached), turning the one endpoint documented as an open
+      // liveness probe into a 1:1 amplifier against egov-user — and blocking
+      // this response for the introspection timeout when that service hangs.
+      const detailed = getAuthMode() !== 'token' ||
+        isCachedCaller(req.headers['authorization'] || req.headers['Authorization']);
       jsonResponse(res, 200, {
         service: 'digit-mcp',
-        version: process.env.MCP_VERSION || '1.0.0',
-        gitSha: process.env.MCP_GIT_SHA || null,
-        buildTime: process.env.MCP_BUILD_TIME || null,
-        nodeVersion: process.version,
+        version: detailed ? (process.env.MCP_VERSION || '1.0.0') : undefined,
+        gitSha: detailed ? (process.env.MCP_GIT_SHA || null) : undefined,
+        buildTime: detailed ? (process.env.MCP_BUILD_TIME || null) : undefined,
+        nodeVersion: detailed ? process.version : undefined,
         startedAt: new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString(),
         uptimeSec: Math.floor(process.uptime()),
         features: ['v1/tenant/bootstrap', 'v1/tenant/city', 'v1/tenant/cleanup', 'v1/tenant/:id/export', 'v1/tools/:name', 'v1/tools/:name/bulk', 'sse-progress', 'cors'],
@@ -542,7 +764,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('tenant_bootstrap', body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -565,7 +788,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('city_setup', body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -601,7 +825,8 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool('tenant_cleanup', toolArgs, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -626,6 +851,14 @@ if (transportMode === 'stdio') {
               jsonResponse(res, authResult.status, { success: false, error: authResult.error });
               return;
             }
+            // Not a registered tool, so it needs the tier stated explicitly.
+            // The bundle is every MDMS record the tenant owns — admin-tier data
+            // by the same standard that puts mdms_search's writers there.
+            const exportDenied = authorizeRest('tenant_export', 'admin', authResult.caller);
+            if (exportDenied) {
+              jsonResponse(res, exportDenied.status, exportDenied.body);
+              return;
+            }
             const bundle = await exportTenant(targetTenant, body.schemas as string[] | undefined, body.limit as number | undefined);
             jsonResponse(res, 200, bundle);
           } catch (err) {
@@ -636,7 +869,8 @@ if (transportMode === 'stdio') {
           }
         });
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -645,6 +879,16 @@ if (transportMode === 'stdio') {
     // so the frontend can render forms / build clients dynamically. Each
     // entry includes a `responseShape` hint when known.
     if (req.method === 'GET' && pathname === '/v1/tools') {
+      // Mirrors discover_tools' `public` tier: no role requirement, but in
+      // token mode the caller must still present a valid token, so the admin
+      // tool surface isn't enumerable by an anonymous peer.
+      if (getAuthMode() === 'token') {
+        const listAuth = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+        if (!listAuth.ok) {
+          jsonResponse(res, listAuth.status, { success: false, error: listAuth.error });
+          return;
+        }
+      }
       jsonResponse(res, 200, {
         tools: restRegistry.getAllTools().map((t) => ({
           name: t.name,
@@ -684,7 +928,8 @@ if (transportMode === 'stdio') {
         const result = await runBulk(bulkMatch[1], items, concurrency, body.auth, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
@@ -698,12 +943,47 @@ if (transportMode === 'stdio') {
         const result = await dispatchTool(toolMatch[1], body, req);
         jsonResponse(res, result.status, result.body);
       } catch (err) {
-        jsonResponse(res, 400, { success: false, error: String(err) });
+        const tooLarge = err instanceof Error && err.name === 'PayloadTooLargeError';
+        jsonResponse(res, tooLarge ? 413 : 400, { success: false, error: String(err) });
       }
       return;
     }
 
     // PGR Dashboard API
+    // ── /api/* gate ────────────────────────────────────────────────────────
+    // The observability routes below are not tool dispatch, so they never went
+    // through checkToolAccess — yet /api/sessions/:id/events serves recorded
+    // tool arguments and result prefixes for every session the server has run,
+    // and /api/pgr/dashboard serves complaint data. They were reachable with no
+    // credentials at all.
+    //
+    // One gate for the whole namespace rather than five call sites, so a route
+    // added later is authenticated by default instead of by remembering to.
+    // Admin tier: this is the same data the admin-tier tools produce.
+    if (pathname.startsWith('/api/') && getAuthMode() === 'token') {
+      const apiAuth = await authenticateBearer(req.headers['authorization'] || req.headers['Authorization']);
+      if (!apiAuth.ok) {
+        jsonResponse(res, apiAuth.status, { error: apiAuth.error });
+        return;
+      }
+      if (!isAdminCaller(apiAuth.caller.user)) {
+        mcpLogger.log({
+          event: 'api_denied',
+          path: pathname,
+          user: apiAuth.caller.user.userName,
+          reason: 'not an admin-tier caller',
+        });
+        jsonResponse(res, 403, {
+          error:
+            `${pathname} requires one of these roles: ${adminRoleCodes().join(', ')}. ` +
+            `Caller "${apiAuth.caller.user.userName}" holds none of them. ` +
+            'Set MCP_ADMIN_ROLES if this deployment uses different admin role codes.',
+        });
+        return;
+      }
+      setContextUser(apiAuth.caller.user.userName);
+    }
+
     if (req.method === 'GET' && pathname === '/api/pgr/dashboard') {
       await handlePgrDashboard(res, parseQuery(url));
       return;
@@ -711,19 +991,54 @@ if (transportMode === 'stdio') {
 
     // MCP endpoint — stateless mode for horizontal scaling
     if (pathname === '/mcp') {
-      await sessionStore.ensureSession('http');
-      const clientIp = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || '';
-      const userAgent = req.headers['user-agent'] || '';
-      const normalizedIp = String(clientIp).split(',')[0].trim();
-      mcpLogger.setRequestContext(normalizedIp, userAgent);
-      sessionStore.setHttpContext(String(userAgent), normalizedIp);
+      const handleMcp = async (): Promise<void> => {
+        // Authenticate BEFORE building the server. In `token` mode (the default
+        // for the HTTP transport) the caller must present a token that
+        // egov-user recognises. Previously this route had no check at all, and
+        // because each tool falls back to CRS_USERNAME/CRS_PASSWORD when no
+        // token is set, an anonymous request was executed as ADMIN.
+        const mcpAuth = await authenticateMcp(req);
+        if (!mcpAuth.ok) {
+          res.writeHead(mcpAuth.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32001, message: mcpAuth.error },
+            id: null,
+          }));
+          return;
+        }
 
-      const server = createServer({ enableAllGroups: true });
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
+        await sessionStore.ensureSession('http');
+        if (peer.claimed) {
+          mcpLogger.log({
+            event: 'untrusted_forwarded_for',
+            peer: peer.ip,
+            claimed: peer.claimed,
+            note: 'X-Forwarded-For ignored: peer is not in MCP_TRUSTED_PROXIES',
+          });
+        }
+        sessionStore.setHttpContext(String(req.headers['user-agent'] || ''), peer.ip);
+
+        const server = createServer({ enableAllGroups: true });
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined, // stateless
+        });
+        await server.connect(transport);
+        await transport.handleRequest(req, res);
+      };
+
+      // In token mode every request carries its own credentials, so give it its
+      // own DigitApiClient. Concurrent callers then cannot observe or inherit
+      // each other's token, and a `configure` call (state tenant / base_url)
+      // dies with the request instead of persisting process-wide.
+      //
+      // In ambient mode (stdio-style single owner, or an explicit opt-in) the
+      // shared client is kept so `configure` once, then use tools still works.
+      if (getAuthMode() === 'token') {
+        await runWithIsolatedClient(handleMcp);
+      } else {
+        await handleMcp();
+      }
       return;
     }
 
@@ -888,11 +1203,17 @@ if (transportMode === 'stdio') {
     // --- 404 ---
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
-  });
+  }
 
-  httpServer.listen(port, '0.0.0.0', () => {
+  // The ambient-mode warning says "only use this on a loopback-bound socket",
+  // which was impossible to comply with while the bind address was hardcoded.
+  // Ambient + HTTP therefore defaults to loopback; set MCP_BIND to override.
+  const bindAddress =
+    process.env.MCP_BIND || (getAuthMode() === 'ambient' ? '127.0.0.1' : '0.0.0.0');
+
+  httpServer.listen(port, bindAddress, () => {
     mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath });
-    console.error(`DIGIT MCP server listening on http://0.0.0.0:${port}/mcp`);
+    console.error(`DIGIT MCP server listening on http://${bindAddress}:${port}/mcp`);
     console.error(`Session viewer: http://0.0.0.0:${port}/`);
     console.error(`Health check: http://0.0.0.0:${port}/healthz`);
     console.error(`Logging to: ${mcpLogger.logPath}`);

@@ -1,6 +1,9 @@
 // DIGIT API endpoint paths — single source of truth
 export const ENDPOINTS = {
   AUTH: '/user/oauth/token',
+  // Token introspection — resolves an access token to its user + roles.
+  // Used to authenticate network callers instead of trusting any bearer string.
+  USER_DETAILS: '/user/_details',
   USER_SEARCH: '/user/_search',
   USER_CREATE: '/user/users/_createnovalidate',
   USER_UPDATE: '/user/users/_updatenovalidate',

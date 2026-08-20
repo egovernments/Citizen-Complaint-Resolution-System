@@ -11,13 +11,33 @@ spec:
       {{- include "digit-mcp.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # Roll the pod when config or secrets change. Without this a
+        # ConfigMap-only change — flipping MCP_AUTH_MODE, say — leaves the pod
+        # spec byte-identical, so `helm upgrade` reports success and nothing
+        # restarts. With a moving image tag that is the only rollout trigger
+        # there is.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         {{- include "digit-mcp.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000          # `node` in the official node images
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required — see values.yaml for the published tag convention" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: {{ .Values.healthcheck.port }}
@@ -27,6 +47,16 @@ spec:
                 name: {{ include "digit-mcp.fullname" . }}
             - secretRef:
                 name: {{ include "digit-mcp.fullname" . }}
+          # readOnlyRootFilesystem is on, so every path the server writes needs
+          # an explicit mount: the access log, the session JSONL directory, and
+          # the snapshot artifact directory it confines output_path to.
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/digit-mcp
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: {{ .Values.healthcheck.path }}
@@ -41,3 +71,17 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      # sizeLimit on every emptyDir: these are node ephemeral storage, and the
+      # access log and session JSONL are append-only with no rotation. An
+      # unbounded pod fills the node and triggers DiskPressure, which evicts
+      # neighbouring pods too — the blast radius is the node, not the pod.
+      volumes:
+        - name: logs
+          emptyDir:
+            sizeLimit: {{ .Values.storage.logsSizeLimit }}
+        - name: data
+          emptyDir:
+            sizeLimit: {{ .Values.storage.dataSizeLimit }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.storage.tmpSizeLimit }}

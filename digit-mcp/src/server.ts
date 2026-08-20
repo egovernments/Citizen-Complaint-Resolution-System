@@ -8,7 +8,10 @@ import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
 import type { ErrorCategory } from './types/index.js';
 import { mcpLogger } from './logger.js';
+import { redactDeep } from './utils/redact.js';
 import { sessionStore } from './services/session-store.js';
+import { AuthRequiredError, checkToolAccess } from './services/auth.js';
+import { digitApi } from './services/digit-api.js';
 import { telemetry } from './services/telemetry.js';
 import { ApiClientError } from './services/digit-api.js';
 import { getErrorHint } from './utils/error-hints.js';
@@ -94,19 +97,60 @@ export function createServer(options?: CreateServerOptions): Server {
       };
     }
 
+    // Authorization (N1). Authentication established *who* the caller is; this
+    // decides whether that identity may run this particular tool. DIGIT allows
+    // citizen self-registration, so "holds a valid token" is not a privilege
+    // boundary on its own — and several tools (decrypt_data, snapshot_capture,
+    // the monitoring probes) never touch DIGIT's own accesscontrol.
+    const denial = checkToolAccess(name, tool.access, digitApi.getAuthInfo().user);
+    if (denial) {
+      mcpLogger.log({ event: 'tool_denied', tool: name, reason: denial });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: denial,
+                category: 'auth' satisfies ErrorCategory,
+                code: 403,
+                requiredAccess: tool.access ?? 'employee',
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+
     const start = Date.now();
     const sanitizedArgs = (args || {}) as Record<string, unknown>;
-    mcpLogger.toolCall(name, sanitizedArgs);
+    // One redaction pass shared by both sinks.
+    const redactedArgs = redactDeep(sanitizedArgs) as Record<string, unknown>;
+    mcpLogger.toolCall(name, sanitizedArgs, redactedArgs);
 
     // Record tool call in session + telemetry
-    const seq = sessionStore.recordToolCall(name, sanitizedArgs);
+    const seq = sessionStore.recordToolCall(name, sanitizedArgs, redactedArgs);
     telemetry.toolCall(name, tool.group);
 
     try {
       const result = await tool.handler(sanitizedArgs);
       const durationMs = Date.now() - start;
       mcpLogger.toolResult(name, durationMs, false);
-      sessionStore.recordToolResult(seq, name, durationMs, false, result);
+      // N2: never persist the output of a tool whose result is sensitive
+      // (decrypt_data returns plaintext PII). The session store keeps a
+      // 200-char prefix of every result, which would otherwise land in
+      // Postgres and the JSONL log.
+      sessionStore.recordToolResult(
+        seq,
+        name,
+        durationMs,
+        false,
+        tool.sensitiveOutput ? `[redacted: ${result.length} chars]` : result,
+      );
 
       // Nudge: suggest checkpoint after every N non-session tool calls
       let text = result;
@@ -130,6 +174,12 @@ export function createServer(options?: CreateServerOptions): Server {
       if (error instanceof ApiClientError) {
         category = error.category;
         code = error.statusCode;
+      } else if (error instanceof AuthRequiredError || (error instanceof Error && error.name === 'AuthRequiredError')) {
+        // Without this the most common failure in token mode — a tool called
+        // with no usable credentials — reported as category 'internal', which
+        // tells the agent to retry rather than to authenticate.
+        category = 'auth';
+        code = 401;
       } else if (error instanceof Error && error.name === 'ValidationError') {
         category = 'validation';
         code = 400;

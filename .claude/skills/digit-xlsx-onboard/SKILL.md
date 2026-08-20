@@ -32,12 +32,36 @@ The skill also accepts the legacy CCRS dataloader format (combined `Department A
 
 ## Procedure
 
+### Step 0 — Mint an access token
+
+`/v1/*` requires authentication. Every call below carries a bearer token, so
+mint one first and keep it in `$MCP_TOKEN` for the session:
+
+```bash
+ssh <alias> 'curl -sS -u egov-user-client: \
+  -d "grant_type=password&scope=read&userType=EMPLOYEE" \
+  --data-urlencode "username=ADMIN" \
+  --data-urlencode "password=eGov@123" \
+  --data-urlencode "tenantId=pg" \
+  http://127.0.0.1:8000/user/oauth/token' | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])'
+```
+
+Export it on the remote side (`MCP_TOKEN=<value>`), or substitute it inline.
+A 401 from any step below means the token expired — mint a new one.
+
+The account must hold an admin role (`SUPERUSER`, `MDMS_ADMIN`, `SYSTEM_ADMIN`
+or `STADMIN`, per `MCP_ADMIN_ROLES`); the tenant tools are admin-tier. A 403
+names both the roles required and the roles held.
+
+`POST` endpoints also accept `"auth": {"username","password","tenant_id"}` in
+the body instead of a header — that is what the Ansible playbook uses.
+
 ### Step 1 — Probe the target MCP
 
 Before touching any files, confirm the target is set up for this workflow:
 
 ```bash
-ssh <alias> "curl -sS http://127.0.0.1:13101/v1/version"
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" http://127.0.0.1:13101/v1/version"
 ```
 
 Expect a 200 with `features[]` containing `v1/tools/:name`. If you get `Not found` or HTTP 404, the MCP on this box is older than `4d88968` (REST shim) and the skill cannot run — fall back to `digit-ansible-onboard` to rebuild, or use the JSON-RPC path at `/mcp` (more brittle; prefer rebuild).
@@ -45,7 +69,7 @@ Expect a 200 with `features[]` containing `v1/tools/:name`. If you get `Not foun
 Also probe **which tools exist** so a feature-gap is loud, not silent:
 
 ```bash
-ssh <alias> "curl -sS http://127.0.0.1:13101/v1/tools" \
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" http://127.0.0.1:13101/v1/tools" \
   | python3 -c 'import sys,json; t=[x["name"] for x in json.load(sys.stdin)["tools"]]; print("city_setup_from_xlsx:", "city_setup_from_xlsx" in t); print("tenant_cleanup:", "tenant_cleanup" in t); print("validate_tenant:", "validate_tenant" in t)'
 ```
 
@@ -54,7 +78,7 @@ If `city_setup_from_xlsx` is missing, refuse — the operator needs a newer MCP 
 Snapshot the existing tenants so you can sanity-check the target tenant in step 4:
 
 ```bash
-ssh <alias> "curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_get_tenants \
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/mdms_get_tenants \
   -H 'Content-Type: application/json' -d '{}'" | python3 -m json.tool | head -40
 ```
 
@@ -131,7 +155,7 @@ Only if Step 3's Q5 was "yes". Otherwise skip.
 The MCP has an `mdms_update` tool — use it instead of shelling out:
 
 ```bash
-ssh <alias> "curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_update \
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/mdms_update \
   -H 'Content-Type: application/json' -d '{
     \"tenant_id\": \"<root>\",
     \"schema_code\": \"common-masters.UserValidation\",
@@ -164,7 +188,7 @@ If `<root>` (the part of the target tenant before the first `.`) is a **country/
 Detect: `mdms_search` for any schema at `<root>` returns empty / the root isn't in `mdms_get_tenants`. Then run the bootstrap (clones schema defs + ~14 essential data records + ADMIN + PGR workflow from a source state, default `pg`):
 
 ```bash
-ssh <alias> "curl -sS -X POST http://127.0.0.1:13101/v1/tools/tenant_bootstrap \
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/tenant_bootstrap \
   -H 'Content-Type: application/json' \
   -d '{\"target_tenant\":\"<root>\",\"source_tenant\":\"pg\",
        \"auth\":{\"username\":\"ADMIN\",\"password\":\"eGov@123\",\"tenant_id\":\"pg\"}}'"
@@ -179,7 +203,7 @@ Re-bootstrap of an already-bootstrapped root is idempotent. For an *existing* st
 One POST per call to `city_setup_from_xlsx`. Use the in-container paths from Step 4:
 
 ```bash
-ssh <alias> "curl -sS -X POST http://127.0.0.1:13101/v1/tools/city_setup_from_xlsx \
+ssh <alias> "curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/city_setup_from_xlsx \
   -H 'Content-Type: application/json' -d '{
     \"tenant_id\": \"<target_tenant>\",
     \"tenant_file\":   \"/tmp/onboarding-poc/Tenant And Branding Master.xlsx\",
@@ -201,19 +225,19 @@ The wizard reports what IT did. Independent reads from DIGIT confirm whether it 
 
 ```bash
 # 1. Tenant record at ROOT (not city — tenant.tenants lives at the parent)
-curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
+curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
   -H 'Content-Type: application/json' \
   -d '{"tenant_id":"<root>","schema_code":"tenant.tenants","unique_identifier":"<city_code>"}'
 # Expect: 1 record, data.parent == <root>, data.code == <city_code>
 
 # 2. Boundary hierarchy at CITY (hierarchies do NOT inherit)
-curl -sS -X POST http://127.0.0.1:13101/v1/tools/validate_boundary_hierarchy \
+curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/validate_boundary_hierarchy \
   -H 'Content-Type: application/json' \
   -d '{"tenant_id":"<target_tenant>","hierarchy_type":"<CITY>_ADMIN","expected_levels":[...]}'
 # Expect: valid: true, owner_matches: true, order_matches: true
 
 # 3. Departments / Designations / ComplaintTypes — present at ROOT, inherited by CITY
-curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
+curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
   -H 'Content-Type: application/json' \
   -d '{"tenant_id":"<root>","schema_code":"common-masters.Department","limit":500}'
 # repeat for common-masters.Designation, and RAINMAKER-PGR.ComplaintHierarchy
@@ -222,7 +246,7 @@ curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
 # Expect: every code from the source XLSX present with isActive=true.
 
 # 4. Employees at CITY — by mobile (HRMS overrides userName=employeeCode, so by-username doesn't work for files whose userName column differs from code)
-curl -sS -X POST http://127.0.0.1:13101/v1/tools/user_search \
+curl -sS -H "Authorization: Bearer $MCP_TOKEN" -X POST http://127.0.0.1:13101/v1/tools/user_search \
   -H 'Content-Type: application/json' \
   -d '{"tenant_id":"<target_tenant>","mobile_number":"<first_employee_mobile>"}'
 # Expect: 1 user, name matches, tenantId == <target_tenant>, roles populated

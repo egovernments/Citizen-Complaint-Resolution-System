@@ -110,9 +110,20 @@ describe('host_vars _example.yml', () => {
 describe('docker-compose.egov-digit.yaml', () => {
   const compose = read('local-setup/docker-compose.egov-digit.yaml');
 
-  test('digit-mcp falls back to a public ghcr image', () => {
+  test('digit-mcp falls back to the image this repo publishes', () => {
+    // egovio/digit-mcp is what build/build-config.yml builds from
+    // digit-mcp/Dockerfile. It used to fall back to a personal ghcr registry
+    // fed by a different repository, so changes made here never shipped.
     expect(compose).toMatch(
-      /image: \$\{MCP_IMAGE:-ghcr\.io\/subhashini-egov\/digit-mcp:[0-9-]+\}/
+      /image: \$\{MCP_IMAGE:-egovio\/digit-mcp:[\w.-]+\}/
     );
+  });
+
+  test('digit-mcp does NOT relax auth — nginx proxies /v1/ publicly', () => {
+    // ansible/templates/nginx-site.conf.j2 exposes /v1/ on the public vhost and
+    // relies on the MCP server to authenticate. MCP_AUTH_MODE=ambient here
+    // would therefore publish an anonymous ADMIN surface.
+    expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*\$\{MCP_AUTH_MODE:-ambient\}/);
+    expect(compose).not.toMatch(/MCP_AUTH_MODE:\s*ambient/);
   });
 });

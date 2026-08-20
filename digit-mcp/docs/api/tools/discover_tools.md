@@ -25,7 +25,7 @@ Returns tool counts (enabled vs. total), and a groups object with each group's s
 ```json
 {
   "success": true,
-  "message": "8 of 59 tools enabled",
+  "message": "8 of 70 tools enabled",
   "groups": {
     "core": {
       "enabled": true,
@@ -69,7 +69,7 @@ Returns tool counts (enabled vs. total), and a groups object with each group's s
 }
 ```
 
-*(The response includes all 14 groups; the example above is abbreviated.)*
+*(The response includes all 15 groups; the example above is abbreviated.)*
 
 ## Examples
 

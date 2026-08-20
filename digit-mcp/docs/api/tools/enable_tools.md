@@ -51,7 +51,7 @@ Returns the result of enable/disable operations, the list of currently active gr
   },
   "disabled": null,
   "activeGroups": ["core", "docs", "pgr", "masters"],
-  "toolCount": "19 of 59 tools now enabled"
+  "toolCount": "19 of 70 tools now enabled"
 }
 ```
 

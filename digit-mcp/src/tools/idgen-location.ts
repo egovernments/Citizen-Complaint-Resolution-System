@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 export function registerIdgenLocationTools(registry: ToolRegistry): void {
   // ──────────────────────────────────────────
@@ -137,18 +138,3 @@ export function registerIdgenLocationTools(registry: ToolRegistry): void {
 }
 
 // Auto-login helper
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-
-  if (!username || !password) {
-    throw new Error(
-      'Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.'
-    );
-  }
-
-  await digitApi.login(username, password, tenantId);
-}

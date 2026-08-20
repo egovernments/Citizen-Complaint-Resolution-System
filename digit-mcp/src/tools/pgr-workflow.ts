@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated, defaultProvisioningPassword } from '../services/auth.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
 import type { PaginationOptions } from '../utils/pagination.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength, validateResourceId } from '../utils/validation.js';
@@ -102,7 +103,7 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
             action: wf.action,
             state: wf.state,
             assignes: wf.assignes,
-            comment: wf.comments,
+            comment: sanitizeUserContent(wf.comments as string),
           } : null,
           createdTime: audit?.createdTime,
           lastModifiedTime: audit?.lastModifiedTime,
@@ -126,6 +127,12 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'pgr_create',
+    // Returns a plaintext provisioning password (loginCredentials /
+    // citizenLogin). The session store keeps a 200-char prefix of every result
+    // in Postgres and the JSONL log, so without this the credential is
+    // persisted — harmless while the default is the published eGov@123, a real
+    // leak the moment an operator sets a strong one.
+    sensitiveOutput: true,
     group: 'pgr',
     category: 'pgr',
     risk: 'write',
@@ -253,29 +260,45 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
         const existing = await digitApi.userSearch(rootTenant, { mobileNumber: citizenMobile, limit: 1 });
         if (existing.length > 0) {
           citizenUser = existing[0];
-          // Reset password in case it was created by PGR previously (OTP-only)
-          try { await digitApi.userUpdate({ ...citizenUser, password: 'eGov@123' }); } catch (pwErr) { console.error(`[pgr_create] Citizen password reset failed: ${pwErr instanceof Error ? pwErr.message : String(pwErr)}`); }
+          // Deliberately NOT resetting this account's password.
+          // Filing a complaint on behalf of an existing citizen must not change
+          // that citizen's credentials — the previous unconditional reset to a
+          // well-known default meant anyone who could call pgr_create with a
+          // real mobile number could take over that person's account.
+          // Consequence: we don't know their password, so no citizenLogin is
+          // returned below. RATE/REOPEN as that citizen needs their own creds.
         } else {
           // Create new citizen with password auth.
           // IMPORTANT: Use type EMPLOYEE (not CITIZEN) because DIGIT's OAuth only supports
           // password auth for EMPLOYEE-type users. CITIZEN-type uses OTP only.
           // The CITIZEN *role* is what PGR checks for RATE/REOPEN permissions.
+          //
+          // On tiers: pgr_create is employee-tier but provisions a user, while
+          // user_create is admin-tier. That is deliberate, not an oversight —
+          // filing on behalf of a citizen is ordinary counter work, and the
+          // account created here holds only the CITIZEN role, so checkToolAccess
+          // (which keys on roles, not type) still refuses it every staff tool.
+          // user_create can mint arbitrary roles, which is why it sits higher.
+          const newCitizenPassword = defaultProvisioningPassword();
           citizenUser = await digitApi.userCreate({
             name: citizenName,
             mobileNumber: citizenMobile,
             userName: citizenMobile,
-            password: 'eGov@123',
+            password: newCitizenPassword,
             type: 'EMPLOYEE',
             active: true,
             roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: rootTenant }],
             tenantId: rootTenant,
           }, rootTenant);
+          // Credentials are reported only for an account we just created. For a
+          // pre-existing citizen we leave their password untouched, so there is
+          // nothing to hand back.
+          citizenCredentials = {
+            username: citizenMobile,
+            password: newCitizenPassword,
+            loginTenantId: rootTenant,
+          };
         }
-        citizenCredentials = {
-          username: citizenMobile,
-          password: 'eGov@123',
-          loginTenantId: rootTenant,
-        };
       } catch (citizenErr) {
         // Non-fatal: PGR will auto-create the citizen (but without password auth)
         console.error(`[pgr_create] Citizen pre-creation failed: ${citizenErr instanceof Error ? citizenErr.message : String(citizenErr)}`);
@@ -344,7 +367,7 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
               `DIGIT's OAuth token only includes roles for the user's home tenant hierarchy. ` +
               `FIX: Create an employee on the target tenant using employee_create (with PGR roles like GRO, PGR_LME, DGRO), ` +
               `then call configure with the employee's code (returned in loginCredentials) as username, ` +
-              `password "eGov@123", and tenant_id="${targetRoot}". Then retry pgr_create.`;
+              `password "${defaultProvisioningPassword()}", and tenant_id="${targetRoot}". Then retry pgr_create.`;
             alternatives.push(
               { tool: 'employee_create', purpose: `Create employee on ${tenantId} with PGR roles (GRO, PGR_LME, DGRO)` },
               { tool: 'configure', purpose: `Re-authenticate as the new employee with tenant_id="${targetRoot}"` },
@@ -514,7 +537,7 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
               ? `Your user "${authInfo.user?.userName}" is on "${userTenantRoot}" — CITIZEN role doesn't cover "${targetRoot}". `
               : '') +
             `FIX: The citizen who filed the complaint has login credentials (returned by pgr_create in the citizenLogin field). ` +
-            `Call configure with the citizen's username (their mobile number) and password "eGov@123" and tenant_id="${targetRoot}". ` +
+            `Call configure with the citizen's username (their mobile number) and their own password, and tenant_id="${targetRoot}". ` +
             `Then retry pgr_update with action="${action}".`;
         } else if (isRoleError && isCrossTenant) {
           hint = `CROSS-TENANT ROLE MISMATCH: User "${authInfo.user?.userName}" is on "${userTenantRoot}" but complaint is on "${targetRoot}". ` +
@@ -702,7 +725,7 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
             state: (p.state as Record<string, unknown>)?.state,
             action: p.action,
             assignee: p.assignee,
-            comment: p.comment,
+            comment: sanitizeUserContent(p.comment as string),
             createdTime: (p.auditDetails as Record<string, unknown>)?.createdTime,
           })),
         },
@@ -720,6 +743,7 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
     name: 'workflow_create',
     group: 'pgr',
     category: 'workflow',
+    access: 'admin',
     risk: 'write',
     description:
       'Create a workflow business service definition for a tenant. This registers the state machine (states, actions, transitions, roles, SLA) ' +
@@ -938,13 +962,3 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}

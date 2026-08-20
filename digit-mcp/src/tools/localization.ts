@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 import { validateTenantId, rejectControlChars } from '../utils/validation.js';
 import { sanitizeUserContent } from '../utils/sanitize.js';
 import { applyFieldMask } from '../utils/field-mask.js';
@@ -74,6 +75,7 @@ export function registerLocalizationTools(registry: ToolRegistry): void {
     name: 'localization_upsert',
     group: 'localization',
     category: 'localization',
+    access: 'admin',
     risk: 'write',
     description:
       'Create or update localization messages for a tenant. Upserts translated strings — if a code already exists it is updated, otherwise created. Use for adding UI labels for new departments, complaint types, etc.',
@@ -164,13 +166,3 @@ export function registerLocalizationTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}

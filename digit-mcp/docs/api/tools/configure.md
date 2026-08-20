@@ -12,6 +12,23 @@ The tool supports multi-tenant login with automatic fallback. When a `tenant_id`
 
 Credentials can be passed as parameters or via the `CRS_USERNAME` and `CRS_PASSWORD` environment variables. The environment variable approach is recommended for automated/CI usage.
 
+## Authorization
+
+`configure` is **admin**-tier: it authenticates, and with `provision_roles` it
+can grant roles on the target tenant. It is also `risk: "write"`, so clients
+that auto-approve read-only tools will ask before running it.
+
+`provision_roles` (default `false`) is opt-in. When login falls back to a
+different tenant than requested, this grants the standard role set — including
+`SUPERUSER` — on the target. It previously ran automatically, which made a
+privilege grant a side effect of a tool documented as "connect to an
+environment".
+
+`base_url` is restricted to allow-listed hosts (`MCP_ALLOWED_BASE_URLS`, which
+extends rather than replaces the configured `CRS_API_URL`), and in token mode
+requires explicit `username`/`password` — the server never sends its own stored
+credentials to a caller-named host.
+
 ## Parameters
 
 | Parameter | Type | Required | Default | Description |

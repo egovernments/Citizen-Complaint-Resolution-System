@@ -1,11 +1,11 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
+import { getRequestContext } from './services/request-context.js';
+import { redactDeep } from './utils/redact.js';
 
 class McpLogger {
   public readonly logPath: string;
   private stream: WriteStream;
-  private ip = '';
-  private ua = '';
 
   constructor() {
     this.logPath = process.env.MCP_LOG_FILE || '/var/log/digit-mcp/access.log';
@@ -13,10 +13,18 @@ class McpLogger {
     this.stream = createWriteStream(this.logPath, { flags: 'a' });
   }
 
-  /** Called per HTTP request to set the client context for subsequent tool logs */
-  setRequestContext(ip: string, userAgent: string): void {
-    this.ip = ip;
-    this.ua = userAgent;
+  /**
+   * Client context for the call being logged.
+   *
+   * Read from the request scope rather than from instance fields: on the HTTP
+   * transport two concurrent requests would overwrite shared fields and
+   * cross-attribute each other's tool calls. Empty under stdio, where the
+   * session record already identifies the single owner.
+   */
+  private peer(): { ip?: string; ua?: string; user?: string } {
+    const ctx = getRequestContext();
+    if (!ctx) return {};
+    return { ip: ctx.ip || undefined, ua: ctx.userAgent || undefined, user: ctx.userName };
   }
 
   /** Write a structured JSON log line */
@@ -26,13 +34,16 @@ class McpLogger {
   }
 
   /** Log a tool call (called from server.ts CallTool handler) */
-  toolCall(toolName: string, args: Record<string, unknown>): void {
+  /** `redacted` lets a caller that already redacted these args avoid a second walk. */
+  toolCall(toolName: string, args: Record<string, unknown>, redacted?: Record<string, unknown>): void {
+    const peer = this.peer();
     this.log({
       event: 'tool_call',
-      ip: this.ip || undefined,
-      ua: this.ua || undefined,
+      ip: peer.ip,
+      ua: peer.ua,
+      user: peer.user,
       tool: toolName,
-      args: this.sanitize(args),
+      args: redacted ?? this.sanitize(args),
     });
   }
 
@@ -40,20 +51,20 @@ class McpLogger {
   toolResult(toolName: string, durationMs: number, isError: boolean): void {
     this.log({
       event: 'tool_result',
-      ip: this.ip || undefined,
+      ip: this.peer().ip,
       tool: toolName,
       durationMs,
       error: isError || undefined,
     });
   }
 
-  /** Strip sensitive fields before logging */
+  /**
+   * Strip sensitive fields before logging. Substring match on the key name, at
+   * any depth — the previous exact-name top-level check missed nested shapes
+   * like `{ auth: { password } }` as well as `apiKey`-style names.
+   */
   private sanitize(args: Record<string, unknown>): Record<string, unknown> {
-    const out = { ...args };
-    for (const key of ['password', 'secret', 'token', 'auth_token']) {
-      if (key in out) out[key] = '***';
-    }
-    return out;
+    return redactDeep(args) as Record<string, unknown>;
   }
 }
 
