@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.web.models.Contact;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -102,5 +104,65 @@ class NovuClientTest {
         ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
         verify(restTemplate).exchange(url.capture(), eq(HttpMethod.GET), any(), eq(Map.class));
         assertEquals("http://novu:3000/v2/workflows?limit=100&page=0", url.getValue());
+    }
+
+    private Contact whatsappContact() {
+        return Contact.builder().userId("uuid-1").type("CITIZEN").name("Jane Doe")
+                .phone("whatsapp:+254712345678").locale("en_IN").build();
+    }
+
+    /**
+     * Novu resolves the PRIMARY integration for a channel unless the trigger names an
+     * explicit overrides.<channel>.integrationIdentifier. WhatsApp-via-Twilio is an
+     * "sms"-channel step in Novu, so a dedicated WhatsApp integration living alongside
+     * the primary (plain SMS) one would otherwise never be picked. When
+     * novu.bridge.integration.id.whatsapp is configured, a WHATSAPP dispatch (always
+     * carries a Twilio Content SID templateId — see DispatchPipelineService's template
+     * gate) must ask for that integration explicitly.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    void identifyThenTrigger_whatsappWithConfiguredIntegration_overridesSmsIntegrationIdentifier() {
+        config.setWhatsappIntegrationId("twilio-whatsapp");
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("acknowledged", true)));
+
+        novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
+                "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
+                "HX00000000000000000000000000000000", null);
+
+        ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
+        // Two POSTs: /v1/subscribers (identify) then /v1/events/trigger — the trigger is the last one.
+        verify(restTemplate, org.mockito.Mockito.times(2))
+                .exchange(anyString(), eq(HttpMethod.POST), ent.capture(), eq(Map.class));
+        Map<String, Object> triggerBody = (Map<String, Object>) ent.getAllValues().get(1).getBody();
+
+        Map<String, Object> overrides = (Map<String, Object>) triggerBody.get("overrides");
+        Map<String, Object> smsOverride = (Map<String, Object>) overrides.get("sms");
+        assertEquals("twilio-whatsapp", smsOverride.get("integrationIdentifier"));
+        // The Twilio Content SID override must still be present alongside it.
+        Map<String, Object> providers = (Map<String, Object>) overrides.get("providers");
+        Map<String, Object> twilio = (Map<String, Object>) providers.get("twilio");
+        Map<String, Object> passthroughBody = (Map<String, Object>) ((Map<String, Object>) twilio.get("_passthrough")).get("body");
+        assertEquals("HX00000000000000000000000000000000", passthroughBody.get("contentSid"));
+    }
+
+    /** Unconfigured (default, blank) whatsappIntegrationId: no override — existing deployments unaffected. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    void identifyThenTrigger_whatsappWithoutConfiguredIntegration_sendsNoIntegrationOverride() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("acknowledged", true)));
+
+        novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
+                "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
+                "HX00000000000000000000000000000000", null);
+
+        ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, org.mockito.Mockito.times(2))
+                .exchange(anyString(), eq(HttpMethod.POST), ent.capture(), eq(Map.class));
+        Map<String, Object> triggerBody = (Map<String, Object>) ent.getAllValues().get(1).getBody();
+        Map<String, Object> overrides = (Map<String, Object>) triggerBody.get("overrides");
+        assertFalse(overrides.containsKey("sms"));
     }
 }

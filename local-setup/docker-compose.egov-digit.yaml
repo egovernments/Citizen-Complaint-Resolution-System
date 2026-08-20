@@ -2417,6 +2417,12 @@ services:
       NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
       NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
       NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
+      # Novu integration identifier to explicitly target for WHATSAPP triggers
+      # (a distinct, WhatsApp-registered Twilio integration). Twilio WhatsApp is
+      # an "sms"-channel step in Novu, so without this a WHATSAPP dispatch
+      # silently resolves to the PRIMARY sms integration (the plain SMS sender)
+      # instead. Leave unset until that dedicated integration is onboarded.
+      NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP: ${NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP:-}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
