@@ -6,13 +6,18 @@ const getPermissions = vi.fn();
 let authChangeListener: (() => void) | null = null;
 let authInfo: { user: { uuid: string; tenantId: string } } = { user: { uuid: 'u1', tenantId: 't1' } };
 
+// Per-resource-name overrides for the tests below that need a specific ResourceConfig shape
+// (a non-mdms `type`) — defaults to a plain mdms-typed config every other test relies on, since
+// the policy check only ever applies to `type: 'mdms'` resources (see useMastersCapability.tsx).
+let resourceConfigOverrides: Record<string, unknown> = {};
+
 vi.mock('@/providers/bridge', () => ({
   getAuthProvider: () => ({ getPermissions }),
   onAuthChange: (listener: () => void) => {
     authChangeListener = listener;
     return () => {};
   },
-  getResourceConfig: (name: string) => ({ schema: name }),
+  getResourceConfig: (name: string) => resourceConfigOverrides[name] ?? { type: 'mdms', schema: name },
   digitClient: { getAuthInfo: () => authInfo },
 }));
 
@@ -28,6 +33,7 @@ beforeEach(() => {
   getPermissions.mockReset();
   authChangeListener = null;
   authInfo = { user: { uuid: 'u1', tenantId: 't1' } };
+  resourceConfigOverrides = {};
 });
 
 describe('MastersCapabilityProvider — deny-by-default lifecycle (#1441 review)', () => {
@@ -70,5 +76,43 @@ describe('MastersCapabilityProvider — deny-by-default lifecycle (#1441 review)
     await waitFor(() => expect(getPermissions).toHaveBeenCalled());
     await waitFor(() => expect(result.current.canViewResource('anything')).toBe(false));
     expect(result.current.canEditResource('anything')).toBe(false);
+  });
+});
+
+describe('canViewResource/canEditResource — the ACCESSCONTROL policy check only applies to type: \'mdms\' resources', () => {
+  it('consults masters.canView/canEdit for a type: \'mdms\' resource', async () => {
+    resourceConfigOverrides.departments = { type: 'mdms', schema: 'common-masters.Department' };
+    const canView = vi.fn(() => false);
+    const canEdit = vi.fn(() => false);
+    getPermissions.mockResolvedValue({ roles: ['SUPERVISOR'], masters: { canView, canEdit } });
+
+    const { result } = renderCapability();
+    await waitFor(() => expect(result.current.roles).toEqual(['SUPERVISOR']));
+
+    expect(result.current.canViewResource('departments')).toBe(false);
+    expect(canView).toHaveBeenCalledWith('common-masters.Department');
+    expect(result.current.canEditResource('departments')).toBe(false);
+    expect(canEdit).toHaveBeenCalledWith('common-masters.Department');
+  });
+
+  it('is unrestricted (true) for any non-mdms resource, regardless of the fetched policy — e.g. Employees (hrms), Complaints (pgr), Localization', async () => {
+    resourceConfigOverrides.employees = { type: 'hrms', endpoint: { search: '/egov-hrms/employees/_search', create: '/egov-hrms/employees/_create', update: '/egov-hrms/employees/_update' } };
+    resourceConfigOverrides.complaints = { type: 'pgr' };
+    resourceConfigOverrides.localization = { type: 'localization', endpoint: { search: '/localization/messages/v1/_search', create: '/localization/messages/v1/_upsert' } };
+    // A restrictive policy that would deny everything if it were ever consulted for these —
+    // proves the type check short-circuits before masters.canView/canEdit is even called.
+    const canView = vi.fn(() => false);
+    const canEdit = vi.fn(() => false);
+    getPermissions.mockResolvedValue({ roles: ['GRO'], masters: { canView, canEdit } });
+
+    const { result } = renderCapability();
+    await waitFor(() => expect(result.current.roles).toEqual(['GRO']));
+
+    for (const name of ['employees', 'complaints', 'localization']) {
+      expect(result.current.canViewResource(name)).toBe(true);
+      expect(result.current.canEditResource(name)).toBe(true);
+    }
+    expect(canView).not.toHaveBeenCalled();
+    expect(canEdit).not.toHaveBeenCalled();
   });
 });
