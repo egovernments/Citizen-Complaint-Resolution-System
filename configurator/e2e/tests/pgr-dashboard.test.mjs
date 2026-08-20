@@ -1,7 +1,7 @@
 import { launchBrowser, login, screenshot } from '../helpers.mjs';
 
 export const name = 'pgr-dashboard';
-export const description = 'Navigate to PGR Dashboard and verify charts render';
+export const description = 'Legacy PGR Dashboard is hidden unless explicitly enabled';
 
 const NAV_TIMEOUT = 30_000;
 
@@ -13,14 +13,42 @@ export async function run() {
   try {
     await login(page);
 
-    // Navigate to PGR Dashboard
     const baseUrl = process.env.E2E_BASE_URL || 'https://crs-mockup.egov.theflywheel.in';
     await page.goto(`${baseUrl}/manage/pgr-dashboard`, {
       waitUntil: 'networkidle2',
       timeout: NAV_TIMEOUT,
     });
 
-    // Verify we're on the right page
+    const bakedFlag = await page.evaluate(() => window.__CCRS_BUILD_FLAGS__?.legacyPgrDashboardEnabled);
+    const bakedRaw = await page.evaluate(() => window.__CCRS_BUILD_FLAGS__?.legacyPgrDashboardRaw);
+    if (typeof bakedFlag !== 'boolean' || typeof bakedRaw !== 'string') {
+      throw new Error('Built Configurator did not publish its legacy-dashboard flag contract');
+    }
+    const expectedRaw = process.env.VITE_ENABLE_LEGACY_PGR_DASHBOARD;
+    if (expectedRaw !== undefined && expectedRaw !== bakedRaw) {
+      throw new Error(
+        `Legacy-dashboard build flag mismatch: test expected VITE_ENABLE_LEGACY_PGR_DASHBOARD=${JSON.stringify(expectedRaw)}, ` +
+        `but the loaded bundle was built with ${JSON.stringify(bakedRaw)}`,
+      );
+    }
+    const legacyEnabled = bakedFlag;
+
+    if (!legacyEnabled) {
+      const url = page.url();
+      if (url.includes('/pgr-dashboard')) {
+        throw new Error(`Disabled legacy dashboard remained directly routable at ${url}`);
+      }
+      const pageText = await page.evaluate(() => document.body.innerText);
+      if (pageText.includes('PGR Dashboard')) {
+        throw new Error('Disabled legacy dashboard is still visible in Configurator navigation');
+      }
+      return {
+        success: true,
+        details: { hiddenByDefault: true, redirectedTo: url },
+      };
+    }
+
+    // Explicit rollback mode: verify the retained implementation still works.
     const url = page.url();
     if (!url.includes('/pgr-dashboard')) {
       throw new Error(`Did not navigate to PGR Dashboard — landed on ${url}`);

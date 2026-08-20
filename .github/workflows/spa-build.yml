@@ -4,11 +4,9 @@ run-name: Build ${{ github.event.inputs.pipeline_name }}
 # Builds + publishes the Vite/esbuild SPA images (self-contained Dockerfiles)
 # to the egovio Docker Hub org as multi-arch (amd64 + arm64) manifests.
 #
-# Differs from pgr-ui-build.yml in exactly one way: the docker build CONTEXT
-# is the app's work-dir from build/build-config.yml, not the repo root.
-# configurator/Dockerfile and digit-ui-esbuild/docker/Dockerfile COPY
-# package.json etc. relative to their own directory and take no WORK_DIR
-# build-arg (unlike the legacy micro-ui Dockerfile).
+# The docker build context comes from each app's work-dir in
+# build/build-config.yml. Configurator uses the repo root so it can consume the
+# shared feature-flag module; digit-ui-esbuild keeps its app-local context.
 on:
   workflow_dispatch:
     inputs:
@@ -123,8 +121,7 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
-      # Context is the app's work-dir: these Dockerfiles COPY relative to
-      # their own directory. --file stays cwd-relative (repo root).
+      # Context is the configured work-dir; --file stays cwd-relative (repo root).
       - name: Build image for ${{ matrix.arch }}
         run: |
           docker buildx build \

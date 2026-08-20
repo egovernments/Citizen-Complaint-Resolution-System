@@ -65,9 +65,8 @@ server {
 
 {% endif %}
 {% if nginx_features.digit_ui_v2 | default(false) %}
-  # digit-ui-v2 — Vite + React 19 citizen SPA. Built from
-  # {{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }} on the
-  # target ({{ digit_ui_v2_repo | default('digit-ui-v2 repo') }}) and
+  # digit-ui-v2 — Vite + React 19 citizen SPA. Built on the target from
+  # {{ (digit_ui_v2_repo | default('')) | ternary(digit_ui_v2_repo | default('') ~ '@' ~ (digit_ui_v2_branch | default('HEAD')), 'the vendored in-tree digit-ui-v2/ source') }} and
   # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
   # the long immutable cache; index.html stays no-cache so a redeploy
   # propagates without operators forcing a hard refresh.
