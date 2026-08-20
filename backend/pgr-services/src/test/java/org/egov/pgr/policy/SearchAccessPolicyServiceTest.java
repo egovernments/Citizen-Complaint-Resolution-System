@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -252,6 +253,10 @@ class SearchAccessPolicyServiceTest {
         ArgumentCaptor<ScopePolicy> captor = ArgumentCaptor.forClass(ScopePolicy.class);
         verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
         assertTrue(captor.getValue().getAxes().isEmpty(), "no axes declared — no restriction on department or jurisdiction");
+        // resolveScope() used to call registry.getScopePolicy() then registry.isPolicyUnconfigured()
+        // separately, each independently re-fetching on a cache miss — a real double-fetch/doubled
+        // hot-path-load bug (#1827 review). Both facts must now come from ONE fetch.
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL));
     }
 
     @Test
@@ -272,6 +277,7 @@ class SearchAccessPolicyServiceTest {
         ArgumentCaptor<ScopePolicy> captor = ArgumentCaptor.forClass(ScopePolicy.class);
         verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
         assertTrue(captor.getValue().getAxes().isEmpty());
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL));
     }
 
     @Test

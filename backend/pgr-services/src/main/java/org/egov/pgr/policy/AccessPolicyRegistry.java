@@ -295,14 +295,46 @@ public class AccessPolicyRegistry {
      * action. Deliberately does NOT catch {@link MalformedScopePolicyException} — a present-but-broken
      * {@code scope} block is an authoring mistake, not "unconfigured", and must propagate exactly like
      * {@link #getScopePolicy} already does for the same case.
+     *
+     * <p><b>{@code resource.<resourceType>.attributes} (field masking) alone does NOT count as
+     * "configured" here</b> — this method only looks at {@code scope} and {@code condition}. An
+     * action that declares field-masking rules (e.g. REDACTing a PII field) but no {@code scope}/
+     * {@code condition} still resolves {@code true} (fully unrestricted row-level access), by design:
+     * field masking and row-level scoping are independent axes of this policy, and an operator
+     * authoring one is not implicitly opting into the other. A caller who wants "any policy at all"
+     * to imply row restriction must check {@link #getFieldVisibilityRules} separately, not read that
+     * intent into this method.
      */
     public boolean isPolicyUnconfigured(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
+        return resolveScopeState(actionUrl, requestInfo, tenantId, resourceType).unconfigured();
+    }
+
+    /**
+     * Combined form of {@link #getScopePolicy} + {@link #isPolicyUnconfigured} that fetches the
+     * action exactly once instead of twice. {@code SearchAccessPolicyService#resolveScope} used to
+     * call both separately — two independent {@link #getAction} calls that, on a cache miss (a
+     * "not found"/not-visible action is never cached — see this class' Javadoc), each triggered a
+     * fresh {@code /access/v1/actions/mdms/_get} round-trip for the SAME request: a real double-fetch
+     * race and doubled hot-path load. This method is the single source both values are derived from.
+     */
+    public ScopeResolution resolveScopeState(String actionUrl, RequestInfo requestInfo, String tenantId, String resourceType) {
         Map<String, Object> action = getAction(actionUrl, requestInfo, tenantId);
         if (action == null)
-            return true;
-        if (extractScopePolicy(action, resourceType).isPresent())
-            return false;
-        return action.get("condition") == null;
+            return new ScopeResolution(Optional.empty(), true);
+        Optional<ScopePolicy> scopePolicy = extractScopePolicy(action, resourceType);
+        if (scopePolicy.isPresent())
+            return new ScopeResolution(scopePolicy, false);
+        return new ScopeResolution(Optional.empty(), action.get("condition") == null);
+    }
+
+    /**
+     * Result of {@link #resolveScopeState}: {@code scopePolicy} is the MDMS-authored
+     * {@code resource.<resourceType>.scope} when present, and {@code unconfigured} is true only when
+     * NEITHER a {@code scope} block NOR a legacy {@code condition} was authored (see
+     * {@link #isPolicyUnconfigured}'s Javadoc for what "unconfigured" does and doesn't cover).
+     * {@code scopePolicy} present always implies {@code unconfigured == false}.
+     */
+    public record ScopeResolution(Optional<ScopePolicy> scopePolicy, boolean unconfigured) {
     }
 
     /**

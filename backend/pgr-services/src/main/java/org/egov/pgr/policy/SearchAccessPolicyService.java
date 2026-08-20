@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Tier-2 PDP for the reference access-control rule: a citizen sees only their own complaints, an
@@ -89,11 +88,18 @@ public class SearchAccessPolicyService {
      * {@link #UNRESTRICTED_SCOPE_POLICY} instead, matching Tier-2's backward-compatible allow for
      * the same case rather than silently requiring HRMS department/jurisdiction data nobody asked
      * for. See {@link AccessPolicyRegistry#isPolicyUnconfigured}.
+     *
+     * <p>Fetches the action exactly once via {@link AccessPolicyRegistry#resolveScopeState} — the
+     * scope-policy-present check and the unconfigured fallback below used to be two independent
+     * {@code AccessPolicyRegistry} calls, each capable of triggering its own
+     * {@code /access/v1/actions/mdms/_get} round-trip on a cache miss (a "not found" action is never
+     * cached), which was both a real double-fetch race and doubled hot-path load per search request.
      */
     public PgrSearchScope resolveScope(RequestInfo requestInfo, String tenantId, int stateLevelLen) {
-        Optional<ScopePolicy> scopePolicy = registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
-        if (scopePolicy.isPresent())
-            return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, scopePolicy.get());
+        AccessPolicyRegistry.ScopeResolution resolution =
+                registry.resolveScopeState(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
+        if (resolution.scopePolicy().isPresent())
+            return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, resolution.scopePolicy().get());
 
         if (config.isAbacStrictMode()) {
             log.error("SearchAccessPolicyService: no resource.complaint.scope configured for url='{}' tenant='{}' — pgr.abac.strict-mode is enabled, failing closed (Tier-1, matching AccessPolicyRegistry#getCondition's Tier-2 fail-closed)",
@@ -102,8 +108,7 @@ public class SearchAccessPolicyService {
             return PgrSearchScope.deniedAll(tenantId, stateLevel);
         }
 
-        boolean unconfigured = registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, tenantId, "complaint");
-        ScopePolicy fallback = unconfigured ? UNRESTRICTED_SCOPE_POLICY : DEFAULT_SCOPE_POLICY;
+        ScopePolicy fallback = resolution.unconfigured() ? UNRESTRICTED_SCOPE_POLICY : DEFAULT_SCOPE_POLICY;
         return policyDrivenScopeResolver.resolve(requestInfo, tenantId, stateLevelLen, fallback);
     }
 
