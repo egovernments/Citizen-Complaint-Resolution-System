@@ -8,6 +8,8 @@ import { convertEpochFormateToDate } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
+import { useQuery } from "react-query";
+import { Request } from "@egovernments/digit-ui-libraries";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import { buildExtendedAttributeRows, useExtendedAttributeOrder } from "../../components/PgrExtendedAttributesView";
@@ -201,10 +203,33 @@ const PGRDetails = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const searchCreatedBy = queryParams.get("createdBy");
-  const { isLoading, isError, error, data: pgrData, revalidate: pgrSearchRevalidate } = Digit.Hooks.pgr.usePGRSearch(
+  // Arrived from the admin search? That endpoint is cross-department while the
+  // default /v2/request/_search is scoped to the viewer, so a result outside
+  // their own scope would resolve to nothing here. Query the same endpoint the
+  // row came from. AdminSearch stamps `src=admin` on the link it builds.
+  const fromAdminSearch = queryParams.get("src") === "admin";
+
+  // Signature is (searchparams, tenantId, filters, config) — the react-query
+  // config is the FOURTH arg; passing it third would land in `filters`.
+  const pgrSearch = Digit.Hooks.pgr.usePGRSearch(
     { serviceRequestId: id, ...(searchCreatedBy ? { createdBy: searchCreatedBy } : {}) },
-    tenantId
+    tenantId,
+    undefined,
+    { enabled: !fromAdminSearch }
   );
+
+  const adminSearch = useQuery(
+    ["pgr-admin-detail", tenantId, id],
+    () => Request({ url: Urls.pgr.adminSearch, method: "POST", auth: true, userService: true, useCache: false,
+                    params: { tenantId, serviceRequestId: id } }),
+    { enabled: fromAdminSearch, retry: false, staleTime: 0, cacheTime: 0 }
+  );
+
+  const isLoading = fromAdminSearch ? adminSearch.isLoading : pgrSearch.isLoading;
+  const isError = fromAdminSearch ? adminSearch.isError : pgrSearch.isError;
+  const error = fromAdminSearch ? adminSearch.error : pgrSearch.error;
+  const pgrData = fromAdminSearch ? adminSearch.data : pgrSearch.data;
+  const pgrSearchRevalidate = fromAdminSearch ? adminSearch.refetch : pgrSearch.revalidate;
   // CCSD-2123: schema x-order for the Additional Details rows (complainantName
   // pinned first inside buildExtendedAttributeRows regardless).
   const extAttrOrder = useExtendedAttributeOrder(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes);
