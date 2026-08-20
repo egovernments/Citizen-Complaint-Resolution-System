@@ -2642,9 +2642,10 @@ services:
   # SMS-OTP path; gated behind the notifications profile (off by default).
   # Node service vendored at utilities/otp-publisher; built locally via
   # `build_otp_publisher: true` (tag otp-publisher:local) or override with
-  # OTP_PUBLISHER_IMAGE.
+  # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
+  # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
-    image: ${OTP_PUBLISHER_IMAGE:-otp-publisher:local}
+    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:v2.12-beta}
     container_name: otp-publisher
     restart: unless-stopped
     profiles: ["notifications"]
