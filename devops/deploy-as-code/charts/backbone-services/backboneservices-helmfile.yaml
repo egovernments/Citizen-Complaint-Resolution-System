@@ -348,6 +348,9 @@ releases:
         annotations:
           cert-manager.io/cluster-issuer: {{ index .Values "root-ingress" "cert-issuer" | quote }}
         host: {{ .Values.global.domain | quote }}
+        # Browser code cannot resolve Kubernetes service DNS. Keep the API,
+        # dashboard and Socket.IO URLs on this deployment's public TLS origin.
+        publicOrigin: {{ printf "https://%s" .Values.global.domain | quote }}
         tls:
           - secretName: {{ printf "%s-tls-certs" .Values.global.domain | quote }}
             hosts:

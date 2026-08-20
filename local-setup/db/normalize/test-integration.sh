@@ -43,7 +43,7 @@ DUMP="${1:?usage: test-integration.sh /path/to/dump.sql}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MAP="$HERE/../flyway-history-map.yml"
 REPO="$(cd "$HERE/../../.." && pwd)"
-PG_IMAGE="registry.preview.egov.theflywheel.in/postgres:16"
+PG_IMAGE="${PG_IMAGE:-egovio/postgres:16}"
 NET=normalize-it
 WORK="$(mktemp -d)"
 trap 'docker rm -f it-pos it-neg it-slow it-grd >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT

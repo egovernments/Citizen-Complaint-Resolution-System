@@ -380,6 +380,20 @@ server {
     proxy_read_timeout 24h;
   }
 
+  # Novu 2.3.0 uses Socket.IO's default root transport path. The dashboard
+  # ignores a /novu-ws suffix in VITE_WEBSOCKET_HOSTNAME and connects here.
+  location /socket.io/ {
+    proxy_pass http://127.0.0.1:14003/socket.io/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
   # novu-bridge: the read-only configurator proxy endpoints
   # (GET /novu-bridge/novu-adapter/v1/logs|integrations) are routed by Kong
   # (see local-setup/kong/kong.yml) and auth-gated INSIDE novu-bridge by

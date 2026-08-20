@@ -87,7 +87,7 @@ The verify-pass corrections have been folded into the body; one minor open note 
 SMS is the fully-supported delivery path. The Novu Twilio SMS integration is what actually sends.
 
 ### 3.1 Prerequisites
-- Novu stack running (enable with `enable_novu: true`; adds `novu-api`, `novu-worker`, `novu-ws`, `novu-dashboard`, `novu-mongo`, `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`).
+- Novu stack running (enable with `enable_novu: true`; adds `novu-api`, `novu-worker`, `novu-ws`, `novu-dashboard`, `novu-mongo`, `novu-bridge`, `digit-config-service`, `digit-user-preferences-service`, `otp-publisher`).
 - A **real Novu environment API key**. The two-deploy flow: first boot → operator signs up at `/novu/` to mint the key → second deploy wires it. Bomet uses a Novu **DEVELOPMENT**-environment key (workflow creation is only allowed in Dev on self-hosted Novu).
 - An **SMS-capable Twilio number you OWN**, in plain E.164 (e.g. `<TWILIO_SMS_FROM_E164>`). This is a *different* number from any WhatsApp sender.
 

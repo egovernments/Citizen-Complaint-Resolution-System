@@ -183,9 +183,28 @@
     # `node esbuild.build.js`. `container` mode skips this entirely:
     # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
     # writable under become:false, and Mac always runs container mode.
+    # There is no default repo URL any more (#1503). The SPA source is in this
+    # monorepo and CI publishes it as egovio/digit-ui-esbuild, so the ordinary
+    # deploy pulls the bundle image and never clones. Fail fast rather than
+    # cloning a surprise fork when a mode that DOES need source has none.
+    - name: "digit-ui — a source-building mode needs digit_ui_esbuild_repo"
+      ansible.builtin.assert:
+        that:
+          - (digit_ui_esbuild_repo | default('')) | length > 0
+        fail_msg: >-
+          digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
+          target, but digit_ui_esbuild_repo is empty. Either set
+          digit_ui_bundle_image (static mode — the default,
+          egovio/digit-ui-esbuild:nightly-develop) and skip the build entirely,
+          or point digit_ui_esbuild_repo at a source tree to clone.
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
+
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
-        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        repo: "{{ digit_ui_esbuild_repo }}"
         dest: /opt/digit-ui-esbuild
         version: "{{ digit_ui_esbuild_branch | default('main') }}"
         update: yes
@@ -197,6 +216,7 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        - (digit_ui_esbuild_repo | default('')) | length > 0
         # When a prebuilt bundle image is pinned (static mode), the git
         # tree is not the source of what nginx serves — leave it alone so
         # a deploy can't silently regress build/ to an older checkout.
@@ -1257,9 +1277,26 @@
           db:       ../db
           seeds:    ../seeds
           gatus:    ../gatus
-          jupyter:  ../jupyter
+          dataloader: ../dataloader
           scripts:  ../scripts
           keycloak: ../keycloak
+
+    # Upgrade path for #1743. `synchronize` only writes what is in the list
+    # above — it never removes a directory that has dropped out of it. A host
+    # deployed before the Jupyter removal therefore keeps two stale copies of
+    # the loader on disk:
+    #   {{ digit_dir }}/jupyter/            (old `jupyter: ../jupyter` entry)
+    #   {{ digit_dir }}/ci-tests/jupyter/   (old rsync destination)
+    # Leaving them is not cosmetic: the second is a full second copy of the
+    # library, and a script whose sys.path resolution drifts can import the
+    # pre-move version and silently run old code.
+    - name: "Remove pre-#1743 Jupyter/dataloader directories left by an earlier deploy"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ digit_dir }}/jupyter"
+        - "{{ digit_dir }}/ci-tests/jupyter"
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -1294,6 +1331,20 @@
           {{ novu_dashboard_image
              | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
                        else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
+
+    # otp-publisher: same shape as MCP above. `build_otp_publisher: true` builds
+    # the vendored service on the box and tags it otp-publisher:local; otherwise
+    # pull the published image. The old default was the local-only tag in BOTH
+    # cases, so a tenant that enabled notifications without opting into the build
+    # selected an image that exists in no registry — `pull` skipped it
+    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
+    # Override with `otp_publisher_image:` in host_vars.
+    - name: "Resolve otp-publisher image tag"
+      ansible.builtin.set_fact:
+        otp_publisher_image: >-
+          {{ otp_publisher_image
+             | default('otp-publisher:local' if (build_otp_publisher | default(false))
+                       else 'egovio/otp-publisher:v2.12-beta') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -1384,7 +1435,7 @@
     # Same shape of overwrite-on-redeploy bug as the four above, for two
     # siblings the original fix missed:
     #   - egov-inbox PARENT_LEVEL_TENANT_ID: mz
-    #   - digit-mcp / jupyter DIGIT_TENANT: pg
+    #   - digit-mcp DIGIT_TENANT: pg
     # Both are tenant-shaped values the verbatim compose `copy:` resets
     # to upstream defaults on every deploy. Defensive same-pattern fix.
     - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
@@ -1393,7 +1444,7 @@
         regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
         replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
 
-    - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose
+    - name: Set DIGIT_TENANT (digit-mcp) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
@@ -1615,7 +1666,12 @@
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
-    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # `npm run build` the SPA here (files/digit-ui-build.sh). With no
+    # digit_ui_esbuild_repo set — the default since #1503 — the repo argument is
+    # the "-" sentinel, i.e. VENDORED: build the monorepo's own
+    # digit-ui-esbuild/ tree in place, no clone. This path therefore needs no
+    # git source of its own, which is why the source-mode assert above does not
+    # cover it. Set digit_ui_esbuild_repo to build a fork instead.
     # The bundle is laid into the digit-ui container AFTER up -d via tar (see
     # the "lay digit-ui build into container" task below) — NOT a bind-mount:
     # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
@@ -1640,7 +1696,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
-        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ (digit_ui_esbuild_repo | default('')) or '-' }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
       environment:
         REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
@@ -2067,6 +2123,11 @@
     - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
       ansible.builtin.shell: |
         set -euo pipefail
+        # `docker cp` refuses a destination whose PARENT does not exist
+        # ("invalid output path: directory ... does not exist"). The git clone
+        # used to create /opt/digit-ui-esbuild as a side effect; this path skips
+        # the clone, so on a fresh target nothing else makes it. Create it here.
+        mkdir -p /opt/digit-ui-esbuild
         docker pull {{ digit_ui_bundle_image }}
         id=$(docker create {{ digit_ui_bundle_image }})
         trap 'docker rm -f "$id" >/dev/null' EXIT
@@ -3386,7 +3447,7 @@
       ansible.builtin.shell: |
         # Only flag genuinely broken states. Many services don't define
         # a healthcheck at all (default-data-handler, digit-gatus,
-        # digit-otel-collector, digit-jupyter, etc.) and show plain "Up X"
+        # digit-otel-collector, etc.) and show plain "Up X"
         # with no health suffix — that's normal, not unhealthy.
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
@@ -4729,7 +4790,7 @@
     # The dump (db/full-dump.sql) ships with pg.citest pre-bootstrapped
     # (CI-ADMIN with HRMS, PGR workflow loaded, complaint types). So the
     # tests work out of the box — no dataloader prerequisite.
-    # postman/ + jupyter/ trees are already synced to {{ digit_dir }} by
+    # postman/ + dataloader/ trees are already synced to {{ digit_dir }} by
     # the "Synchronize config directories" task above — no separate copy
     # step here, just reference the synced paths.
     - name: "Install Newman (Postman CLI runner)"
@@ -4824,7 +4885,7 @@
       register: postman_lifecycle
       changed_when: false
 
-    # CRSLoader end-to-end test — proves the Jupyter notebook flow
+    # CRSLoader end-to-end test — proves the full dataloader flow
     # (bootstrap a tenant from `pg`, load every phase, rollback) works.
     # Runs against `pg.cietee` — a dedicated throwaway tenant that
     # user-seed.sh provisions with ADMIN. The test's cleanup nukes MDMS
@@ -4847,10 +4908,10 @@
         extra_args: --break-system-packages
       changed_when: false
 
-    - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+    - name: "CI — CRSLoader E2E (10-phase dataloader flow, throwaway tenant)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
-        cd {{ digit_dir }}/jupyter/dataloader
+        cd {{ digit_dir }}/dataloader
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
         DIGIT_USERNAME=ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -4973,7 +5034,7 @@
         state: directory
       loop:
         - scripts
-        - jupyter/dataloader/templates/localisations
+        - dataloader/templates/localisations
         - data
 
       when: run_ci_tests | default(false)
@@ -5002,14 +5063,17 @@
     # at local-setup/scripts/ and is run as part of the core CI block above,
     # not gated on run_ci_tests.)
 
-    # Use OUR canonical, deduped dataloader (local-setup/jupyter/) — not
+    # Use OUR canonical, deduped dataloader (local-setup/dataloader/) — not
     # a sibling repo's copy. The sibling copy used to drift (e.g. it had
     # a `menuPathName` field that the MDMS schema rejects, breaking the
     # complaint-type create call). Single source of truth.
-    - name: "Synchronize DataLoader library (from local-setup/jupyter/)"
+    #
+    # The destination must stay a SIBLING of ci-tests/scripts/: the copied
+    # scripts resolve the library as SCRIPT_DIR/../dataloader.
+    - name: "Synchronize DataLoader library (from local-setup/dataloader/)"
       synchronize:
-        src: "../jupyter/dataloader/"
-        dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
+        src: "../dataloader/"
+        dest: "{{ digit_dir }}/ci-tests/dataloader/"
       when: run_ci_tests | default(false)
 
     - name: Copy county input XLSX (Bomet)

@@ -52,7 +52,7 @@ git submodule update --init --recursive local-setup/ansible/nairobi-mdms
 | What | When you need it | Default if missing |
 |---|---|---|
 | **This repo** (`Citizen-Complaint-Resolution-System`) | always — `deploy.sh` runs from `ansible/` inside it | required |
-| `digit-ui-esbuild` | auto-cloned on the target from `theflywheel/digit-ui-esbuild` (no controller-side clone needed) | playbook handles it |
+| `digit-ui-esbuild` | nothing to clone — the SPA source is in this monorepo and CI publishes it as `egovio/digit-ui-esbuild`, which `digit_ui_bundle_image` pulls and unpacks on the target | playbook handles it |
 | `digit-ui-fix` (sibling clone next to CCRS) | only when `run_ci_tests: true` — Playwright + XLSX dataloader suite | task block skipped |
 | `digit-configurator` | `nginx_features.configurator: true` — with `build_configurator: true` the deploy clones + `vite build`s it from source (`files/configurator-build.sh`); or point `configurator_build:` at a pre-built `dist/` | sync task ignored, nginx renders without `/configurator/` location |
 | `DIGIT-MCP` | `enable_mcp: true` — with `build_mcp: true` the deploy clones + `docker build`s the image locally (`files/mcp-build.sh`, tagged `digit-mcp:local`), no registry pull; else pulls `{{ docker_registry }}/digit-mcp:latest` | MCP not deployed |
@@ -68,9 +68,6 @@ cd ansible
 
 # Full deploy
 ./deploy.sh nairobi
-
-# Dry-run first (no changes, show diff of every templated file)
-./deploy.sh nairobi --check --diff
 
 # Subset — only re-render nginx + reload it
 ./deploy.sh nairobi --tags nginx
@@ -126,7 +123,7 @@ their own. End-to-end:
 The first deploy:
 - installs Docker + Compose, configures insecure-registries if needed
 - creates `/opt/digit/`, syncs configs (`otel/`, `nginx/`, `kong/`,
-  `db/`, `seeds/`, `gatus/`, `jupyter/`, `configs/`, `docker/`,
+  `db/`, `seeds/`, `gatus/`, `dataloader/`, `configs/`, `docker/`,
   plus both compose files)
 - initialises + unseals OpenBao, seeds `bootstrap_secrets` (once)
 - writes per-tenant `/opt/digit/.env` from OpenBao
@@ -287,7 +284,6 @@ below). Use `--start-at-task` and `--list-tasks` to slice work instead.
 
 | Goal | Command |
 |---|---|
-| See what would change without applying | `./deploy.sh <tenant> --check --diff` |
 | List every task name (so you can pick one to start from) | `./deploy.sh <tenant> --list-tasks` |
 | Resume from a specific task | `./deploy.sh <tenant> --start-at-task "Pull all images from VPC registry"` |
 | Pause after each task to review | `./deploy.sh <tenant> --step` |
@@ -524,8 +520,11 @@ flags. Setting back to `false` sweeps the running search containers.
 ### Just check that everything's wired up correctly
 
 ```bash
-./deploy.sh <tenant> --check --diff --tags compose-config
+./deploy.sh <tenant> --tags compose-config
 ```
+
+Re-renders the compose config and nothing else, so it converges quickly and
+shows which templated files changed.
 
 ### Relocating Docker's storage to another partition — `docker_data_root`
 

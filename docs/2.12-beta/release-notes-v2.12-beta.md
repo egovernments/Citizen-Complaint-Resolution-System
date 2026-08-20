@@ -153,12 +153,12 @@ Forms now validate against the city's own country rules — phone-number format,
 
 ### 7. Complaint Reopen Window
 
-How long a citizen has to reopen a resolved complaint is now a real city setting (default 5 days). Previously a hardcoded 1-hour limit applied no matter what was configured.
+How long a citizen has to reopen a resolved complaint is now a real city setting (default 72 hours). Previously a hardcoded 1-hour limit applied no matter what was configured, and the server enforced its own separate deployment-wide limit — so the screen and the API could disagree about whether a complaint was still reopenable.
 
 | | |
 |---|---|
-| Config | `RAINMAKER-PGR.UIConstants.REOPENSLA` (milliseconds; shipped default `432000000` = 5 days) drives the reopen window in the citizen timeline and the employee/counter action bar alike. Edit per city in DIGIT Studio. |
-| Enforcement | The deadline is also enforced on the server, based on the stored complaint (not what the request claims). |
+| Config | `RAINMAKER-PGR.UIConstants.REOPENSLA` (milliseconds; shipped default `259200000` = 72 hours) drives the reopen window in the citizen timeline and the employee/counter action bar alike. Edit per city in DIGIT Studio. Cities onboarded before this release keep their existing value. |
+| Enforcement | The deadline is also enforced on the server from the same `REOPENSLA` master, based on the stored complaint (not what the request claims). Deployments must unset `time-before-closing-complaint`, which used to override it. |
 
 ### 8. Tamper-Evident Audit Trail — *always on*
 
@@ -196,7 +196,7 @@ Every create/update of a complaint and every workflow step is recorded in a dedi
 | `MapConfig` | RAINMAKER-PGR | Schema only | Per-city map settings |
 | `InboxVisibilityConfig` | RAINMAKER-PGR | Schema only | My/All inbox tabs |
 | `ComplaintExtendedAttributeSchema`, `ComplaintRelatedToMap`, `ComplaintTemplateType` | RAINMAKER-PGR | Yes | Confidential/extended complaint fields |
-| `UIConstants.REOPENSLA` | RAINMAKER-PGR | Yes (5 days) | Complaint reopen window (now actually applied) |
+| `UIConstants.REOPENSLA` | RAINMAKER-PGR | Yes (72 hours) | Complaint reopen window (now actually applied, UI + server) |
 | `MobileNumberValidation` | common-masters | Yes (`default: false` — mark one record true) | Phone-number rules per country (replaces `UserValidation`) |
 | `FormValidations` | common-masters | Yes (5-digit postal-code row) | Postal-code / name / email rules |
 | `KpiDefinition`, `DashboardPack`, `DashboardConfig` | dss | Via `enable-dashboard.sh` | Supervisor Dashboard |
@@ -341,7 +341,7 @@ These require action from the operations team on existing installations — full
 
 **Form & Mobile Number Validation**
 - New `common-masters.FormValidations` MDMS master: one row per `fieldType` (`postalCode`, `name`, `email`) with a regex; MDMS-first over the host_vars/globalConfigs fallback across DIGIT Studio and all PGR create-complaint flows (CCSD-1989/1990). Default rows seeded by default-data-handler and `full-dump.sql`.
-- Postal-code validation consolidated onto a single shared validator with real-time feedback and dynamically derived, localized error messages (#722, #1315); reopen window driven from MDMS `RAINMAKER-PGR.UIConstants.REOPENSLA` (default 5 days) and enforced server-side (#925).
+- Postal-code validation consolidated onto a single shared validator with real-time feedback and dynamically derived, localized error messages (#722, #1315); reopen window driven from MDMS `RAINMAKER-PGR.UIConstants.REOPENSLA` (default 72 hours) and enforced server-side from the same master (#925, #1252).
 - `common-masters.MobileNumberValidation` is now the single authoritative source across all surfaces (frontend, Configurator, MCP, employee profile, complaint forms).
 - Mobile validation lengths derived entirely from the configured regex.
 - Real-time mobile validation added to the create-complaint page with i18n error messages.

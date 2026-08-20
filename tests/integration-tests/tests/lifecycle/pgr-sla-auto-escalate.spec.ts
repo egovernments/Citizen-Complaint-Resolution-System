@@ -6,10 +6,16 @@
  * single auto-escalation assertion.
  *
  * Prerequisites on the target deployment:
- *   PGR_ESCALATION_INTERVAL_MS=60000   (scan every 60 s)
- *   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (SLA breach in 30 s)
- *   ESCALATE workflow action allows role SYSTEM at root tenant
- *   At least one HRMS reportingTo relationship in the city tenant
+ *   ESCALATE workflow action allows role SYSTEM at root tenant   (tests 1-3, always run)
+ *   At least one HRMS reportingTo relationship in the city tenant (tests 1-3, always run)
+ *   PGR_ESCALATION_INTERVAL_MS=60000   (scan every 60 s)          (test 4 only, opt-in)
+ *   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (SLA breach in 30 s)      (test 4 only, opt-in)
+ *
+ * Only test 4 is gated (on PGR_FAST_ESCALATION=1) — it is the one with a
+ * wall-clock deadline. Tests 1-3 are cheap reads and run everywhere, so a
+ * deployment that has auto-escalation misconfigured still gets a red rather
+ * than a silent skip. On a stock deployment this file is 3 passes + 1 skip and
+ * finishes in seconds; the ~2 min figure applies only with the gate opened.
  *
  * Worst-case timing:
  *   - Just-missed scheduler tick: 60 s wait
@@ -80,19 +86,21 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
 }
 
 test.describe.serial('PGR SLA auto-escalation (fast)', () => {
-  // Pre-flight gate: the ~130s poll deadline is only meetable when pgr-services
-  // is deployed with fast escalation tuning (PGR_ESCALATION_INTERVAL_MS=60000 +
-  // PGR_ESCALATION_DEFAULT_SLA_MS=30000). The service defaults are 300000 /
-  // 432000000, and no in-repo deploy passes the fast values, so on a stock
-  // deployment the scheduler can't possibly escalate within the deadline and the
-  // test would hard-fail as red noise. Opt in with PGR_FAST_ESCALATION=1 (mirrors
-  // how enc-key-drift-622.spec.ts gates its destructive variant on an env flag).
-  test.skip(
-    process.env.PGR_FAST_ESCALATION !== '1',
-    'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
-      '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000). ' +
-      'pgr-services defaults (300000 / 432000000) make the ~130s poll deadline unmeetable.',
-  );
+  // NOTE: the PGR_FAST_ESCALATION gate lives on test 4 ONLY — see the skip at the
+  // top of that test's body.
+  //
+  // It used to sit here, in the describe body, which in Playwright applies to
+  // every test in the group. That silently suppressed tests 1-3 as well, and
+  // those three don't depend on escalation TIMING at all: they read a token,
+  // read the workflow config, and read HRMS. On a stock deployment they run in
+  // a couple of seconds and assert real, load-bearing facts — that
+  // ESCALATE@PENDINGATLME grants role SYSTEM (without it the scheduler's
+  // SYSTEM-identity transition is rejected) and that HRMS has a reportingTo
+  // link (without it scanAndEscalate finds no escalation target). Those are
+  // exactly the two ways auto-escalation breaks SILENTLY in production, so
+  // reporting them as "skipped" hid the checks that were still worth running.
+  // Per the annotation on test 2, a clear FAILURE here is the intended outcome
+  // when the prerequisite is missing — it saves the 130 s wait in test 4.
 
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
@@ -181,6 +189,38 @@ Steps:
 Test timeout is 160s because the worst-case wall-clock is ~130s (just-missed scheduler tick + SLA + buffer). If the deployment doesn't have the env config, this is the fastest way to discover that.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    // Timing gate — this test, and ONLY this test, needs fast escalation tuning.
+    //
+    // The ~130 s poll deadline is meetable only when the scan interval and the
+    // SLA are both small. pgr-services' shipped defaults
+    // (application.properties: pgr.escalation.interval.ms=300000,
+    // pgr.escalation.default.sla.ms=432000000) mean a complaint must sit idle
+    // for 5 DAYS before it is even eligible, and the scan runs only every 5
+    // minutes — so on a stock deployment this can't pass, by three orders of
+    // magnitude, and would be pure red noise.
+    //
+    // There is no way for the test to force the issue: pgr-services exposes no
+    // on-demand escalation endpoint (RequestsApiController is /v2/request/*
+    // only), and the escalation Kafka topic is produce-only. The two levers are
+    // both deployment-side:
+    //   1. env PGR_ESCALATION_INTERVAL_MS / PGR_ESCALATION_DEFAULT_SLA_MS, or
+    //   2. an MDMS RAINMAKER-PGR.EscalationConfig record with a small
+    //      defaultSlaByLevel / per-serviceCode overrides entry.
+    // Even with (2), the floor on the poll deadline is the scan interval, so a
+    // deployment that only seeds MDMS still needs the interval lowered too.
+    //
+    // Opt in with PGR_FAST_ESCALATION=1 once a deployment has done that (mirrors
+    // how enc-key-drift-622.spec.ts gates its destructive variant on an env flag).
+    test.skip(
+      process.env.PGR_FAST_ESCALATION !== '1',
+      'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
+        '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000, ' +
+        'or an MDMS RAINMAKER-PGR.EscalationConfig with a small defaultSlaByLevel). ' +
+        'pgr-services defaults (300000 / 432000000 = 5-min scan, 5-day SLA) make the ' +
+        '~130s poll deadline unmeetable. Tests 1-3 above still verify the ' +
+        'non-timing prerequisites on every deployment.',
+    );
+
     test.setTimeout(160_000);
 
     // Create a fresh complaint — filed as CITIZEN via seed.ts (APPLY is

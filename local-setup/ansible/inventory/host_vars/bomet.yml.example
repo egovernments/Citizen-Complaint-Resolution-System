@@ -118,13 +118,6 @@ build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
 
-# Build the pass-through novu-bridge / config-driven pgr-services from source
-# on the box instead of pulling a published/preview image. Off by default,
-# same as _example.yml — this tenant currently uses the published images
-# (pgr_services_image / novu_bridge_image below).
-build_novu_bridge: false
-build_pgr_services: false
-
 # Init the nairobi-mdms git submodule on the controller. Only needed if this
 # tenant's onboarding uses those JSONs — not the case here.
 requires_nairobi_mdms: false

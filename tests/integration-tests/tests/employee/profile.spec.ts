@@ -94,7 +94,14 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
     // enum or empty. Guards the historical +91 regression except where
     // the deployment genuinely uses +91.
     expect(prefixText).toMatch(/^\+\d+$/);
-    if (expectedPrefix !== '+91') {
+    // Only assert the negative when we POSITIVELY know this deployment's dial
+    // code and it isn't +91. `expectedPrefix` is null when the MDMS rule could
+    // not be discovered (getMobileValidationRule falls back to a rule carrying
+    // no `prefix`) — that means "unknown", not "not +91". The old
+    // `expectedPrefix !== '+91'` treated null as proof the tenant wasn't India
+    // and failed every deployment that genuinely uses +91 while also missing
+    // the common-masters.MobileNumberValidation master.
+    if (expectedPrefix && expectedPrefix !== '+91') {
       expect(prefixText).not.toBe('+91');
     }
   });

@@ -19,6 +19,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Always the package source — dist lags `npm run build` in the package,
+      // and a stale clientFilter is what made /manage/localization show 0 rows
+      // against a live dashboard count.
+      '@digit-mcp/data-provider': path.resolve(__dirname, './packages/data-provider/src/index.ts'),
     },
   },
   server: {
