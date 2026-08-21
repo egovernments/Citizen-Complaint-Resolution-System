@@ -5,14 +5,16 @@
     "active": true,
     "shortName": "IGE",
     "displayOrder": 1,
-    "tenantId": "me"
+    "tenantId": "mz",
+    "tenantCode": "mz"
   },
   {
     "code": "IGSAE",
     "name": "PGR_RELATEDTO_NAME_IGSAE",
-    "active": true,
+    "active": false,
     "shortName": "IGSAE",
     "displayOrder": 2,
-    "tenantId": "me"
+    "tenantId": "mz",
+    "tenantCode": "mz"
   }
 ]
