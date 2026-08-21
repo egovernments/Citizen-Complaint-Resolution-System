@@ -3675,6 +3675,11 @@ accesscontrol-roleaction-2248	pg	MDMS_ADMIN.4589	ACCESSCONTROL-ROLEACTIONS.rolea
 accesscontrol-roleaction-2249	pg	CSR.4589	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "CSR", "actionid": 4589, "actioncode": "", "tenantId": "pg", "id": 2249}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2250	pg	GRO.4589	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "GRO", "actionid": 4589, "actioncode": "", "tenantId": "pg", "id": 2250}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2251	pg	PGR_LME.4589	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "PGR_LME", "actionid": 4589, "actioncode": "", "tenantId": "pg", "id": 2251}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-action-4590	pg	4590	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 4590, "url": "/localization/messages/cache-bust", "code": "null", "name": "Localization", "path": "", "enabled": false, "displayName": "Localization Cache Bust", "orderNumber": 0, "serviceCode": "localization", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2252	pg	ACCOUNT_ADMIN.4590	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 4590, "actioncode": "", "tenantId": "pg", "id": 2252}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2253	pg	SUPERUSER.4590	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "SUPERUSER", "actionid": 4590, "actioncode": "", "tenantId": "pg", "id": 2253}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2254	pg	MDMS_ADMIN.4590	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "MDMS_ADMIN", "actionid": 4590, "actioncode": "", "tenantId": "pg", "id": 2254}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2255	pg	LOC_ADMIN.4590	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "LOC_ADMIN", "actionid": 4590, "actioncode": "", "tenantId": "pg", "id": 2255}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 \.
 
 
