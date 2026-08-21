@@ -1639,8 +1639,12 @@ export const UICustomizations = {
       // correct). Applied only when reception is the user's SOLE CMS role —
       // a multi-role user (e.g. reception + supervisor) keeps the wider view
       // their other role is entitled to.
+      // Default ON: an unset value means the officer has not touched the filter,
+      // so the inbox opens scoped to their own work as before. Unchecking widens
+      // it to every complaint their role can otherwise see.
       const ownCreatedByUuid = receptionOnlyCreatedByUuid();
-      if (ownCreatedByUuid) params.createdBy = ownCreatedByUuid;
+      const onlyMyComplaints = searchForm?.onlyMyComplaints !== false;
+      if (ownCreatedByUuid && onlyMyComplaints) params.createdBy = ownCreatedByUuid;
 
       // Search form fields
       if (searchForm.complaintNumber) {
@@ -1769,12 +1773,15 @@ export const UICustomizations = {
             <div style={{ display: "grid" }}>
               <span className="link" style={{ display: "grid" }}>
                 {(() => {
-                  // Same source of truth as the inbox search (receptionOnlyCreatedByUuid).
-                  // Previously derived from the row's auditDetails.createdBy, which is not
-                  // guaranteed to be present in the inbox payload — when it was missing the
-                  // param dropped and the details page queried unscoped.
-                  const ownCreatedByUuid = receptionOnlyCreatedByUuid();
-                  const query = ownCreatedByUuid ? `?createdBy=${encodeURIComponent(ownCreatedByUuid)}` : "";
+                  // Carry createdBy ONLY for a row this user created. The details page
+                  // applies the param as a search filter, so passing it for someone
+                  // else's complaint scopes the lookup to this user and resolves to
+                  // nothing — reachable as soon as the "only my complaints" filter is
+                  // unchecked and the list includes other people's rows.
+                  const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
+                  const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy;
+                  const query =
+                    creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
                   return (
                     <Link to={`/${window.contextPath}/employee/pgr/complaint-details/${value}${query}`}>
                       {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
@@ -1831,8 +1838,10 @@ export const UICustomizations = {
     MobileDetailsOnClick: (row, tenantId) => {
       const complaintNo = row?.["CS_COMMON_COMPLAINT_NO"];
       if (!complaintNo) return `/${window.contextPath}/employee/pgr/inbox-v2`;
-      const ownCreatedByUuid = receptionOnlyCreatedByUuid();
-      const query = ownCreatedByUuid ? `?createdBy=${encodeURIComponent(ownCreatedByUuid)}` : "";
+      const currentUserUuid = Digit.UserService.getUser()?.info?.uuid;
+      const creatorUuid = row?.businessObject?.service?.auditDetails?.createdBy || row?.businessObject?.service?.createdBy;
+      const query =
+        creatorUuid && creatorUuid === currentUserUuid ? `?createdBy=${encodeURIComponent(currentUserUuid)}` : "";
       return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}${query}`;
     },
   },
