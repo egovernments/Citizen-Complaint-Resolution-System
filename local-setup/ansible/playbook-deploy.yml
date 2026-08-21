@@ -4090,6 +4090,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
@@ -4112,6 +4121,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
