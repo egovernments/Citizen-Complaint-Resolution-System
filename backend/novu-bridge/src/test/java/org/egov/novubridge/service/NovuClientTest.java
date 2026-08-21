@@ -165,4 +165,31 @@ class NovuClientTest {
         Map<String, Object> overrides = (Map<String, Object>) triggerBody.get("overrides");
         assertFalse(overrides.containsKey("sms"));
     }
+
+    /**
+     * DispatchPipelineService currently gates WHATSAPP on a templateId being present, but that's
+     * caller-side policy, not something this method should rely on. A future WHATSAPP caller that
+     * skips the provider-template path must still get the integration override, or it would
+     * silently resolve to the primary (non-WhatsApp) SMS integration.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    void identifyThenTrigger_whatsappWithoutTemplateId_stillAppliesConfiguredIntegrationOverride() {
+        config.setWhatsappIntegrationId("twilio-whatsapp");
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
+                .thenReturn((ResponseEntity) ResponseEntity.ok(Map.of("acknowledged", true)));
+
+        novuClient.identifyThenTrigger("ke.bomet:uuid-1", whatsappContact(), "WHATSAPP",
+                "Dear Jane, your complaint is assigned.", null, "txn-1", Map.of(),
+                null, null);
+
+        ArgumentCaptor<HttpEntity> ent = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, org.mockito.Mockito.times(2))
+                .exchange(anyString(), eq(HttpMethod.POST), ent.capture(), eq(Map.class));
+        Map<String, Object> triggerBody = (Map<String, Object>) ent.getAllValues().get(1).getBody();
+
+        Map<String, Object> overrides = (Map<String, Object>) triggerBody.get("overrides");
+        Map<String, Object> smsOverride = (Map<String, Object>) overrides.get("sms");
+        assertEquals("twilio-whatsapp", smsOverride.get("integrationIdentifier"));
+    }
 }
