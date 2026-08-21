@@ -68,6 +68,93 @@ public class AnalyticsService {
     /** Hard request budget: batch entries execute sequentially and each may hit PostgreSQL. */
     static final int MAX_BATCH_QUERIES = 50;
 
+    /**
+     * The only query params a PUBLIC-floor caller may attach to a KPI reference (#1797): the
+     * dashboard's global filter bar. Enforced HERE — on every path that resolves a kpiId for the
+     * public floor, not only the {@code /public/_query} alias — because Kong's audit mode
+     * ({@code ENFORCE_UNAUTH=false}) still lets an anonymous body reach {@code /_query}, where it
+     * degrades to the same PUBLIC floor. Each is a narrowing predicate the composer layers under
+     * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
+     * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
+     * Values are scalar strings, length-capped, and the dates must be ISO calendar days.
+     */
+    static final Set<String> PUBLIC_QUERY_PARAMS =
+            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+    static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
+    private static final java.util.regex.Pattern ISO_DAY =
+            java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+
+    /**
+     * Public narrowing param -> the grain column it binds. A PUBLIC def that already filters that
+     * column (e.g. "water complaints" with a baked {@code service_code} eq) must keep its own
+     * predicate: the composer's {@link KpiQueryComposer} REPLACES an existing eq rather than
+     * intersecting with it, which for an anonymous caller would turn a curated subset tile into
+     * a "count anything" primitive. Such params are dropped and reported as {@code paramsIgnored}.
+     */
+    private static final Map<String,String> PUBLIC_PARAM_COLUMNS = Map.of(
+            "ward", "ward_code",
+            "serviceCode", "service_code",
+            "complaintPath", "complaint_node_path");
+
+    /**
+     * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
+     * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
+     * non-scalar or blank value, over-long value, or non-ISO-day date.
+     */
+    static ObjectNode sanitizePublicParams(JsonNode params) {
+        if (params == null || params.isNull()) return null;
+        if (!params.isObject())
+            throw new IllegalArgumentException("invalid_param: public params must be an object");
+        if (params.isEmpty()) return null;
+        ObjectNode clean = JsonNodeFactory.instance.objectNode();
+        for (Iterator<Map.Entry<String,JsonNode>> it = params.fields(); it.hasNext();) {
+            Map.Entry<String,JsonNode> e = it.next();
+            String name = e.getKey();
+            JsonNode v = e.getValue();
+            if (!PUBLIC_QUERY_PARAMS.contains(name))
+                throw new IllegalArgumentException("invalid_param: public queries accept only "
+                        + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
+            if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
+            String text = v.asText().trim();
+            if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name + " exceeds "
+                        + PUBLIC_QUERY_PARAM_MAX_LENGTH + " characters");
+            if ((name.equals("dateFrom") || name.equals("dateTo")) && !ISO_DAY.matcher(text).matches())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
+            clean.put(name, text);
+        }
+        return clean;
+    }
+
+    /**
+     * Public-floor view of a kpiId reference: {@code kpiId} plus sanitized {@code params} and
+     * nothing else. Inline bodies are rejected by the caller before this runs.
+     */
+    static ObjectNode publicFloorRef(JsonNode queryNode) {
+        ObjectNode ref = JsonNodeFactory.instance.objectNode();
+        ref.set("kpiId", queryNode.get("kpiId"));
+        ObjectNode params = sanitizePublicParams(queryNode.get("params"));
+        if (params != null) ref.set("params", params);
+        return ref;
+    }
+
+    /** Drop public params whose column the def's own query already filters (see PUBLIC_PARAM_COLUMNS). */
+    private static JsonNode withoutBakedNarrowings(KpiDefinition def, JsonNode params, List<String> paramsIgnored) {
+        if (params == null || !params.isObject()) return params;
+        JsonNode filters = def.getQuery() == null ? null : def.getQuery().get("filters");
+        if (filters == null || !filters.isObject()) return params;
+        ObjectNode out = null;
+        for (Map.Entry<String,String> e : PUBLIC_PARAM_COLUMNS.entrySet()) {
+            if (params.has(e.getKey()) && filters.has(e.getValue())) {
+                if (out == null) out = ((ObjectNode) params).deepCopy();
+                out.remove(e.getKey());
+                if (paramsIgnored != null && !paramsIgnored.contains(e.getKey())) paramsIgnored.add(e.getKey());
+            }
+        }
+        return out == null ? params : out;
+    }
+
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
@@ -154,6 +241,9 @@ public class AnalyticsService {
                                 "message", "public access is limited to published PUBLIC KPIs"));
                         continue;
                     }
+                    // ... and only the filter-bar params (#1797) — an out-of-list param is a
+                    // per-entry invalid_param, whichever gateway path the body arrived through.
+                    if (publicFloor) queryNode = publicFloorRef(queryNode);
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
                     Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name, calendar);
                     if (composed != null) { results.put(name, composed); continue; }
@@ -189,6 +279,7 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
+            if (publicFloor) queryNode = publicFloorRef(queryNode);
             Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query", calendar);
             if (composed != null) { out.putAll(composed); return out; }
             List<String> paramsIgnored = new ArrayList<>();
@@ -242,8 +333,11 @@ public class AnalyticsService {
                             src.getKey(), "public-options", calendar);
                     results.put(src.getKey(), codesOnly(r, src.getValue()));
                 } catch (Exception ex) {
+                    // Anonymous envelope: the driver/SQL detail belongs only in the server log.
+                    log.warn("public filter options: {} distinct failed", src.getKey(), ex);
                     partial = true;
-                    results.put(src.getKey(), err(ex));
+                    results.put(src.getKey(), Map.of("error", "query_failed",
+                            "message", "filter options are unavailable"));
                 }
             }
             Map<String,Object> out = new LinkedHashMap<>();
@@ -327,9 +421,13 @@ public class AnalyticsService {
             log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
             return null;
         }
+        // Public floor (#1797): a param may not displace a predicate the PUBLIC def bakes itself.
+        JsonNode callerParams = isPublicFloor(callerRoles)
+                ? withoutBakedNarrowings(def.get(), queryNode.get("params"), paramsIgnored)
+                : queryNode.get("params");
         // #1026: apply the def's declared params[].default for any param the caller omitted.
         // Precedence: explicit caller param > declared default > the def's baked query.
-        JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
+        JsonNode effectiveParams = withDeclaredDefaults(def.get(), callerParams);
 
         // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
         // params.allowed allow-list (the def is in scope here). An out-of-list value (window,

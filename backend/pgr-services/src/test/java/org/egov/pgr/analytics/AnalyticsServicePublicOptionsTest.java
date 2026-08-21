@@ -93,7 +93,7 @@ public class AnalyticsServicePublicOptionsTest {
     @SuppressWarnings("unchecked")
     public void oneFailingDistinctLeavesTheOtherUsable() {
         when(jdbc.queryForList(eq("SELECT ward_code"), any(Object[].class)))
-                .thenThrow(new RuntimeException("boom"));
+                .thenThrow(new RuntimeException("boom: relation complaint_facts does not exist"));
         when(jdbc.queryForList(eq("SELECT service_code"), any(Object[].class)))
                 .thenReturn(Collections.singletonList(row("service_code", "Pothole", 9)));
 
@@ -101,7 +101,10 @@ public class AnalyticsServicePublicOptionsTest {
 
         Map<String,Object> results = (Map<String,Object>) out.get("results");
         assertEquals(Boolean.TRUE, out.get("partial"));
-        assertTrue(((Map<String,Object>) results.get("wards")).containsKey("error"));
+        // Anonymous envelope never carries the driver/SQL detail.
+        assertEquals(Map.of("error", "query_failed", "message", "filter options are unavailable"),
+                results.get("wards"));
+        assertFalse(results.toString().contains("boom"));
         assertEquals(Collections.singletonList(Map.of("service_code", "Pothole")),
                 ((Map<String,Object>) results.get("complaintTypes")).get("rows"));
     }

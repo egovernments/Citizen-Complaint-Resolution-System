@@ -92,7 +92,7 @@ export async function fetchComplaintHierarchyRecords() {
   // The master is anonymously readable (MDMS _search is auth-optional on
   // Kong); the public runtime sends a role-less single-shot request, exactly
   // like boundaryService, so the public filter bar gets the same tree (#1797).
-  if (!hasAuth() && !isPublicDashboardRuntime()) return null;
+  if (!isPublicDashboardRuntime() && !hasAuth()) return null;
 
   try {
     const response = await authFetch(getMdmsSearchUrl(), {

@@ -71,14 +71,14 @@ const localeStorageKey = () =>
   isPublicDashboardRuntime() ? PUBLIC_LOCALE_KEY : EMPLOYEE_LOCALE_KEY;
 
 /**
- * Deployment default for a visitor who has never picked a language: the same
- * LOCALE_DEFAULT + "_" + LOCALE_REGION composition the employee app boots with
- * (globalConfigs), else en_IN.
+ * Deployment default for a public visitor who has never picked a language:
+ * the employee app's own boot rule (packages/libraries Digit.Utils
+ * getDefaultLanguage — each half defaulted independently, `en` / `IN`). The
+ * dev harness keeps its historical en_IN so its behaviour is unchanged.
  */
 function defaultLocale() {
-  const lang = globalConfig("LOCALE_DEFAULT");
-  const region = globalConfig("LOCALE_REGION");
-  return lang && region ? `${lang}_${region}` : FALLBACK_LOCALE;
+  if (!isPublicDashboardRuntime()) return FALLBACK_LOCALE;
+  return `${globalConfig("LOCALE_DEFAULT") || "en"}_${globalConfig("LOCALE_REGION") || "IN"}`;
 }
 
 const readStoredLocale = () => {
@@ -100,8 +100,17 @@ export function getLanguage() {
  * <html lang>, and notify every useDashboardT subscriber so the whole tree —
  * including imperatively-drawn charts keyed on `language` — re-renders.
  */
+/**
+ * Whether THIS runtime owns language switching. False whenever a host i18next
+ * exists (DigitUI's TopBar switcher is in charge); the in-page LanguageMenu
+ * gates on the same predicate so it can only appear where setLanguage acts.
+ */
+export function ownsLanguageSwitch() {
+  return !hostI18next();
+}
+
 export function setLanguage(locale) {
-  if (!locale || hostI18next()) return Promise.resolve();
+  if (!locale || !ownsLanguageSwitch()) return Promise.resolve();
   standalone.locale = locale;
   try {
     window.localStorage.setItem(localeStorageKey(), locale);

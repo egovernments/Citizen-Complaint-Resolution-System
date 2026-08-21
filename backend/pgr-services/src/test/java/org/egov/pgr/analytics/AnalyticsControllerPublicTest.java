@@ -347,6 +347,8 @@ public class AnalyticsControllerPublicTest {
     public void publicCatalogListsEveryPublicTileAndIgnoresSpoofedRequestInfo() {
         when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
                 .thenReturn(Arrays.asList(publicDef("cl_public"), publicDef("cl_public_extra")));
+        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
 
         ResponseEntity<Map<String,Object>> response = controller.searchPublicCatalog(Map.of(
                 "tenantId", "ke",
@@ -381,7 +383,29 @@ public class AnalyticsControllerPublicTest {
     }
 
     @Test
+    public void publicCatalogAndOptionsFailClosedWithoutAPublicPack() {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+                .thenReturn(Collections.singletonList(publicDef("cl_public")));
+        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+                .thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String,Object>> catalog = controller.searchPublicCatalog(Map.of("tenantId", "ke"));
+        ResponseEntity<Map<String,Object>> options = controller.publicFilterOptions(Map.of("tenantId", "ke"), null);
+
+        // Same gate as /public/_query: enabled-but-unconfigured exposes neither descriptors nor codes.
+        assertEquals(400, catalog.getStatusCodeValue());
+        assertEquals("public_pack_not_found", catalog.getBody().get("error"));
+        assertEquals(400, options.getStatusCodeValue());
+        assertEquals("public_pack_not_found", options.getBody().get("error"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
     public void publicOptionsDelegateToTheServerOwnedDistinctsAndHideFailures() {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+                .thenReturn(Collections.singletonList(publicDef("cl_public")));
+        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
         when(service.publicFilterOptions("ke", 1, "trace-9"))
                 .thenReturn(Map.of("results", Map.of("wards", Map.of("rows", List.of(Map.of("ward_code", "W1"))))));
 

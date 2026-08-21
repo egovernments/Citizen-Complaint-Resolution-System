@@ -23,6 +23,7 @@ import DashboardLogin, {
   clearDashboardSession,
 } from "./components/DashboardLogin";
 import { useDashboardConfig } from "../useDashboardConfig";
+import { configurePublicDashboardRuntime } from "./services/dashboardRuntime";
 import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 import { resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
@@ -161,6 +162,12 @@ const AdminDashboard = ({ embedded = false, mode }) => {
   // `embedded` is kept as a legacy alias so Module.js (and any other caller)
   // keeps working unchanged; an explicit `mode` always wins.
   const resolvedMode = mode || (embedded ? "embedded" : "standalone");
+  // The prop and the process-level runtime flag must agree: services decide
+  // storage namespaces / anonymous transport off the flag, this component
+  // decides fetch paths off the prop. Setting the flag here (idempotent, before
+  // the first child render) means a public mount can never read or write an
+  // employee's saved layout/filters because an entry forgot the explicit call.
+  if (resolvedMode === "public") configurePublicDashboardRuntime();
   const isEmbedded = resolvedMode === "embedded";
   // Only the standalone shell owns a session: embedded inherits the host's,
   // public deliberately has none.

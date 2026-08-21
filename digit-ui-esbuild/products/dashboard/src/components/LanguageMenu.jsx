@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import PopoverMenu, { PopoverMenuItem } from "./ui/PopoverMenu";
-import { setLanguage } from "../i18n/localeRuntime";
+import { ownsLanguageSwitch, setLanguage } from "../i18n/localeRuntime";
 import useDashboardT from "../i18n/useDashboardT";
 import { fetchStateLanguages } from "../services/stateInfoService";
 
@@ -36,7 +36,12 @@ const LanguageMenu = () => {
   const { t, language } = useDashboardT();
   const [languages, setLanguages] = useState(null);
 
+  // Self-gate on the runtime that actually performs the switch: a shell that
+  // happens to load the DigitUI libraries gets the host TopBar switcher, and
+  // this menu must not render a control whose clicks would be swallowed.
+  const owns = ownsLanguageSwitch();
   useEffect(() => {
+    if (!owns) return undefined;
     let cancelled = false;
     fetchStateLanguages().then((list) => {
       if (!cancelled) setLanguages(list);
@@ -44,9 +49,9 @@ const LanguageMenu = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [owns]);
 
-  if (!languages || languages.length < 2) return null;
+  if (!owns || !languages || languages.length < 2) return null;
 
   const current = languages.find((l) => l.value === language);
   return (

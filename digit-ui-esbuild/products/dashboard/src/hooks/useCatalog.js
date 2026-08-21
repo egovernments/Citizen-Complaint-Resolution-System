@@ -67,17 +67,17 @@ export function useCatalog(tenantId, { publicMode = false } = {}) {
       // blanking a page that can still render its default tiles.
       ? fetchPublicPack(tenantId).then((packRes) =>
           packRes?.enabled === false
-            ? [packRes, null]
+            ? [packRes, { tiles: [] }]
             : fetchPublicCatalog(tenantId)
-                .catch(() => null)
+                // Degrade to the pack's own descriptors: the default tiles
+                // still render, only the Add-KPI menu is reduced.
+                .catch(() => ({ tiles: packRes?.tiles || [] }))
                 .then((catalogRes) => [packRes, catalogRes]))
       : Promise.all([fetchPack(tenantId), fetchCatalog(tenantId)]);
     request
       .then(([packRes, catalogRes]) => {
         if (cancelled) return;
-        const catalogTiles = catalogRes?.tiles?.length
-          ? catalogRes.tiles
-          : (packRes?.tiles || []);
+        const catalogTiles = catalogRes?.tiles || [];
         const allKpis = Object.fromEntries(
           catalogTiles.map(k => [k.kpiId, k])
         );

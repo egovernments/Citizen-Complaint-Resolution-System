@@ -32,7 +32,10 @@ esbuild.buildSync({
     contents: `
       import { configurePublicDashboardRuntime } from './dashboardRuntime.js';
       import { authFetch, buildRequestInfo } from './authService.js';
-      export { configurePublicDashboardRuntime, authFetch, buildRequestInfo };
+      import { fetchComplaintHierarchyRecords } from './complaintHierarchyService.js';
+      import { fetchBoundariesByCodes } from './boundaryService.js';
+      export { configurePublicDashboardRuntime, authFetch, buildRequestInfo,
+               fetchComplaintHierarchyRecords, fetchBoundariesByCodes };
     `,
     resolveDir: __dirname,
     sourcefile: "public-runtime-test-entry.js",
@@ -122,6 +125,39 @@ test("public runtime makes shared auxiliary requests anonymous and single-shot",
   assert.equal(reads, 0);
   assert.equal(writes, 0);
   assert.equal(events, 0);
+});
+
+test("public auxiliary reads (complaint hierarchy, boundaries) never inspect employee storage", async () => {
+  const reads = [];
+  global.window = {
+    globalConfigs: { getConfig: (key) => ({ STATE_LEVEL_TENANT_ID: "ke", MDMS_V1_CONTEXT_PATH: "mdms-v2" })[key] },
+    localStorage: { getItem: (k) => { reads.push(k); return JSON.stringify("employee-secret"); }, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: (k) => { reads.push(`session:${k}`); return null; }, setItem() {}, removeItem() {} },
+    dispatchEvent() {},
+  };
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ MdmsRes: { "RAINMAKER-PGR": { ComplaintHierarchy: [{ code: "Roads", name: "Roads" }] } }, Boundary: [] }),
+    };
+  };
+  delete require.cache[require.resolve(OUT)];
+  const mod = require(OUT);
+  mod.configurePublicDashboardRuntime();
+
+  const records = await mod.fetchComplaintHierarchyRecords();
+  await mod.fetchBoundariesByCodes(["W1"]);
+
+  assert.ok(Array.isArray(records) && records.length === 1, "hierarchy is readable anonymously");
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.body.RequestInfo.authToken, undefined);
+    assert.equal(call.body.RequestInfo.userInfo, undefined);
+  }
+  assert.deepEqual(reads, [], `employee storage touched: ${reads}`);
 });
 
 test("public entry resets the standalone browser viewport", () => {

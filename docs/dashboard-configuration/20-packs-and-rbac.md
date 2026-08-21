@@ -207,6 +207,26 @@ whole-batch `400 invalid_param`. So the anonymous page gets the same Ward / Comp
 filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
 sparklines), no Group-by level switch and no per-complaint pin source.
 
+Three details of that policy worth knowing when authoring PUBLIC defs:
+
+- **It is enforced in the service, not just the alias.** `AnalyticsService` applies the same
+  allow-list to every PUBLIC-floor caller (`PUBLIC_QUERY_PARAMS`), so an anonymous body that
+  reaches the employee `/_query` while Kong runs in audit mode gets per-entry `invalid_param`
+  for anything outside it — the alias only adds the whole-batch 400 and discards RequestInfo.
+- **A public param never displaces a predicate the def bakes itself.** The composer *replaces*
+  an existing `eq` rather than intersecting with it (that is the employee filter-bar semantics),
+  so for the public floor a `ward` / `serviceCode` / `complaintPath` param whose column the def's
+  own `query.filters` already pins is dropped and reported in `paramsIgnored`. "Water complaints"
+  stays water complaints however the visitor filters.
+- **Date ranges follow employee semantics:** `dateFrom`/`dateTo` replace the def's named
+  `window` (the `params[].allowed` list governs only the `window` param). A public tile can
+  therefore be asked for any historical interval; if a deployment wants a ceiling, that is a
+  product decision (see the open question in PR #1838), not something the catalog expresses today.
+
+All four aliases share one fail-closed gate: `publicDashboardEnabled` **and** a matching PUBLIC
+pack. Enabled-but-no-pack exposes neither descriptors (`catalog/_search`) nor option codes
+(`_options`) — both return `400 public_pack_not_found`, the same as a query would.
+
 **Which knob grants what, publicly:** tag a def `PUBLIC` → it appears in the public Add KPI
 menu and is queryable anonymously; add it to the `public-default` pack → it is on the page by
 default. Untag it → both disappear on the next config-cache refresh. The visitor's own layout and
