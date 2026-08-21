@@ -8,7 +8,7 @@
   },
   {
     "caseRelatedTo": "IGSAE",
-    "active": true,
+    "active": false,
     "schemaRef": "IgsaeComplaintExtendedAttributes",
     "allowedDocumentTypes": ["EVIDENCE"],
     "allowedViewerRoles": ["CONFIDENTIAL_COMPLAINT_VIEWER"]

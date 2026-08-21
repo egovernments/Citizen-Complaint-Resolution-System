@@ -12,7 +12,7 @@
       "code":         { "type": "string", "description": "Unique category code, e.g. IGE" },
       "name":         { "type": "string", "description": "Full display name" },
       "active":       { "type": "boolean" },
-      "tenantCode":   { "type": "string", "description": "Sub-tenant code, e.g. mz.ige" },
+      "tenantCode":   { "type": "string", "description": "Tenant the complaint is filed under. Set to the root tenant (e.g. mz) unless the deployment genuinely runs per-authority sub-tenants with their own boundary data — a sub-tenant with no boundaries makes the citizen locality picker come up empty." },
       "shortName":    { "type": "string", "description": "Abbreviated label for UI chips" },
       "tenantId":     { "type": "string", "description": "State-level tenant, e.g. mz" },
       "displayOrder": { "type": "integer", "minimum": 1 }
