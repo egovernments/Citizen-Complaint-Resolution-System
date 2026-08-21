@@ -146,6 +146,11 @@ plugins:
           -- They are exact AUTH_OPTIONAL matches and exact regex routes below.
           ["/pgr-services/v2/analytics/public/packs"]=true,
           ["/pgr-services/v2/analytics/public/_query"]=true,
+          -- #1797: the public page's Add-KPI menu and filter-bar option lists. Same
+          -- contract: RequestInfo discarded server-side, PUBLIC-tagged tiles only,
+          -- the options endpoint takes nothing but tenantId.
+          ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
+          ["/pgr-services/v2/analytics/public/_options"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -600,6 +605,44 @@ services:
   - name: pgr-public-analytics-query-route
     paths:
     - ~/pgr-services/v2/analytics/public/_query$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-catalog-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/catalog/_search$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-options-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/_options$
     methods:
     - POST
     strip_path: false

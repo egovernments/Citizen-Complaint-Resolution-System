@@ -152,27 +152,32 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
 }
 
 /**
- * Public requests are intentionally narrower than the employee query plan.
- * Membership, layout, windows and disclosure policy belong to the curated
- * public pack/backend endpoint. The browser sends one bare kpiId reference per
- * laid-out tile: no user filters, hierarchy overrides, comparison/series fanout
- * or per-complaint map pin source.
+ * Public requests are narrower than the employee query plan. Membership,
+ * layout, windows and disclosure policy belong to the PUBLIC catalog/backend
+ * endpoints. The browser sends one reference per laid-out tile carrying ONLY
+ * the global filter-bar params (globalParams — the backend's public allow-list,
+ * #1797): no hierarchy overrides, comparison/series fan-out or per-complaint
+ * map pin source. `params` is omitted when no filter narrows anything so the
+ * bare-ref wire shape stays valid against older backends.
  */
-export function buildPublicRefs(tiles, kpis) {
+export function buildPublicRefs(tiles, kpis, filters) {
   const refs = {};
+  const params = globalParams(filters);
+  const hasParams = Object.keys(params).length > 0;
   for (const tile of tiles || []) {
     const kpiId = tile?.kpiId;
     if (!kpiId || !kpis?.[kpiId]) continue;
-    refs[kpiId] = { kpiId };
+    refs[kpiId] = hasParams ? { kpiId, params: { ...params } } : { kpiId };
   }
   return refs;
 }
 
-export function buildPublicRefsKey(tiles, kpis) {
+export function buildPublicRefsKey(tiles, kpis, filters) {
   return JSON.stringify({
     public: true,
     ids: (tiles || []).map((tile) => tile?.kpiId).filter((id) => id && kpis?.[id]),
     versions: (tiles || []).map((tile) => kpis?.[tile?.kpiId]?.version ?? null),
+    gp: globalParams(filters),
   });
 }
 
