@@ -1,0 +1,27 @@
+# Checkov configuration - scoped to the Ansible remote-server deployment code.
+#
+# We scan ONLY local-setup/ansible with the Ansible framework:
+#   - This is the actual deployment code for setup path C (`./deploy.sh <tenant>`).
+#   - Helm charts / Kubernetes / Terraform (devops/**, local-setup/k8s/**) are other
+#     setup paths / later phases and are NOT scanned here.
+#   - Secret detection is intentionally NOT done by Checkov: its entropy-based scanner
+#     produces heavy false positives on templated/generated files (Helm b64enc,
+#     randAlphaNum, base64 tokens). Secrets are handled by GitHub native secret scanning.
+#
+# docker-compose exposure (ports/protocols/privileged/host mounts) is covered by KICS,
+# see .github/workflows/security-scan.yml.
+directory:
+  - local-setup/ansible
+
+framework:
+  - ansible
+
+skip-path:
+  - ".*_example.*"   # example inventories/host_vars are placeholders, not real config
+  - ".*\\.example.*"
+
+compact: true
+download-external-modules: false
+
+# Report-only for now. After triage, set soft-fail: false to start failing runs.
+soft-fail: true
