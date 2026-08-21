@@ -108,6 +108,50 @@ public class ServiceRequestValidatorTest {
         assertDoesNotThrow(() -> validator.validateCreate(request, buildMdmsData("POTHOLE")));
     }
 
+    // ── validateDescription (CCRS#1226) ─────────────────────────────────────────
+
+    @Test
+    void create_nullDescription_throwsDescriptionRequired() {
+        // Boundary must resolve cleanly so validateBoundary (called right after
+        // validateDescription in validateCreate) doesn't throw its own
+        // BOUNDARY_SERVICE_SEARCH_ERROR first and mask the error under test.
+        stubBoundaryResponse("LOC001");
+        request.getService().setDescription(null);
+        assertMapErrorKey("DESCRIPTION_REQUIRED", () -> validator.validateCreate(request, mdmsData));
+    }
+
+    @Test
+    void create_blankDescription_throwsDescriptionRequired() {
+        stubBoundaryResponse("LOC001");
+        request.getService().setDescription("   ");
+        assertMapErrorKey("DESCRIPTION_REQUIRED", () -> validator.validateCreate(request, mdmsData));
+    }
+
+    @Test
+    void create_numbersOnlyDescription_throwsDescriptionInvalid() {
+        stubBoundaryResponse("LOC001");
+        request.getService().setDescription("000000000000000000");
+        assertMapErrorKey("DESCRIPTION_INVALID", () -> validator.validateCreate(request, mdmsData));
+    }
+
+    @Test
+    void create_tooFewLettersDescription_throwsDescriptionInvalid() {
+        stubBoundaryResponse("LOC001");
+        // Only 2 letters ("a", "b") among the digits/punctuation — below the
+        // 3-letter minimum.
+        request.getService().setDescription("12a34b56");
+        assertMapErrorKey("DESCRIPTION_INVALID", () -> validator.validateCreate(request, mdmsData));
+    }
+
+    @Test
+    void create_descriptionWithNumbersAndEnoughLetters_passes() {
+        stubBoundaryResponse("LOC001");
+        // Real-world descriptions legitimately contain numbers (house/street
+        // numbers) — only numbers-only content should be rejected.
+        request.getService().setDescription("Leak near house no. 42");
+        assertDoesNotThrow(() -> validator.validateCreate(request, mdmsData));
+    }
+
     // ── validateMDMS on update ────────────────────────────────────────────────
 
     @Test
@@ -132,6 +176,20 @@ public class ServiceRequestValidatorTest {
         assertEquals(expectedCode, ex.getCode());
     }
 
+    /**
+     * For errors accumulated into validateCreate's errorMap and thrown via
+     * `new CustomException(errorMap)` (e.g. validateUserData, validateDescription)
+     * — unlike the single-error `new CustomException(code, message)` throws
+     * (validateBoundary, validateMDMS), this constructor never sets `code`
+     * (only `errors`/`message`), so assertCode's getCode() check would always
+     * see null here regardless of which key was actually put into the map.
+     */
+    private static void assertMapErrorKey(String expectedKey, org.junit.jupiter.api.function.Executable block) {
+        CustomException ex = assertThrows(CustomException.class, block);
+        assertTrue(ex.getErrors() != null && ex.getErrors().containsKey(expectedKey),
+                "Expected error key '" + expectedKey + "' in " + ex.getErrors());
+    }
+
     private static ServiceRequest buildRequest(String localityCode, String serviceCode) {
         org.egov.common.contract.request.User actor = org.egov.common.contract.request.User.builder()
                 .uuid("citizen-uuid")
@@ -154,6 +212,7 @@ public class ServiceRequestValidatorTest {
                 .serviceCode(serviceCode)
                 .source("web")
                 .address(address)
+                .description("Pothole reported near the main street junction")
                 .build();
 
         return ServiceRequest.builder()

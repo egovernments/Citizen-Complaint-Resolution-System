@@ -200,7 +200,11 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  pattern: /^(?!\s*$).+/,
+                  // CCSD-1980 / CCRS#1226: reject numbers-only / whitespace-only
+                  // descriptions (e.g. "000000000000") — require at least 3
+                  // letters (any language). Non-empty is implied. Matches the
+                  // digit-ui-esbuild copy of this same form.
+                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
                 },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
