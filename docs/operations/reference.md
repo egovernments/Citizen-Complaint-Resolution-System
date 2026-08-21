@@ -76,19 +76,39 @@ You will only need this table if someone on the call refers to a port number.
 
 **The health dashboard at `/status/` needs no login.** Open the URL and you are in.
 
-**Grafana does need one.** The user is `admin` and the password is generated on the first
-deploy and stored in this deployment's OpenBao — so **ask your system administrator for it**.
-It is not a shared default you can guess, and anonymous access is off unless the deployment
-explicitly turns it on (and even then it grants **Viewer**, never Admin). Get the password
-before your first incident rather than during one.
+**Grafana does need one, and it should be an account of your own.**
 
-Nothing you do in Grafana changes the system — it only displays data.
+A freshly deployed Grafana contains exactly **one** account, `admin`, whose password is
+generated on the first deploy and stored in this deployment's OpenBao. That account belongs
+to the **system administrator**. Self-registration is disabled (`allow_sign_up = false`), so
+there is only one way for the service desk to get in: **the administrator creates a Grafana
+account for each L1 and L2 person.** Ask for yours before your first incident rather than
+during one.
+
+**What to ask the administrator for**
+
+| | |
+|---|---|
+| **A named account** — your own username, not the shared `admin` login | Named accounts show who ran which query, and one person changing a password does not lock out the desk |
+| **The Editor role** | Grafana assigns new accounts **Viewer** by default, and a Viewer **cannot open Explore** — [Step 4 of first response](l1-first-response.md#step-4--what-does-the-log-say) and most of [L2 diagnosis](l2-diagnosis.md) need it |
+| **The dashboard URLs**, if Grafana sits behind a VPN | You may also need to be added to the VPN |
+
+Editor is a safe role to hand out here: it cannot add users, change passwords or edit
+datasources, and **nothing in this handbook writes to the system** — Grafana only displays
+data. An Editor *can* save changes to a dashboard (the provisioner sets
+`allowUiUpdates: true`), so treat the nine shipped dashboards as read-only by convention: if
+you want a different view, use **Explore**, or duplicate the dashboard rather than editing
+it. They are provisioned from files on disk and re-read every 30 seconds, so a redeploy
+overwrites your edits anyway.
+
+Anonymous access is off unless the deployment explicitly turns it on, and even then it grants
+**Viewer**, never Admin.
 
 Anything else that asks for a username and password is **not** yours to obtain on your own:
 
 | Needs credentials | Ask |
 |---|---|
-| **Grafana** (`/grafana/`) | Your system administrator — user `admin`, password from OpenBao |
+| **Grafana** (`/grafana/`) | Your system administrator — they create your named account and set it to **Editor**. The `admin` password stays with them |
 | Notification platform admin (`/novu/`) | Your system administrator |
 | The SMS / WhatsApp / email provider console | Your system administrator — it is usually held by whoever owns the provider contract |
 | Configurator admin screens | Your system administrator |

@@ -28,16 +28,25 @@ system by following this page.
 
 **The health dashboard needs no login.** Open the URL and you're in.
 
-**Grafana does need one**, and you should get it *before* your first call rather than during
-it. The user is `admin`, and the password is generated when the deployment is first built and
-stored in a secret store — so **ask your system administrator for it**. It is not a shared
-default and it cannot be guessed. Steps 3 and 4 below both need it.
+**Grafana does need one**, and you should have it *before* your first call rather than
+hunting for it during one. You do not use the `admin` login for this — that one belongs to
+your **system administrator**, and a new deployment has no other accounts. Grafana does not
+let people sign themselves up, so **the administrator creates a Grafana account for each L1
+and L2 person**. Ask them for yours, and ask for two specific things:
+
+1. **A named account of your own** — your username, not the shared `admin` login.
+2. **The Editor role.** New accounts are created as **Viewer** by default, and a Viewer
+   cannot open **Explore** — which [Step 4](#step-4--what-does-the-log-say) needs. If Step 4
+   shows you no Explore item in the left menu, this is why: go back and ask for Editor.
+
+Editor cannot add users or change passwords, and nothing in this checklist changes the
+system — Grafana only displays data. Steps 3 and 4 below both need the login.
 
 Everything else, ask your **system administrator** for:
 
 | If you need | Ask your system administrator |
 |---|---|
-| **The Grafana password** (user is `admin`) | Needed for Steps 3 and 4. Ask for it before your first call |
+| **A Grafana account of your own**, with the **Editor** role | Needed for Steps 3 and 4. Ask before your first call — the admin creates it for you |
 | A password prompt appears where you did not expect one | They'll tell you the right URL, or add you to the VPN |
 | The **Novu** notification dashboard (to see if a message was sent) | Access is not part of the service desk by default |
 | The **SMS / WhatsApp provider console** (to check credit or credentials) | Usually held by whoever owns the provider contract |
@@ -93,7 +102,7 @@ step below.
 | You need | Used in | If you don't have it |
 |---|---|---|
 | The two URLs above, reachable from your desk | Steps 2–4 | Ask L2 — Grafana may sit behind the VPN |
-| The **Grafana password** | Steps 3–4 | Ask your system administrator. Without it you can do Steps 0–2 and must hand over there |
+| Your **Grafana account** (Editor role) | Steps 3–4 | Ask your system administrator — they create it. Without it you can do Steps 0–2 and must hand over there |
 | To know this deployment's **observability level** | Step 4 | Ask L2. On a `metrics`-level deployment there are no logs to read — see Step 4 |
 | A **login of your own** for the system | Step 1 | You cannot confirm scope; say so in the ticket rather than guessing |
 | A **second test login**, ideally in a different office | Step 1 | Ask a colleague to try instead, and note whose account was used |

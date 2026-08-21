@@ -1,7 +1,7 @@
-# DIGIT / CCRS — Operations & Support Handbook
+# DIGIT Complaint Management — Operations & Support Handbook
 
-**Audience:** the team that operates a deployed DIGIT / CCRS instance — the IT or
-infrastructure staff inside the department, council or ministry that owns the server.
+**Audience:** the team that operates a deployed DIGIT Complaint Management instance — the
+IT or infrastructure staff inside the department, council or ministry that owns the server.
 
 **Purpose:** to help you find out *what* broke without waiting for us, and to make it easy
 to hand us a report we can act on straight away.
@@ -105,17 +105,28 @@ including the database, the API gateway, the message broker and the supervisor d
 own timings. What each one shows and which panels to read is
 **[dashboards.md](dashboards.md)**.
 
-> **Access note.** Grafana asks for a login. The user is `admin`; the password is
-> generated on the first deploy and stored in this deployment's OpenBao, so **ask your
-> system administrator for it** — it is not a shared default you can guess. Anonymous
-> access is off unless the deployment explicitly sets `grafana_anonymous_enabled: true`,
-> and even then it grants **Viewer**, never Admin. If your deployment does have anonymous
-> access on and is reachable from the public internet, raise it with us: a Viewer can run
-> arbitrary Loki queries, and the logs contain live session tokens. See
-> [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
+> **Access note — who gives you a Grafana login.** Grafana asks for a login, and a fresh
+> deployment has exactly **one** account: `admin`. That account belongs to your **system
+> administrator** — its password is generated on the first deploy and stored in this
+> deployment's OpenBao. Self-registration is disabled, so **the administrator creates a
+> Grafana account for each L1 and L2 person** who needs one. Ask them for *your own*
+> account rather than for the admin password; see
+> [reference.md § Credentials](reference.md#credentials--who-to-ask) for what to ask for.
+>
+> **Ask for the Editor role.** Grafana hands new accounts the **Viewer** role by default,
+> and a Viewer cannot open **Explore** — which [Step 4](l1-first-response.md#step-4--what-does-the-log-say)
+> of first response and most of L2's work depend on. **Editor** is the right role for the
+> service desk. It still cannot change passwords, add users or edit datasources, and
+> nothing in this handbook writes to the system — Grafana only displays data.
+>
+> Anonymous access is off unless the deployment explicitly sets
+> `grafana_anonymous_enabled: true`, and even then it grants **Viewer**, never Admin. If
+> your deployment does have anonymous access on and is reachable from the public internet,
+> raise it with us: a Viewer can run arbitrary Loki queries, and the logs contain live
+> session tokens. See [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
 >
 > **Credentials.** The health dashboard needs no login; Grafana does, so the service desk
-> needs that password in advance — see above. For everything else — the Novu notification
+> needs accounts in advance — see above. For everything else — the Novu notification
 > dashboard, the SMS/WhatsApp provider console, or server access — **ask your system
 > administrator**. Never send credentials in a ticket or a chat message, including to us.
 

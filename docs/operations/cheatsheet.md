@@ -11,7 +11,7 @@ One page. Print it, or pin it in the alert channel.
 | | |
 |---|---|
 | Health dashboard | `https://<your-domain>/status/` — no login |
-| Grafana | `https://<your-domain>/grafana/` — **login required**, user `admin` |
+| Grafana | `https://<your-domain>/grafana/` — **login required**, your own account (admin creates it, Editor role) |
 | Logs | `https://<your-domain>/grafana/d/digit-loki-logs/` |
 | Service metrics | `https://<your-domain>/grafana/d/digit-jvm/` |
 
@@ -166,7 +166,7 @@ sudo docker logs --tail 500 --timestamps <container> > /tmp/evidence.log
 | | |
 |---|---|
 | Domain | |
-| Grafana password held by | |
+| Grafana account created by (admin) | |
 | Observability level (`metrics` / `logs` / `traces`) | |
 | L2 contact | |
 | Escalation channel | |

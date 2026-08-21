@@ -55,11 +55,19 @@ expected.
     the anonymous role is pinned to **Viewer** in the compose file. A Viewer cannot create
     alert rules, so if you are browsing without logging in, Save will be rejected — log in
     rather than working around it.
-  - **Everyone shares the one `admin` account**, so Grafana cannot record who created,
-    edited or silenced a rule. **Keep your own written change log.** If the instance is
-    reachable from the public internet, ask us to put it behind your VPN or an
-    authenticating proxy — and note that a Viewer can run arbitrary Loki queries, which is
-    why anonymous access is not a safe default here.
+  - **Create named accounts before the desk starts using this — that is your job, not
+    ours.** A fresh deployment holds exactly one account, `admin`, and self-registration is
+    off, so unless you act everyone shares one login and Grafana cannot record who created,
+    edited or silenced a rule. Create a Grafana user for each **L1 and L2** person:
+    **Administration → Users and access → Users → New user** (Grafana 11.4). Set the
+    password on that screen and hand it over directly — **do not use Invite**, because SMTP
+    is not configured here (`smtp.enabled = false`) and the invitation email is never sent.
+    New users are created as **Viewer**: change each one to **Editor**, because a Viewer
+    cannot open **Explore**, which first response and L2 diagnosis both depend on. Keep
+    `admin` for yourself, and keep a written change log for rule edits regardless.
+  - **If the instance is reachable from the public internet**, ask us to put it behind your
+    VPN or an authenticating proxy — and note that a Viewer can run arbitrary Loki queries,
+    which is why anonymous access is not a safe default here.
 - Rules you create in the UI are stored in Grafana's own database inside the
   `grafana_data` Docker volume. They survive restarts and redeployments. They do **not**
   survive `docker compose down -v` — which is one more reason that command appears on the
