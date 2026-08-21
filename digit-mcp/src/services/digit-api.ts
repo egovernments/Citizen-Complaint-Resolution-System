@@ -344,6 +344,17 @@ class DigitApiClient {
     return data.mdms || [];
   }
 
+  // MDMS v2 Count — used to cross-check that pagination in mdmsV2SearchRaw
+  // callers collected every row for a schema, independent of page-ordering.
+  async mdmsV2Count(tenantId: string, schemaCode: string): Promise<number> {
+    const data = await this.request<{ totalCount?: number }>(this.endpoint('MDMS_COUNT'), {
+      RequestInfo: this.buildRequestInfo(),
+      MdmsCriteria: { tenantId, schemaCode },
+    });
+
+    return data.totalCount ?? 0;
+  }
+
   // MDMS v2 Create
   async mdmsV2Create(
     tenantId: string,

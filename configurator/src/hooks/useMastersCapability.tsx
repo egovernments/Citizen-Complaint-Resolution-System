@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { getAuthProvider, getResourceConfig, onAuthChange, digitClient } from '@/providers/bridge';
+import { getAuthProvider, getResourceConfig, isAccessControlGated, onAuthChange, digitClient } from '@/providers/bridge';
 import type { DigitPermissions } from '@digit-mcp/data-provider';
 
 /**
@@ -84,7 +84,27 @@ export function useMastersCapability() {
   const { roles, masters } = useContext(MastersCapabilityContext);
   return {
     roles,
-    canViewResource: (name: string) => masters.canView(getResourceConfig(name)?.schema),
-    canEditResource: (name: string) => masters.canEdit(getResourceConfig(name)?.schema),
+    // The view/edit/create policy check (ACCESSCONTROL-ACTIONS-TEST/ROLEACTIONS)
+    // only applies to resources `isAccessControlGated` (resourceRegistry.ts) marks
+    // as gated: every genuine mdms-v2-backed master (`type: 'mdms'`), plus the
+    // small explicit allowlist of non-'mdms'-typed resources that still have a
+    // real `/mdms-v2/v2/_create|_update/<schema>` action in the seed (currently
+    // access-roles/access-actions — the screens that edit the permission system
+    // itself). Gating on `type === 'mdms'` alone silently left those two
+    // unrestricted for every role (#1826 review). Every other resource type
+    // (hrms, boundary, pgr, localization, user, workflow-*, mdms-schema, custom,
+    // ...) stays unrestricted — same as before this whole masters-gating feature
+    // existed. Do not extend the allowlist without an explicit decision to gate
+    // that specific resource; see docs/design/masters-configurator-access-policy-design.md.
+    canViewResource: (name: string) => {
+      const config = getResourceConfig(name);
+      if (!isAccessControlGated(config)) return true;
+      return masters.canView(config!.schema);
+    },
+    canEditResource: (name: string) => {
+      const config = getResourceConfig(name);
+      if (!isAccessControlGated(config)) return true;
+      return masters.canEdit(config!.schema);
+    },
   };
 }

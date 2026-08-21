@@ -118,13 +118,6 @@ build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
 
-# Build the pass-through novu-bridge / config-driven pgr-services from source
-# on the box instead of pulling a published/preview image. Off by default,
-# same as _example.yml — this tenant currently uses the published images
-# (pgr_services_image / novu_bridge_image below).
-build_novu_bridge: false
-build_pgr_services: false
-
 # Init the nairobi-mdms git submodule on the controller. Only needed if this
 # tenant's onboarding uses those JSONs — not the case here.
 requires_nairobi_mdms: false
@@ -198,8 +191,11 @@ auth_provider: ""
 keycloak_client_id: digit-ui
 enable_digit_ui_v2: true
 digit_ui_esbuild_branch: feat/keycloak-auth-adapter
-digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
-digit_ui_v2_branch: feat/digit-ui-v2-keycloak
+# Left unset on purpose: the citizen SPA builds from the vendored in-tree
+# digit-ui-v2/ source, so this box ships the revision it is deployed from
+# (including build-time flags like VITE_ENABLE_LEGACY_PGR_DASHBOARD).
+# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+# digit_ui_v2_branch: develop
 keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP wiring
 
 # ── secrets (LOCAL TEST VALUES — kit redacts these as CHANGE_ME) ──

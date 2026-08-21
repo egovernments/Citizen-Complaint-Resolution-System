@@ -97,12 +97,11 @@ config:
   # nightly builds the neutral-default reference image (see build/NIGHTLY-BUILDS.md).
   - name: "builds/Citizen-Complaint-Resolution-System/configurator"
     build:
-      - work-dir: "configurator"
+      - work-dir: "."
         dockerfile: "configurator/Dockerfile"
         image-name: "configurator"
   - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-v2"
     build:
-      - work-dir: "digit-ui-v2"
+      - work-dir: "."
         dockerfile: "digit-ui-v2/Dockerfile"
         image-name: "digit-ui-v2"
-

@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -40,10 +41,15 @@ import static org.mockito.Mockito.when;
  * verify what {@link ScopePolicy} actually gets fetched/passed through.
  *
  * <p>PGR complaint search's scoping rule (which axes are required per role) is declared by
- * {@code resource.complaint.scope} on the actiontest action record — see {@link ScopePolicyEngine}
- * — with an in-code jurisdiction-only fallback ({@link SearchAccessPolicyService#DEFAULT_SCOPE_POLICY})
- * when MDMS has none configured. A previous per-tenant {@code dss.DashboardConfig.departmentScoping}
- * toggle used to vary this at runtime and has been removed.
+ * {@code resource.complaint.scope} on the actiontest action record — see {@link ScopePolicyEngine}.
+ * When no {@code scope} block is configured, the fallback depends on whether the action has a
+ * legacy hand-authored {@code condition}: if it does, an in-code jurisdiction-only default
+ * ({@link SearchAccessPolicyService#DEFAULT_SCOPE_POLICY}) applies; if it has neither, the action
+ * is treated as genuinely never configured and gets
+ * {@link SearchAccessPolicyService#UNRESTRICTED_SCOPE_POLICY} instead — see the
+ * {@code resolveScope()} tests near the bottom. A previous per-tenant
+ * {@code dss.DashboardConfig.departmentScoping} toggle used to vary this at runtime and has been
+ * removed.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -223,6 +229,55 @@ class SearchAccessPolicyServiceTest {
         verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
         assertEquals(ScopeLevel.ALL, captor.getValue().levelFor("ANY_ROLE", "department"));
         assertEquals(ScopeLevel.OWN, captor.getValue().levelFor("ANY_ROLE", "jurisdiction"));
+    }
+
+    @Test
+    void resolveScopeIsFullyUnrestrictedWhenActionHasNeitherScopeNorCondition() {
+        // Distinct from resolveScopeFallsBackToJurisdictionOnlyDefaultWhenNoScopeConfigured above:
+        // that test's action has a legacy hand-authored condition (@BeforeEach), so
+        // DEFAULT_SCOPE_POLICY's jurisdiction requirement is still intentional. Here the action is
+        // visible but has NEVER had any policy authored at all — Tier-2
+        // (AccessPolicyRegistry#getCondition) already treats that as backward-compatible-allow, so
+        // Tier-1 must not silently require HRMS jurisdiction data nobody configured.
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "enabled", true);
+        when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
+                .thenReturn(List.of(action));
+        AccessPolicyRegistry registryUnconfigured = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
+        SearchAccessPolicyService serviceWithMockResolver =
+                new SearchAccessPolicyService(mockResolver, registryUnconfigured, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
+        RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
+
+        serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2);
+
+        ArgumentCaptor<ScopePolicy> captor = ArgumentCaptor.forClass(ScopePolicy.class);
+        verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
+        assertTrue(captor.getValue().getAxes().isEmpty(), "no axes declared — no restriction on department or jurisdiction");
+        // resolveScope() used to call registry.getScopePolicy() then registry.isPolicyUnconfigured()
+        // separately, each independently re-fetching on a cache miss — a real double-fetch/doubled
+        // hot-path-load bug (#1827 review). Both facts must now come from ONE fetch.
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL));
+    }
+
+    @Test
+    void resolveScopeIsFullyUnrestrictedWhenNoActionIsVisibleAtAll() {
+        // Same "genuinely unconfigured" treatment as the neither-scope-nor-condition case above —
+        // no MDMS entry visible at all is the SAME "not configured for this deployment" signal
+        // AccessPolicyRegistry#getCondition already treats as backward-compatible-allow.
+        when(mdmsUtils.fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL)))
+                .thenReturn(List.of());
+        AccessPolicyRegistry registryNoAction = new AccessPolicyRegistry(mdmsUtils, new ObjectMapper(), new PGRConfiguration());
+        PolicyDrivenScopeResolver mockResolver = mock(PolicyDrivenScopeResolver.class);
+        SearchAccessPolicyService serviceWithMockResolver =
+                new SearchAccessPolicyService(mockResolver, registryNoAction, new PolicyEvaluator(), new PolicyInputBuilder(), new PGRConfiguration());
+        RequestInfo requestInfo = requestInfo("emp-1", "EMPLOYEE");
+
+        serviceWithMockResolver.resolveScope(requestInfo, TENANT_ID, 2);
+
+        ArgumentCaptor<ScopePolicy> captor = ArgumentCaptor.forClass(ScopePolicy.class);
+        verify(mockResolver).resolve(eq(requestInfo), eq(TENANT_ID), eq(2), captor.capture());
+        assertTrue(captor.getValue().getAxes().isEmpty());
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(any(), eq(TENANT_ID), eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL));
     }
 
     @Test

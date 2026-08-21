@@ -65,9 +65,8 @@ server {
 
 {% endif %}
 {% if nginx_features.digit_ui_v2 | default(false) %}
-  # digit-ui-v2 — Vite + React 19 citizen SPA. Built from
-  # {{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }} on the
-  # target ({{ digit_ui_v2_repo | default('digit-ui-v2 repo') }}) and
+  # digit-ui-v2 — Vite + React 19 citizen SPA. Built on the target from
+  # {{ (digit_ui_v2_repo | default('')) | ternary(digit_ui_v2_repo | default('') ~ '@' ~ (digit_ui_v2_branch | default('HEAD')), 'the vendored in-tree digit-ui-v2/ source') }} and
   # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
   # the long immutable cache; index.html stays no-cache so a redeploy
   # propagates without operators forcing a hard refresh.
@@ -371,6 +370,20 @@ server {
   # status updates. Proxy upgrades the connection to WS.
   location /novu-ws/ {
     proxy_pass http://127.0.0.1:14003/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
+  # Novu 2.3.0 uses Socket.IO's default root transport path. The dashboard
+  # ignores a /novu-ws suffix in VITE_WEBSOCKET_HOSTNAME and connects here.
+  location /socket.io/ {
+    proxy_pass http://127.0.0.1:14003/socket.io/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

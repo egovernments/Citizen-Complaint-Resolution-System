@@ -344,6 +344,122 @@ class AccessPolicyRegistryTest {
                 AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
     }
 
+    // --- isPolicyUnconfigured(): Tier-1's signal for "genuinely never authored" -------------------
+
+    @Test
+    void isPolicyUnconfiguredIsTrueWhenNoActionIsVisibleAtAll() {
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of());
+
+        assertTrue(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsTrueWhenActionHasNeitherScopeNorCondition() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "enabled", true);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertTrue(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsTrueWhenOnlyFieldMaskingAttributesArePresentWithNoScopeOrCondition() {
+        // Field masking (resource.<type>.attributes) and row-level scoping are independent axes of
+        // this policy — an action that REDACTs a PII field but declares neither scope nor condition
+        // must still resolve fully unrestricted at Tier-1/row level, matching Tier-2's
+        // backward-compatible allow. This is intentional (per product decision), not a gap to close.
+        Map<String, Object> attributes = Map.of("citizen.mobileNumber", Map.of("condition", Map.of("==", List.of(1, 2)), "onDeny", Map.of("strategy", "REDACT")));
+        Map<String, Object> resource = Map.of("complaint", Map.of("attributes", attributes));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertTrue(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+        assertTrue(registry.getScopePolicy(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint").isEmpty());
+        assertFalse(registry.getFieldVisibilityRules(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint").isEmpty());
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsFalseWhenAScopeBlockIsPresent() {
+        Map<String, Object> scope = Map.of("axes", List.of("department"), "default", Map.of("department", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertFalse(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredIsFalseWhenALegacyConditionIsPresentWithNoScopeBlock() {
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL,
+                "condition", Map.of("==", List.of(1, 1)));
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertFalse(registry.isPolicyUnconfigured(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    @Test
+    void isPolicyUnconfiguredThrowsOnAMalformedScopeRatherThanReturningTrue() {
+        // A present-but-broken scope block is an authoring mistake, not "unconfigured" — must
+        // propagate, never silently read as "apply the fully unrestricted fallback".
+        Map<String, Object> scope = Map.of("axes", List.of());
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        assertThrows(MalformedScopePolicyException.class, () -> registry.isPolicyUnconfigured(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint"));
+    }
+
+    // --- resolveScopeState(): the combined getScopePolicy() + isPolicyUnconfigured() form ---------
+
+    @Test
+    void resolveScopeStateFetchesTheActionOnlyOnceWhenUnconfigured() {
+        // A "not found"/not-visible action is never cached (role-scoped API — see class Javadoc),
+        // so calling getScopePolicy() then isPolicyUnconfigured() separately for the SAME request
+        // used to trigger two independent fetchAccessControlActions round-trips. resolveScopeState
+        // must derive both facts from one fetch.
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of());
+
+        AccessPolicyRegistry.ScopeResolution resolution = registry.resolveScopeState(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
+
+        assertTrue(resolution.unconfigured());
+        assertTrue(resolution.scopePolicy().isEmpty());
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+    }
+
+    @Test
+    void resolveScopeStateFetchesTheActionOnlyOnceWhenAScopeBlockIsPresent() {
+        Map<String, Object> scope = Map.of("axes", List.of("department"), "default", Map.of("department", "OWN"));
+        Map<String, Object> resource = Map.of("complaint", Map.of("scope", scope));
+        Map<String, Object> action = Map.of("id", 2008, "url", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, "resource", resource);
+        RequestInfo requestInfo = requestInfo("EMPLOYEE");
+        when(mdmsUtils.fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL))
+                .thenReturn(List.of(action));
+
+        AccessPolicyRegistry.ScopeResolution resolution = registry.resolveScopeState(
+                AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
+
+        assertFalse(resolution.unconfigured());
+        assertTrue(resolution.scopePolicy().isPresent());
+        // Cached now (a successful resolution) — a second call must not fetch again either.
+        registry.resolveScopeState(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL, requestInfo, "pg.city", "complaint");
+        verify(mdmsUtils, times(1)).fetchAccessControlActions(requestInfo, "pg.city", AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL);
+    }
+
     @Test
     void getConditionGeneratesFromScopeWhenPresentIgnoringHandAuthoredCondition() {
         Map<String, Object> scope = Map.of(

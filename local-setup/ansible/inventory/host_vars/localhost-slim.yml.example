@@ -186,10 +186,12 @@ digit_ui_mode: container
 # Values: true | false.
 enable_digit_ui_v2: true
 
-# Git source for that SPA. Cloned on the TARGET, so native Vite binaries match
-# the runtime architecture. Values: any repo/branch; point at a fork to test one.
-digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
-digit_ui_v2_branch: "fix/citizen-ui-v2-mobile-config"
+# Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
+# sibling `ui-shared/` sources from this checkout. To test an external source,
+# uncomment both values and point them at the required repo/branch; cloning is
+# performed on the target so native Vite binaries match its architecture.
+# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+# digit_ui_v2_branch: "develop"
 
 # Branch of the digit-ui-esbuild repo used when digit_ui_mode builds on the box.
 # Inert while digit_ui_mode is `container` and build_digit_ui is false.

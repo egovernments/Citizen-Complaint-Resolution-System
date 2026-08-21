@@ -76,8 +76,11 @@ cd local-setup/ansible
 ansible-galaxy install -r requirements.yml
 ```
 
-Optionally `pip3 install ansible-lint yamllint` — `deploy.sh` runs both before touching
-anything and just warns if they are absent.
+The linters are optional — `deploy.sh` runs both before touching anything and just warns
+if they are absent — but `pip3 install ansible-lint yamllint` fails on Ubuntu 24.04 and
+every other PEP 668 Python. Use
+[`local-setup/scripts/install-prereqs.sh`](../scripts/install-prereqs.sh) instead: it puts
+them, and a compatible `ansible-core`, in a virtualenv on your PATH.
 
 ### The become-password gotcha
 
@@ -126,12 +129,6 @@ No inventory edit is needed. `deploy.sh` regenerates `inventory/hosts.yml` from 
 
 ```bash
 ./deploy.sh mybox -K
-```
-
-Dry-run first if you want to see what would change:
-
-```bash
-./deploy.sh mybox --check --diff
 ```
 
 The first run installs Docker and Compose, creates `/opt/digit/`, syncs configs, initialises

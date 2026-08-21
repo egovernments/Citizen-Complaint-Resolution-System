@@ -1990,44 +1990,6 @@ services:
     networks:
       - egov-network
 
-  # ==================== Jupyter Lab for PGR Configuration ====================
-  jupyter:
-    image: egovio/tilt-demo-jupyter:latest
-    container_name: digit-jupyter
-    user: root
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      kong:
-        condition: service_healthy
-    environment:
-      DIGIT_URL: http://kong:8000
-      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
-      DIGIT_DIRECT_USER: http://egov-user:8107
-      DIGIT_DIRECT_PGR: http://pgr-services:8080
-      DIGIT_TENANT: pg
-      JUPYTER_ENABLE_LAB: "yes"
-    command: >
-      jupyter lab
-      --ip=0.0.0.0
-      --port=8888
-      --no-browser
-      --allow-root
-      --ServerApp.token=''
-      --ServerApp.password=''
-      --ServerApp.base_url=/jupyter
-      --ServerApp.allow_origin='*'
-    ports:
-      - "18888:8888"
-    volumes:
-      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
-      - ./jupyter/dataloader:/home/jovyan/work/dataloader
-      - ./jupyter/dataloader/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
-    networks:
-      - egov-network
-
   # ==================== OpenBao (secrets backend) ====================
   # Per-tenant secrets store. File-backed KV v2; the playbook handles
   # init + auto-unseal on first deploy and stores the unseal keys at
@@ -2680,9 +2642,10 @@ services:
   # SMS-OTP path; gated behind the notifications profile (off by default).
   # Node service vendored at utilities/otp-publisher; built locally via
   # `build_otp_publisher: true` (tag otp-publisher:local) or override with
-  # OTP_PUBLISHER_IMAGE.
+  # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
+  # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
-    image: ${OTP_PUBLISHER_IMAGE:-otp-publisher:local}
+    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:v2.12-beta}
     container_name: otp-publisher
     restart: unless-stopped
     profiles: ["notifications"]

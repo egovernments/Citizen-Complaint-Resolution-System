@@ -128,6 +128,44 @@ export async function readInboxRows(page: Page): Promise<{ srid: string; localit
   });
 }
 
+/** Matches the inbox's own server-side search so callers can await the re-query
+ *  a page-size change triggers. */
+export const INBOX_SEARCH_RE = /pgr-services\/v2\/request\/_search/;
+
+/**
+ * Bump rows-per-page to the largest option so every matching row renders.
+ *
+ * REQUIRED before asserting that a specific complaint is present. The inbox
+ * sorts server-side by `sla ASC` and pages at 10 with no total count (Next Page
+ * stays disabled), so a freshly-seeded complaint is NOT necessarily on the first
+ * page once others accumulate — and the suite shares ONE citizen fixture, so by
+ * the end of a run that citizen owns dozens of complaints. Selecting the max
+ * page size re-issues the search with a larger `limit`.
+ *
+ * A no-op when the tenant has fewer rows than the smallest page size, so it is
+ * always safe to call. Lifted here from inbox-filters.spec.ts, which had it
+ * privately (as did pgr-inbox-sort-922.spec.ts) while inbox-search.spec.ts —
+ * which needs it just as much — did not.
+ */
+export async function showAllInboxRows(page: Page): Promise<void> {
+  const sel = page.locator('select').last();
+  if ((await sel.count()) === 0) return;
+  const values = await sel.locator('option').evaluateAll(
+    (os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
+  );
+  if (values.length === 0) return;
+  await Promise.all([
+    page
+      .waitForResponse(
+        (r) => INBOX_SEARCH_RE.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 20_000 },
+      )
+      .catch(() => null),
+    sel.selectOption(values[values.length - 1]),
+  ]);
+  await page.waitForTimeout(1_500);
+}
+
 /** Open the Take-Action menu and pick an action by its (localized OR raw-key)
  *  label. The action-bar button itself renders the raw i18n key
  *  ES_COMMON_TAKE_ACTION on mz.maputo, so it is located structurally. */

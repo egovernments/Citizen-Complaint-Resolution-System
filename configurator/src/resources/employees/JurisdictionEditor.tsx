@@ -207,6 +207,17 @@ export function JurisdictionEditor({
   // Picking a boundary at a level makes it the deepest stored selection;
   // deeper levels reset automatically (the path is derived from row.boundary).
   const selectLevel = (index: number, levelType: string, code: string) => {
+    // Radix's Select renders a hidden native <select> ("bubble input") that
+    // fires onValueChange('') whenever the controlled `value` matches none of
+    // the registered SelectItems — which is exactly the state this cascade is
+    // in for the first frames after mount, while the boundary list is still
+    // being fetched. Writing that '' through would blank an existing
+    // jurisdiction the user never touched, and HRMS then hands boundary-service
+    // an empty code list, which composes `... AND boundary.code IN ( )` and
+    // dies with a Postgres syntax error surfaced as QUERY_EXECUTION_ERROR — so
+    // editing ANY employee that already has a jurisdiction 400s on Save.
+    // A real pick can never be empty: Radix forbids SelectItem value="".
+    if (!code) return;
     const picked = boundaryByCode.get(code);
     updateRow(index, {
       boundary: code,
@@ -276,13 +287,20 @@ export function JurisdictionEditor({
                     </Label>
                     <Select
                       value={hierarchyType}
-                      onValueChange={(value) =>
+                      onValueChange={(value) => {
+                        // Same Radix bubble-input guard as selectLevel: an
+                        // unregistered controlled value (a stale stored
+                        // hierarchy like "ADMIN", or the loading window) echoes
+                        // '' back through onValueChange, and this handler
+                        // clears `boundary` — silently discarding the
+                        // jurisdiction on the next Save.
+                        if (!value) return;
                         updateRow(index, {
                           hierarchyType: value,
                           boundaryType: '',
                           boundary: '',
-                        })
-                      }
+                        });
+                      }}
                       disabled={hierarchiesLoading}
                     >
                       <SelectTrigger>
