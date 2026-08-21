@@ -1,9 +1,19 @@
 import { translate } from "../i18n/localeRuntime";
 import {
-  clearedSelection,
+  ALL,
+  complaintMultiSelectionFromCode,
   normalizeComplaintTypeValue,
   repairSelection,
 } from "../utils/complaintTypeTree";
+import {
+  geographyMultiSelectionFromCode,
+  normalizeGeographyValue,
+  repairGeographySelection,
+} from "../utils/boundaryTree";
+import {
+  normalizeHierarchySelections,
+  normalizeStringList,
+} from "../utils/multiSelectFilters";
 import {
   DEFAULT_TIME_ZONE,
   isValidTimeZone,
@@ -29,6 +39,15 @@ export const COMPLAINT_TYPE_OPTIONS = [
     id: "all",
     get label() {
       return translate("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+    },
+  },
+];
+
+export const DEPARTMENT_OPTIONS = [
+  {
+    id: "all",
+    get label() {
+      return translate("DASHBOARD_FILTERS_ALL_DEPARTMENTS", "All departments");
     },
   },
 ];
@@ -62,27 +81,38 @@ export const GLOBAL_FILTER_FIELDS = [
     defaultValue: null,
   },
   {
-    id: "geography",
-    type: "select",
+    id: "geographies",
+    type: "multi-select",
     get label() {
       return translate("DASHBOARD_FILTERS_GEOGRAPHY", "Geography");
     },
-    defaultValue: "all",
+    defaultValue: [],
     options: GEOGRAPHY_OPTIONS,
   },
   {
-    id: "complaintType",
-    type: "select",
+    id: "complaintTypes",
+    type: "multi-select",
     get label() {
       return translate("DASHBOARD_FILTERS_COMPLAINT_TYPE", "Complaint type");
     },
-    defaultValue: "all",
+    defaultValue: [],
     options: COMPLAINT_TYPE_OPTIONS,
+  },
+  {
+    id: "departments",
+    type: "multi-select",
+    get label() {
+      return translate("DASHBOARD_FILTERS_DEPARTMENT", "Department");
+    },
+    defaultValue: [],
+    options: DEPARTMENT_OPTIONS,
   },
 ];
 
 /** @deprecated use GLOBAL_FILTER_FIELDS */
-export const GLOBAL_FILTER_GROUPS = GLOBAL_FILTER_FIELDS.filter((f) => f.type === "select");
+export const GLOBAL_FILTER_GROUPS = GLOBAL_FILTER_FIELDS.filter(
+  (f) => f.type === "multi-select"
+);
 
 /**
  * `timeZone` should be an already-resolved zone (resolveConfiguredTimeZone
@@ -103,21 +133,21 @@ export function buildDefaultFilters(timeZone) {
   );
   defaults.timeWindow = "weekly";
   defaults.dateRangeActive = true;
-  // Tree-traversal complaint-type filter companions: `complaintType` stays the
-  // selected node's code ("all" = cleared, back-compat with every consumer);
-  // path + leaf make the persisted selection self-describing so the very first
-  // batch (before the MDMS tree loads) already sends the right param shape
-  // (leaf → serviceCode, interior → complaintPath).
-  defaults.complaintTypePath = null;
-  defaults.complaintTypeLeaf = false;
   return defaults;
 }
 
 export function hasActiveFilters(filters, timeZone) {
   if (!filters) return false;
   const defaults = buildDefaultFilters(timeZone);
-  const geography = filters.geography ?? defaults.geography;
-  const complaintType = filters.complaintType ?? defaults.complaintType;
+  const geographies = normalizeHierarchySelections(
+    filters.geographies ?? defaults.geographies
+  );
+  const complaintTypes = normalizeHierarchySelections(
+    filters.complaintTypes ?? defaults.complaintTypes
+  );
+  const departments = normalizeStringList(
+    filters.departments ?? defaults.departments
+  );
   const dateFrom = filters.dateFrom ?? defaults.dateFrom;
   const dateTo = filters.dateTo ?? defaults.dateTo;
   const dateRangeActive = filters.dateRangeActive ?? defaults.dateRangeActive;
@@ -126,8 +156,9 @@ export function hasActiveFilters(filters, timeZone) {
     dateRangeActive !== defaults.dateRangeActive ||
     dateFrom !== defaults.dateFrom ||
     dateTo !== defaults.dateTo ||
-    geography !== defaults.geography ||
-    complaintType !== defaults.complaintType
+    geographies.length > 0 ||
+    complaintTypes.length > 0 ||
+    departments.length > 0
   );
 }
 
@@ -145,7 +176,8 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
   // persistDashboardFilters(filters, dynamicOptions) can pass `null` explicitly, which
   // slips past the default and makes `dynamicOptions[field.id]` throw on the first select
   // field ("geography") — blanking the dashboard on any date-filter change. Normalize it.
-  const options = dynamicOptions && typeof dynamicOptions === "object" ? dynamicOptions : {};
+  const options =
+    dynamicOptions && typeof dynamicOptions === "object" ? dynamicOptions : {};
 
   const next = { ...defaults };
 
@@ -154,16 +186,14 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
     if (field.type === "date" && isValidISODate(value)) {
       next[field.id] = value;
     }
-    // complaintType is a tree node, not a flat option — handled below.
-    if (field.type === "select" && field.id !== "complaintType") {
-      const fieldOptions = options[field.id] ?? field.options;
-      if (fieldOptions.some((opt) => opt.id === value)) {
-        next[field.id] = value;
-      }
-    }
   }
 
-  Object.assign(next, sanitizeComplaintTypeSelection(raw, options));
+  next.complaintTypes = sanitizeComplaintTypeSelections(raw, options);
+  next.geographies = sanitizeGeographySelections(raw, options);
+  next.departments = sanitizeFlatSelections(
+    raw.departments,
+    options.department
+  );
 
   if (["daily", "weekly", "monthly", "wow", "mom"].includes(raw.timeWindow)) {
     next.timeWindow = raw.timeWindow;
@@ -175,8 +205,9 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
 }
 
 /**
- * Sanitize/repair the complaint-type node selection ({ complaintType,
- * complaintTypePath, complaintTypeLeaf }):
+ * Sanitize/repair the complaint-type selections. The v4 scalar trio
+ * ({ complaintType, complaintTypePath, complaintTypeLeaf }) is accepted as a
+ * one-release migration input; v5 persists self-describing selection arrays.
  *
  * - Pruned tree available (options.complaintTypeTree) — the authority:
  *   exact node wins; a vanished node walks UP its stored dot-path to the
@@ -191,26 +222,88 @@ export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
  * - No dynamic options at all (initial localStorage load): trust the
  *   persisted trio and let reconcileFiltersWithOptions repair it when the
  *   tree arrives — clearing here would forget the selection on every reload.
+ *
+ * Geography follows the same rules on the
+ * boundary tree (options.geographyTree as the authority; flat scoped ward
+ * list validates leaves only, interior selections HELD through tree-fetch
+ * hiccups; no options at all → trust the persisted trio).
  */
-function sanitizeComplaintTypeSelection(raw, options) {
-  const stored = normalizeComplaintTypeValue({
+function legacyGeographySelections(raw) {
+  if (Array.isArray(raw.geographies))
+    return normalizeHierarchySelections(raw.geographies);
+  const legacy = normalizeGeographyValue({
+    code: raw.geography,
+    path: raw.geographyPath,
+    leaf: raw.geographyLeaf,
+  });
+  return legacy.code === ALL
+    ? []
+    : normalizeHierarchySelections({
+        ...legacy,
+        codes: legacy.leaf ? [legacy.code] : [],
+      });
+}
+
+function legacyComplaintTypeSelections(raw) {
+  if (Array.isArray(raw.complaintTypes))
+    return normalizeHierarchySelections(raw.complaintTypes);
+  const legacy = normalizeComplaintTypeValue({
     code: raw.complaintType,
     path: raw.complaintTypePath,
     leaf: raw.complaintTypeLeaf,
   });
-  let selection = stored;
+  return legacy.code === ALL
+    ? []
+    : normalizeHierarchySelections({
+        ...legacy,
+        codes: legacy.leaf ? [legacy.code] : [],
+      });
+}
 
-  if (options.complaintTypeTree) {
-    selection = repairSelection(options.complaintTypeTree, stored);
-  } else if (options.complaintType && stored.leaf) {
-    selection = options.complaintType.some((opt) => opt.id === stored.code)
-      ? stored
-      : clearedSelection();
+function sanitizeGeographySelections(raw, options) {
+  const stored = legacyGeographySelections(raw);
+  if (options.geographyTree) {
+    return stored
+      .map((selection) =>
+        repairGeographySelection(options.geographyTree, selection)
+      )
+      .filter((selection) => selection.code !== ALL)
+      .map((selection) =>
+        geographyMultiSelectionFromCode(options.geographyTree, selection.code)
+      )
+      .filter(Boolean);
   }
+  if (!options.geography) return stored;
+  const valid = new Set(options.geography.map((option) => option.id));
+  return stored.filter(
+    (selection) => !selection.leaf || valid.has(selection.code)
+  );
+}
 
-  return {
-    complaintType: selection.code,
-    complaintTypePath: selection.path,
-    complaintTypeLeaf: selection.leaf,
-  };
+function sanitizeComplaintTypeSelections(raw, options) {
+  const stored = legacyComplaintTypeSelections(raw);
+  if (options.complaintTypeTree) {
+    return stored
+      .map((selection) => repairSelection(options.complaintTypeTree, selection))
+      .filter((selection) => selection.code !== ALL)
+      .map((selection) =>
+        complaintMultiSelectionFromCode(
+          options.complaintTypeTree,
+          selection.code
+        )
+      )
+      .filter(Boolean);
+  }
+  if (!options.complaintType) return stored;
+  const valid = new Set(options.complaintType.map((option) => option.id));
+  return stored.filter(
+    (selection) => !selection.leaf || valid.has(selection.code)
+  );
+}
+
+function sanitizeFlatSelections(raw, fieldOptions) {
+  const stored = normalizeStringList(raw);
+  if (!fieldOptions) return stored;
+  const valid = new Set(fieldOptions.map((option) => option.id));
+  return stored.filter((value) => valid.has(value));
 }

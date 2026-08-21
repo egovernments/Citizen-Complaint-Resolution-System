@@ -236,18 +236,21 @@ public class AnalyticsPlanner {
                 parts.add(colKey + " LIKE ? || '%'");
                 continue;
             }
-            // subtree: delimiter-guarded subtree membership on a materialized dot-path column —
-            // the node itself OR any dot-descendant. Unlike a bare starts_with, the '.' guard
-            // prevents sibling-prefix collisions ('PGR' must not match 'PGRX.…'), and the eq arm
-            // keeps mixed interior+serviceable nodes (a complaint filed AT the node) in the
-            // subtree. Same allowlist as starts_with (prefix-filterable path columns only), same
-            // bound-param + LIKE-escape mechanics.
+            // subtree: delimiter-guarded subtree membership on a materialized path column —
+            // the node itself OR any descendant. Unlike a bare starts_with, the delimiter guard
+            // prevents sibling-prefix collisions ('PGR' must not match 'PGRX.…', a ward code must
+            // not match a same-prefix sibling ward), and the eq arm keeps rows attached AT the
+            // node itself in the subtree. Same allowlist as starts_with (prefix-filterable path
+            // columns only), same bound-param + LIKE-escape mechanics. The guard character is the
+            // column's own segment delimiter: complaint_node_path is dot-joined, boundary_path is
+            // pipe-joined (ancestralmaterializedpath || '|' || code — see the grain MV migration).
             if ("subtree".equals(op)) {
                 if (!prefixFilterable) throw new IllegalArgumentException(
                         "op_not_allowed: 'subtree' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                String delim = "boundary_path".equals(colKey) ? "|" : ".";
                 params.add(v.asText());
                 params.add(escapeLike(v.asText()));
-                parts.add("(" + colKey + " = ? OR " + colKey + " LIKE ? || '.%')");
+                parts.add("(" + colKey + " = ? OR " + colKey + " LIKE ? || '" + delim + "%')");
                 continue;
             }
             if (!plainFilterable) throw new IllegalArgumentException(

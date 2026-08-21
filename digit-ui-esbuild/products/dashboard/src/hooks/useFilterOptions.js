@@ -4,19 +4,22 @@ import {
   buildComplaintTypeIndex,
   fetchComplaintHierarchyRecords,
 } from "../services/complaintHierarchyService";
+import { fetchBoundaryTreeRoots } from "../services/boundaryHierarchyService";
 import {
   buildComplaintTree,
   pruneComplaintTree,
 } from "../utils/complaintTypeTree";
+import { buildBoundaryTree, pruneBoundaryTree } from "../utils/boundaryTree";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import useDashboardT from "../i18n/useDashboardT";
 import {
   COMPLAINT_TYPE_OPTIONS,
+  DEPARTMENT_OPTIONS,
   GEOGRAPHY_OPTIONS,
 } from "../config/globalFilterGroups";
 
 /**
- * Fetches the global filter dropdown options (wards + complaint types) as
+ * Fetches the global filter dropdown options (wards + complaint types + departments) as
  * server-scoped distincts: one inline batch _query on the facts grain, so the
  * backend's ABAC (PrincipalScopeResolver department/ward scoping) applies —
  * a Water-dept supervisor only ever sees water complaint types.
@@ -29,7 +32,7 @@ import {
  * fetch). Labels re-derive from the cached rows on a language switch.
  *
  * Returns: { options, loading }
- * - options: { geography: [{id,label}], complaintType: [{id,label,group?}] } —
+ * - options: { geography, complaintType, department } — each is an option list;
  *   each list prepended with its "all" sentinel; a key is omitted when its
  *   query failed or returned nothing, so DashboardFilters falls back to the
  *   placeholder list for that select. null until loaded / on total failure.
@@ -49,6 +52,13 @@ const OPTION_QUERIES = {
     grain: "facts",
     window: { name: "all" },
     dimensions: ["ward_code"],
+    measures: [{ name: "n", agg: "count" }],
+    limit: 300,
+  },
+  departments: {
+    grain: "facts",
+    window: { name: "all" },
+    dimensions: ["department_code"],
     measures: [{ name: "n", agg: "count" }],
     limit: 300,
   },
@@ -90,7 +100,11 @@ function toComplaintTypeDecorator(hierarchyIndex) {
       // a one-item optgroup echoing the option's own label is just noise.
       ...(entry.rootCode !== code &&
         entry.rootLabel && {
-          group: dimensionLabel(entry.rootCode, "complaintType", entry.rootLabel),
+          group: dimensionLabel(
+            entry.rootCode,
+            "complaintType",
+            entry.rootLabel
+          ),
         }),
     };
   };
@@ -99,28 +113,51 @@ function toComplaintTypeDecorator(hierarchyIndex) {
 export function useFilterOptions({ enabled = true } = {}) {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
-  const [raw, setRaw] = useState({ results: null, hierarchyRecords: null, loading: true });
+  const [raw, setRaw] = useState({
+    results: null,
+    hierarchyRecords: null,
+    boundaryRoots: null,
+    loading: true,
+  });
   const { language, i18nTick } = useDashboardT();
 
   useEffect(() => {
     if (!enabled) {
-      setRaw({ results: null, hierarchyRecords: null, loading: false });
+      setRaw({
+        results: null,
+        hierarchyRecords: null,
+        boundaryRoots: null,
+        loading: false,
+      });
       return undefined;
     }
     let cancelled = false;
     Promise.all([
       runBatchQueries(OPTION_QUERIES),
-      // Resolves null on any failure (never rejects) — labels then fall back
-      // to the humanizer and the list stays flat, exactly the old behavior.
+      // Both hierarchy fetches resolve null on any failure (never reject) —
+      // labels then fall back to the humanizer and the affected filter stays
+      // flat, exactly the old behavior.
       fetchComplaintHierarchyRecords(),
+      fetchBoundaryTreeRoots(),
     ])
-      .then(([res, hierarchyRecords]) => {
+      .then(([res, hierarchyRecords, boundaryRoots]) => {
         if (cancelled) return;
-        setRaw({ results: res?.results || {}, hierarchyRecords, loading: false });
+        setRaw({
+          results: res?.results || {},
+          hierarchyRecords,
+          boundaryRoots,
+          loading: false,
+        });
       })
       .catch(() => {
         // Never block the dashboard — the selects keep their placeholder lists.
-        if (!cancelled) setRaw({ results: null, hierarchyRecords: null, loading: false });
+        if (!cancelled)
+          setRaw({
+            results: null,
+            hierarchyRecords: null,
+            boundaryRoots: null,
+            loading: false,
+          });
       });
     return () => {
       cancelled = true;
@@ -146,6 +183,12 @@ export function useFilterOptions({ enabled = true } = {}) {
       GEOGRAPHY_OPTIONS,
       "boundary"
     );
+    const department = toOptionList(
+      raw.results.departments?.rows,
+      "department_code",
+      DEPARTMENT_OPTIONS,
+      "department"
+    );
     // Tree-traversal complaint-type filter: the MDMS tree intersected with the
     // ABAC-scoped DISTINCT service_code list above (pruneComplaintTree). Both
     // inputs must exist — no scoped distincts (query failed / zero rows) or no
@@ -157,10 +200,23 @@ export function useFilterOptions({ enabled = true } = {}) {
       buildComplaintTree(raw.hierarchyRecords),
       scopedLeafCodes
     );
+    // Geography drill-down (CCSD-2171): the boundary-relationships tree
+    // intersected with the same ABAC-scoped DISTINCT ward_code list the flat
+    // select is built from. Either input missing → null, and the filter
+    // degrades to the flat ward select — the complaint-type pattern verbatim.
+    const scopedWardCodes = (raw.results.wards?.rows || [])
+      .map((row) => String(row?.ward_code ?? "").trim())
+      .filter(Boolean);
+    const geographyTree = pruneBoundaryTree(
+      buildBoundaryTree(raw.boundaryRoots),
+      scopedWardCodes
+    );
     const options = {
       ...(geography && { geography }),
       ...(complaintType && { complaintType }),
+      ...(department && { department }),
       ...(complaintTypeTree && { complaintTypeTree }),
+      ...(geographyTree && { geographyTree }),
     };
     return {
       options: Object.keys(options).length ? options : null,
