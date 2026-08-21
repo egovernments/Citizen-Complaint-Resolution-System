@@ -468,6 +468,16 @@ novu_bridge_channel: "sms"
 # novu_bridge_workflow_id_sms:      "complaints-sms"
 # novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
 # novu_bridge_workflow_id_email:    "complaints-email"
+
+# Novu integration identifier to explicitly target for WHATSAPP triggers. Twilio
+# WhatsApp is modeled in Novu as an "sms"-channel step, so a second, dedicated
+# WhatsApp-registered Twilio integration living alongside the primary (plain
+# SMS) integration is silently ignored unless named here — every WHATSAPP send
+# would otherwise resolve to the primary SMS sender and be rejected by Twilio.
+# Leave unset until that dedicated integration has been created in Novu
+# (Integrations tab) for this tenant; must match its exact identifier.
+# novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
+
 # Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
 # novu_bridge_identify_cache_ttl_ms: 300000
 
