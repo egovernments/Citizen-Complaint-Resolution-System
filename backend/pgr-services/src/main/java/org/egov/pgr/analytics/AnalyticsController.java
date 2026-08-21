@@ -301,7 +301,7 @@ public class AnalyticsController {
             // semantics as DashboardPack.matchesRoles); recordCount -> record_count_tier tag
             // (tenant corpus on complaint_facts, NOT the caller's ABAC-visible subset).
             out.put("packId", pack.map(DashboardPack::getId).orElse(null));
-            out.put("persona", pack.map(DashboardPack::getRequiredActionUrl).orElse(null));
+            out.put("persona", pack.map(AnalyticsController::personaTag).orElse(null));
             // recordCount is live tenant data, so it takes the same coarse pack-match
             // gate as packId/persona: no matching pack (e.g. the anonymous PUBLIC floor
             // on a tenant with no public pack) -> null. Without this gate an
@@ -357,6 +357,23 @@ public class AnalyticsController {
     }
 
     // ---- helpers ----
+
+    /**
+     * The {@code persona} metric tag (#1110): which capability selected the caller's pack.
+     *
+     * <p>It used to be the first matching role code. The pack is now selected by a capability, so
+     * the equivalent value is that capability — but emitted as its short name rather than the whole
+     * action URL, because this is an OTEL datapoint attribute and a URL makes for a poor tag. The
+     * cardinality stays bounded by the number of dashboard capabilities, as it was bounded by the
+     * number of pack roles before.
+     */
+    private static String personaTag(DashboardPack pack) {
+        String requiredActionUrl = pack.getRequiredActionUrl();
+        if (requiredActionUrl == null)
+            return pack.isPublicPack() ? "public" : null;
+        int lastSegment = requiredActionUrl.lastIndexOf("/analytics/");
+        return lastSegment < 0 ? requiredActionUrl : requiredActionUrl.substring(lastSegment + "/analytics/".length());
+    }
 
     /** Serializes a KpiDefinition for external consumption: includes viz/params but NEVER query or rbac. */
     private Map<String,Object> safeTile(KpiDefinition def) {

@@ -78,6 +78,8 @@ public class AnalyticsControllerPacksTest {
         assertEquals(200, resp.getStatusCodeValue());
         assertEquals(1234L, resp.getBody().get("recordCount"));
         assertEquals("supervisor-pack", resp.getBody().get("packId"));
+        // persona is an OTEL tag: the capability that selected the pack, short name not full URL.
+        assertEquals("_query", resp.getBody().get("persona"));
         assertEquals(AnalyticsService.MAX_BATCH_QUERIES, resp.getBody().get("maxBatchQueries"));
     }
 }
