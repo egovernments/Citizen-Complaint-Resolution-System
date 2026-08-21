@@ -7,6 +7,7 @@ import PGRAdminSearch from "./pages/employee/AdminSearch";
 import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
+import OnlyMyComplaintsFilter from "./components/OnlyMyComplaintsFilter";
 import ComplaintHierarchyComponent from "./components/ComplaintHierarchyComponent";
 import PGRDatePicker from "./components/PGRDatePicker";
 import PGRDetails from "./pages/employee/PGRDetails";
@@ -108,6 +109,7 @@ const componentsToRegister = {
   PGRLinks,
   PGRCard,
   PGRBoundaryComponent: BoundaryComponent,
+  PGROnlyMyComplaintsFilter: OnlyMyComplaintsFilter,
   PGRComplaintHierarchyComponent: ComplaintHierarchyComponent,
   PGRDatePicker,
   PGRComplaintDetails: PGRDetails,
