@@ -25,9 +25,27 @@ RETRY_INTERVAL=5
 # `^[a-zA-Z. ]*$` on create — letters and dots only.)
 SEED_TENANTS="${SEED_TENANTS:-pg pg.citya pg.cityb pg.cietee}"
 
+# The bootstrap admin the deploy authenticates as. The Ansible tier overrides
+# these from host_vars `bootstrap_user`/`bootstrap_password` (rendered into
+# .env → passed in via the compose `environment:` block) so a deploy that
+# moved off the well-known ADMIN/eGov@123 defaults gets a loginable admin
+# BEFORE the playbook's "auth flow" validate mints its first token — nothing
+# else creates that user this early (see issue: custom bootstrap_user used to
+# 400 "Invalid login credentials" and abort every fresh deploy).
+# When SEED_ADMIN_USER != ADMIN the stock ADMIN is still seeded too: the
+# CI-gated tasks and Postman collections hardcode ADMIN/eGov@123.
+SEED_ADMIN_USER="${SEED_ADMIN_USER:-ADMIN}"
+SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-eGov@123}"
+
 echo "=== DIGIT User Seed ==="
-echo "EGOV_USER_HOST: $EGOV_USER_HOST"
-echo "SEED_TENANTS:   $SEED_TENANTS"
+echo "EGOV_USER_HOST:  $EGOV_USER_HOST"
+echo "SEED_TENANTS:    $SEED_TENANTS"
+echo "SEED_ADMIN_USER: $SEED_ADMIN_USER"
+
+# Escape a value for embedding inside a JSON double-quoted string.
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
 
 # Wait for egov-user to be healthy
 echo "Waiting for egov-user service..."
@@ -48,6 +66,7 @@ create_user() {
   local EMAIL=$4
   local TENANT=$5
   local ROLES=$6
+  local PASSWORD="${7:-eGov@123}"
 
   echo "  Creating user: $USERNAME on '$TENANT'"
 
@@ -64,7 +83,7 @@ create_user() {
         \"active\": true,
         \"type\": \"EMPLOYEE\",
         \"tenantId\": \"$TENANT\",
-        \"password\": \"eGov@123\",
+        \"password\": \"$(json_escape "$PASSWORD")\",
         \"roles\": $ROLES
       }
     }")
@@ -114,11 +133,18 @@ roles_gro() {
   ]"
 }
 
-# Seed ADMIN + GRO on every SEED_TENANT.
+# Seed the bootstrap admin (+ stock ADMIN when they differ) + GRO on every
+# SEED_TENANT. The bootstrap admin gets a distinct mobile number from stock
+# ADMIN so the two EMPLOYEE users never collide on it.
 for TENANT in $SEED_TENANTS; do
   echo ""
   echo "── Seeding tenant: $TENANT ──"
-  create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
+  if [ "$SEED_ADMIN_USER" != "ADMIN" ]; then
+    create_user "$SEED_ADMIN_USER" "Bootstrap Administrator" "9777777777" "bootstrap-admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
+    create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
+  else
+    create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")" "$SEED_ADMIN_PASSWORD"
+  fi
   create_user "GRO"   "Grievance Officer"    "9888888888" "gro@digit.org"   "$TENANT" "$(roles_gro "$TENANT")"
 done
 
@@ -153,4 +179,9 @@ fi
 
 echo ""
 echo "=== User seed completed ==="
-echo "Default credentials: ADMIN / eGov@123 (and GRO / eGov@123) on every tenant in SEED_TENANTS."
+if [ "$SEED_ADMIN_USER" != "ADMIN" ]; then
+  echo "Bootstrap admin: $SEED_ADMIN_USER (password from SEED_ADMIN_PASSWORD) on every tenant in SEED_TENANTS."
+  echo "Stock credentials: ADMIN / eGov@123 (and GRO / eGov@123) also seeded for CI/tests."
+else
+  echo "Default credentials: ADMIN (password from SEED_ADMIN_PASSWORD, default eGov@123) and GRO / eGov@123 on every tenant in SEED_TENANTS."
+fi

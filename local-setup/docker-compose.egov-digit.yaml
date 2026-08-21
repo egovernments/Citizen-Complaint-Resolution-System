@@ -571,7 +571,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:mdms-count-api-3ac4f8e
+    image: egovio/mdms-v2:maven-jdk21-f3a7c13
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1383,6 +1383,13 @@ services:
     entrypoint: ["sh", "/user-seed.sh"]
     environment:
       EGOV_USER_HOST: http://egov-user-proxy:8107
+      # The bootstrap admin the Ansible tier authenticates as (host_vars
+      # bootstrap_user/bootstrap_password, rendered into .env). Seeding it
+      # here — before the playbook's auth validate — is what lets operators
+      # move off the well-known ADMIN/eGov@123 defaults on a fresh box.
+      # Standalone compose users get the stock defaults unchanged.
+      SEED_ADMIN_USER: ${BOOTSTRAP_USER:-ADMIN}
+      SEED_ADMIN_PASSWORD: ${BOOTSTRAP_PASSWORD:-eGov@123}
     networks:
       - egov-network
     restart: "no"

@@ -443,7 +443,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:mdms-count-api-3ac4f8e
+    image: egovio/mdms-v2:maven-jdk21-f3a7c13
     depends_on:
       pgbouncer:
         condition: service_healthy
