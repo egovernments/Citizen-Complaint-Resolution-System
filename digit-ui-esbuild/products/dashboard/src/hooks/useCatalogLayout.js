@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GRID_COLS, DROPPING_ITEM_ID } from "../constants/layoutConfig";
 import { getEmployeeInfo, getTenantId } from "../services/authService";
+import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
 import {
   storageKeyFor,
+  publicStorageKeyFor,
   readSavedLayout,
   persistLayout,
   buildSeedLayout,
@@ -30,6 +32,7 @@ export function getDroppingItemForKpi(kpiId, kpis) {
 }
 
 function scopedStorageKey() {
+  if (isPublicDashboardRuntime()) return publicStorageKeyFor(getTenantId());
   return storageKeyFor(getTenantId(), getEmployeeInfo()?.uuid);
 }
 

@@ -184,6 +184,35 @@ An unauthenticated / role-less caller degrades to the synthetic `PUBLIC` role
 This is a deliberate degrade-to-curated-aggregates, not a lock-out; it closed the old fail-open
 where anonymous callers could read every `visibleTo: []` tile.
 
+#### The public dashboard page (`/digit-ui/public-dashboard`, #1540 / #1797)
+
+The anonymous page never touches the mixed-auth endpoints above. It uses four Kong-only
+auth-optional aliases under `/v2/analytics/public/*` (`AnalyticsController`), each of which
+**discards `RequestInfo` by construction** and fails closed when
+`dss.DashboardConfig.publicDashboardEnabled` is not `true`:
+
+| alias | returns | feeds |
+|---|---|---|
+| `POST …/public/packs` | the matched `PUBLIC` pack: tiles + default layout (no `recordCount`); `{enabled:false}` when disabled | default page |
+| `POST …/public/catalog/_search` | every published def with `"PUBLIC"` in `visibleTo` (safe descriptors) | the **Add KPI** menu |
+| `POST …/public/_options` | ward / complaint-type **codes** that carry complaints (counts stripped); the two distinct queries are server constants, the caller sends only `tenantId` | the filter bar's dropdowns |
+| `POST …/public/_query` | batch of `{kpiId[, params]}` refs | tile data |
+
+`/public/_query` accepts a ref for **any PUBLIC-tagged def** (not only pack tiles — the pack is
+the enablement gate, `visibleTo` is the disclosure boundary), and its `params` are rebuilt from a
+fixed allow-list — `dateFrom`, `dateTo`, `ward`, `serviceCode`, `complaintPath` — i.e. exactly
+the global filter bar. Each value must be a non-empty scalar ≤ 128 chars and the dates ISO
+calendar days; any other key (`hierLevel`, `compare`, `series`, `window`, …), shape or value is a
+whole-batch `400 invalid_param`. So the anonymous page gets the same Ward / Complaint type / date
+filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
+sparklines), no Group-by level switch and no per-complaint pin source.
+
+**Which knob grants what, publicly:** tag a def `PUBLIC` → it appears in the public Add KPI
+menu and is queryable anonymously; add it to the `public-default` pack → it is on the page by
+default. Untag it → both disappear on the next config-cache refresh. The visitor's own layout and
+filter choices persist only in their browser (`ccrs.dashboard.*.public` keys, disjoint from every
+employee slot).
+
 ## 3. Error codes and what to do about them
 
 Per-entry in a batch (`results.<name>.error` + top-level `partial: true`) or a 400 body on a
@@ -212,7 +241,8 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 | role R gets a curated default dashboard | add R to a pack's `roles` (and X to its `tiles`/`layout`) | `dss.DashboardPack` (MDMS) |
 | role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
 | role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
-| anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
+| anonymous/public page can show KPI X (Add KPI menu + anonymous query) | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
+| anonymous/public page shows KPI X **by default** | also list X in the `public-default` pack's `tiles` + `layout` | `dss.DashboardPack` (MDMS) |
 | role R can *open the dashboard view at all* (home card, deep-link route) | add R to `dss.DashboardConfig` `allowedRoles` (MDMS; the FE falls back to its built-in `DASHBOARD_ROLES` when the record is absent) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
 | role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
 

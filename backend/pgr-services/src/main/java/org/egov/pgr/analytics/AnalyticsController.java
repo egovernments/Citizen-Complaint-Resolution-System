@@ -2,6 +2,7 @@ package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
@@ -27,6 +28,13 @@ import java.util.stream.Collectors;
  *   POST /v2/analytics/packs           — return best-match DashboardPack + safe tile descriptors
  *   POST /v2/analytics/catalog/_search — return all visible KpiDefinition tiles (no query/rbac)
  *
+ * Anonymous twins (Kong-only auth-optional aliases; RequestInfo is discarded by construction):
+ *   POST /v2/analytics/public/packs           — curated PUBLIC pack, fail-closed when disabled
+ *   POST /v2/analytics/public/catalog/_search — every PUBLIC-tagged published tile (Add KPI menu)
+ *   POST /v2/analytics/public/_options        — filter-bar option codes (wards / complaint types)
+ *   POST /v2/analytics/public/_query          — {kpiId[, params]} refs over PUBLIC tiles, with
+ *                                               params restricted to PUBLIC_QUERY_PARAMS
+ *
  * Body (single):  { "RequestInfo": {...}, "tenantId": "ke", "query": { ...grammar... } }
  * Body (batch):   { "RequestInfo": {...}, "tenantId": "ke", "queries": { "name": {...}, ... } }
  */
@@ -37,6 +45,20 @@ public class AnalyticsController {
 
     private static final Set<String> DASHBOARD_CONFIG_ROLES =
             Set.of("MDMS_ADMIN", "SUPERUSER", "LOC_ADMIN");
+
+    /**
+     * The only query params an anonymous caller may attach to a public KPI reference (#1797):
+     * the dashboard's global filter bar. Each is a NARROWING predicate the composer layers under
+     * the def's own query; none can widen the window, switch the aggregation level
+     * ({@code hierLevel}), fan out companions ({@code compare}/{@code series}) or reach a
+     * per-complaint source. Values are scalar strings, length-capped, and the dates must be ISO
+     * calendar days — anything else is rejected before the batch reaches the service.
+     */
+    static final Set<String> PUBLIC_QUERY_PARAMS =
+            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+    static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
+    private static final java.util.regex.Pattern ISO_DAY =
+            java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private final AnalyticsService service;
     private final KpiCatalogService kpiCatalogService;
@@ -127,9 +149,11 @@ public class AnalyticsController {
     }
 
     /**
-     * Anonymous dashboard data endpoint. Only a bounded batch of bare {@code {kpiId}} references
-     * selected by the tenant's matched PUBLIC pack is accepted. RequestInfo and caller parameters
-     * are discarded by construction before delegating to the normal analytics execution path.
+     * Anonymous dashboard data endpoint. Accepts a bounded batch of {@code {kpiId[, params]}}
+     * references over the tenant's PUBLIC-tagged published tiles (the same set the public Add-KPI
+     * menu offers; the matched PUBLIC pack must still exist as the fail-closed gate). RequestInfo
+     * is discarded by construction; {@code params} is rebuilt from the {@link #PUBLIC_QUERY_PARAMS}
+     * allow-list — never forwarded verbatim — before delegating to the normal execution path.
      */
     @PostMapping("/public/_query")
     public ResponseEntity<Map<String,Object>> publicQuery(@RequestBody JsonNode body,
@@ -153,28 +177,38 @@ public class AnalyticsController {
 
             Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
             List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
-            DashboardPack pack = kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs)
+            // The pack is the fail-closed enablement gate; the tile set is the PUBLIC catalog,
+            // so a tile a visitor added from the public Add-KPI menu is queryable too (#1797).
+            kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "public_pack_not_found: no PUBLIC dashboard pack is configured"));
-            Set<String> allowedKpis = new HashSet<>(
-                    pack.getTiles() == null ? Collections.emptyList() : pack.getTiles());
+            Set<String> allowedKpis = visibleDefs.stream()
+                    .map(KpiDefinition::getId).collect(Collectors.toSet());
 
             ObjectNode sanitizedQueries = mapper.createObjectNode();
             Iterator<Map.Entry<String,JsonNode>> it = queries.fields();
             while (it.hasNext()) {
                 Map.Entry<String,JsonNode> entry = it.next();
                 JsonNode ref = entry.getValue();
-                if (ref == null || !ref.isObject() || ref.size() != 1 || !ref.hasNonNull("kpiId")
+                if (ref == null || !ref.isObject() || !ref.hasNonNull("kpiId")
                         || !ref.get("kpiId").isTextual() || ref.get("kpiId").asText().isEmpty()) {
                     throw new IllegalArgumentException(
-                            "invalid_param: public queries must be bare {kpiId} references without params");
+                            "invalid_param: public queries must be {kpiId[, params]} references");
+                }
+                for (Iterator<String> names = ref.fieldNames(); names.hasNext();) {
+                    String field = names.next();
+                    if (!field.equals("kpiId") && !field.equals("params"))
+                        throw new IllegalArgumentException(
+                                "invalid_param: public queries must be {kpiId[, params]} references");
                 }
                 String kpiId = ref.get("kpiId").asText();
                 if (!allowedKpis.contains(kpiId))
                     throw new IllegalArgumentException(
-                            "kpi_forbidden: KPI is not selected by the PUBLIC dashboard pack");
+                            "kpi_forbidden: KPI is not published to the PUBLIC audience");
                 ObjectNode cleanRef = mapper.createObjectNode();
                 cleanRef.put("kpiId", kpiId);
+                ObjectNode cleanParams = sanitizePublicParams(ref.get("params"));
+                if (cleanParams != null) cleanRef.set("params", cleanParams);
                 sanitizedQueries.set(entry.getKey(), cleanRef);
             }
 
@@ -189,6 +223,62 @@ public class AnalyticsController {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
             log.error("public analytics query failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
+        }
+    }
+
+    /**
+     * Anonymous catalog: every published tile tagged PUBLIC, as safe descriptors. Feeds the public
+     * page's Add-KPI menu (#1797) — the public equivalent of "everything your role can see". Same
+     * disabled/RequestInfo contract as {@link #publicQuery}.
+     */
+    @PostMapping("/public/catalog/_search")
+    public ResponseEntity<Map<String,Object>> searchPublicCatalog(@RequestBody Map<String,Object> body){
+        try {
+            String tenantId = extractTenantId(body);
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(
+                        new IllegalArgumentException(
+                                "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
+            }
+            List<Map<String,Object>> tiles = kpiCatalogService
+                    .getVisibleDefs(tenantId, Set.of(AnalyticsService.PUBLIC_ROLE)).stream()
+                    .map(this::safeTile)
+                    .collect(Collectors.toList());
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("tiles", tiles);
+            out.put("total", tiles.size());
+            return ResponseEntity.ok(out);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics catalog search failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
+        }
+    }
+
+    /**
+     * Anonymous filter-bar options: the ward and complaint-type codes that carry complaints on
+     * this tenant (#1797). The caller supplies nothing but the tenant; the two distinct queries
+     * are server-owned constants (see {@link AnalyticsService#publicFilterOptions}).
+     */
+    @PostMapping("/public/_options")
+    public ResponseEntity<Map<String,Object>> publicFilterOptions(@RequestBody Map<String,Object> body,
+            @RequestHeader(value = "x-trace-id", required = false) String xTraceId){
+        try {
+            String tenantId = extractTenantId(body);
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(
+                        new IllegalArgumentException(
+                                "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
+            }
+            int stateLen = config.getStateLevelTenantIdLength() == null
+                    ? 1 : config.getStateLevelTenantIdLength();
+            return ResponseEntity.ok(service.publicFilterOptions(tenantId, stateLen, xTraceId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics filter options failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
         }
     }
@@ -317,6 +407,37 @@ public class AnalyticsController {
     private String matchingRole(DashboardPack pack, Set<String> callerRoles) {
         if (pack.getRoles() == null || callerRoles == null) return null;
         return pack.getRoles().stream().filter(callerRoles::contains).findFirst().orElse(null);
+    }
+
+    /**
+     * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
+     * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
+     * non-scalar or blank value, over-long value, or non-ISO-day date.
+     */
+    static ObjectNode sanitizePublicParams(JsonNode params) {
+        if (params == null || params.isNull()) return null;
+        if (!params.isObject())
+            throw new IllegalArgumentException("invalid_param: public params must be an object");
+        if (params.isEmpty()) return null;
+        ObjectNode clean = JsonNodeFactory.instance.objectNode();
+        for (Iterator<Map.Entry<String,JsonNode>> it = params.fields(); it.hasNext();) {
+            Map.Entry<String,JsonNode> e = it.next();
+            String name = e.getKey();
+            JsonNode v = e.getValue();
+            if (!PUBLIC_QUERY_PARAMS.contains(name))
+                throw new IllegalArgumentException("invalid_param: public queries accept only "
+                        + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
+            if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
+            String text = v.asText().trim();
+            if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name + " exceeds "
+                        + PUBLIC_QUERY_PARAM_MAX_LENGTH + " characters");
+            if ((name.equals("dateFrom") || name.equals("dateTo")) && !ISO_DAY.matcher(text).matches())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
+            clean.put(name, text);
+        }
+        return clean;
     }
 
     /** Serializes a KpiDefinition for external consumption: includes viz/params but NEVER query or rbac. */

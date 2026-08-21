@@ -1,6 +1,8 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -200,6 +202,91 @@ public class AnalyticsService {
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
+        return out;
+    }
+
+    /**
+     * The two filter-bar option sources the dashboard derives from ABAC-scoped distincts (the
+     * employee FE posts these verbatim as an inline batch; see useFilterOptions.OPTION_QUERIES).
+     * Fixed server-owned shape so the public arm can serve them without accepting an inline body.
+     */
+    static final String PUBLIC_OPTIONS_WARDS = "wards";
+    static final String PUBLIC_OPTIONS_COMPLAINT_TYPES = "complaintTypes";
+    private static final int PUBLIC_OPTIONS_LIMIT = 300;
+
+    /**
+     * Anonymous filter-bar options (#1797). The public floor forbids inline queries — an inline
+     * body bypasses the catalog's PUBLIC opt-in — so the two distinct-dimension queries the
+     * employee filter bar runs inline are built HERE from constants, with no caller input beyond
+     * the tenant, and executed under the anonymous tenant-aggregate scope. The response mirrors
+     * the batch envelope ({@code results.wards.rows[].ward_code},
+     * {@code results.complaintTypes.rows[].service_code}) so the dashboard's option builder is
+     * shared between the two surfaces, but the per-code counts are dropped: a public caller
+     * learns WHICH codes carry complaints, never how many.
+     */
+    public Map<String,Object> publicFilterOptions(String tenantId, int stateLevelLen, String headerTraceId){
+        if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
+        try {
+            AnalyticsScope scope = scopeResolver.resolve(null, tenantId, stateLevelLen);
+            BusinessCalendar calendar = BusinessCalendar.of(
+                    kpiCatalogService.resolveTimeZone(tenantId), requestClock.getAsLong());
+            Map<String,Object> results = new LinkedHashMap<>();
+            boolean partial = false;
+            Map<String,String> sources = new LinkedHashMap<>();
+            sources.put(PUBLIC_OPTIONS_WARDS, "ward_code");
+            sources.put(PUBLIC_OPTIONS_COMPLAINT_TYPES, "service_code");
+            for (Map.Entry<String,String> src : sources.entrySet()) {
+                try {
+                    Map<String,Object> r = runOne(distinctDimensionQuery(src.getValue()), scope, tel,
+                            src.getKey(), "public-options", calendar);
+                    results.put(src.getKey(), codesOnly(r, src.getValue()));
+                } catch (Exception ex) {
+                    partial = true;
+                    results.put(src.getKey(), err(ex));
+                }
+            }
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("asOf", asOf());
+            out.put("calendar", calendarInfo(calendar));
+            out.put("scope", scopeInfo(scope));
+            out.put("results", results);
+            out.put("partial", partial);
+            return out;
+        } finally {
+            if (!tel.isEmpty())
+                log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
+        }
+    }
+
+    /** {@code SELECT <dimension>, count(*) FROM facts (all time)} — the filter bar's distinct source. */
+    private JsonNode distinctDimensionQuery(String dimension) {
+        ObjectNode q = JsonNodeFactory.instance.objectNode();
+        q.put("grain", "facts");
+        q.putObject("window").put("name", "all");
+        q.putArray("dimensions").add(dimension);
+        q.putArray("measures").addObject().put("name", "n").put("agg", "count");
+        q.put("limit", PUBLIC_OPTIONS_LIMIT);
+        return q;
+    }
+
+    /** Project a distinct result down to its dimension column: no counts, no timing. */
+    @SuppressWarnings("unchecked")
+    private static Map<String,Object> codesOnly(Map<String,Object> result, String dimension) {
+        List<Map<String,Object>> rows = new ArrayList<>();
+        Object rawRows = result.get("rows");
+        if (rawRows instanceof List) {
+            for (Object row : (List<Object>) rawRows) {
+                if (!(row instanceof Map)) continue;
+                Object code = ((Map<String,Object>) row).get(dimension);
+                if (code == null || code.toString().trim().isEmpty()) continue;
+                rows.add(Collections.singletonMap(dimension, code));
+            }
+        }
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("columns", Collections.singletonList(dimension));
+        out.put("rows", rows);
+        out.put("rowCount", rows.size());
         return out;
     }
 
