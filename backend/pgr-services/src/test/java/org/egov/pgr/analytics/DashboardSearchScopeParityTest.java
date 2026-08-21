@@ -77,8 +77,10 @@ class DashboardSearchScopeParityTest {
     void setUp() {
         when(config.getHrmsHost()).thenReturn("http://localhost:8092");
         when(config.getHrmsEndPoint()).thenReturn("/egov-hrms/employees/_search");
-        when(registry.getScopePolicy(eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL), any(), anyString(), eq("complaint")))
-                .thenReturn(ScopePolicy.parse(ACTION_2008_SCOPE));
+        // #1827 replaced getScopePolicy with resolveScopeState, which also reports whether the
+        // action is genuinely unconfigured. Here it IS configured, so `unconfigured` is false.
+        when(registry.resolveScopeState(eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL), any(), anyString(), eq("complaint")))
+                .thenReturn(new AccessPolicyRegistry.ScopeResolution(ScopePolicy.parse(ACTION_2008_SCOPE), false));
         when(catalog.isDepartmentScopingDisabled(anyString())).thenReturn(false);
 
         PolicyDrivenScopeResolver policyResolver = new PolicyDrivenScopeResolver(
@@ -191,6 +193,26 @@ class DashboardSearchScopeParityTest {
 
         assertEquals(List.of(ScopePolicyEngine.UNRESOLVED_SENTINEL), scope.departmentCodes,
                 "an unauthorized tenant must stay denied");
+    }
+
+    @Test
+    void anUnconfiguredActionLeavesBothSurfacesUnrestricted() {
+        // #1827: an action that is visible but genuinely bare — no scope block, no legacy
+        // condition — means nobody authored a policy, so no axis restricts anyone. This is the
+        // supported way to run a tenant with ABAC effectively off, and the dashboard has to honour
+        // it identically to search, or turning it off would silently only half work.
+        when(registry.resolveScopeState(eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL), any(), anyString(), eq("complaint")))
+                .thenReturn(new AccessPolicyRegistry.ScopeResolution(java.util.Optional.empty(), true));
+        stubHrms(List.of(Map.of("department", "DEPT_1", "isCurrentAssignment", true)),
+                List.of(Map.of("boundary", "WARD_001", "isActive", true)));
+        RequestInfo requestInfo = employee("emp-1", "PGR_LME");
+
+        PgrSearchScope onSearch = searchScope.resolveScope(requestInfo, TENANT, STATE_LEVEL_LEN);
+        PgrSearchScope onDashboard = dashboardScope.resolve(requestInfo, TENANT, STATE_LEVEL_LEN);
+
+        assertNull(onDashboard.departmentCodes, "no authored policy means no department axis");
+        assertNull(onDashboard.jurisdictionCodes, "no authored policy means no jurisdiction axis");
+        assertEquals(describe(onSearch), describe(onDashboard));
     }
 
     // ---- helpers ----------------------------------------------------------------------------
