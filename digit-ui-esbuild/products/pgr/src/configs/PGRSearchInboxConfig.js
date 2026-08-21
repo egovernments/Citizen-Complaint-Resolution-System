@@ -227,11 +227,16 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                                       label: "",
                                       isMandatory: false,
                                       key: "onlyMyComplaints",
-                                      type: "checkbox",
+                                      // NOT type "checkbox": RenderFormFields has no such
+                                      // case and its default branch returns the raw
+                                      // populators object, which React cannot render
+                                      // (error #31). "component" is the slot the locality
+                                      // filter below already uses.
+                                      type: "component",
+                                      component: "PGROnlyMyComplaintsFilter",
                                       disable: false,
                                       populators: {
                                           name: "onlyMyComplaints",
-                                          title: "ES_PGR_FILTER_ONLY_MY_COMPLAINTS",
                                       },
                                   },
                               ]

@@ -1642,8 +1642,12 @@ export const UICustomizations = {
       // Default ON: an unset value means the officer has not touched the filter,
       // so the inbox opens scoped to their own work as before. Unchecking widens
       // it to every complaint their role can otherwise see.
+      // Read from filterForm, not searchForm: the control lives in the left FILTER
+      // panel, and this preProcess destructures the two form states separately.
+      // Reading the wrong one leaves the value permanently undefined, so the
+      // `!== false` default would report "checked" no matter what the user did.
       const ownCreatedByUuid = receptionOnlyCreatedByUuid();
-      const onlyMyComplaints = searchForm?.onlyMyComplaints !== false;
+      const onlyMyComplaints = filterForm?.onlyMyComplaints !== false;
       if (ownCreatedByUuid && onlyMyComplaints) params.createdBy = ownCreatedByUuid;
 
       // Search form fields
