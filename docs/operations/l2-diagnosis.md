@@ -28,6 +28,7 @@ against a live deployment.
 - [Reading the evidence L1 captured](#reading-the-evidence-l1-captured)
 - [Going deeper on logs](#going-deeper-on-logs)
 - [Is it slow, or is it failing?](#is-it-slow-or-is-it-failing)
+  - [First: which half of the request is at fault?](#first-which-half-of-the-request-is-at-fault)
 - [The host itself](#the-host-itself-cpu-ram-disk)
 - [Container logs — the usual reason the disk fills](#container-logs--the-usual-reason-the-disk-fills)
 - [Raising CPU or memory for a service](#raising-cpu-or-memory-for-a-service)
@@ -41,15 +42,16 @@ against a live deployment.
 
 ## How the stack is layered
 
-A deployment runs roughly 40 containers. Almost every failure sits in one of five layers,
-and the layer tells you where to look:
+A deployment runs **around 45 containers** — the exact number depends on which optional
+features and which observability level this deployment runs. Almost every failure sits in one
+of five layers, and the layer tells you where to look:
 
 | Layer | What's in it | Fails as | Look at |
 |---|---|---|---|
-| **Edge** | nginx (host), Kong gateway | 502 / 504, site won't load, some APIs 404 | Health dashboard → *API Gateway*; nginx + kong logs |
+| **Edge** | nginx (host), Kong gateway | 502 / 504, site won't load, some APIs 404 | **`Kong API Gateway` dashboard** (is it the gateway or the service behind it?); health dashboard → *API Gateway*; nginx + kong logs |
 | **Application** | pgr-services, digit-ui, configurator, inbox, dashboard | A screen or action breaks, others fine | Health dashboard → *Application*; that service's logs |
 | **Core platform** | user, workflow, mdms, hrms, boundary, localization, idgen, accesscontrol, filestore, persister, indexer | Many features break at once; login fails | Health dashboard → *Core Services* |
-| **Backbone** | Postgres, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch | Everything degrades or hangs | Health dashboard → *Infrastructure* |
+| **Backbone** | Postgres, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch | Everything degrades or hangs | **`PostgreSQL Database`** and **`Redpanda (Kafka) Broker`** dashboards; health dashboard → *Infrastructure* |
 | **Host** | CPU, RAM, disk, network, Docker | Random restarts, OOM kills, "no space left on device" | Node Exporter Full dashboard, or SSH |
 
 **Causation runs downward.** If a Core Service is red, there is little point debugging the
@@ -92,19 +94,25 @@ Restarts outside that window are the interesting ones.
 - **"JVM CPU — recent utilization"** at `1.0` is one full core. Sustained high CPU with no
   traffic is a spin loop.
 
-> **Coverage limit.** JVM metrics exist only for the **16 Java services carrying the
+> **Coverage limit.** JVM metrics exist only for the **15 Java services carrying the
 > OpenTelemetry agent**: boundary-service, digit-config-service, egov-accesscontrol,
 > egov-enc-service, egov-filestore, egov-hrms, egov-idgen, egov-indexer, egov-persister,
-> egov-user, egov-workflow-v2, inbox, mdms-backend, novu-bridge, pgr-services, plus dashboard
-> web metrics. **Postgres, Redis, Kafka, Kong, Elasticsearch, nginx, the sign-in service and the Node
-> services have no metrics at all** — for those, the health dashboard and the logs are the
+> egov-user, egov-workflow-v2, inbox, mdms-backend, novu-bridge, pgr-services.
+>
+> **The rest of the infrastructure is not blind any more, but it is measured elsewhere.**
+> Postgres, the message broker and Kong each have their own exporter and their own dashboard —
+> see [dashboards.md](dashboards.md). What still has **no metrics at all** is **Redis,
+> Elasticsearch, MinIO and nginx**; for those four the health dashboard and the logs are the
 > only signals, and both cover them fully.
+>
+> Run `up` in Explore → Prometheus to see which collectors are reporting on this deployment.
+> A full stack answers with `otel-collector`, `node`, `postgres-exporter`, `redpanda`, `kong`.
 
 ---
 
 ## Going deeper on logs
 
-Logs cover **every container** — all ~44 — including the ones with no metrics.
+Logs cover **every container** — around 45 of them — including the ones with no metrics.
 
 The method:
 
@@ -144,6 +152,40 @@ Then narrow:
 
 Different problems, different evidence. Establish which one you have.
 
+### First: which half of the request is at fault?
+
+Before reading any service's metrics, ask the gateway. Kong times **its own work** and **the
+service behind it** separately, so it answers "gateway or service?" in one panel — and that
+answer redirects everything after it.
+
+Grafana → **`Kong API Gateway`** → expand the **Latencies** row, or in Explore → Prometheus:
+
+```promql
+# Time the service behind the gateway took — usually where it all is
+histogram_quantile(0.95, sum by (le, service) (rate(kong_upstream_latency_ms_bucket[5m])))
+
+# Time Kong itself took — routing, auth, plugins. Normally single-digit to low-tens of ms
+histogram_quantile(0.95, sum by (le) (rate(kong_kong_latency_ms_bucket[5m])))
+```
+
+| Reading | Means |
+|---|---|
+| Upstream high, Kong flat | The service is slow. Go to that service — the gateway is fine |
+| Kong high, upstream flat | The gateway itself is the bottleneck. Rare, and a real finding |
+| Both flat, users still complain | The delay is not in the API layer. Look at the browser, the network, or the front-end |
+
+And which service is actually returning errors, straight from the gateway's own count:
+
+```promql
+sum by (service) (rate(kong_http_requests_total{code=~"5.."}[5m]))
+sum by (code) (rate(kong_http_requests_total[5m]))
+```
+
+> This counts every request through the gateway, including ones that never reached a service.
+> The service-reported 5xx query below counts only what the service itself saw. When the two
+> disagree, requests are failing **before** the service — a routing, auth or upstream-timeout
+> problem in Kong.
+
 ### Failing — HTTP 5xx
 
 Grafana → **Explore** → **Prometheus**:
@@ -181,17 +223,80 @@ rate(db_client_connections_timeouts_total[5m])  # any non-zero = pool exhausted
 `pending_requests` above zero, or any increase in `timeouts_total`, means the pool is
 exhausted — either a query got slow or something leaked connections.
 
+**Then ask the database itself.** The metrics above are what the *services* see from outside.
+`postgres-exporter` reports what Postgres sees from inside, which is where the cause usually
+is. Grafana → **`PostgreSQL Database`**, or:
+
+```promql
+# Sessions by state. A climb in "active" with no more traffic = queries not finishing
+sum by (state) (pg_stat_activity_count{datname="egov"})
+
+# How close to the connection ceiling
+100 * sum(pg_stat_activity_count{datname="egov"}) / on() group_left() pg_settings_max_connections
+
+# Cache hit rate — healthy is above ~99%. A drop means reads are going to disk
+100 * sum(pg_stat_database_blks_hit{datname="egov"})
+    / (sum(pg_stat_database_blks_hit{datname="egov"}) + sum(pg_stat_database_blks_read{datname="egov"}))
+
+# Deadlocks. Should be flat zero — anything else is a code-level finding, not capacity
+rate(pg_stat_database_deadlocks{datname="egov"}[5m])
+
+# Longest open transaction, seconds. A number that only grows is a stuck transaction
+max(pg_stat_activity_max_tx_duration{datname="egov"})
+
+# Connections parked mid-transaction — a leak in a service, not a database fault
+sum(pg_stat_activity_count{datname="egov", state="idle in transaction"})
+```
+
+**How to read the pair.** Pool pending high *and* the database busy means the database is
+genuinely the bottleneck — find the slow query. Pool pending high *while the database is
+idle* means the pool is being held by something that is not using it: a leak, or a service
+waiting on something else entirely while holding a connection. Those two have completely
+different fixes, and this is the only way to tell them apart.
+
 ### Slow because of the message queue
 
 Complaints, notifications and indexing move through Kafka. A stuck consumer means complaints
 are filed but never appear in the inbox or trigger a notification:
 
+**Use the broker's own view**, not the client's. Grafana → **`DIGIT Kafka Consumer Lag`**.
+It compares the newest message on each queue against the last one each consumer group
+confirmed, so it covers **every** consumer group — including ones with no Java
+instrumentation — and it keeps reporting when a consumer dies, which is exactly when you need
+it.
+
+```promql
+# Lag per consumer group, from the broker
+sum by (redpanda_group) (
+  max by (redpanda_namespace, redpanda_topic, redpanda_partition) (
+    redpanda_kafka_max_offset{redpanda_namespace="kafka"}
+  )
+  - on(redpanda_topic, redpanda_partition) group_right()
+  redpanda_kafka_consumer_group_committed_offset
+)
+
+# How many workers are attached. 0 = nothing is processing that queue at all
+redpanda_kafka_consumer_group_consumers
+```
+
+The client-side metric still exists and still works for the instrumented services:
+
 ```promql
 max by (service_name, client_id) (kafka_consumer_records_lag_max)
 ```
 
+> **Prefer the broker view.** The client metric is reported *by the consumer*, so a consumer
+> that has crashed or lost its broker connection reports nothing — the lag graph goes flat
+> and empty at the moment the pipeline breaks, which reads as "fine" at a glance.
+
 Lag that climbs without recovering is the signal — `egov-indexer`, `egov-persister` or
-`novu-bridge` are the usual candidates.
+`novu-bridge` are the usual candidates. **Check the broker has disk, too**: it stops
+accepting writes when it fills, and that presents as every pipeline stalling at once.
+
+```promql
+100 * redpanda_storage_disk_free_bytes / redpanda_storage_disk_total_bytes
+redpanda_storage_disk_free_space_alert   # 0 = OK, 1 = low space, 2 = degraded
+```
 
 ### Slow — which part of the request?
 
@@ -357,7 +462,7 @@ is a deployment change, not something to apply on the box**, because anything ed
 | Limit | Where it lives | Notes |
 |---|---|---|
 | **JVM heap** (`-Xmx`) | `JAVA_TOOL_OPTIONS` or `JAVA_OPTS` per service in the compose file | This is the ceiling that actually causes `OutOfMemoryError`. 22 services declare `-Xmx`, totalling **~12.8 GB** — more than a 16 GB host has, so they rely on not all peaking at once |
-| **Container memory** | `deploy.resources.limits.memory` per service in the compose file | Set on **10 of the 60 services**, not on the rest — see below |
+| **Container memory** | `deploy.resources.limits.memory` per service in the compose file | Set on **10 of the 60 services** in the main compose file, plus `node-exporter` in the monitoring overlay — 11 capped containers in all, and nothing else. See below |
 | **Container CPU** | not set today | No `cpus` limit on any service in the deployed compose — they compete freely for host CPU |
 | **Host size** | your infrastructure | If the host itself is short of RAM or cores, no per-service change helps |
 
@@ -368,13 +473,15 @@ is a deployment change, not something to apply on the box**, because anything ed
 | `prometheus` | 512M | | `egov-otp` | 512M |
 | `loki` | 512M | | `user-otp` | 512M |
 | `tempo` | 384M | | `egov-notification-sms` | 512M |
-| `otel-collector` | 320M | | | |
+| `otel-collector` | 320M | | `node-exporter` | 64M |
 | `grafana` | 256M | | | |
 | `promtail` | 128M | | | |
 | `gatus` | 64M | | | |
 
 Everything else — every JVM service, Postgres, Redpanda, Kafka, Elasticsearch, MinIO, Kong,
-Novu — has **no container memory limit**, so only the JVM heap bounds it.
+Novu — has **no container memory limit**, so only the JVM heap bounds it. `postgres-exporter`
+is also uncapped; it is a thin reader and has not needed one, but it is worth knowing it is
+not in the list above.
 
 > The caps use `deploy.resources.limits.memory`, not the older top-level `mem_limit` key.
 > Compose V2 applies them identically outside Swarm; if you grep for `mem_limit` you will
@@ -417,18 +524,19 @@ redeploy.
 | Symptom | Most likely | Check, in this order |
 |---|---|---|
 | **Site won't load at all** (browser error, not a DIGIT page) | nginx down, TLS certificate expired, DNS | Try the health dashboard URL — if that also fails, it's the edge, not DIGIT. Check certificate expiry in the browser padlock |
-| **502 / 504 Bad Gateway** | Kong or the upstream service down or restarting | Health dashboard *API Gateway* + *Application* → restarts → Kong logs |
+| **502 / 504 Bad Gateway** | Kong or the upstream service down or restarting | **`Kong API Gateway` → Request rate → "RPS per route/service by status code"** names the failing API in one panel. Then the Latencies row to see whether the time is Kong's or the service's → health dashboard *API Gateway* + *Application* → restarts → Kong logs |
 | **Login fails for everyone** | egov-user, the sign-in service, Redis, or accesscontrol | Health dashboard *Core Services* + the sign-in group → logs for `egov-user` and the sign-in containers |
 | **Login fails for one user** | Wrong tenant, disabled account, role missing | Usually a data question rather than an outage — check the user in HRMS/Configurator |
 | **OTP not received** | Notification/SMS provider, not DIGIT | Health dashboard *OTP* + *Notifications* → logs for `egov-user-proxy`, `novu-worker`. Check provider credit/credentials |
 | **Complaint submit fails** | pgr-services, workflow, idgen, or Postgres | Browser Network tab → failing URL → that service's logs → Health dashboard *Infrastructure* |
-| **Complaint filed but not in the inbox** | Indexing pipeline, not the write path | `kafka_consumer_records_lag_max`; logs for `egov-indexer`, `elasticsearch`, `inbox` |
-| **Notifications not delivered** | Novu chain or provider | Health dashboard *Notifications* → logs for `novu-bridge`, `novu-worker` → provider console |
-| **Dashboard / reports empty** | Analytics query, roles, or no data for the filter | Confirm with a second account and a wider date range first → logs for `pgr-services` → `pgr_analytics_query_duration_ms` |
-| **Everything is slow** | Host CPU/RAM/disk, or the DB pool | Host panels → `db_client_connections_pending_requests` → Tempo slow traces |
+| **Complaint filed but not in the inbox** | Indexing pipeline, not the write path | **`DIGIT Kafka Consumer Lag`** — which group is behind, and is "Consumers per group" zero? Then logs for `egov-indexer`, `elasticsearch`, `inbox` |
+| **Notifications not delivered** | Novu chain or provider | **`DIGIT Kafka Consumer Lag`** first — if `novu-bridge` is lagging, the message never reached Novu at all → health dashboard *Notifications* → logs for `novu-bridge`, `novu-worker` → provider console |
+| **Dashboard / reports empty** | Analytics query, roles, or no data for the filter | Confirm with a second account and a wider date range first → logs for `pgr-services` → **`DIGIT — PGR Analytics Queries`** |
+| **Dashboard slow, not empty** | One analytics query, or the dataset grew | **`DIGIT — PGR Analytics Queries` → "Slowest KPIs by mean duration"** names the measurement; "Rows scanned per second" says whether the query got worse or the city got bigger |
+| **Everything is slow** | Host CPU/RAM/disk, or the database | Host panels → `db_client_connections_pending_requests` (what services see) → **`PostgreSQL Database`: Active sessions, Cache Hit Rate, Conflicts/Deadlocks** (what the database sees) → Tempo slow traces. [Reading the pair](#slow-because-of-the-database) tells a genuinely busy database apart from a leaked pool |
 | **Works for one city, not another** | Tenant configuration or data rather than code | File with both tenant codes so we can diff them |
 | **A service restarts every few minutes** | OOM, failed health check, or a bad config/env value | OOM panels → that service's logs from the *first* boot attempt onward |
-| **"No space left on device"** anywhere | Disk full — usually container logs | Host panels or `df -h`, then [Container logs](#container-logs--the-usual-reason-the-disk-fills). Postgres may already be refusing writes |
+| **"No space left on device"** anywhere | Disk full — usually container logs | Host panels or `df -h`, then [Container logs](#container-logs--the-usual-reason-the-disk-fills). Postgres may already be refusing writes. **Check the broker separately** — `redpanda_storage_disk_free_space_alert` — it has its own space accounting and stalls every pipeline when it fills |
 | **Disk climbing steadily with no new usage** | An uncapped container log | [Container logs](#container-logs--the-usual-reason-the-disk-fills) — check which containers lack the rotation cap |
 | **A service is starved (OOM, low headroom, GC thrash)** | Under-provisioned heap | [Raising CPU or memory](#raising-cpu-or-memory-for-a-service) — gather the evidence, then raise it with us |
 
@@ -539,6 +647,9 @@ Paste into **Grafana → Explore** with the matching datasource. The fuller list
 host queries, is in [reference.md](reference.md#query-cookbook).
 
 ```promql
+# Which collectors are reporting at all — run this first if a dashboard is blank
+up
+
 # Which services are reporting at all
 count by (service_name) (jvm_thread_count)
 
@@ -555,6 +666,29 @@ sum by (service_name) (rate(jvm_gc_duration_seconds_sum[5m]))
 # Server errors by service and endpoint
 sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
 ```
+
+The infrastructure that used to have no metrics at all:
+
+```promql
+# Database: is it the bottleneck?
+sum by (state) (pg_stat_activity_count{datname="egov"})
+100 * sum(pg_stat_database_blks_hit{datname="egov"})
+    / (sum(pg_stat_database_blks_hit{datname="egov"}) + sum(pg_stat_database_blks_read{datname="egov"}))
+rate(pg_stat_database_deadlocks{datname="egov"}[5m])
+max(pg_stat_activity_max_tx_duration{datname="egov"})
+
+# Gateway: which half of the request, and which API is erroring
+histogram_quantile(0.95, sum by (le, service) (rate(kong_upstream_latency_ms_bucket[5m])))
+histogram_quantile(0.95, sum by (le) (rate(kong_kong_latency_ms_bucket[5m])))
+sum by (service) (rate(kong_http_requests_total{code=~"5.."}[5m]))
+
+# Broker: does it have disk, and is anything consuming?
+redpanda_storage_disk_free_space_alert
+redpanda_kafka_consumer_group_consumers
+```
+
+The full list, with what each reading means, is in
+[reference.md](reference.md#query-cookbook).
 
 ```logql
 # Error volume by service

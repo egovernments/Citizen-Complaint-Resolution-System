@@ -107,25 +107,39 @@ Filled in by whoever works [l2-diagnosis.md](l2-diagnosis.md).
      downstream error that surfaced first]
 
 20. Restart / crash history for that service (last 24h):
+    [`DIGIT JVM Services` -> "Heap used (MB)", or the "Started ... Application" log query]
 
 21. Memory: heap %, headroom, OOM events:
+    [`DIGIT JVM Services` -> "Right-sizing snapshot" + "OOM events (current range)"]
 
-22. Host state:
+22. Host state:                                    [`Node Exporter Full`]
     [ ] normal  [ ] CPU ____  [ ] RAM ____  [ ] disk ____
     [ ] host metrics unavailable (no `node` job — see l2-diagnosis.md)
 
-23. Database pool (db_client_connections_pending_requests / timeouts):
+23. Database — pool AND server side:
+    Pool (what services see):  db_client_connections_pending_requests ____  timeouts ____
+    Server (`PostgreSQL Database` dashboard):
+      active sessions ____ / max ____ · cache hit ____% · deadlocks ____ · longest tx ____s
+    [Both halves matter: a saturated pool with an idle database is a leak, not a slow
+     database, and the two have completely different fixes.]
 
-24. Kafka lag, if relevant:
+24. Pipelines, if relevant:                        [`DIGIT Kafka Consumer Lag`]
+    lagging group ____  lag ____  consumers attached ____
+    [Consumers attached = 0 means nothing is processing that queue at all.]
+    Broker disk:  redpanda_storage_disk_free_space_alert ____   (0 = OK, 1 = low, 2 = degraded)
+
+25. Gateway, for any 5xx or slowness:              [`Kong API Gateway` -> Latencies]
+    upstream p95 ____ms · kong proxy p95 ____ms · failing service/route ____
+    [Upstream high with proxy flat = the service is at fault, not the gateway.]
 
 --- ACTIONS TAKEN ---
-25. What was tried, with times:
+26. What was tried, with times:
     [Restarting to get users moving is usually the right call — just record it,
      because it changes what the logs show.]
 
-26. Did it resolve the symptom?  [yes / no / temporarily]
+27. Did it resolve the symptom?  [yes / no / temporarily]
 
-27. Anything captured before the restart?  [log files, screenshots — attach them]
+28. Anything captured before the restart?  [log files, screenshots — attach them]
 ```
 
 ---
@@ -134,9 +148,9 @@ Filled in by whoever works [l2-diagnosis.md](l2-diagnosis.md).
 
 ```
 --- HYPOTHESIS ---
-28. What you believe is happening, and what rules out the alternatives:
+29. What you believe is happening, and what rules out the alternatives:
 
-29. Why this needs us rather than a config change:
+30. Why this needs us rather than a config change:
     [ ] product code / data-model defect
     [ ] deployment change needed (heap size, extra container, env value,
         node-exporter, SMTP relay, Gatus catalogue)
@@ -144,18 +158,22 @@ Filled in by whoever works [l2-diagnosis.md](l2-diagnosis.md).
     [ ] not sure — need a second opinion
 
 --- EVIDENCE ---
-30. Trace ID(s), for anything about speed:      [within 24h or they're gone]
-31. Failing endpoint (http_route) + status code:
-32. Log excerpts, as text, with time ranges:
-33. Grafana panel screenshots for anything anomalous:
+31. Trace ID(s), for anything about speed:      [within 24h or they're gone]
+32. Failing endpoint (http_route) + status code:
+33. Log excerpts, as text, with time ranges:
+34. Grafana panel screenshots for anything anomalous:
+    [Name the dashboard and the time range on each one. The panels we ask for most:
+     `DIGIT JVM Services` right-sizing snapshot, `Node Exporter Full` disk,
+     `PostgreSQL Database` cache hit + deadlocks, `Kong API Gateway` latencies,
+     `DIGIT Kafka Consumer Lag` total lag. See dashboards.md]
 
 --- IMPACT ---
-34. Business impact:
+35. Business impact:
     [One or two lines. "The central office cannot register walk-in complaints;
      ~40 citizens turned away since 09:00." This is what tells us how to
      prioritise it.]
 
-35. Workaround in place?  [what it is, and what it costs]
+36. Workaround in place?  [what it is, and what it costs]
 ```
 
 ---
@@ -198,11 +216,39 @@ included** — a log line without a timestamp is nearly useless.
 
 ### For "it's slow" reports
 
+**Answer "which half?" first** — it decides everything else, and it takes one panel:
+
+- **`Kong API Gateway` → Latencies row.** Send both numbers: **Upstream time** (the service
+  behind the gateway) and **Kong Proxy Latency** (the gateway itself). Upstream high with
+  proxy flat means the service is at fault; both flat means the delay is not in the API layer
+  at all.
+- **`PostgreSQL Database`** — cache hit rate, active sessions vs Max Connections, and the
+  Conflicts/Deadlocks panel. This is what tells a genuinely busy database apart from a leaked
+  connection pool.
 - A **Trace ID** from Grafana → `DIGIT — Traces (Tempo)` → **Slow traces** panel → click a
   row → copy the ID. Within 24 hours, or it is gone.
 - Screenshot of the **95th-percentile latency** query from
   [l2-diagnosis.md](l2-diagnosis.md#slow--latency).
 - `db_client_connections_pending_requests` — the current value.
+
+### For "it saved but never appeared" reports
+
+Complaint filed and confirmed, but not in the inbox / no notification / not in reports. The
+write path worked and a background pipeline did not, so the evidence is different:
+
+- **`DIGIT Kafka Consumer Lag`** — which group is behind, whether the lag is climbing or
+  draining, and **"Consumers per group"** (zero means nothing is processing that queue).
+- The **complaint number**, and the output of tracing it across services: paste it into the
+  **q** box on `DIGIT — Logs (Loki)` with service `.+`.
+- `redpanda_storage_disk_free_space_alert` — if the broker is out of disk, every pipeline
+  stalls at once and the individual consumer is not the fault.
+
+### For "the supervisor dashboard is slow" reports
+
+- **`DIGIT — PGR Analytics Queries` → "Slowest KPIs by mean duration"** — which measurement,
+  and for which tenant and grain.
+- **"Rows scanned per second"** — this says whether the query got worse or the city simply
+  got bigger, which are different problems with different answers.
 
 ### For "the site is down" reports
 

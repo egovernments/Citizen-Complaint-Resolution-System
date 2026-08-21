@@ -48,6 +48,10 @@ splits attention and nothing gets read.
 
 **Recommended starting configuration for a government IT team:**
 
+0. **First, before any of the below:** turn on **[Gatus alerting](#option-b--gatus-native-alerting-endpoint-down)**.
+   It is already built and already covers all 57 health checks — it needs one webhook URL and
+   nothing else, and it is the only alerting that watches Redis, Elasticsearch, MinIO and
+   nginx. Everything else on this page is work; that one is a value.
 1. **Primary:** the chat tool the department already uses (Google Chat or Teams for most),
    one dedicated channel — `#digit-alerts`. All `warning` and `critical` alerts land here.
 2. **Wake-up:** `critical` only, additionally to a WhatsApp group or SMS to the two on-call
@@ -204,37 +208,81 @@ bearer token on the request.
 
 ## Option B — Gatus native alerting (endpoint down)
 
-The health dashboard at `/status/` already checks up to 57 endpoints every 30 seconds. It can
-notify you directly, and it is the **only thing watching the containers that emit no
-metrics** — Postgres, Redis, Kafka, Kong, Elasticsearch, nginx and the sign-in service. That makes it the
-highest-value alerting you can add, and the fastest.
+**Start here.** This is the fastest, highest-value alerting you can turn on, and unlike
+everything in Option A it is **already built and already wired** — it is waiting on one
+value.
 
-It is configured in `local-setup/gatus/config.yaml`, which currently has alerting commented
-out. The change looks like this:
+The health dashboard at `/status/` checks up to 57 endpoints every 30 seconds. Alerting on
+those checks ships with the deployment, **switched off**, with every endpoint already opted
+in and sensible thresholds already set:
 
 ```yaml
 alerting:
   slack:
-    webhook-url: "https://hooks.slack.com/services/..."
+    webhook-url: "${GATUS_SLACK_WEBHOOK_URL}"    # empty = alerting off
     default-alert:
+      enabled: true
       failure-threshold: 3      # 3 consecutive failed checks ≈ 90 seconds
       success-threshold: 2      # 2 passes before it says "recovered"
       send-on-resolved: true
 ```
 
-...and then each endpoint opts in with `alerts: [{type: slack}]`. Gatus also supports
-Google Chat, Teams, Telegram, Discord, PagerDuty, Opsgenie, email and generic webhooks with
-the same shape.
+### Turning it on
 
-Two things to know:
+**One value:** the deployment variable `gatus_slack_webhook_url`, set to a Slack incoming
+webhook URL. Mint the webhook the same way as for a Grafana contact point
+([Slack](#slack-recommended-if-you-use-slack), step 1), then **send it to us** — it goes into
+this deployment's configuration and applies at the next deploy. Nothing else changes.
 
-- **The file is part of the deployment, not the running box.** Editing it on the server is
-  overwritten at the next deployment, and the same catalogue is mirrored in the Kubernetes
-  configuration with CI enforcing that the two match. **Send us the webhook URL and which
-  endpoints you want alerts on, and we will ship it.**
-- **Threshold discipline still applies.** With 50 endpoints, alerting on every one at a
-  failure-threshold of 1 will bury you during a deployment. Start with the *Infrastructure*
-  group plus `PGR Services`, `DIGIT UI` and `Kong Gateway`, at a threshold of 3.
+Leave it unset and behaviour is exactly as today: Gatus expands the empty variable, drops the
+Slack provider with a warning in its own log, and carries on serving the dashboard normally.
+It does not refuse to start.
+
+> **The webhook URL is a credential.** Anyone holding it can post into your channel. Send it
+> to us through whatever channel you would use for a password — not in a ticket, not in a
+> group chat, and never committed to a repository.
+
+### What you get
+
+- **Every endpoint alerts, not a chosen subset.** Every check in the catalogue carries the
+  opt-in already — all 57 of them, and therefore however many of those your deployment
+  actually runs. The coverage is complete on day one; there is no list to curate.
+- **~90 seconds of sustained failure before it fires**, not one failed check. That is what
+  stops a single dropped probe or a rolling restart from paging anyone.
+- **Recovery messages**, so the channel tells you when it is over.
+- **The only alerting that watches Redis, Elasticsearch, MinIO and nginx.** Those four still
+  have no metrics of their own, so no Grafana rule can see them. Gatus can.
+
+### Two things to know
+
+- **The catalogue is part of the deployment, not the running box.** Editing
+  `gatus/config.yaml` on the server is overwritten at the next deployment, and the same
+  catalogue is mirrored in the Kubernetes configuration with CI enforcing that the two match.
+  Adding an endpoint, changing a threshold, or using a provider other than Slack is a change
+  to ship — **ask us**.
+- **Expect noise during your deployment window.** Every service restarts, so a redeploy will
+  produce a burst of down-and-recovered messages. That is the main argument for having a
+  deployment window everyone knows about; Gatus has no mute-timing equivalent of its own.
+
+### Gatus alerting or Grafana alerting?
+
+Both, eventually — they answer different questions and they overlap less than they look:
+
+| | Gatus | Grafana |
+|---|---|---|
+| Tells you | *X stopped answering* | *X is unhealthy but still answering* |
+| Covers | every endpoint in the catalogue, including the four services with no metrics | anything with a metric or a log line |
+| Catches | outages | disks filling, memory creeping, lag climbing, error rates |
+| Effort | one variable | a rule at a time |
+
+Gatus catches the outage; Grafana catches the hour before it. **Turn Gatus on first** — it is
+one value and it covers the case where nothing is running to raise an alert at all — then
+build the five Grafana rules in
+[alerts-setup.md § Avoiding alert fatigue](alerts-setup.md#avoiding-alert-fatigue).
+
+**Do not duplicate.** Once Gatus alerts on endpoints being down, there is no value in a
+Grafana rule that says the same thing more slowly. Keep Grafana for the conditions Gatus
+cannot see.
 
 ---
 
@@ -389,7 +437,9 @@ Escalate when:
 - The same alert has fired **three times in a week** — that is a systemic problem, not an
   incident.
 - The fix would need a **deployment change**: more memory for a service, an extra container,
-  a configuration value, node-exporter, an SMTP relay, a Gatus alerting change.
+  a configuration value, node-exporter, an SMTP relay, a change to the Gatus endpoint
+  catalogue or its thresholds, or **the Gatus Slack webhook** that turns endpoint alerting
+  on.
 - You are about to do something on the destroy-list in
   [l2-diagnosis.md](l2-diagnosis.md#commands-that-are-destructive). Ask first.
 
