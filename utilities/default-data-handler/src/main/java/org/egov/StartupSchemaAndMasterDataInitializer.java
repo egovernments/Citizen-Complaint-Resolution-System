@@ -106,6 +106,16 @@ public class StartupSchemaAndMasterDataInitializer{
                     defaultDataRequest.getRequestInfo(),
                     serviceConfig.getDefaultMdmsDataPath());
 
+            // Load root-only MDMS data (always). Kept out of the shared
+            // mdmsData bundle on purpose: loadNewTenantProductionData replays
+            // that bundle for every new tenant, which would give each city its
+            // own copy of these rows and cut it off from state-root changes.
+            // Seeded here, a city inherits the root row until it genuinely
+            // needs an override (e.g. Configurator Phase 2 map geometry).
+            mdmsBulkLoader.loadAllMdmsData(defaultDataRequest.getTargetTenantId(),
+                    defaultDataRequest.getRequestInfo(),
+                    serviceConfig.getStateMdmsDataPath());
+
             // Load default config data (always)
             configDataBulkLoader.loadAllConfigData(defaultDataRequest.getTargetTenantId(),
                     defaultDataRequest.getRequestInfo(),

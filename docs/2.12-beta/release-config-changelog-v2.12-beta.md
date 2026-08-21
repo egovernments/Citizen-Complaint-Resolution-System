@@ -22,7 +22,7 @@ All MDMS-v2 master data lives under `utilities/default-data-handler` (auto-seede
 - **`RAINMAKER-PGR.ComplaintRelatedToMap`** (NEW) — lookup driving which extended-attribute schema applies to a complaint (`IGE`, `IGSAE` codes).
 - **`RAINMAKER-PGR.ComplaintTemplateType`** (NEW) — joins `caseRelatedTo` → `schemaRef` + allowed document types + allowed viewer roles (e.g. `CONFIDENTIAL_COMPLAINT_VIEWER`).
 - **`RAINMAKER-PGR.EscalationConfig`** (NEW) — per-tenant auto-escalation SLA config (`maxDepth`, `defaultSlaByLevel[]`, optional per-serviceCode overrides). Without a record, pgr-services falls back to a hardcoded 5-day SLA. Shipped default: `maxDepth:3`, SLAs `[1h, 4h, 24h]`.
-- **`RAINMAKER-PGR.MapConfig`** (NEW schema, no default data) — per-tenant map tiles/center/zoom/geocode-bbox config. Opt-in; UI falls back to globalConfigs/built-in defaults if no record exists.
+- **`RAINMAKER-PGR.MapConfig`** (NEW schema + minimal root default) — per-tenant map tiles/center/zoom/geocode-bbox config. The default-data-handler seeds a single `DEFAULT` row at the state root with neutral tile/ward presentation values (root-only `stateMdmsData/` bundle); cities inherit it until Configurator Phase 2 writes their own row with the derived centre, boundary source and geocoding extent.
 - **`RAINMAKER-PGR.InboxVisibilityConfig`** (NEW schema, no default data) — feature flag + config for the employee inbox "My/All" tabs (Visibility V1). Missing record = legacy inbox behaviour; safe by default.
 
 ### 1.2 Notifications (RAINMAKER-PGR)

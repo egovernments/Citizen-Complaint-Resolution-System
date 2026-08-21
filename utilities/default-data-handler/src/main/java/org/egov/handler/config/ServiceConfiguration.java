@@ -144,6 +144,9 @@ public class ServiceConfiguration {
     @Value("${default.employee.data.file}")
     private String defaultEmployeeDataFile;
 
+    @Value("${state.mdms.data.path:classpath:stateMdmsData/**/*.json}")
+    private String stateMdmsDataPath;
+
     @Value("${dev.mdms.data.path}")
     private String devMdmsDataPath;
 

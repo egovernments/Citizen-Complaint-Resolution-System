@@ -85,6 +85,19 @@ MDMS read errors are swallowed — a missing schema or record never breaks the m
 
 ## How it gets set
 
+**Seeded once, at the state root.** The default-data-handler creates a minimal
+`DEFAULT` row for `default.tenant.id` at startup. It establishes the neutral
+presentation defaults (`voyager` tiles and `#FFA74F` ward highlighting) and
+deliberately carries no centre, boundary tenant or geocoding extent.
+
+The seed lives in the root-only `stateMdmsData/` bundle, *not* the shared
+`mdmsData/` one that `loadNewTenantProductionData` replays for every new tenant.
+That is deliberate: a city provisioned later owns no MapConfig row, so mdms-v2
+resolves it up the tree and the city picks up the root's presentation values —
+including any the operator changed after the seed. The city only gets its own
+row when it genuinely needs one (Phase 2 geometry, or a manual edit), and that
+row is created by merging the patch over the inherited values.
+
 **Automatically, at onboarding (preferred).** Configurator Phase 2 already
 fetches the OSM boundary polygons, so the centroid/bounding-box of the onboarded
 area *is* the correct centre, zoom and search extent. `deriveMapPosition`
@@ -102,7 +115,9 @@ own-vs-inherited guard).
 ## Schema registration & migration
 
 On a **fresh** install the default-data-handler seeds the schema from
-`schema/RAINMAKER-PGR.json` at startup.
+`schema/RAINMAKER-PGR.json` and the minimal root-owned `DEFAULT` row from
+`stateMdmsData/RAINMAKER-PGR/RAINMAKER-PGR.MapConfig.json` at startup. Tenants
+provisioned later get no row of their own — they inherit the root's.
 
 On a box that carries the earlier hand-registered **colour-keyed** schema
 (`x-unique: ["wardHighlightColor"]`), that schema squats the code — and mdms-v2
@@ -112,7 +127,11 @@ schema codes are immutable over the API (`DUPLICATE_SCHEMA_CODE`; `schema/v1/_up
 fixes it at the DB level: it re-keys the legacy record to `DEFAULT` (preserving
 the colour), rewrites the rogue schema in place to the correct code-keyed
 definition, and registers the schema for any tenant that has data but no schema.
-Idempotent and guarded (no-op on a correct/fresh box). See that directory's
+Idempotent and guarded (no-op on a correct/fresh box). Note the ordering: the
+bulk loader's idempotency pre-check is per *schemaCode*, so a root that still
+carries a legacy colour-keyed row gets no seed at all until that migration
+re-keys it to `DEFAULT` — which is the intended outcome, never a second active
+singleton. See that directory's
 `README.md` for how to apply it, and keep its embedded definition in sync with
 the JSON schema file.
 
