@@ -100,13 +100,19 @@ plugins:
         -- enforces both the shared set and that intentional exception (Phase 3). See
         -- docs/parity-item5-gateway-rbac-design.md.
         --
-        -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
-        -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
-        -- is a legitimate anonymous call — if it is, add its EXACT path to AUTH_OPTIONAL AND env.yaml).
-        local ENFORCE_UNAUTH = false
-        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. Also ships in
-        -- AUDIT mode (log-only); flip to true to enforce (403 on deny). Independent of ENFORCE_UNAUTH.
-        local ENFORCE_RBAC = false
+        -- ENFORCED (2026-08-21): unauthenticated hits on protected paths now get a real 401.
+        -- Known gap at flip time: /common-persist still has zero
+        -- ACCESSCONTROL-ACTIONS-TEST.actions-test coverage (see docs/parity-item5-gateway-rbac-design.md)
+        -- — accepted as-is for now; persister calls will 403 under ENFORCE_RBAC below until that
+        -- coverage is added. /novu-bridge/* is covered (actiontest + roleactions for
+        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME).
+        local ENFORCE_UNAUTH = true
+        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. ENFORCED
+        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. Known gap: PGR_ADMIN is
+        -- referenced in ACCESSCONTROL-ROLEACTIONS.roleactions but missing from
+        -- ACCESSCONTROL-ROLES.roles, and /common-persist has no actiontest rows at
+        -- all — both will deny until fixed separately.
+        local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
