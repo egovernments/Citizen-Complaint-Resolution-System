@@ -1350,11 +1350,51 @@
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
     # working directory, so no extra wiring is needed in the compose file.
+    - name: "Slurp previous .env (to preserve OpenBao secret blocks across regeneration)"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.env"
+      register: prev_env
+      failed_when: false
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
         dest: "{{ digit_dir }}/.env"
         mode: '0644'
+
+    # The template above regenerates .env from scratch, which used to WIPE the
+    # marked secret blocks the OpenBao section appends much later in the play
+    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
+    # behind enable_keycloak). Fresh box: fine — the blocks don't exist yet and
+    # the first `up -d` runs postgres on the compose default before the OpenBao
+    # section ALTERs the role to the vault password. RERUN: fatal — the role's
+    # password in the persisted volume is already the vault value, but the
+    # freshly templated .env has no POSTGRES_PASSWORD line, so "Start DIGIT
+    # stack" recreates postgres' consumers with the egov123 default and the
+    # first thing to connect (db-history-normalize) dies with "password
+    # authentication failed", aborting the play long before the OpenBao section
+    # would have re-appended the block. Restore the blocks verbatim; the OpenBao
+    # section later refreshes them from the vault as before (so a rotated
+    # secret still propagates — just after the stack is up, same as day one).
+    - name: "Restore OpenBao secret blocks into the regenerated .env"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} {{ item }}"
+        block: "{{ prev_block }}"
+        create: false
+        mode: '0600'   # blocks carry secrets; match the OpenBao tasks' mode
+      vars:
+        prev_env_text: "{{ prev_env.content | default('') | b64decode }}"
+        prev_block: >-
+          {{ (prev_env_text
+              | regex_search('(?s)# BEGIN ' + item + '\n(.*?)# END ' + item, '\1')
+              | default([''], true) | first).rstrip('\n') }}
+      loop:
+        - TENANT SECRETS
+        - KEYCLOAK SECRETS
+      when:
+        - prev_env.content is defined
+        - ('# BEGIN ' + item) in (prev_env.content | b64decode)
 
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
