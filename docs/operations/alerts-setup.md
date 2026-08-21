@@ -17,6 +17,7 @@ How to make the system tell you it is unwell, before a citizen does.
   - [Host alerts](#host-alerts-cpu-ram-disk)
   - [Service alerts](#service-alerts-crashes-memory-restarts)
   - [Application alerts](#application-alerts-errors-latency-queues)
+  - [Infrastructure alerts](#infrastructure-alerts-database-broker-gateway)
   - [Synthetic alerts](#synthetic-alerts-and-the-dead-mans-switch)
 - [Getting "No Data" right](#getting-no-data-right-the-mistake-everyone-makes)
 - [Shipping alerts as code](#shipping-alerts-as-code-so-they-survive-a-rebuild)
@@ -54,11 +55,19 @@ expected.
     the anonymous role is pinned to **Viewer** in the compose file. A Viewer cannot create
     alert rules, so if you are browsing without logging in, Save will be rejected — log in
     rather than working around it.
-  - **Everyone shares the one `admin` account**, so Grafana cannot record who created,
-    edited or silenced a rule. **Keep your own written change log.** If the instance is
-    reachable from the public internet, ask us to put it behind your VPN or an
-    authenticating proxy — and note that a Viewer can run arbitrary Loki queries, which is
-    why anonymous access is not a safe default here.
+  - **Create named accounts before the desk starts using this — that is your job, not
+    ours.** A fresh deployment holds exactly one account, `admin`, and self-registration is
+    off, so unless you act everyone shares one login and Grafana cannot record who created,
+    edited or silenced a rule. Create a Grafana user for each **L1 and L2** person:
+    **Administration → Users and access → Users → New user** (Grafana 11.4). Set the
+    password on that screen and hand it over directly — **do not use Invite**, because SMTP
+    is not configured here (`smtp.enabled = false`) and the invitation email is never sent.
+    New users are created as **Viewer**: change each one to **Editor**, because a Viewer
+    cannot open **Explore**, which first response and L2 diagnosis both depend on. Keep
+    `admin` for yourself, and keep a written change log for rule edits regardless.
+  - **If the instance is reachable from the public internet**, ask us to put it behind your
+    VPN or an authenticating proxy — and note that a Viewer can run arbitrary Loki queries,
+    which is why anonymous access is not a safe default here.
 - Rules you create in the UI are stored in Grafana's own database inside the
   `grafana_data` Docker volume. They survive restarts and redeployments. They do **not**
   survive `docker compose down -v` — which is one more reason that command appears on the
@@ -78,10 +87,21 @@ datasource **Prometheus** → run:
 up
 ```
 
+A healthy full stack answers with **five** jobs:
+
+| Job | Feeds |
+|---|---|
+| `otel-collector` | JVM metrics from the 15 instrumented Java services, plus browser metrics |
+| `node` | host CPU / RAM / disk — **the host alerts below** |
+| `postgres-exporter` | database internals — the database alerts below |
+| `redpanda` | broker health and consumer lag — the broker alerts below |
+| `kong` | gateway traffic, status codes and latency — the gateway alerts below |
+
 | Result | Meaning |
 |---|---|
-| `job="otel-collector"` **and** `job="node"` | Host metrics available. Skip to the next section. |
-| `job="otel-collector"` only | **No host metrics right now.** The `Node Exporter Full` dashboard will be empty and the host alerts below cannot be created. Two different causes — see below. |
+| `job="node"` present | Host metrics available. Skip to the next section. |
+| `job="node"` missing | **No host metrics right now.** The `Node Exporter Full` dashboard will be empty and the host alerts below cannot be created. Two different causes — see below. |
+| Some other job missing | That exporter is not running on this deployment. Its dashboard will be blank and the matching rules below cannot be created — raise it with us |
 
 **Missing `node` has two causes, and they need different fixes.** Check them in this order,
 because the second is a one-minute fix and the first is a redeploy:
@@ -236,6 +256,11 @@ Notes worth reading:
   maintenance.
 - **`HostMemoryHigh` uses `MemAvailable`, not `MemFree`.** Linux uses free RAM as cache;
   `MemFree` is near zero on a healthy box and would alert constantly.
+- **`HostSwapping` does nothing on a box with no swap.** Several of these deployments have
+  none configured, so `SwapTotal` is `0` and the expression evaluates to `NaN` rather than a
+  number — it will never fire and its preview will look broken. Check with
+  `node_memory_SwapTotal_bytes` before building it; if that returns `0`, skip the rule
+  instead of trying to fix it.
 
 ### Service alerts (crashes, memory, restarts)
 
@@ -305,14 +330,79 @@ Notes:
 - Consider adding **`PgrAnalyticsSlow`** if supervisors complain about the dashboard:
   `histogram_quantile(0.95, sum by (le) (rate(pgr_analytics_query_duration_ms_bucket[5m]))) > 5000`.
 
+### Infrastructure alerts (database, broker, gateway)
+
+These became possible when the database, broker and gateway got their own exporters. They
+cover the failures that used to be invisible until a user reported them — and unlike the
+health checks, they fire while the service is still answering.
+
+*Requires the matching scrape job — check with `up`.* Datasource: **Prometheus**.
+
+**Database** (`job="postgres-exporter"`):
+
+| Rule name | Query | Fires when | Pending | Severity |
+|---|---|---|---|---|
+| **PostgresDown** | `pg_up` | `< 1` | **2m** | critical |
+| **PostgresConnectionsHigh** | `100 * sum(pg_stat_activity_count{datname="egov"}) / on() group_left() pg_settings_max_connections` | `> 80` | **10m** | warning |
+| **PostgresCacheHitLow** | `100 * sum(pg_stat_database_blks_hit{datname="egov"}) / (sum(pg_stat_database_blks_hit{datname="egov"}) + sum(pg_stat_database_blks_read{datname="egov"}))` | `< 95` | **15m** | warning |
+| **PostgresDeadlocks** | `rate(pg_stat_database_deadlocks{datname="egov"}[5m])` | `> 0` | **5m** | warning |
+| **PostgresLongTransaction** | `max(pg_stat_activity_max_tx_duration{datname="egov"})` | `> 300` | **5m** | warning |
+| **PostgresIdleInTransaction** | `sum(pg_stat_activity_count{datname="egov", state="idle in transaction"})` | `> 5` | **15m** | warning |
+
+**Message broker** (`job="redpanda"`):
+
+| Rule name | Query | Fires when | Pending | Severity |
+|---|---|---|---|---|
+| **BrokerDiskLow** | `redpanda_storage_disk_free_space_alert` | `> 0` | **5m** | critical |
+| **BrokerDiskFreePercent** | `100 * redpanda_storage_disk_free_bytes / redpanda_storage_disk_total_bytes` | `< 15` | **15m** | warning |
+| **BrokerPartitionsUnavailable** | `redpanda_cluster_unavailable_partitions` | `> 0` | **5m** | critical |
+| **ConsumerGroupEmpty** | `redpanda_kafka_consumer_group_consumers` | `< 1` | **10m** | critical |
+| **ConsumerLagHigh** | the broker-side lag expression in [reference.md](reference.md#prometheus--the-message-broker-redpanda) | `> 5000` | **15m** | warning |
+
+**Gateway** (`job="kong"`):
+
+| Rule name | Query | Fires when | Pending | Severity |
+|---|---|---|---|---|
+| **KongUpstream5xx** | `sum by (service) (rate(kong_http_requests_total{code=~"5.."}[5m]))` | `> 0.1` | **10m** | warning |
+| **KongUpstreamSlow** | `histogram_quantile(0.95, sum by (le, service) (rate(kong_upstream_latency_ms_bucket[5m])))` | `> 3000` | **15m** | warning |
+| **KongProxySlow** | `histogram_quantile(0.95, sum by (le) (rate(kong_kong_latency_ms_bucket[5m])))` | `> 100` | **10m** | warning |
+| **KongDatastoreUnreachable** | `kong_datastore_reachable` | `< 1` | **5m** | critical |
+
+Notes:
+
+- **`ConsumerGroupEmpty` is the best rule in this section.** Zero consumers attached to a
+  queue means that pipeline has stopped entirely — complaints stop being indexed, or
+  notifications stop being sent — while every service tile stays green. Nothing else catches
+  it.
+- **`BrokerDiskLow` reads the broker's own verdict** rather than a threshold you picked, so
+  it needs no tuning. `0` is OK, `1` is low space, `2` is degraded.
+- **`PostgresCacheHitLow` at 95% is deliberately below the healthy figure** (~99%+ on these
+  deployments). Set it just under what your box actually runs at, after watching for a week.
+- **`KongProxySlow` and `KongUpstreamSlow` are the same shape but mean opposite things.**
+  Proxy-slow says the gateway is at fault; upstream-slow says the service behind it is.
+  Routing them to the same channel is fine — the rule name carries the distinction.
+- **`PostgresDown` and the Gatus PostgreSQL check overlap.** Keep whichever your team will
+  act on; do not run both into the same channel.
+- **These thresholds are starting points.** Run each query in Explore over a normal week
+  before committing to a number.
+
 ### Synthetic alerts and the dead-man's switch
 
-**Endpoint checks.** The Gatus health dashboard at `/status/` already probes up to 57 endpoints
-every 30 seconds, but it does not notify anyone by default. Turning on **Gatus's own
-alerting** gives you "service X is down" notifications without any Grafana rules at all —
-it is the cheapest coverage you can add, and it is the only thing that watches the
-non-Java containers (Postgres, Redis, Kafka, Kong, Elasticsearch). See
+**Endpoint checks — do this before anything on this page.** The Gatus health dashboard at
+`/status/` probes up to 57 endpoints every 30 seconds. **Alerting on those checks already
+ships, already has every endpoint opted in, and already has sensible thresholds** — 3
+consecutive failures (~90 seconds) before it fires, 2 passes before it says recovered, and
+recovery messages on. It is off only because no webhook URL is set.
+
+That means "service X is down" notifications across the whole catalogue cost you **one
+value**, not one rule at a time — and Gatus is the only thing that watches **Redis,
+Elasticsearch, MinIO and nginx**, which still have no metrics for a Grafana rule to read. See
 [alert-channels.md § Gatus](alert-channels.md#option-b--gatus-native-alerting-endpoint-down).
+
+Everything in the catalogue above stays worth building afterwards: Gatus tells you a service
+stopped answering, Grafana tells you about the hour before that — the disk filling, the heap
+creeping, the lag climbing. **Do not write Grafana rules that duplicate Gatus's endpoint
+checks.**
 
 **Who watches the watcher?** If the whole box dies, Grafana dies with it and you get
 silence — which looks exactly like "everything is fine". The fix is a **dead-man's switch**:
@@ -436,11 +526,13 @@ them yourself — either works.
 An alert nobody reads is worse than no alert, because it creates the *belief* that something
 is watching. Rules that hold up in practice:
 
-1. **Start with five rules, not thirty.** In order of value:
-   `HostDiskSpaceCritical`, `ServiceStoppedReporting`, `ServiceOutOfMemory`,
-   `HostMemoryHigh`, `ServiceRestartLoop`. Live with them for two weeks. Add more only when
-   an incident happens that they did not catch — that incident tells you exactly which rule
-   was missing.
+1. **Turn on Gatus alerting first** — one webhook URL, and it covers every health check
+   ([alert-channels.md](alert-channels.md#option-b--gatus-native-alerting-endpoint-down)).
+   Then **start with five Grafana rules, not thirty.** In order of value:
+   `HostDiskSpaceCritical`, `ConsumerGroupEmpty`, `ServiceOutOfMemory`, `HostMemoryHigh`,
+   `ServiceRestartLoop`. Live with them for two weeks. Add more only when an incident happens
+   that they did not catch — that incident tells you exactly which rule was missing.
+   (`ServiceStoppedReporting` is the sixth; Gatus already covers most of what it catches.)
 2. **Every `critical` must be actionable at 3am.** If the honest response is "look at it
    tomorrow", it is a `warning`. Route the two severities to different places
    ([alert-channels.md](alert-channels.md)).

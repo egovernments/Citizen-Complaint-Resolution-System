@@ -66,7 +66,10 @@ this and not something that looks like it, the **resolution**, who **applies** i
 
 | Symptom | Confirm it's this | Resolution | Applied by |
 |---|---|---|---|
-| Complaints are filed successfully but never appear in the inbox | `kafka_consumer_records_lag_max` climbing for `egov-indexer`; complaint exists via API | Indexing pipeline stalled — restart `egov-indexer`, then confirm lag drains | L2 |
+| Complaints are filed successfully but never appear in the inbox | **`DIGIT Kafka Consumer Lag`** shows lag climbing for `egov-indexer` and not draining; complaint exists via API | Indexing pipeline stalled — restart `egov-indexer`, then watch the same panel until lag drains. If "Consumers per group" is `0`, nothing is attached to the queue at all | L2 |
+| Nothing is being indexed, notified or persisted — every pipeline at once | `redpanda_storage_disk_free_space_alert` above `0`, or **`Redpanda (Kafka) Broker` → storage** row showing little free | The broker is out of disk and has stopped accepting messages. Reclaim host disk first ([l2-diagnosis](l2-diagnosis.md#container-logs--the-usual-reason-the-disk-fills)); the broker recovers on its own once there is room | L2 |
+| Everything is slow, database tiles green | **`PostgreSQL Database`**: Cache Hit Rate falling below ~99%, or Active sessions near Max Connections, or a non-draining Lock tables count | The database is the bottleneck. Which of the three it is decides the fix — see [l2-diagnosis](l2-diagnosis.md#slow-because-of-the-database). A restart clears the symptom, not the cause | L2 |
+| One API returns 502/504, the rest are fine | **`Kong API Gateway` → Latencies**: Upstream time high while Kong Proxy Latency stays flat | The gateway is fine; the service behind it is slow or dead. Go to that service — the gateway is not the problem | L2 |
 | Inbox unavailable immediately after a from-scratch deployment | Only on a first deploy; `digit-inbox` exited | Known start-order race — `docker start digit-inbox`. Does not recur on later deploys | L2 |
 | A service is stuck restarting | `Started .+Application in` repeating for one service | Read that service's log from the *first* boot attempt. If it's an OOM, the heap needs raising — that's a deployment change, escalate | L2 |
 | Everything slow, nothing red | `db_client_connections_pending_requests` above 0 | Connection pool exhausted. Identify the slow query or the leak; a restart clears the symptom, not the cause | L2 |
@@ -81,8 +84,13 @@ Worth knowing so nobody spends an hour on them.
 
 | Looks like | Actually |
 |---|---|
+| A whole Grafana dashboard is missing, not just empty — usually **DIGIT — Logs (Loki)** | This deployment runs a reduced **observability level**, so Loki (and possibly Tempo) was never deployed. A deployment decision, not a fault — see [README](README.md#how-much-monitoring-this-deployment-runs) |
+| The **PostgreSQL**, **Redpanda** or **Kong** dashboard is a wall of unfamiliar jargon | Those three are imported from the upstream projects, so most of their panels are for tuning that software, not for incidents. [dashboards.md](dashboards.md#dashboards-imported-from-the-community) names the few panels that matter — ignoring the rest is correct, not lazy |
+| A query returns "No data" | On error, deadlock, OOM and lag queries that is the **healthy** answer. To tell "zero" from "not collected", run `up` — it names the five collectors that should be reporting |
+| A p95 latency panel shows `NaN` | No requests arrived in the window being measured, so there is no distribution to take a percentile of. Widen the time range |
 | `Node Exporter Full` dashboard is completely empty | Either `node-exporter` isn't installed (deployments made before 2026-07-22), **or** it is running and Prometheus simply hasn't re-read its config. Not an incident either way — L2 tells them apart in one minute, and the second is fixed by a config reload with no downtime. See [alerts-setup.md](alerts-setup.md#prerequisite--turn-on-host-metrics) |
 | A log search for "OutOfMemoryError" returns a hit from `grafana` or `loki` | Those tools log your search text back into the log stream. Filter them out |
+| **"OOM events (current range)" shows a large number, but nothing has crashed** | The same echo, and this panel does **not** filter it out. Open "Incidents — OOM / heap-space errors" below it: if every line is from `grafana` or `loki`, the real count is zero. Investigating an OOM makes this number go **up**, so it climbs fastest exactly when someone is looking at it. Verified on a live deployment: 116 events, all echo, no real crash |
 | Elasticsearch logs mention "out of memory" | Routine circuit-breaker messages, not a crash |
 | Every service restarts at the same time overnight | A scheduled redeploy, if this deployment has one. Confirm the window before treating it as an incident |
 | PgBouncer green while PostgreSQL is red | Both are checked deliberately — the pooler accepts connections to a database that isn't answering. Treat as Infrastructure red |
