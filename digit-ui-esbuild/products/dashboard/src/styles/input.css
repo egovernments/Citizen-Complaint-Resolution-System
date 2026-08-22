@@ -390,6 +390,12 @@
   .dashboard-header-controls {
     @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2;
   }
+
+  .dashboard-footer-img {
+    height: 1.1em;
+    width: auto;
+    cursor: pointer;
+  }
   .dashboard-header-controls .dashboard-header-btn {
     @apply tw-box-border tw-m-0 tw-inline-flex tw-h-8 tw-min-h-8 tw-max-h-8 tw-shrink-0 tw-items-center tw-justify-center tw-gap-1.5 tw-rounded-sm tw-border tw-border-solid tw-border-border tw-bg-surface tw-px-2.5 tw-py-0 tw-text-[12px] tw-font-medium tw-leading-none tw-text-foreground;
     font-family: inherit;
