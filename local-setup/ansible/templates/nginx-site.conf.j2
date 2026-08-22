@@ -76,10 +76,27 @@ server {
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     try_files $uri =404;
   }
+  # digit-ui-v2 reads window.globalConfigs.getConfig('CORE_MOBILE_CONFIGS')
+  # (countryCode + mobileNumberRegex) at runtime, but its Vite index.html ships
+  # no <script> to define window.globalConfigs — so without this it falls back to
+  # a hardcoded +254/Kenya default. Inject the SAME globalConfigs.js the legacy
+  # /digit-ui/ uses (rendered from core_mobile_configs, carrying the tenant's
+  # +91), exactly as the /digit-ui/ block does below. Served via the exact-match
+  # location so it wins over the /citizen prefix. add_header does NOT inherit
+  # from the sibling /citizen block, so the no-cache header has to be repeated
+  # here (same as /digit-ui/globalConfigs.js) — otherwise the browser applies
+  # heuristic freshness and keeps serving a stale tenant config after a
+  # redeploy or a core_mobile_configs change.
+  location = /citizen/globalConfigs.js {
+    alias {{ digit_dir }}/nginx/globalConfigs.js;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+  }
   location /citizen {
     alias /var/www/citizen/;
     try_files $uri $uri/ /citizen/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    sub_filter '</head>' '<script src="/citizen/globalConfigs.js"></script></head>';
+    sub_filter_once on;
   }
 
 {% endif %}
