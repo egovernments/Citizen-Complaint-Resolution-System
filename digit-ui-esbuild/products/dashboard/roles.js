@@ -1,48 +1,48 @@
-// FALLBACK roles allowed to open the supervisor dashboard, used whenever the
-// dss.DashboardConfig MDMS record is absent or unreadable (fresh tenants,
-// MDMS down, schema not registered) so existing deployments keep working
-// unchanged. Deployments with a custom role taxonomy (e.g. CMS_* roles)
-// override this via MDMS instead of a rebuild — see useDashboardAccess below.
-import { useDashboardConfig } from "./useDashboardConfig";
-//
-// Checked tenant-agnostically (role CODE only, via Digit.UserService.hasAccess)
-// because employee roles live at the state root tenant ("ke") while the working
-// tenant may be a city tenant — Digit.Utils.didEmployeeHasAtleastOneRole filters
-// by current tenant and would wrongly hide the dashboard there.
-export const DASHBOARD_ROLES = ["SUPERVISOR", "PGR_SUPERVISOR", "GRO", "DGRO", "PGR_LME", "PGR_ADMIN", "SUPERUSER"];
+import { useEffect, useState } from "react";
+import { fetchAccess } from "./src/services/analyticsService";
+import { getTenantId } from "./src/services/authService";
 
 /**
- * useDashboardAccess — resolves the dashboard's nav/route role gate from MDMS.
+ * useDashboardAccess — resolves the dashboard's nav/route gate from
+ * egov-accesscontrol via POST /pgr-services/v2/analytics/_access.
  *
- * Master: dss.DashboardConfig at the STATE ROOT tenant (same owning tenant as
- * the dss.KpiDefinition / dss.DashboardPack catalog), single record:
- *   { "id": "default", "allowedRoles": ["SUPERVISOR", ...] }
+ * PGR resolves the caller's roles server-side (the same RequestInfo every
+ * other analytics call already sends) and asks egov-accesscontrol whether
+ * they hold the base analytics capability — the frontend sends no role list,
+ * parses no policy, and keeps no allowlist of its own. This replaces the
+ * former dss.DashboardConfig `allowedRoles` MDMS field and the hardcoded
+ * DASHBOARD_ROLES fallback list, both retired by issue #1050.
  *
- * Resolution:
- *   - record present with a non-empty allowedRoles array → those role codes
- *   - record absent / fetch error / malformed shape → DASHBOARD_ROLES fallback
- *     (silent — a tenant that never seeds the master behaves exactly as before)
- *
- * Fetched through the same MDMS v1-compat search the rest of the UI uses
- * (Digit.Hooks.useCustomMDMS → /egov-mdms-service/v1/_search; mdms-v2 serves it
- * as schemaCode "dss.DashboardConfig"). react-query caches it for the session
- * (staleTime/cacheTime Infinity), so the gate costs one request per login, and
- * both consumers (route guard + home card) share the one cache entry.
+ * Fails CLOSED: a network error, a non-2xx response, or a malformed body all
+ * resolve to `allowed: false` — unlike the old MDMS-backed gate, there is no
+ * client-side fallback list to widen access when the call can't be resolved.
  *
  * This is deliberately NOT a security boundary: the data plane is enforced
- * server-side by the analytics catalog + scope RBAC. This hook only decides
- * whether the nav surfaces (home card, /employee/dashboard route) show.
+ * server-side by the analytics catalog + capability checks. This hook only
+ * decides whether the nav surfaces (home card, /employee/dashboard route)
+ * show.
  *
  * @returns {{ allowed: boolean, loading: boolean }} — consumers must render
  *   nothing while `loading` so the gate never flashes a redirect/card.
  */
 export const useDashboardAccess = () => {
-  // Delegates to the shared session-cached DashboardConfig loader (one fetch,
-  // one react-query cache entry — shape guards live there).
-  const { config, loading } = useDashboardConfig();
-  const configured = Array.isArray(config?.allowedRoles)
-    ? config.allowedRoles.filter((role) => typeof role === "string" && role)
-    : [];
-  const roles = configured.length ? configured : DASHBOARD_ROLES;
-  return { allowed: !!Digit.UserService.hasAccess(roles), loading };
+  const [state, setState] = useState({ allowed: false, loading: true });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAccess(getTenantId())
+      .then((res) => {
+        if (cancelled) return;
+        setState({ allowed: res?.allowed === true, loading: false });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setState({ allowed: false, loading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return state;
 };

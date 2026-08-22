@@ -2770,5 +2770,369 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1791
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1792
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1793
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1794
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1795
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1796
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1797
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1798
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2640,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1799
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1800
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1801
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1802
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1803
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1804
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1805
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1806
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2641,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1807
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1808
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1809
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1810
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1811
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1812
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1813
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1814
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2642,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1815
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1816
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1817
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1818
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1819
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1820
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1821
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1822
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2643,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1823
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1824
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1825
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1826
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1827
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1828
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1829
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1830
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2644,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1831
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2645,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1832
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2645,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1833
+  },
+  {
+    "rolecode": "LOC_ADMIN",
+    "actionid": 2645,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1834
+  },
+  {
+    "rolecode": "PGR_SUPERVISOR",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1835
+  },
+  {
+    "rolecode": "PGR_ADMIN",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1836
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1837
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1838
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2647,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1839
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2647,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1840
+  },
+  {
+    "rolecode": "TICKET_REPORT_VIEWER",
+    "actionid": 2648,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1841
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1842
+  },
+  {
+    "rolecode": "HRMS_ADMIN",
+    "actionid": 2646,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1843
   }
 ]

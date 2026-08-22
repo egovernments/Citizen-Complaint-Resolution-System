@@ -296,18 +296,6 @@
         }
       }
     },
-    "rbac": {
-      "type": "object",
-      "properties": {
-        "visibleTo": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Role codes that can see this KPI; empty = all authenticated roles. Officer-PII KPIs must list specific roles here."
-        }
-      }
-    },
     "query": {
       "type": [
         "object",
@@ -351,6 +339,14 @@
     "version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "requiredActionUrl": {
+      "type": "string",
+      "description": "The egov-accesscontrol action URL a caller must be granted to see this KPI (e.g. /pgr-services/v2/analytics/_query, /pgr-services/v2/analytics/capabilities/officer). Absent means no authenticated caller reaches it."
+    },
+    "public": {
+      "type": "boolean",
+      "description": "Additive anonymous-access marker, not a ceiling: true also opts the tile into the credential-free public dashboard. Absent/false = not public."
     }
   }
 }

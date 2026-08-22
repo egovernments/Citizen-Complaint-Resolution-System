@@ -32,18 +32,21 @@ public class AnalyticsControllerPacksTest {
     @Mock private AnalyticsService service;
     @Mock private KpiCatalogService kpiCatalogService;
     @Mock private PGRConfiguration config;
+    @Mock private AnalyticsCapabilityService capabilityService;
 
     private AnalyticsController controller;
 
     @BeforeEach
     public void setUp() {
-        controller = new AnalyticsController(service, kpiCatalogService, new ObjectMapper(), config);
+        controller = new AnalyticsController(service, kpiCatalogService, capabilityService,
+                new ObjectMapper(), config);
+        when(capabilityService.resolve(any(), anyString())).thenReturn(AnalyticsCapabilityFixtures.full());
         when(config.getStateLevelTenantIdLength()).thenReturn(1);
     }
 
     @Test
     public void noMatchingPackReturnsNullRecordCountAndNeverCounts() {
-        // anonymous caller (no RequestInfo -> PUBLIC floor) on a tenant with no public pack
+        // a caller holding the packs capability, on a tenant that has authored no pack for it
         when(kpiCatalogService.getVisibleDefs(eq("ke.othercity"), any())).thenReturn(Collections.emptyList());
         when(kpiCatalogService.getBestPack(eq("ke.othercity"), any(), any())).thenReturn(Optional.empty());
 
@@ -62,7 +65,7 @@ public class AnalyticsControllerPacksTest {
     public void matchingPackStillGetsTheTenantCorpusCount() {
         DashboardPack pack = new DashboardPack();
         pack.setId("supervisor-pack");
-        pack.setRoles(Collections.singletonList("PGR_ADMIN"));
+        pack.setRequiredActionUrl(AnalyticsCapabilities.QUERY);
         pack.setTiles(Collections.emptyList());
         when(kpiCatalogService.getVisibleDefs(eq("ke.bomet"), any())).thenReturn(Collections.emptyList());
         when(kpiCatalogService.getBestPack(eq("ke.bomet"), any(), any())).thenReturn(Optional.of(pack));
@@ -75,6 +78,8 @@ public class AnalyticsControllerPacksTest {
         assertEquals(200, resp.getStatusCodeValue());
         assertEquals(1234L, resp.getBody().get("recordCount"));
         assertEquals("supervisor-pack", resp.getBody().get("packId"));
+        // persona is an OTEL tag: the capability that selected the pack, short name not full URL.
+        assertEquals("_query", resp.getBody().get("persona"));
         assertEquals(AnalyticsService.MAX_BATCH_QUERIES, resp.getBody().get("maxBatchQueries"));
     }
 }
