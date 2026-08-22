@@ -1,0 +1,44 @@
+name: africa
+modeled_on: kenya
+default: true
+
+# user_validation rules passed to tenant_bootstrap. Source tenant
+# (pg) ships no UserValidation so this is synthesized server-side.
+user_validation:
+  - field_type: mobile
+    pattern: '^[17][0-9]{8}$'
+    min_length: 9
+    max_length: 9
+    error_message: 'Enter a 9-digit Kenya mobile starting with 1 or 7'
+
+mobile_display_prefix: '+254'
+
+boundary_hierarchy:
+  hierarchy_type: ADMIN
+  levels: [Country, County, SubCounty, Ward, Locality]
+  complaint_filing_level: Ward
+
+# Boundary entities applied at city tenant via boundary_create.
+# Topologically sorted by the orchestrator (parent-first).
+boundary_entities:
+  - { code: COUNTY_NAIROBI, name: Nairobi County, type: County, parent: null }
+  - { code: SUBCOUNTY_WESTLANDS, name: Westlands, type: SubCounty, parent: COUNTY_NAIROBI }
+  - { code: WARD_WESTLANDS, name: Westlands Ward, type: Ward, parent: SUBCOUNTY_WESTLANDS }
+  - { code: LOC_WESTLANDS_1, name: Parklands, type: Locality, parent: WARD_WESTLANDS }
+
+# Per PREFLIGHT.md, tenant_bootstrap copies the source tenant's
+# ServiceDefs. complaint_types here adds Africa-specific types
+# beyond the source baseline. The orchestrator's mdms_search probe
+# makes each entry idempotent (skipped if already present).
+complaint_types:
+  - { code: GarbageNotCollected, name: Garbage not collected, department: DEPT_3, sla_hours: 48 }
+  - { code: Pothole, name: Pothole on road, department: DEPT_2, sla_hours: 72 }
+  - { code: StreetlightNotWorking, name: Streetlight not working, department: DEPT_1, sla_hours: 24 }
+
+# Localization rows are LOCALE DELTAS — tenant_bootstrap already
+# copies the source tenant's en_IN baseline (1253 rows confirmed on
+# mz/rainmaker-pgr per PREFLIGHT.md). Only Swahili deltas here.
+localizations:
+  - { locale: sw_KE, module: rainmaker-common, code: CS_PGR_LOGIN, message: Ingia }
+  - { locale: sw_KE, module: rainmaker-common, code: CS_PGR_LOGOUT, message: Toka }
+  - { locale: sw_KE, module: rainmaker-pgr, code: SERVICEDEFS.GARBAGENOTCOLLECTED, message: 'Takataka hazijachukuliwa' }
