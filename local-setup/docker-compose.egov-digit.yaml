@@ -602,7 +602,10 @@ services:
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
-      # Check Spring Boot health - Flyway runs before app context starts, so health implies migrations done
+      # egovio/mdms-v2:maven-jdk21-f3a7c13 is the standard Alpine/Temurin build (real shell +
+      # wget) — unlike the earlier mdms-count-api-3ac4f8e distroless build, this image can
+      # actually run a CMD-SHELL check. Flyway runs before app context starts, so health implies
+      # migrations done.
       test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 10s
@@ -760,7 +763,7 @@ services:
     # includes the Digit-Core#1044 fixes (tenant-aware encryption,
     # SafeHtmlValidator/CCRS#771, NPE fix) previously carried via the
     # :mobilevalidation-jdk8 preview pin.
-    image: egovio/egov-user:2.12-87e13fe
+    image: egovio/egov-user:2.12-68f707e
     depends_on:
       pgbouncer:
         condition: service_healthy
