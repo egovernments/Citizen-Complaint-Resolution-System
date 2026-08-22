@@ -1,0 +1,97 @@
+@startuml workflow-notification-flow
+!theme plain
+title PGR Notification Dispatch via Workflow Extension Service (MOZ_007)
+autonumber
+
+actor       "Citizen /\nEmployee"          as User
+participant "pgr-services"                  as PGR
+participant "egov-workflow-v2\n(Digit-Core)" as WF
+participant "workflow-\nextension-service"  as WFExt
+database    "MDMS"                          as MDMS
+queue       "complaints.\ndomain.events\n(Kafka)" as Kafka
+participant "novu-bridge"                   as Novu
+participant "egov-config-\nservice"         as Config
+participant "user-preferences\nservice"     as Prefs
+participant "Novu API\n(SMS / WhatsApp /\nemail provider)" as Provider
+
+== 1. Inbound action on a complaint ==
+
+User -> PGR : POST /pgr-services/v2/request/_update\n(serviceRequest, workflow.action=RESOLVE)
+activate PGR
+
+PGR -> PGR : validate request\n(ServiceRequestValidator)
+
+== 2. Workflow transition ==
+
+PGR -> WF : POST /egov-wf/process/_transition\n(tenantId=mz, businessId=PGR,\n action=RESOLVE, assignes=[…])
+activate WF
+
+alt BusinessService not in WF cache
+    WF -> MDMS : POST /mdms-v2/v1/_search\n(Workflow.BusinessService)
+    MDMS --> WF : BusinessService\n(states[], actions[], roles[])
+end
+
+WF -> WF : validate transition\n+ role gating against BusinessService
+
+WF --> PGR : ProcessInstance\n{state=RESOLVED,\n assignes[], action=RESOLVE}
+deactivate WF
+
+PGR -> PGR : enrich Service\n(applicationStatus=RESOLVED,\n fromState=PENDINGATLME)
+
+== 3. Resolve audience via workflow extension ==
+
+PGR -> WFExt : POST /workflow-extension/v1/extension/_search\n(tenantId=mz, businessService=PGR)
+activate WFExt
+
+alt extension not in pgr-side TTL cache **AND** not in WFExt cache
+    WFExt -> MDMS : POST /mdms-v2/v1/_search\n(Workflow.BusinessServiceExtension)
+    MDMS --> WFExt : BusinessServiceExtension\n(transitions[])
+end
+
+WFExt --> PGR : BusinessServiceExtension\n(transitions[])
+deactivate WFExt
+
+note over PGR
+  Locate transition matching
+  (fromState=PENDINGATLME, action=RESOLVE):
+
+    notifyRoles = [CITIZEN, ASSIGNEE]
+
+  No template / channel info here —
+  those are novu-bridge's job.
+end note
+
+PGR -> PGR : resolve each role to actual identity\n(CITIZEN ⇒ service.accountId,\n ASSIGNEE ⇒ ProcessInstance.assignes[])\nbuild stakeholders[]
+
+== 4. Publish domain event ==
+
+PGR -> Kafka : produce ComplaintsDomainEvent\n{eventName=COMPLAINTS.WORKFLOW.RESOLVE,\n tenantId, entityId, workflow,\n stakeholders[], data, context}
+
+PGR --> User : 200 OK\n(serviceRequest with enriched workflow)
+deactivate PGR
+
+== 5. Asynchronous downstream dispatch (per stakeholder × channel) ==
+
+Kafka -> Novu : consume ComplaintsDomainEvent
+activate Novu
+
+loop for each stakeholder
+    Novu -> Prefs : GET preferred channel(s)\n(userId, tenantId)
+    Prefs --> Novu : [SMS, WHATSAPP, …]
+
+    loop for each enabled channel
+        Novu -> Config : POST /config/v1/entry/_resolve\n(configCode=NOTIF_TEMPLATE_MAP,\n selectors={eventName, channel, locale, tenantId})
+        activate Config
+        Config --> Novu : { templateKey, contentSid,\n  paramOrder[], requiredVars[] }
+        deactivate Config
+
+        Novu -> Novu : validate required vars\nagainst event.data
+
+        Novu -> Provider : trigger(templateKey,\n subscriberId, recipientPhone,\n contentVariables)
+        Provider --> Novu : message id / status
+    end
+end
+
+deactivate Novu
+
+@enduml
