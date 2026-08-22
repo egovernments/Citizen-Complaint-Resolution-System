@@ -71,8 +71,14 @@ public class EscalationScheduler {
         List<Long> defaultSlaByLevel = getDefaultSlaByLevel(escalationConfig);
         Map<String, List<Long>> overrides = getOverrides(escalationConfig);
 
-        // Search for complaints in PENDINGATLME and PENDINGFORASSIGNMENT
-        Set<String> statuses = new HashSet<>(Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT));
+        // Search for complaints in the configured applicationStatus values
+        // (pgr.escalation.states) — deployments customize this to match
+        // whichever states in their BusinessService workflow carry a named
+        // assignee and have an ESCALATE action wired on them.
+        Set<String> statuses = Arrays.stream(config.getEscalationStates().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toSet());
 
         // Get all tenants — for now, use the state-level tenant from config
         // In a multi-tenant setup, this would iterate over all tenants
