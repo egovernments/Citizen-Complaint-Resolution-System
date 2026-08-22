@@ -491,3 +491,46 @@ test("v3 backfill: no primary in record → nothing invented", () => {
     assert.equal(props["--color-primary-2"], undefined);
   } finally { restore(); }
 });
+
+// ── v3 full-shape records (issue #1035 follow-up) ───────────────────────────
+// There is no committed preset catalog — MDMS (a tenant's own
+// common-masters.ThemeConfig row, set per-deployment via the Configurator)
+// is the single source of truth for real theme colors; see
+// local-setup/ansible/README.md's "Set the OOTB theme" section. These
+// fixtures are synthetic — they exist only to exercise applyTheme() against
+// a FULL v3 record (every role populated, not just the handful the other
+// tests above set), including the
+// "button-primary-bg-default deliberately differs from primary-main"
+// contrast-exception shape a real record can have.
+const SYNTHETIC_V3_THEME = {
+  version: "3",
+  colors: {
+    "primary-1": "#204060",
+    "primary-2": "#3070A0",
+    error: "#B00020",
+    "button-primary-bg-default": "#204060",
+    "button-primary-text": "#FFFFFF",
+    "header-bg": "#204060",
+    "sidebar-bg": "#204060",
+    "chart-1": "#3070A0",
+    "chart-2": "#B00020",
+    "chart-3": "#2E7D32",
+    "chart-4": "#F9A825",
+    "chart-5": "#EF6C00",
+  },
+};
+
+test("v3 full-shape record: applies every populated role, including a button color that deliberately differs from primary-main", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme(SYNTHETIC_V3_THEME);
+    assert.equal(props["--color-button-primary-bg-default"], "#204060");
+    assert.equal(props["--color-primary-2"], "#3070A0");
+    assert.equal(props["--color-error"], "#B00020");
+    assert.equal(props["--color-digitv2-chart-2"], "#B00020");
+    assert.equal(props["--color-header-bg"], "#204060");
+    assert.equal(props["--color-sidebar-bg"], "#204060");
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
+  } finally { restore(); }
+});

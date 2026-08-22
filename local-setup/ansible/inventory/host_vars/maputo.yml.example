@@ -62,6 +62,15 @@ asset_s3_bucket: "maputo-egov-assets"
 footer_logo_url: ""
 footer_bw_logo_url: ""
 
+# ── OOTB theme (issue #1035) ──
+# common-masters.ThemeConfig's SCHEMA registers automatically on every
+# deploy (default-data-handler's standard schema bootstrap — no ansible
+# step needed). The theme DATA is not: MDMS is the single source of truth
+# for colors, so there is no committed preset to opt into here. Set
+# Maputo's theme once, after the first deploy, via the Configurator's
+# Theme Config screen — see local-setup/ansible/README.md's "Set the OOTB
+# theme" section.
+
 digit_ui_mode: container
 # Build digit-ui from source at deploy (files/digit-ui-build.sh: clone +
 # npm run build) and mount the bundle over the container web root, instead of

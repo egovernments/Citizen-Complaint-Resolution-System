@@ -521,6 +521,36 @@ enable_search_stack: true   # ~2 GB RAM extra
 The playbook resolves this into `docker compose --profile search …`
 flags. Setting back to `false` sweeps the running search containers.
 
+### Set the OOTB theme (issue #1035)
+
+MDMS (`common-masters.ThemeConfig`) is the single source of truth for theme
+colors — full stop. There is no committed preset file anywhere in this repo
+(not in the frontend app, not in ansible) for the deploy to seed from; the
+frontend only ever reads MDMS at runtime.
+
+The schema registers itself automatically — `common-masters.ThemeConfig` is
+part of default-data-handler's standard `common-masters.json` schema
+bundle, so every tenant gets it on first deploy with no ansible step
+required (same as any other `common-masters.*` schema).
+
+Setting the actual colors is a one-time, post-deploy step through the
+Configurator, which has a dedicated tabbed editor with a live preview for
+this schema (the same editor on both Create and Edit — Theme Config →
+Create):
+
+1. Deploy the tenant as usual (`./deploy.sh <tenant>`).
+2. Log into the Configurator, go to **Theme Config → Create**.
+3. Fill in `code` / `name`, set `version: "3"`, and fill in the colors —
+   hover any field to see which part of the live preview it drives.
+4. Save, then toggle it active (and deactivate whichever theme was
+   previously active — MDMS does not enforce exclusivity itself; see
+   `digitInitData` in `packages/libraries/src/services/molecules/Store/service.js`,
+   which just takes whichever active row it's handed first).
+
+There's no separate "preset name" to reference — reuse an existing theme's
+values as a starting point by opening it in the Configurator and copying
+the fields you want, rather than by pointing at a repo file.
+
 ### Just check that everything's wired up correctly
 
 ```bash
