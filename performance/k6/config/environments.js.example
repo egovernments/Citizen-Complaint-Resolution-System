@@ -8,6 +8,13 @@ export const ENVS = {
     stateTenant: 'statea',
     username: __ENV.DIGIT_USERNAME || 'ADMIN',
     password: __ENV.DIGIT_PASSWORD || 'eGov@123',
+    // Optional: override PGR ServiceDefs used in load tests.
+    // Omit to use all 33 default service codes (requires full-dump.sql data).
+    // For minimal/k8s deployments with only default-data-handler bootstrap data:
+    // serviceCodes: [
+    //   'StreetLightNotWorking', 'NoStreetlight', 'GarbageNeedsTobeCleared',
+    //   'BurningOfGarbage', 'DamagedGarbageBin', 'NonSweepingOfRoad',
+    // ],
   },
   prod: {
     baseUrl: 'http://<PROD_IP>:18000',
@@ -16,6 +23,39 @@ export const ENVS = {
     username: __ENV.DIGIT_USERNAME || 'ADMIN',
     password: __ENV.DIGIT_PASSWORD || 'eGov@123',
   },
+
+  // Example of a real deployment behind an ingress rather than the
+  // docker-compose gateway port. Note that PGR workflow and
+  // RAINMAKER-PGR.ComplaintHierarchy may both resolve at the STATE tenant,
+  // in which case `tenant` must be the state code, not the city.
+  // deployment: {
+  //   baseUrl: 'https://<HOST>',        // no :18000 behind an ingress
+  //   tenant: '<state>',
+  //   stateTenant: '<state>',
+  //   username: __ENV.DIGIT_USERNAME || '<EMPLOYEE_USERNAME>',
+  //   password: __ENV.DIGIT_PASSWORD || '<PASSWORD>',
+  //
+  //   // The employee must hold roles for every workflow transition the
+  //   // lifecycle drives. On stock PGR: ASSIGN needs GRO or PGR_VIEWER,
+  //   // RESOLVE needs PGR_LME or PGR_VIEWER. PGR_VIEWER covers both.
+  //   // Creating complaints additionally needs CSR.
+  //
+  //   // Restrict to complaint codes whose department actually has active
+  //   // employees, otherwise ASSIGN auto-routing has nobody to route to.
+  //   serviceCodes: ['<code>', ...],
+  //
+  //   // Real boundary codes for the deployment. The stock 'JLC477' only
+  //   // exists in full-dump.sql seed data; PGR validates locality against
+  //   // the boundary service. Rotating spreads writes across wards.
+  //   localities: ['<BOUNDARY_CODE>', ...],
+  //   city: '<City Name>',
+  //
+  //   // Optional: file every complaint as one pre-existing citizen instead
+  //   // of fabricating 100 new users. Useful against shared or live
+  //   // environments where junk user records are undesirable.
+  //   citizenPhone: '<10-digit>',
+  //   citizenName: '<name>',
+  // },
 };
 
 export function getEnv() {

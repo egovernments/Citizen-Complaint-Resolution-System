@@ -60,6 +60,7 @@ CPU limits are applied to running containers via `docker update` (no restart nee
 |---------|-------|------|
 | Dev | 8 vCPU, 16 GB RAM (AWS EC2) | Constrained-resource testing |
 | Prod | 16 vCPU, 32 GB RAM (AWS EC2) | Full-scale testing, 1M record DB |
+| Bomet | 16 vCPU, 30 GB RAM (bare metal) | Live production deployment, validated Aug 2026 |
 
 ## Executive Summary
 
@@ -104,6 +105,72 @@ At low record counts, dev and prod perform nearly identically — the workload i
 | 400 | - | failures start |
 
 **VU ceilings:** Dev ~250, Prod ~300. Failures at the ceiling are caused by connection exhaustion and PgBouncer timeouts, not CPU.
+
+## Live Deployment Validation (Bomet, August 2026)
+
+The March 2026 results above were produced against dedicated test machines with a
+synthetic `statea.citya` dataset. In August 2026 the same harness was run against
+**Bomet County's live production deployment** to confirm the findings hold on a real
+installation carrying real data and real daily traffic.
+
+### Methodology Differences
+
+Two things differ from the March runs and must be read alongside the numbers:
+
+1. **k6 ran from a remote control machine over the public internet**, not on-host over
+   an SSH tunnel. Measured RTT to the deployment was **~185ms**, and that is included in
+   every `http_req_duration` figure below. Server-side latency is roughly the reported
+   value minus 185ms. Throughput and error rates are unaffected by this offset.
+2. **The database was not empty.** The deployment held ~2,225 existing complaints and
+   was serving 20-100 real complaints/day throughout the test window. Tests were run
+   at ~00:47-01:15 EAT to minimise overlap with real users, and all test data was
+   removed afterwards, verified back to the exact pre-test row count.
+
+### Results
+
+| Test | Transactions | Throughput | p95 Latency* | Success | Failures |
+|------|-------------|-----------|-------------|---------|----------|
+| ramp-2vu | 94 | 0.154/s | 423ms | 100% | 0% |
+| ramp-10vu | 438 | 0.730/s | 407ms | 100% | 0% |
+| ramp-50vu | 2,421 | 3.332/s | 511ms | 100% | 0% |
+
+\* includes ~185ms of network RTT; subtract for server-side latency.
+
+**No threshold was breached at any level, and not a single HTTP request failed across
+all three runs (4,561 requests total).**
+
+### Observations
+
+- **Throughput scales near-linearly.** 2 to 10 VU yielded 4.74x for 5x the load (95%
+  efficiency); 10 to 50 VU yielded 4.56x (91%). No knee in the curve up to 50 VU.
+- **Latency is essentially flat under load.** p95 moved 423 to 511ms across a 25x load
+  increase — about +21%, most of which is queueing at the top of the ramp.
+- **Extrapolated capacity: ~288,000 lifecycles/day** at the 50 VU rate. Bomet's actual
+  volume is 20-100 complaints/day, so the deployment is running at well under 0.1% of
+  its demonstrated capacity, and ~28x above the 10,000 txn/day design target.
+- **CPU is the binding constraint, not memory.** Host load rose from ~5.5 idle to a peak
+  of 28.0 on 16 vCPU (1.75x oversubscribed) with CPU idle bottoming at 10%, while
+  available memory barely moved (6.0 GB to 5.3 GB). The ceiling lies above 50 VU and
+  will be CPU-bound.
+
+### Deployment-Specific Configuration
+
+Pointing the harness at a real deployment required config the harness previously
+hardcoded. These are now overridable via `k6/config/environments.js` (see
+`environments.js.example`):
+
+| Assumption | Stock value | Why it fails elsewhere |
+|-----------|------------|----------------------|
+| Locality code | `JLC477` | Only exists in `full-dump.sql` seed data. PGR validates locality against the boundary service, so every CREATE fails without a real code. |
+| City/district/region | `City A` | Same — seed-only value. |
+| Tenant | `statea.citya` | PGR workflow and `RAINMAKER-PGR.ComplaintHierarchy` may both resolve at the **state** tenant, not the city. |
+| Service codes | 33 defaults | Must be restricted to codes whose department has active employees, or ASSIGN auto-routing has nobody to route to. |
+| Citizen identity | 100 fabricated users | Creates junk user records on shared or live environments. |
+
+One further prerequisite worth recording: the test employee must hold roles for **every**
+transition the lifecycle drives. On stock PGR, `ASSIGN` requires `GRO` or `PGR_VIEWER`
+and `RESOLVE` requires `PGR_LME` or `PGR_VIEWER` — so `PGR_VIEWER` alone covers both,
+while an account holding only `GRO` and `SUPERVISOR` cannot complete the lifecycle.
 
 ## Resource Profile Performance Over Time
 

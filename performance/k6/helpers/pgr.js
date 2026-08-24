@@ -16,7 +16,7 @@ export function isAuthError(res) {
  * Create a PGR complaint.
  * @returns {object} The created service object or null
  */
-export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName) {
+export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName, locality, city) {
   const requestInfo = makeRequestInfo(token, userInfo);
   const payload = {
     service: {
@@ -27,13 +27,13 @@ export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode,
       source: 'web',
       address: {
         landmark: 'Load Test Landmark',
-        city: 'City A',
-        district: 'City A',
-        region: 'City A',
+        city: city,
+        district: city,
+        region: city,
         pincode: '',
         locality: {
-          code: 'JLC477',
-          name: 'Gali No,. 2 To Gali No. 6',
+          code: locality,
+          name: locality,
         },
         geoLocation: {},
       },
