@@ -1231,8 +1231,15 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let userProvisioned: { username: string; tenantId: string; roles: string[] } | null = null;
         let userProvisionError: string | null = null;
         try {
-          const currentUsername = process.env.CRS_USERNAME || 'ADMIN';
-          const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+          // Prefer the authenticated session's identity + password (the
+          // operator's bootstrap credentials when the caller passed body.auth)
+          // over the container's CRS_* env. Falling back to env here used to
+          // re-provision the env-default ADMIN while the operator's custom
+          // bootstrap user kept a password they never set — every later token
+          // mint as that user 400'd "Invalid login credentials".
+          const authInfo = digitApi.getAuthInfo();
+          const currentUsername = authInfo.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
+          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
           const mobileNumber = deriveValidMobile(
             mobileRegex,
             Number(args.mobile_length) || 10,
@@ -1257,6 +1264,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             password: currentPassword,
             type: 'EMPLOYEE',
             active: true,
+            // Re-provisioning is the recovery path after credential drift —
+            // repeated failed logins may have tripped egov-user's account
+            // lockout on this row; clear it along with resetting the password.
+            accountLocked: false,
             roles: standardRoles,
             tenantId: target,
           };
@@ -2148,7 +2159,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        // The session's login password, so the provisioned admin carries the
+        // operator's actual credentials (CRS_PASSWORD only as a fallback for
+        // token-only auth, where the password is unknown).
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
         // Get full user details from source tenant
         const sourceTenantForSearch = auth.user?.tenantId || source;
@@ -3149,7 +3163,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
         const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
