@@ -8,6 +8,7 @@
  */
 
 import Urls from "../utils/urls";
+import { receptionOnlyCreatedByUuid } from "./UICustomizations";
 
 /**
  * @param {boolean} visibilityEnabled — RAINMAKER-PGR.InboxVisibilityConfig
@@ -207,9 +208,39 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                         status: null,
                         complaintType: null,
                         serviceCode:null,
+                        // Reception officers open scoped to their own work; the
+                        // checkbox below lets them widen it. Only rendered for a
+                        // user holding the reception role (see fields), so this
+                        // default is inert for everyone else.
+                        onlyMyComplaints: true,
 
                     },
                     fields: [
+                        // Lets a reception officer widen the inbox beyond the
+                        // complaints they filed. Shown whenever they hold the
+                        // reception role — the same condition under which the search
+                        // scopes to createdBy at all, so the control never appears
+                        // without something to control.
+                        ...(receptionOnlyCreatedByUuid()
+                            ? [
+                                  {
+                                      label: "",
+                                      isMandatory: false,
+                                      key: "onlyMyComplaints",
+                                      // NOT type "checkbox": RenderFormFields has no such
+                                      // case and its default branch returns the raw
+                                      // populators object, which React cannot render
+                                      // (error #31). "component" is the slot the locality
+                                      // filter below already uses.
+                                      type: "component",
+                                      component: "PGROnlyMyComplaintsFilter",
+                                      disable: false,
+                                      populators: {
+                                          name: "onlyMyComplaints",
+                                      },
+                                  },
+                              ]
+                            : []),
                         // QA #18: the assigned-to-me / assigned-to-all radio is
                         // gone from the left panel. The defaultValues block above
                         // keeps assignedToMe=ASSIGNED_TO_ALL, and preProcess only

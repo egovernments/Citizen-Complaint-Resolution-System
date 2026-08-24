@@ -7492,5 +7492,6 @@
         "message": "Complainant Details",
         "module": "rainmaker-pgr",
         "locale": "default"
-    }
+    },
+    {"code": "ES_PGR_FILTER_ONLY_MY_COMPLAINTS", "message": "Only complaints I created", "module": "rainmaker-pgr", "locale": "default"}
 ]
