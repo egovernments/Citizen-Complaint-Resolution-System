@@ -77,7 +77,8 @@ const ESSENTIAL_DATA_SCHEMAS = [
 ];
 
 // Roles the new state's ADMIN user needs. INTERNAL_MICROSERVICE_ROLE is non-negotiable —
-// inbox crashes at startup if no user has it on the state tenant.
+// inbox crashes at startup if no user has it on the state tenant. ACCOUNT_ADMIN is
+// required for the configurator's own bootstrapping/tenant-onboarding screens.
 const ADMIN_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
   { code: 'CITIZEN', name: 'Citizen' },
@@ -86,6 +87,7 @@ const ADMIN_ROLES = [
   { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
   { code: 'DGRO', name: 'Department GRO' },
   { code: 'SUPERUSER', name: 'Super User' },
+  { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
   { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
 ];
 
