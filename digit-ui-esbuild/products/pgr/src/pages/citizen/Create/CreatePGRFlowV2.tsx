@@ -238,7 +238,16 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
       return false;
     }
     case "description":
-      return typeof data.description === "string" && data.description.trim().length > 0;
+      // CCSD-1980 / #1226: reject numbers-only / whitespace-only descriptions
+      // (e.g. "000000000000") — require at least 3 letters (any language).
+      // Mirrors the employee-side rule in CreateComplaintConfig.js; this V2
+      // flow (and the legacy FormExplorer it was ported from) only checked
+      // non-empty, so a citizen could submit a numeric-only description even
+      // though the employee UI already rejected it.
+      return (
+        typeof data.description === "string" &&
+        /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u.test(data.description)
+      );
     case "SelectComplaintType":
       return data.SelectComplaintType != null;
     case "GeoLocationsPoint":
