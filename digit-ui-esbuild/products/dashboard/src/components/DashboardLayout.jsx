@@ -3,6 +3,7 @@ import { getBrandTheme } from "../config/dashboardConfig";
 import DashboardHeader from "./DashboardHeader";
 import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
+import DashboardFooter from "./DashboardFooter";
 
 const DashboardLayout = ({
   children,
@@ -90,6 +91,12 @@ const DashboardLayout = ({
           )}
           {children}
         </main>
+        {/* Sibling of <main>, not a child: the shell is tw-h-screen with an
+            overflow-hidden column, so the footer must sit outside the scroll
+            container to stay pinned at the bottom. In embedded mode the
+            employee shell renders its own attribution above us, so skip ours
+            rather than stacking two. */}
+        {!embedded && <DashboardFooter />}
       </div>
     </div>
   );
