@@ -1,0 +1,141 @@
+name: Security Scan - Ansible Remote Server Deployment
+
+# Security scanning for the Ansible remote-server deployment path
+# (local-setup/#choose-your-setup-path: `./deploy.sh <tenant>`).
+#
+#   Checkov  -> Ansible deployment code (local-setup/ansible) - config hardening
+#   KICS     -> docker-compose ports / protocols / privileged / host-network (with severities)
+#
+# Secret detection is handled by GitHub native secret scanning (lower false positives
+# than entropy-based scanners), not Checkov.
+#
+# MANUAL trigger only: run it from Actions -> "Run workflow" and pick the branch in the
+# dropdown. Both tools upload SARIF to Security -> Code scanning, and are merged into a
+# per-run report published to the public dashboard (gh-pages). See .github/SECURITY-SCANNING.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # push reports to gh-pages
+  security-events: write # publish SARIF to the Security tab
+  pull-requests: read
+
+jobs:
+  scan:
+    name: Ansible remote-server security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 1) Checkov - Ansible deployment code only (scoped to local-setup/ansible to avoid
+      #    scanning Helm/k8s/devops, which produced entropy-based secret false positives)
+      - name: Checkov (Ansible)
+        if: always()
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: local-setup/ansible
+          config_file: .checkov.yaml
+          output_format: cli,sarif,json
+          output_file_path: console,checkov.sarif,checkov.json
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+      # 2) KICS - docker-compose misconfig (ports/protocols/privileged), with severities
+      - name: KICS (docker-compose)
+        if: always()
+        uses: checkmarx/kics-github-action@v2
+        with:
+          path: "."
+          platform_type: DockerCompose
+          exclude_paths: "local-setup/k8s,devops,tests,node_modules"
+          # Disable KICS secret detection (env-var false positives); secrets are
+          # handled by GitHub native secret scanning. (exclude_categories with a
+          # space in the name breaks the KICS CLI arg parsing.)
+          disable_secrets: true
+          output_path: "kics-results/"
+          output_formats: "json,sarif"
+          fail_on: ""
+          ignore_on_exit: results
+
+      # KICS output filename can vary; make the SARIF path deterministic so the
+      # upload never hard-fails on a missing file.
+      - name: Normalize KICS outputs
+        if: always()
+        run: |
+          echo "KICS output dir:"; ls -la kics-results/ 2>/dev/null || echo "(none)"
+          mkdir -p kics-results
+          # SARIF (for the Security tab) - must exist or the upload step hard-fails
+          if [ ! -f kics-results/results.sarif ]; then
+            found="$(find kics-results -name '*.sarif' 2>/dev/null | head -1 || true)"
+            if [ -n "$found" ]; then
+              cp "$found" kics-results/results.sarif; echo "copied $found -> results.sarif"
+            else
+              printf '%s' '{"$schema":"https://json.schemastore.org/sarif-2.1.0.json","version":"2.1.0","runs":[{"tool":{"driver":{"name":"KICS","rules":[]}},"results":[]}]}' > kics-results/results.sarif
+              echo "no KICS sarif produced; wrote empty valid sarif"
+            fi
+          fi
+          # JSON (feeds the dashboard) - locate it if KICS used a different name
+          if [ ! -f kics-results/results.json ]; then
+            fj="$(find kics-results -name '*.json' 2>/dev/null | head -1 || true)"
+            [ -n "$fj" ] && cp "$fj" kics-results/results.json && echo "copied $fj -> results.json" || echo "no KICS json found"
+          fi
+
+      - name: Upload KICS SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kics-results/results.sarif
+          category: kics
+
+      # 3) Merge into a structured run.json + summary card
+      - name: Build report data
+        if: always()
+        env:
+          CHECKOV_JSON: checkov.json
+          CHECKOV_BASE: local-setup/ansible
+          KICS_JSON: kics-results/results.json
+          OUT_JSON: run.json
+          REPO: ${{ github.repository }}
+          REF: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          SCAN_SCOPE: "Ansible Deployment - Remote Server"
+        run: python3 .github/scripts/security_report.py >> "$GITHUB_STEP_SUMMARY"
+
+      # 3b) OPTIONAL: agentic enrichment via a free LLM (Google Gemini).
+      # 5 stages: context -> triage (FP filter) -> remediate -> dual-pass verify ->
+      # executive summary. Uses only Python stdlib. No-ops if GEMINI_API_KEY is unset.
+      - name: Enrich report (Gemini agent pipeline, optional)
+        if: always()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          RUN_JSON: run.json
+          CACHE_FILE: enrich-cache.json
+          REPO: ${{ github.repository }}
+        run: python3 .github/scripts/enrich_report.py || echo "enrichment skipped (non-fatal)"
+
+      # 4) Publish to the public dashboard (gh-pages, keeps history)
+      - name: Publish to public dashboard
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/publish_pages.sh
+
+      - name: Upload run data artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-data
+          path: run.json
+          if-no-files-found: warn
