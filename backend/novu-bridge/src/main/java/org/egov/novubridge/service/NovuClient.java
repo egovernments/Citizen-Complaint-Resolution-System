@@ -81,8 +81,14 @@ public class NovuClient {
         // routing key. Pass it + positional contentVariables as a Twilio provider override so Novu
         // sends the approved template rather than the free-form body. The integration supplies the
         // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
-        if (StringUtils.hasText(templateId)) {
-            Map<String, Object> overrides = buildProviderTemplateOverrides(templateId, contentVariables);
+        Map<String, Object> overrides = StringUtils.hasText(templateId)
+                ? buildProviderTemplateOverrides(templateId, contentVariables) : null;
+        // Applied regardless of templateId: DispatchPipelineService currently gates WHATSAPP on a
+        // templateId being present, but that's a caller-side policy, not a guarantee this method can
+        // rely on. Without this, a future WHATSAPP caller that skips the template path would silently
+        // fall through to the primary-SMS-integration bug this override exists to prevent.
+        overrides = applyWhatsappIntegrationOverride(overrides, channel);
+        if (overrides != null && !overrides.isEmpty()) {
             return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
         }
 
@@ -90,6 +96,38 @@ public class NovuClient {
     }
 
     private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
+
+    /**
+     * Novu selects the PRIMARY integration for a channel unless the trigger names an
+     * explicit {@code overrides.<channel>.integrationIdentifier}. WhatsApp-via-Twilio is
+     * an "sms"-channel step in Novu, so without this override a WhatsApp send would
+     * silently resolve to the primary (plain SMS, non-WhatsApp-registered) Twilio
+     * integration and be rejected by Twilio for a from/to channel mismatch. Only applies
+     * when {@code novu.bridge.integration.id.whatsapp} is configured; otherwise this is a
+     * no-op so deployments without a dedicated WhatsApp integration are unaffected.
+     *
+     * <p>Public so {@code ProviderController}'s {@code /providers/test-send} can apply the
+     * same override the live dispatch path uses — otherwise a WHATSAPP test-send would
+     * validate against the primary SMS integration and give a false read on whether the
+     * dedicated WhatsApp integration is actually reachable.
+     *
+     * @param overrides existing overrides map, or {@code null} if none built yet
+     * @return {@code overrides} with the {@code sms.integrationIdentifier} override merged in
+     *         (a new map if {@code overrides} was {@code null}), or {@code overrides} unchanged
+     *         (possibly {@code null}) when the override doesn't apply
+     */
+    public Map<String, Object> applyWhatsappIntegrationOverride(Map<String, Object> overrides, String channel) {
+        if (!"WHATSAPP".equalsIgnoreCase(channel) || !StringUtils.hasText(config.getWhatsappIntegrationId())) {
+            return overrides;
+        }
+        if (overrides == null) {
+            overrides = new HashMap<>();
+        }
+        Map<String, Object> smsOverride = new HashMap<>();
+        smsOverride.put("integrationIdentifier", config.getWhatsappIntegrationId());
+        overrides.put("sms", smsOverride);
+        return overrides;
+    }
 
     /**
      * The exact {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
