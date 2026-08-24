@@ -55,7 +55,10 @@ jobs:
           path: "."
           platform_type: DockerCompose
           exclude_paths: "local-setup/k8s,devops,tests,node_modules"
-          exclude_categories: "Secret Management"
+          # Disable KICS secret detection (env-var false positives); secrets are
+          # handled by GitHub native secret scanning. (exclude_categories with a
+          # space in the name breaks the KICS CLI arg parsing.)
+          disable_secrets: true
           output_path: "kics-results/"
           output_formats: "json,sarif"
           fail_on: ""
@@ -96,6 +99,7 @@ jobs:
         if: always()
         env:
           CHECKOV_JSON: checkov.json
+          CHECKOV_BASE: local-setup/ansible
           KICS_JSON: kics-results/results.json
           OUT_JSON: run.json
           REPO: ${{ github.repository }}
@@ -108,21 +112,18 @@ jobs:
           SCAN_SCOPE: "Ansible Deployment - Remote Server"
         run: python3 .github/scripts/security_report.py >> "$GITHUB_STEP_SUMMARY"
 
-      # 3b) OPTIONAL: enrich why/fix + executive summary with Claude.
-      # Runs only on push/schedule/dispatch (not PRs) and only if the secret exists.
-      # No-ops silently when ANTHROPIC_API_KEY is unset.
-      - name: Enrich report with Claude (optional)
-        if: ${{ always() && github.event_name != 'pull_request' }}
+      # 3b) OPTIONAL: agentic enrichment via a free LLM (Google Gemini).
+      # 5 stages: context -> triage (FP filter) -> remediate -> dual-pass verify ->
+      # executive summary. Uses only Python stdlib. No-ops if GEMINI_API_KEY is unset.
+      - name: Enrich report (Gemini agent pipeline, optional)
+        if: always()
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           RUN_JSON: run.json
           CACHE_FILE: enrich-cache.json
           REPO: ${{ github.repository }}
-        run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then echo "no ANTHROPIC_API_KEY secret; skipping enrichment"; exit 0; fi
-          pip install --quiet --disable-pip-version-check anthropic
-          python3 .github/scripts/enrich_report.py || echo "enrichment skipped (non-fatal)"
+        run: python3 .github/scripts/enrich_report.py || echo "enrichment skipped (non-fatal)"
 
       # 4) Publish to the public dashboard (gh-pages, keeps history)
       - name: Publish to public dashboard

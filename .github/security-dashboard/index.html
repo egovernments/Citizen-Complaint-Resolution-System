@@ -29,14 +29,31 @@ button.print{font:inherit;padding:7px 12px;border:1px solid var(--line);border-r
 @media(max-width:820px){.grid{grid-template-columns:1fr}}
 section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 14px}
-.rbig{font-size:20px;font-weight:700}.rbig b{color:var(--high)}
-.rsub{font-size:12px;color:var(--muted);margin-top:4px}
+.rsub{font-size:12px;color:var(--muted);margin-bottom:12px}
+.sevrow{display:flex;align-items:center;font-size:15px;margin-top:12px}
+.sevrow b{font-weight:700}.sevrow .sevn{color:var(--muted);margin-left:4px}
+.catlist{list-style:none;margin:6px 0 0;padding:0 0 0 20px}
+.catlist li{display:flex;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.catlist .cattitle{flex:0 1 auto}
+.catlist .catn{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;background:#0f172a;color:#fff;border-radius:999px;padding:1px 9px;font-size:12px}
 .hct{width:100%;border-collapse:collapse;font-size:13px;margin-top:14px}
 .hct th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 6px;border-bottom:1px solid var(--line)}
 .hct td{padding:9px 6px;border-bottom:1px solid var(--line)}
 .hct td.r,.hct th.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
 .hdot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:8px;vertical-align:middle}
 .atag{font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 6px;margin-left:6px}
+.fp{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
+.fp input{margin:0}
+.tri{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.tri.fp{background:#fef3c7;color:#92400e;border:1px solid #fcd34d;cursor:default}
+.tri.nr{background:#e2e8f0;color:#475569}
+.tri.ok{background:#dcfce7;color:#166534}
+.vf{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:8px;text-transform:none;letter-spacing:0}
+.vf.ok{background:#dcfce7;color:#166534}
+.vf.nr{background:#fef3c7;color:#92400e}
+.aitag{color:#7c3aed;font-weight:600}
+.prilist{margin:0;padding-left:22px;font-size:14px;color:#334155;line-height:1.7}
+.prilist li{margin:3px 0}
 .chartbox{position:relative;height:230px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -77,6 +94,7 @@ details.hard>summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:1
    <div style="margin-top:10px"><span class="posture" id="posture">—</span></div>
   </div>
   <div class="controls">
+   <label class="fp"><input type="checkbox" id="fpToggle" onchange="renderFindings()"> Hide likely false positives</label>
    <label class="muted" for="runSel">Report</label>
    <select id="runSel" aria-label="Select report run"></select>
    <button class="print" onclick="window.print()">Print / PDF</button>
@@ -90,11 +108,16 @@ details.hard>summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:1
   <div id="exec" style="font-size:14px;color:#334155;line-height:1.65"></div>
  </section>
 
+ <section id="priWrap" style="margin-top:14px;display:none">
+  <h2>Priority actions <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· AI-generated</span></h2>
+  <ol id="priList" class="prilist"></ol>
+ </section>
+
  <div class="grid">
   <section>
    <h2>Risk summary</h2>
    <div id="riskHead"></div>
-   <div id="highWrap"><table class="hct" id="highTable"></table></div>
+   <div id="highWrap"></div>
   </section>
   <section>
    <h2>Findings by severity</h2>
@@ -127,7 +150,9 @@ const SEV=["CRITICAL","HIGH","MEDIUM","LOW","INFO"];
 const COL={CRITICAL:"#7f1d1d",HIGH:"#dc2626",MEDIUM:"#f59e0b",LOW:"#64748b",INFO:"#cbd5e1"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let donutChart,trendChart;
+// format an ISO timestamp in the VIEWER's local timezone with AM/PM (e.g. "Aug 21, 2026, 4:44 PM GMT+5:30")
+const fmtTime=ts=>{try{return ts?new Date(ts).toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'numeric',minute:'2-digit',hour12:true,timeZoneName:'short'}):"";}catch(e){return ts||"";}};
+let donutChart,trendChart,CUR=null;
 
 async function boot(){
   let manifest;
@@ -138,7 +163,7 @@ async function boot(){
   const sel=$("runSel");
   runs.forEach((r,i)=>{
     const pr=r.pr?` · PR #${r.pr.number}`:"";
-    sel.insertAdjacentHTML("beforeend",`<option value="${i}">${esc(r.date)} · ${esc(r.branch)}${pr}</option>`);
+    sel.insertAdjacentHTML("beforeend",`<option value="${i}">${esc(fmtTime(r.ts)||r.date)} · ${esc(r.branch)}${pr}</option>`);
   });
   drawTrend(runs);
   sel.onchange=()=>loadRun(runs[+sel.value].file);
@@ -160,45 +185,51 @@ async function loadRun(file){
   const prLink=m.pr?`<span>PR: <a href="${m.pr.url}" target="_blank" rel="noopener"><b>#${m.pr.number} ${esc(m.pr.title)}</b></a></span>`:"";
   $("metabar").innerHTML=
     `<span>Repo: <b>${esc(m.repo)}</b></span><span>Branch: <b>${esc(m.branch)}</b></span>`+
-    `<span>Commit: ${commit}</span>${prLink}<span>Scanned: <b>${esc(m.date)}</b></span>`+
+    `<span>Commit: ${commit}</span>${prLink}<span>Scanned: <b>${esc(fmtTime(m.ts)||m.date)}</b></span>`+
     `<span>Scanners: <b>${(m.scanners||[]).join(" + ")}</b></span>`+
     `<span><a href="${esc(m.runUrl)}" target="_blank" rel="noopener">workflow run ↗</a></span>`;
   // executive summary (present only when Claude enrichment ran)
   const ew=$("execWrap");
   if(m.executive_summary){$("exec").textContent=m.executive_summary;ew.style.display="";}
   else{ew.style.display="none";}
-  // risk summary: list HIGH/CRITICAL categories with occurrence counts; medium summarized
-  const highGroups=(d.findings||[]).filter(f=>f.severity==="CRITICAL"||f.severity==="HIGH").sort((a,b)=>b.count-a.count);
-  const hiTypes=(s.typesBySeverity.CRITICAL||0)+(s.typesBySeverity.HIGH||0);
-  const hiOcc=(s.occBySeverity.CRITICAL||0)+(s.occBySeverity.HIGH||0);
-  const medT=s.typesBySeverity.MEDIUM||0, medO=s.occBySeverity.MEDIUM||0;
-  $("riskHead").innerHTML=
-    `<div class="rbig"><b>${hiTypes}</b> high-severity categor${hiTypes===1?'y':'ies'}`+
-    `<span class="muted"> · ${hiOcc} occurrence${hiOcc===1?'':'s'}</span></div>`+
-    `<div class="rsub">${medT} medium categor${medT===1?'y':'ies'} (${medO} occurrences) · ${s.types} issue types total</div>`;
-  if(highGroups.length){
-    $("highWrap").style.display="";
-    $("highTable").innerHTML=
-      `<tr><th>High category</th><th class="r">Count</th></tr>`+
-      highGroups.map(f=>`<tr><td><span class="hdot" style="background:${COL[f.severity]}"></span>${esc(f.title)} <span class="atag">${esc(f.area)}</span></td><td class="r">${f.count}</td></tr>`).join("");
-  } else {
-    $("highWrap").style.display="";
-    $("highTable").innerHTML='<tr><td class="ok" style="padding:14px">No high-severity issues.</td></tr>';
-  }
+  // risk summary: nested by severity. "Severity - <#categories>", then each category - <occurrences>.
+  const sevName=x=>x[0]+x.slice(1).toLowerCase();
+  $("riskHead").innerHTML=`<div class="rsub">${s.types} issue types across ${s.occurrences} occurrences</div>`;
+  const showSev=SEV.filter(sv=>(s.typesBySeverity[sv]||0)>0||sv==="CRITICAL"||sv==="HIGH");
+  $("highWrap").innerHTML=showSev.map(sv=>{
+    const n=s.typesBySeverity[sv]||0;
+    const cats=(d.findings||[]).filter(f=>f.severity===sv).sort((a,b)=>b.count-a.count);
+    let h=`<div class="sevrow"><span class="hdot" style="background:${COL[sv]}"></span><b>${sevName(sv)}</b><span class="sevn"> - ${n}</span></div>`;
+    if(cats.length) h+=`<ul class="catlist">`+cats.map(f=>
+      `<li><span class="cattitle">${esc(f.title)}</span> <span class="atag">${esc(f.area)}</span><span class="catn">${f.count}</span></li>`).join("")+`</ul>`;
+    return h;
+  }).join("");
   // donut (occurrences by severity)
   drawDonut(s.occBySeverity);
   // area
   const byArea={};(d.findings||[]).forEach(f=>byArea[f.area]=(byArea[f.area]||0)+f.count);
   $("areaTable").innerHTML=Object.entries(byArea).sort((a,b)=>b[1]-a[1])
     .map(([a,n])=>`<tr><td>${esc(a)}</td><td class="r">${n}</td></tr>`).join("")||'<tr><td class="muted">None</td></tr>';
-  // findings
-  const prio=(d.findings||[]).filter(f=>f.severity==="CRITICAL"||f.severity==="HIGH");
-  const hard=(d.findings||[]).filter(f=>f.severity!=="CRITICAL"&&f.severity!=="HIGH");
+  // priority actions (AI)
+  const pw=$("priWrap");
+  if(Array.isArray(m.priority_actions)&&m.priority_actions.length){
+    $("priList").innerHTML=m.priority_actions.map(a=>`<li>${esc(a)}</li>`).join("");pw.style.display="";
+  } else pw.style.display="none";
+  // findings (respects the hide-FP toggle)
+  CUR=d; renderFindings();
+  const eng=m.engine?`triage & remediation are ${esc(m.engine)}-generated and dual-pass verified`:`remediation is curated`;
+  $("foot").innerHTML=`Report-only mode · Count = times each rule matched · file links open the exact line on commit ${esc(m.shaShort)} · ${eng} · per-location detail in Security → Code scanning.`;
+}
+function renderFindings(){
+  const d=CUR; if(!d) return;
+  const hideFP=(document.getElementById("fpToggle")||{}).checked;
+  const vis=(d.findings||[]).filter(f=>!(hideFP&&(f.triage||{}).verdict==="likely_false_positive"));
+  const prio=vis.filter(f=>f.severity==="CRITICAL"||f.severity==="HIGH");
+  const hard=vis.filter(f=>f.severity!=="CRITICAL"&&f.severity!=="HIGH");
   $("prioTitle").innerHTML=`Priority findings — High &amp; Critical (${prio.length} types)`;
   $("prio").innerHTML=prio.map(card).join("")||'<p class="muted">None.</p>';
   $("hardWrap").innerHTML=hard.length?
     `<details class="hard"><summary>Hardening recommendations — ${hard.length} issue types (Medium / Low / Info)</summary>${hard.map(card).join("")}</details>`:"";
-  $("foot").innerHTML=`Report-only mode · Count = times each rule matched · file links open the exact line on commit ${esc(m.shaShort)} · KICS severities are native, Checkov findings bucketed (secrets=High, other=Medium) · per-location triage in Security → Code scanning.`;
 }
 
 function card(f){
@@ -209,12 +240,20 @@ function card(f){
   const more=locs.length>60?`<li class="muted">and ${locs.length-60} more…</li>`:"";
   const det=locs.length>1?`<details class="loc"><summary>${locs.length} locations</summary><ul class="locs">${list}${more}</ul></details>`:"";
   const guide=f.guide?` · <a href="${esc(f.guide)}" target="_blank" rel="noopener">reference ↗</a>`:"";
+  const tv=(f.triage||{}).verdict, treason=esc((f.triage||{}).reason||"");
+  const tri = tv==="likely_false_positive" ? `<span class="tri fp" title="${treason}">Likely false positive</span>`
+            : tv==="needs_review" ? `<span class="tri nr" title="${treason}">Needs review</span>`
+            : tv==="confirmed" ? `<span class="tri ok" title="${treason}">Confirmed</span>` : "";
+  const vf=f.verify;
+  const vmark = vf ? (vf.verified ? `<span class="vf ok" title="Passed dual-pass review">✓ verified</span>`
+                                  : `<span class="vf nr" title="${esc(vf.note||'flagged by a reviewer')}">⚠ needs review</span>`) : "";
+  const aitag = f.enriched?' · <span class="aitag" title="AI-generated remediation">✨ AI</span>':'';
   return `<div class="finding">
    <div class="h"><span class="sev ${f.severity}" style="background:${COL[f.severity]}">${f.severity[0]+f.severity.slice(1).toLowerCase()}</span>
-    <span class="t">${esc(f.title)}</span><span class="cnt">×${f.count}</span></div>
-   <div class="rule"><code>${esc(f.id)}</code> · ${esc(f.source)} · ${esc(f.area)}${guide}${f.enriched?' · <span title="Claude-generated remediation">✨ AI</span>':''}</div>
+    <span class="t">${esc(f.title)}</span>${tri}<span class="cnt">×${f.count}</span></div>
+   <div class="rule"><code>${esc(f.id)}</code> · ${esc(f.source)} · ${esc(f.area)}${guide}${aitag}</div>
    <div class="wf"><div class="b"><div class="k">Why it matters</div>${esc(f.why)}</div>
-    <div class="b"><div class="k">How to fix</div>${esc(f.fix)}</div></div>
+    <div class="b"><div class="k">How to fix ${vmark}</div>${esc(f.fix)}</div></div>
    <div style="margin-top:10px">First location: ${firstLink}${det}</div>
   </div>`;
 }

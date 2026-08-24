@@ -20,6 +20,15 @@ CHECKOV_SEV = {"secrets": "HIGH", "dockerfile": "MEDIUM", "ansible": "MEDIUM"}
 # rule title (KICS) or the Checkov id prefix. First match wins; fallback uses
 # the scanner's own description.
 REMEDIATION = [
+    ("https url is used", (
+        "Ansible `uri`/`get_url` tasks that call an http:// endpoint send data (including credentials, tokens and config) over the network in cleartext, exposing it to interception or man-in-the-middle tampering.",
+        "Change the task's `url` to https://. If the target is an internal service without TLS, front it with a TLS-terminating proxy or document the exception - do not disable certificate validation to work around it.")),
+    ("validate_certs", (
+        "`validate_certs: false` turns off TLS certificate verification, so Ansible trusts any certificate presented. A man-in-the-middle can impersonate the endpoint and capture or alter what is sent.",
+        "Remove `validate_certs: false` (the default `true` verifies certificates). For a private CA, point Ansible at the CA bundle (e.g. `ca_path`) instead of disabling verification.")),
+    ("certificate validation", (
+        "Disabling TLS certificate validation lets Ansible trust any certificate, enabling man-in-the-middle interception of the request.",
+        "Re-enable certificate validation (`validate_certs: true`) and supply the CA bundle if a private CA is in use.")),
     ("docker socket mounted", (
         "Mounting /var/run/docker.sock gives the container full control of the Docker daemon on the host - equivalent to root on the machine, so a compromised container can escape and take over the server.",
         "Remove the docker.sock bind mount. If a container genuinely needs Docker access, use a scoped socket proxy (e.g. tecnativa/docker-socket-proxy) exposing only the required API endpoints, read-only.")),
@@ -102,13 +111,19 @@ def category(title):
 
 
 def from_checkov(data):
+    # Checkov reports paths relative to the scanned directory. Prepend CHECKOV_BASE
+    # so paths are repo-root-relative (correct display + working blob links).
+    base = os.environ.get("CHECKOV_BASE", "").strip("/")
     out = []
     for r in (data if isinstance(data, list) else [data]) if data else []:
         ct = r.get("check_type", "checkov")
         for c in ((r.get("results") or {}).get("failed_checks") or []):
+            fp = (c.get("file_path") or "").lstrip("/")
+            if base and fp and not fp.startswith(base + "/"):
+                fp = f"{base}/{fp}"
             out.append({"source": "Checkov", "area": ct, "severity": CHECKOV_SEV.get(ct, "MEDIUM"),
                         "id": c.get("check_id", ""), "title": c.get("check_name", ""),
-                        "file": (c.get("file_path") or "").lstrip("/"),
+                        "file": fp,
                         "line": (c.get("file_line_range") or [None])[0],
                         "desc": "", "guide": c.get("guideline") or ""})
     return out

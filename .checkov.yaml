@@ -16,6 +16,11 @@ directory:
 framework:
   - ansible
 
+# CKV2_ANSIBLE_3 (block must handle task errors) is a reliability best-practice,
+# not a security issue - skip it so the report stays security-focused.
+skip-check:
+  - CKV2_ANSIBLE_3
+
 skip-path:
   - ".*_example.*"   # example inventories/host_vars are placeholders, not real config
   - ".*\\.example.*"

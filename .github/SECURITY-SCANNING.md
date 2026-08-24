@@ -1,58 +1,81 @@
-# Security Scanning — Ansible Remote Server Deployment
+# Security Scanning - Ansible Remote Server Deployment
 
-Automated security scanning for the **Ansible remote-server deployment** path
+Security scanning for the Ansible remote-server deployment path
 ([setup path C](../local-setup/#choose-your-setup-path): `./deploy.sh <tenant>`).
-Runs in CI as **`.github/workflows/security-scan.yml`**
-("Security Scan - Ansible Remote Server Deployment").
+Runs in CI as `.github/workflows/security-scan.yml` and publishes a public dashboard.
 
-## What is scanned
+## What runs
 
-| Tool | Covers |
-|------|--------|
-| **Checkov** | Ansible playbooks, Dockerfiles, secrets (`.checkov.yaml`) |
-| **KICS** | docker-compose: exposed ports, protocols, privileged, host-network, host mounts (native severities) |
+| Tool | Scope |
+|------|-------|
+| **Checkov** | Ansible deployment code (`local-setup/ansible`) - config hardening (`.checkov.yaml`) |
+| **KICS** | `docker-compose` files - exposed ports, protocols, privileged, host-network, host mounts (native severities) |
+| **GitHub secret scanning** (native) | Secrets - lower false positives than entropy-based scanners; Checkov secret scanning is intentionally off |
 
-Excluded (other setup paths / later phases): `local-setup/k8s/**`, `devops/**`.
-Later phases: Kubernetes + Helm, then Terraform / cloud infra.
+Out of scope here (later phases): `local-setup/k8s/**` (Kubernetes/Tilt) and
+`devops/**` (Helm charts + Terraform).
 
-## The public dashboard (primary view)
+## Trigger
 
-Every run merges both tools into a per-run `run.json` and publishes it to the
-**`gh-pages`** branch, which **keeps all historical reports**. The dashboard
-(`/.github/security-dashboard/index.html`, copied to gh-pages) is a single page with:
+**Manual only.** Actions -> "Security Scan - Ansible Remote Server Deployment" ->
+**Run workflow** -> pick the branch from the dropdown. (The button appears once the
+workflow is on the default branch.)
 
-- a **report switcher** (pick any past run),
-- **risk summary** tiles + a **severity donut**,
-- a **trend** chart across all reports,
-- **findings grouped by rule** with occurrence counts, **why it matters / how to fix**,
-  and every location **hyperlinked to the exact line** on the scanned commit.
+## Where results go
 
-Public URL (after Pages is enabled): `https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan`
+- **Public dashboard (primary):** `https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan`
+  - report switcher (any past run), risk summary + severity donut, trend across runs
+  - findings grouped by rule with **why / how-to-fix**, every location **linked to the exact line** on the scanned commit
+  - AI additions (when enabled): executive summary, priority actions, triage badges, dual-pass verify markers, and a "hide likely false positives" toggle
+  - timestamps render in the **viewer's local timezone**
+- **Security -> Code scanning:** SARIF from both tools + inline PR annotations (engineer triage)
+- **Actions run:** a condensed severity summary + the `security-report-data` artifact (`run.json`)
 
-### One-time: enable GitHub Pages
-After the first run creates the `gh-pages` branch:
-**Settings → Pages → Build and deployment → Source: Deploy from a branch →
-Branch: `gh-pages` / `/ (root)`**. (The repo is public, so the dashboard is
-public — that is intentional here.)
+One-time to make the dashboard live: **Settings -> Pages -> Deploy from a branch ->
+`gh-pages` / root**. The repo is public, so the dashboard is public by design.
 
-## Other surfaces
-- **Security → Code scanning** — engineer triage (SARIF from both tools; inline PR annotations).
-- **Actions run summary** — a condensed severity card.
-- **`security-report-data`** artifact — the raw `run.json`.
+## AI enrichment (optional, free)
 
-## Reading the numbers
-- **Passed / Failed** = each policy evaluated against each resource; failed = violates it.
-- **Count** = how many times one rule matched (occurrences), grouped into one issue type.
-- **Severity**: KICS native; Checkov (OSS) bucketed (secrets = High, other = Medium).
+A 5-stage agent pipeline enriches each report when a key is present. Engine is any
+OpenAI-compatible LLM; default is **Google Gemini**.
+
+1. **context** - reads the real code around each finding
+2. **triage** - confirmed / likely false positive / needs review (+ reason)
+3. **remediate** - context-aware why/fix grounded in the actual code
+4. **verify** - **dual-pass critic**: a fix is "verified" only if two independent reviewers agree
+5. **summary** - executive summary + prioritized action list
+
+**Enable:** add a repo secret **`GEMINI_API_KEY`** (free key from
+[aistudio.google.com](https://aistudio.google.com); a personal Google account works
+if your org blocks AI Studio). Optional repo variable `GEMINI_MODEL` (default
+`gemini-2.0-flash`). To use a different provider, set `LLM_BASE` + the key and model.
+
+**Guardrails:** no key = clean no-op (curated remediation kept); raw scanner findings
+are never altered (agents only annotate); likely false positives are **labelled, never
+dropped**; per-rule results are cached on `gh-pages` so unchanged rules aren't re-run.
+Any failure falls back to curated text - it never breaks the pipeline.
+
+## Reading the report
+
+- **Count** = how many times a rule matched, grouped into one issue type.
+- **Severity** = KICS native; Checkov findings are bucketed (Medium).
+- **Triage** (AI) = confirmed / likely false positive / needs review.
+- **Verify** (AI) = the fix passed both critics (`verified`) or was flagged (`needs review`).
 
 ## Enforcement (currently report-only)
-`soft-fail: true` (Checkov) and `fail_on: ""` (KICS). To enforce after triage: set
-`soft-fail: false` + KICS `fail_on: high`, then add the check as required in branch protection.
+
+`soft-fail: true` (Checkov) and `fail_on: ""` (KICS) report without failing. To enforce
+after triage: set `soft-fail: false` + KICS `fail_on: high`, then add the check as
+required in branch protection.
 
 ## Files
-- `.github/workflows/security-scan.yml` — the pipeline
-- `.checkov.yaml` — Checkov scope
-- `.github/scripts/security_report.py` — merge scanners → `run.json`
-- `.github/scripts/build_manifest.py` — index runs for the switcher/trend
-- `.github/scripts/publish_pages.sh` — publish to gh-pages (keeps history)
-- `.github/security-dashboard/index.html` — the dashboard SPA
+
+| File | Role |
+|------|------|
+| `.github/workflows/security-scan.yml` | the pipeline |
+| `.checkov.yaml` | Checkov scope (Ansible) |
+| `.github/scripts/security_report.py` | merge scanners -> `run.json` |
+| `.github/scripts/enrich_report.py` | Gemini agent pipeline (optional) |
+| `.github/scripts/build_manifest.py` | index runs for the switcher/trend |
+| `.github/scripts/publish_pages.sh` | publish to `gh-pages` (keeps history) |
+| `.github/security-dashboard/index.html` | the dashboard |
