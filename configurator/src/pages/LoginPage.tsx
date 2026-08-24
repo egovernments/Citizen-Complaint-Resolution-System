@@ -8,6 +8,7 @@ import { DigitCard, DigitCardHeader, DigitCardSubHeader } from '@/components/dig
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant, ApiClientError } from '@/api';
+import { DigitFooter } from '@/components/DigitFooter';
 
 type AppMode = 'onboarding' | 'management';
 
@@ -265,6 +266,11 @@ export default function LoginPage() {
         <p className="text-center text-sm text-muted-foreground mt-6">
           Requires MDMS_ADMIN or SUPERUSER role
         </p>
+
+        {/* Powered by DIGIT (CCRS#1841) */}
+        <div className="flex justify-center mt-8">
+          <DigitFooter />
+        </div>
       </div>
     </div>
   );

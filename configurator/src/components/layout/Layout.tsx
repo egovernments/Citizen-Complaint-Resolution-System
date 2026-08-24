@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMastersCapability } from '@/hooks/useMastersCapability';
+import { DigitFooter } from '@/components/DigitFooter';
 
 const phases = [
   { id: 1, name: 'Tenant', fullName: 'Tenant & Branding', icon: Building2, master: 'tenants' },
@@ -199,10 +200,12 @@ export default function Layout() {
 
       {/* Footer - DIGIT style */}
       <footer className="bg-secondary text-white py-3 sm:py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-col items-center gap-2">
           <p className="text-center text-xs sm:text-sm">
             DIGIT Complaints Management • <span className="hidden sm:inline">Press <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs">Ctrl+/</kbd> for help</span>
           </p>
+          {/* bw lockup: this bar is bg-secondary (dark) */}
+          <DigitFooter variant="bw" />
         </div>
       </footer>
     </div>

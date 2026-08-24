@@ -46,6 +46,7 @@ import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
+import { DigitFooter } from '@/components/DigitFooter';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
@@ -449,6 +450,11 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         <main id="main-content" className="flex-1 p-6 overflow-auto min-h-0">
           {children}
         </main>
+
+        {/* Powered by DIGIT (CCRS#1841) */}
+        <footer className="flex-shrink-0 flex items-center justify-center border-t border-border bg-card py-2">
+          <DigitFooter />
+        </footer>
       </div>
 
       {/* Documentation Pane */}
