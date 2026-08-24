@@ -114,9 +114,11 @@ function cleanObject(obj) {
  *
  *  Reception officers file complaints on citizens' behalf but are neither the
  *  accountId (that's the citizen) nor ever an assignee, so an unscoped inbox
- *  shows them nothing of their own work. Applied only when reception is the
- *  user's SOLE CMS role — a multi-role user (e.g. reception + supervisor) keeps
- *  the wider view their other role is entitled to.
+ *  shows them nothing of their own work. Applied whenever the user HOLDS the
+ *  reception role, regardless of other roles: granting a second role (e.g.
+ *  dashboard viewer) must not silently widen the inbox. A multi-role user can
+ *  still widen it explicitly via the "only my complaints" checkbox, which
+ *  renders under the same condition.
  *
  *  Exported as one function so the inbox SEARCH and the row's DETAIL LINK agree
  *  by construction. They used to decide independently: the search read the role
@@ -127,12 +129,8 @@ function cleanObject(obj) {
  */
 export const receptionOnlyCreatedByUuid = () => {
   const info = Digit.UserService.getUser()?.info;
-  const cmsRoles = (info?.roles || [])
-    .map((r) => r?.code)
-    .filter((c) => c && (c.startsWith("CMS_") || c === "SUPERUSER" || c === "ADMIN"));
-  const receptionOnly =
-    cmsRoles.includes("CMS_RECEPTION_OFFICER") && cmsRoles.every((c) => c === "CMS_RECEPTION_OFFICER");
-  return receptionOnly ? info?.uuid || null : null;
+  const isReception = (info?.roles || []).some((r) => r?.code === "CMS_RECEPTION_OFFICER");
+  return isReception ? info?.uuid || null : null;
 };
 
 export const UICustomizations = {
@@ -1636,9 +1634,9 @@ export const UICustomizations = {
       // ever an assignee — so the inbox showed them nothing of their own work.
       // Scope their inbox to the complaints THEY created (audit createdby;
       // pgr-services filters on it server-side, so pagination/count stay
-      // correct). Applied only when reception is the user's SOLE CMS role —
-      // a multi-role user (e.g. reception + supervisor) keeps the wider view
-      // their other role is entitled to.
+      // correct). Applied whenever the user HOLDS the reception role — a
+      // second role must not silently widen the inbox; a multi-role user
+      // widens it explicitly by unchecking the filter below.
       // Default ON: an unset value means the officer has not touched the filter,
       // so the inbox opens scoped to their own work as before. Unchecking widens
       // it to every complaint their role can otherwise see.
