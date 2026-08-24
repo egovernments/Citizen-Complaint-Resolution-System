@@ -40,6 +40,14 @@ export interface ResourceConfig {
    *  (serviceCode/menuPath/menuPathName from parentCode) so downstream
    *  complaint-type UI keeps working unchanged. */
   leafServiceDefAdapter?: boolean;
+  /** For `type: 'mdms'` resources: when true, getList/getOne stop filtering
+   *  to `isActive: true` — deactivated records stay visible instead of
+   *  disappearing entirely (the default for every other MDMS master, where
+   *  isActive:false means "soft-deleted, hide it"). Set this only for masters
+   *  where deactivation is a MEANINGFUL STATE an operator audits (e.g.
+   *  role-actions — confirming a permission grant was actually revoked),
+   *  not a delete substitute (egovernments/CCRS#1846). */
+  includeInactive?: boolean;
 }
 
 export const REGISTRY: Record<string, ResourceConfig> = {
@@ -142,7 +150,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'workflow-config': { type: 'mdms', label: 'Workflow Config', schema: 'Workflow.BusinessServiceConfig', idField: 'code', nameField: 'code' },
   'auto-escalation': { type: 'mdms', label: 'Auto Escalation', schema: 'Workflow.AutoEscalation', idField: 'businessService', nameField: 'businessService' },
   'sla-config': { type: 'mdms', label: 'SLA Config', schema: 'common-masters.wfSlaConfig', idField: 'slotPercentage', nameField: 'slotPercentage' },
-  'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
+  'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid', includeInactive: true },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
   'action-mappings': { type: 'mdms', label: 'Action Mappings', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test', idField: 'id', nameField: 'displayName', descriptionField: 'url' },
   'encryption-policy': { type: 'mdms', label: 'Encryption Policy', schema: 'DataSecurity.EncryptionPolicy', idField: 'key', nameField: 'key' },

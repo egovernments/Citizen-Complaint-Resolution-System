@@ -22,7 +22,7 @@ import {
   UserList, UserShow, UserEdit, UserCreate,
   AccessRoleList, AccessRoleShow,
   AccessActionList, AccessActionShow,
-  RoleActionList, RoleActionShow,
+  RoleActionList, RoleActionShow, RoleActionCreate, RoleActionEdit,
   WorkflowServiceList, WorkflowServiceShow,
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
@@ -154,7 +154,9 @@ function ManagementAdminResources() {
         {/* Read-only entities with List/Show */}
         {canViewResource('access-roles') && <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />}
         {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
-        {canViewResource('role-actions') && <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />}
+        {canViewResource('role-actions') && (
+          <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} create={RoleActionCreate} edit={RoleActionEdit} />
+        )}
         {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />}
         {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
         {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
