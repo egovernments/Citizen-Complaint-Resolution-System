@@ -3705,6 +3705,9 @@ accesscontrol-roleaction-2270	pg	SUPERUSER.2007	ACCESSCONTROL-ROLEACTIONS.roleac
 accesscontrol-roleaction-2271	pg	AUTO_ESCALATE.2007	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "AUTO_ESCALATE", "actionid": 2007, "actioncode": "", "tenantId": "pg", "id": 2271}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2272	pg	SUPERUSER.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "SUPERUSER", "actionid": 2008, "actioncode": "", "tenantId": "pg", "id": 2272}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2273	pg	AUTO_ESCALATE.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "AUTO_ESCALATE", "actionid": 2008, "actioncode": "", "tenantId": "pg", "id": 2273}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-action-4597	pg	4597	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 4597, "url": "/mdms-v2/v2/_count", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "count mdms records", "orderNumber": 0, "serviceCode": "MDMS", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1787564728000	1787564728000
+accesscontrol-roleaction-2274	pg	MDMS_ADMIN.4597	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 2274, "actionid": 4597, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1787564728000	1787564728000
+accesscontrol-roleaction-2275	pg	ACCOUNT_ADMIN.4597	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 2275, "actionid": 4597, "rolecode": "ACCOUNT_ADMIN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1787564728000	1787564728000
 \.
 
 
