@@ -16,7 +16,9 @@ export function isAuthError(res) {
  * Create a PGR complaint.
  * @returns {object} The created service object or null
  */
-export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName, locality, city) {
+// `locality` and `city` default to the full-dump.sql seed values so that callers
+// which predate these parameters keep their original behaviour.
+export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName, locality = 'JLC477', city = 'City A') {
   const requestInfo = makeRequestInfo(token, userInfo);
   const payload = {
     service: {

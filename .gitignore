@@ -123,6 +123,11 @@ logs/
 *.log
 spring.log
 
+# ─── Load testing ────────────────────────────────────────────────────────────
+# Contains real deployment URLs and credentials. Copy from the .example file.
+performance/k6/config/environments.js
+performance/ansible/inventory.ini
+
 # ─── Docker ──────────────────────────────────────────────────────────────────
 docker-compose.override.yml
 
