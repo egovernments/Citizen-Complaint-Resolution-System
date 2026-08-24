@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.provider.OzekiOverridesBuilder;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
@@ -33,6 +34,7 @@ import java.util.*;
 public class DispatchPipelineService {
 
     private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
+    private static final String OTP_EVENT_NAME = "OTP.SEND";
 
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
@@ -60,6 +62,16 @@ public class DispatchPipelineService {
                 event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         envelopeValidator.validate(event);
+
+        // OTP.SEND (from otp-publisher) is a separate, minimal path — pre-account
+        // (no DIGIT user yet), no PGR-rendered body/contact, delivered through the
+        // existing complaints-sms workflow but (optionally) via an Ozeki override
+        // instead of whatever's primary. Handle it before any of the PGR
+        // pass-through logic (preference checks, contact building, WHATSAPP
+        // formatting) that doesn't apply to it.
+        if (OTP_EVENT_NAME.equalsIgnoreCase(event.getEventName())) {
+            return processOtp(event, send);
+        }
 
         DerivedContext context = deriveContext(event);
         String subscriberId = StringUtils.hasText(event.getSubscriberId())
@@ -218,6 +230,118 @@ public class DispatchPipelineService {
                 .novuResponse(response != null ? response.getResponse() : null)
                 .diagnostics(Collections.singletonList("Dispatch successful"))
                 .build();
+    }
+
+    /**
+     * OTP send. otp-publisher carries the mobile number in {@code stakeholders[0]}
+     * and the OTP code in {@code data.otp} — pre-account, so there is no
+     * subscriberId/contact resolved by anything upstream the way PGR resolves
+     * them for complaint events. Triggers the existing SMS pass-through workflow
+     * ({@code novu.bridge.workflow.id.sms}, i.e. {@code complaints-sms}) — no
+     * dedicated OTP workflow needed, since the workflow step is a bare
+     * {@code payload.body} passthrough regardless of event type.
+     *
+     * <p>When {@code novu.bridge.otp.sms.provider=ozeki}, attaches the Ozeki
+     * generic-sms overrides envelope ({@link OzekiOverridesBuilder}) so this one
+     * trigger delivers via the (possibly non-primary) Ozeki integration instead
+     * of whatever's primary for the sms channel — Twilio and PGR complaint
+     * delivery are untouched either way, since this flag is only read here, not
+     * in {@link #deriveContext} / the pass-through path above.
+     */
+    private DispatchResult processOtp(ComplaintsDomainEvent event, boolean send) {
+        String mobile = (event.getStakeholders() != null && !event.getStakeholders().isEmpty())
+                ? event.getStakeholders().get(0).getMobile() : null;
+        Object otp = event.getData() != null ? event.getData().get("otp") : null;
+        String transactionId = StringUtils.hasText(event.getTransactionId())
+                ? event.getTransactionId() : event.getEventId();
+
+        if (!StringUtils.hasText(mobile) || otp == null) {
+            persistOtp(event, transactionId, "SKIPPED", "NB_OTP_CONTACT_MISSING",
+                    "OTP event missing mobile or otp", 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).novuTriggered(false)
+                    .diagnostics(Collections.singletonList("OTP event missing mobile or otp"))
+                    .build();
+        }
+
+        if (!send) {
+            persistOtp(event, transactionId, "RECEIVED", null, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Validation only mode"))
+                    .build();
+        }
+
+        String formattedMobile;
+        try {
+            // otp-publisher carries the bare national number (no "+"); prepend the
+            // tenant's MDMS-configured country code the same way the PGR pass-through
+            // path does in formatRecipientPhone, so Ozeki/Twilio get a real E.164
+            // destination instead of a bare local number.
+            formattedMobile = formatRecipientPhone(mobile, event.getTenantId(), "sms", null);
+        } catch (CustomException ce) {
+            persistOtp(event, transactionId, "FAILED", ce.getCode(), ce.getMessage(), 1);
+            throw ce;
+        }
+
+        String subscriberId = event.getTenantId() + ":" + formattedMobile;
+        String body = "Seu código de login de uso único é \"" + otp 
+        + "\". Ele expira em 10 minutos. Não compartilhe este código.";
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("otp", otp);
+        payload.put("mobile", formattedMobile);
+        payload.put("body", body);
+        Object userType = event.getData() != null ? event.getData().get("userType") : null;
+        if (userType != null) {
+            payload.put("userType", userType);
+        }
+
+        Map<String, Object> overrides = config.isOtpOzekiEnabled()
+                ? OzekiOverridesBuilder.build(config.getOzekiIntegrationIdentifier(), transactionId, formattedMobile, body)
+                : null;
+
+        NovuClient.NovuResponse response;
+        try {
+            response = novuClient.trigger(config.getNovuWorkflowSms(), subscriberId, formattedMobile, payload, transactionId, overrides);
+        } catch (CustomException ce) {
+            persistOtp(event, transactionId, "FAILED", ce.getCode(), ce.getMessage(), 1);
+            throw ce;
+        }
+
+        Integer sc = response != null ? response.getStatusCode() : null;
+        boolean delivered = sc != null && sc >= 200 && sc < 300;
+        persistOtp(event, transactionId, delivered ? "SENT" : "FAILED",
+                delivered ? null : "NB_NOVU_TRIGGER_FAILED",
+                delivered ? null : "Novu returned status " + sc, 1);
+
+        return DispatchResult.builder()
+                .valid(true).preferenceAllowed(true)
+                .novuTriggered(delivered).novuStatusCode(sc)
+                .novuResponse(response != null ? response.getResponse() : null)
+                .diagnostics(Collections.singletonList(
+                        delivered ? "OTP dispatch successful" : "OTP dispatch failed: status " + sc))
+                .build();
+    }
+
+    private void persistOtp(ComplaintsDomainEvent event, String transactionId, String status,
+                            String errorCode, String errorMessage, Integer attemptCount) {
+        dispatchLogRepository.upsert(DispatchLogEntry.builder()
+                .eventId(event.getEventId())
+                .transactionId(transactionId)
+                .referenceNumber(event.getEntityId())
+                .module(event.getModule())
+                .eventName(event.getEventName())
+                .tenantId(event.getTenantId())
+                .channel("SMS")
+                .recipientValue(transactionId)
+                .templateKey("OTP.SEND")
+                .status(status)
+                .attemptCount(attemptCount)
+                .lastErrorCode(errorCode)
+                .lastErrorMessage(errorMessage)
+                .createdTime(System.currentTimeMillis())
+                .lastModifiedTime(System.currentTimeMillis())
+                .build());
     }
 
     public NovuClient.NovuResponse testTrigger(String workflowId, String subscriberId, String phone,
