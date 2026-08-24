@@ -210,15 +210,15 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                         serviceCode:null,
                         // Reception officers open scoped to their own work; the
                         // checkbox below lets them widen it. Only rendered for a
-                        // reception-only user (see fields), so this default is inert
-                        // for everyone else.
+                        // user holding the reception role (see fields), so this
+                        // default is inert for everyone else.
                         onlyMyComplaints: true,
 
                     },
                     fields: [
                         // Lets a reception officer widen the inbox beyond the
-                        // complaints they filed. Shown only when reception is their
-                        // sole CMS role — the same condition under which the search
+                        // complaints they filed. Shown whenever they hold the
+                        // reception role — the same condition under which the search
                         // scopes to createdBy at all, so the control never appears
                         // without something to control.
                         ...(receptionOnlyCreatedByUuid()
