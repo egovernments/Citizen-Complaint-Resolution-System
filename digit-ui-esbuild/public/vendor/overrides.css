@@ -6393,6 +6393,17 @@ header.digit-header .digit-dropdown-master {
   border-bottom: 1px solid #d6d8da;
   padding: 6px 12px;
 }
+/* In the mobile row the trigger spans the bar so the whole strip is tappable,
+ * and the summary is centred in it. */
+.employee .digit-working-context-mobile .digit-working-context,
+.employee .digit-working-context-mobile .digit-working-context-trigger { display: block; width: 100%; }
+.employee .digit-working-context-mobile .digit-working-context-trigger { padding: 0; text-align: center; }
+.employee .digit-working-context-mobile .digit-working-context-summary { text-align: center; }
+/* Panel is fixed and positioned by the component; keep it inside narrow screens. */
+@media (max-width: 640px) {
+  .employee .digit-working-context-panel { max-width: calc(100vw - 16px); }
+}
+
 /* This row paints its own white ground, so it cannot inherit the dark
  * topbar's white text. */
 .employee .digit-working-context-mobile .digit-working-context-summary {

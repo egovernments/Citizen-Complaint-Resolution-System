@@ -121,9 +121,14 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       const a = anchorRef?.current;
       if (!a) return;
       const r = a.getBoundingClientRect();
-      // Prefer right-aligning to the trigger; clamp so it never leaves the viewport.
-      const width = 272;
-      const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
+      // Prefer right-aligning to the trigger; clamp so it never leaves the
+      // viewport. Narrow phones get the full width minus a gutter.
+      const width = Math.min(272, window.innerWidth - 16);
+      // Right-align under a compact header trigger; centre in the viewport when
+      // the trigger spans the bar (the mobile row), where aligning to either
+      // edge strands it in a corner. Clamped so it never leaves the viewport.
+      const preferred = r.width > width ? (window.innerWidth - width) / 2 : r.right - width;
+      const left = Math.max(8, Math.min(preferred, window.innerWidth - width - 8));
       setPos({ top: Math.round(r.bottom + 8), left: Math.round(left) });
     };
     place();

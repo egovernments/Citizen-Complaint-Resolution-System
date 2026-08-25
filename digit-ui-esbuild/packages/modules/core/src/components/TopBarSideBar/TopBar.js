@@ -1,6 +1,6 @@
 import { Hamburger, TopBar as TopBarComponent } from "@egovernments/digit-ui-react-components";
 import { Dropdown } from "@egovernments/digit-ui-components";
-import { EmployeeWorkingContext, EmployeeWorkingContextSummary } from "./EmployeeWorkingContext";
+import { EmployeeWorkingContext } from "./EmployeeWorkingContext";
 import React, { Fragment } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import ChangeCity from "../ChangeCity";
@@ -218,7 +218,7 @@ const TopBar = ({
       />
       {showWorkingContext && (
         <div className="digit-working-context-mobile">
-          <EmployeeWorkingContextSummary
+          <EmployeeWorkingContext
             t={t}
             context={workingContext}
             isError={workingContextError}
