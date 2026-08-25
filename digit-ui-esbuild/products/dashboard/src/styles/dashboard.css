@@ -513,6 +513,12 @@
   gap: 0.5rem;
 }
 
+.dashboard-footer-img {
+  height: 1.1em;
+  width: auto;
+  cursor: pointer;
+}
+
 .dashboard-header-controls .dashboard-header-btn{
   margin: 0px;
   box-sizing: border-box;
@@ -542,6 +548,16 @@
   -webkit-appearance: none;
   -moz-appearance: none;
        appearance: none;
+}
+
+/* Language switcher chip (standalone/public header, #1797): match the
+     header buttons' 2rem height so the controls row stays one line. */
+
+.dashboard-header-controls .dashboard-language-chip{
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 0px;
+  flex-shrink: 0;
 }
 
 .dashboard-header-controls .dashboard-header-btn:hover{

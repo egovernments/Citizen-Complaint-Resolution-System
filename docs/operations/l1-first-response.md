@@ -26,15 +26,28 @@ system by following this page.
 
 ### Logins and passwords
 
-The two pages you'll use — the health dashboard and Grafana — **need no login on these
-deployments**. You open the URL and you're in. That is deliberate, so the service desk is
-never blocked waiting for an account.
+**The health dashboard needs no login.** Open the URL and you're in.
+
+**Grafana does need one**, and you should have it *before* your first call rather than
+hunting for it during one. You do not use the `admin` login for this — that one belongs to
+your **system administrator**, and a new deployment has no other accounts. Grafana does not
+let people sign themselves up, so **the administrator creates a Grafana account for each L1
+and L2 person**. Ask them for yours, and ask for two specific things:
+
+1. **A named account of your own** — your username, not the shared `admin` login.
+2. **The Editor role.** New accounts are created as **Viewer** by default, and a Viewer
+   cannot open **Explore** — which [Step 4](#step-4--what-does-the-log-say) needs. If Step 4
+   shows you no Explore item in the left menu, this is why: go back and ask for Editor.
+
+Editor cannot add users or change passwords, and nothing in this checklist changes the
+system — Grafana only displays data. Steps 3 and 4 below both need the login.
 
 Everything else, ask your **system administrator** for:
 
 | If you need | Ask your system administrator |
 |---|---|
-| A password prompt appears on the health dashboard or Grafana | They'll tell you the right URL, or add you to the VPN |
+| **A Grafana account of your own**, with the **Editor** role | Needed for Steps 3 and 4. Ask before your first call — the admin creates it for you |
+| A password prompt appears where you did not expect one | They'll tell you the right URL, or add you to the VPN |
 | The **Novu** notification dashboard (to see if a message was sent) | Access is not part of the service desk by default |
 | The **SMS / WhatsApp provider console** (to check credit or credentials) | Usually held by whoever owns the provider contract |
 | Access to the **server itself** | That is L2's, not yours — you never need it for this checklist |
@@ -50,11 +63,36 @@ described as menu clicks, so you don't have to memorise addresses.
 | Page | URL | What it is |
 |---|---|---|
 | **Health dashboard** | `https://<your-domain>/status/` | A page that automatically tries up to 57 parts of the system every 30 seconds and colours each one green or red |
-| **Grafana** | `https://<your-domain>/grafana/` | The system's own recordings — memory, errors, logs — shown as charts and lists |
+| **Grafana** | `https://<your-domain>/grafana/` | The system's own recordings — memory, errors, logs — shown as charts and lists. **Asks for a login** |
 
 **About Grafana**, because it looks intimidating the first time: it is a *viewer*. It reads
 recordings the system already made and draws them on screen. It does not control the
 system, and clicking around in it cannot start, stop or change anything. Explore it freely.
+
+### The nine dashboards, and the two that are yours
+
+Grafana's **Dashboards** menu lists nine pages. **This checklist uses two of them**, and the
+other seven are L2's. That is not a restriction on you — it is which questions belong to
+which tier.
+
+| Dashboard | Used in | Whose |
+|---|---|---|
+| **DIGIT JVM Services** | [Step 3](#step-3--did-something-crash-or-run-out-of-memory) — two panels only | **Yours** |
+| **DIGIT — Logs (Loki)** | [Step 4](#step-4--what-does-the-log-say) | **Yours** |
+| Node Exporter Full, PostgreSQL Database, Kong API Gateway, Redpanda (Kafka) Broker, DIGIT Kafka Consumer Lag, DIGIT — Traces (Tempo), DIGIT — PGR Analytics Queries | — | L2's |
+
+The seven answer *why* something is failing — is the database the bottleneck, is it the
+gateway or the service behind it, which pipeline is stuck. Reading them correctly needs to
+know what normal looks like on this deployment, and
+[working out why is not your job](#l1--first-response). Looking at them cannot break
+anything, so look if you are curious — just don't put conclusions from them in a ticket.
+
+**One exception worth knowing:** if a caller reports something that sounds like *"everything
+is slow"* or you see the words **"no space left on device"** anywhere, say so explicitly in
+the handover. Those two point L2 straight at a specific dashboard, and naming the symptom in
+those words saves them a step.
+
+What every dashboard shows, if you want to read ahead: **[dashboards.md](dashboards.md)**.
 
 ### What you need before your first call
 
@@ -64,6 +102,8 @@ step below.
 | You need | Used in | If you don't have it |
 |---|---|---|
 | The two URLs above, reachable from your desk | Steps 2–4 | Ask L2 — Grafana may sit behind the VPN |
+| Your **Grafana account** (Editor role) | Steps 3–4 | Ask your system administrator — they create it. Without it you can do Steps 0–2 and must hand over there |
+| To know this deployment's **observability level** | Step 4 | Ask L2. On a `metrics`-level deployment there are no logs to read — see Step 4 |
 | A **login of your own** for the system | Step 1 | You cannot confirm scope; say so in the ticket rather than guessing |
 | A **second test login**, ideally in a different office | Step 1 | Ask a colleague to try instead, and note whose account was used |
 | The **maintenance window**, written on your [cheat sheet](cheatsheet.md) | Step 3 | Ask L2 before reporting restarts |
@@ -142,8 +182,9 @@ alarm.
 
 ### What this page is
 
-The **health dashboard** is a page that tries about 50 different parts of the system every
-30 seconds and shows the result as a coloured tile. Green means that part answered. Red
+The **health dashboard** is a page that tries every part of the system — up to 57 checks,
+though most deployments run somewhat fewer — every 30 seconds, and shows each result as a
+coloured tile. Green means that part answered. Red
 means it did not. You don't run anything — the page is already doing it continuously, and
 you're reading the latest result.
 
@@ -226,7 +267,10 @@ You are checking two things, and only reading numbers:
 **DIGIT JVM Services**.
 
 **Set the time window first.** At the **top right** there is a time control — it usually
-says something like *Last 6 hours*. Everything on the screen is only about that window, so
+says something like *Last 6 hours*.
+
+![The time range control at the top right of every dashboard, reading "Last 6 hours"](images/10-time-range-control.png)
+ Everything on the screen is only about that window, so
 if you set it wrong you will see nothing and think all is well. Set it to **Last 6 hours**,
 or wider if the caller says the problem started earlier.
 
@@ -237,10 +281,29 @@ window you chose.
 | Reading | What it means |
 |---|---|
 | **0** | Normal. Nothing ran out of memory in that window |
-| **Anything above 0** | A service ran out of memory. This is a real finding |
+| **Anything above 0** | **Check the panel below before treating it as a finding** — see the next paragraph |
 
 If it is above zero, look at the panel directly below it, **"Incidents — OOM / heap-space
 errors"**. That lists the actual error lines and names the service.
+
+![The OOM events panel reading 116 in red — on this deployment every one of them was an echo, not a crash](images/20-oom-events-echo.png)
+
+*The panel above was photographed on a healthy deployment. All 116 were Grafana and Loki
+echoing a search back into the log — there had been no crash at all. Read the next paragraph
+before acting on a number like this.*
+
+> **Check the service name before you escalate — this number has a known blind spot.**
+> Grafana and Loki are the monitoring tools themselves, and they write your *search text*
+> back into the log as an ordinary log line. So whenever anyone searches for the words
+> "OutOfMemoryError", this panel counts that search as though it were a crash. On a
+> deployment where L2 has been investigating, the number can read in the **hundreds** while
+> nothing has actually crashed.
+>
+> **How to tell in five seconds:** in the "Incidents" panel below, look at the service each
+> line came from. If every line is from **`grafana`** or **`loki`**, there were **no real
+> out-of-memory events** — record it as `OOM events: 0 (all grafana/loki echo)` and move on.
+> Only lines naming an actual DIGIT service — `pgr-services`, `egov-indexer`,
+> `egov-user` and so on — are real.
 
 **What to do about it:**
 
@@ -311,6 +374,15 @@ you can put in a ticket.
 Logs are kept for **72 hours**, so a problem from last week has no log left. This is why
 reporting quickly matters.
 
+> **First check this step applies to your deployment.** Searchable logs come from a component
+> called Loki, and some deployments are configured without it to save memory and disk — see
+> [README § How much monitoring this deployment runs](README.md#how-much-monitoring-this-deployment-runs).
+> If **DIGIT — Logs (Loki)** is not in the dashboard list at all, that is a deployment
+> decision and **not a fault**. Skip to [Step 5](#step-5--resolve-or-escalate), and write in
+> the ticket: *"no log search on this deployment"* — L2 can still read logs on the server
+> itself. Ask L2 once which level you are on and note it on your
+> [cheat sheet](cheatsheet.md), so nobody rediscovers this mid-incident.
+
 ### How to get there
 
 Open **Grafana** → left menu **Dashboards** → open **DIGIT — Logs (Loki)**.
@@ -318,11 +390,13 @@ Open **Grafana** → left menu **Dashboards** → open **DIGIT — Logs (Loki)**
 **You do not need to write a query here.** This dashboard has three dropdowns across the
 top; set them and the logs appear underneath.
 
+![The three controls across the top of the Logs dashboard: Service, Level and Search regex](images/30-logs-controls.png)
+
 | Control | Set it to |
 |---|---|
-| **service** | The service you suspect, from Step 2 or Step 3. If you have no suspect, leave it as `.+`, which means "all of them" |
-| **level** | `ERROR` — this hides routine chatter and shows only failures |
-| **q** | Leave empty. Or paste a complaint number here to follow one specific case through the system |
+| **Service** | The service you suspect, from Step 2 or Step 3. If you have no suspect, leave it as `.+`, which means "all of them" |
+| **Level** | `ERROR` — this hides routine chatter and shows only failures |
+| **Search regex** | Leave empty. Or paste a complaint number here to follow one specific case through the system |
 
 Then set the **time range** (top right) to **start ten minutes before the problem began**.
 Not when the caller rang — when it started. Failures cascade, and you want to catch the

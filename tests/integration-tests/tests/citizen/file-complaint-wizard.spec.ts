@@ -301,13 +301,23 @@ test.describe('Citizen file-complaint wizard', () => {
       });
       await expect(marker, 'clicking the map must create one explicit pin').toHaveCount(1);
 
-      // GeoLocations intentionally renders this icon-only control immediately
-      // after the search input. Trigger its actual React click handler through
-      // the DOM: the delayed-geocode loading veil otherwise intercepts pointer
-      // events, which is precisely the race this regression needs to exercise.
+      // A reverse geocode is still deliberately in flight. The loading status
+      // must not intercept pointer input: the user can replace the pin and then
+      // clear it without waiting for address enrichment (CCRS#1808).
+      await map.click({
+        position: {
+          x: Math.max(20, Math.floor(bounds!.width * 0.38)),
+          y: Math.max(20, Math.floor(bounds!.height * 0.42)),
+        },
+      });
+      await expect(marker, 'a second real map click must replace the pin while geocoding is in flight').toHaveCount(1);
+
+      // GeoLocations renders this icon-only control immediately after the
+      // search input. Use a real pointer click so an input-blocking veil makes
+      // this regression test fail instead of being bypassed programmatically.
       const clearControl = searchInput.locator('xpath=following-sibling::div[1]');
       await expect(clearControl, 'the map search field must expose its clear control').toHaveCount(1);
-      await clearControl.evaluate((element: HTMLElement) => element.click());
+      await clearControl.click();
 
       await expect(marker, 'Clear must remove the explicitly selected pin').toHaveCount(0);
       await expect(mapNext, 'clearing an optional pin must not disable Next').toBeEnabled();

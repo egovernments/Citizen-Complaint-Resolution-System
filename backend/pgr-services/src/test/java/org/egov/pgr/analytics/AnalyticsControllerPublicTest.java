@@ -280,25 +280,168 @@ public class AnalyticsControllerPublicTest {
     }
 
     @Test
-    public void publicQueryRejectsCallerParamsAndKpisOutsideThePack() throws Exception {
+    public void publicQueryForwardsOnlyAllowListedFilterParams() throws Exception {
         KpiDefinition def = publicDef("cl_public");
         DashboardPack pack = publicPack("cl_public");
         when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
         when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(pack));
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull()))
+                .thenReturn(Map.of("results", Collections.emptyMap()));
 
-        ResponseEntity<Map<String,Object>> withParams = controller.publicQuery(mapper.readTree(
-                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{" +
-                        "\"kpiId\":\"cl_public\",\"params\":{\"ward\":\"W1\"}}}}"), null);
-        ResponseEntity<Map<String,Object>> outsidePack = controller.publicQuery(mapper.readTree(
-                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{" +
-                        "\"kpiId\":\"cl_other\"}}}"), null);
+        ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public\"," +
+                        "\"params\":{\"dateFrom\":\"2026-07-01\",\"dateTo\":\"2026-07-31\"," +
+                        "\"ward\":\" W1 \",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"}}}}"),
+                null);
 
-        assertEquals(400, withParams.getStatusCodeValue());
-        assertEquals("invalid_param", withParams.getBody().get("error"));
-        assertEquals(400, outsidePack.getStatusCodeValue());
-        assertEquals("kpi_forbidden", outsidePack.getBody().get("error"));
+        assertEquals(200, response.getStatusCodeValue());
+        ArgumentCaptor<JsonNode> sanitized = ArgumentCaptor.forClass(JsonNode.class);
+        verify(service).query(sanitized.capture(), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull());
+        JsonNode params = sanitized.getValue().at("/queries/tile/params");
+        assertEquals(mapper.readTree("{\"dateFrom\":\"2026-07-01\",\"dateTo\":\"2026-07-31\"," +
+                "\"ward\":\"W1\",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"}"), params);
+    }
+
+    @Test
+    public void publicQueryAllowsAnyPublicTileNotJustPackTiles() throws Exception {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Arrays.asList(publicDef("cl_public"), publicDef("cl_public_extra")));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull()))
+                .thenReturn(Map.of("results", Collections.emptyMap()));
+
+        ResponseEntity<Map<String,Object>> added = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public_extra\"}}}"), null);
+        ResponseEntity<Map<String,Object>> notPublic = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_officer_pii\"}}}"), null);
+
+        assertEquals(200, added.getStatusCodeValue());
+        assertEquals(400, notPublic.getStatusCodeValue());
+        assertEquals("kpi_forbidden", notPublic.getBody().get("error"));
+        verify(service, times(1)).query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull());
+    }
+
+    @Test
+    public void publicQueryRejectsEveryParamOutsideTheAllowList() throws Exception {
+        KpiDefinition def = publicDef("cl_public");
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Collections.singletonList(def));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
+
+        String[] rejected = {
+                "{\"hierLevel\":\"1\"}",                       // aggregation level
+                "{\"compare\":\"prior\"}",                     // companion fan-out
+                "{\"series\":\"daily\"}",
+                "{\"window\":\"all\"}",                        // window override
+                "{\"ward\":[\"W1\",\"W2\"]}",                 // non-scalar
+                "{\"ward\":\"   \"}",                          // blank
+                "{\"dateFrom\":\"01/07/2026\"}",               // not an ISO day
+                "{\"dateFrom\":\"2026-07-01\"}",               // incomplete range
+                "{\"dateTo\":\"2026-07-31\"}",                 // incomplete range
+                "{\"serviceCode\":\"" + "x".repeat(129) + "\"}", // over-long
+        };
+        for (String params : rejected) {
+            ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
+                    "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{" +
+                            "\"kpiId\":\"cl_public\",\"params\":" + params + "}}}"), null);
+            assertEquals(400, response.getStatusCodeValue(), params);
+            assertEquals("invalid_param", response.getBody().get("error"), params);
+        }
+        // A foreign top-level field on the ref is rejected too (nothing but kpiId/params).
+        ResponseEntity<Map<String,Object>> foreign = controller.publicQuery(mapper.readTree(
+                "{\"tenantId\":\"ke\",\"queries\":{\"tile\":{" +
+                        "\"kpiId\":\"cl_public\",\"query\":{\"grain\":\"facts\"}}}}"), null);
+        assertEquals(400, foreign.getStatusCodeValue());
+        assertEquals("invalid_param", foreign.getBody().get("error"));
         verifyNoInteractions(service);
+    }
+
+    @Test
+    public void publicCatalogListsEveryPublicTileAndIgnoresSpoofedRequestInfo() {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Arrays.asList(publicDef("cl_public"), publicDef("cl_public_extra")));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
+
+        ResponseEntity<Map<String,Object>> response = controller.searchPublicCatalog(Map.of(
+                "tenantId", "ke",
+                "RequestInfo", Map.of("userInfo", Map.of("roles", List.of(Map.of("code", "SUPERUSER"))))));
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(2, response.getBody().get("total"));
+        @SuppressWarnings("unchecked")
+        List<Map<String,Object>> tiles = (List<Map<String,Object>>) response.getBody().get("tiles");
+        assertEquals(List.of("cl_public", "cl_public_extra"),
+                tiles.stream().map(t -> t.get("kpiId")).collect(java.util.stream.Collectors.toList()));
+        for (Map<String,Object> tile : tiles) {
+            assertFalse(tile.containsKey("query"));
+            assertFalse(tile.containsKey("rbac"));
+        }
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any(AnalyticsCapabilities.class));
+    }
+
+    @Test
+    public void publicCatalogAndOptionsFailClosedWhenDisabled() {
+        when(kpiCatalogService.isPublicDashboardEnabled("ke")).thenReturn(false);
+
+        ResponseEntity<Map<String,Object>> catalog = controller.searchPublicCatalog(Map.of("tenantId", "ke"));
+        ResponseEntity<Map<String,Object>> options = controller.publicFilterOptions(Map.of("tenantId", "ke"), null);
+
+        assertEquals(404, catalog.getStatusCodeValue());
+        assertEquals("public_dashboard_disabled", catalog.getBody().get("error"));
+        assertEquals(404, options.getStatusCodeValue());
+        assertEquals("public_dashboard_disabled", options.getBody().get("error"));
+        verifyNoInteractions(service);
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any());
+    }
+
+    @Test
+    public void publicCatalogAndOptionsFailClosedWithoutAPublicPack() {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Collections.singletonList(publicDef("cl_public")));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String,Object>> catalog = controller.searchPublicCatalog(Map.of("tenantId", "ke"));
+        ResponseEntity<Map<String,Object>> options = controller.publicFilterOptions(Map.of("tenantId", "ke"), null);
+
+        // Same gate as /public/_query: enabled-but-unconfigured exposes neither descriptors nor codes.
+        assertEquals(400, catalog.getStatusCodeValue());
+        assertEquals("public_pack_not_found", catalog.getBody().get("error"));
+        assertEquals(400, options.getStatusCodeValue());
+        assertEquals("public_pack_not_found", options.getBody().get("error"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    public void publicOptionsDelegateToTheServerOwnedDistinctsAndHideFailures() {
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
+                .thenReturn(Collections.singletonList(publicDef("cl_public")));
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(publicPack("cl_public")));
+        when(service.publicFilterOptions("ke", 1, "trace-9"))
+                .thenReturn(Map.of("results", Map.of("wards", Map.of("rows", List.of(Map.of("ward_code", "W1"))))));
+
+        ResponseEntity<Map<String,Object>> response = controller.publicFilterOptions(Map.of(
+                "tenantId", "ke",
+                "RequestInfo", Map.of("authToken", "stolen")), "trace-9");
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertTrue(response.getBody().containsKey("results"));
+        verify(service).publicFilterOptions("ke", 1, "trace-9");
+
+        when(service.publicFilterOptions("ke", 1, null))
+                .thenThrow(new RuntimeException("select password from private_table"));
+        ResponseEntity<Map<String,Object>> failure = controller.publicFilterOptions(Map.of("tenantId", "ke"), null);
+        assertEquals(500, failure.getStatusCodeValue());
+        assertFalse(failure.getBody().toString().contains("private_table"));
     }
 }

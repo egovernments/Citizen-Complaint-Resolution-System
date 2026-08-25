@@ -4,19 +4,17 @@ How much monitoring to run, what each part costs, and how to turn parts on and o
 
 Written for the question an operator actually has: **"how much can I afford, and what do I lose if I skip a piece?"**
 
-> **This describes work in flight on the `monitoring-fix` integration branch, not
-> what is on `master` today.** Named, so nobody goes looking for a knob that is not
-> there yet:
+> **One thing here has not merged yet.** Grafana alert *rules*, contact points and the
+> alerting test (`local-setup/otel/grafana/provisioning/alerting/`) arrive with **#1673**,
+> stacked on **#1609**. Until that lands, a deployed Grafana has **zero alert rules** and one
+> placeholder contact point — see
+> [../operations/alerts-setup.md](../operations/alerts-setup.md) for what to build in the
+> meantime, and note that **Gatus endpoint alerting has shipped** and needs only a webhook
+> URL.
 >
-> | Described here | Actually arrives with |
-> |---|---|
-> | `observability_level` and the `obs-*` compose profiles | #1657, plus the three defect fixes in #1687 |
-> | `.github/scripts/check-helm-values-paths.py` in CI | #1652 |
-> | The Kubernetes tier's wired-in helmfile and `monitoring.*` toggles | #1675 — until it lands the helmfile line is still commented out and `env.yaml` has no `monitoring:` block |
-| Grafana alert rules, contact points and the alerting test | #1673, stacked on #1609 — a different branch chain from this one |
->
-> None of those had merged when this was written. Everything else here — what each
-> component does, the Gatus coverage rules, the Kubernetes layout — is current.
+> Everything else described below is on `master`: `observability_level` and the `obs-*`
+> compose profiles (#1657), the CI helm-values check (#1652), and the Kubernetes tier's
+> wired-in helmfile with its `monitoring.*` toggles (#1675).
 
 ---
 

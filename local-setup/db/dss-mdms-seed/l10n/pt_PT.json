@@ -450,6 +450,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_LANGUAGE",
+    "message": "Idioma",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Últimos 7 dias",
     "module": "rainmaker-dashboard"

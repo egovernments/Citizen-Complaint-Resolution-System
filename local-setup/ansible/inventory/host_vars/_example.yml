@@ -635,6 +635,12 @@ grafana_anonymous_enabled: false
 # Change bootstrap_user/bootstrap_password to move OFF the well-known
 # defaults. They are used for every bootstrap call the playbook makes AND
 # are the credentials you log into the configurator with.
+# On a fresh box the user is created by the compose user-seed step (full
+# admin roles on every seed tenant; the stock ADMIN/eGov@123 is still seeded
+# alongside a custom name — CI collections hardcode it). Caveat for EXISTING
+# boxes: seeding never rewrites passwords, so changing bootstrap_password
+# after the user exists fails the deploy's auth validate until you reset the
+# password via the user API (or revert the var).
 # bootstrap_user: "ADMIN"
 # bootstrap_password: "eGov@123"
 # bootstrap_tenant: "pg"                # tenant those calls authenticate against

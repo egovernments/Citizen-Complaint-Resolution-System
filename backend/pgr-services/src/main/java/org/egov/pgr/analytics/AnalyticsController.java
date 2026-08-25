@@ -26,6 +26,13 @@ import java.util.stream.Collectors;
  *   POST /v2/analytics/packs           — return best-match DashboardPack + safe tile descriptors
  *   POST /v2/analytics/catalog/_search — return all visible KpiDefinition tiles (no query/rbac)
  *
+ * Anonymous twins (Kong-only auth-optional aliases; RequestInfo is discarded by construction):
+ *   POST /v2/analytics/public/packs           — curated PUBLIC pack, fail-closed when disabled
+ *   POST /v2/analytics/public/catalog/_search — every PUBLIC-tagged published tile (Add KPI menu)
+ *   POST /v2/analytics/public/_options        — filter-bar option codes (wards / complaint types)
+ *   POST /v2/analytics/public/_query          — {kpiId[, params]} refs over PUBLIC tiles, with
+ *                                               params restricted to AnalyticsService.PUBLIC_QUERY_PARAMS
+ *
  * Body (single):  { "RequestInfo": {...}, "tenantId": "ke", "query": { ...grammar... } }
  * Body (batch):   { "RequestInfo": {...}, "tenantId": "ke", "queries": { "name": {...}, ... } }
  */
@@ -171,9 +178,11 @@ public class AnalyticsController {
     }
 
     /**
-     * Anonymous dashboard data endpoint. Only a bounded batch of bare {@code {kpiId}} references
-     * selected by the tenant's matched PUBLIC pack is accepted. RequestInfo and caller parameters
-     * are discarded by construction before delegating to the normal analytics execution path.
+     * Anonymous dashboard data endpoint. Accepts a bounded batch of {@code {kpiId[, params]}}
+     * references over the tenant's PUBLIC-tagged published tiles (the same set the public Add-KPI
+     * menu offers; the matched PUBLIC pack must still exist as the fail-closed gate). RequestInfo
+     * is discarded by construction; {@code params} is rebuilt from the {@link #PUBLIC_QUERY_PARAMS}
+     * allow-list — never forwarded verbatim — before delegating to the normal execution path.
      */
     @PostMapping("/public/_query")
     public ResponseEntity<Map<String,Object>> publicQuery(@RequestBody JsonNode body,
@@ -197,29 +206,35 @@ public class AnalyticsController {
 
             AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
             List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicSurface);
-            DashboardPack pack = kpiCatalogService.getBestPack(tenantId, publicSurface, visibleDefs)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "public_pack_not_found: no PUBLIC dashboard pack is configured"));
-            Set<String> allowedKpis = new HashSet<>(
-                    pack.getTiles() == null ? Collections.emptyList() : pack.getTiles());
+            // The pack is the fail-closed enablement gate; the tile set is the PUBLIC catalog,
+            // so a tile a visitor added from the public Add-KPI menu is queryable too (#1797).
+            requirePublicPack(tenantId, publicSurface, visibleDefs);
+            Set<String> allowedKpis = visibleDefs.stream()
+                    .map(KpiDefinition::getId).collect(Collectors.toSet());
 
             ObjectNode sanitizedQueries = mapper.createObjectNode();
             Iterator<Map.Entry<String,JsonNode>> it = queries.fields();
             while (it.hasNext()) {
                 Map.Entry<String,JsonNode> entry = it.next();
                 JsonNode ref = entry.getValue();
-                if (ref == null || !ref.isObject() || ref.size() != 1 || !ref.hasNonNull("kpiId")
+                if (ref == null || !ref.isObject() || !ref.hasNonNull("kpiId")
                         || !ref.get("kpiId").isTextual() || ref.get("kpiId").asText().isEmpty()) {
                     throw new IllegalArgumentException(
-                            "invalid_param: public queries must be bare {kpiId} references without params");
+                            "invalid_param: public queries must be {kpiId[, params]} references");
+                }
+                for (Iterator<String> names = ref.fieldNames(); names.hasNext();) {
+                    String field = names.next();
+                    if (!field.equals("kpiId") && !field.equals("params"))
+                        throw new IllegalArgumentException(
+                                "invalid_param: public queries must be {kpiId[, params]} references");
                 }
                 String kpiId = ref.get("kpiId").asText();
                 if (!allowedKpis.contains(kpiId))
                     throw new IllegalArgumentException(
-                            "kpi_forbidden: KPI is not selected by the PUBLIC dashboard pack");
-                ObjectNode cleanRef = mapper.createObjectNode();
-                cleanRef.put("kpiId", kpiId);
-                sanitizedQueries.set(entry.getKey(), cleanRef);
+                            "kpi_forbidden: KPI is not published to the PUBLIC audience");
+                // Same allow-list the service re-applies for every PUBLIC-floor caller; rejecting
+                // here keeps the alias's whole-batch 400 contract for malformed input.
+                sanitizedQueries.set(entry.getKey(), AnalyticsService.publicFloorRef(ref));
             }
 
             ObjectNode sanitizedBody = mapper.createObjectNode();
@@ -235,6 +250,69 @@ public class AnalyticsController {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
             log.error("public analytics query failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
+        }
+    }
+
+    /**
+     * Anonymous catalog: every published tile tagged PUBLIC, as safe descriptors. Feeds the public
+     * page's Add-KPI menu (#1797) — the public equivalent of "everything your role can see". Same
+     * disabled/RequestInfo contract as {@link #publicQuery}.
+     */
+    @PostMapping("/public/catalog/_search")
+    public ResponseEntity<Map<String,Object>> searchPublicCatalog(@RequestBody Map<String,Object> body){
+        try {
+            String tenantId = extractTenantId(body);
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(
+                        new IllegalArgumentException(
+                                "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
+            }
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicSurface);
+            // Same fail-closed gate as /public/_query: no PUBLIC pack -> no catalog either, so an
+            // enabled-but-unconfigured tenant never exposes descriptors it cannot serve data for.
+            requirePublicPack(tenantId, publicSurface, visibleDefs);
+            List<Map<String,Object>> tiles = visibleDefs.stream()
+                    .map(this::safeTile)
+                    .collect(Collectors.toList());
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("tiles", tiles);
+            out.put("total", tiles.size());
+            return ResponseEntity.ok(out);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics catalog search failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
+        }
+    }
+
+    /**
+     * Anonymous filter-bar options: the ward and complaint-type codes that carry complaints on
+     * this tenant (#1797). The caller supplies nothing but the tenant; the two distinct queries
+     * are server-owned constants (see {@link AnalyticsService#publicFilterOptions}).
+     */
+    @PostMapping("/public/_options")
+    public ResponseEntity<Map<String,Object>> publicFilterOptions(@RequestBody Map<String,Object> body,
+            @RequestHeader(value = "x-trace-id", required = false) String xTraceId){
+        try {
+            String tenantId = extractTenantId(body);
+            if (!kpiCatalogService.isPublicDashboardEnabled(tenantId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(
+                        new IllegalArgumentException(
+                                "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
+            }
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            requirePublicPack(tenantId, publicSurface,
+                    kpiCatalogService.getVisibleDefs(tenantId, publicSurface));
+            int stateLen = config.getStateLevelTenantIdLength() == null
+                    ? 1 : config.getStateLevelTenantIdLength();
+            return ResponseEntity.ok(service.publicFilterOptions(tenantId, stateLen, xTraceId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        } catch (Exception e) {
+            log.error("public analytics filter options failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(publicUnavailable());
         }
     }
@@ -373,6 +451,14 @@ public class AnalyticsController {
             return pack.isPublicPack() ? "public" : null;
         int lastSegment = requiredActionUrl.lastIndexOf("/analytics/");
         return lastSegment < 0 ? requiredActionUrl : requiredActionUrl.substring(lastSegment + "/analytics/".length());
+    }
+
+    /** The matched PUBLIC pack is the fail-closed gate shared by every public alias. */
+    private DashboardPack requirePublicPack(String tenantId, AnalyticsCapabilities capabilities,
+                                            List<KpiDefinition> visibleDefs) {
+        return kpiCatalogService.getBestPack(tenantId, capabilities, visibleDefs)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "public_pack_not_found: no PUBLIC dashboard pack is configured"));
     }
 
     /** Serializes a KpiDefinition for external consumption: includes viz/params but NEVER query or rbac. */

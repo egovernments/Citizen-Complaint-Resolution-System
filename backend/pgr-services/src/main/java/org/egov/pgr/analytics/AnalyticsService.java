@@ -1,6 +1,8 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
@@ -48,10 +50,99 @@ public class AnalyticsService {
      * aggregate-only, no PII), and may NOT run inline (non-kpiId) queries. Tenant-aggregate scope is
      * still applied. This is the deliberate "degrade-to-public-floor", not a blanket lock-out.
      */
-    static final String PUBLIC_ROLE = "PUBLIC";
-
     /** Hard request budget: batch entries execute sequentially and each may hit PostgreSQL. */
     static final int MAX_BATCH_QUERIES = 50;
+
+    /**
+     * The only query params a PUBLIC-floor caller may attach to a KPI reference (#1797): the
+     * dashboard's global filter bar. Enforced HERE — on every path that resolves a kpiId for the
+     * public floor, not only the {@code /public/_query} alias — because Kong's audit mode
+     * ({@code ENFORCE_UNAUTH=false}) still lets an anonymous body reach {@code /_query}, where it
+     * degrades to the same PUBLIC floor. Each is a narrowing predicate the composer layers under
+     * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
+     * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
+     * Values are scalar strings, length-capped, and dates must be ISO calendar days supplied as a
+     * pair.
+     */
+    static final Set<String> PUBLIC_QUERY_PARAMS =
+            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+    static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
+    private static final java.util.regex.Pattern ISO_DAY =
+            java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+
+    /**
+     * Public narrowing param -> the grain column it binds. A PUBLIC def that already filters that
+     * column (e.g. "water complaints" with a baked {@code service_code} eq) must keep its own
+     * predicate: the composer's {@link KpiQueryComposer} REPLACES an existing eq rather than
+     * intersecting with it, which for an anonymous caller would turn a curated subset tile into
+     * a "count anything" primitive. Such params are dropped and reported as {@code paramsIgnored}.
+     */
+    private static final Map<String,String> PUBLIC_PARAM_COLUMNS = Map.of(
+            "ward", "ward_code",
+            "serviceCode", "service_code",
+            "complaintPath", "complaint_node_path");
+
+    /**
+     * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
+     * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
+     * non-scalar or blank value, over-long value, non-ISO-day date, or incomplete date range.
+     */
+    static ObjectNode sanitizePublicParams(JsonNode params) {
+        if (params == null || params.isNull()) return null;
+        if (!params.isObject())
+            throw new IllegalArgumentException("invalid_param: public params must be an object");
+        if (params.isEmpty()) return null;
+        ObjectNode clean = JsonNodeFactory.instance.objectNode();
+        for (Iterator<Map.Entry<String,JsonNode>> it = params.fields(); it.hasNext();) {
+            Map.Entry<String,JsonNode> e = it.next();
+            String name = e.getKey();
+            JsonNode v = e.getValue();
+            if (!PUBLIC_QUERY_PARAMS.contains(name))
+                throw new IllegalArgumentException("invalid_param: public queries accept only "
+                        + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
+            if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
+            String text = v.asText().trim();
+            if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name + " exceeds "
+                        + PUBLIC_QUERY_PARAM_MAX_LENGTH + " characters");
+            if ((name.equals("dateFrom") || name.equals("dateTo")) && !ISO_DAY.matcher(text).matches())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
+            clean.put(name, text);
+        }
+        if (clean.has("dateFrom") != clean.has("dateTo"))
+            throw new IllegalArgumentException(
+                    "invalid_param: dateFrom and dateTo must be supplied together");
+        return clean;
+    }
+
+    /**
+     * Public-floor view of a kpiId reference: {@code kpiId} plus sanitized {@code params} and
+     * nothing else. Inline bodies are rejected by the caller before this runs.
+     */
+    static ObjectNode publicFloorRef(JsonNode queryNode) {
+        ObjectNode ref = JsonNodeFactory.instance.objectNode();
+        ref.set("kpiId", queryNode.get("kpiId"));
+        ObjectNode params = sanitizePublicParams(queryNode.get("params"));
+        if (params != null) ref.set("params", params);
+        return ref;
+    }
+
+    /** Drop public params whose column the def's own query already filters (see PUBLIC_PARAM_COLUMNS). */
+    private static JsonNode withoutBakedNarrowings(KpiDefinition def, JsonNode params, List<String> paramsIgnored) {
+        if (params == null || !params.isObject()) return params;
+        JsonNode filters = def.getQuery() == null ? null : def.getQuery().get("filters");
+        if (filters == null || !filters.isObject()) return params;
+        ObjectNode out = null;
+        for (Map.Entry<String,String> e : PUBLIC_PARAM_COLUMNS.entrySet()) {
+            if (params.has(e.getKey()) && filters.has(e.getValue())) {
+                if (out == null) out = ((ObjectNode) params).deepCopy();
+                out.remove(e.getKey());
+                if (paramsIgnored != null && !paramsIgnored.contains(e.getKey())) paramsIgnored.add(e.getKey());
+            }
+        }
+        return out == null ? params : out;
+    }
 
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
@@ -148,6 +239,9 @@ public class AnalyticsService {
                                 "message", "public access is limited to published PUBLIC KPIs"));
                         continue;
                     }
+                    // ... and only the filter-bar params (#1797) — an out-of-list param is a
+                    // per-entry invalid_param, whichever gateway path the body arrived through.
+                    if (publicFloor) queryNode = publicFloorRef(queryNode);
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
                     Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, capabilities, tel, name, calendar);
                     if (composed != null) { results.put(name, composed); continue; }
@@ -183,6 +277,7 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
+            if (publicFloor) queryNode = publicFloorRef(queryNode);
             Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, capabilities, tel, "query", calendar);
             if (composed != null) { out.putAll(composed); return out; }
             List<String> paramsIgnored = new ArrayList<>();
@@ -202,6 +297,95 @@ public class AnalyticsService {
     /** Same state-level test the scope resolvers use, for the anonymous tenant-only scope. */
     private static boolean isStateLevel(String tenantId, int stateLevelLen) {
         return tenantId != null && tenantId.split("\\.").length == stateLevelLen;
+    }
+
+    /**
+     * The two filter-bar option sources the dashboard derives from ABAC-scoped distincts (the
+     * employee FE posts these verbatim as an inline batch; see useFilterOptions.OPTION_QUERIES).
+     * Fixed server-owned shape so the public arm can serve them without accepting an inline body.
+     */
+    static final String PUBLIC_OPTIONS_WARDS = "wards";
+    static final String PUBLIC_OPTIONS_COMPLAINT_TYPES = "complaintTypes";
+    private static final int PUBLIC_OPTIONS_LIMIT = 300;
+
+    /**
+     * Anonymous filter-bar options (#1797). The public floor forbids inline queries — an inline
+     * body bypasses the catalog's PUBLIC opt-in — so the two distinct-dimension queries the
+     * employee filter bar runs inline are built HERE from constants, with no caller input beyond
+     * the tenant, and executed under the anonymous tenant-aggregate scope. The response mirrors
+     * the batch envelope ({@code results.wards.rows[].ward_code},
+     * {@code results.complaintTypes.rows[].service_code}) so the dashboard's option builder is
+     * shared between the two surfaces, but the per-code counts are dropped: a public caller
+     * learns WHICH codes carry complaints, never how many.
+     */
+    public Map<String,Object> publicFilterOptions(String tenantId, int stateLevelLen, String headerTraceId){
+        if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
+        try {
+            PgrSearchScope scope = AnalyticsRowScopeResolver.publicSurfaceScope(
+                    tenantId, isStateLevel(tenantId, stateLevelLen));
+            BusinessCalendar calendar = BusinessCalendar.of(
+                    kpiCatalogService.resolveTimeZone(tenantId), requestClock.getAsLong());
+            Map<String,Object> results = new LinkedHashMap<>();
+            boolean partial = false;
+            Map<String,String> sources = new LinkedHashMap<>();
+            sources.put(PUBLIC_OPTIONS_WARDS, "ward_code");
+            sources.put(PUBLIC_OPTIONS_COMPLAINT_TYPES, "service_code");
+            for (Map.Entry<String,String> src : sources.entrySet()) {
+                try {
+                    Map<String,Object> r = runOne(distinctDimensionQuery(src.getValue()), scope, tel,
+                            src.getKey(), "public-options", calendar);
+                    results.put(src.getKey(), codesOnly(r, src.getValue()));
+                } catch (Exception ex) {
+                    // Anonymous envelope: the driver/SQL detail belongs only in the server log.
+                    log.warn("public filter options: {} distinct failed", src.getKey(), ex);
+                    partial = true;
+                    results.put(src.getKey(), Map.of("error", "query_failed",
+                            "message", "filter options are unavailable"));
+                }
+            }
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("asOf", asOf());
+            out.put("calendar", calendarInfo(calendar));
+            out.put("scope", scopeInfo(scope));
+            out.put("results", results);
+            out.put("partial", partial);
+            return out;
+        } finally {
+            if (!tel.isEmpty())
+                log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
+        }
+    }
+
+    /** {@code SELECT <dimension>, count(*) FROM facts (all time)} — the filter bar's distinct source. */
+    private JsonNode distinctDimensionQuery(String dimension) {
+        ObjectNode q = JsonNodeFactory.instance.objectNode();
+        q.put("grain", "facts");
+        q.putObject("window").put("name", "all");
+        q.putArray("dimensions").add(dimension);
+        q.putArray("measures").addObject().put("name", "n").put("agg", "count");
+        q.put("limit", PUBLIC_OPTIONS_LIMIT);
+        return q;
+    }
+
+    /** Project a distinct result down to its dimension column: no counts, no timing. */
+    @SuppressWarnings("unchecked")
+    private static Map<String,Object> codesOnly(Map<String,Object> result, String dimension) {
+        List<Map<String,Object>> rows = new ArrayList<>();
+        Object rawRows = result.get("rows");
+        if (rawRows instanceof List) {
+            for (Object row : (List<Object>) rawRows) {
+                if (!(row instanceof Map)) continue;
+                Object code = ((Map<String,Object>) row).get(dimension);
+                if (code == null || code.toString().trim().isEmpty()) continue;
+                rows.add(Collections.singletonMap(dimension, code));
+            }
+        }
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("columns", Collections.singletonList(dimension));
+        out.put("rows", rows);
+        out.put("rowCount", rows.size());
+        return out;
     }
 
     /** Reject oversized batches before principal resolution or any SQL execution. */
@@ -241,9 +425,21 @@ public class AnalyticsService {
             log.debug("kpiId '{}' not found or not reachable by capabilities {}", kpiId, capabilities.granted());
             return null;
         }
+        boolean publicFloor = capabilities.isPublicSurface();
+        // Public floor (#1797): a caller param may not displace a predicate the PUBLIC def bakes
+        // itself. Do this before defaults so a rejected caller param is still reported accurately.
+        JsonNode callerParams = publicFloor
+                ? withoutBakedNarrowings(def.get(), queryNode.get("params"), paramsIgnored)
+                : queryNode.get("params");
         // #1026: apply the def's declared params[].default for any param the caller omitted.
         // Precedence: explicit caller param > declared default > the def's baked query.
-        JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
+        JsonNode effectiveParams = withDeclaredDefaults(def.get(), callerParams);
+        // A declared default is server configuration rather than a caller-supplied param, but it
+        // must obey the same PUBLIC invariant: it cannot redefine a KPI whose identity is baked
+        // into its query. Do not report such a default as ignored input because the caller did not
+        // supply it.
+        if (publicFloor)
+            effectiveParams = withoutBakedNarrowings(def.get(), effectiveParams, null);
 
         // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
         // params.allowed allow-list (the def is in scope here). An out-of-list value (window,

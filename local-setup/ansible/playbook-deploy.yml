@@ -1350,11 +1350,51 @@
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
     # working directory, so no extra wiring is needed in the compose file.
+    - name: "Slurp previous .env (to preserve OpenBao secret blocks across regeneration)"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.env"
+      register: prev_env
+      failed_when: false
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
         dest: "{{ digit_dir }}/.env"
         mode: '0644'
+
+    # The template above regenerates .env from scratch, which used to WIPE the
+    # marked secret blocks the OpenBao section appends much later in the play
+    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
+    # behind enable_keycloak). Fresh box: fine — the blocks don't exist yet and
+    # the first `up -d` runs postgres on the compose default before the OpenBao
+    # section ALTERs the role to the vault password. RERUN: fatal — the role's
+    # password in the persisted volume is already the vault value, but the
+    # freshly templated .env has no POSTGRES_PASSWORD line, so "Start DIGIT
+    # stack" recreates postgres' consumers with the egov123 default and the
+    # first thing to connect (db-history-normalize) dies with "password
+    # authentication failed", aborting the play long before the OpenBao section
+    # would have re-appended the block. Restore the blocks verbatim; the OpenBao
+    # section later refreshes them from the vault as before (so a rotated
+    # secret still propagates — just after the stack is up, same as day one).
+    - name: "Restore OpenBao secret blocks into the regenerated .env"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} {{ item }}"
+        block: "{{ prev_block }}"
+        create: false
+        mode: '0600'   # blocks carry secrets; match the OpenBao tasks' mode
+      vars:
+        prev_env_text: "{{ prev_env.content | default('') | b64decode }}"
+        prev_block: >-
+          {{ (prev_env_text
+              | regex_search('(?s)# BEGIN ' + item + '\n(.*?)# END ' + item, '\1')
+              | default([''], true) | first).rstrip('\n') }}
+      loop:
+        - TENANT SECRETS
+        - KEYCLOAK SECRETS
+      when:
+        - prev_env.content is defined
+        - ('# BEGIN ' + item) in (prev_env.content | b64decode)
 
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
@@ -3537,7 +3577,14 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.mcp | default(false)
 
-    - name: "validate — auth flow: ADMIN can mint a token"
+    # The bootstrap user is guaranteed to exist by now: user-seed (compose)
+    # creates {{ bootstrap_user }} with full admin roles on every seed tenant
+    # (SEED_ADMIN_USER/SEED_ADMIN_PASSWORD from .env — see digit.env.j2).
+    # The one case seeding can't fix: the user already existed with a
+    # DIFFERENT password (user create is skipped on DuplicateUserName, and
+    # there is no unauthenticated password reset — by design). The assert
+    # below names that case instead of dying with a bare HTTP 400.
+    - name: "validate — auth flow: bootstrap user can mint a token"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
@@ -3561,13 +3608,25 @@
       register: auth_probe
       retries: 6
       delay: 10
+      until: auth_probe.status == 200
+      failed_when: false
 
     - name: "validate — auth probe returned an access_token"
       ansible.builtin.assert:
         that:
+          - auth_probe.status == 200
           - auth_probe.json.access_token is defined
           - auth_probe.json.access_token | length > 10
-        fail_msg: "Auth flow returned 200 but no access_token — egov-user may have wrong DB creds or schema migration didn't run."
+        fail_msg: >-
+          Token mint failed for bootstrap user '{{ bootstrap_user | default('ADMIN') }}'
+          on tenant '{{ bootstrap_tenant | default('pg') }}'
+          (HTTP {{ auth_probe.status }}: {{ auth_probe.json | default({}) | to_json | truncate(200) }}).
+          If this is 'Invalid login credentials': the user exists but its password does not
+          match host_vars bootstrap_password (user-seed skips existing users and never
+          rewrites passwords). Either set bootstrap_password back to the value the user was
+          created with, or reset the password via the configurator/user API, then rerun.
+          A 200 without an access_token means egov-user has wrong DB creds or its schema
+          migration didn't run.
 
     # ────────────────────────────────────────────────────────────────
     # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
@@ -4031,6 +4090,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
@@ -4053,6 +4121,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
