@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DIGIT Complaints Management</title>
+    <!-- Ops kill switch for this app's own telemetry. A CLASSIC script, loaded
+         before the module below, so the flag exists before main.tsx decides
+         whether to initialise PostHog and Sentry. Shipped in dist alongside this
+         file, so the two can never skew. See src/lib/telemetryGate.ts. -->
+    <!-- Base-aware: vite.config.ts sets base '/configurator/', so an origin-root
+         path 404s once deployed under that prefix. A missing global makes
+         isTelemetryKilled() return false — i.e. the kill switch fails OPEN. -->
+    <script src="./telemetry-config.js"></script>
   </head>
   <body>
     <div id="root"></div>

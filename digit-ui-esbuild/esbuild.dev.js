@@ -336,6 +336,26 @@ async function start() {
       return;
     }
 
+    // Serve public/analytics.js in dev. The prod build copies every public/ file
+    // into build/, but this dev server only special-cases globalConfigs.js and
+    // vendor/. This handler must stay AHEAD of the build/ static branch below:
+    // build/ is never cleaned, so a stale build/analytics.js from an earlier
+    // production build would otherwise shadow edits made to public/analytics.js.
+    if (pathname === "/digit-ui/analytics.js") {
+      const analyticsPath = path.resolve(__dirname, "public/analytics.js");
+      if (fs.existsSync(analyticsPath)) {
+        res.writeHead(200, {
+          "Content-Type": "application/javascript",
+          "Cache-Control": "no-store",
+        });
+        res.end(fs.readFileSync(analyticsPath));
+      } else {
+        res.writeHead(404);
+        res.end("analytics.js not found");
+      }
+      return;
+    }
+
     // Serve vendored assets (e.g. the transformed digit-ui-css) from public/vendor/
     if (pathname.startsWith("/digit-ui/vendor/")) {
       const subPath = pathname.slice("/digit-ui/vendor/".length);
