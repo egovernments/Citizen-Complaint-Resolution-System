@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.policy.PgrSearchScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ public class KpiQueryComposerPinnedWindowTest {
     private final AnalyticsCatalog catalog = new AnalyticsCatalog();
     private final KpiQueryComposer composer = new KpiQueryComposer(catalog);
     private final AnalyticsPlanner planner = new AnalyticsPlanner(catalog);
-    private final AnalyticsScope stateScope = new AnalyticsScope("ke", true, null, null, null);
+    private final PgrSearchScope stateScope = new PgrSearchScope("ke", true, null, null, null);
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }

@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.policy.PgrSearchScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +23,7 @@ public class AnalyticsPlannerTimeZoneTest {
     private final ObjectMapper om = new ObjectMapper();
     private final AnalyticsCatalog catalog = new AnalyticsCatalog();
     private final AnalyticsPlanner planner = new AnalyticsPlanner(catalog);
-    private final AnalyticsScope stateScope = new AnalyticsScope("ke", true, null, null, null);
+    private final PgrSearchScope stateScope = new PgrSearchScope("ke", true, null, null, null);
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
@@ -171,11 +172,12 @@ public class AnalyticsPlannerTimeZoneTest {
         assertEquals(kolkata.getId(), p.params.get(0), "zone must be the first bound param");
         assertEquals(true, p.params.get(1), "measure FILTER predicate binds next, still inside SELECT");
         assertEquals("W1", p.params.get(2), "explicit filter is the first WHERE param");
-        // window gte/lt bounds follow, then the RBAC tenant-scope param last.
+        // window gte/lt bounds follow, then the two subtree tenant-scope params last.
         assertEquals(now - 7 * 86_400_000L, p.params.get(3));
         assertEquals(now, p.params.get(4));
-        assertEquals("ke%", p.params.get(5));
-        assertEquals(6, p.params.size());
+        assertEquals("ke", p.params.get(5));
+        assertEquals("ke.%", p.params.get(6));
+        assertEquals(7, p.params.size());
     }
 
     @Test

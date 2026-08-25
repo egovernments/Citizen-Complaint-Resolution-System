@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.pgr.analytics.model.DashboardPack;
 import org.egov.pgr.analytics.model.KpiDefinition;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.policy.AccessControlUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,13 +30,14 @@ public class AnalyticsControllerPublicTest {
     @Mock private AnalyticsService service;
     @Mock private KpiCatalogService kpiCatalogService;
     @Mock private PGRConfiguration config;
+    @Mock private AnalyticsCapabilityService capabilityService;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private AnalyticsController controller;
 
     @BeforeEach
     public void setUp() {
-        controller = new AnalyticsController(service, kpiCatalogService, mapper, config);
+        controller = new AnalyticsController(service, kpiCatalogService, capabilityService, mapper, config);
         when(config.getStateLevelTenantIdLength()).thenReturn(1);
         when(kpiCatalogService.isPublicDashboardEnabled(anyString())).thenReturn(true);
     }
@@ -49,36 +51,36 @@ public class AnalyticsControllerPublicTest {
         viz.setKind("number-tile");
         viz.setTitleKey("DASHBOARD_" + id.toUpperCase(Locale.ROOT));
         def.setViz(viz);
-        KpiDefinition.KpiRbac rbac = new KpiDefinition.KpiRbac();
-        rbac.setVisibleTo(Collections.singletonList("PUBLIC"));
-        def.setRbac(rbac);
+        def.setPublicTile(true);
         return def;
     }
 
     private DashboardPack publicPack(String... ids) {
         DashboardPack pack = new DashboardPack();
         pack.setId("public-default");
-        pack.setRoles(Collections.singletonList("PUBLIC"));
+        pack.setPublicPack(true);
         pack.setTiles(Arrays.asList(ids));
         pack.setLayout(Collections.emptyList());
         return pack;
     }
 
-    private Map<String,Object> refreshBody(String callerTenant, String role, String targetTenant) {
-        return Map.of(
-                "tenantId", targetTenant,
-                "RequestInfo", Map.of("userInfo", Map.of(
-                        "tenantId", callerTenant,
-                        "roles", List.of(Map.of("code", role)))));
+    private Map<String,Object> refreshBody(String targetTenant) {
+        return Map.of("tenantId", targetTenant, "RequestInfo", Map.of("authToken", "token"));
+    }
+
+    private void givenRefreshCapability(boolean granted) {
+        when(capabilityService.resolve(any(), anyString())).thenReturn(granted
+                ? AnalyticsCapabilityFixtures.of(AnalyticsCapabilities.CONFIG_REFRESH)
+                : AnalyticsCapabilityFixtures.of(AnalyticsCapabilities.QUERY));
     }
 
     @Test
     public void publicPackIgnoresSpoofedRequestInfoAndNeverReturnsRecordCount() {
         KpiDefinition def = publicDef("cl_public");
         DashboardPack pack = publicPack("cl_public");
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(pack));
 
         Map<String,Object> body = new LinkedHashMap<>();
@@ -126,8 +128,8 @@ public class AnalyticsControllerPublicTest {
         assertNull(response.getBody().get("packId"));
         assertEquals(AnalyticsService.MAX_BATCH_QUERIES,
                 response.getBody().get("maxBatchQueries"));
-        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), anySet());
-        verify(kpiCatalogService, never()).getBestPack(anyString(), anySet(), anyList());
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any(AnalyticsCapabilities.class));
+        verify(kpiCatalogService, never()).getBestPack(anyString(), any(AnalyticsCapabilities.class), anyList());
         verifyNoInteractions(service);
     }
 
@@ -140,8 +142,8 @@ public class AnalyticsControllerPublicTest {
 
         assertEquals(404, response.getStatusCodeValue());
         assertEquals("public_dashboard_disabled", response.getBody().get("error"));
-        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), anySet());
-        verify(kpiCatalogService, never()).getBestPack(anyString(), anySet(), anyList());
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any(AnalyticsCapabilities.class));
+        verify(kpiCatalogService, never()).getBestPack(anyString(), any(AnalyticsCapabilities.class), anyList());
         verifyNoInteractions(service);
     }
 
@@ -149,8 +151,10 @@ public class AnalyticsControllerPublicTest {
     public void configRefreshReturnsFreshPublicDashboardState() {
         when(kpiCatalogService.refreshPublicDashboardConfig("ke")).thenReturn(true);
 
+        givenRefreshCapability(true);
+
         ResponseEntity<Map<String,Object>> response =
-                controller.refreshDashboardConfig(refreshBody("ke", "MDMS_ADMIN", "ke"));
+                controller.refreshDashboardConfig(refreshBody("ke"));
 
         assertEquals(200, response.getStatusCodeValue());
         assertEquals(true, response.getBody().get("publicDashboardEnabled"));
@@ -161,8 +165,10 @@ public class AnalyticsControllerPublicTest {
     public void configRefreshAllowsConfiguratorAdminWithinCallerTenantTree() {
         when(kpiCatalogService.refreshPublicDashboardConfig("ke.bomet")).thenReturn(false);
 
+        givenRefreshCapability(true);
+
         ResponseEntity<Map<String,Object>> response = controller.refreshDashboardConfig(
-                refreshBody("ke", "SUPERUSER", "ke.bomet"));
+                refreshBody("ke.bomet"));
 
         assertEquals(200, response.getStatusCodeValue());
         assertEquals(false, response.getBody().get("publicDashboardEnabled"));
@@ -170,20 +176,28 @@ public class AnalyticsControllerPublicTest {
     }
 
     @Test
-    public void configRefreshRejectsAnonymousWrongRoleAndCrossTenantCallers() {
-        ResponseEntity<Map<String,Object>> anonymous =
-                controller.refreshDashboardConfig(Map.of("tenantId", "ke"));
-        ResponseEntity<Map<String,Object>> wrongRole = controller.refreshDashboardConfig(
-                refreshBody("ke", "EMPLOYEE", "ke"));
-        ResponseEntity<Map<String,Object>> crossTenant = controller.refreshDashboardConfig(
-                refreshBody("ke.bomet", "MDMS_ADMIN", "ke"));
+    public void configRefreshIsRefusedWithoutTheRefreshCapability() {
+        // Who may bust the config cache is now the role-action master's answer (action 2645), not a
+        // role list kept in this controller. The refusal surfaces as 403 through the handler.
+        givenRefreshCapability(false);
 
-        assertEquals(403, anonymous.getStatusCodeValue());
-        assertEquals(403, wrongRole.getStatusCodeValue());
-        assertEquals(403, crossTenant.getStatusCodeValue());
-        assertEquals("config_refresh_forbidden", anonymous.getBody().get("error"));
-        assertEquals("config_refresh_forbidden", wrongRole.getBody().get("error"));
-        assertEquals("config_refresh_forbidden", crossTenant.getBody().get("error"));
+        AnalyticsAccessDeniedException denied = assertThrows(AnalyticsAccessDeniedException.class,
+                () -> controller.refreshDashboardConfig(refreshBody("ke")));
+
+        assertEquals(AnalyticsCapabilities.CONFIG_REFRESH, denied.getAction());
+        assertEquals(403, controller.onAccessDenied(denied).getStatusCodeValue());
+        verify(kpiCatalogService, never()).refreshPublicDashboardConfig(anyString());
+    }
+
+    @Test
+    public void anUnreachableAccessControlIsAServiceUnavailableNotAnEmptyDashboard() {
+        when(capabilityService.resolve(any(), anyString()))
+                .thenThrow(new AccessControlUnavailableException("accesscontrol unreachable"));
+
+        AccessControlUnavailableException e = assertThrows(AccessControlUnavailableException.class,
+                () -> controller.refreshDashboardConfig(refreshBody("ke")));
+
+        assertEquals(503, controller.onAccessControlUnavailable(e).getStatusCodeValue());
         verify(kpiCatalogService, never()).refreshPublicDashboardConfig(anyString());
     }
 
@@ -205,9 +219,9 @@ public class AnalyticsControllerPublicTest {
 
     @Test
     public void missingPublicPackFailsClosedToAnEmptyDashboard() {
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(publicDef("cl_public")));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.empty());
 
         ResponseEntity<Map<String,Object>> response =
@@ -224,11 +238,11 @@ public class AnalyticsControllerPublicTest {
     public void publicQueryForcesPublicAndDelegatesOnlyTheSanitizedBarePackRef() throws Exception {
         KpiDefinition def = publicDef("cl_public");
         DashboardPack pack = publicPack("cl_public");
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(pack));
-        when(service.query(any(JsonNode.class), isNull(), eq("ke"), eq(1), eq("trace-1")))
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class), eq("ke"), eq(1), eq("trace-1")))
                 .thenReturn(Map.of("results", Collections.emptyMap()));
 
         JsonNode body = mapper.readTree("{\"tenantId\":\"ke\"," +
@@ -239,7 +253,7 @@ public class AnalyticsControllerPublicTest {
 
         assertEquals(200, response.getStatusCodeValue());
         ArgumentCaptor<JsonNode> sanitized = ArgumentCaptor.forClass(JsonNode.class);
-        verify(service).query(sanitized.capture(), isNull(), eq("ke"), eq(1), eq("trace-1"));
+        verify(service).query(sanitized.capture(), isNull(), any(AnalyticsCapabilities.class), eq("ke"), eq(1), eq("trace-1"));
         assertFalse(sanitized.getValue().has("RequestInfo"));
         assertEquals(mapper.readTree("{\"tenantId\":\"ke\",\"queries\":{\"tile\":{\"kpiId\":\"cl_public\"}}}"),
                 sanitized.getValue());
@@ -249,11 +263,11 @@ public class AnalyticsControllerPublicTest {
     public void publicQueryHidesUnexpectedExceptionDetails() throws Exception {
         KpiDefinition def = publicDef("cl_public");
         DashboardPack pack = publicPack("cl_public");
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(pack));
-        when(service.query(any(JsonNode.class), isNull(), eq("ke"), eq(1), isNull()))
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class), eq("ke"), eq(1), isNull()))
                 .thenThrow(new RuntimeException("select password from private_table"));
 
         ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
@@ -268,11 +282,13 @@ public class AnalyticsControllerPublicTest {
     @Test
     public void publicQueryForwardsOnlyAllowListedFilterParams() throws Exception {
         KpiDefinition def = publicDef("cl_public");
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        DashboardPack pack = publicPack("cl_public");
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
-                .thenReturn(Optional.of(publicPack("cl_public")));
-        when(service.query(any(JsonNode.class), isNull(), eq("ke"), eq(1), isNull()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
+                .thenReturn(Optional.of(pack));
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull()))
                 .thenReturn(Map.of("results", Collections.emptyMap()));
 
         ResponseEntity<Map<String,Object>> response = controller.publicQuery(mapper.readTree(
@@ -283,7 +299,8 @@ public class AnalyticsControllerPublicTest {
 
         assertEquals(200, response.getStatusCodeValue());
         ArgumentCaptor<JsonNode> sanitized = ArgumentCaptor.forClass(JsonNode.class);
-        verify(service).query(sanitized.capture(), isNull(), eq("ke"), eq(1), isNull());
+        verify(service).query(sanitized.capture(), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull());
         JsonNode params = sanitized.getValue().at("/queries/tile/params");
         assertEquals(mapper.readTree("{\"dateFrom\":\"2026-07-01\",\"dateTo\":\"2026-07-31\"," +
                 "\"ward\":\"W1\",\"serviceCode\":\"Pothole\",\"complaintPath\":\"Roads\"}"), params);
@@ -291,11 +308,12 @@ public class AnalyticsControllerPublicTest {
 
     @Test
     public void publicQueryAllowsAnyPublicTileNotJustPackTiles() throws Exception {
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Arrays.asList(publicDef("cl_public"), publicDef("cl_public_extra")));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(publicPack("cl_public")));
-        when(service.query(any(JsonNode.class), isNull(), eq("ke"), eq(1), isNull()))
+        when(service.query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull()))
                 .thenReturn(Map.of("results", Collections.emptyMap()));
 
         ResponseEntity<Map<String,Object>> added = controller.publicQuery(mapper.readTree(
@@ -306,15 +324,16 @@ public class AnalyticsControllerPublicTest {
         assertEquals(200, added.getStatusCodeValue());
         assertEquals(400, notPublic.getStatusCodeValue());
         assertEquals("kpi_forbidden", notPublic.getBody().get("error"));
-        verify(service, times(1)).query(any(JsonNode.class), isNull(), eq("ke"), eq(1), isNull());
+        verify(service, times(1)).query(any(JsonNode.class), isNull(), any(AnalyticsCapabilities.class),
+                eq("ke"), eq(1), isNull());
     }
 
     @Test
     public void publicQueryRejectsEveryParamOutsideTheAllowList() throws Exception {
         KpiDefinition def = publicDef("cl_public");
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(def));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(publicPack("cl_public")));
 
         String[] rejected = {
@@ -347,9 +366,9 @@ public class AnalyticsControllerPublicTest {
 
     @Test
     public void publicCatalogListsEveryPublicTileAndIgnoresSpoofedRequestInfo() {
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Arrays.asList(publicDef("cl_public"), publicDef("cl_public_extra")));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(publicPack("cl_public")));
 
         ResponseEntity<Map<String,Object>> response = controller.searchPublicCatalog(Map.of(
@@ -366,7 +385,7 @@ public class AnalyticsControllerPublicTest {
             assertFalse(tile.containsKey("query"));
             assertFalse(tile.containsKey("rbac"));
         }
-        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), eq(Set.of("SUPERUSER")));
+        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any(AnalyticsCapabilities.class));
     }
 
     @Test
@@ -386,9 +405,9 @@ public class AnalyticsControllerPublicTest {
 
     @Test
     public void publicCatalogAndOptionsFailClosedWithoutAPublicPack() {
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(publicDef("cl_public")));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.empty());
 
         ResponseEntity<Map<String,Object>> catalog = controller.searchPublicCatalog(Map.of("tenantId", "ke"));
@@ -404,9 +423,9 @@ public class AnalyticsControllerPublicTest {
 
     @Test
     public void publicOptionsDelegateToTheServerOwnedDistinctsAndHideFailures() {
-        when(kpiCatalogService.getVisibleDefs(eq("ke"), eq(Set.of("PUBLIC"))))
+        when(kpiCatalogService.getVisibleDefs(eq("ke"), any(AnalyticsCapabilities.class)))
                 .thenReturn(Collections.singletonList(publicDef("cl_public")));
-        when(kpiCatalogService.getBestPack(eq("ke"), eq(Set.of("PUBLIC")), any()))
+        when(kpiCatalogService.getBestPack(eq("ke"), any(AnalyticsCapabilities.class), any()))
                 .thenReturn(Optional.of(publicPack("cl_public")));
         when(service.publicFilterOptions("ke", 1, "trace-9"))
                 .thenReturn(Map.of("results", Map.of("wards", Map.of("rows", List.of(Map.of("ward_code", "W1"))))));
