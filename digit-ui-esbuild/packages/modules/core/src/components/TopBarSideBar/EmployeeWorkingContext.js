@@ -85,8 +85,12 @@ export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantI
   if (roleContexts.length) parts.push(<Truncated key="ctx" values={roleContexts} />);
   if (!parts.length) return null;
 
+  // The header truncates when space is tight, so carry the full value in a
+  // tooltip; the expanded panel has it in full either way.
+  const plain = [city, ...departments, ...roleContexts].filter(Boolean).join(" · ");
+
   return (
-    <div className="digit-working-context-summary">
+    <div className="digit-working-context-summary" title={plain}>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
           {i > 0 && <span className="digit-working-context-sep">·</span>}
@@ -132,9 +136,33 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       setPos({ top: Math.round(r.bottom + 8), left: Math.round(left) });
     };
     place();
+    // The header is still settling when the panel mounts (web fonts, the city
+    // and language controls resolving their labels), so a single measurement
+    // anchors the panel to where the trigger *was*. Re-measure on the next
+    // frame and whenever the trigger's box actually changes.
+    const raf = requestAnimationFrame(place);
+    let ro;
+    if (typeof ResizeObserver !== "undefined" && anchorRef?.current) {
+      ro = new ResizeObserver(place);
+      // Watch the row as well as the trigger: the trigger often *moves* rather
+      // than resizes when the sibling city/language labels resolve, and a
+      // ResizeObserver on the trigger alone never fires for that.
+      ro.observe(anchorRef.current);
+      const row = anchorRef.current.closest(".digit-header-action-fields") || anchorRef.current.parentElement;
+      if (row) ro.observe(row);
+    }
+    // Bounded catch-all for anything neither observer sees (late web fonts).
+    let ticks = 0;
+    const settle = setInterval(() => {
+      place();
+      if (++ticks >= 6) clearInterval(settle);
+    }, 100);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(settle);
+      ro?.disconnect();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };

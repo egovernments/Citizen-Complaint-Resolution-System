@@ -6291,11 +6291,28 @@ header.digit-header .digit-dropdown-master {
  * Compact line in the employee header, read-only panel on click, and a sticky
  * row on mobile. Scoped to .employee so the citizen shell is untouched.
  * ======================================================================== */
+/* The header's action-field row is overflow:hidden, so anything wider than the
+ * space left over is sliced off at the edge rather than truncated. A flex item
+ * will not shrink below its content until min-width:0 is set, so without this
+ * the context overflows the container and loses its first characters instead
+ * of ending in an ellipsis. */
+/* Only the field holding the context may shrink — applying this to every
+ * action field let the avatar collapse into an oval. If :has() is unsupported
+ * the rule is simply skipped, which degrades to the clipping it replaces
+ * rather than to broken controls. */
+.employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
 .employee .digit-working-context {
   position: relative;
   display: inline-flex;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
 }
+.employee .digit-working-context-trigger { min-width: 0; max-width: 100%; }
+/* Circular avatar must keep its aspect ratio regardless of flex pressure. */
+.employee .digit-header-action-fields .digit-profile-image,
+.employee .digit-header-action-fields img[alt="Profile"],
+.employee .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
 .employee .digit-working-context-trigger {
   background: none;
   border: none;
