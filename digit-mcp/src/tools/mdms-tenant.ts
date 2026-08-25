@@ -1255,6 +1255,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             { code: 'SUPERUSER', name: 'Super User' },
             { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
             { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+            // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the
+            // configurator; this re-provision path replaces the user's role list wholesale
+            // (see updateUser below), so omitting it here would silently strip it on every
+            // post-bootstrap re-provision.
+            { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
             { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
           ].map((r) => ({ ...r, tenantId: target }));
           const newUser = {
@@ -2197,6 +2202,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // create/update on these roles specifically; without them ADMIN is stuck view-only).
           { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
           { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+          // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the configurator
+          // and its other admin screens.
+          { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -3165,7 +3173,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
         const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'ACCOUNT_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [
