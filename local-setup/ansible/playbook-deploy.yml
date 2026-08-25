@@ -3070,12 +3070,27 @@
     # this stack: after a re-render the host file and the container's copy
     # diverged, and `docker restart` re-resolved the mount.
     #
-    # So: restart the container ONLY when the render actually changed. Note that
+    # So: restart the container whenever the render actually changed. Note that
     # `template:` reports changed on a brand-new render too, so this DOES fire on
     # a first deploy — harmless, because the container was created after the
     # render and already holds the right content, it just restarts once. What it
     # avoids is a restart on every SUBSEQUENT deploy: an unchanged re-render
     # reports ok, and the task is skipped.
+    #
+    # Deliberately NOT gated on `build_configurator`. The `configurator` compose
+    # service has no `profiles:` key, so the container runs even while host nginx
+    # is serving a host-built dist — and it would sit there pinned to the OLD
+    # inode. Skipping the restart in that mode leaves a trap for the mode switch
+    # this PR exists to enable:
+    #   1. build_configurator: true + a tenant change -> render CHANGED, restart
+    #      skipped, container still holds the previous tenant
+    #   2. a later deploy flips build_configurator to false with the SAME values
+    #      -> render reports ok, so nothing triggers a restart
+    #   3. host nginx now proxies to a container serving the OLD tenant, with no
+    #      error anywhere
+    # Restarting in both modes costs one `docker restart` of an idle container on
+    # the host-built path, and keeps the mount correct for whenever it starts
+    # serving. `failed_when` already tolerates the container being absent.
     - name: "Configurator SPA — restart container so a re-rendered config.js is picked up"
       ansible.builtin.command: docker restart configurator
       register: configurator_restart
@@ -3085,7 +3100,6 @@
         - '"No such container" not in (configurator_restart.stderr | default(""))'
       when:
         - nginx_features.configurator | default(false)
-        - not (build_configurator | default(false))
         - configurator_config_render is defined
         - configurator_config_render is changed
 

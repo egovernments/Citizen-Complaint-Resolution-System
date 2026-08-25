@@ -35,6 +35,20 @@ server {
     try_files $uri =404;
   }
 
+  # Runtime config must NEVER be cached. config.js is what makes one dist serve
+  # a given tenant, so a stale copy silently points the SPA at the wrong tenant
+  # and endpoints — no error, just wrong data. The container path gets this from
+  # the image's own nginx (configurator/Dockerfile); the host-built path serves
+  # from disk and never sees that rule, so it has to be stated here.
+  #
+  # Exact match, so it wins over the /configurator/ prefix location regardless of
+  # order. Without it the no-caching variant below sends NO Cache-Control at all
+  # and browsers apply heuristic freshness off Last-Modified.
+  location = /configurator/config.js {
+    alias /var/www/configurator/config.js;
+    add_header Cache-Control "no-store, must-revalidate" always;
+  }
+
   location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
@@ -43,6 +57,20 @@ server {
 {% else %}
   # Configurator SPA — host-built dist (build_configurator: true), no
   # asset-level caching.
+  # Runtime config must NEVER be cached. config.js is what makes one dist serve
+  # a given tenant, so a stale copy silently points the SPA at the wrong tenant
+  # and endpoints — no error, just wrong data. The container path gets this from
+  # the image's own nginx (configurator/Dockerfile); the host-built path serves
+  # from disk and never sees that rule, so it has to be stated here.
+  #
+  # Exact match, so it wins over the /configurator/ prefix location regardless of
+  # order. Without it the no-caching variant below sends NO Cache-Control at all
+  # and browsers apply heuristic freshness off Last-Modified.
+  location = /configurator/config.js {
+    alias /var/www/configurator/config.js;
+    add_header Cache-Control "no-store, must-revalidate" always;
+  }
+
   location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
