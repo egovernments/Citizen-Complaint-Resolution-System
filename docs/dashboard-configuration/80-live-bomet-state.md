@@ -5,6 +5,10 @@ to verify the claims in docs 10–70 against reality. It also documents the sing
 operational trap on this platform: **the catalog the dashboard renders from, the `dss.*` records
 in the mdms-v2 store, and the repo seed files can all disagree.**
 
+> Historical authorization note: this probe predates the #1050 capability cutover. References to
+> pack `roles`, KPI `visibleTo` and `DASHBOARD_ROLES` describe the old deployment only; current
+> behavior is documented in 20 and 70 and is driven by egov-accesscontrol actions.
+
 > Probed **2026-07-09** against bomet Kong (`http://127.0.0.1:18000` on the host), employee token
 > for `KE_ADMIN` @ `ke`. Read-only. Numbers will drift as the catalog is reconciled; the *shapes*
 > and *mechanisms* are the durable content.

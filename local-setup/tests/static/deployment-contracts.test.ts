@@ -45,6 +45,13 @@ describe('ansible playbook-deploy.yml', () => {
     expect(forwarded).toHaveLength(2);
   });
 
+  test('both 0→1 bootstrap passes forward the dashboard access role floor', () => {
+    const forwarded = playbook.match(
+      /dashboard_roles: "\{\{ dashboard_allowed_roles \}\}"/g
+    );
+    expect(forwarded).toHaveLength(2);
+  });
+
   // HRMS crash-loops on non-pg tenants without the INTERNAL_USER system
   // user at state_root (its startup lookup is tenant-scoped).
   //
@@ -105,6 +112,13 @@ describe('host_vars _example.yml', () => {
     const example = read('local-setup/ansible/inventory/host_vars/_example.yml');
     expect(example).toContain('pgr_pincode_allowlist');
     expect(example).toMatch(/CS_COMMON_PINCODE_NOT_SERVICABLE/);
+  });
+
+  test('documents current dashboard access and excludes the legacy path', () => {
+    const example = read('local-setup/ansible/inventory/host_vars/_example.yml');
+    expect(example).toContain('dashboard_allowed_roles');
+    expect(example).toContain('base analytics capabilities');
+    expect(example).toContain('/dashboard path is outside this bootstrap contract');
   });
 });
 

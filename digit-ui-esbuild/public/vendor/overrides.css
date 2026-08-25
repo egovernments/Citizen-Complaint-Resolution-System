@@ -6262,3 +6262,26 @@ header.digit-header .digit-dropdown-master {
   background: #fff;
   box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12), 0 5px 5px -3px rgba(0,0,0,.2);
 }
+
+/* ===========================================================================
+ * Legacy select/date-range vertical alignment (CCRS#921)
+ *
+ * Two generations of the same widget ship side by side. The current one
+ * (digit-ui-components: .digit-employee-select-wrap > .digit-select) is a flex
+ * row with align-items:center and horizontal padding, so its text sits on the
+ * box's centre line. The legacy one (react-components:
+ * .employee-select-wrap > .select) is a plain block with no padding, so the
+ * input renders at the top of the box and the text reads ~8px high with a band
+ * of dead space beneath it, touching the left border.
+ *
+ * That legacy markup is still what DateRangeNew, DateRange and the legacy
+ * employee Dropdown render, so match it to the current one rather than
+ * patching the date field alone.
+ * ======================================================================== */
+.employee .employee-select-wrap > .select,
+.employee .employee-select-wrap > .select-active {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+  min-height: 44px !important;
+}

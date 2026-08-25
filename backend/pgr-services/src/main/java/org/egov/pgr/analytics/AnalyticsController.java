@@ -5,9 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.model.DashboardPack;
+import org.egov.pgr.policy.AccessControlUnavailableException;
 import org.egov.pgr.analytics.model.KpiDefinition;
 import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,19 +41,47 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AnalyticsController {
 
-    private static final Set<String> DASHBOARD_CONFIG_ROLES =
-            Set.of("MDMS_ADMIN", "SUPERUSER", "LOC_ADMIN");
-
     private final AnalyticsService service;
     private final KpiCatalogService kpiCatalogService;
+    private final AnalyticsCapabilityService capabilityService;
     private final ObjectMapper mapper;
     private final PGRConfiguration config;
 
     @Autowired
     public AnalyticsController(AnalyticsService service, KpiCatalogService kpiCatalogService,
-                               ObjectMapper mapper, PGRConfiguration config){
+                               AnalyticsCapabilityService capabilityService, ObjectMapper mapper,
+                               PGRConfiguration config){
         this.service = service; this.kpiCatalogService = kpiCatalogService;
-        this.mapper = mapper; this.config = config;
+        this.capabilityService = capabilityService; this.mapper = mapper; this.config = config;
+    }
+
+    /**
+     * POST /v2/analytics/_access — the dashboard's authorization bootstrap.
+     *
+     * Answers "what may I do here?" in one call, so the browser renders from the server's decision
+     * instead of re-deriving it from a role list of its own. The response is the caller's granted
+     * action URLs; the dashboard reads them as capabilities and shows exactly the routes, cards and
+     * tiles they reach.
+     *
+     * Response: { "allowed": true|false, "capabilities": ["/pgr-services/v2/analytics/_query", ...] }
+     */
+    @PostMapping("/_access")
+    public ResponseEntity<Map<String,Object>> access(@RequestBody Map<String,Object> body){
+        try {
+            String tenantId = extractTenantId(body);
+            AnalyticsCapabilities capabilities =
+                    capabilityService.resolve(extractRequestInfo(body), tenantId);
+            Map<String,Object> out = new LinkedHashMap<>();
+            // `allowed` is the dashboard's own gate: without the bootstrap grant there is no
+            // dashboard to render, whatever else the caller holds.
+            out.put("allowed", capabilities.allows(AnalyticsCapabilities.ACCESS));
+            out.put("capabilities", new ArrayList<>(capabilities.granted()));
+            return ResponseEntity.ok(out);
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        }
     }
 
     @PostMapping("/_query")
@@ -66,9 +93,15 @@ public class AnalyticsController {
             RequestInfo requestInfo = body.has("RequestInfo")
                     ? mapper.convertValue(body.get("RequestInfo"), RequestInfo.class) : null;
             String tenantId = body.hasNonNull("tenantId") ? body.get("tenantId").asText() : null;
+            if (tenantId == null || tenantId.isEmpty())
+                throw new IllegalArgumentException("invalid_param: tenantId is required");
+            AnalyticsCapabilities capabilities = capabilityService.resolve(requestInfo, tenantId);
+            capabilities.require(AnalyticsCapabilities.QUERY);
             int stateLen = config.getStateLevelTenantIdLength() == null ? 1 : config.getStateLevelTenantIdLength();
-            Map<String,Object> result = service.query(body, requestInfo, tenantId, stateLen, xTraceId);
+            Map<String,Object> result = service.query(body, requestInfo, capabilities, tenantId, stateLen, xTraceId);
             return ResponseEntity.ok(result);
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -78,8 +111,17 @@ public class AnalyticsController {
     }
 
     @PostMapping("/_schema")
-    public ResponseEntity<Map<String,Object>> schema(){
-        return ResponseEntity.ok(service.schema());
+    public ResponseEntity<Map<String,Object>> schema(@RequestBody(required = false) Map<String,Object> body){
+        try {
+            String tenantId = extractTenantId(body);
+            capabilityService.resolve(extractRequestInfo(body), tenantId)
+                    .require(AnalyticsCapabilities.SCHEMA);
+            return ResponseEntity.ok(service.schema());
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e));
+        }
     }
 
     /**
@@ -103,11 +145,11 @@ public class AnalyticsController {
                 // screen. No KPI descriptors, layouts, counts, or query data leave the service.
                 return ResponseEntity.ok(out);
             }
-            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
-            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicSurface);
             Map<String,KpiDefinition> defIndex = visibleDefs.stream()
                     .collect(Collectors.toMap(KpiDefinition::getId, d -> d));
-            Optional<DashboardPack> pack = kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs);
+            Optional<DashboardPack> pack = kpiCatalogService.getBestPack(tenantId, publicSurface, visibleDefs);
 
             List<Map<String,Object>> tiles = new ArrayList<>();
             for (String kpiId : pack.map(DashboardPack::getTiles).orElse(Collections.emptyList())) {
@@ -125,6 +167,8 @@ public class AnalyticsController {
             // Deliberately no recordCount: even a matching public pack must not become a
             // tenant-volume enumeration primitive.
             return ResponseEntity.ok(out);
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -160,11 +204,11 @@ public class AnalyticsController {
                 throw new IllegalArgumentException("invalid_param: public query requires a non-empty 'queries' object");
             AnalyticsService.validateBatchSize(queries);
 
-            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
-            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicSurface);
             // The pack is the fail-closed enablement gate; the tile set is the PUBLIC catalog,
             // so a tile a visitor added from the public Add-KPI menu is queryable too (#1797).
-            requirePublicPack(tenantId, publicRoles, visibleDefs);
+            requirePublicPack(tenantId, publicSurface, visibleDefs);
             Set<String> allowedKpis = visibleDefs.stream()
                     .map(KpiDefinition::getId).collect(Collectors.toSet());
 
@@ -199,7 +243,9 @@ public class AnalyticsController {
             int stateLen = config.getStateLevelTenantIdLength() == null
                     ? 1 : config.getStateLevelTenantIdLength();
             return ResponseEntity.ok(service.query(
-                    sanitizedBody, null, tenantId, stateLen, xTraceId));
+                    sanitizedBody, null, publicSurface, tenantId, stateLen, xTraceId));
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -222,11 +268,11 @@ public class AnalyticsController {
                         new IllegalArgumentException(
                                 "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
             }
-            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
-            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicRoles);
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, publicSurface);
             // Same fail-closed gate as /public/_query: no PUBLIC pack -> no catalog either, so an
             // enabled-but-unconfigured tenant never exposes descriptors it cannot serve data for.
-            requirePublicPack(tenantId, publicRoles, visibleDefs);
+            requirePublicPack(tenantId, publicSurface, visibleDefs);
             List<Map<String,Object>> tiles = visibleDefs.stream()
                     .map(this::safeTile)
                     .collect(Collectors.toList());
@@ -257,8 +303,9 @@ public class AnalyticsController {
                         new IllegalArgumentException(
                                 "public_dashboard_disabled: public dashboard is not enabled for this tenant")));
             }
-            Set<String> publicRoles = Set.of(AnalyticsService.PUBLIC_ROLE);
-            requirePublicPack(tenantId, publicRoles, kpiCatalogService.getVisibleDefs(tenantId, publicRoles));
+            AnalyticsCapabilities publicSurface = AnalyticsCapabilities.publicSurface();
+            requirePublicPack(tenantId, publicSurface,
+                    kpiCatalogService.getVisibleDefs(tenantId, publicSurface));
             int stateLen = config.getStateLevelTenantIdLength() == null
                     ? 1 : config.getStateLevelTenantIdLength();
             return ResponseEntity.ok(service.publicFilterOptions(tenantId, stateLen, xTraceId));
@@ -276,14 +323,12 @@ public class AnalyticsController {
             @RequestBody Map<String,Object> body) {
         try {
             String tenantId = extractTenantId(body);
-            RequestInfo requestInfo = extractRequestInfo(body);
-            String authorizationError = dashboardConfigAuthorizationError(requestInfo, tenantId);
-            if (authorizationError != null) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error(
-                        new IllegalArgumentException("config_refresh_forbidden: " + authorizationError)));
-            }
+            capabilityService.resolve(extractRequestInfo(body), tenantId)
+                    .require(AnalyticsCapabilities.CONFIG_REFRESH);
             boolean enabled = kpiCatalogService.refreshPublicDashboardConfig(tenantId);
             return ResponseEntity.ok(Map.of("publicDashboardEnabled", enabled));
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -303,15 +348,16 @@ public class AnalyticsController {
     @PostMapping("/packs")
     public ResponseEntity<Map<String,Object>> getPacks(@RequestBody Map<String,Object> body){
         try {
-            RequestInfo requestInfo = extractRequestInfo(body);
             String tenantId = extractTenantId(body);
-            Set<String> callerRoles = extractRoles(requestInfo);
+            AnalyticsCapabilities capabilities =
+                    capabilityService.resolve(extractRequestInfo(body), tenantId);
+            capabilities.require(AnalyticsCapabilities.PACKS);
 
-            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, callerRoles);
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, capabilities);
             Map<String,KpiDefinition> defIndex = visibleDefs.stream()
                     .collect(Collectors.toMap(KpiDefinition::getId, d -> d));
 
-            Optional<DashboardPack> pack = kpiCatalogService.getBestPack(tenantId, callerRoles, visibleDefs);
+            Optional<DashboardPack> pack = kpiCatalogService.getBestPack(tenantId, capabilities, visibleDefs);
 
             List<Map<String,Object>> tiles = new ArrayList<>();
             List<String> tileIds = pack.map(DashboardPack::getTiles)
@@ -333,7 +379,7 @@ public class AnalyticsController {
             // semantics as DashboardPack.matchesRoles); recordCount -> record_count_tier tag
             // (tenant corpus on complaint_facts, NOT the caller's ABAC-visible subset).
             out.put("packId", pack.map(DashboardPack::getId).orElse(null));
-            out.put("persona", pack.map(p -> matchingRole(p, callerRoles)).orElse(null));
+            out.put("persona", pack.map(AnalyticsController::personaTag).orElse(null));
             // recordCount is live tenant data, so it takes the same coarse pack-match
             // gate as packId/persona: no matching pack (e.g. the anonymous PUBLIC floor
             // on a tenant with no public pack) -> null. Without this gate an
@@ -344,6 +390,8 @@ public class AnalyticsController {
             out.put("recordCount", pack.isPresent() ? service.recordCount(tenantId, stateLen) : null);
             out.put("maxBatchQueries", AnalyticsService.MAX_BATCH_QUERIES);
             return ResponseEntity.ok(out);
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -362,11 +410,12 @@ public class AnalyticsController {
     @PostMapping("/catalog/_search")
     public ResponseEntity<Map<String,Object>> searchCatalog(@RequestBody Map<String,Object> body){
         try {
-            RequestInfo requestInfo = extractRequestInfo(body);
             String tenantId = extractTenantId(body);
-            Set<String> callerRoles = extractRoles(requestInfo);
+            AnalyticsCapabilities capabilities =
+                    capabilityService.resolve(extractRequestInfo(body), tenantId);
+            capabilities.require(AnalyticsCapabilities.CATALOG_SEARCH);
 
-            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, callerRoles);
+            List<KpiDefinition> visibleDefs = kpiCatalogService.getVisibleDefs(tenantId, capabilities);
             List<Map<String,Object>> tiles = visibleDefs.stream()
                     .map(this::safeTile)
                     .collect(Collectors.toList());
@@ -375,6 +424,8 @@ public class AnalyticsController {
             out.put("tiles", tiles);
             out.put("total", tiles.size());
             return ResponseEntity.ok(out);
+        } catch (AnalyticsAccessDeniedException | AccessControlUnavailableException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
         } catch (Exception e) {
@@ -386,19 +437,26 @@ public class AnalyticsController {
     // ---- helpers ----
 
     /**
-     * The role that made the pack match (#1110/R9-C7): first role in the PACK's declared
-     * roles list that the caller holds. Deterministic (pack order, not set order) and
-     * consistent with {@link DashboardPack#matchesRoles} — a non-null result is exactly
-     * "this pack matched". Returned as the {@code persona} tag source for the FE.
+     * The {@code persona} metric tag (#1110): which capability selected the caller's pack.
+     *
+     * <p>It used to be the first matching role code. The pack is now selected by a capability, so
+     * the equivalent value is that capability — but emitted as its short name rather than the whole
+     * action URL, because this is an OTEL datapoint attribute and a URL makes for a poor tag. The
+     * cardinality stays bounded by the number of dashboard capabilities, as it was bounded by the
+     * number of pack roles before.
      */
-    private String matchingRole(DashboardPack pack, Set<String> callerRoles) {
-        if (pack.getRoles() == null || callerRoles == null) return null;
-        return pack.getRoles().stream().filter(callerRoles::contains).findFirst().orElse(null);
+    private static String personaTag(DashboardPack pack) {
+        String requiredActionUrl = pack.getRequiredActionUrl();
+        if (requiredActionUrl == null)
+            return pack.isPublicPack() ? "public" : null;
+        int lastSegment = requiredActionUrl.lastIndexOf("/analytics/");
+        return lastSegment < 0 ? requiredActionUrl : requiredActionUrl.substring(lastSegment + "/analytics/".length());
     }
 
     /** The matched PUBLIC pack is the fail-closed gate shared by every public alias. */
-    private DashboardPack requirePublicPack(String tenantId, Set<String> publicRoles, List<KpiDefinition> visibleDefs) {
-        return kpiCatalogService.getBestPack(tenantId, publicRoles, visibleDefs)
+    private DashboardPack requirePublicPack(String tenantId, AnalyticsCapabilities capabilities,
+                                            List<KpiDefinition> visibleDefs) {
+        return kpiCatalogService.getBestPack(tenantId, capabilities, visibleDefs)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "public_pack_not_found: no PUBLIC dashboard pack is configured"));
     }
@@ -434,39 +492,25 @@ public class AnalyticsController {
         return Map.of("error", "query_failed", "message", "public dashboard is unavailable");
     }
 
-    private Set<String> extractRoles(RequestInfo requestInfo) {
-        // Mirror AnalyticsService's public floor: an anonymous / role-less caller degrades
-        // to PUBLIC so the catalog endpoints expose only PUBLIC tiles (not every
-        // visibleTo:[] tile). Keeps /packs + /catalog/_search consistent with /_query.
-        if (requestInfo == null) return Set.of(AnalyticsService.PUBLIC_ROLE);
-        User u = requestInfo.getUserInfo();
-        if (u == null || u.getRoles() == null) return Set.of(AnalyticsService.PUBLIC_ROLE);
-        Set<String> roles = u.getRoles().stream()
-                .filter(r -> r != null && r.getCode() != null)
-                .map(Role::getCode)
-                .collect(Collectors.toSet());
-        return roles.isEmpty() ? Set.of(AnalyticsService.PUBLIC_ROLE) : roles;
+    /**
+     * Three distinct failures, three distinct statuses. "You may not do this" and "we could not
+     * find out" send a user to different remedies, and collapsing them means the dashboard shows
+     * the wrong one during an incident. Rethrown past the generic catches above so they arrive
+     * here rather than as an indistinguishable 500.
+     */
+    @ExceptionHandler(AnalyticsAccessDeniedException.class)
+    public ResponseEntity<Map<String,Object>> onAccessDenied(AnalyticsAccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "forbidden",
+                        "message", "action '" + e.getAction() + "' is not permitted"));
     }
 
-    /** Restrict the cache-busting write hook to configurator admins within their tenant tree. */
-    private String dashboardConfigAuthorizationError(RequestInfo requestInfo, String tenantId) {
-        User user = requestInfo == null ? null : requestInfo.getUserInfo();
-        if (user == null) return "authenticated configurator user is required";
-
-        Set<String> roles = extractRoles(requestInfo);
-        if (Collections.disjoint(roles, DASHBOARD_CONFIG_ROLES)) {
-            return "MDMS_ADMIN, SUPERUSER, or LOC_ADMIN role is required";
-        }
-
-        String callerTenant = user.getTenantId();
-        if (callerTenant == null || callerTenant.trim().isEmpty()) {
-            return "caller tenant is required";
-        }
-        callerTenant = callerTenant.trim();
-        if (!tenantId.equals(callerTenant) && !tenantId.startsWith(callerTenant + ".")) {
-            return "requested tenant is outside the caller tenant tree";
-        }
-        return null;
+    @ExceptionHandler(AccessControlUnavailableException.class)
+    public ResponseEntity<Map<String,Object>> onAccessControlUnavailable(AccessControlUnavailableException e) {
+        log.error("analytics: no trustworthy access decision — failing closed: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("error", "access_control_unavailable",
+                        "message", "authorization could not be determined; no data was returned"));
     }
 
     private Map<String,Object> error(Exception e){

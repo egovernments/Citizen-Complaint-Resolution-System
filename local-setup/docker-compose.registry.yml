@@ -576,7 +576,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:2.12-87e13fe
+    image: egovio/egov-user:2.12-68f707e
     depends_on:
       pgbouncer:
         condition: service_healthy

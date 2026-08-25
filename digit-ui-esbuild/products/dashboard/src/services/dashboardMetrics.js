@@ -1,11 +1,9 @@
-import { DASHBOARD_ROLES } from "../../roles";
 import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
 /**
  * dashboardMetrics — client-side render-lag instrumentation (issue #1110, PR1).
  *
- * Dependency-free (no npm deps; only the pure DASHBOARD_ROLES constant), hand-rolled
- * OTLP/HTTP JSON emitter. Statically imported (the bundle is a single IIFE —
+ * Dependency-free (no npm deps), hand-rolled OTLP/HTTP JSON emitter. Statically imported (the bundle is a single IIFE —
  * splitting:false — so dynamic import() would save nothing); the cheap core
  * (`beginLoad`, marks, `getTraceHeaders`) runs synchronously, while the
  * PerformanceObserver subscription and the flush machinery defer to
@@ -399,20 +397,6 @@ export function withTraceHeaders(headers) {
 /* Tags (datapoint attributes only — D6)                                     */
 /* ------------------------------------------------------------------------- */
 
-function readLocalStorage(key) {
-  try {
-    const raw = window.localStorage?.getItem(key);
-    if (!raw || raw === "undefined") return null;
-    try {
-      return JSON.parse(raw);
-    } catch (e) {
-      return raw;
-    }
-  } catch (e) {
-    return null;
-  }
-}
-
 function getTenantTag() {
   try {
     return (
@@ -426,21 +410,13 @@ function getTenantTag() {
 }
 
 /**
- * persona tag: prefer the server's actual pack-match decision (packMeta.persona,
- * PR2); fall back to the first caller role present in DASHBOARD_ROLES, in the
- * DASHBOARD_ROLES array order (deterministic — mirrors the BE first-match), else
- * "other". Bounded cardinality either way.
+ * persona tag: the server's actual pack-match decision (packMeta.persona,
+ * PR2), else "other". No client-side role list — access-control (not the
+ * frontend) owns role/capability resolution. Bounded cardinality either way.
  */
 function getPersonaTag() {
   if (isPublicDashboardRuntime()) return "PUBLIC";
   if (state.packMeta?.persona) return state.packMeta.persona;
-  const info = readLocalStorage("Employee.user-info");
-  const roleCodes = new Set(
-    (Array.isArray(info?.roles) ? info.roles : []).map((r) => String(r?.code ?? "")).filter(Boolean)
-  );
-  for (const role of DASHBOARD_ROLES) {
-    if (roleCodes.has(role)) return role;
-  }
   return "other";
 }
 

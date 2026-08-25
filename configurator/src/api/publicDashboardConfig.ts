@@ -4,7 +4,6 @@ export const PUBLIC_DASHBOARD_PATH = '/digit-ui/public-dashboard';
 
 export interface DashboardConfigData extends Record<string, unknown> {
   id: string;
-  allowedRoles: string[];
   publicDashboardEnabled?: boolean;
 }
 
