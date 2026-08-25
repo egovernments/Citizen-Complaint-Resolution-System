@@ -42,7 +42,7 @@ The steps below are the same thing by hand, for when you need to do one piece.
 Compose helper (**name services explicitly** — a bare `up -d` revives `default-data-handler`, which re-seeds MDMS):
 ```bash
 cd /opt/digit
-C="sudo docker compose -f docker-compose.egov-digit.yaml -f docker-compose.fast-path.yml -f docker-compose.migrations.yml -f docker-compose.migrations.ansible.yml"
+C="sudo docker compose -f docker-compose.egov-digit.yaml -f docker-compose.fast-path.yml -f docker-compose.migrations.yml"
 ```
 
 **1 — PGR onto the config-driven path**
@@ -78,9 +78,18 @@ sudo docker restart kong-gateway   # a bridge recreate poisons Kong's DNS cache 
 ```
 
 **5 — Ingress** *(only if you did NOT deploy with `enable_novu:true`)* — add the nginx
-`/novu` `/novu-api` `/novu-ws` blocks + the dashboard public-URL envs, and open the port
-(`sudo ufw allow 80/tcp`). Copy the `/novu` `/novu-api` `/novu-ws` blocks from
-[`local-setup/ansible/templates/nginx-site.conf.j2`](../../local-setup/ansible/templates/nginx-site.conf.j2).
+Novu block + the dashboard public-URL envs, and open the port (`sudo ufw allow 80/tcp`).
+Copy the **entire** `enable_novu` section from
+[`local-setup/ansible/templates/nginx-site.conf.j2`](../../local-setup/ansible/templates/nginx-site.conf.j2),
+not only `/novu`, `/novu-api`, and `/novu-ws`. The stock 2.3.0 dashboard is built
+with Vite `base=/`; runtime `VITE_BASE_PATH=/novu` does not rebase its assets or
+React routes. It therefore also needs the narrowly scoped root asset/auth routes
+and `/env/`. A missing `/env/` is the characteristic failure where the workflows
+list opens but **Create workflow** (route `/env/<slug>/workflows/create`) does not,
+especially on a hard reload. Kubernetes installs get the equivalent route set
+from the Novu chart ingress template. Keep the `/socket.io/` route too: Novu 2.3.0
+uses Socket.IO's root transport path even when `VITE_WEBSOCKET_HOSTNAME` contains
+`/novu-ws`; without it the dashboard appears usable but live activity updates 404.
 
 **6 — Seed the MDMS masters** — §4 below.
 

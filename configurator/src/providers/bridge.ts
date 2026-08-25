@@ -19,9 +19,11 @@ export {
   getResourceIdField,
   getResourceLabel,
   getResourceBySchema,
+  isAccessControlGated,
   REGISTRY,
 } from '@digit-mcp/data-provider';
 export type { ResourceConfig } from '@digit-mcp/data-provider';
+export { DigitApiClient } from '@digit-mcp/data-provider';
 
 // Singleton client -- mirrors the existing apiClient pattern.
 // Created with an empty URL; configured later when the user logs in
@@ -58,6 +60,26 @@ export function resetProviders(): void {
   clearTranslationCache();
 }
 
+// Auth-change subscription -- lets anything that derives per-user state (e.g.
+// MastersCapabilityProvider's masters visibility/edit capability) refetch
+// when the logged-in identity actually changes, rather than only once per
+// component mount. Needed because a component consuming digitClient's auth
+// can outlive a logout/login cycle in the same tab; relying on remount alone
+// previously left one user's capability (e.g. an MDMS_ADMIN's "see
+// everything") visible for whoever logged in next.
+let authChangeListeners: Array<() => void> = [];
+
+export function onAuthChange(listener: () => void): () => void {
+  authChangeListeners.push(listener);
+  return () => {
+    authChangeListeners = authChangeListeners.filter((l) => l !== listener);
+  };
+}
+
+function notifyAuthChange(): void {
+  authChangeListeners.forEach((listener) => listener());
+}
+
 /**
  * Configure the digitClient with environment URL, auth, and tenant.
  * Since DigitApiClient.baseUrl is private, we create a new instance
@@ -85,4 +107,6 @@ export function configureDigitClient(url: string, token?: string, user?: UserInf
     // Preserve existing auth when only URL/tenant changes
     digitClient.setAuth(currentInfo.token, currentInfo.user);
   }
+
+  notifyAuthChange();
 }

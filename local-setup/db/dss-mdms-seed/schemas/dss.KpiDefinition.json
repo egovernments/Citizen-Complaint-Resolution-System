@@ -169,6 +169,130 @@
         },
         "dimensionKey": {
           "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "type"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "label"
+                ]
+              },
+              {
+                "required": [
+                  "labelKey"
+                ]
+              }
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "text",
+                  "integer",
+                  "percent",
+                  "hours",
+                  "hoursDays",
+                  "rating",
+                  "trend",
+                  "tags",
+                  "officer",
+                  "department",
+                  "dimension"
+                ],
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "labelKey": {
+                "type": "string"
+              },
+              "align": {
+                "enum": [
+                  "left",
+                  "center",
+                  "right"
+                ],
+                "type": "string"
+              },
+              "width": {
+                "type": "string"
+              },
+              "dimension": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "comparison": {
+          "type": "object",
+          "required": [
+            "period",
+            "mode",
+            "joinBy",
+            "valueKey",
+            "outputKey"
+          ],
+          "properties": {
+            "period": {
+              "enum": [
+                "prior"
+              ],
+              "type": "string"
+            },
+            "mode": {
+              "enum": [
+                "percentChange"
+              ],
+              "type": "string"
+            },
+            "joinBy": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "valueKey": {
+              "type": "string"
+            },
+            "outputKey": {
+              "type": "string"
+            }
+          }
+        },
+        "rowFilter": {
+          "type": "object",
+          "required": [
+            "column"
+          ],
+          "properties": {
+            "column": {
+              "type": "string"
+            },
+            "eq": {},
+            "gte": {
+              "type": "number"
+            },
+            "gt": {
+              "type": "number"
+            },
+            "lte": {
+              "type": "number"
+            },
+            "lt": {
+              "type": "number"
+            }
+          }
         }
       }
     },

@@ -35,7 +35,7 @@ function breakEvenSeriesValues(value, breakEven) {
 }
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
-  const { t, language } = useDashboardT();
+  const { t, language, i18nTick } = useDashboardT();
   // Per-locale numberFormat mask stamp (#1272): baked into the options memo
   // because react-apexcharts compares JSON.stringify(options), which drops
   // the total-label/tooltip formatter closures — `language` alone can miss a
@@ -49,7 +49,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
         resolved: Number(entry.resolved),
         created: Number(entry.created),
       })),
-    [data, t, language]
+    [data, t, language, i18nTick]
   );
 
   const categories = useMemo(() => rows.map((d) => d.label), [rows]);
@@ -212,6 +212,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       rows,
       t,
       language,
+      i18nTick,
       numberFormatStamp,
     ]
   );
@@ -221,7 +222,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       { name: t("DASHBOARD_TILE_LEGEND_FALLING_BEHIND", "Falling behind (<1.0)"), data: belowSeries },
       { name: t("DASHBOARD_TILE_LEGEND_CATCHING_UP", "Catching up (≥1.0)"), data: aboveSeries },
     ],
-    [aboveSeries, belowSeries, t, language]
+    [aboveSeries, belowSeries, t, language, i18nTick]
   );
 
   const hasData = rows.length > 0;

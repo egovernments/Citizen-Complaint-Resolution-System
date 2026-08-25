@@ -46,7 +46,7 @@ import { BASE_URL, TENANT } from '../utils/env';
 import { getPersona, resolveSeedPlan, serviceCodesFor, type ResolvedPersona } from '../utils/personas';
 import { seedComplaintAsCitizen } from '../utils/seed';
 import {
-  loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
+  loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, showAllInboxRows, type Principal,
 } from '../utils/employee-ui';
 
 /** Adapt a personas.ts ResolvedPersona to employee-ui.ts's Principal shape —
@@ -180,28 +180,9 @@ async function clearFilters(page: Page): Promise<void> {
   await page.waitForTimeout(2_000);
 }
 
-/**
- * Bump the results table to its largest rows-per-page so the FULL filtered set
- * renders on one page. The inbox sorts server-side by `sla ASC` and pages at 10
- * with no total-count (Next Page stays disabled), so a freshly-seeded complaint
- * is not necessarily on the first SLA-sorted page once other complaints of the
- * same status accumulate. Selecting the max page size re-issues the search with
- * a larger `limit`, surfacing every matching row (see readInboxRows). No-op when
- * the tenant has fewer rows than the smallest page size. */
-async function showAllRows(page: Page): Promise<void> {
-  const sel = page.locator('select').last();
-  if ((await sel.count()) === 0) return;
-  const values = await sel.locator('option').evaluateAll(
-    (os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
-  );
-  if (values.length === 0) return;
-  const biggest = values[values.length - 1];
-  await Promise.all([
-    page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 20_000 }).catch(() => null),
-    sel.selectOption(biggest),
-  ]);
-  await page.waitForTimeout(1_500);
-}
+// showAllRows lived here privately; it now sits in utils/employee-ui.ts as
+// showAllInboxRows so inbox-search.spec.ts can use it too (it needs the same
+// page-size bump and did not have it).
 
 test.describe('employee inbox-v2 — filters narrow the result set', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -235,7 +216,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
 
     // Render the whole REJECTED set (not just the SLA-sorted first page) so the
     // seeded complaint is reachable regardless of how many others accumulated.
-    await showAllRows(page);
+    await showAllInboxRows(page);
     const rejRows = await readInboxRows(page);
     expect(rejRows.length, 'REJECTED filter returns ≥1 row (we seeded one)').toBeGreaterThan(0);
     expect(rejRows.every((r) => r.status === rejectedLabel), 'every visible row is REJECTED').toBeTruthy();
@@ -260,7 +241,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     // against them, and filtering by one of those can only ever return an empty
     // list. Picking blind (the first N options) therefore proves nothing; the
     // filter has to be pointed at a type the data can narrow TO.
-    await showAllRows(page);
+    await showAllInboxRows(page);
     const before = await readInboxRows(page);
     expect(before.length).toBeGreaterThan(0);
     const countByCode = new Map<string, number>();
@@ -316,7 +297,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       const requested = url.match(/[?&]serviceCode=([^&]+)/)?.[1] || '';
       tried.push(requested || optionTexts[i]);
       if (!preferred.length && !targets.includes(requested)) continue; // no rows possible
-      await showAllRows(page);
+      await showAllInboxRows(page);
       const rows = await readInboxRows(page);
       if (rows.length === 0) continue;
       const codes = new Set<string>();

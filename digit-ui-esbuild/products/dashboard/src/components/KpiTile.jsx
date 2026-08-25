@@ -9,9 +9,10 @@ import LineChart from './LineChart';
 import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
-import { evaluateCompose } from '../utils/composeKpi';
+import { evaluateCompose, requiresBackendComposition } from '../utils/composeKpi';
 import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
 import { formatNumber } from '../utils/numberFormat';
+import { transformTableRows } from '../utils/tableRows';
 import {
   GEO_MAP_LAYER_KEYS,
   partitionPinsByLayer,
@@ -47,6 +48,7 @@ import { markFirstWidgetVisible } from '../services/dashboardMetrics';
  *     values,  // map of named scalars
  *     series,  // pre-shaped multi-series payload (line/stacked) when BE supplies it
  *     prior,   // prior-period scalar/series for deltas
+ *     priorRows, // prior-period rows for catalog-declared table comparisons
  *     sparkline, // daily series for sparkline cards
  *     asOf, scope }
  *
@@ -229,6 +231,12 @@ function primaryMeasure(result, viz) {
 
 function resolveScalar(ctx) {
   const { viz, result, results } = ctx;
+  // Calendar-aware averages are composed by pgr-services. If a malformed KPI definition
+  // combines one with a raw query, fail closed instead of rendering that query's total as
+  // an average. A valid backend-composed response always supplies result.value.
+  if (requiresBackendComposition(viz.compose)) {
+    return result.value != null ? Number(result.value) : null;
+  }
   if (viz.compose && results) {
     const composed = evaluateCompose(viz.compose, results);
     if (composed != null) return composed;
@@ -778,7 +786,7 @@ function renderTable(ctx) {
   // SLAs caveat at non-leaf levels is documented in the KPI catalog docs
   // (PR1), not surfaced in-cell.
   const columns = applyGroupByToColumns(viz.columns || deriveColumnsFromResult(result), groupBy);
-  const rows = result.rows || [];
+  const rows = transformTableRows(result, viz);
   if (loading && !rows.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
   return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
 }

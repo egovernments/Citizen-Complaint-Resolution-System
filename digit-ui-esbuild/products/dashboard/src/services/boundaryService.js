@@ -4,7 +4,9 @@ import {
   getTenantId,
   hasAuth,
 } from "./authService";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 import { withTraceHeaders } from "./dashboardMetrics";
+import { chunkValues, runSequentialChunks } from "./sequentialChunks";
 
 
 /**
@@ -13,16 +15,17 @@ import { withTraceHeaders } from "./dashboardMetrics";
  * API: POST /boundary-service/boundary/_search?tenantId=&codes=&limit=
  */
 export async function fetchBoundariesByCodes(codes = []) {
-  if (!hasAuth() || !codes.length) return [];
+  // Runtime flag first: hasAuth() reads employee storage, which the public
+  // runtime must never do (publicRuntimeIsolation.test.js).
+  if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return [];
 
   const tenantId = getTenantId();
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
-  const chunkSize = 100;
   const all = [];
   let lastError = null;
+  let successfulChunks = 0;
 
-  for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
-    const chunk = uniqueCodes.slice(i, i + chunkSize);
+  const outcomes = await runSequentialChunks(chunkValues(uniqueCodes, 100), async (chunk) => {
     const params = new URLSearchParams({
       tenantId,
       codes: chunk.join(","),
@@ -33,29 +36,29 @@ export async function fetchBoundariesByCodes(codes = []) {
     // loaded, but a TOTAL failure still rethrows so the map can show its error
     // state instead of a silently blank choropleth. Auxiliary data: a 401 here
     // must never be allowed to declare the whole session dead.
-    try {
-      const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
-        headers: withTraceHeaders({}),
-        buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
-        sessionCritical: false,
-      });
+    const response = await authFetch(`/boundary-service/boundary/_search?${params}`, {
+      headers: withTraceHeaders({}),
+      buildBody: () => ({ RequestInfo: buildRequestInfo("dashboard-boundary") }),
+      sessionCritical: false,
+    });
 
-      if (!response.ok) {
-        console.warn(`boundary/_search failed (${response.status})`);
-        lastError = new Error(`boundary/_search failed (${response.status})`);
-        continue;
-      }
+    if (!response.ok) throw new Error(`boundary/_search failed (${response.status})`);
 
-      const payload = await response.json();
-      const boundaries = payload?.Boundary || [];
-      all.push(...boundaries);
-    } catch (error) {
-      console.warn("boundary/_search error", error);
-      lastError = error;
+    const payload = await response.json();
+    return payload?.Boundary || [];
+  });
+
+  for (const outcome of outcomes) {
+    if (outcome.error) {
+      console.warn("boundary/_search error", outcome.error);
+      lastError = outcome.error;
+    } else {
+      successfulChunks += 1;
+      all.push(...outcome.value);
     }
   }
 
-  if (!all.length && lastError) throw lastError;
+  if (successfulChunks === 0 && lastError) throw lastError;
 
   return all;
 }
@@ -123,7 +126,7 @@ export async function fetchBoundaryRelationshipsByCodes(
   codes = [],
   { hierarchyType = "ADMIN" } = {}
 ) {
-  if (!hasAuth() || !codes.length) return {};
+  if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return {};
 
   const tenantId = getTenantId();
   const rootCode = deriveBoundaryRootCode(codes);

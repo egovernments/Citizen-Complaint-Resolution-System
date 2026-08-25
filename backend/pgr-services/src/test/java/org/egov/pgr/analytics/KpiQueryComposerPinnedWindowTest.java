@@ -4,12 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -24,10 +23,18 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code compare:"prior"} meaning yesterday rather than a prior-equal-duration-of-the-range, the
  * sparkline staying answerable, non-time params still narrowing a pinned query, and — the
  * regression guard that matters most — that every UNPINNED def behaves exactly as before.
+ *
+ * <p>Deterministic (#29): every case is judged against ONE fixed {@link BusinessCalendar}
+ * ({@code CAL}, a Saturday, EAT) rather than the wall clock — the request-scoped calendar this
+ * class exists to make possible. This also removes the old two-clock race between the test's own
+ * {@code today()} read and the composer's separate internal clock read.
  */
 public class KpiQueryComposerPinnedWindowTest {
 
     private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");
+    /** Fixed "now": 2024-06-15 12:00 EAT (a Saturday), mid-day so no test is a midnight boundary case. */
+    private static final BusinessCalendar CAL =
+            BusinessCalendar.of(EAT, ZonedDateTime.of(2024, 6, 15, 12, 0, 0, 0, EAT).toInstant().toEpochMilli());
 
     private final ObjectMapper om = new ObjectMapper();
     private final AnalyticsCatalog catalog = new AnalyticsCatalog();
@@ -39,20 +46,7 @@ public class KpiQueryComposerPinnedWindowTest {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
     }
 
-    private LocalDate today() { return Instant.now().atZone(EAT).toLocalDate(); }
-
-    /**
-     * Run a day-sensitive assertion and abandon it (rather than fail) if EAT midnight passed while it
-     * ran. The composer reads its own clock, so a case that computes an expectation from {@code today()}
-     * and then merges is inherently a two-clock comparison — around 21:00 UTC that is a real CI window.
-     * Aborting keeps the suite honest: it never passes on a stale day, and never fails for one either.
-     */
-    private void onAStableDay(Supplier<LocalDate> body) {
-        LocalDate before = today();
-        LocalDate used = body.get();
-        assumeTrue(before.equals(today()), "EAT midnight passed mid-test; day-boundary case abandoned");
-        assertEquals(before, used, "test helper must exercise the day it captured");
-    }
+    private LocalDate today() { return CAL.businessDate; }
 
     /** The seeded "complaints created today" def, post-fix: a pinned calendar-day window. */
     private JsonNode createdTodayBase() {
@@ -67,7 +61,7 @@ public class KpiQueryComposerPinnedWindowTest {
     }
 
     private JsonNode merge(JsonNode base, String params) {
-        return composer.mergeParams(base, json(params), new ArrayList<>());
+        return composer.mergeParams(base, json(params), new ArrayList<>(), CAL);
     }
 
     private boolean suppressed(JsonNode merged) {
@@ -79,9 +73,9 @@ public class KpiQueryComposerPinnedWindowTest {
     /** dtd is the calendar day in EAT — NOT last_1d's rolling 24h, which drifts across midnight. */
     @Test
     public void dtdIsTheCalendarDayNotARollingDay() {
-        long now = System.currentTimeMillis();
-        long dtd = AnalyticsPlanner.windowStartMs("dtd", now);
-        long rolling = AnalyticsPlanner.windowStartMs("last_1d", now);
+        long now = CAL.nowMs;
+        long dtd = AnalyticsPlanner.windowStartMs("dtd", now, EAT);
+        long rolling = AnalyticsPlanner.windowStartMs("last_1d", now, EAT);
 
         assertEquals(today().atStartOfDay(EAT).toInstant().toEpochMilli(), dtd,
                 "dtd must start at EAT midnight of the current day");
@@ -92,7 +86,7 @@ public class KpiQueryComposerPinnedWindowTest {
     /** dtd plans into a real time predicate, so a pinned tile still filters on its own axis. */
     @Test
     public void dtdPlansIntoATimePredicate() {
-        AnalyticsPlanner.Planned p = planner.plan(createdTodayBase(), stateScope);
+        AnalyticsPlanner.Planned p = planner.plan(createdTodayBase(), stateScope, CAL);
         assertTrue(p.sql.contains("created_at >= ?") && p.sql.contains("created_at < ?"),
                 "expected a bounded created_at predicate, got: " + p.sql);
     }
@@ -100,7 +94,7 @@ public class KpiQueryComposerPinnedWindowTest {
     @Test
     public void unknownWindowNameStillRejected() {
         assertThrows(IllegalArgumentException.class,
-                () -> AnalyticsPlanner.windowStartMs("dtd_", System.currentTimeMillis()));
+                () -> AnalyticsPlanner.windowStartMs("dtd_", CAL.nowMs, EAT));
     }
 
     // ---- pinning beats the dashboard globals ----
@@ -108,27 +102,24 @@ public class KpiQueryComposerPinnedWindowTest {
     /** The whole bug: a selected range must not redefine what "today" means. */
     @Test
     public void dateRangeDoesNotRewriteAPinnedWindow() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode merged = merge(createdTodayBase(),
-                    "{\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t + "\"}");
+        LocalDate t = today();
+        JsonNode merged = merge(createdTodayBase(),
+                "{\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t + "\"}");
 
-            // The pin is now materialized into explicit bounds instead of being left as a window node
-            // for the planner to re-resolve, so assert on the bound interval rather than window.name.
-            assertFalse(merged.has("window"), "the pinned window is baked into explicit bounds");
-            assertEquals(t.atStartOfDay(EAT).toInstant().toEpochMilli(),
-                    merged.path("filters").path("created_at").path("gte").asLong(),
-                    "bounds must start at EAT midnight TODAY, not at the range start");
-            assertFalse(suppressed(merged), "the range covers today, so the tile is answerable");
-            return t;
-        });
+        // The pin is now materialized into explicit bounds instead of being left as a window node
+        // for the planner to re-resolve, so assert on the bound interval rather than window.name.
+        assertFalse(merged.has("window"), "the pinned window is baked into explicit bounds");
+        assertEquals(t.atStartOfDay(EAT).toInstant().toEpochMilli(),
+                merged.path("filters").path("created_at").path("gte").asLong(),
+                "bounds must start at EAT midnight TODAY, not at the range start");
+        assertFalse(suppressed(merged), "the range covers today, so the tile is answerable");
     }
 
     /** The window param (the FE's per-tile default) must not override a pin either. */
     @Test
     public void windowParamDoesNotOverrideAPinnedWindowAndIsReported() {
         List<String> ignored = new ArrayList<>();
-        JsonNode merged = composer.mergeParams(createdTodayBase(), json("{\"window\":\"last_30d\"}"), ignored);
+        JsonNode merged = composer.mergeParams(createdTodayBase(), json("{\"window\":\"last_30d\"}"), ignored, CAL);
 
         long midnight = today().atStartOfDay(EAT).toInstant().toEpochMilli();
         assertEquals(midnight, merged.path("filters").path("created_at").path("gte").asLong(),
@@ -142,37 +133,28 @@ public class KpiQueryComposerPinnedWindowTest {
     /** Range entirely in the past: today cannot be in it, so the tile has no answer. */
     @Test
     public void rangeEndingBeforeTodaySuppresses() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode merged = merge(createdTodayBase(),
-                    "{\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t.minusDays(1) + "\"}");
-            assertTrue(suppressed(merged), "a range ending yesterday excludes today");
-            return t;
-        });
+        LocalDate t = today();
+        JsonNode merged = merge(createdTodayBase(),
+                "{\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t.minusDays(1) + "\"}");
+        assertTrue(suppressed(merged), "a range ending yesterday excludes today");
     }
 
     /** Range entirely in the future: same. */
     @Test
     public void rangeStartingAfterTodaySuppresses() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode merged = merge(createdTodayBase(),
-                    "{\"dateFrom\":\"" + t.plusDays(1) + "\",\"dateTo\":\"" + t.plusDays(7) + "\"}");
-            assertTrue(suppressed(merged), "a range starting tomorrow excludes today");
-            return t;
-        });
+        LocalDate t = today();
+        JsonNode merged = merge(createdTodayBase(),
+                "{\"dateFrom\":\"" + t.plusDays(1) + "\",\"dateTo\":\"" + t.plusDays(7) + "\"}");
+        assertTrue(suppressed(merged), "a range starting tomorrow excludes today");
     }
 
     /** A single-day range on today is the boundary case — inclusive, so answerable. */
     @Test
     public void rangeOfExactlyTodayIsNotSuppressed() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode merged = merge(createdTodayBase(),
-                    "{\"dateFrom\":\"" + t + "\",\"dateTo\":\"" + t + "\"}");
-            assertFalse(suppressed(merged));
-            return t;
-        });
+        LocalDate t = today();
+        JsonNode merged = merge(createdTodayBase(),
+                "{\"dateFrom\":\"" + t + "\",\"dateTo\":\"" + t + "\"}");
+        assertFalse(suppressed(merged));
     }
 
     /** No range at all (the dashboard default) — nothing to conflict with. */
@@ -190,7 +172,7 @@ public class KpiQueryComposerPinnedWindowTest {
         assertTrue(suppressed(merged));
         // The planner ignores it rather than emitting it — the service short-circuits before planning,
         // but a stray plan() call must still never produce a __suppressed column or predicate.
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, CAL);
         assertFalse(p.sql.contains("__suppressed"), "marker leaked into SQL: " + p.sql);
     }
 
@@ -199,18 +181,15 @@ public class KpiQueryComposerPinnedWindowTest {
     /** "vs yesterday" must mean yesterday, not the prior 30 days because a month was selected. */
     @Test
     public void priorOnAPinnedDayMeansYesterday() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode merged = merge(createdTodayBase(),
-                    "{\"compare\":\"prior\",\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t + "\"}");
+        LocalDate t = today();
+        JsonNode merged = merge(createdTodayBase(),
+                "{\"compare\":\"prior\",\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t + "\"}");
 
-            long expectedFrom = t.minusDays(1).atStartOfDay(EAT).toInstant().toEpochMilli();
-            long expectedTo = t.atStartOfDay(EAT).toInstant().toEpochMilli();
-            assertEquals(expectedFrom, merged.path("filters").path("created_at").path("gte").asLong());
-            assertEquals(expectedTo, merged.path("filters").path("created_at").path("lt").asLong());
-            assertFalse(merged.has("window"), "explicit prior bounds replace the window");
-            return t;
-        });
+        long expectedFrom = t.minusDays(1).atStartOfDay(EAT).toInstant().toEpochMilli();
+        long expectedTo = t.atStartOfDay(EAT).toInstant().toEpochMilli();
+        assertEquals(expectedFrom, merged.path("filters").path("created_at").path("gte").asLong());
+        assertEquals(expectedTo, merged.path("filters").path("created_at").path("lt").asLong());
+        assertFalse(merged.has("window"), "explicit prior bounds replace the window");
     }
 
     // ---- sparkline ----
@@ -245,22 +224,20 @@ public class KpiQueryComposerPinnedWindowTest {
     /** A pinned WEEK under a two-day filter must not report the whole week: coverage, not overlap. */
     @Test
     public void partialOverlapOfAMultiDayPinIsSuppressed() {
-        onAStableDay(() -> {
-            LocalDate t = today();
-            JsonNode weekly = json("{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}],"
-                    + "\"window\":{\"name\":\"wtd\",\"timeRole\":\"filed_at\",\"pinned\":true}}");
-            JsonNode merged = merge(weekly,
-                    "{\"dateFrom\":\"" + t.minusDays(1) + "\",\"dateTo\":\"" + t + "\"}");
+        LocalDate t = today();
+        JsonNode weekly = json("{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}],"
+                + "\"window\":{\"name\":\"wtd\",\"timeRole\":\"filed_at\",\"pinned\":true}}");
+        JsonNode merged = merge(weekly,
+                "{\"dateFrom\":\"" + t.minusDays(1) + "\",\"dateTo\":\"" + t + "\"}");
 
-            LocalDate weekStart = t.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-            // Only meaningful from Wednesday on: earlier in the week the 2-day range genuinely covers
-            // the whole week-to-date, so there is nothing partial to assert.
-            assumeTrue(t.minusDays(1).isAfter(weekStart),
-                    "early in the week the range covers the pinned window; nothing partial to test");
-            assertTrue(suppressed(merged),
-                    "a range covering only part of the pinned week must not report the full week");
-            return t;
-        });
+        LocalDate weekStart = t.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        // Only meaningful from Wednesday on: earlier in the week the 2-day range genuinely covers
+        // the whole week-to-date, so there is nothing partial to assert. CAL is a fixed Saturday, so
+        // this always exercises the real case rather than skipping.
+        assumeTrue(t.minusDays(1).isAfter(weekStart),
+                "early in the week the range covers the pinned window; nothing partial to test");
+        assertTrue(suppressed(merged),
+                "a range covering only part of the pinned week must not report the full week");
     }
 
     /** Pinning something boundless has no meaning; it must degrade to the ordinary path, not to a lie. */
@@ -307,7 +284,7 @@ public class KpiQueryComposerPinnedWindowTest {
                 "empty params must remain a no-op");
         JsonNode merged = merge(createdTodayBase(), "{\"serviceCode\":\"Pothole\"}");
         assertFalse(merged.has("window"), "the window must be consumed into explicit bounds");
-        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope);
+        AnalyticsPlanner.Planned p = planner.plan(merged, stateScope, CAL);
         assertTrue(p.sql.contains("created_at >= ?") && p.sql.contains("created_at < ?"),
                 "materialized bounds must still produce the same bounded predicate: " + p.sql);
     }
@@ -322,7 +299,9 @@ public class KpiQueryComposerPinnedWindowTest {
                 "{\"dateFrom\":\"" + t.minusDays(30) + "\",\"dateTo\":\"" + t + "\"}");
 
         assertFalse(merged.has("window"), "range must still remove an unpinned window");
-        assertEquals(t.minusDays(30).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+        // Bounds are computed in the resolved TENANT zone (EAT here), not UTC (#29) — a range
+        // dateFrom/dateTo is a local calendar date wherever the tenant is configured.
+        assertEquals(t.minusDays(30).atStartOfDay(EAT).toInstant().toEpochMilli(),
                 merged.path("filters").path("created_at").path("gte").asLong());
         assertFalse(suppressed(merged), "unpinned defs are never suppressed");
     }

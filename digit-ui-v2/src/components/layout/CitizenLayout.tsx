@@ -2,18 +2,20 @@
  * CitizenLayout — top bar + single-item sidebar + content slot.
  *
  * Replaces the operator-side Layout/DigitLayout from the configurator fork.
- * No RHS docs pane, no module switcher, no role-based nav — citizens see one
- * thing (the dashboard) until we add more citizen surfaces. Each future
- * surface is one extra <NavLink> in the sidebar below.
+ * No RHS docs pane, no module switcher, no role-based nav. The legacy dashboard
+ * link is injected only when its build-time rollback flag is enabled.
  */
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, FileText, UserCircle, BarChart3 } from 'lucide-react';
 import { useApp } from '@/App';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 const NAV: { to: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { to: '/dashboard', label: 'Citizen Dashboard', icon: LayoutDashboard },
+  ...(LEGACY_PGR_DASHBOARD_ENABLED
+    ? [{ to: '/dashboard', label: 'Citizen Dashboard', icon: LayoutDashboard }]
+    : []),
   { to: '/dashboard-v2', label: 'Dashboard v2', icon: BarChart3 },
   { to: '/complaints', label: 'My Complaints', icon: FileText },
   { to: '/profile', label: 'Profile', icon: UserCircle },

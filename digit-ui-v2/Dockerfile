@@ -1,3 +1,5 @@
+# Build from the repository root (`docker build -f digit-ui-v2/Dockerfile .`)
+# so both SPAs consume the same ui-shared feature-flag parser.
 # digit-ui-v2 (digit-citizen-ui) — Vite/React citizen SPA, served by nginx under
 # /citizen/. Mirrors the playbook "digit-ui-v2 — build (vite) with env contract"
 # task: Vite bakes VITE_* at build time, so they are build-args here (one image
@@ -13,11 +15,12 @@ ARG NODE_IMAGE=node:20-bookworm-slim
 ARG BASE_PATH=/citizen/
 
 FROM ${NODE_IMAGE} AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY packages ./packages
+WORKDIR /app/digit-ui-v2
+COPY digit-ui-v2/package.json digit-ui-v2/package-lock.json ./
+COPY digit-ui-v2/packages ./packages
 RUN npm ci || npm install
-COPY . .
+COPY ui-shared /app/ui-shared
+COPY digit-ui-v2 .
 # Build file: sub-packages first (their `main` points at dist/, not built by npm ci).
 RUN for sp in packages/*/; do \
       [ -f "${sp}package.json" ] || continue; \
@@ -33,13 +36,15 @@ ARG VITE_KEYCLOAK_CLIENT_ID=digit-ui
 ARG VITE_TOKEN_EXCHANGE_URL=/token-exchange
 ARG VITE_CITIZEN_STATE_TENANT=""
 ARG VITE_CITIZEN_TENANT=""
+ARG VITE_ENABLE_LEGACY_PGR_DASHBOARD=false
 ENV VITE_AUTH_PROVIDER=${VITE_AUTH_PROVIDER} \
     VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
     VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID} \
     VITE_TOKEN_EXCHANGE_URL=${VITE_TOKEN_EXCHANGE_URL} \
     VITE_CITIZEN_STATE_TENANT=${VITE_CITIZEN_STATE_TENANT} \
-    VITE_CITIZEN_TENANT=${VITE_CITIZEN_TENANT}
+    VITE_CITIZEN_TENANT=${VITE_CITIZEN_TENANT} \
+    VITE_ENABLE_LEGACY_PGR_DASHBOARD=${VITE_ENABLE_LEGACY_PGR_DASHBOARD}
 # v2's proven recipe is the package.json build (tsc -b && vite build); base
 # (/citizen/) comes from vite.config.ts. Strict (no vite-only fallback): a type
 # error should fail the nightly loudly, not ship an unchecked citizen bundle.
@@ -49,7 +54,7 @@ RUN npm run build \
 # --- serve ---------------------------------------------------------------------
 FROM nginx:1.27-alpine
 ARG BASE_PATH
-COPY --from=build /app/dist /usr/share/nginx/html${BASE_PATH}
+COPY --from=build /app/digit-ui-v2/dist /usr/share/nginx/html${BASE_PATH}
 # `root` (not `alias`) + try_files: avoids the alias+try_files path-doubling
 # footgun and serves deep-link refreshes under the base path correctly.
 RUN printf 'server {\n\

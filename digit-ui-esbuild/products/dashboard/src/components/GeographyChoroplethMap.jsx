@@ -190,7 +190,7 @@ const GeographyChoroplethMap = ({
   layerTotal = 0,
   unmappedTotal = 0,
 }) => {
-  const { t, language } = useDashboardT();
+  const { t, language, i18nTick } = useDashboardT();
   const shellRef = useRef(null);
   const frameRef = useRef(null);
   const elRef = useRef(null);
@@ -285,18 +285,18 @@ const GeographyChoroplethMap = ({
   // ── data joins ───────────────────────────────────────────────────────────
   const joined = useMemo(
     () => joinWardMapData(wardCounts, boundaries),
-    [wardCounts, boundaries, language]
+    [wardCounts, boundaries, language, i18nTick]
   );
 
   // Parent-level joins for the zoom-driven boundary levels (counts rolled up to the
   // sub-county / county, joined against the seeded parent polygons).
   const subCountyJoined = useMemo(
     () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 1), boundaries),
-    [wardCounts, hierarchyIndex, boundaries, language]
+    [wardCounts, hierarchyIndex, boundaries, language, i18nTick]
   );
   const countyJoined = useMemo(
     () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 0), boundaries),
-    [wardCounts, hierarchyIndex, boundaries, language]
+    [wardCounts, hierarchyIndex, boundaries, language, i18nTick]
   );
   // Active level by zoom; fall back to wards if a level's parent polygons are missing.
   const activeJoined =
@@ -318,12 +318,12 @@ const GeographyChoroplethMap = ({
 
   const mapRootLabel = useMemo(
     () => resolveMapRootLabel(cityLabel, drillHierarchyIndex, wardCodes, boundaries),
-    [cityLabel, drillHierarchyIndex, wardCodes, boundaries, language]
+    [cityLabel, drillHierarchyIndex, wardCodes, boundaries, language, i18nTick]
   );
 
   const boundaryLabelIndex = useMemo(
     () => buildBoundaryLabelIndex(boundaries),
-    [boundaries, language]
+    [boundaries, language, i18nTick]
   );
 
   const focusedWard = useMemo(
@@ -369,7 +369,7 @@ const GeographyChoroplethMap = ({
   const legendItems = useMemo(
     () => getGeographyMapLegend(layerMode, createdBuckets),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layerMode, language, createdScaleKey, getNumberFormatStamp()]
+    [layerMode, language, i18nTick, createdScaleKey, getNumberFormatStamp()]
   );
   // Kept OUT of legendItems on purpose: that array is a colour scale scanned by
   // range (getCreatedCountBucket), so the pin row renders as its own <li> below.
@@ -391,6 +391,7 @@ const GeographyChoroplethMap = ({
       pinsTruncated,
       unmappedTotal,
       language,
+      i18nTick,
       getNumberFormatStamp(),
     ]
   );
@@ -687,6 +688,7 @@ const GeographyChoroplethMap = ({
     // Leaflet tooltips are drawn imperatively — redraw layers on language switch
     // (#882 ward-tooltip precedent) so bound tooltip text picks up the new locale.
     language,
+    i18nTick,
     layerMode,
     createdScaleKey,
   ]);
@@ -814,7 +816,7 @@ const GeographyChoroplethMap = ({
     // language switch so pin tooltips re-render localized (#882 precedent).
     // `layerMode`: pin colour follows the layer. (The pin ARRAY also changes per
     // layer, but not on an 'open-only' catalog where all three are identical.)
-  }, [visibleComplaintPins, language, layerMode]);
+  }, [visibleComplaintPins, language, i18nTick, layerMode]);
 
   // ── initial fit ───────────────────────────────────────────────────────────
   useEffect(() => {

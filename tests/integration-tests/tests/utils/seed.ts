@@ -111,6 +111,7 @@ export async function seedComplaintAsCitizen(opts?: {
   serviceCode?: string;
   localityCode?: string;
   description?: string;
+  geoLocation?: { latitude?: number; longitude?: number };
 }): Promise<{ srid: string; status: string }> {
   // Resolved only when the caller left something to resolve — a spec that pins
   // both is asking for one specific complaint and should not be gated on the
@@ -129,6 +130,7 @@ export async function seedComplaintAsCitizen(opts?: {
     description: opts?.description ?? `seed complaint — ${new Date().toISOString()}`,
     citizenName: who.name,
     citizenPhone: who.mobile,
+    geoLocation: opts?.geoLocation,
   });
   filedBy.set(result.serviceRequestId, who);
   return { srid: result.serviceRequestId, status: result.applicationStatus };

@@ -65,9 +65,8 @@ server {
 
 {% endif %}
 {% if nginx_features.digit_ui_v2 | default(false) %}
-  # digit-ui-v2 — Vite + React 19 citizen SPA. Built from
-  # {{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }} on the
-  # target ({{ digit_ui_v2_repo | default('digit-ui-v2 repo') }}) and
+  # digit-ui-v2 — Vite + React 19 citizen SPA. Built on the target from
+  # {{ (digit_ui_v2_repo | default('')) | ternary(digit_ui_v2_repo | default('') ~ '@' ~ (digit_ui_v2_branch | default('HEAD')), 'the vendored in-tree digit-ui-v2/ source') }} and
   # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
   # the long immutable cache; index.html stays no-cache so a redeploy
   # propagates without operators forcing a hard refresh.
@@ -124,7 +123,14 @@ server {
 {% endif %}
 
 {% endif %}
-  # Grafana dashboard
+{# `| default(true)` is load-bearing: host_vars override nginx_features as a
+   whole dict (hash_behaviour=replace), so every tenant file written before
+   this key existed has no `grafana` member. Without the default those deploys
+   would fail rendering this template. Same reason as digit_ui_v2 below. #}
+{% if nginx_features.grafana | default(true) %}
+  # Grafana dashboard. This is the ONLY public path to Grafana — the Kong
+  # /grafana route was removed in #1604, so turning this flag off makes the
+  # UI genuinely unreachable from outside rather than merely unlinked.
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};
     proxy_set_header Host $host;
@@ -136,6 +142,7 @@ server {
     proxy_set_header Connection "upgrade";
   }
 
+{% endif %}
 {% if nginx_features.status %}
   # Gatus health page — public path /status/, SPA assets rewritten on the fly.
   # Gatus's index.html / JS reference assets and the API as absolute paths
@@ -373,6 +380,20 @@ server {
     proxy_read_timeout 24h;
   }
 
+  # Novu 2.3.0 uses Socket.IO's default root transport path. The dashboard
+  # ignores a /novu-ws suffix in VITE_WEBSOCKET_HOSTNAME and connects here.
+  location /socket.io/ {
+    proxy_pass http://127.0.0.1:14003/socket.io/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
   # novu-bridge: the read-only configurator proxy endpoints
   # (GET /novu-bridge/novu-adapter/v1/logs|integrations) are routed by Kong
   # (see local-setup/kong/kong.yml) and auth-gated INSIDE novu-bridge by
@@ -416,6 +437,25 @@ server {
   }
 
 {% endif %}
+  # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
+  # a second esbuild entry living in the same /digit-ui/ docroot as the employee
+  # app (so hashed assets resolve against one publicPath), which means this only
+  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  #
+  # Its analytics read paths are explicitly auth-optional on Kong, so the page
+  # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
+  # gateway is deliberately not opened because it does not normalize spoofed
+  # anonymous userInfo. The real data boundary remains server-side.
+  location = /digit-ui/public-dashboard {
+    return 302 /digit-ui/public-dashboard.html;
+  }
+
+  # Backwards-compatible alias for the first public-dashboard preview. The
+  # explicit digit-ui path is canonical and is what the configurator exposes.
+  location = /dashboard {
+    return 302 /digit-ui/public-dashboard;
+  }
+
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook

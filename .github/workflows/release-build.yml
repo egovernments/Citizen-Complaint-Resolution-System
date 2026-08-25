@@ -1,0 +1,32 @@
+name: Release Build
+run-name: Release build ${{ github.event.release.tag_name }}
+
+on:
+  release:
+    types: [published]
+
+# NOTE: `release` events run the workflow file from the DEFAULT branch (master),
+# so this file must exist there. It builds the exact commit the release tag
+# points at and publishes egovio/<name>:<release-tag> (the same tag as the
+# GitHub release). No rolling tag, no prune — release tags are immutable and kept.
+
+# Keyed per release tag, so two releases published close together DO run
+# concurrently. That is safe only because build-images.yml scopes its per-arch
+# staging tags with `github.run_id` — without that, both runs would write the
+# same `egovio/<image>:release-staging-<arch>` tags and could stitch an
+# arch-mixed manifest under an immutable release tag (e.g. v2.12.1 on amd64
+# silently running v2.12.0 code).
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-images.yml
+    with:
+      ref: ${{ github.event.release.tag_name }}
+      version_tag: ${{ github.event.release.tag_name }}
+      # Disambiguated per run inside build-images.yml — see the note above.
+      staging_prefix: release
+      prune_develop: false
+    secrets: inherit

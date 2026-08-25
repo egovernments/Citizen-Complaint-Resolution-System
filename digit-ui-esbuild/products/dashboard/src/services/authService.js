@@ -1,4 +1,5 @@
 import { getTenantId } from "../config/dashboardConfig";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
 /**
  * Single source of truth for dashboard auth: token storage, RequestInfo
@@ -452,8 +453,10 @@ function announceSessionExpired({ clearStorage } = { clearStorage: false }) {
 }
 
 export function buildRequestInfo(msgIdPrefix = "dashboard") {
-  const authToken = getEmployeeToken();
-  const userInfo = getEmployeeInfo();
+  // A public entry may share this origin with an employee session. Never let
+  // those credentials change the public endpoint's audience or leave storage.
+  const authToken = isPublicDashboardRuntime() ? null : getEmployeeToken();
+  const userInfo = isPublicDashboardRuntime() ? null : getEmployeeInfo();
   return {
     apiId: "Rainmaker",
     ver: ".01",
@@ -618,15 +621,20 @@ function refreshSession() {
  */
 export async function authFetch(
   url,
-  { buildBody, method = "POST", headers, sessionCritical = true } = {}
+  { buildBody, method = "POST", headers, sessionCritical = true, signal } = {}
 ) {
   const send = () =>
     fetch(url, {
       method,
       headers: { "Content-Type": "application/json", ...headers },
       credentials: "omit",
+      signal,
       body: buildBody ? JSON.stringify(buildBody()) : undefined,
     });
+
+  // Public requests are never part of employee session ownership. One send,
+  // no refresh, no dead-token marker, no storage clear and no expiry event.
+  if (isPublicDashboardRuntime()) return send();
 
   // Three sends max, still at most ONE refresh per call. Three because there are
   // two independent reasons to replay and a caller can need both: a

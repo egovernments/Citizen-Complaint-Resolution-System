@@ -27,6 +27,31 @@ shell at boot. The TopBar language dropdown (host `ChangeLanguage`) drives local
 dashboard re-renders in place, including the imperatively-drawn Leaflet layers and pin popups
 (re-keyed on `i18n.language`).
 
+### 1.1 The public page (`/digit-ui/public-dashboard`)
+
+There is no DigitUI shell and no host i18next on the anonymous page, so
+`products/dashboard/src/i18n/localeRuntime.js` fetches the same four bundles itself from
+`/localization/messages/v1/_search` (auth-optional on Kong) at the **state root**, for the active
+locale **plus `en_IN`** as the fallback chain. Since #1797 the page carries its own language
+switcher (`components/LanguageMenu.jsx`, in the header):
+
+- **options** come from `common-masters.StateInfo[0].languages` at the state root, exactly like
+  the TopBar (`hasLocalisation` must be `true`; a single declared language hides the menu);
+- **switching** calls `setLanguage()`, which remembers the choice under
+  `localStorage["ccrs.dashboard.public-locale.v1"]` — deliberately *not* `Employee.locale`, so a
+  public visit never reads or rewrites the language of an employee session in the same browser —
+  loads the bundle and re-renders every `useDashboardT` consumer in place;
+- **first visit** defaults to `globalConfigs` `LOCALE_DEFAULT` + `_` + `LOCALE_REGION` (the
+  employee app's boot locale), else `en_IN`.
+
+**Seeding caveat (bomet).** The menu lists whatever `StateInfo.languages` declares; it does not
+know whether a `rainmaker-dashboard` pack exists for that locale. `ke` declares `en_IN` +
+`sw_KE`, but only `en_IN` and `pt_PT` dashboard packs ship in
+`local-setup/db/dss-mdms-seed/l10n/` — so picking Swahili on bomet today renders the dashboard's
+own chrome in the English fallback until a `sw_KE` pack is upserted (`enable-dashboard.sh`
+already warns on exactly this mismatch). The fix is data: translate the pack, upsert it at the
+state root, cache-bust (§4.1).
+
 Two resolution seams in `products/dashboard/src/i18n/`:
 
 - `translate(key, seedEnglish)` / `useDashboardT()` — chrome strings; missing ⇒ raw key.
@@ -64,7 +89,7 @@ keys for these. `dimensionLabel` tries, in order:
 |---|---|---|---|
 | `complaintType` | `COMPLAINT_HIERARCHY.<code>`, `COMPLAINT_HIERARCHY.<CODE>`, legacy `SERVICEDEFS.<CODE>` | `rainmaker-pgr` | configurator complaint-type create (per StateInfo locale) |
 | `boundary` | bare `<code>` (e.g. `BOMET_BOMET_CENTRAL_CHESOEN`), transformed variant | `rainmaker-boundary-<hier>` | configurator boundary phase (#852/#1002 conventions) |
-| `department` | `COMMON_MASTERS_DEPARTMENT_<CODE>`, `DEPARTMENT_<CODE>` | `rainmaker-common` | configurator department create |
+| `department` | `COMMON_MASTERS_DEPARTMENT_<CODE>`, `DEPARTMENT_<CODE>` | `rainmaker-common` | configurator department create; `tenant_bootstrap` derives a floor from the master's `name` (#1590) |
 | `workflowStatus` | `DASHBOARD_WF_STAGE_<STATUS>`, then platform `CS_COMMON_<STATUS>` / `WF_PGR_<STATUS>` | dashboard pack / `rainmaker-pgr` | pack + PGR seeds |
 | `channel` / `slaState` / `ageBucket` | `DASHBOARD_*` (§2) | `rainmaker-dashboard` | pack |
 
@@ -79,9 +104,25 @@ screen therefore means *neither* a localization message *nor* an operator-author
 | `DASHBOARD_…` key | that key, module `rainmaker-dashboard`, active locale, state root | upsert it (locale gap ⇒ the whole pack for that locale is probably missing) |
 | `CMS-DASHBOARD.DASHBOARD_KPI_…` | title/subtitle for a def | upsert; if it's a new KPI, the def's author skipped the localization step (§2) |
 | a complaint-type code (`ServiceSchedulingComplaints`) | `COMPLAINT_HIERARCHY.<code>` in `rainmaker-pgr` | upsert — known gap for **legacy** type-level codes created before the `COMPLAINT_HIERARCHY` namespace (bomet `ke` has these) |
-| a department code (`WATER_ENV`) | `COMMON_MASTERS_DEPARTMENT_<CODE>` in `rainmaker-common` | upsert — known gap on bomet `ke` |
+| a department code (`WATER_ENV`, `PMC_ELEC`) | `COMMON_MASTERS_DEPARTMENT_<CODE>` in `rainmaker-common` | upsert at the **state root** (§4.1). If the tenant was created by `tenant_bootstrap`, check whether the code even exists as a message anywhere: the copy carries masters unconditionally but only carries messages that already exist on a source tenant, so a master no source dump ever localized arrives bare (#1590) |
 | a boundary code | bare code in `rainmaker-boundary-<hier>` | re-run the configurator boundary localization / upsert (per locale) |
 | `DASHBOARD_GEO_LEVEL_<n>` | tier word for the tenant | upsert the deployment's vocabulary (ke: County/Sub-county/Ward) |
+
+### 4.1 Which tenant to upsert to
+
+**The state root**, not the city — for anything the dashboard renders.
+
+`egov-localization`'s `_search` resolves a tenant's **own rows only**. There is no ancestor
+fallback and no descendant rollup: verified on bomet 2026-08-06, a search at `ke.india` returns
+its own 9 messages and no `ke` row, and a search at `ke` never sees a `ke.india` row. The
+ancestor merge people expect happens *client-side* in the digit-ui, which loads its packs for
+`stateTenantId`.
+
+That matters here because the dashboard aggregates a root's whole sub-tenant subtree: a fact row
+filed under `ke.india` shows up on the `ke` dashboard, but a message seeded only under `ke.india`
+never will. This is exactly how #1590 hid — the departments were correctly onboarded onto the
+city, and the root screen had nothing to resolve. Seed both when the city has its own UI;
+`tenant_bootstrap` does this for its derived floor and for `TENANT_TENANTS_*`.
 
 After any upsert, walk the **three cache layers** (details in [30-view-access.md](30-view-access.md)):
 service in-app cache — `POST /localization/messages/cache-bust` (on bomet this path is **not

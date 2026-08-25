@@ -1098,7 +1098,28 @@
     "displayName": "MDMS v2",
     "orderNumber": 1,
     "serviceCode": "MDMS v2",
-    "parentModule": ""
+    "parentModule": "",
+    "resource": {
+      "masters": {
+        "ACCESSCONTROL-ROLES.roles": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "ACCESSCONTROL-ACTIONS-TEST.actions-test": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "ACCESSCONTROL-ROLEACTIONS.roleactions": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "common-masters.Department": {
+          "condition": {
+            "or": [
+              { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] },
+              { "in": [ "SUPERVISOR", { "var": "user.roles" } ] }
+            ]
+          }
+        }
+      }
+    }
   },
   {
     "id": 2510,
@@ -1406,7 +1427,50 @@
     "displayName": "Search PGR Request",
     "orderNumber": 0,
     "serviceCode": "pgr-services",
-    "parentModule": ""
+    "parentModule": "",
+    "method": "POST",
+    "resource": {
+      "complaint": {
+        "scope": {
+          "axes": ["department", "jurisdiction"],
+          "roleScopes": {
+            "GRO": { "department": "ALL", "jurisdiction": "OWN" },
+            "PGR_LME": { "department": "OWN", "jurisdiction": "OWN" },
+            "SUPERVISOR": { "department": "OWN", "jurisdiction": "ALL" }
+          },
+          "default": { "department": "ALL", "jurisdiction": "OWN" }
+        },
+        "attributes": {
+          "citizen.mobileNumber": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "REDACT" }
+          },
+          "citizen.name": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "REDACT" }
+          },
+          "citizen.userName": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "REDACT" }
+          }
+        }
+      }
+    }
   },
   {
     "id": 2007,

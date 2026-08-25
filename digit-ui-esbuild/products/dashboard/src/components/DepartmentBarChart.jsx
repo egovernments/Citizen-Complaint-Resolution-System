@@ -53,7 +53,7 @@ const DepartmentBarChart = ({
   valueFormat = "count",
 }) => {
   // Subscribes to language changes so labels below re-render translated.
-  const { language } = useDashboardT();
+  const { language, i18nTick } = useDashboardT();
   // Per-locale numberFormat mask stamp (#1272): baked into the options memo
   // because react-apexcharts compares JSON.stringify(options), which drops
   // the data-label formatter closures — without a stringifiable delta a
@@ -70,7 +70,7 @@ const DepartmentBarChart = ({
 
   const chartData = useMemo(
     () => normalizeChartData(data, categoryOrder),
-    [data, categoryOrder, language]
+    [data, categoryOrder, language, i18nTick]
   );
 
   const { viewportRef, chartSize, isScrollable, isReady, scrollAxis } = useScrollableChartSize({
@@ -87,7 +87,7 @@ const DepartmentBarChart = ({
         : t("DASHBOARD_COMMON_COUNT", "Count"),
       data: chartData.map((d) => d.count),
     }],
-    [chartData, isPercent, language]
+    [chartData, isPercent, language, i18nTick]
   );
 
   const seriesMax = useMemo(

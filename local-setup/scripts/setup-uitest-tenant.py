@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Create uitest.city1 tenant using CRSLoader (the real onboarding flow)."""
 
+import os
 import sys
-sys.path.insert(0, '/root/code/digit-ui-fix/local-setup/jupyter/dataloader')
+
+# Resolve the loader next to this script so the checkout can live anywhere.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATALOADER_DIR = os.path.join(SCRIPT_DIR, "..", "dataloader")
+sys.path.insert(0, DATALOADER_DIR)
 
 from crs_loader import CRSLoader
 

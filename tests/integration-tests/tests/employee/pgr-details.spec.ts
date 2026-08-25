@@ -24,6 +24,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../utils/auth';
 import { BASE_URL, TENANT } from '../utils/env';
 import { getPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
 
 // getPersona('employee') asks the live deployment who actually holds
 // EMPLOYEE/SUPERUSER instead of assuming ADMIN — it tries FLOW5_EMPLOYEE_USER/
@@ -296,5 +297,57 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     );
     await expect(takeAction.first()).toBeVisible({ timeout: 10_000 });
     await expect(takeAction.first()).toBeEnabled();
+  });
+
+  test('Story 5.location — optional coordinates hide/show the complete location card (#1750)', {
+    annotation: {
+      type: 'description',
+      description: `Files one complaint with no geoLocation and one at latitude=0/longitude=36.8, then opens each through employee PGR details. The missing location must render neither the card heading nor a map; the equator point must render both. This keeps employee details aligned with the citizen detail contract and prevents truthiness checks from rejecting a valid zero-axis coordinate.`,
+    },
+    tag: ['@area:pgr', '@ccrs:1750', '@kind:regression', '@layer:ui', '@persona:employee'],
+  }, async ({ page }) => {
+    test.setTimeout(180_000);
+
+    let missingId: string;
+    let equatorId: string;
+    try {
+      const [missing, equator] = await Promise.all([
+        seedComplaintAsCitizen({
+          description: 'PW #1750 employee detail without geo-location',
+          geoLocation: {},
+        }),
+        seedComplaintAsCitizen({
+          description: 'PW #1750 employee detail equator geo-location',
+          geoLocation: { latitude: 0, longitude: 36.8 },
+        }),
+      ]);
+      missingId = missing.srid;
+      equatorId = equator.srid;
+    } catch (error) {
+      test.skip(true, `complaint create blocked on this deployment: ${(error as Error).message.slice(0, 200)}`);
+      return;
+    }
+
+    await page.route('https://nominatim.openstreetmap.org/reverse**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ display_name: 'Playwright employee coordinate contract' }),
+      }),
+    );
+    const locationHeading = () =>
+      page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
+    const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
+
+    await openDetails(page, missingId, 'fresh no-location fixture creation failed');
+    await expect(
+      locationHeading(),
+      'employee details must hide the complete location card when coordinates are absent',
+    ).toHaveCount(0);
+    await expect(locationMarker()).toHaveCount(0);
+
+    await openDetails(page, equatorId, 'fresh equator fixture creation failed');
+    await expect(locationHeading(), 'employee details must accept latitude=0').toBeVisible();
+    await expect(locationMarker()).toHaveCount(1);
   });
 });

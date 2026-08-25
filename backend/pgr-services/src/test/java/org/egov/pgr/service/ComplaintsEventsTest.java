@@ -1,9 +1,12 @@
 package org.egov.pgr.service;
 
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.policy.FieldVisibilityService;
+import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
 import org.egov.pgr.web.models.*;
 import org.junit.Before;
@@ -44,6 +47,16 @@ public class ComplaintsEventsTest {
     private MDMSUtils mdmsUtils;
     @Mock
     private ComplaintDomainEventService complaintDomainEventService;
+    @Mock
+    private PGRUtils pgrUtils;
+    @Mock
+    private ExtendedAttributesValidationService extendedAttributesValidationService;
+    @Mock
+    private EncryptionDecryptionService encryptionDecryptionService;
+    @Mock
+    private SearchAccessPolicyService searchAccessPolicyService;
+    @Mock
+    private FieldVisibilityService fieldVisibilityService;
 
     @InjectMocks
     private PGRService pgrService;

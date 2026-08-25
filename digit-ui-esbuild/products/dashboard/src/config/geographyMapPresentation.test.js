@@ -214,16 +214,15 @@ test("the pin entry is NOT part of the colour scale", () => {
   }
 });
 
-// NOTE ON EXPECTED STRINGS: translate() renders the RAW KEY when no message
-// store is primed (localeRuntime has no test seam), so these assert the CODE
-// each branch selects — the English literals in the source are the seeded
-// fallbacks, verified by the l10n pack, not by this file.
+// No message store is primed in this unit test, so translate() exercises the
+// same canonical-English fallback used by a standalone dashboard while its
+// selected locale is missing a message.
 
 test("pin label and swatch follow the layer under per-layer semantics", () => {
   const of = (layer) => getGeographyMapPinLegendEntry(layer, { semantics: "per-layer" });
-  assert.equal(of("created").label, "DASHBOARD_MAP_LEGEND_PINS_CREATED");
-  assert.equal(of("open").label, "DASHBOARD_MAP_LEGEND_PINS_OPEN");
-  assert.equal(of("resolved").label, "DASHBOARD_MAP_LEGEND_PINS_RESOLVED");
+  assert.equal(of("created").label, "Pins: complaints filed");
+  assert.equal(of("open").label, "Pins: complaints still open");
+  assert.equal(of("resolved").label, "Pins: complaints resolved");
   assert.deepEqual(of("created").swatch, GEOGRAPHY_MAP_PIN_STYLES.created);
   assert.deepEqual(of("open").swatch, GEOGRAPHY_MAP_PIN_STYLES.open);
   assert.deepEqual(of("resolved").swatch, GEOGRAPHY_MAP_PIN_STYLES.resolved);
@@ -239,12 +238,12 @@ test("pin label and swatch follow the layer under per-layer semantics", () => {
 test("open-only semantics says so on EVERY layer", () => {
   for (const layer of ["created", "open", "resolved"]) {
     const entry = getGeographyMapPinLegendEntry(layer, { semantics: "open-only" });
-    assert.equal(entry.label, "DASHBOARD_MAP_LEGEND_PINS_OPEN_ONLY");
+    assert.equal(entry.label, "Pins: complaints still open — pins do not follow this layer");
   }
   // Anything that is not exactly 'open-only' is treated as per-layer.
   assert.equal(
     getGeographyMapPinLegendEntry("open", { semantics: "nonsense" }).label,
-    "DASHBOARD_MAP_LEGEND_PINS_OPEN"
+    "Pins: complaints still open"
   );
 });
 
@@ -256,7 +255,7 @@ test("the coverage note is composed by concatenation, never interpolation", () =
   });
   assert.equal(
     entry.note,
-    "42DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF137DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX"
+    "42 of 137 shown on the map (rest have no location)"
   );
   assert.ok(!/\{|\}|%s/.test(entry.note), "no interpolation placeholders");
   // Nothing to compare against -> no note at all rather than "0 of 0".
@@ -272,9 +271,9 @@ test("truncation and unmapped complaints are surfaced, not swallowed", () => {
     unmapped: 17,
   });
   assert.deepEqual(entry.note.split(" \u00b7 "), [
-    "1000DASHBOARD_MAP_LEGEND_PINS_COVERAGE_OF4200DASHBOARD_MAP_LEGEND_PINS_COVERAGE_SUFFIX",
-    "DASHBOARD_MAP_LEGEND_PINS_TRUNCATED",
-    "17DASHBOARD_MAP_LEGEND_PINS_UNMAPPED",
+    "1000 of 4200 shown on the map (rest have no location)",
+    "Showing the most recent 1,000 only",
+    "17 complaints have no ward and are not mapped",
   ]);
   // No cap hit, nothing unmapped -> just the coverage line.
   const clean = getGeographyMapPinLegendEntry("open", { shown: 3, total: 4, unmapped: 0 });

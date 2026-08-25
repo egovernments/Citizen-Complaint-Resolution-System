@@ -113,6 +113,41 @@ Operator consequences:
   serviceCode; complaints whose type has no department are excluded for department-scoped users
   (NULL never matches an `IN` list).
 
+#### Tenant-configurable calendar zone — `dss.DashboardConfig.timeZone` (#29)
+
+Every analytics request resolves ONE IANA time zone from this OPTIONAL field on the same
+`dss.DashboardConfig` record (composes additively with `departmentScoping`/`numberFormat`/
+`allowedRoles` on that record) and builds exactly one `BusinessCalendar` (a resolved `ZoneId` +
+a single captured `asOf` instant) that every downstream consumer of the request shares — the
+planner's named windows (`dtd`/`wtd`/`mtd`/`qtd`/`ytd`), the `#1462` pinned-window
+suppression/prior decision, an explicit `dateFrom`/`dateTo` range, the runtime `timeBucket` SQL,
+and the compose `*_Avg` elapsed-time math. The response's own `asOf`/`calendar` fields
+(`{timeZone, businessDate}`) echo exactly this same resolved calendar.
+
+**Fail-safe**: absent, empty, or a value that fails `ZoneId.of(...)` (not a valid IANA zone id)
+falls back to `Africa/Nairobi` — the zone every unconfigured tenant already behaved as before
+this field existed (a migration-compatibility default, not an assertion that EAT is the "right"
+default for new tenants). The fallback is logged at WARN (once per cache TTL window per state
+root); it never throws and never falls back to the server's JVM/OS zone.
+
+Read at the tenant's **state root** and served from the SAME cached fetch/TTL as
+`departmentScoping` (one MDMS call resolves both axes together; see the shared-cache note above)
+— a config flip on either field takes effect within one `pgr.analytics.config-cache-ttl-ms`
+window (default 5 minutes) without a redeploy.
+
+**DB-refresh lag is separate from calendar resolution.** The calendar itself (window boundaries,
+`businessDate`) is computed once per request from the resolved `timeZone` value. A config change
+therefore reaches the request path on the first request after the shared config cache refreshes
+(within the TTL above). What can lag further is the underlying DATA: `complaint_facts` /
+`complaint_events` are materialized views refreshed by `DashboardRefreshScheduler` on its own
+cadence (`pgr.dashboard.refresh.interval.ms`, default 5 min — see `60-operations.md`), so a
+DB-derived tile's numbers reflect a `timeZone` change (e.g. it shifting which rows fall in
+"today") only from that view's next refresh onward, not instantaneously.
+
+Seed note: `ansible/nairobi-mdms/mdms/dss/DashboardConfig.json` carries
+`"timeZone": "Africa/Nairobi"` for the canonical `ke` tenant — the explicit value matches what
+absence would already resolve to, kept explicit so the seed is self-documenting.
+
 ### Layer 2 — Catalog visibility (`rbac.visibleTo`)
 
 Per-KPI role ceiling, evaluated in `KpiDefinition.isVisibleTo`:
@@ -149,6 +184,55 @@ An unauthenticated / role-less caller degrades to the synthetic `PUBLIC` role
 This is a deliberate degrade-to-curated-aggregates, not a lock-out; it closed the old fail-open
 where anonymous callers could read every `visibleTo: []` tile.
 
+#### The public dashboard page (`/digit-ui/public-dashboard`, #1540 / #1797)
+
+The anonymous page never touches the mixed-auth endpoints above. It uses four Kong-only
+auth-optional aliases under `/v2/analytics/public/*` (`AnalyticsController`), each of which
+**discards `RequestInfo` by construction** and fails closed when
+`dss.DashboardConfig.publicDashboardEnabled` is not `true`:
+
+| alias | returns | feeds |
+|---|---|---|
+| `POST …/public/packs` | the matched `PUBLIC` pack: tiles + default layout (no `recordCount`); `{enabled:false}` when disabled | default page |
+| `POST …/public/catalog/_search` | every published def with `"PUBLIC"` in `visibleTo` (safe descriptors) | the **Add KPI** menu |
+| `POST …/public/_options` | ward / complaint-type **codes** that carry complaints (counts stripped); the two distinct queries are server constants, the caller sends only `tenantId` | the filter bar's dropdowns |
+| `POST …/public/_query` | batch of `{kpiId[, params]}` refs | tile data |
+
+`/public/_query` accepts a ref for **any PUBLIC-tagged def** (not only pack tiles — the pack is
+the enablement gate, `visibleTo` is the disclosure boundary), and its `params` are rebuilt from a
+fixed allow-list — `dateFrom`, `dateTo`, `ward`, `serviceCode`, `complaintPath` — i.e. exactly
+the global filter bar. Each value must be a non-empty scalar ≤ 128 chars; dates must be ISO
+calendar days supplied together. Any other key (`hierLevel`, `compare`, `series`, `window`, …),
+shape or value is a whole-batch `400 invalid_param`. So the anonymous page gets the same Ward /
+Complaint type / date filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
+sparklines), no Group-by level switch and no per-complaint pin source.
+
+Three details of that policy worth knowing when authoring PUBLIC defs:
+
+- **It is enforced in the service, not just the alias.** `AnalyticsService` applies the same
+  allow-list to every PUBLIC-floor caller (`PUBLIC_QUERY_PARAMS`), so an anonymous body that
+  reaches the employee `/_query` while Kong runs in audit mode gets per-entry `invalid_param`
+  for anything outside it — the alias only adds the whole-batch 400 and discards RequestInfo.
+- **A public param never displaces a predicate the def bakes itself.** The composer *replaces*
+  an existing `eq` rather than intersecting with it (that is the employee filter-bar semantics),
+  so for the public floor a `ward` / `serviceCode` / `complaintPath` param whose column the def's
+  own `query.filters` already pins is dropped and reported in `paramsIgnored`. "Water complaints"
+  stays water complaints however the visitor filters.
+- **Date ranges follow employee semantics:** `dateFrom`/`dateTo` replace the def's named
+  `window` (the `params[].allowed` list governs only the `window` param). A public tile can
+  therefore be asked for any historical interval; if a deployment wants a ceiling, that is a
+  product decision (see the open question in PR #1838), not something the catalog expresses today.
+
+All four aliases share one fail-closed gate: `publicDashboardEnabled` **and** a matching PUBLIC
+pack. Enabled-but-no-pack exposes neither descriptors (`catalog/_search`) nor option codes
+(`_options`) — both return `400 public_pack_not_found`, the same as a query would.
+
+**Which knob grants what, publicly:** tag a def `PUBLIC` → it appears in the public Add KPI
+menu and is queryable anonymously; add it to the `public-default` pack → it is on the page by
+default. Untag it → both disappear on the next config-cache refresh. The visitor's own layout and
+filter choices persist only in their browser (`ccrs.dashboard.*.public` keys, disjoint from every
+employee slot).
+
 ## 3. Error codes and what to do about them
 
 Per-entry in a batch (`results.<name>.error` + top-level `partial: true`) or a 400 body on a
@@ -177,7 +261,8 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 | role R gets a curated default dashboard | add R to a pack's `roles` (and X to its `tiles`/`layout`) | `dss.DashboardPack` (MDMS) |
 | role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
 | role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
-| anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
+| anonymous/public page can show KPI X (Add KPI menu + anonymous query) | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
+| anonymous/public page shows KPI X **by default** | also list X in the `public-default` pack's `tiles` + `layout` | `dss.DashboardPack` (MDMS) |
 | role R can *open the dashboard view at all* (home card, deep-link route) | add R to `dss.DashboardConfig` `allowedRoles` (MDMS; the FE falls back to its built-in `DASHBOARD_ROLES` when the record is absent) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
 | role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
 

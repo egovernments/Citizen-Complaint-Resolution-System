@@ -114,9 +114,102 @@ releases:
   values:
     - ./kafka-kraft/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
+    # Exporter images (#1647). BOTH images the chart pins were retired from
+    # Docker Hub -- bitnami/jmx-exporter:0.19.0-debian-11-r95 and
+    # bitnami/kafka-exporter:1.7.0-debian-11-r132 are 404 today -- so enabling
+    # metrics without this turns a working release into ImagePullBackOff.
+    # Verified on a cluster; every plausible source was checked first:
+    #
+    #   jmx   -> bitnamilegacy/*, where Bitnami moved the legacy tags. Same
+    #            pinned tag, still published (updated 2025-07-02).
+    #   kafka -> danielqsj/*, the upstream project Bitnami repackaged, at the
+    #            SAME version. NOT egovio/kafka-exporter: that mirror carries
+    #            exactly one tag, `latest`, last pushed 2020 -- unpinnable and
+    #            six years stale. bitnamilegacy/kafka-exporter does not exist.
+    #
+    # The durable fix is mirroring both into egovio/ with real version tags, as
+    # was done for the broker (egovio/bitnami-kafka:3.6.0-debian-11-r0); that
+    # needs registry push rights this change does not have.
+    - metrics:
+        jmx:
+          image:
+            repository: bitnamilegacy/jmx-exporter
+        kafka:
+          image:
+            repository: danielqsj/kafka-exporter
+            tag: v1.7.0
+          # The chart runs the exporter through a shell: `command: [bash]` with
+          # every flag in one `-ce` string. Bitnami's image had bash; the
+          # upstream one is a scratch image whose entrypoint IS the binary, so
+          # under the chart's default it exits 128 with no logs. Invoking it
+          # directly is what makes a shell-less image usable.
+          #
+          # This repeats the chart's own broker list, so it must track
+          # controller.replicaCount (3 in kafka-kraft/values.yaml). Guarded by
+          # the fact that a wrong list shows up immediately as a down target.
+          command:
+            - /bin/kafka_exporter
+          args:
+{{- range $i := until 3 }}
+            - --kafka.server=kafka-kraft-controller-{{ $i }}.kafka-kraft-controller-headless.backbone.svc.cluster.local:9092
+{{- end }}
+            - --web.listen-address=:9308
   set:
     - name: kraft.clusterId
       value: {{ .Values.secrets.kafka.clusterID }}
+    # Broker metrics (#1647). Scoped to THIS release on purpose: the chart
+    # reads .Values.metrics.*, and a top-level `metrics:` key in env.yaml would
+    # be injected into every release — including charts/common/_service.yaml,
+    # which emits prometheus.io/* scrape annotations for any chart that sets
+    # `metrics`, i.e. all 41 application services.
+    #
+    # kafka exporter is the one that yields consumer-group LAG
+    # (kafka_consumergroup_lag). Lag is the failure that matters here:
+    # egov-persister is the sole Kafka->Postgres write path and runs a single
+    # replica, so when it stalls the API still returns 200 while complaints are
+    # never persisted. JMX gives broker health (under-replicated partitions,
+    # request rates) but NOT lag — both, or the exercise misses its point.
+    - name: metrics.kafka.enabled
+      value: true
+    - name: metrics.jmx.enabled
+      value: true
+    # Prometheus only selects ServiceMonitors labelled with its release name:
+    # serviceMonitorSelectorNilUsesHelmValues is true with an empty selector,
+    # which renders as matchLabels {release: kube-prometheus-stack}. Without
+    # this label the object is created and silently never scraped.
+    - name: metrics.serviceMonitor.enabled
+      value: true
+    - name: metrics.serviceMonitor.labels.release
+      value: kube-prometheus-stack
+    # Both exporters default to `resources: {limits: {}, requests: {}}`, so
+    # without these they would join the broker as unbounded containers -- the
+    # pattern #1612 flags -- and the jmx one is a sidecar on the broker pod
+    # itself, where an unbounded exporter competes with the broker for the
+    # node. Sized for what they are: kafka-exporter is a small Go binary that
+    # polls consumer offsets; jmx-exporter is a JVM.
+    - name: metrics.kafka.resources.requests.cpu
+      value: 50m
+    - name: metrics.kafka.resources.requests.memory
+      value: 64Mi
+    - name: metrics.kafka.resources.limits.cpu
+      value: 200m
+    - name: metrics.kafka.resources.limits.memory
+      value: 128Mi
+    # 384Mi and not tighter because the chart hardcodes
+    # `-XX:MaxRAMPercentage=100` on this container
+    # (kafka-kraft/templates/controller-eligible/statefulset.yaml:326, not
+    # exposed as a value), so the memory limit IS the JVM's max heap with no
+    # allowance for metaspace, thread stacks or GC structures. The live set of
+    # jmx_prometheus_httpserver is tens of MB; the headroom is there so a heap
+    # that expands under GC pressure cannot reach the cgroup ceiling.
+    - name: metrics.jmx.resources.requests.cpu
+      value: 50m
+    - name: metrics.jmx.resources.requests.memory
+      value: 128Mi
+    - name: metrics.jmx.resources.limits.cpu
+      value: 250m
+    - name: metrics.jmx.resources.limits.memory
+      value: 384Mi
 
 - name: ingress-nginx
   installed: true
@@ -127,6 +220,111 @@ releases:
     - ./ingress-nginx/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - domain: {{ .Values.global.domain }}
+    # Security config (#1648). Two of these three keys were reaching nothing at
+    # all, and it was not cosmetic: the TLS cipher suite and the protocol floor
+    # were silently absent while env.yaml stated them plainly.
+    #
+    # The precise shape of the defect, since it is not the obvious one. This
+    # vendored chart carries a LOCAL modification to templates/_helpers.tpl
+    # (lines 6-9, absent from upstream 4.10.0): inside "ingress-nginx.name" it
+    # merges .Values[.Chart.Name] over the root context with mustMergeOverwrite,
+    # which mutates in place. So env.yaml's `ingress-nginx.controller.*` IS
+    # read -- the subtree is hoisted to the root at template time. What is NOT
+    # read is everything the hoist cannot help:
+    #   - ssl-ciphers / ssl-protocols / ssl-ecdh-curve are SIBLINGS of
+    #     `controller:` in env.yaml, so they hoist to root `.Values.ssl-ciphers`,
+    #     not to `.Values.controller.config.*` where the chart reads them
+    #   - `replicas` is simply the wrong key name; the chart reads replicaCount
+    # Those two are what this block genuinely repairs. addHeaders is re-pathed
+    # here as well and is belt-and-braces -- the hoist already delivers it --
+    # but stating it explicitly beats depending on a hand-patched helper.
+    #
+    # Re-pathed HERE rather than by moving the block to a top-level
+    # `controller:` key in env.yaml, because kafka-kraft reads .Values.controller
+    # too (13 templates, its own controller block) and the whole-values
+    # passthrough on the line above is shared -- a root-level move would leak
+    # these into the broker.
+    #
+    # An inline values block rather than `set:`: Access-Control-Allow-Headers
+    # contains COMMAS, which helm's --set parses as separate assignments.
+    #
+    # NB: do not write a Go-template action in these comments. helmfile renders
+    # the file as a template BEFORE parsing it as YAML, so `#` does not protect
+    # anything -- an interpolation here expands into the middle of the comment
+    # and corrupts the document.
+    - controller:
+        replicaCount: {{ index .Values "ingress-nginx" "controller" "replicas" | default 1 }}
+        # Roll the controller whenever the headers change.
+        #
+        # The `add-headers` ConfigMap is read by nginx when the controller
+        # builds its configuration, and the running process does not pick up
+        # later edits to it. Verified on a cluster: the ConfigMap was updated at
+        # 11:39:14 and the controller was still serving the OLD
+        # Access-Control-Allow-Origin at 11:41 -- it had even logged a RELOAD,
+        # for the main config, while the custom headers stayed stale. A restart
+        # applied them immediately.
+        #
+        # Without this annotation a `helmfile apply` that changes only these
+        # headers reports success and changes nothing that a browser can see --
+        # the same silent no-op this whole block exists to fix, one level up.
+        # The hash makes the pod template differ, so helm rolls it for us.
+        podAnnotations:
+          checksum/add-headers: {{ index .Values "ingress-nginx" "controller" "addHeaders" | toYaml | sha256sum }}
+        # Rendered into its own ConfigMap and referenced by the controller's
+        # `add-headers` key -- this is what actually applies X-Frame-Options,
+        # nosniff and the CORS policy to every response.
+        addHeaders: {{ index .Values "ingress-nginx" "controller" "addHeaders" | toYaml | nindent 10 }}
+        # nginx ConfigMap entries. ssl-protocols is the one that matters most:
+        # without it the controller keeps its build default, which on some
+        # builds still permits TLSv1.0/1.1.
+        config:
+          ssl-ciphers: {{ index .Values "ingress-nginx" "ssl-ciphers" | quote }}
+          ssl-protocols: {{ index .Values "ingress-nginx" "ssl-protocols" | quote }}
+          ssl-ecdh-curve: {{ index .Values "ingress-nginx" "ssl-ecdh-curve" | quote }}
+    # Gateway metrics (#1648). Every citizen request crosses this controller and
+    # it contributes nothing to Prometheus, so "are we returning errors, and on
+    # which route?" can only be answered by reading logs.
+    #
+    # Written into the `ingress-nginx:` subtree, and NOT via `set:`, because of
+    # a local modification to this vendored chart. templates/_helpers.tpl:6-9
+    # (absent from upstream 4.10.0) does, inside "ingress-nginx.name":
+    #
+    #   $envOverrides := index .Values .Chart.Name
+    #   mustMergeOverwrite . (dict "Values" (mustMergeOverwrite $baseValues $envOverrides))
+    #
+    # mergeOverwrite mutates its destination, and the destination here is the
+    # root context -- so the first template to render a label permanently
+    # merges .Values["ingress-nginx"] OVER .Values for the whole render. That
+    # happens at TEMPLATE time, after every values file and after --set, so
+    # anything named in env.yaml's block wins over both. Verified: with
+    # env.yaml present, `--set controller.metrics.enabled=true` renders NO
+    # metrics Service, because env.yaml says `enabled: false` one level down.
+    #
+    # Which is also why this cannot move to a root `controller:` key: the
+    # subtree would still overwrite it, and kafka-kraft reads .Values.controller
+    # for its own broker block off the same shared passthrough.
+    - ingress-nginx:
+        controller:
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: true
+              # Prometheus selects only ServiceMonitors carrying its release
+              # name (serviceMonitorSelectorNilUsesHelmValues true + empty
+              # selector renders as matchLabels {release: kube-prometheus-stack}).
+              # Without this the object exists and is never scraped.
+              additionalLabels:
+                release: kube-prometheus-stack
+            # MUST stay false while `prometheusRule.rules` is [] in
+            # ingress-nginx/values.yaml. The template emits `spec:` with no
+            # body when the list is empty, so the object renders as
+            # `spec: null` -- and the PrometheusRule CRD marks spec required
+            # and typed object, so the API server rejects it and the whole
+            # release apply fails. env.yaml asks for true; it was harmless only
+            # because metrics.enabled gated it off. Turning metrics on is what
+            # makes it dangerous.
+            prometheusRule:
+              enabled: false
 
 - name: novu
   installed: true
@@ -136,3 +334,32 @@ releases:
   values:
     - ./novu/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
+    # Serve on THIS deployment's domain over TLS (#1644). The chart default
+    # named another environment's hostname and had no tls block at all, so the
+    # dashboard was reachable only by Host-header and only over plain HTTP.
+    # Same <domain>-tls-certs name every other ingress here uses -- but note
+    # TLS secrets are namespace-scoped and novu runs in its OWN namespace, not
+    # `backbone`/`egov` where the other copies live. So the cluster-issuer
+    # annotation is REQUIRED here, not decorative: it is what makes cert-manager
+    # issue a certificate into the novu namespace. Without it the name would
+    # resolve to nothing locally and ingress-nginx would fall back to its
+    # --default-ssl-certificate (egov/<domain>-tls-certs).
+    - ingress:
+        annotations:
+          cert-manager.io/cluster-issuer: {{ index .Values "root-ingress" "cert-issuer" | quote }}
+        host: {{ .Values.global.domain | quote }}
+        # Browser code cannot resolve Kubernetes service DNS. Keep the API,
+        # dashboard and Socket.IO URLs on this deployment's public TLS origin.
+        publicOrigin: {{ printf "https://%s" .Values.global.domain | quote }}
+        tls:
+          - secretName: {{ printf "%s-tls-certs" .Values.global.domain | quote }}
+            hosts:
+              - {{ .Values.global.domain | quote }}
+    # Signing/encryption secrets from the SOPS-covered file rather than the
+    # chart's example values. jwtSecret signs sessions; a known value is a
+    # forged login.
+    - novu:
+        secrets:
+          jwtSecret: {{ .Values.secrets.novu.jwtSecret | quote }}
+          storeEncryptionKey: {{ .Values.secrets.novu.storeEncryptionKey | quote }}
+          novuSecretKey: {{ .Values.secrets.novu.novuSecretKey | quote }}

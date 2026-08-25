@@ -76,7 +76,10 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:develop-20260716}"
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}"
+# ^ same tag docker-compose.egov-digit.yaml pins, deliberately: v2.12-beta is a
+#   DIFFERENT digest, so diverging here would give you one bridge via compose and
+#   another via this script.
 # ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
 #   template) WhatsApp path needs this PR branch's build, published to public
 #   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.
@@ -119,7 +122,7 @@ DB_NAME="${DB_NAME:-egov}"                                # db name
 
 # Compose file set. NAME SERVICES EXPLICITLY on every up — a bare `up -d` revives
 # default-data-handler, which re-seeds MDMS.
-COMPOSE_FILES="${COMPOSE_FILES:-docker-compose.egov-digit.yaml docker-compose.fast-path.yml docker-compose.migrations.yml docker-compose.migrations.ansible.yml}"
+COMPOSE_FILES="${COMPOSE_FILES:-docker-compose.egov-digit.yaml docker-compose.fast-path.yml docker-compose.migrations.yml}"
 KONG_CONTAINER="${KONG_CONTAINER:-kong-gateway}"          # Kong container to restart after a bridge recreate (DNS cache flush)
 
 # Step 5 ingress: auto | true | false. auto = validate only, mutate nothing.

@@ -1,5 +1,5 @@
 
-# OTEL javaagent — fetched at deploy time by ansible (otel/download-agent.sh)
+# OTEL javaagent — fetched at deploy time by ansible (local-setup/otel/download-agent.sh)
 local-setup/otel/opentelemetry-javaagent.jar
 
 # Python bytecode + caches

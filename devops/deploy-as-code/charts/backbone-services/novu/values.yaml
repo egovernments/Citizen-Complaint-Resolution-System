@@ -9,12 +9,32 @@ ingress:
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: "/$2"
-  host: "pgroneclick.digit.org"
+  # Overridden per deployment from global.domain by the helmfile (#1644).
+  # This default named pgroneclick.digit.org — a hostname belonging to a
+  # DIFFERENT environment, inherited from the upstream import — so the
+  # dashboard did not serve on the deployment's own domain at all.
+  host: "domain.com"
+  # Browser-facing origin. Unlike Kubernetes service names, this must resolve
+  # from the operator's browser. The helmfile overrides this alongside host.
+  publicOrigin: "https://domain.com"
   path: "/novu(/|$)(.*)"
+  # Populated per deployment by the helmfile, same secret every other ingress
+  # in this tree uses.
+  tls: []
   pathType: "ImplementationSpecific"
   service:
     name: "novu-dashboard"
     port: 4000
+  api:
+    path: "/novu-api(/|$)(.*)"
+    service:
+      name: "novu-api"
+      port: 3000
+  ws:
+    path: "/novu-ws(/|$)(.*)"
+    service:
+      name: "novu-ws"
+      port: 3002
 
 # Global defaults from Novu community .env example
 # Adjust these for your environment.
@@ -23,10 +43,27 @@ global:
   nodeEnv: "local"
 
 novu:
+  # These are the upstream project's EXAMPLE values and must not survive into a
+  # deployment (#1644). jwtSecret signs session tokens, so a known value lets a
+  # session be forged outright — no password needed and nothing to intercept.
+  # storeEncryptionKey encrypts the stored SMS/email provider credentials, so a
+  # known value makes them readable.
+  #
+  # Overridden per deployment from secrets.novu.* by the helmfile, which is the
+  # SOPS-covered file. Left here only so the chart renders standalone.
   secrets:
-    jwtSecret: "your-secret"
-    storeEncryptionKey: "change-this-key-32-characters!!!"
-    novuSecretKey: "change-this-secret-key"
+    # PREFERRED: name a Secret you created out of band, and the three values
+    # below are ignored entirely -- they never enter values.yaml, the Helm
+    # release, or `helm get values`. It must carry the keys `jwt-secret`,
+    # `store-encryption-key` and `novu-secret-key`:
+    #   kubectl -n novu create secret generic novu-secrets \
+    #     --from-literal=jwt-secret='...' \
+    #     --from-literal=store-encryption-key='<exactly 32 chars>' \
+    #     --from-literal=novu-secret-key='...'
+    existingSecret: ""
+    jwtSecret: "change-me"
+    storeEncryptionKey: "change-me-exactly-32-characters!"
+    novuSecretKey: "change-me"
   subscriberWidgetJwtExpirationTime: "15d"
   aws:
     accessKeyId: "test"
@@ -147,11 +184,11 @@ api:
     - name: NODE_ENV
       value: {{ .Values.global.nodeEnv | quote }}
     - name: API_ROOT_URL
-      value: {{ printf "%s:%d" .Values.global.hostName (int .Values.api.port) | quote }}
+      value: {{ printf "%s/novu-api" .Values.ingress.publicOrigin | quote }}
     - name: PORT
       value: {{ .Values.api.port | quote }}
     - name: FRONT_BASE_URL
-      value: {{ printf "%s:%d" .Values.global.hostName (int .Values.dashboard.port) | quote }}
+      value: {{ printf "%s/novu" .Values.ingress.publicOrigin | quote }}
     - name: MONGO_URL
       value: {{ printf "mongodb://%s:%s@%s:%d/novu-db?authSource=admin" .Values.mongodb.auth.username .Values.mongodb.auth.password .Values.mongodb.name (int .Values.mongodb.port) | quote }}
     - name: MONGO_MIN_POOL_SIZE
@@ -181,11 +218,20 @@ api:
     - name: AWS_SECRET_ACCESS_KEY
       value: {{ .Values.novu.aws.secretAccessKey | quote }}
     - name: JWT_SECRET
-      value: {{ .Values.novu.secrets.jwtSecret | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: jwt-secret
     - name: STORE_ENCRYPTION_KEY
-      value: {{ .Values.novu.secrets.storeEncryptionKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: store-encryption-key
     - name: NOVU_SECRET_KEY
-      value: {{ .Values.novu.secrets.novuSecretKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: novu-secret-key
     - name: SUBSCRIBER_WIDGET_JWT_EXPIRATION_TIME
       value: {{ .Values.novu.subscriberWidgetJwtExpirationTime | quote }}
     - name: SENTRY_DSN
@@ -268,7 +314,10 @@ worker:
     - name: AWS_SECRET_ACCESS_KEY
       value: {{ .Values.novu.aws.secretAccessKey | quote }}
     - name: STORE_ENCRYPTION_KEY
-      value: {{ .Values.novu.secrets.storeEncryptionKey | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: store-encryption-key
     - name: SUBSCRIBER_WIDGET_JWT_EXPIRATION_TIME
       value: {{ .Values.novu.subscriberWidgetJwtExpirationTime | quote }}
     - name: SENTRY_DSN
@@ -334,7 +383,10 @@ ws:
     - name: REDIS_PASSWORD
       value: {{ .Values.novu.redis.password | quote }}
     - name: JWT_SECRET
-      value: {{ .Values.novu.secrets.jwtSecret | quote }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "novu.secretName" . }}
+          key: jwt-secret
     - name: WS_CONTEXT_PATH
       value: {{ .Values.ws.contextPath | quote }}
     - name: NEW_RELIC_ENABLED
@@ -374,11 +426,13 @@ dashboard:
     port: 4000
   env: |
     - name: VITE_API_HOSTNAME
-      value: {{ printf "http://%s:%d" .Values.api.name (int .Values.api.port) | quote }}
+      value: {{ printf "%s/novu-api" .Values.ingress.publicOrigin | quote }}
     - name: VITE_SELF_HOSTED
       value: "true"
     - name: VITE_WEBSOCKET_HOSTNAME
-      value: {{ printf "http://%s:%d" .Values.ws.name (int .Values.ws.port) | quote }}
+      # socket.io-client uses the URL origin but defaults its transport path to
+      # /socket.io; putting /novu-ws here is silently discarded by Novu 2.3.0.
+      value: {{ .Values.ingress.publicOrigin | quote }}
     - name: VITE_BASE_PATH
       value: {{ .Values.dashboard.basePath | quote }}
     - name: VITE_PUBLIC_PATH

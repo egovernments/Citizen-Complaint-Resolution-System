@@ -51,24 +51,16 @@ require_cmd curl
 require_cmd jq
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=load-dotenv.sh
+source "${SCRIPT_DIR}/load-dotenv.sh"
+
 NOVU_ENV_FILE="${NOVU_ENV_FILE:-${SCRIPT_DIR}/.env.novu}"
 if [[ -f "$NOVU_ENV_FILE" ]]; then
-  # EXPLICIT ENV WINS. The tracked .env.novu holds DUMMY values, so it must only
-  # FILL variables the caller did NOT already provide — never override them.
-  # Snapshot the vars we care about (name + whether set), source the file, then
-  # restore any that were already set so the dummy values can't clobber them.
-  _PRESET_VARS=(NOVU_BASE_URL NOVU_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN \
-    TWILIO_WHATSAPP_FROM NOVU_ENV_NAME NOVU_ENV_COLOR NOVU_INTEGRATION_NAME \
-    NOVU_INTEGRATION_ID NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME NOVU_SMS_BODY \
-    NOVU_EVENT_WORKFLOWS NOVU_SMS_WORKFLOW_ID NOVU_EMAIL_WORKFLOW_ID)
-  declare -A _PRESET_SNAP=()
-  for _v in "${_PRESET_VARS[@]}"; do
-    [[ -n "${!_v+x}" ]] && _PRESET_SNAP[$_v]="${!_v}"
-  done
-  # shellcheck disable=SC1090
-  set -a && source "$NOVU_ENV_FILE" && set +a
-  for _v in "${!_PRESET_SNAP[@]}"; do printf -v "$_v" '%s' "${_PRESET_SNAP[$_v]}"; export "$_v"; done
-  unset _PRESET_VARS _PRESET_SNAP _v
+  # EXPLICIT ENV WINS. The tracked .env.novu holds DUMMY values, so it only
+  # fills variables the caller did not provide. Parse it as dotenv rather than
+  # shell: unquoted message bodies with spaces are valid dotenv and must not be
+  # executed as commands (issue #1517).
+  load_dotenv_defaults "$NOVU_ENV_FILE"
   echo "Loaded environment from: $NOVU_ENV_FILE (explicit env preserved)"
 fi
 

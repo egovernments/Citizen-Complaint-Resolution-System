@@ -7,6 +7,7 @@ import {
 import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 // Department is the axis admins actually slice this list by ("what does Public
 // Works own?"), and it is already a rendered column — mirrors the Department
@@ -64,10 +65,11 @@ const columns: DigitColumn[] = [
 ];
 
 export function ComplaintTypeList() {
+  const { canEditResource } = useMastersCapability();
   return (
     <DigitList
       title="app.resources.complaint_types"
-      hasCreate
+      hasCreate={canEditResource('complaint-hierarchy')}
       sort={{ field: 'serviceCode', order: 'ASC' }}
       filters={filters}
     >

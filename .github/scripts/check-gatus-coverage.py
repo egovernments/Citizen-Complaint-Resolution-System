@@ -96,7 +96,6 @@ COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
     LS / "docker-compose.migrations.yml",
-    LS / "docker-compose.migrations.ansible.yml",
     LS / "docker-compose.fast-path.yml",
     LS / "docker-compose.deploy.yaml",
     LS / "docker-compose.registry.yml",
@@ -139,12 +138,11 @@ EXEMPT = {
     "tempo": "observability plumbing: trace store, not a serving dependency",
     "otel-collector": "observability plumbing: telemetry pipeline, not a serving dependency",
     "node-exporter": "observability plumbing: host-metrics exporter (#1335), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml",
+    "postgres-exporter": "observability plumbing: database-metrics exporter (#1615), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml. The DATABASE it reads is already covered by the PostgreSQL check; this container going down costs metrics, not service.",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
     "openbao": "deploy-time secrets store: no runtime dependents, binds 127.0.0.1 only",
-    # Tooling, not part of the serving stack.
-    "jupyter": "dev tool, not a serving dependency",
     "gatus": "the monitor itself",
 }
 

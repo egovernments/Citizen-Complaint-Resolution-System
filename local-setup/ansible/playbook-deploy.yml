@@ -100,6 +100,14 @@
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      # GF_SECURITY_ADMIN_PASSWORD in the compose file is `${GF_ADMIN_PASSWORD:?}`
+      # (no default, on purpose — see the grafana service there). Compose
+      # interpolates for `down` too, so a box whose previous deploy aborted
+      # before .env got the real value would fail this teardown on an
+      # unresolvable variable. The value is irrelevant to `down`; feed it a
+      # placeholder rather than let a missing secret block a teardown.
+      environment:
+        GF_ADMIN_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -175,9 +183,28 @@
     # `node esbuild.build.js`. `container` mode skips this entirely:
     # digit-ui ships its dist baked in. Also gated off Darwin: /opt isn't
     # writable under become:false, and Mac always runs container mode.
+    # There is no default repo URL any more (#1503). The SPA source is in this
+    # monorepo and CI publishes it as egovio/digit-ui-esbuild, so the ordinary
+    # deploy pulls the bundle image and never clones. Fail fast rather than
+    # cloning a surprise fork when a mode that DOES need source has none.
+    - name: "digit-ui — a source-building mode needs digit_ui_esbuild_repo"
+      ansible.builtin.assert:
+        that:
+          - (digit_ui_esbuild_repo | default('')) | length > 0
+        fail_msg: >-
+          digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
+          target, but digit_ui_esbuild_repo is empty. Either set
+          digit_ui_bundle_image (static mode — the default,
+          egovio/digit-ui-esbuild:nightly-develop) and skip the build entirely,
+          or point digit_ui_esbuild_repo at a source tree to clone.
+      when:
+        - digit_ui_mode in ['static', 'hmr']
+        - ansible_system != 'Darwin'
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
+
     - name: "digit-ui — ensure /opt/digit-ui-esbuild repo is present and current"
       ansible.builtin.git:
-        repo: "{{ digit_ui_esbuild_repo | default('https://github.com/theflywheel/digit-ui-esbuild.git') }}"
+        repo: "{{ digit_ui_esbuild_repo }}"
         dest: /opt/digit-ui-esbuild
         version: "{{ digit_ui_esbuild_branch | default('main') }}"
         update: yes
@@ -189,6 +216,7 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        - (digit_ui_esbuild_repo | default('')) | length > 0
         # When a prebuilt bundle image is pinned (static mode), the git
         # tree is not the source of what nginx serves — leave it alone so
         # a deploy can't silently regress build/ to an older checkout.
@@ -433,381 +461,381 @@
         # release task below only fires when this one created the file).
         - name: "Docker install — configure data-root before first start (Debian/Ubuntu), always releasing the auto-start hold"
           block:
-          - name: "Docker install — hold package auto-start until data-root is configured (Debian/Ubuntu)"
-            ansible.builtin.copy:
-              dest: /usr/sbin/policy-rc.d
-              mode: '0755'
-              force: false
-              content: |
-                #!/bin/sh
-                # Temporary: installed by the DIGIT ansible deploy while
-                # docker-ce is installed with a relocated data-root; removed
-                # again in the same run.
-                exit 101
-            register: _docker_autostart_hold
-            when:
-              - ansible_facts['os_family'] == 'Debian'
-              - (docker_data_root | default('') | length) > 0
+            - name: "Docker install — hold package auto-start until data-root is configured (Debian/Ubuntu)"
+              ansible.builtin.copy:
+                dest: /usr/sbin/policy-rc.d
+                mode: '0755'
+                force: false
+                content: |
+                  #!/bin/sh
+                  # Temporary: installed by the DIGIT ansible deploy while
+                  # docker-ce is installed with a relocated data-root; removed
+                  # again in the same run.
+                  exit 101
+              register: _docker_autostart_hold
+              when:
+                - ansible_facts['os_family'] == 'Debian'
+                - (docker_data_root | default('') | length) > 0
 
-          - name: Install Docker Engine (Debian/Ubuntu)
-            apt:
-              name:
-                - docker-ce
-                - docker-ce-cli
-                - containerd.io
-                - docker-buildx-plugin
-                - docker-compose-plugin
-              state: present
-              update_cache: yes
-            when: ansible_facts['os_family'] == 'Debian'
+            - name: Install Docker Engine (Debian/Ubuntu)
+              apt:
+                name:
+                  - docker-ce
+                  - docker-ce-cli
+                  - containerd.io
+                  - docker-buildx-plugin
+                  - docker-compose-plugin
+                state: present
+                update_cache: yes
+              when: ansible_facts['os_family'] == 'Debian'
 
-          # ==================== Docker Installation (RHEL family) ====================
-          # Rocky Linux / AlmaLinux / CentOS Stream / RHEL. Docker publishes no
-          # separate "rocky"/"alma" repo — the upstream linux/rhel repo is the
-          # documented path for every RHEL rebuild, BUT the stock
-          # docker-ce.repo uses $releasever, which resolves to the host's
-          # actual major version — and Docker briefly had no EL10 packages
-          # (download.docker.com/linux/rhel/10/ 404'd earlier in 2026;
-          # github.com/docker/roadmap#847). Docker now publishes a
-          # linux/rhel/10/ tree for x86_64 and aarch64, so the host's real
-          # major version is used by default. docker_rhel_releasever_override
-          # remains as an escape hatch for a future major version that again
-          # ships without packages (pin it to the last published releasever
-          # until Docker catches up).
-          - name: "Docker repo (RHEL family) — resolve releasever to use"
-            ansible.builtin.set_fact:
-              _docker_rhel_releasever: >-
-                {{ docker_rhel_releasever_override | default(ansible_distribution_major_version, true) }}
-            when: ansible_facts['os_family'] == 'RedHat'
+            # ==================== Docker Installation (RHEL family) ====================
+            # Rocky Linux / AlmaLinux / CentOS Stream / RHEL. Docker publishes no
+            # separate "rocky"/"alma" repo — the upstream linux/rhel repo is the
+            # documented path for every RHEL rebuild, BUT the stock
+            # docker-ce.repo uses $releasever, which resolves to the host's
+            # actual major version — and Docker briefly had no EL10 packages
+            # (download.docker.com/linux/rhel/10/ 404'd earlier in 2026;
+            # github.com/docker/roadmap#847). Docker now publishes a
+            # linux/rhel/10/ tree for x86_64 and aarch64, so the host's real
+            # major version is used by default. docker_rhel_releasever_override
+            # remains as an escape hatch for a future major version that again
+            # ships without packages (pin it to the last published releasever
+            # until Docker catches up).
+            - name: "Docker repo (RHEL family) — resolve releasever to use"
+              ansible.builtin.set_fact:
+                _docker_rhel_releasever: >-
+                  {{ docker_rhel_releasever_override | default(ansible_distribution_major_version, true) }}
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          - name: "Docker repo (RHEL family) — write docker-ce.repo pinned to a published releasever"
-            ansible.builtin.copy:
-              dest: /etc/yum.repos.d/docker-ce.repo
-              mode: '0644'
-              content: |
-                [docker-ce-stable]
-                name=Docker CE Stable - $basearch
-                baseurl=https://download.docker.com/linux/rhel/{{ _docker_rhel_releasever }}/$basearch/stable
-                enabled=1
-                gpgcheck=1
-                gpgkey=https://download.docker.com/linux/rhel/gpg
-            when: ansible_facts['os_family'] == 'RedHat'
+            - name: "Docker repo (RHEL family) — write docker-ce.repo pinned to a published releasever"
+              ansible.builtin.copy:
+                dest: /etc/yum.repos.d/docker-ce.repo
+                mode: '0644'
+                content: |
+                  [docker-ce-stable]
+                  name=Docker CE Stable - $basearch
+                  baseurl=https://download.docker.com/linux/rhel/{{ _docker_rhel_releasever }}/$basearch/stable
+                  enabled=1
+                  gpgcheck=1
+                  gpgkey=https://download.docker.com/linux/rhel/gpg
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          # podman/podman-docker ship on RHEL-family cloud images and own the
-          # same `docker` CLI shim path as Docker CE's packages — same
-          # conflict as Ubuntu's docker.io above. Idempotent: no-op if absent.
-          - name: Remove conflicting RHEL-family container packages
-            dnf:
-              name: [podman, podman-docker, runc]
-              state: absent
-            when: ansible_facts['os_family'] == 'RedHat'
+            # podman/podman-docker ship on RHEL-family cloud images and own the
+            # same `docker` CLI shim path as Docker CE's packages — same
+            # conflict as Ubuntu's docker.io above. Idempotent: no-op if absent.
+            - name: Remove conflicting RHEL-family container packages
+              dnf:
+                name: [podman, podman-docker, runc]
+                state: absent
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          - name: Install Docker Engine (RHEL family)
-            dnf:
-              name:
-                - docker-ce
-                - docker-ce-cli
-                - containerd.io
-                - docker-buildx-plugin
-                - docker-compose-plugin
-              state: present
-              update_cache: yes
-            when: ansible_facts['os_family'] == 'RedHat'
+            - name: Install Docker Engine (RHEL family)
+              dnf:
+                name:
+                  - docker-ce
+                  - docker-ce-cli
+                  - containerd.io
+                  - docker-buildx-plugin
+                  - docker-compose-plugin
+                state: present
+                update_cache: yes
+              when: ansible_facts['os_family'] == 'RedHat'
 
-          # semanage (and the libselinux python bindings the seboolean module
-          # needs) live in policycoreutils-python-utils, which minimal
-          # RHEL-family cloud images do not preinstall. One early install
-          # serves both the storage-relocation labeling below and the nginx
-          # SELinux block further down.
-          - name: "SELinux — ensure policy tooling is present (RHEL family)"
-            dnf:
-              name: policycoreutils-python-utils
-              state: present
-            when:
-              - ansible_facts['os_family'] == 'RedHat'
-              - _selinux_enforced
+            # semanage (and the libselinux python bindings the seboolean module
+            # needs) live in policycoreutils-python-utils, which minimal
+            # RHEL-family cloud images do not preinstall. One early install
+            # serves both the storage-relocation labeling below and the nginx
+            # SELinux block further down.
+            - name: "SELinux — ensure policy tooling is present (RHEL family)"
+              dnf:
+                name: policycoreutils-python-utils
+                state: present
+              when:
+                - ansible_facts['os_family'] == 'RedHat'
+                - _selinux_enforced
 
-          # ==================== Relocate Docker + containerd storage (optional) ====================
-          # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
-          # Docker's data-root (images/volumes metadata) AND containerd's own
-          # root (the actual image-layer store — a separate config file that
-          # Docker's data-root does NOT control) off a small root filesystem.
-          # Without this, a fresh box with a small `/` and a larger `/opt`
-          # fills `/` mid-deploy pulling the ~30 images in this stack and dies
-          # with "no space left on device". Must run before containerd/docker
-          # are ever started — relocating an already-populated /var/lib/docker
-          # or /var/lib/containerd needs a stop+rsync+relabel migration instead
-          # (not handled here; do that by hand first if Docker's already run).
-          - name: "Docker/containerd storage relocation (when docker_data_root is set)"
-            when: (docker_data_root | default('') | length) > 0
-            vars:
-              # Strip any trailing slash before deriving the sibling containerd
-              # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
-              # INSIDE Docker's own data-root instead of beside it). A top-level
-              # value like '/docker' has dirname '/', which would yield the
-              # bogus '//containerd' — collapse that to '/containerd'.
-              _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
-              _containerd_root: "{{ (_docker_data_root | dirname | regex_replace('^/$', '')) ~ '/containerd' }}"
-            block:
-              # If daemon.json already points at the relocated data-root, the
-              # relocation was applied by an earlier run and anything left in
-              # /var/lib/docker (or /var/lib/containerd) is a harmless
-              # first-start skeleton, not live data — skip the populated-guard
-              # so routine re-deploys don't hard-fail. String-match rather than
-              # from_json so an unparseable daemon.json can't blow up the guard
-              # itself (the daemon.json merge task later fails with a clear
-              # message in that case).
-              - name: "Guard — read daemon.json to detect an already-applied relocation"
-                ansible.builtin.slurp:
-                  src: /etc/docker/daemon.json
-                register: _daemon_json_pre
-                failed_when: false
+            # ==================== Relocate Docker + containerd storage (optional) ====================
+            # Set docker_data_root in host_vars (e.g. "/opt/docker") to move BOTH
+            # Docker's data-root (images/volumes metadata) AND containerd's own
+            # root (the actual image-layer store — a separate config file that
+            # Docker's data-root does NOT control) off a small root filesystem.
+            # Without this, a fresh box with a small `/` and a larger `/opt`
+            # fills `/` mid-deploy pulling the ~30 images in this stack and dies
+            # with "no space left on device". Must run before containerd/docker
+            # are ever started — relocating an already-populated /var/lib/docker
+            # or /var/lib/containerd needs a stop+rsync+relabel migration instead
+            # (not handled here; do that by hand first if Docker's already run).
+            - name: "Docker/containerd storage relocation (when docker_data_root is set)"
+              when: (docker_data_root | default('') | length) > 0
+              vars:
+                # Strip any trailing slash before deriving the sibling containerd
+                # dir — dirname('/opt/docker/') is '/opt/docker' (nests containerd
+                # INSIDE Docker's own data-root instead of beside it). A top-level
+                # value like '/docker' has dirname '/', which would yield the
+                # bogus '//containerd' — collapse that to '/containerd'.
+                _docker_data_root: "{{ docker_data_root | regex_replace('/+$', '') }}"
+                _containerd_root: "{{ (_docker_data_root | dirname | regex_replace('^/$', '')) ~ '/containerd' }}"
+              block:
+                # If daemon.json already points at the relocated data-root, the
+                # relocation was applied by an earlier run and anything left in
+                # /var/lib/docker (or /var/lib/containerd) is a harmless
+                # first-start skeleton, not live data — skip the populated-guard
+                # so routine re-deploys don't hard-fail. String-match rather than
+                # from_json so an unparseable daemon.json can't blow up the guard
+                # itself (the daemon.json merge task later fails with a clear
+                # message in that case).
+                - name: "Guard — read daemon.json to detect an already-applied relocation"
+                  ansible.builtin.slurp:
+                    src: /etc/docker/daemon.json
+                  register: _daemon_json_pre
+                  failed_when: false
 
-              - name: "Guard — read containerd config.toml to detect its currently-configured root"
-                ansible.builtin.slurp:
-                  src: /etc/containerd/config.toml
-                register: _containerd_config_pre
-                failed_when: false
+                - name: "Guard — read containerd config.toml to detect its currently-configured root"
+                  ansible.builtin.slurp:
+                    src: /etc/containerd/config.toml
+                  register: _containerd_config_pre
+                  failed_when: false
 
-              - name: "Guard — note whether the relocation is already in effect"
-                ansible.builtin.set_fact:
-                  _relocation_already_applied: >-
-                    {{ _daemon_json_pre.content is defined
-                       and (_daemon_json_pre.content | b64decode)
-                           is search('"data-root"\s*:\s*"' ~ (_docker_data_root | regex_escape) ~ '/?"') }}
+                - name: "Guard — note whether the relocation is already in effect"
+                  ansible.builtin.set_fact:
+                    _relocation_already_applied: >-
+                      {{ _daemon_json_pre.content is defined
+                         and (_daemon_json_pre.content | b64decode)
+                             is search('"data-root"\s*:\s*"' ~ (_docker_data_root | regex_escape) ~ '/?"') }}
 
-              # Extract whatever data-root/root Docker/containerd are
-              # CURRENTLY configured to use, if anything — not just whether
-              # /var/lib/* happens to be empty. A box already relocated to one
-              # custom path (e.g. /opt/docker) has nothing under
-              # /var/lib/docker, so checking only the compiled-in default
-              # would let a SECOND relocation (e.g. to /data/docker) sail
-              # through the emptiness check and silently orphan the data
-              # actually live at /opt/docker.
-              - name: "Guard — extract the currently-configured data-root/containerd-root (if any)"
-                ansible.builtin.set_fact:
-                  _current_docker_root: >-
-                    {{ (((_daemon_json_pre.content | default('') | b64decode)
-                         | regex_search('"data-root"\s*:\s*"[^"]*"')) | default(''))
-                       | regex_replace('^.*"([^"]*)"$', '\1') }}
-                  _current_containerd_root: >-
-                    {{ (((_containerd_config_pre.content | default('') | b64decode)
-                         | regex_search('(?m)^\s*root\s*=\s*"[^"]*"')) | default(''))
-                       | regex_replace('^.*"([^"]*)"$', '\1') }}
+                # Extract whatever data-root/root Docker/containerd are
+                # CURRENTLY configured to use, if anything — not just whether
+                # /var/lib/* happens to be empty. A box already relocated to one
+                # custom path (e.g. /opt/docker) has nothing under
+                # /var/lib/docker, so checking only the compiled-in default
+                # would let a SECOND relocation (e.g. to /data/docker) sail
+                # through the emptiness check and silently orphan the data
+                # actually live at /opt/docker.
+                - name: "Guard — extract the currently-configured data-root/containerd-root (if any)"
+                  ansible.builtin.set_fact:
+                    _current_docker_root: >-
+                      {{ (((_daemon_json_pre.content | default('') | b64decode)
+                           | regex_search('"data-root"\s*:\s*"[^"]*"')) | default(''))
+                         | regex_replace('^.*"([^"]*)"$', '\1') }}
+                    _current_containerd_root: >-
+                      {{ (((_containerd_config_pre.content | default('') | b64decode)
+                           | regex_search('(?m)^\s*root\s*=\s*"[^"]*"')) | default(''))
+                         | regex_replace('^.*"([^"]*)"$', '\1') }}
 
-              # Resolve which directory each store actually needs checking:
-              # its current custom location if it's already been relocated
-              # once before (even to a DIFFERENT path than this run's
-              # target), otherwise the compiled-in default.
-              - name: "Guard — resolve which directory to check for each store"
-                ansible.builtin.set_fact:
-                  _dataroot_guard_targets:
-                    - label: docker
-                      current: "{{ _current_docker_root }}"
-                      check_path: "{{ _current_docker_root if (_current_docker_root | length) > 0 else '/var/lib/docker' }}"
-                      matches_target: "{{ _current_docker_root == _docker_data_root }}"
-                    - label: containerd
-                      current: "{{ _current_containerd_root }}"
-                      check_path: "{{ _current_containerd_root if (_current_containerd_root | length) > 0 else '/var/lib/containerd' }}"
-                      matches_target: "{{ _current_containerd_root == _containerd_root }}"
+                # Resolve which directory each store actually needs checking:
+                # its current custom location if it's already been relocated
+                # once before (even to a DIFFERENT path than this run's
+                # target), otherwise the compiled-in default.
+                - name: "Guard — resolve which directory to check for each store"
+                  ansible.builtin.set_fact:
+                    _dataroot_guard_targets:
+                      - label: docker
+                        current: "{{ _current_docker_root }}"
+                        check_path: "{{ _current_docker_root if (_current_docker_root | length) > 0 else '/var/lib/docker' }}"
+                        matches_target: "{{ _current_docker_root == _docker_data_root }}"
+                      - label: containerd
+                        current: "{{ _current_containerd_root }}"
+                        check_path: "{{ _current_containerd_root if (_current_containerd_root | length) > 0 else '/var/lib/containerd' }}"
+                        matches_target: "{{ _current_containerd_root == _containerd_root }}"
 
-              # Relocating a data-root that Docker/containerd have already
-              # written to — whether that's the compiled-in default
-              # (/var/lib/docker, /var/lib/containerd) or a PREVIOUSLY
-              # relocated custom path — would point daemon.json/config.toml at
-              # an empty directory: every existing image and named volume
-              # (including the Postgres complaint database) becomes invisible
-              # and the stack silently re-initializes from scratch. Only a
-              # fresh/never-relocated box, or one already relocated to this
-              # EXACT target, may proceed.
-              - name: "Guard — check the resolved store directories are still empty"
-                ansible.builtin.command: "find {{ item.check_path }} -mindepth 1 -maxdepth 1"
-                loop: "{{ _dataroot_guard_targets }}"
-                loop_control:
-                  label: "{{ item.label }}: {{ item.check_path }}"
-                register: _live_dataroot_check
-                changed_when: false
-                failed_when: false
-                when: not (item.matches_target | bool)
+                # Relocating a data-root that Docker/containerd have already
+                # written to — whether that's the compiled-in default
+                # (/var/lib/docker, /var/lib/containerd) or a PREVIOUSLY
+                # relocated custom path — would point daemon.json/config.toml at
+                # an empty directory: every existing image and named volume
+                # (including the Postgres complaint database) becomes invisible
+                # and the stack silently re-initializes from scratch. Only a
+                # fresh/never-relocated box, or one already relocated to this
+                # EXACT target, may proceed.
+                - name: "Guard — check the resolved store directories are still empty"
+                  ansible.builtin.command: "find {{ item.check_path }} -mindepth 1 -maxdepth 1"
+                  loop: "{{ _dataroot_guard_targets }}"
+                  loop_control:
+                    label: "{{ item.label }}: {{ item.check_path }}"
+                  register: _live_dataroot_check
+                  changed_when: false
+                  failed_when: false
+                  when: not (item.matches_target | bool)
 
-              - name: "Guard — refuse to relocate an already-populated data-root"
-                ansible.builtin.fail:
-                  msg: >-
-                    docker_data_root is set to "{{ _docker_data_root }}" but
-                    {{ item.item.check_path }} already contains data
-                    {{ '(a previously relocated ' ~ item.item.label ~ ' root)'
-                       if (item.item.current | length) > 0
-                       else '(the compiled-in default ' ~ item.item.label ~ ' root)' }},
-                    meaning Docker/containerd have already run against it.
-                    Relocating now would orphan every existing image and named
-                    volume (including the Postgres complaint database) — stop
-                    docker/containerd, rsync {{ item.item.check_path }} to its
-                    new home by hand (relabeling under SELinux if applicable),
-                    then re-run.
-                loop: "{{ _live_dataroot_check.results | default([]) }}"
-                loop_control:
-                  label: "{{ item.item.label | default('') }}"
-                when:
-                  - item.item is defined
-                  - not (item.item.matches_target | bool)
-                  - (item.stdout_lines | default([]) | length) > 0
+                - name: "Guard — refuse to relocate an already-populated data-root"
+                  ansible.builtin.fail:
+                    msg: >-
+                      docker_data_root is set to "{{ _docker_data_root }}" but
+                      {{ item.item.check_path }} already contains data
+                      {{ '(a previously relocated ' ~ item.item.label ~ ' root)'
+                         if (item.item.current | length) > 0
+                         else '(the compiled-in default ' ~ item.item.label ~ ' root)' }},
+                      meaning Docker/containerd have already run against it.
+                      Relocating now would orphan every existing image and named
+                      volume (including the Postgres complaint database) — stop
+                      docker/containerd, rsync {{ item.item.check_path }} to its
+                      new home by hand (relabeling under SELinux if applicable),
+                      then re-run.
+                  loop: "{{ _live_dataroot_check.results | default([]) }}"
+                  loop_control:
+                    label: "{{ item.item.label | default('') }}"
+                  when:
+                    - item.item is defined
+                    - not (item.item.matches_target | bool)
+                    - (item.stdout_lines | default([]) | length) > 0
 
-              - name: "Ensure Docker data-root directory exists"
-                ansible.builtin.file:
-                  path: "{{ _docker_data_root }}"
-                  state: directory
-                  mode: '0711'
+                - name: "Ensure Docker data-root directory exists"
+                  ansible.builtin.file:
+                    path: "{{ _docker_data_root }}"
+                    state: directory
+                    mode: '0711'
 
-              - name: "Ensure containerd root directory exists"
-                ansible.builtin.file:
-                  path: "{{ _containerd_root }}"
-                  state: directory
-                  mode: '0711'
+                - name: "Ensure containerd root directory exists"
+                  ansible.builtin.file:
+                    path: "{{ _containerd_root }}"
+                    state: directory
+                    mode: '0711'
 
-              - name: "containerd — ensure a default config.toml exists"
-                ansible.builtin.shell: |
-                  set -eo pipefail
-                  mkdir -p /etc/containerd
-                  containerd config default > /etc/containerd/config.toml
-                args:
-                  executable: /bin/bash
-                  creates: /etc/containerd/config.toml
+                - name: "containerd — ensure a default config.toml exists"
+                  ansible.builtin.shell: |
+                    set -eo pipefail
+                    mkdir -p /etc/containerd
+                    containerd config default > /etc/containerd/config.toml
+                  args:
+                    executable: /bin/bash
+                    creates: /etc/containerd/config.toml
 
-              # The containerd.io package's shipped config.toml stub has no
-              # top-level `root =` key, so the regexp below matches nothing and
-              # lineinfile appends the line at EOF — landing it inside whatever
-              # `[table]` last preceded it in TOML instead of at the document
-              # root, where containerd silently ignores it. insertbefore: BOF
-              # guarantees the key lands above any table header when absent.
-              - name: "containerd — point root at the relocated directory"
-                ansible.builtin.lineinfile:
-                  path: /etc/containerd/config.toml
-                  regexp: '^\s*root\s*='
-                  line: 'root = "{{ _containerd_root }}"'
-                  insertbefore: BOF
-                register: containerd_root_config
+                # The containerd.io package's shipped config.toml stub has no
+                # top-level `root =` key, so the regexp below matches nothing and
+                # lineinfile appends the line at EOF — landing it inside whatever
+                # `[table]` last preceded it in TOML instead of at the document
+                # root, where containerd silently ignores it. insertbefore: BOF
+                # guarantees the key lands above any table header when absent.
+                - name: "containerd — point root at the relocated directory"
+                  ansible.builtin.lineinfile:
+                    path: /etc/containerd/config.toml
+                    regexp: '^\s*root\s*='
+                    line: 'root = "{{ _containerd_root }}"'
+                    insertbefore: BOF
+                  register: containerd_root_config
 
-              # semanage is provided by the "SELinux — ensure policy tooling is
-              # present" task above (before this relocation block).
-              #
-              # semanage errors if the exact equivalence already exists (e.g. a
-              # re-run) — that's not a real failure, just already-done. Fresh
-              # adds say "already defined"; re-adding after equivalences already
-              # exist for both paths says "already exists" instead — tolerate
-              # both.
-              - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
-                ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
-                loop:
-                  - { orig: /var/lib/docker, new: "{{ _docker_data_root }}" }
-                  - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
-                register: _semanage_fcontext
-                failed_when: >-
-                  _semanage_fcontext.rc != 0
-                  and 'already defined' not in (_semanage_fcontext.stderr | default(''))
-                  and 'already exists' not in (_semanage_fcontext.stderr | default(''))
-                changed_when: _semanage_fcontext.rc == 0
-                when:
-                  - ansible_facts['os_family'] == 'RedHat'
-                  - _selinux_enforced
+                # semanage is provided by the "SELinux — ensure policy tooling is
+                # present" task above (before this relocation block).
+                #
+                # semanage errors if the exact equivalence already exists (e.g. a
+                # re-run) — that's not a real failure, just already-done. Fresh
+                # adds say "already defined"; re-adding after equivalences already
+                # exist for both paths says "already exists" instead — tolerate
+                # both.
+                - name: "SELinux — label the relocated storage dirs like the originals (RHEL family)"
+                  ansible.builtin.command: "semanage fcontext -a -e {{ item.orig }} {{ item.new }}"
+                  loop:
+                    - { orig: /var/lib/docker, new: "{{ _docker_data_root }}" }
+                    - { orig: /var/lib/containerd, new: "{{ _containerd_root }}" }
+                  register: _semanage_fcontext
+                  failed_when: >-
+                    _semanage_fcontext.rc != 0
+                    and 'already defined' not in (_semanage_fcontext.stderr | default(''))
+                    and 'already exists' not in (_semanage_fcontext.stderr | default(''))
+                  changed_when: _semanage_fcontext.rc == 0
+                  when:
+                    - ansible_facts['os_family'] == 'RedHat'
+                    - _selinux_enforced
 
-              # Expensive: walks every file individually (read + possibly
-              # rewrite its security.selinux xattr). Only needed the FIRST time
-              # the relocation happens — the semanage equivalence above makes
-              # new files Docker/containerd create afterward inherit the
-              # correct label automatically (default SELinux file-creation
-              # behavior: a new file/dir inherits its parent's context absent
-              # an explicit type-transition rule, and the parent here is
-              # already correctly labeled after this one pass). Re-running
-              # restorecon on every subsequent deploy against an
-              # already-relocated, already-populated data-root just re-walks
-              # a now-large Docker/containerd tree for nothing — on a
-              # multi-GB overlay2 store this has been observed to take
-              # 15-20+ minutes on IOPS-limited cloud block storage, blocking
-              # every redeploy for no benefit.
-              - name: "SELinux — restorecon the relocated storage dirs (RHEL family, first relocation only)"
-                ansible.builtin.command: "restorecon -RF {{ item }}"
-                loop:
-                  - "{{ _docker_data_root }}"
-                  - "{{ _containerd_root }}"
-                changed_when: false
-                when:
-                  - ansible_facts['os_family'] == 'RedHat'
-                  - _selinux_enforced
-                  - not (_relocation_already_applied | bool)
+                # Expensive: walks every file individually (read + possibly
+                # rewrite its security.selinux xattr). Only needed the FIRST time
+                # the relocation happens — the semanage equivalence above makes
+                # new files Docker/containerd create afterward inherit the
+                # correct label automatically (default SELinux file-creation
+                # behavior: a new file/dir inherits its parent's context absent
+                # an explicit type-transition rule, and the parent here is
+                # already correctly labeled after this one pass). Re-running
+                # restorecon on every subsequent deploy against an
+                # already-relocated, already-populated data-root just re-walks
+                # a now-large Docker/containerd tree for nothing — on a
+                # multi-GB overlay2 store this has been observed to take
+                # 15-20+ minutes on IOPS-limited cloud block storage, blocking
+                # every redeploy for no benefit.
+                - name: "SELinux — restorecon the relocated storage dirs (RHEL family, first relocation only)"
+                  ansible.builtin.command: "restorecon -RF {{ item }}"
+                  loop:
+                    - "{{ _docker_data_root }}"
+                    - "{{ _containerd_root }}"
+                  changed_when: false
+                  when:
+                    - ansible_facts['os_family'] == 'RedHat'
+                    - _selinux_enforced
+                    - not (_relocation_already_applied | bool)
 
-              - name: "Restart containerd if its config changed"
-                ansible.builtin.service:
-                  name: containerd
-                  state: restarted
-                  enabled: true
-                when: containerd_root_config.changed | default(false)
+                - name: "Restart containerd if its config changed"
+                  ansible.builtin.service:
+                    name: containerd
+                    state: restarted
+                    enabled: true
+                  when: containerd_root_config.changed | default(false)
 
-              - name: "Ensure containerd is enabled + running"
-                ansible.builtin.service:
-                  name: containerd
-                  state: started
-                  enabled: true
+                - name: "Ensure containerd is enabled + running"
+                  ansible.builtin.service:
+                    name: containerd
+                    state: started
+                    enabled: true
 
-              # Seed the data-root into daemon.json BEFORE dockerd's first
-              # start. The full merged daemon.json (log rotation, insecure
-              # registries) is written much later in this play — but "Ensure
-              # docker daemon is enabled + running" below starts dockerd first,
-              # and without the seed that first start populates the default
-              # /var/lib/docker, tripping the relocation guard above on every
-              # subsequent re-deploy. Merge, don't overwrite: operator-set keys
-              # in an existing daemon.json survive (the later merge task keeps
-              # them too).
-              - name: "Docker — seed data-root into daemon.json before first start"
-                block:
-                  - name: "Docker — write daemon.json with the relocated data-root"
-                    vars:
-                      _existing: >-
-                        {{ (_daemon_json_pre.content | default('') | b64decode | from_json)
-                           if (_daemon_json_pre.content is defined
-                               and (_daemon_json_pre.content | b64decode | trim | length) > 0)
-                           else {} }}
-                    ansible.builtin.copy:
-                      dest: /etc/docker/daemon.json
-                      content: "{{ _existing | combine({'data-root': _docker_data_root}) | to_nice_json }}\n"
-                      mode: '0644'
-                    register: _daemon_json_seed
-                rescue:
-                  - name: "Docker — existing daemon.json is unreadable"
-                    ansible.builtin.fail:
-                      msg: >-
-                        /etc/docker/daemon.json exists but could not be parsed
-                        as JSON, so the relocated data-root could not be seeded
-                        into it. Fix or remove that file and re-run — it has
-                        been left untouched rather than overwritten.
+                # Seed the data-root into daemon.json BEFORE dockerd's first
+                # start. The full merged daemon.json (log rotation, insecure
+                # registries) is written much later in this play — but "Ensure
+                # docker daemon is enabled + running" below starts dockerd first,
+                # and without the seed that first start populates the default
+                # /var/lib/docker, tripping the relocation guard above on every
+                # subsequent re-deploy. Merge, don't overwrite: operator-set keys
+                # in an existing daemon.json survive (the later merge task keeps
+                # them too).
+                - name: "Docker — seed data-root into daemon.json before first start"
+                  block:
+                    - name: "Docker — write daemon.json with the relocated data-root"
+                      vars:
+                        _existing: >-
+                          {{ (_daemon_json_pre.content | default('') | b64decode | from_json)
+                             if (_daemon_json_pre.content is defined
+                                 and (_daemon_json_pre.content | b64decode | trim | length) > 0)
+                             else {} }}
+                      ansible.builtin.copy:
+                        dest: /etc/docker/daemon.json
+                        content: "{{ _existing | combine({'data-root': _docker_data_root}) | to_nice_json }}\n"
+                        mode: '0644'
+                      register: _daemon_json_seed
+                  rescue:
+                    - name: "Docker — existing daemon.json is unreadable"
+                      ansible.builtin.fail:
+                        msg: >-
+                          /etc/docker/daemon.json exists but could not be parsed
+                          as JSON, so the relocated data-root could not be seeded
+                          into it. Fix or remove that file and re-run — it has
+                          been left untouched rather than overwritten.
 
-              - name: "Docker — check whether dockerd is already running"
-                ansible.builtin.command: systemctl is-active docker
-                register: _dockerd_active
-                changed_when: false
-                failed_when: false
+                - name: "Docker — check whether dockerd is already running"
+                  ansible.builtin.command: systemctl is-active docker
+                  register: _dockerd_active
+                  changed_when: false
+                  failed_when: false
 
-              - name: "Docker — restart a running dockerd to apply the relocated data-root"
-                ansible.builtin.service:
-                  name: docker
-                  state: restarted
-                when:
-                  - _daemon_json_seed.changed | default(false)
-                  - (_dockerd_active.stdout | default('')) == 'active'
+                - name: "Docker — restart a running dockerd to apply the relocated data-root"
+                  ansible.builtin.service:
+                    name: docker
+                    state: restarted
+                  when:
+                    - _daemon_json_seed.changed | default(false)
+                    - (_dockerd_active.stdout | default('')) == 'active'
 
           always:
-          # Release the Debian package auto-start hold now that the data-root
-          # is configured — only if this run created it (an operator-managed
-          # policy-rc.d is never touched).
-          - name: "Docker install — release the package auto-start hold (Debian/Ubuntu)"
-            ansible.builtin.file:
-              path: /usr/sbin/policy-rc.d
-              state: absent
-            when:
-              - ansible_facts['os_family'] == 'Debian'
-              - _docker_autostart_hold.changed | default(false)
+            # Release the Debian package auto-start hold now that the data-root
+            # is configured — only if this run created it (an operator-managed
+            # policy-rc.d is never touched).
+            - name: "Docker install — release the package auto-start hold (Debian/Ubuntu)"
+              ansible.builtin.file:
+                path: /usr/sbin/policy-rc.d
+                state: absent
+              when:
+                - ansible_facts['os_family'] == 'Debian'
+                - _docker_autostart_hold.changed | default(false)
 
-        # apt/dnf both install docker.service disabled by default — enable +
-        # start it explicitly so subsequent tasks can talk to the daemon.
+          # apt/dnf both install docker.service disabled by default — enable +
+          # start it explicitly so subsequent tasks can talk to the daemon.
         - name: Ensure docker daemon is enabled + running
           service:
             name: docker
@@ -1107,44 +1135,22 @@
     #
     # db/ is already synchronized below (digit_config_dirs), which carries
     # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
+    # All migrators pull pinned egovio/*-db images (pgr-services, novu-bridge
+    # and digit-config-service used to build from in-repo contexts via an
+    # Ansible-only overlay + context rsync; CI-published -db images replaced
+    # that), so the overlay needs no build context on the host.
     - name: Copy DB-migration overlay
       copy:
         src: ../docker-compose.migrations.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.yml"
 
-    # The overlay's three in-repo migrators (pgr-services, novu-bridge,
-    # digit-config-service) build from ../backend/<svc>/src/main/resources/db.
-    # That path exists in the repo but NOT on a deployed host, so sync those
-    # contexts under docker/ (the existing build-context convention) and repoint
-    # them with an Ansible-only overlay. docker-compose.migrations.yml itself
-    # stays valid for anyone running compose straight from the repo.
-    #
-    # rsync creates only the FINAL component of the destination path, so this
-    # needs {{ digit_dir }}/docker to exist already. On a cold-start box it does
-    # not: the task that creates it ("Synchronize docker build context dirs")
-    # runs ~100 tasks later. Without this the FIRST deploy to a fresh host dies
-    # with rsync rc=11, mkdir "<digit_dir>/docker/pgr-services-db" failed
-    # (ENOENT) — while a re-deploy onto a host that already has the directory
-    # passes, which is why it went unnoticed. Idempotent.
-    - name: Ensure docker build-context dir exists (cold start)
+    # Earlier deploys shipped the build-context repoint overlay; it is no
+    # longer layered anywhere, so clear stale copies before someone -f's one
+    # by hand against a migrations.yml it no longer matches.
+    - name: Remove retired Ansible migrations overlay (if present)
       file:
-        path: "{{ digit_dir }}/docker"
-        state: directory
-        mode: "0755"
-
-    - name: Synchronize in-repo migrator build contexts
-      synchronize:
-        src: "../../backend/{{ item }}/src/main/resources/db/"
-        dest: "{{ digit_dir }}/docker/{{ item }}-db/"
-      loop:
-        - pgr-services
-        - novu-bridge
-        - digit-config-service
-
-    - name: Copy DB-migration overlay (Ansible build-context paths)
-      copy:
-        src: ../docker-compose.migrations.ansible.yml
-        dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+        path: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+        state: absent
 
     # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
     # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
@@ -1222,6 +1228,44 @@
       synchronize:
         src: "{{ item.value }}/"
         dest: "{{ digit_dir }}/{{ item.key }}/"
+        # --inplace is load-bearing (#1683), not a performance tweak.
+        #
+        # rsync's default is to write a temp file and rename it over the
+        # destination. That REPLACES THE INODE. Several of these files are
+        # bind-mounted into containers individually (kong.yml, gatus/config.yaml,
+        # otel-collector-config.yaml, prometheus.yml, the nginx *-proxy.conf
+        # files), and a single-file bind mount is bound to the inode it was
+        # created with -- not to the path. Once rsync swaps the inode, the
+        # running container keeps reading the OLD file forever.
+        #
+        # This is a silent-success failure: the file on disk is correct, the
+        # playbook is green, and `kong reload` even reports success, while the
+        # gateway carries on serving the previous policy. It was found with Kong
+        # running an 11-day-old kong.yml -- still proxying routes that had been
+        # deleted -- because nothing recreates Kong when only kong.yml changes.
+        # Most other services self-heal only because they happen to be recreated
+        # by the "Recreate services with the new env" task below.
+        #
+        # --inplace writes into the existing file, so the inode survives and the
+        # container sees the update. Verified on a real box: default rsync
+        # changed the inode and the container never saw the new content;
+        # --inplace kept it (6665 -> 6665) and the container saw it immediately.
+        #
+        # The trade: an interrupted transfer can leave a partially-written
+        # config where the default would have left the previous file intact. For
+        # small text configs written by a deploy that health-checks afterwards,
+        # a config that is actually applied beats one that is atomically stale.
+        #
+        # delay_updates MUST be false alongside it. ansible's synchronize adds
+        # --delay-updates by default, and rsync refuses the combination outright:
+        #   "rsync: --inplace cannot be used with --delay-updates"
+        # which fails every item in this loop and aborts the deploy at this task.
+        # (--delay-updates is the very batch-then-rename behaviour we are
+        # removing, so turning it off is the point, not a workaround.)
+        delay_updates: false
+        rsync_opts:
+          - "--inplace"
+      register: config_sync
       loop: "{{ digit_config_dirs | dict2items }}"
       vars:
         digit_config_dirs:
@@ -1233,9 +1277,26 @@
           db:       ../db
           seeds:    ../seeds
           gatus:    ../gatus
-          jupyter:  ../jupyter
+          dataloader: ../dataloader
           scripts:  ../scripts
           keycloak: ../keycloak
+
+    # Upgrade path for #1743. `synchronize` only writes what is in the list
+    # above — it never removes a directory that has dropped out of it. A host
+    # deployed before the Jupyter removal therefore keeps two stale copies of
+    # the loader on disk:
+    #   {{ digit_dir }}/jupyter/            (old `jupyter: ../jupyter` entry)
+    #   {{ digit_dir }}/ci-tests/jupyter/   (old rsync destination)
+    # Leaving them is not cosmetic: the second is a full second copy of the
+    # library, and a script whose sys.path resolution drifts can import the
+    # pre-move version and silently run old code.
+    - name: "Remove pre-#1743 Jupyter/dataloader directories left by an earlier deploy"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ digit_dir }}/jupyter"
+        - "{{ digit_dir }}/ci-tests/jupyter"
 
     # docker/ contains build contexts (db-migrations, pgr-services).
     # Even though we use pre-built images, compose may validate volume mount paths.
@@ -1271,10 +1332,30 @@
              | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
                        else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
 
+    # otp-publisher: same shape as MCP above. `build_otp_publisher: true` builds
+    # the vendored service on the box and tags it otp-publisher:local; otherwise
+    # pull the published image. The old default was the local-only tag in BOTH
+    # cases, so a tenant that enabled notifications without opting into the build
+    # selected an image that exists in no registry — `pull` skipped it
+    # (--ignore-pull-failures) and `up -d` then aborted the whole deploy.
+    # Override with `otp_publisher_image:` in host_vars.
+    - name: "Resolve otp-publisher image tag"
+      ansible.builtin.set_fact:
+        otp_publisher_image: >-
+          {{ otp_publisher_image
+             | default('otp-publisher:local' if (build_otp_publisher | default(false))
+                       else 'egovio/otp-publisher:v2.12-beta') }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
     # working directory, so no extra wiring is needed in the compose file.
+    - name: "Slurp previous .env (to preserve OpenBao secret blocks across regeneration)"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.env"
+      register: prev_env
+      failed_when: false
+
     - name: Write per-tenant compose .env
       template:
         src: templates/digit.env.j2
@@ -1341,6 +1422,39 @@
         dest: "{{ digit_dir }}/configurator-runtime/config.js"
         mode: "0644"
       register: configurator_config_render
+    # The template above regenerates .env from scratch, which used to WIPE the
+    # marked secret blocks the OpenBao section appends much later in the play
+    # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
+    # behind enable_keycloak). Fresh box: fine — the blocks don't exist yet and
+    # the first `up -d` runs postgres on the compose default before the OpenBao
+    # section ALTERs the role to the vault password. RERUN: fatal — the role's
+    # password in the persisted volume is already the vault value, but the
+    # freshly templated .env has no POSTGRES_PASSWORD line, so "Start DIGIT
+    # stack" recreates postgres' consumers with the egov123 default and the
+    # first thing to connect (db-history-normalize) dies with "password
+    # authentication failed", aborting the play long before the OpenBao section
+    # would have re-appended the block. Restore the blocks verbatim; the OpenBao
+    # section later refreshes them from the vault as before (so a rotated
+    # secret still propagates — just after the stack is up, same as day one).
+    - name: "Restore OpenBao secret blocks into the regenerated .env"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        marker: "# {mark} {{ item }}"
+        block: "{{ prev_block }}"
+        create: false
+        mode: '0600'   # blocks carry secrets; match the OpenBao tasks' mode
+      vars:
+        prev_env_text: "{{ prev_env.content | default('') | b64decode }}"
+        prev_block: >-
+          {{ (prev_env_text
+              | regex_search('(?s)# BEGIN ' + item + '\n(.*?)# END ' + item, '\1')
+              | default([''], true) | first).rstrip('\n') }}
+      loop:
+        - TENANT SECRETS
+        - KEYCLOAK SECRETS
+      when:
+        - prev_env.content is defined
+        - ('# BEGIN ' + item) in (prev_env.content | b64decode)
 
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
@@ -1421,7 +1535,7 @@
     # Same shape of overwrite-on-redeploy bug as the four above, for two
     # siblings the original fix missed:
     #   - egov-inbox PARENT_LEVEL_TENANT_ID: mz
-    #   - digit-mcp / jupyter DIGIT_TENANT: pg
+    #   - digit-mcp DIGIT_TENANT: pg
     # Both are tenant-shaped values the verbatim compose `copy:` resets
     # to upstream defaults on every deploy. Defensive same-pattern fix.
     - name: Set PARENT_LEVEL_TENANT_ID (egov-inbox) in compose
@@ -1430,7 +1544,7 @@
         regexp: '^(\s+)PARENT_LEVEL_TENANT_ID: pg$'
         replace: '\1PARENT_LEVEL_TENANT_ID: {{ state_root }}'
 
-    - name: Set DIGIT_TENANT (digit-mcp / jupyter) in compose
+    - name: Set DIGIT_TENANT (digit-mcp) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
@@ -1496,7 +1610,32 @@
     # COMPOSE_PROFILES drives which optional service groups are included.
     # Today: `search` covers elasticsearch + egov-indexer + inbox-v2.
     # Default off; tenants opt in via `enable_search_stack: true`.
+    # Observability levels are CUMULATIVE (#1657): each includes the ones
+    # above it. Default `traces` yields all three profiles, i.e. exactly the
+    # stack every tenant runs today — this knob only ever removes.
+    - name: "Validate observability_level"
+      ansible.builtin.fail:
+        msg: >-
+          observability_level must be one of metrics|logs|traces, got
+          '{{ observability_level }}'. Levels are cumulative; `traces` is the
+          full stack and the default. A gatus-only level is not offered yet —
+          16 services depend_on otel-collector, so omitting it risks failing
+          the deploy rather than shrinking it.
+      when: (observability_level | default('traces')) not in ['metrics', 'logs', 'traces']
+
     - name: "Compute compose profiles for this tenant"
+      vars:
+        _obs: "{{ observability_level | default('traces') }}"
+        # collector lives in `metrics`, not `traces`: JVM metrics reach
+        # Prometheus via otel-collector:8889, so dropping it costs metrics too.
+        _obs_profiles: >-
+          {{
+            ([]
+              + (['obs-metrics'] if _obs in ['metrics', 'logs', 'traces'] else [])
+              + (['obs-logs']    if _obs in ['logs', 'traces']            else [])
+              + (['obs-traces']  if _obs == 'traces'                      else [])
+            )
+          }}
       ansible.builtin.set_fact:
         compose_profiles: >-
           {{
@@ -1506,6 +1645,7 @@
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
+              + _obs_profiles
             ) | join(',')
           }}
 
@@ -1526,7 +1666,6 @@
             '-f docker-compose.egov-digit.yaml' +
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
-            ' -f docker-compose.migrations.ansible.yml' +
             ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
@@ -1627,7 +1766,12 @@
 
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
-    # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
+    # `npm run build` the SPA here (files/digit-ui-build.sh). With no
+    # digit_ui_esbuild_repo set — the default since #1503 — the repo argument is
+    # the "-" sentinel, i.e. VENDORED: build the monorepo's own
+    # digit-ui-esbuild/ tree in place, no clone. This path therefore needs no
+    # git source of its own, which is why the source-mode assert above does not
+    # cover it. Set digit_ui_esbuild_repo to build a fork instead.
     # The bundle is laid into the digit-ui container AFTER up -d via tar (see
     # the "lay digit-ui build into container" task below) — NOT a bind-mount:
     # mounting build/ over /var/web/digit-ui makes the nested globalConfigs.js /
@@ -1652,7 +1796,7 @@
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
         "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}"
-        "{{ digit_ui_esbuild_repo | default('-') }}"
+        "{{ (digit_ui_esbuild_repo | default('')) or '-' }}"
         "{{ digit_ui_esbuild_branch | default('') }}"
       environment:
         REACT_APP_MAP_TENANT: "{{ city_tenant | default(ui_state_tenant_id | default('')) }}"
@@ -1660,6 +1804,30 @@
       changed_when: true
       when:
         - build_digit_ui | default(false)
+
+    # ---- Grafana admin password BEFORE the first compose-up ----
+    # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
+    # ${GF_ADMIN_PASSWORD:?} — no default, so an unset variable aborts the whole
+    # compose invocation (that is the point: a `:-admin` default would ship
+    # admin/admin to anyone running the file standalone). But the authoritative
+    # value only exists further down, after the OpenBao bootstrap — which itself
+    # needs the stack up. Same ordering trap the KEYCLOAK/novu prep blocks below
+    # solve, and the same fix: put a value in .env before anything runs compose.
+    #
+    # It is random per run, not a fixed placeholder, because it IS the password
+    # Grafana seeds its admin row with on a first boot (GF_SECURITY_ADMIN_PASSWORD
+    # is only read when grafana_data is empty). If a deploy dies between here and
+    # the OpenBao block, the box is left with an unguessable admin password
+    # instead of admin/admin. The cost is that Grafana gets recreated once more
+    # per deploy, when the OpenBao value replaces this line further down.
+    - name: "Grafana prep — write a GF_ADMIN_PASSWORD into .env BEFORE compose-up"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+        create: true
+        mode: '0600'
+      no_log: true
 
     # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
     # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
@@ -1904,6 +2072,75 @@
       until: kong_health.stdout == 'healthy'
       changed_when: false
 
+    # Kong is DB-less: it loads kong.yml once at startup and does not watch it.
+    # So a changed kong.yml is PRESENT but not APPLIED until Kong re-reads it,
+    # and nothing else in this playbook recreates Kong when only its config
+    # changed (unlike the app services, which the recreate task above covers).
+    #
+    # Without this, a tightened auth or RBAC rule silently does not take effect
+    # -- the file is right, the deploy is green, and the gateway keeps serving
+    # the previous policy (#1683).
+    #
+    # `kong reload` is used rather than a container recreate because it is
+    # Kong's documented zero-downtime path: workers are replaced gracefully, so
+    # in-flight API calls are not dropped. It only works because the --inplace
+    # sync above keeps the mounted file current; with the default rsync the
+    # reload re-reads a stale inode and reports success while changing nothing.
+    - name: "Kong — reload declarative config when kong.yml changed (#1683)"
+      ansible.builtin.command:
+        cmd: docker exec kong-gateway kong reload
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'kong')
+        | selectattr('changed', 'defined') | selectattr('changed')
+        | list | length > 0
+      changed_when: true
+
+    # Same failure mode as Kong, one hop further down (#1683). The OpenTelemetry
+    # Collector reads --config once at startup and does not watch the file, and
+    # nothing else recreates it on a routine redeploy: unlike gatus/grafana it
+    # declares no `environment:` at all, so the ".env changed" recreate above
+    # never selects it. Result: otel-collector-config.yaml now correctly lands
+    # on disk and inside the container -- and is still not applied.
+    #
+    # Gatus is deliberately NOT restarted here. It watches its config file and
+    # reloads itself, which the --inplace sync above is what makes possible: the
+    # watcher follows the mounted inode, so the old rename-over-the-top swap was
+    # invisible to it. A restart would also drop its uptime history for no gain.
+    # prometheus.yml is handled separately by its own SIGHUP reload (#1608).
+    #
+    # A restart, not a reload: the collector has no reload signal or admin
+    # endpoint. It is a few seconds of dropped telemetry, which is why the gate
+    # below is on the ONE file that matters rather than on the otel/ directory
+    # as a whole -- that directory also holds prometheus.yml, the Loki/Tempo/
+    # Promtail configs, the javaagent jar and every Grafana dashboard JSON, so a
+    # directory-level gate would bounce the collector on any dashboard tweak.
+    #
+    # synchronize's per-file itemized output is what makes the narrow gate
+    # possible: stdout_lines carries one rsync `>f.st...... <name>` line per
+    # changed file, and is empty when the dir is unchanged. Verified locally
+    # against ansible.posix.synchronize 2.2.2 + rsync 3.4.4: editing only
+    # prometheus.yml leaves this gate false while the item still reports
+    # changed=true; editing otel-collector-config.yaml flips it true.
+    - name: "OTEL Collector — restart when its config changed (#1683)"
+      ansible.builtin.shell: |
+        set -e
+        if [ -z "$(docker ps -q -f name='^digit-otel-collector$')" ]; then
+          echo "NOCHANGE collector not running"
+          exit 0
+        fi
+        docker restart digit-otel-collector
+      args:
+        executable: /bin/bash
+      register: otel_collector_restart
+      changed_when: "'NOCHANGE' not in otel_collector_restart.stdout"
+      when: >-
+        config_sync.results | default([])
+        | selectattr('item.key', 'equalto', 'otel')
+        | map(attribute='stdout_lines') | flatten
+        | select('search', 'otel-collector-config')
+        | list | length > 0
+
     # ==================== Wait for Persister (Kafka consumer) ====================
     - name: Wait for egov-persister to be healthy
       shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-persister
@@ -1928,16 +2165,22 @@
     # live Prometheus keeps its old in-memory config and never picks up a newly
     # added scrape job (e.g. the `node` job for node-exporter) until it happens
     # to restart. A fresh deploy is unaffected — Prometheus boots with the new
-    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
-    # rereads the file in place. Best-effort: on a first deploy Prometheus may
-    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    # config.
+    #
+    # Reload is by SIGHUP, not POST /-/reload (#1608). The HTTP lifecycle
+    # endpoints are enabled by --web.enable-lifecycle, which also exposes
+    # POST /-/quit — an unauthenticated remote shutdown of the metrics store.
+    # SIGHUP is Prometheus's documented equivalent for re-reading config and
+    # carries no HTTP surface, so the flag is gone from the compose file.
+    # `docker kill` only DELIVERS the signal despite its name; HUP does not
+    # terminate the process.
+    #
+    # Best-effort: on a first deploy Prometheus may not be up yet (and has
+    # already loaded fresh config), so a failure here is fine.
     - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
-      ansible.builtin.uri:
-        url: http://127.0.0.1:19090/-/reload
-        method: POST
-        status_code: [200]
+      ansible.builtin.command: docker kill -s HUP digit-prometheus
       register: prometheus_reload
-      changed_when: prometheus_reload.status == 200
+      changed_when: prometheus_reload.rc == 0
       failed_when: false
 
     # ==================== digit-ui mode convergence ====================
@@ -1980,6 +2223,11 @@
     - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
       ansible.builtin.shell: |
         set -euo pipefail
+        # `docker cp` refuses a destination whose PARENT does not exist
+        # ("invalid output path: directory ... does not exist"). The git clone
+        # used to create /opt/digit-ui-esbuild as a side effect; this path skips
+        # the clone, so on a fresh target nothing else makes it. Create it here.
+        mkdir -p /opt/digit-ui-esbuild
         docker pull {{ digit_ui_bundle_image }}
         id=$(docker create {{ digit_ui_bundle_image }})
         trap 'docker rm -f "$id" >/dev/null' EXIT
@@ -2144,13 +2392,86 @@
     # is documented in CLAUDE.md / handoff between this PR and the
     # sister UI PR. Update both ends together.
     # ============================================================
-    - name: "digit-ui-v2 — ensure /opt/digit-ui-v2 repo present + on chosen branch"
+    # Source selection. The citizen SPA is VENDORED in-tree at CCRS
+    # `digit-ui-v2/` (alongside `ui-shared/`, which its build imports), so the
+    # DEFAULT is to ship the source this checkout actually contains — same
+    # rule the configurator and turbopass builds already follow. The previous
+    # default cloned an external fork branch, which meant a deploy that did not
+    # override `digit_ui_v2_repo` silently built a different codebase than the
+    # one under review: build-time contracts added here (e.g.
+    # VITE_ENABLE_LEGACY_PGR_DASHBOARD) were passed to a build that had no code
+    # reading them, so the legacy dashboard stayed visible by default.
+    #
+    # Setting `digit_ui_v2_repo` still selects the clone path, for transitional
+    # or standalone use. Either way the build dir stays
+    # /opt/digit-ui-v2/digit-ui-v2 with ui-shared as its sibling, matching the
+    # repo-root-relative import in src/config/featureFlags.ts.
+    - name: "digit-ui-v2 — clone external source (only when digit_ui_v2_repo is set)"
       ansible.builtin.git:
-        repo: "{{ digit_ui_v2_repo | default('https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git') }}"
+        repo: "{{ digit_ui_v2_repo }}"
         dest: /opt/digit-ui-v2
-        version: "{{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }}"
+        version: "{{ digit_ui_v2_branch | default('HEAD') }}"
         update: true
         force: true
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - digit_ui_v2_repo is defined
+        - (digit_ui_v2_repo | default('')) | length > 0
+
+    - name: "digit-ui-v2 — ensure vendored source dirs on target"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /opt/digit-ui-v2
+        - /opt/digit-ui-v2/digit-ui-v2
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - (digit_ui_v2_repo | default('')) | length == 0
+
+    # node_modules/dist stay on the target between runs (the npm-install task
+    # below is mtime-gated), so never delete them from the controller copy.
+    - name: "digit-ui-v2 — sync vendored source (digit-ui-v2/ + ui-shared/) to target"
+      ansible.builtin.synchronize:
+        src: "{{ playbook_dir }}/../../{{ item }}/"
+        dest: "/opt/digit-ui-v2/{{ item }}/"
+        delete: false
+        rsync_opts:
+          - "--omit-dir-times"
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+          - "--exclude=.git"
+      loop:
+        - digit-ui-v2
+        - ui-shared
+      when:
+        - enable_digit_ui_v2 | default(false)
+        - (digit_ui_v2_repo | default('')) | length == 0
+
+    # Fail loudly rather than silently building a source tree that predates the
+    # build-time flag contract — the failure mode the external-fork default hid.
+    - name: "digit-ui-v2 — stat build-flag contract in the selected source"
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dui2_flag_contract
+      loop:
+        - /opt/digit-ui-v2/digit-ui-v2/src/config/featureFlags.ts
+        - /opt/digit-ui-v2/ui-shared/featureFlags.ts
+      when: enable_digit_ui_v2 | default(false)
+
+    - name: "digit-ui-v2 — assert the selected source reads VITE_ENABLE_LEGACY_PGR_DASHBOARD"
+      ansible.builtin.assert:
+        that:
+          - dui2_flag_contract.results | map(attribute='stat.exists') | select | list | length == 2
+        fail_msg: >-
+          /opt/digit-ui-v2 does not contain src/config/featureFlags.ts and
+          ui-shared/featureFlags.ts. The source selected by digit_ui_v2_repo /
+          digit_ui_v2_branch predates the VITE_ENABLE_LEGACY_PGR_DASHBOARD
+          contract, so the legacy PGR dashboard would ship visible regardless of
+          enable_legacy_pgr_dashboard. Unset digit_ui_v2_repo to build the
+          vendored in-tree source, or point it at a revision that has the flag.
+        success_msg: "digit-ui-v2 source reads the build-time feature-flag contract"
       when: enable_digit_ui_v2 | default(false)
 
     # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
@@ -2187,6 +2508,7 @@
         VITE_TOKEN_EXCHANGE_URL=/token-exchange \
         VITE_CITIZEN_STATE_TENANT="{{ state_tenant_id }}" \
         VITE_CITIZEN_TENANT="{{ tenant_id }}" \
+        VITE_ENABLE_LEGACY_PGR_DASHBOARD="{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}" \
         npm run build
         test -f dist/index.html
       args:
@@ -2357,6 +2679,58 @@
       register: bao_secrets
       no_log: true
 
+    # Grafana admin password. Tenants seeded BEFORE this key existed can't get
+    # it from the bootstrap seed above (that write is cas:0 — it only fires when
+    # no version exists yet), so generate one here and persist it. After the
+    # first run the stored value is reused, which keeps the password stable
+    # across deploys. Operators read it back with:
+    #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+    #
+    # `or`, not `ternary`. Jinja evaluates every filter argument before calling
+    # the filter, so `… | ternary(stored, lookup('password', …))` runs the
+    # generator on every deploy and throws the result away whenever OpenBao
+    # already has a value. `or` compiles to Python's `or` and short-circuits, so
+    # the lookup only runs when there is nothing stored — which is also what the
+    # task name claims. (default('', true) turns both "undefined" and "" into the
+    # falsey '' that `or` needs.)
+    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
+      ansible.builtin.set_fact:
+        grafana_admin_pw: >-
+          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      no_log: true
+
+    - name: "OpenBao — persist generated Grafana admin password"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        # The whole body is ONE template expression on purpose: Ansible preserves
+        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
+        # across YAML keys it would render as the string "5" and the CAS check
+        # would depend on server-side weak decoding.
+        #
+        # cas = the version we just read. Without it this is a blind overwrite of
+        # the entire secret: anything written between our read and this write (a
+        # concurrent deploy, an operator running `bao kv put`) is silently lost,
+        # because `data` is built from the snapshot we read. With cas, a racing
+        # write makes OpenBao reject ours (400) and the deploy stops rather than
+        # clobbering. No retry loop: deploys are serialised per tenant, so a
+        # conflict means something genuinely unexpected touched the secret and a
+        # human should look before we overwrite it.
+        #
+        # `data` merges, never replaces — a bare {grafana_admin_password: …}
+        # write would drop every other key in this tenant's secret.
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+        status_code: [200]
+      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      no_log: true
+
     - name: "OpenBao — write secrets into compose .env (idempotent block)"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
@@ -2375,6 +2749,21 @@
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    # GF_ADMIN_PASSWORD is the one OpenBao-backed value that is NOT in the block
+    # above: "Grafana prep" already wrote a pre-boot line for it before the stack
+    # came up (the compose file has no default for it), and appending a second
+    # line inside the block would leave two GF_ADMIN_PASSWORD entries in .env
+    # with the winner decided by file order. Replace the existing line in place
+    # instead, so .env always has exactly one — now the authoritative value.
+    - name: "OpenBao — put the stored Grafana admin password into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
+        create: false
+        mode: '0600'
       no_log: true
 
     # Keycloak-tier secrets — appended as a separate marked block so the
@@ -2455,6 +2844,76 @@
       register: post_secrets_recreate
       changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
       when: ansible_system != "Darwin"
+
+    # Tear down observability tiers that are no longer active (#1657).
+    #
+    # `docker compose up` only declines to START services outside the selected
+    # profiles -- it never STOPS ones already running. So lowering
+    # observability_level changed the exporter env vars and left tempo, loki and
+    # promtail running exactly as before: the operator sees a config that says
+    # metrics-only, a deploy that reports success, and a box still running the
+    # full stack. On a 16 GB box that is ~1 GB of the memory the downgrade was
+    # supposed to release (tempo 384m + loki 512m + promtail 128m).
+    #
+    # `--remove-orphans` does not help: these are declared in the compose file
+    # and merely unselected, which compose treats as "leave alone", not orphaned.
+    # They have to be named explicitly.
+    #
+    # Only fires when a tier is genuinely inactive AND its containers exist, so a
+    # steady-state redeploy is a no-op rather than a needless stop/start.
+    - name: "Observability — stop tiers this tenant no longer runs"
+      ansible.builtin.shell: |
+        set -e
+        GONE=""
+        for svc in {{ _obs_teardown | join(' ') }}; do
+          if docker ps -a --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx "digit-${svc}"; then
+            GONE="$GONE $svc"
+          fi
+        done
+        [ -z "$GONE" ] && { echo "NOCHANGE no inactive observability containers"; exit 0; }
+        echo "removing:$GONE"
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} rm -sf $GONE
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      register: obs_teardown
+      changed_when: "'NOCHANGE' not in obs_teardown.stdout"
+      when:
+        - ansible_system != "Darwin"
+        - _obs_teardown | length > 0
+      vars:
+        # Services belonging to each tier, so an inactive tier can be named.
+        #
+        # Membership here tracks one thing only: whether the service is
+        # profiles:-gated. A gated service stopped at a lower tier stays
+        # stopped, because the next `up -d` will not select it, so the teardown
+        # settles after one run. An UNGATED service would come straight back on
+        # the next `up -d` and flap `changed` forever, which is why
+        # otel-collector is deliberately absent: it is unprofiled and always
+        # runs (every instrumented service depends on it) -- see the comment on
+        # the service in docker-compose.egov-digit.yaml.
+        #
+        # All six listed below are gated. tempo/loki/promtail in
+        # docker-compose.egov-digit.yaml; prometheus and grafana likewise; and
+        # node-exporter in docker-compose.monitoring.yml, which is always
+        # layered as an -f flag but whose one service still carries
+        # `profiles: [obs-metrics]` (since #1657). Layered-always and
+        # started-always are different things.
+        _obs_tier_services:
+          obs-metrics: [prometheus, grafana, node-exporter]
+          obs-logs: [loki, promtail]
+          obs-traces: [tempo]
+        # Derived from compose_profiles, not _obs_profiles: the latter is a
+        # task-scoped `vars:` entry on the set_fact above, so it does not exist
+        # by the time this task runs. compose_profiles IS a fact and already
+        # carries the obs-* tiers.
+        _obs_teardown: >-
+          {{
+            _obs_tier_services
+            | dict2items
+            | rejectattr('key', 'in', (compose_profiles | default('')).split(','))
+            | map(attribute='value') | flatten
+          }}
 
     # OpenBao wrote secrets into .env → compose recreates the JVM
     # containers, which cold-start under Rosetta and trip the same
@@ -2570,6 +3029,9 @@
         # placeholder + pre-login default from the real deployment tenant. A city
         # code collapses to its root segment at runtime.
         VITE_STATE_TENANT_ID: "{{ state_tenant_id | default('') }}"
+        # Retained rollback-only UI. Default false hides both navigation and
+        # direct route; the underlying legacy implementation remains in source.
+        VITE_ENABLE_LEGACY_PGR_DASHBOARD: "{{ enable_legacy_pgr_dashboard | default(false) | bool | ternary('true', 'false') }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -3120,7 +3582,7 @@
       ansible.builtin.shell: |
         # Only flag genuinely broken states. Many services don't define
         # a healthcheck at all (default-data-handler, digit-gatus,
-        # digit-otel-collector, digit-jupyter, etc.) and show plain "Up X"
+        # digit-otel-collector, etc.) and show plain "Up X"
         # with no health suffix — that's normal, not unhealthy.
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
@@ -3210,7 +3672,14 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.mcp | default(false)
 
-    - name: "validate — auth flow: ADMIN can mint a token"
+    # The bootstrap user is guaranteed to exist by now: user-seed (compose)
+    # creates {{ bootstrap_user }} with full admin roles on every seed tenant
+    # (SEED_ADMIN_USER/SEED_ADMIN_PASSWORD from .env — see digit.env.j2).
+    # The one case seeding can't fix: the user already existed with a
+    # DIFFERENT password (user create is skipped on DuplicateUserName, and
+    # there is no unauthenticated password reset — by design). The assert
+    # below names that case instead of dying with a bare HTTP 400.
+    - name: "validate — auth flow: bootstrap user can mint a token"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
         method: POST
@@ -3234,13 +3703,25 @@
       register: auth_probe
       retries: 6
       delay: 10
+      until: auth_probe.status == 200
+      failed_when: false
 
     - name: "validate — auth probe returned an access_token"
       ansible.builtin.assert:
         that:
+          - auth_probe.status == 200
           - auth_probe.json.access_token is defined
           - auth_probe.json.access_token | length > 10
-        fail_msg: "Auth flow returned 200 but no access_token — egov-user may have wrong DB creds or schema migration didn't run."
+        fail_msg: >-
+          Token mint failed for bootstrap user '{{ bootstrap_user | default('ADMIN') }}'
+          on tenant '{{ bootstrap_tenant | default('pg') }}'
+          (HTTP {{ auth_probe.status }}: {{ auth_probe.json | default({}) | to_json | truncate(200) }}).
+          If this is 'Invalid login credentials': the user exists but its password does not
+          match host_vars bootstrap_password (user-seed skips existing users and never
+          rewrites passwords). Either set bootstrap_password back to the value the user was
+          created with, or reset the password via the configurator/user API, then rerun.
+          A 200 without an access_token means egov-user has wrong DB creds or its schema
+          migration didn't run.
 
     # ────────────────────────────────────────────────────────────────
     # MCP-driven tenant bootstrap. Once auth/pg works, ask MCP to clone
@@ -3704,6 +4185,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
@@ -3726,6 +4216,15 @@
           user_only: true
           mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
+          # defaults) so user_only re-provisions THAT user with THAT password —
+          # env auth used to provision ADMIN/eGov@123 while the custom
+          # bootstrap_user kept a password the operator never set, and the
+          # configurator-i18n token mint right after 400'd until lockout.
+          auth:
+            username: "{{ bootstrap_user | default('ADMIN') }}"
+            password: "{{ bootstrap_password | default('eGov@123') }}"
+            tenant_id: "pg"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
@@ -4251,19 +4750,122 @@
         msg: "DIGIT-MCP: {{ 'HEALTHY' if mcp_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
       when: enable_mcp | default(false)
 
-    # ==================== Wait for Loki ====================
-    - name: Wait for Loki health (up to 2 min)
-      shell: curl -sf http://127.0.0.1:13100/ready -o /dev/null
-      register: loki_health
+    # ==================== Observability stack health (#1613) ====================
+    # These stay NON-FATAL on purpose: the observability stack is not a serving
+    # dependency, and failing a tenant deploy over a dashboard is
+    # disproportionate. What was wrong before is that only Loki was checked at
+    # all, its failure printed a single easily-missed line, and ansible/README.md
+    # claimed gates for "loki / grafana" that did not exist.
+    #
+    # The path that actually reaches a human is Gatus -> Slack (#1609/#1613);
+    # this loop exists so the deploy operator sees it immediately, and names
+    # every component rather than only the one that happened to be checked.
+    #
+    # Budget: 6 x 5s = 30s per component, so a fully-down stack costs at most
+    # 2.5 min for all five rather than the 10 min that 12 x 10s each would.
+    # `until` retries are sequential per loop item, so the old single-check
+    # budget cannot simply be reused five times over. 30s is ample here because
+    # this is a readiness re-check, not a startup wait: `docker compose up -d`
+    # runs ~2400 lines earlier in this play, and everything between (keycloak
+    # bootstrap alone allows 5 min to bind) has already given the stack minutes
+    # to settle. A component still not answering by this point is down, not
+    # slow -- and it is non-fatal either way, so the cost of being wrong is one
+    # inaccurate line, against 7.5 min on the tail of every deploy.
+    - name: Wait for observability stack health (up to 30s each)
+      shell: "curl -sf {{ item.url }} -o /dev/null"
+      register: observability_health
+      retries: 6
+      delay: 5
+      until: observability_health.rc == 0
+      changed_when: false
+      ignore_errors: yes
+      # Skip a component whose tier is not deployed (#1657/#1666). Ungated, a
+      # tenant on `observability_level: metrics` burns the retry budget on
+      # containers it deliberately did not deploy and then reports them
+      # UNHEALTHY -- which reads as a fault when it is the configured state.
+      # An empty profile means always-on: otel-collector carries no profile.
+      when: >-
+        item.profile == ''
+        or item.profile in (compose_profiles | default('')).split(',')
+      loop:
+        - { name: Loki,           profile: obs-logs,    url: "http://127.0.0.1:13100/ready" }
+        - { name: Grafana,        profile: obs-metrics, url: "http://127.0.0.1:13000/api/health" }
+        - { name: Prometheus,     profile: obs-metrics, url: "http://127.0.0.1:19090/-/healthy" }
+        - { name: Tempo,          profile: obs-traces,  url: "http://127.0.0.1:13200/ready" }
+        - { name: OTEL Collector, profile: "",          url: "http://127.0.0.1:13133" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Show observability stack health
+      debug:
+        msg: >-
+          {{ item.item.name }}:
+          {{ 'SKIPPED (tier not deployed)' if item.get('skipped', false)
+             else ('HEALTHY' if item.get('rc', 1) == 0
+                   else 'UNHEALTHY (non-critical — dashboards only, but its Gatus check will be red)') }}
+      loop: "{{ observability_health.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    # GF_SECURITY_ADMIN_PASSWORD only seeds the admin user on the FIRST boot of a
+    # fresh grafana_data volume. Every box deployed before this change already has
+    # an admin row — from the era when the login form was disabled entirely — so
+    # without this reset they would keep unknown/legacy credentials and nobody
+    # could log in to the UI we just closed off.
+    - name: Wait for Grafana health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13000/api/health -o /dev/null
+      register: grafana_health
       retries: 12
       delay: 10
-      until: loki_health.rc == 0
+      until: grafana_health.rc == 0
       changed_when: false
       ignore_errors: yes
 
-    - name: Show Loki health status
+    # Fatal when it runs. Grafana is healthy at this point, so a failing reset is
+    # a genuine anomaly (wrong CLI path after an image bump, unwritable DB), and
+    # the failure mode it leaves behind is silent: the UI keeps whatever password
+    # the volume was seeded with, nobody can log in with the OpenBao value, and a
+    # `failed_when: false` would bury that in a 4000-line deploy log.
+    #
+    # --password-from-stdin, NOT the positional argument. As an argument the
+    # password lands in the host's process table and the container's argv, and
+    # /proc/<pid>/cmdline is world-readable — so every `no_log` on the Ansible
+    # side is undone for the lifetime of the exec by any local user running
+    # `ps aux`. The CLI reads one line off stdin instead (bufio.Scanner in
+    # pkg/cmd/grafana-cli/commands/reset_password_command.go; present in the
+    # pinned grafana 11.4.0), and `docker exec -i` is what forwards it.
+    #
+    # failed_when is explicit because a non-zero rc is not the only failure:
+    # resetPasswordCommand returns nil when the admin user cannot be found, so
+    # the CLI exits 0 after printing "Admin user cannot be found". Gate on the
+    # success line so that case is loud too.
+    - name: Grafana — align admin password with OpenBao (idempotent)
+      ansible.builtin.command: >-
+        docker exec -i digit-grafana
+        grafana cli admin reset-admin-password --password-from-stdin
+      args:
+        stdin: "{{ grafana_admin_pw }}"
+      register: grafana_pw_reset
+      changed_when: false
+      failed_when: >-
+        grafana_pw_reset.rc != 0
+        or 'Admin password changed successfully' not in grafana_pw_reset.stdout
+      no_log: true
+      when: grafana_health.rc == 0
+
+    # Grafana never came up. Non-fatal, matching the Loki gate above — the
+    # dashboards are not a serving dependency — but say so loudly, because the
+    # stored password has NOT been applied to the running instance.
+    - name: Show Grafana admin-password status
       debug:
-        msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+        msg: >-
+          Grafana: {{ 'admin password aligned with OpenBao'
+                      if grafana_health.rc == 0
+                      else 'UNHEALTHY — admin password NOT applied. Once it is up, rerun the deploy or (piped, so the
+                            password stays out of ps aux):
+                            bao kv get -field=grafana_admin_password '
+                           ~ secrets_path ~
+                           ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's
@@ -4360,7 +4962,7 @@
     # The dump (db/full-dump.sql) ships with pg.citest pre-bootstrapped
     # (CI-ADMIN with HRMS, PGR workflow loaded, complaint types). So the
     # tests work out of the box — no dataloader prerequisite.
-    # postman/ + jupyter/ trees are already synced to {{ digit_dir }} by
+    # postman/ + dataloader/ trees are already synced to {{ digit_dir }} by
     # the "Synchronize config directories" task above — no separate copy
     # step here, just reference the synced paths.
     - name: "Install Newman (Postman CLI runner)"
@@ -4455,7 +5057,7 @@
       register: postman_lifecycle
       changed_when: false
 
-    # CRSLoader end-to-end test — proves the Jupyter notebook flow
+    # CRSLoader end-to-end test — proves the full dataloader flow
     # (bootstrap a tenant from `pg`, load every phase, rollback) works.
     # Runs against `pg.cietee` — a dedicated throwaway tenant that
     # user-seed.sh provisions with ADMIN. The test's cleanup nukes MDMS
@@ -4478,10 +5080,10 @@
         extra_args: --break-system-packages
       changed_when: false
 
-    - name: "CI — CRSLoader E2E (10-phase Jupyter notebook flow, throwaway tenant)"
+    - name: "CI — CRSLoader E2E (10-phase dataloader flow, throwaway tenant)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
-        cd {{ digit_dir }}/jupyter/dataloader
+        cd {{ digit_dir }}/dataloader
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
         DIGIT_USERNAME=ADMIN \
         DIGIT_PASSWORD=eGov@123 \
@@ -4604,7 +5206,7 @@
         state: directory
       loop:
         - scripts
-        - jupyter/dataloader/templates/localisations
+        - dataloader/templates/localisations
         - data
 
       when: run_ci_tests | default(false)
@@ -4633,14 +5235,17 @@
     # at local-setup/scripts/ and is run as part of the core CI block above,
     # not gated on run_ci_tests.)
 
-    # Use OUR canonical, deduped dataloader (local-setup/jupyter/) — not
+    # Use OUR canonical, deduped dataloader (local-setup/dataloader/) — not
     # a sibling repo's copy. The sibling copy used to drift (e.g. it had
     # a `menuPathName` field that the MDMS schema rejects, breaking the
     # complaint-type create call). Single source of truth.
-    - name: "Synchronize DataLoader library (from local-setup/jupyter/)"
+    #
+    # The destination must stay a SIBLING of ci-tests/scripts/: the copied
+    # scripts resolve the library as SCRIPT_DIR/../dataloader.
+    - name: "Synchronize DataLoader library (from local-setup/dataloader/)"
       synchronize:
-        src: "../jupyter/dataloader/"
-        dest: "{{ digit_dir }}/ci-tests/jupyter/dataloader/"
+        src: "../dataloader/"
+        dest: "{{ digit_dir }}/ci-tests/dataloader/"
       when: run_ci_tests | default(false)
 
     - name: Copy county input XLSX (Bomet)

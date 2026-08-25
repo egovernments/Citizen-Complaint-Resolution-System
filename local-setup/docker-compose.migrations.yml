@@ -37,8 +37,7 @@ services:
       - egov-network
 
   pgr-services-migration:
-    build:
-      context: ../backend/pgr-services/src/main/resources/db
+    image: egovio/pgr-services-db:2.12-beta-96dcf10
     container_name: pgr-services-migration
     depends_on:
       postgres-db:
@@ -77,10 +76,13 @@ services:
       pgr-services-migration:
         condition: service_completed_successfully
 
-  # ── Phase 2 · repo-local, self-contained services ───────────────────────────
+  # ── Phase 2 · repo-hosted services ──────────────────────────────────────────
+  # These once built from ../backend/<svc>/src/main/resources/db; they now pull
+  # the CI-built egovio/<svc>-db image pinned to the SAME tag as the app image,
+  # like every other migrator here (see the egov-user note below for why the
+  # app/db tags must move in lockstep).
   novu-bridge-migration:
-    build:
-      context: ../backend/novu-bridge/src/main/resources/db
+    image: egovio/novu-bridge-db:2.12-beta-96dcf10
     container_name: novu-bridge-migration
     profiles: ["notifications"]   # active exactly when novu-bridge is
     depends_on:
@@ -109,8 +111,7 @@ services:
         condition: service_completed_successfully
 
   digit-config-service-migration:
-    build:
-      context: ../backend/digit-config-service/src/main/resources/db
+    image: egovio/digit-config-service-db:2.12-beta-96dcf10
     container_name: digit-config-service-migration
     profiles: ["notifications"]   # active exactly when digit-config-service is
     depends_on:
@@ -344,7 +345,7 @@ services:
     depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
 
   egov-hrms-migration:
-    image: egovio/egov-hrms-db:hrms-boundary-dd641a6
+    image: egovio/egov-hrms-db:2.12-beta-dd641a6
     container_name: egov-hrms-migration
     depends_on:
       postgres-db: { condition: service_healthy }

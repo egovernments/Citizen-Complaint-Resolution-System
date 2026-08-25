@@ -67,6 +67,18 @@ public class AnalyticsServiceRecordCountTest {
     }
 
     @Test
+    public void stateLevelRecordCountEscapesLikeMetacharacters() {
+        when(jdbc.queryForObject(contains("LIKE"), eq(Long.class), eq("ke\\%\\_\\\\root%")))
+                .thenReturn(9L);
+
+        assertEquals(9L, service.recordCount("ke%_\\root", STATE_LEN));
+
+        verify(jdbc).queryForObject(
+                eq("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?"),
+                eq(Long.class), eq("ke\\%\\_\\\\root%"));
+    }
+
+    @Test
     public void secondCallWithinTtlServesFromCache() {
         when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L);
 

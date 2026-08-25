@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useListContext } from 'ra-core';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
@@ -62,19 +61,6 @@ function ModuleSelector() {
   );
 }
 
-/** Pins the list to fetch every supported locale so the data provider pivots
- *  one msg__<locale> column per language. Runs once on mount. */
-function LocalesFilterSetup() {
-  const { filterValues, setFilters } = useListContext();
-  useEffect(() => {
-    if (!filterValues.locales) {
-      setFilters({ ...filterValues, locales: LOCALE_CODES }, undefined, true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return null;
-}
-
 /** One editable column per locale (msg__<locale>) so every language can be
  *  edited inline, side by side. */
 function MultiLocaleDatagrid() {
@@ -105,9 +91,12 @@ export function LocalizationList() {
       hasCreate
       sort={{ field: 'code', order: 'ASC' }}
       actions={<LocalizationToolbar />}
+      // Permanent filter so the FIRST getList already pivots every locale.
+      // LocalesFilterSetup used to apply this in a debounced effect, so the
+      // badge flashed en_IN-only (~7900) then the union (~14000).
+      filter={{ locales: LOCALE_CODES }}
     >
       <ModuleSelector />
-      <LocalesFilterSetup />
       <MultiLocaleDatagrid />
     </DigitList>
   );

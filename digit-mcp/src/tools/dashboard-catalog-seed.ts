@@ -184,6 +184,130 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
           },
           "dimensionKey": {
             "type": "string"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "type"
+              ],
+              "anyOf": [
+                {
+                  "required": [
+                    "label"
+                  ]
+                },
+                {
+                  "required": [
+                    "labelKey"
+                  ]
+                }
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "text",
+                    "integer",
+                    "percent",
+                    "hours",
+                    "hoursDays",
+                    "rating",
+                    "trend",
+                    "tags",
+                    "officer",
+                    "department",
+                    "dimension"
+                  ],
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "labelKey": {
+                  "type": "string"
+                },
+                "align": {
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ],
+                  "type": "string"
+                },
+                "width": {
+                  "type": "string"
+                },
+                "dimension": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "comparison": {
+            "type": "object",
+            "required": [
+              "period",
+              "mode",
+              "joinBy",
+              "valueKey",
+              "outputKey"
+            ],
+            "properties": {
+              "period": {
+                "enum": [
+                  "prior"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "percentChange"
+                ],
+                "type": "string"
+              },
+              "joinBy": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "valueKey": {
+                "type": "string"
+              },
+              "outputKey": {
+                "type": "string"
+              }
+            }
+          },
+          "rowFilter": {
+            "type": "object",
+            "required": [
+              "column"
+            ],
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "eq": {},
+              "gte": {
+                "type": "number"
+              },
+              "gt": {
+                "type": "number"
+              },
+              "lte": {
+                "type": "number"
+              },
+              "lt": {
+                "type": "number"
+              }
+            }
           }
         }
       },
@@ -368,6 +492,15 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
           "disabled"
         ],
         "description": "Whether analytics scopes employees to their HRMS department. 'disabled' widens visibility to all employees on the tenant — temporary, pending department enrichment (#1280). Absent = enforced."
+      },
+      "publicDashboardEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Fail-closed switch for the credential-free public dashboard and its analytics endpoints. Only boolean true enables it; absent, false, malformed, or an unreadable DashboardConfig disables it. Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default)."
+      },
+      "timeZone": {
+        "type": "string",
+        "description": "IANA time zone id (e.g. \"Africa/Nairobi\", \"Africa/Maputo\", \"Asia/Kolkata\") the analytics engine resolves ONE BusinessCalendar from per request — every named window (dtd/wtd/mtd/qtd/ytd), pinned-window suppression decision, explicit dateFrom/dateTo bound, timeBucket, and compose elapsed-time calculation is judged against this zone's calendar day, not UTC or the server's JVM zone (#29). Optional: absent, empty, or not a valid IANA zone id falls back to Africa/Nairobi (the historical hardcoded default every unconfigured tenant already behaved as — a migration-compatibility default, not a real default timezone). Configurator changes take effect immediately through its authenticated protected refresh; only when that refresh fails do they wait for the shared analytics config-cache TTL (five minutes by default). The underlying complaint_facts/complaint_events materialized views are refreshed by DashboardRefreshScheduler on its own cadence (pgr.dashboard.refresh.interval.ms), so a DB-derived tile's data reflects a timeZone change only from its NEXT refresh onward, not instantaneously."
       }
     }
   }
@@ -1149,7 +1282,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
@@ -1291,7 +1424,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
@@ -2079,7 +2212,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "query": {
       "grain": "facts",
       "window": {
-        "name": "last_7d",
+        "name": "last_30d",
         "timeRole": "filed_at"
       },
       "dimensions": [
@@ -2172,7 +2305,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "params": [
       {
         "name": "window",
-        "default": "last_7d",
+        "default": "last_30d",
         "allowed": [
           "last_1d",
           "last_7d",
@@ -3195,15 +3328,15 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "id": "cl_table_ward_performance",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Ward performance",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "wardLabel",
-          "type": "text",
+          "id": "ward_code",
+          "type": "dimension",
           "align": "left",
           "label": "Ward",
           "width": "24%"
@@ -3223,21 +3356,21 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "14%"
         },
         {
-          "id": "reopenRate",
+          "id": "reopen_rate",
           "type": "percent",
           "align": "left",
           "label": "Reopen %",
           "width": "16%"
         },
         {
-          "id": "ontimeRate",
+          "id": "ontime_rate",
           "type": "percent",
           "align": "left",
           "label": "On-time %",
           "width": "16%"
         },
         {
-          "id": "avgCsat",
+          "id": "avg_csat",
           "type": "rating",
           "align": "left",
           "label": "CSAT",
@@ -3256,8 +3389,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "ontime_rate",
         "avg_csat"
       ],
-      "dimensionKey": "ward_code",
-      "tableProfile": "wardPerformance"
+      "dimensionKey": "ward_code"
     },
     "rbac": {
       "visibleTo": [
@@ -3280,6 +3412,13 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "created"
         },
         {
+          "agg": "count",
+          "name": "open",
+          "filter": {
+            "is_open": true
+          }
+        },
+        {
           "agg": "ratio",
           "name": "reopen_rate",
           "numerator": {
@@ -3287,18 +3426,12 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
             "filter": {
               "is_reopened": true,
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           },
           "denominator": {
             "agg": "count",
             "filter": {
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         },
@@ -3310,18 +3443,12 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
             "filter": {
               "is_resolved": true,
               "sla_breached": false
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           },
           "denominator": {
             "agg": "count",
             "filter": {
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         },
@@ -3332,9 +3459,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "filter": {
             "has_rating": true,
             "is_resolved": true
-          },
-          "window": {
-            "timeRole": "resolved_at"
           }
         }
       ],
@@ -3356,7 +3480,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "supportsSeries": false
   },
   {
@@ -3421,15 +3545,15 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "id": "cl_table_service_quality_by_channel",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Service quality by channel",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "channelLabel",
-          "type": "text",
+          "id": "source",
+          "type": "dimension",
           "align": "left",
           "label": "Channel",
           "width": "28%"
@@ -3442,14 +3566,14 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "20%"
         },
         {
-          "id": "resolutionRate",
+          "id": "resolution_rate",
           "type": "percent",
           "align": "left",
           "label": "Resolution",
           "width": "26%"
         },
         {
-          "id": "avgCsat",
+          "id": "avg_csat",
           "type": "rating",
           "align": "left",
           "label": "CSAT",
@@ -3463,11 +3587,10 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "valueKey": "volume",
       "measureKeys": [
         "volume",
-        "resolved",
+        "resolution_rate",
         "avg_csat"
       ],
-      "dimensionKey": "source",
-      "tableProfile": "serviceQualityByChannel"
+      "dimensionKey": "source"
     },
     "rbac": {
       "visibleTo": [
@@ -3490,14 +3613,17 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "volume"
         },
         {
-          "agg": "count",
-          "name": "resolved",
-          "filter": {
-            "is_open": false,
-            "is_resolved": true
+          "agg": "ratio",
+          "name": "resolution_rate",
+          "numerator": {
+            "agg": "count",
+            "filter": {
+              "is_open": false,
+              "is_resolved": true
+            }
           },
-          "window": {
-            "timeRole": "resolved_at"
+          "denominator": {
+            "agg": "count"
           }
         },
         {
@@ -3507,9 +3633,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "filter": {
             "has_rating": true,
             "is_resolved": true
-          },
-          "window": {
-            "timeRole": "resolved_at"
           }
         }
       ],
@@ -3531,7 +3654,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "supportsSeries": false
   },
   {
@@ -3660,22 +3783,22 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     "id": "cl_table_recurring_ward_subtype",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Recurring complaints by ward & sub-type",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "wardLabel",
-          "type": "text",
+          "id": "ward_code",
+          "type": "dimension",
           "align": "left",
           "label": "Ward",
           "width": "28%"
         },
         {
-          "id": "subtypeLabel",
-          "type": "text",
+          "id": "service_code",
+          "type": "dimension",
           "align": "left",
           "label": "Sub-type",
           "width": "32%"
@@ -3688,7 +3811,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "18%"
         },
         {
-          "id": "trendPct",
+          "id": "trend_pct",
           "type": "trend",
           "align": "left",
           "label": "Trend",
@@ -3696,17 +3819,28 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         }
       ],
       "compose": null,
-      "minCount": 3,
+      "comparison": {
+        "period": "prior",
+        "mode": "percentChange",
+        "joinBy": [
+          "ward_code",
+          "service_code"
+        ],
+        "valueKey": "total",
+        "outputKey": "trend_pct"
+      },
+      "rowFilter": {
+        "column": "total",
+        "gte": 3
+      },
       "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
       "valueKey": "total",
-      "needsPrior": true,
       "measureKeys": [
         "total"
       ],
-      "dimensionKey": "ward_code",
-      "tableProfile": "wardSubtypeRecurring"
+      "dimensionKey": "ward_code"
     },
     "rbac": {
       "visibleTo": [
@@ -3764,7 +3898,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "supportsSeries": false
   }
 ];
@@ -3872,6 +4006,81 @@ export const DASHBOARD_PACKS: Record<string, unknown>[] = [
         "y": 20,
         "w": 12,
         "h": 5
+      }
+    ]
+  },
+  {
+    "id": "public-default",
+    "description": "Curated public dashboard — aggregate complaint totals, trends, and service performance",
+    "roles": [
+      "PUBLIC"
+    ],
+    "tiles": [
+      "cl_new_created_count",
+      "cl_resolution_rate_count",
+      "cl_reopen_rate_count",
+      "cl_open_complaints_live",
+      "cl_resolved_date_range_count",
+      "cl_chart_complaints_by_type",
+      "cl_chart_over_time_created_daily",
+      "cl_chart_department_resolution_rate"
+    ],
+    "layout": [
+      {
+        "kpiId": "cl_new_created_count",
+        "x": 0,
+        "y": 0,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "kpiId": "cl_resolution_rate_count",
+        "x": 2,
+        "y": 0,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "kpiId": "cl_reopen_rate_count",
+        "x": 4,
+        "y": 0,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "kpiId": "cl_open_complaints_live",
+        "x": 6,
+        "y": 0,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "kpiId": "cl_resolved_date_range_count",
+        "x": 8,
+        "y": 0,
+        "w": 2,
+        "h": 2
+      },
+      {
+        "kpiId": "cl_chart_complaints_by_type",
+        "x": 0,
+        "y": 2,
+        "w": 6,
+        "h": 6
+      },
+      {
+        "kpiId": "cl_chart_over_time_created_daily",
+        "x": 6,
+        "y": 2,
+        "w": 6,
+        "h": 6
+      },
+      {
+        "kpiId": "cl_chart_department_resolution_rate",
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 6
       }
     ]
   }

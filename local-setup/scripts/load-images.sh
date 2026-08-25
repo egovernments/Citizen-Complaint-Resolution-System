@@ -21,7 +21,7 @@ IMAGES=(
   "twinproduction/gatus:latest"
 
   # Core Services
-  "egovio/mdms-v2:v2.9.2-4a60f20"
+  "egovio/mdms-v2:mdms-count-api-3ac4f8e"
   "egovio/egov-enc-service:v2.9.2-4a60f20"
   "egovio/egov-idgen:v2.9.2-4a60f20"
   "egovio/egov-user:master-fa75ba8"

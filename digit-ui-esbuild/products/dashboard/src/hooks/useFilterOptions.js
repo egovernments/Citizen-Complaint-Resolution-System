@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { runBatchQueries } from "../services/analyticsService";
+import { runBatchQueries, fetchPublicFilterOptions, getTenantId } from "../services/analyticsService";
 import {
   buildComplaintTypeIndex,
   fetchComplaintHierarchyRecords,
@@ -96,16 +96,25 @@ function toComplaintTypeDecorator(hierarchyIndex) {
   };
 }
 
-export function useFilterOptions() {
+/**
+ * `publicMode` swaps the inline distinct batch for the anonymous
+ * /public/_options endpoint (#1797) — same envelope, server-owned queries,
+ * counts stripped — so everything below the fetch is shared.
+ */
+export function useFilterOptions({ enabled = true, publicMode = false } = {}) {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
   const [raw, setRaw] = useState({ results: null, hierarchyRecords: null, loading: true });
-  const { language } = useDashboardT();
+  const { language, i18nTick } = useDashboardT();
 
   useEffect(() => {
+    if (!enabled) {
+      setRaw({ results: null, hierarchyRecords: null, loading: false });
+      return undefined;
+    }
     let cancelled = false;
     Promise.all([
-      runBatchQueries(OPTION_QUERIES),
+      publicMode ? fetchPublicFilterOptions(getTenantId()) : runBatchQueries(OPTION_QUERIES),
       // Resolves null on any failure (never rejects) — labels then fall back
       // to the humanizer and the list stays flat, exactly the old behavior.
       fetchComplaintHierarchyRecords(),
@@ -121,7 +130,7 @@ export function useFilterOptions() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled, publicMode]);
 
   return useMemo(() => {
     if (!raw.results) return { options: null, loading: raw.loading };
@@ -162,6 +171,8 @@ export function useFilterOptions() {
       options: Object.keys(options).length ? options : null,
       loading: raw.loading,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- language re-labels cached rows
-  }, [raw, language]);
+    // `languageChanged` can fire before the new message bundle is installed.
+    // i18nTick also advances on the later store `added` event, so cached rows
+    // are re-labelled once the selected locale is actually available (#1108).
+  }, [raw, language, i18nTick]);
 }

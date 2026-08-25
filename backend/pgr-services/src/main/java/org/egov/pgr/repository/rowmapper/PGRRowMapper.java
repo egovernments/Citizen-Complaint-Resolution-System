@@ -101,8 +101,14 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
 
         if(service.getAddress() == null){
 
-            Double latitude =  rs.getDouble("latitude");
+            Double latitude = rs.getDouble("latitude");
+            if (rs.wasNull()) {
+                latitude = null;
+            }
             Double longitude = rs.getDouble("longitude");
+            if (rs.wasNull()) {
+                longitude = null;
+            }
             Boundary locality = Boundary.builder().code(rs.getString("locality")).build();
 
             GeoLocation geoLocation = GeoLocation.builder().latitude(latitude).longitude(longitude).build();

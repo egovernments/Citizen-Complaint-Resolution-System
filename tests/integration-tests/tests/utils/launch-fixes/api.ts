@@ -166,6 +166,10 @@ export interface PgrCreateParams {
   /** Optional: send extended_attributes in service body. Per user direction:
    *  content must stay empty {}. Defaults to undefined (omitted). */
   extendedAttributes?: Record<string, unknown>;
+  /** Optional geo-location override for map/detail contract tests. The legacy
+   * default remains (0,0) so existing fixture semantics do not change. Pass
+   * an empty object to exercise a genuinely missing persisted location. */
+  geoLocation?: { latitude?: number; longitude?: number };
 }
 
 export interface PgrCreateResult {
@@ -195,6 +199,7 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     citizenPhone,
     workflowAction = 'APPLY',
     extendedAttributes,
+    geoLocation,
   } = params;
 
   const serviceBody: Record<string, unknown> = {
@@ -205,7 +210,7 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
     address: {
       city: tenantId,
       locality: { code: localityCode },
-      geoLocation: { latitude: 0, longitude: 0 },
+      geoLocation: geoLocation ?? { latitude: 0, longitude: 0 },
     },
     citizen: { name: citizenName, mobileNumber: citizenPhone },
   };
@@ -301,14 +306,105 @@ export async function resolveLocalityCode(
   return preferred;
 }
 
+interface MdmsCodeRow {
+  uniqueIdentifier?: string;
+  isActive?: boolean;
+  data?: {
+    active?: boolean;
+    serviceCode?: string;
+    code?: string;
+    department?: string;
+    departments?: string[];
+  };
+}
+
 /**
- * Resolve a service code against the deployment's RAINMAKER-PGR.ServiceDefs
- * MDMS schema. Returns `preferred` if it is active on `tenantId`; otherwise
- * returns the first active code found.
+ * Active, FILEABLE complaint codes held by one MDMS master on `tenantId`.
  *
- * Useful when the env-configured SERVICE_CODE (e.g. `IllegalConstruction`)
- * doesn't exist on the target tenant (e.g. ke/Bomet uses
- * `GarbageMissedGarbageCollection`).
+ * "Fileable" is why ComplaintHierarchy needs the department clause: a node with
+ * no department is a cascade CATEGORY (pg's `Garbage`, `StreetLights`), a level
+ * in the picker rather than something a complaint can be filed against. Same
+ * rule profile.ts's discoverComplaintTypes applies.
+ *
+ * The code is read from data.serviceCode / data.code BEFORE uniqueIdentifier
+ * because the two are not the same field on every deployment — see
+ * resolveServiceCode.
+ */
+async function activeComplaintCodes(
+  baseUrl: string,
+  authToken: string,
+  tenantId: string,
+  schemaCode: string,
+): Promise<string[]> {
+  // PAGE the catalogue rather than taking a single slice of it. ANY fixed limit
+  // that happens to sit below the row count silently changes WHICH code the
+  // fallback returns — and can hide `preferred` itself on a later page, which is
+  // the exact failure this helper exists to prevent. 50 truncated every real
+  // tenant; 200 still truncated bomet's `ke` at 251 ServiceDefs.
+  const PAGE = 200;
+  // Backstop for a deployment whose mdms-v2 ignores `offset` and re-serves page
+  // 0 forever: stop as soon as a page contributes nothing we have not already
+  // seen. MAX_PAGES is a second belt in case such a server also churns the row
+  // order, so `fresh` never quite empties.
+  const MAX_PAGES = 25;
+  const rows: MdmsCodeRow[] = [];
+  const seen = new Set<string>();
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { authToken },
+        MdmsCriteria: { tenantId, schemaCode, limit: PAGE, offset: page * PAGE },
+      }),
+    });
+    const batch = ((await r.json()) as { mdms?: MdmsCodeRow[] }).mdms || [];
+    const fresh = batch.filter((row, i) => {
+      const key =
+        row.uniqueIdentifier ||
+        `${page}:${i}:${row.data?.serviceCode || row.data?.code || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    rows.push(...fresh);
+    if (batch.length < PAGE || fresh.length === 0) break;
+  }
+  const isHierarchy = schemaCode.endsWith('ComplaintHierarchy');
+  const codes = rows
+    .filter((row) => row.isActive !== false && row.data?.active !== false)
+    .filter((row) => !isHierarchy || !!(row.data?.department ?? row.data?.departments?.[0]))
+    .map((row) => row.data?.serviceCode || row.data?.code || row.uniqueIdentifier || '')
+    .filter(Boolean);
+  return [...new Set(codes)];
+}
+
+/**
+ * Resolve a serviceCode the deployment will actually ACCEPT on a PGR _create.
+ * Returns `preferred` when it is active on `tenantId`; otherwise the first
+ * fileable code found.
+ *
+ * Two things this has to get right, both of which it used to get wrong and
+ * which together produced
+ * "INVALID_SERVICECODE: The service code: IllegalShopsOnFootPath is not
+ * present in MDMS" on the local `pg` stack — for a run whose configured
+ * SERVICE_CODE (BurningOfGarbage) was present and perfectly valid:
+ *
+ *  1. WHICH MASTER. pgr-services validates the code against
+ *     RAINMAKER-PGR.ComplaintHierarchy, not ServiceDefs — see
+ *     PGRConstants.MDMS_SERVICEDEF_SEARCH,
+ *     `$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='<CODE>')]`, read
+ *     by ServiceRequestValidator.validateMDMS. `pg` carries 33 ServiceDefs
+ *     against 8 ComplaintHierarchy codes, so 25 of the codes this helper could
+ *     hand back were unfileable by construction. ServiceDefs stays as the
+ *     FALLBACK master, for deployments that keep the catalogue there instead
+ *     (profile.ts's discoverComplaintTypes unions both for the same reason).
+ *
+ *  2. WHERE THE CODE LIVES IN A ROW. mdms-v2's `uniqueIdentifier` is not the
+ *     serviceCode everywhere: pg keys ServiceDefs rows by a sha256 hash and
+ *     ComplaintHierarchy rows by `PGR.<code>`, so matching `preferred` against
+ *     uniqueIdentifier alone never hit and the helper fell through to its
+ *     "first active" branch on every single call.
  */
 export async function resolveServiceCode(
   baseUrl: string,
@@ -316,31 +412,23 @@ export async function resolveServiceCode(
   tenantId: string,
   preferred: string,
 ): Promise<string> {
-  try {
-    const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { authToken },
-        MdmsCriteria: { tenantId, schemaCode: 'RAINMAKER-PGR.ServiceDefs', limit: 50 },
-      }),
-    });
-    const data = (await r.json()) as {
-      mdms?: Array<{ uniqueIdentifier: string; isActive: boolean; data: { active: boolean; serviceCode: string } }>;
-    };
-    const records = data.mdms || [];
-
-    // Check if preferred code is active
-    const preferredRecord = records.find(
-      (rec) => rec.uniqueIdentifier === preferred && rec.isActive && rec.data?.active,
-    );
-    if (preferredRecord) return preferred;
-
-    // Fall back to first active record
-    const firstActive = records.find((rec) => rec.isActive && rec.data?.active);
-    if (firstActive) return firstActive.data.serviceCode || firstActive.uniqueIdentifier;
-  } catch {
-    // Network or parse failure — return preferred and let _create surface the error
+  for (const schemaCode of ['RAINMAKER-PGR.ComplaintHierarchy', 'RAINMAKER-PGR.ServiceDefs']) {
+    let codes: string[] = [];
+    try {
+      codes = await activeComplaintCodes(baseUrl, authToken, tenantId, schemaCode);
+    } catch {
+      // Network or parse failure — try the next master, then give up and let
+      // _create surface the real error against `preferred`.
+      continue;
+    }
+    if (!codes.length) continue;
+    if (codes.includes(preferred)) return preferred;
+    // Deterministic: an arbitrary "first row MDMS happened to return" turns a
+    // seed regression into flake. Suite leftovers (the PW_/Pw… complaint types
+    // other specs create and soft-delete) sort last so a real seeded code wins.
+    return codes
+      .slice()
+      .sort((a, b) => Number(/^pw/i.test(a)) - Number(/^pw/i.test(b)) || a.localeCompare(b))[0];
   }
   return preferred;
 }

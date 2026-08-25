@@ -168,6 +168,63 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
   return cleaned.length > 0 ? cleaned : null;
 }
 
+/** Minimal shape of an mdms-v2 record this module needs to read a master's code + name. */
+interface MasterRowLike {
+  uniqueIdentifier?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * #1590: derive `COMMON_MASTERS_DEPARTMENT_<CODE>` / `COMMON_MASTERS_DESIGNATION_<CODE>`
+ * messages from the department/designation MASTERS a bootstrap just copied.
+ *
+ * tenant_bootstrap's localization step can only carry a message that already
+ * exists on some source tenant, while the MDMS data copy carries the masters
+ * unconditionally. A master the source dump never localized therefore lands on
+ * the target with no message and renders as its raw code — the canned
+ * `pg.citya` / `india.citya` `PMC_*` departments are the live example, and the
+ * dashboard's department tiles show `PMC_ELEC` because the dimensionLabel
+ * contract deliberately has no humaniser
+ * (digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+ *
+ * The message text is the master's own `name` — DATA-OWNED text an operator
+ * authored, which is exactly what that contract sanctions as fallback. A
+ * master with no `name` yields nothing: the gap stays visible rather than
+ * being papered over with a label invented from the code.
+ *
+ * Callers apply this as a FLOOR (a real copied message always wins) and for
+ * the primary locale only — writing an English master name into a pt_PT pack
+ * would hide a genuine translation gap.
+ */
+export function deriveMasterLocalizations(
+  departments: MasterRowLike[],
+  designations: MasterRowLike[],
+): { code: string; message: string; module: string }[] {
+  const out: { code: string; message: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const derive = (rows: MasterRowLike[], prefix: string) => {
+    for (const row of rows || []) {
+      const data = row?.data || {};
+      // Both fields are typed loosely enough to arrive non-string from a
+      // hand-edited or dump-imported record. Guard before trim(): a throw
+      // here escapes into the caller's catch and drops the WHOLE derived
+      // floor, not just the malformed row.
+      const identifier = typeof row?.uniqueIdentifier === 'string' ? row.uniqueIdentifier.trim() : '';
+      const dataCode = typeof data.code === 'string' ? data.code.trim() : '';
+      const code = identifier || dataCode;
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!code || !name) continue;
+      const key = `${prefix}${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ code: key, message: name, module: 'rainmaker-common' });
+    }
+  };
+  derive(departments, 'COMMON_MASTERS_DEPARTMENT_');
+  derive(designations, 'COMMON_MASTERS_DESIGNATION_');
+  return out;
+}
+
 /**
  * Schemas where copying ZERO records from the source is a defect, not a no-op.
  *
@@ -553,7 +610,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               existingRoles.filter((r) => r.tenantId === explicitRoot).map((r) => r.code),
             );
 
-            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER'];
+            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN'];
             const newRoles = standardRoles
               .filter((code) => !existingForTarget.has(code))
               .map((code) => ({ code, name: code, tenantId: explicitRoot }));
@@ -1174,8 +1231,15 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let userProvisioned: { username: string; tenantId: string; roles: string[] } | null = null;
         let userProvisionError: string | null = null;
         try {
-          const currentUsername = process.env.CRS_USERNAME || 'ADMIN';
-          const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+          // Prefer the authenticated session's identity + password (the
+          // operator's bootstrap credentials when the caller passed body.auth)
+          // over the container's CRS_* env. Falling back to env here used to
+          // re-provision the env-default ADMIN while the operator's custom
+          // bootstrap user kept a password they never set — every later token
+          // mint as that user 400'd "Invalid login credentials".
+          const authInfo = digitApi.getAuthInfo();
+          const currentUsername = authInfo.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
+          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
           const mobileNumber = deriveValidMobile(
             mobileRegex,
             Number(args.mobile_length) || 10,
@@ -1189,6 +1253,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
             { code: 'DGRO', name: 'Department GRO' },
             { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+            { code: 'LOC_ADMIN', name: 'Localisation Admin' },
             { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
           ].map((r) => ({ ...r, tenantId: target }));
           const newUser = {
@@ -1198,6 +1264,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             password: currentPassword,
             type: 'EMPLOYEE',
             active: true,
+            // Re-provisioning is the recovery path after credential drift —
+            // repeated failed logins may have tripped egov-user's account
+            // lockout on this row; clear it along with resetting the password.
+            accountLocked: false,
             roles: standardRoles,
             tenantId: target,
           };
@@ -1514,6 +1584,79 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         throw lastErr;
       }
 
+      // Pages through mdmsV2SearchRaw until a page comes back shorter than PAGE_SIZE — a single
+      // capped fetch (the previous behavior) silently truncated any schema with more rows than
+      // the limit. ACCESSCONTROL-ACTIONS-TEST.actions-test routinely has 500+ rows on a real
+      // source tenant, so a `{ limit: 500 }` one-shot call was dropping whichever action records
+      // happened to fall past the 500th — including, on at least one deployment, the
+      // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
+      // to edit those masters in the configurator despite being correctly role-mapped.
+      //
+      // mdms-v2 orders results by createdtime DESC with no tiebreaker, and a bulk-seeded schema
+      // (e.g. ACCESSCONTROL-ACTIONS-TEST.actions-test, where ~329/330 rows share one
+      // createdtime from a single default-data-handler insert) has an unstable sort order across
+      // that tie — offset-based pages can then return the same row twice and skip another,
+      // silently dropping it from `all` even though total row count matched expectations. Dedup
+      // by uniqueIdentifier (mdms-v2's actual identity key) closes that gap; the count cross-check
+      // below is a hard signal that something was still missed if it ever fires.
+      //
+      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS schema. If a
+      // schema's result order isn't stable across separate offset-based requests, an unbounded
+      // loop would hang tenant_bootstrap forever; hitting the cap instead throws a loud,
+      // debuggable error.
+      async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
+        const PAGE_SIZE = 500;
+        const MAX_PAGES = 200;
+        const seen = new Map<string, MdmsRecord>();
+        let offset = 0;
+        let page: MdmsRecord[] = [];
+        for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
+          try {
+            page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          } catch (err) {
+            // Nothing fetched yet — propagate so the caller's own failure handling (fail the
+            // schema / `.catch(() => [])`) applies, same as before this dedup/partial-fetch logic
+            // existed. Once we've already accumulated real rows, though, a later page failing must
+            // NOT discard them — that's the "page 1 succeeds, page 2 fails, whole thing becomes []"
+            // bug this loop used to have (#1826 review finding #5).
+            if (seen.size === 0) throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: page at offset ${offset} failed (${msg}) — ` +
+              `returning the ${seen.size} row(s) already fetched instead of discarding them.`
+            );
+            page = [];
+            break;
+          }
+          for (const record of page) {
+            const key = record.uniqueIdentifier ?? `${schemaCode}#${offset}#${seen.size}`;
+            seen.set(key, record);
+          }
+          if (page.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        if (page.length === PAGE_SIZE) {
+          throw new Error(
+            `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
+            `without a short page — aborting instead of paging indefinitely.`,
+          );
+        }
+        const all = [...seen.values()];
+        try {
+          const expected = await digitApi.mdmsV2Count(tenant, schemaCode);
+          if (expected > 0 && all.length < expected) {
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: fetched ${all.length} unique rows but ` +
+              `_count reports ${expected} — pagination may have skipped rows under an unstable sort tie.`
+            );
+          }
+        } catch {
+          // Best-effort diagnostic only — an unreachable/unsupported _count endpoint must not
+          // fail the (already-successful) fetch itself.
+        }
+        return all;
+      }
+
       // ────────────────────────────────────────────────────────────────
       // Identity-rewrite map for record copy.
       //
@@ -1632,8 +1775,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // ThemeConfig when querying mz). Without the filter, the bootstrap
           // falsely sees the record as already present and skips copying it,
           // leaving the target tenant without its own copy.
-          const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
-          const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+          const [sourceRecords, targetRecords] = await Promise.all([
+            fetchAllMdmsV2Raw(source, schemaCode),
+            fetchAllMdmsV2Raw(target, schemaCode),
+          ]);
           const targetByUid = new Map(
             targetRecords
               .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1732,8 +1877,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             }
           }
         } catch (schemaErr) {
-          // Schema might not have data in source — that's OK
-          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+          // fetchAllMdmsV2Raw only throws on a genuine fetch failure (network/HTTP error, or the
+          // MAX_PAGES safety cap) — a schema that's simply empty at the source resolves to `[]`,
+          // not a rejection, so every path through here is a real failure. Recording it in
+          // results.data.failed (not just logging) is what makes `overallSuccess` correctly turn
+          // false instead of a bootstrap reporting success after silently skipping the schema.
+          const msg = schemaErr instanceof Error ? schemaErr.message : String(schemaErr);
+          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy failed: ${msg}`);
+          results.data.failed.push(`${schemaCode} (schema-level fetch failure): ${msg}`);
         }
       }
 
@@ -1755,7 +1906,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         for (const [schemaCode, records] of catalogFloor) {
           let existingUids = new Set<string>();
           try {
-            const rows = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+            const rows = await fetchAllMdmsV2Raw(target, schemaCode);
             existingUids = new Set(
               (rows || [])
                 .filter((r) => (r as { tenantId?: string }).tenantId === target)
@@ -1814,11 +1965,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let appendedTo = 0;
         let alreadyIn = 0;
         try {
-          const cityModuleRecords = await digitApi.mdmsV2SearchRaw(
-            tenantsScope,
-            'tenant.citymodule',
-            { limit: 100 },
-          );
+          const cityModuleRecords = await fetchAllMdmsV2Raw(tenantsScope, 'tenant.citymodule');
           for (const rec of cityModuleRecords) {
             const data = rec.data as Record<string, unknown>;
             const tenants = Array.isArray(data.tenants)
@@ -1969,8 +2116,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               });
           }
         }
-        const testRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', { limit: 500 });
-        const haveRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS.actions', { limit: 500 });
+        const [testRows, haveRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test'),
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions'),
+        ]);
         const haveUid = new Set(haveRows.map((r) => r.uniqueIdentifier));
         let bridged = 0;
         for (const r of testRows) {
@@ -2010,7 +2159,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        // The session's login password, so the provisioned admin carries the
+        // operator's actual credentials (CRS_PASSWORD only as a fallback for
+        // token-only auth, where the password is unknown).
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
         // Get full user details from source tenant
         const sourceTenantForSearch = auth.user?.tenantId || source;
@@ -2040,6 +2192,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
           { code: 'DGRO', name: 'Department GRO' },
           { code: 'SUPERUSER', name: 'Super User' },
+          // MDMS_ADMIN/LOC_ADMIN — needed for the bootstrap ADMIN to edit MDMS-v2-backed masters
+          // and localization messages through the configurator (its access-policy check gates
+          // create/update on these roles specifically; without them ADMIN is stuck view-only).
+          { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+          { code: 'LOC_ADMIN', name: 'Localisation Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -2142,7 +2299,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // ────────────────────────────────────────────────────────────────
       emitProgress({ phase: 'localizations:start', message: 'Copying localization messages (this can take a while for the full set)', pct: 95 });
 
-      const localizationResults: { locale: string; copied: number; failed: number; error?: string }[] = [];
+      const localizationResults: { locale: string; copied: number; failed: number; derived?: number; error?: string }[] = [];
       const UPSERT_BATCH = 500;
 
       // Discover locales — read source's StateInfo, pull `.languages[].value`.
@@ -2168,6 +2325,43 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const localeSourceTenants = Array.from(
         new Set([source, 'statea', 'statea.g', 'pg', 'pg.citest', 'ke', 'ke.nairobi']),
       );
+
+      // #1590: the copy loop can only carry a message that already exists on
+      // SOME source tenant. Step 2 copies the department/designation MASTERS
+      // regardless — so a master the source dump never localized (the canned
+      // `pg.citya`/`india.citya` PMC_* departments are the live example) lands
+      // on the target with no `COMMON_MASTERS_DEPARTMENT_<CODE>` message and
+      // renders as the raw code wherever a code is displayed: HRMS forms, the
+      // employee filters, and the dashboard's department tiles (which have no
+      // humaniser by design — see the dimensionLabel contract in
+      // digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+      //
+      // Derive the missing keys from the master's own `name`. That is the
+      // DATA-OWNED display text an operator authored, which is exactly what
+      // the dimensionLabel contract sanctions as fallback — not a code-owned
+      // English guess. Copied messages still win (added below only when the
+      // union has no entry for the key).
+      //
+      // PRIMARY LOCALE ONLY — and the primary locale is StateInfo.languages[0],
+      // the deployment's own default, NOT en_IN. The master `name` is authored
+      // in whatever language the operator onboarded in ("Obras Públicas" on mz),
+      // so it belongs in that deployment's default pack. Copying it into the
+      // *other* packs would paper over a real translation gap and defeat the
+      // locale-strict resolution added for #1108 — an untranslated department
+      // must stay visibly untranslated in the locales nobody translated it into.
+      const primaryLocale = locales[0];
+      let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
+      try {
+        const [deptRows, desigRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
+        ]);
+        derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
+      } catch (e) {
+        // Non-fatal: the copy loop below still runs. A master read failure
+        // just means no derived floor for this run.
+        console.error(`[tenant_bootstrap] master-derived localization skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       for (const locale of locales) {
         emitProgress({
@@ -2232,6 +2426,26 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               if (!byKey.has(key)) byKey.set(key, m);
             }
           }
+          // #1590 floor: department/designation labels derived from the masters
+          // Step 2 copied, for codes no source tenant localized. Primary locale
+          // only, and only where the union has nothing — a real translation
+          // always wins over the master name.
+          let derivedCount = 0;
+          if (locale === primaryLocale) {
+            for (const m of derivedMasterMessages) {
+              const key = `${m.module}::${m.code}`;
+              if (byKey.has(key)) continue;
+              byKey.set(key, m);
+              derivedCount++;
+            }
+            if (derivedCount > 0) {
+              emitProgress({
+                phase: 'localizations:derived',
+                message: `${locale}: derived ${derivedCount} department/designation label(s) from MDMS masters (no source tenant localized them)`,
+                data: { locale, derived: derivedCount },
+              });
+            }
+          }
           const messages = Array.from(byKey.values());
 
           if (messages.length === 0) {
@@ -2290,13 +2504,59 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             }
           }
-          localizationResults.push({ locale, copied, failed });
+          localizationResults.push({ locale, copied, failed, ...(derivedCount > 0 ? { derived: derivedCount } : {}) });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           localizationResults.push({ locale, copied: 0, failed: 0, error: msg.slice(0, 200) });
         }
       }
 
+      // The derived floor also has to land on the ROOT tenant, not just the
+      // city. egov-localization `_search` resolves a tenant's OWN rows only —
+      // verified on bomet: a `_search` at `ke.india` returns its 9 rows and no
+      // `ke` row, and a `_search` at `ke` never sees a `ke.india` row. The
+      // dashboard (like the rest of the employee shell) loads its packs for
+      // `stateTenantId`, so a message written only to `ke.india` is invisible
+      // exactly where #1590 was reported — the root dashboard aggregating that
+      // city's complaints. Same reason, same shape as the TENANT_TENANTS_*
+      // push below. Duplicate-tolerant: the root usually already has most of
+      // these, and the upsert treats a repeat as a no-op.
+      if (derivedMasterMessages.length > 0 && target.includes('.')) {
+        const rootTenant = target.split('.')[0];
+        let rootDerived = 0;
+        let rootExisting = 0;
+        let rootFailed = 0;
+        for (const m of derivedMasterMessages) {
+          try {
+            await digitApi.localizationUpsert(rootTenant, primaryLocale, [m]);
+            rootDerived++;
+          } catch (e) {
+            const em = e instanceof Error ? e.message : String(e);
+            if (isDuplicateError(em)) {
+              // Already present at the root (the common case) — a no-op.
+              rootExisting++;
+            } else {
+              // A service/auth/validation failure leaves the root without the
+              // label, which is the whole point of this push. Count it so the
+              // run cannot report clean while a state-level UI still renders
+              // the raw code.
+              rootFailed++;
+              console.error(`[tenant_bootstrap] derived label ${m.code} → root "${rootTenant}": ${em.slice(0, 200)}`);
+            }
+          }
+        }
+        if (rootFailed > 0) {
+          localizationResults.push({ locale: primaryLocale, copied: 0, failed: rootFailed, error: `derived-label push to root "${rootTenant}" failed for ${rootFailed} message(s)` });
+        }
+        emitProgress({
+          phase: 'localizations:derived_root',
+          message: `${primaryLocale}: pushed ${rootDerived} derived master label(s) to root "${rootTenant}" (${rootExisting} already present, ${rootFailed} failed) so state-level UIs resolve them`,
+          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived, existing: rootExisting, failed: rootFailed },
+        });
+      }
+
+      // Totalled AFTER the root push so its failures reach both the reported
+      // counts and the run's success condition.
       const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
       const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
 
@@ -2419,14 +2679,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // city-scoped rows and misses root depts. Query BOTH and union
           // by code so ADMIN's assignments cover every PGR dept.
           const [cityDepts, rootDepts, cityDesigs, rootDesigs] = await Promise.all([
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 100 }).catch(() => []),
+            fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Department', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 100 }).catch(() => []),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Department').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
+            fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Designation', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Designation').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
           ]);
 
           // City must have its own MDMS row for every dept it wants to
@@ -2903,9 +3163,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [

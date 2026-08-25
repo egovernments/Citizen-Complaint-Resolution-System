@@ -19,6 +19,39 @@ templates:
       - {{ .Values | toYaml | nindent 8 }}
 
 releases:
+  # pgAdmin is a full read/write console onto the tenant database, and this
+  # chart publishes it on the deployment's own domain at /pgadmin with NO gate
+  # in front of it: the ingress annotations carrying an IP allow-list and an
+  # SSO redirect are commented out in pgadmin/values.yaml, and the SSO they
+  # point at (`/oauth2/auth`, served by the oauth2-proxy chart) is in NO
+  # helmfile and never deployed — so uncommenting them as-is would not protect
+  # it either. The only barrier is pgAdmin's own login, and that login used to
+  # ship in env-secrets.yaml as demo@demo.com / demo.
+  #
+  # Left ON deliberately: operators substitute secrets and configuration before
+  # deploying, so pgAdmin stays available by default. What #1642 changes is the
+  # credentials, not the install flag -- and that is where the actual exposure
+  # was. `installed: false` never gated it anyway: the `pgadmin` Secret is
+  # rendered by core-services/configmaps, which every deployment applies, so a
+  # default deploy created that Secret from the values shipped in git whether or
+  # not pgAdmin was installed.
+  #
+  # Two things are required of whoever deploys this:
+  #   1. fill in all four secrets.pgadmin fields in env-secrets.yaml. They ship
+  #      BLANK, and blank means the `pgadmin` Secret is never created -- so
+  #      leaving them unset gives a pod that cannot start (it reads
+  #      admin-email/admin-password by secretKeyRef) rather than one reachable
+  #      with a password published in this repo. Placeholders are refused at
+  #      render time, so a half-substituted file fails loudly instead of
+  #      deploying a known credential.
+  #   2. put something in front of it. This is a full read/write console onto
+  #      the tenant database, published on the deployment's own domain at
+  #      /pgadmin, and its own login is currently the only barrier: the ingress
+  #      annotations carrying an IP allow-list and an SSO redirect are commented
+  #      out in pgadmin/values.yaml, and the SSO they point at (`/oauth2/auth`,
+  #      served by the oauth2-proxy chart) is in NO helmfile and never deployed,
+  #      so uncommenting them as-is would not protect it either. Reach it
+  #      through a tunnel or bastion, or deploy oauth2-proxy first.
   - name: pgadmin
     installed: true
     <<: *default

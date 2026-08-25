@@ -1,0 +1,17 @@
+# This Dockerfile builds from the repository root to include ui-shared. Keep the
+# context limited to the files it can consume and exclude host build artefacts.
+**
+!digit-ui-v2/
+!digit-ui-v2/**
+!ui-shared/
+!ui-shared/**
+digit-ui-v2/node_modules
+digit-ui-v2/**/node_modules
+digit-ui-v2/dist
+digit-ui-v2/**/dist
+digit-ui-v2/.env
+digit-ui-v2/.env.*
+digit-ui-v2/playwright-report
+digit-ui-v2/test-results
+digit-ui-v2/coverage
+digit-ui-v2/*.log

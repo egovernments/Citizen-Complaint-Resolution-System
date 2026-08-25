@@ -812,7 +812,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",
@@ -960,7 +960,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",
@@ -1772,7 +1772,7 @@
       "query": {
         "grain": "facts",
         "window": {
-          "name": "last_7d",
+          "name": "last_30d",
           "timeRole": "filed_at"
         },
         "dimensions": [
@@ -1865,7 +1865,7 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
+          "default": "last_30d",
           "allowed": [
             "last_1d",
             "last_7d",
@@ -2927,15 +2927,15 @@
       "id": "cl_table_ward_performance",
       "viz": {
         "pii": false,
-        "kind": "rankedList",
+        "kind": "table",
         "group": "complaint-landscape",
         "title": "Ward performance",
         "accent": "teal",
         "format": "integer",
         "columns": [
           {
-            "id": "wardLabel",
-            "type": "text",
+            "id": "ward_code",
+            "type": "dimension",
             "align": "left",
             "label": "Ward",
             "width": "24%"
@@ -2955,21 +2955,21 @@
             "width": "14%"
           },
           {
-            "id": "reopenRate",
+            "id": "reopen_rate",
             "type": "percent",
             "align": "left",
             "label": "Reopen %",
             "width": "16%"
           },
           {
-            "id": "ontimeRate",
+            "id": "ontime_rate",
             "type": "percent",
             "align": "left",
             "label": "On-time %",
             "width": "16%"
           },
           {
-            "id": "avgCsat",
+            "id": "avg_csat",
             "type": "rating",
             "align": "left",
             "label": "CSAT",
@@ -2988,8 +2988,7 @@
           "ontime_rate",
           "avg_csat"
         ],
-        "dimensionKey": "ward_code",
-        "tableProfile": "wardPerformance"
+        "dimensionKey": "ward_code"
       },
       "rbac": {
         "visibleTo": [
@@ -3012,6 +3011,13 @@
             "name": "created"
           },
           {
+            "agg": "count",
+            "name": "open",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
             "agg": "ratio",
             "name": "reopen_rate",
             "numerator": {
@@ -3019,18 +3025,12 @@
               "filter": {
                 "is_reopened": true,
                 "is_resolved": true
-              },
-              "window": {
-                "timeRole": "resolved_at"
               }
             },
             "denominator": {
               "agg": "count",
               "filter": {
                 "is_resolved": true
-              },
-              "window": {
-                "timeRole": "resolved_at"
               }
             }
           },
@@ -3042,18 +3042,12 @@
               "filter": {
                 "is_resolved": true,
                 "sla_breached": false
-              },
-              "window": {
-                "timeRole": "resolved_at"
               }
             },
             "denominator": {
               "agg": "count",
               "filter": {
                 "is_resolved": true
-              },
-              "window": {
-                "timeRole": "resolved_at"
               }
             }
           },
@@ -3064,9 +3058,6 @@
             "filter": {
               "has_rating": true,
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         ],
@@ -3088,7 +3079,7 @@
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "supportsSeries": false
     }
   },
@@ -3159,15 +3150,15 @@
       "id": "cl_table_service_quality_by_channel",
       "viz": {
         "pii": false,
-        "kind": "rankedList",
+        "kind": "table",
         "group": "complaint-landscape",
         "title": "Service quality by channel",
         "accent": "teal",
         "format": "integer",
         "columns": [
           {
-            "id": "channelLabel",
-            "type": "text",
+            "id": "source",
+            "type": "dimension",
             "align": "left",
             "label": "Channel",
             "width": "28%"
@@ -3180,14 +3171,14 @@
             "width": "20%"
           },
           {
-            "id": "resolutionRate",
+            "id": "resolution_rate",
             "type": "percent",
             "align": "left",
             "label": "Resolution",
             "width": "26%"
           },
           {
-            "id": "avgCsat",
+            "id": "avg_csat",
             "type": "rating",
             "align": "left",
             "label": "CSAT",
@@ -3201,11 +3192,10 @@
         "valueKey": "volume",
         "measureKeys": [
           "volume",
-          "resolved",
+          "resolution_rate",
           "avg_csat"
         ],
-        "dimensionKey": "source",
-        "tableProfile": "serviceQualityByChannel"
+        "dimensionKey": "source"
       },
       "rbac": {
         "visibleTo": [
@@ -3228,14 +3218,17 @@
             "name": "volume"
           },
           {
-            "agg": "count",
-            "name": "resolved",
-            "filter": {
-              "is_open": false,
-              "is_resolved": true
+            "agg": "ratio",
+            "name": "resolution_rate",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_open": false,
+                "is_resolved": true
+              }
             },
-            "window": {
-              "timeRole": "resolved_at"
+            "denominator": {
+              "agg": "count"
             }
           },
           {
@@ -3245,9 +3238,6 @@
             "filter": {
               "has_rating": true,
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         ],
@@ -3269,7 +3259,7 @@
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "supportsSeries": false
     }
   },
@@ -3404,22 +3394,22 @@
       "id": "cl_table_recurring_ward_subtype",
       "viz": {
         "pii": false,
-        "kind": "rankedList",
+        "kind": "table",
         "group": "complaint-landscape",
         "title": "Recurring complaints by ward & sub-type",
         "accent": "teal",
         "format": "integer",
         "columns": [
           {
-            "id": "wardLabel",
-            "type": "text",
+            "id": "ward_code",
+            "type": "dimension",
             "align": "left",
             "label": "Ward",
             "width": "28%"
           },
           {
-            "id": "subtypeLabel",
-            "type": "text",
+            "id": "service_code",
+            "type": "dimension",
             "align": "left",
             "label": "Sub-type",
             "width": "32%"
@@ -3432,7 +3422,7 @@
             "width": "18%"
           },
           {
-            "id": "trendPct",
+            "id": "trend_pct",
             "type": "trend",
             "align": "left",
             "label": "Trend",
@@ -3440,17 +3430,28 @@
           }
         ],
         "compose": null,
-        "minCount": 3,
+        "comparison": {
+          "period": "prior",
+          "mode": "percentChange",
+          "joinBy": [
+            "ward_code",
+            "service_code"
+          ],
+          "valueKey": "total",
+          "outputKey": "trend_pct"
+        },
+        "rowFilter": {
+          "column": "total",
+          "gte": 3
+        },
         "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
         "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
         "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
         "valueKey": "total",
-        "needsPrior": true,
         "measureKeys": [
           "total"
         ],
-        "dimensionKey": "ward_code",
-        "tableProfile": "wardSubtypeRecurring"
+        "dimensionKey": "ward_code"
       },
       "rbac": {
         "visibleTo": [
@@ -3508,7 +3509,7 @@
         }
       ],
       "status": "published",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "supportsSeries": false
     }
   }

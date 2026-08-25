@@ -75,5 +75,6 @@ public class AnalyticsControllerPacksTest {
         assertEquals(200, resp.getStatusCodeValue());
         assertEquals(1234L, resp.getBody().get("recordCount"));
         assertEquals("supervisor-pack", resp.getBody().get("packId"));
+        assertEquals(AnalyticsService.MAX_BATCH_QUERIES, resp.getBody().get("maxBatchQueries"));
     }
 }

@@ -13,6 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
 import { getPrincipal } from '../utils/employee-ui';
+import { resolvePersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
@@ -143,13 +144,70 @@ First link in a serial chain — every later step skips if this fails.`,
     // may live at the CITY tenant (e.g. EMP001 on mz.maputo), not the root
     // where ADMIN lives — so authenticate via getPrincipal, which probes
     // CITY→ROOT and returns null only when neither tenant accepts them.
-    const gro = await getPrincipal(GRO_USER, GRO_PASS);
-    expect(gro, `GRO user ${GRO_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    // The ACTOR only needs the GRO role — the department check does NOT apply
+    // to it. ServiceRequestValidator.validateDepartment resolves departments
+    // for request.getWorkflow().getAssignes(), i.e. the ASSIGNEE, so a bare-GRO
+    // actor does not by itself produce 400 DEPARTMENT_NOT_FOUND. (An earlier
+    // probe read it the other way round because actor and assignee were both
+    // ADMIN; the actor=PGGRO1/assignee=ADMIN probe recorded below disambiguates
+    // it.) The assignee guard is the `departmented(lme)` assertion further down.
+    //
+    // Still prefer the 'gro-with-department' persona: it is what the pg
+    // expectations require, and on a seeded tenant it is the same employee that
+    // must also be assignable. But do NOT hard-require it — a deployment with a
+    // departmented LME and a bare-GRO ADMIN legitimately passes ASSIGN, so
+    // falling back to GRO_USER keeps that case green rather than inventing a
+    // failure the service would not raise.
+    const groPersona = await resolvePersona('gro-with-department').catch(() => null);
+    const gro = groPersona ?? (await getPrincipal(GRO_USER, GRO_PASS));
+    expect(
+      gro,
+      `a GRO must log in (tried persona 'gro-with-department', then ${GRO_USER} on CITY + ROOT)`,
+    ).toBeTruthy();
     groToken = gro!.token;
     groUserInfo = gro!.userInfo;
 
-    const lme = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
-    expect(lme, `LME user ${EMPLOYEE_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    // The ASSIGNEE must carry an HRMS department too — pgr-services rejects the
+    // ASSIGN with 400 DEPARTMENT_NOT_FOUND naming the ASSIGNEE's uuid, not the
+    // actor's. Probed both directions to be sure:
+    //   actor=PGGRO1 (DEPT_3), assignee=PGGRO1 -> 200
+    //   actor=PGGRO1 (DEPT_3), assignee=ADMIN  -> 400 DEPARTMENT_NOT_FOUND [ADMIN uuid]
+    // EMPLOYEE_USER defaults to ADMIN, which holds PGR_LME but no department, so
+    // the bare 'lme' persona is not sufficient to be assigned work.
+    const lmePersona = await resolvePersona('lme').catch(() => null);
+    const departmented = (p: { departments?: string[] } | null) => (p?.departments?.length ?? 0) > 0;
+    // Fall back to the departmented GRO only when it can actually do the LME's
+    // job (it must still hold PGR_LME to RESOLVE later in this chain).
+    const lmeFallback = departmented(groPersona) && (groPersona?.roles ?? []).includes('PGR_LME')
+      ? groPersona
+      : null;
+    const lme = departmented(lmePersona)
+      ? lmePersona
+      : (lmeFallback ?? (await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS)));
+    expect(
+      lme,
+      `an LME must log in (tried persona 'lme', a departmented GRO, then ${EMPLOYEE_USER})`,
+    ).toBeTruthy();
+    expect(
+      departmented(lme as { departments?: string[] }),
+      `the assignee must carry an HRMS department — pgr-services returns 400 ` +
+        `DEPARTMENT_NOT_FOUND otherwise. Resolved '${(lme as { username?: string })?.username ?? EMPLOYEE_USER}' ` +
+        `with departments=[${((lme as { departments?: string[] })?.departments ?? []).join(',') || 'none'}]. ` +
+        `Point EMPLOYEE_USER at a departmented PGR_LME employee, or seed one.`,
+    ).toBe(true);
+    // ...and it must be able to do the LME's job. This same principal RESOLVEs
+    // further down the chain, which pgr-services only permits for PGR_LME. The
+    // 'lme' persona and the GRO fallback are both role-checked on the way in,
+    // but the last-resort EMPLOYEE_USER login is not — without this, a
+    // departmented non-LME reaches RESOLVE and fails there with an
+    // authorisation error that reads like a workflow bug rather than a
+    // misconfigured EMPLOYEE_USER.
+    expect(
+      (lme as { roles?: string[] })?.roles ?? [],
+      `the assignee must also hold PGR_LME — it RESOLVEs later in this chain. ` +
+        `Resolved '${(lme as { username?: string })?.username ?? EMPLOYEE_USER}' ` +
+        `with roles=[${((lme as { roles?: string[] })?.roles ?? []).join(',') || 'none'}].`,
+    ).toContain('PGR_LME');
     lmeToken = lme!.token;
     lmeUserInfo = lme!.userInfo;
 

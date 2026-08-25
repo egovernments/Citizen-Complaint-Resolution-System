@@ -48,6 +48,7 @@ export const ENDPOINTS = {
   MDMS_UPDATE: '/mdms-v2/v2/_update',
   MDMS_SCHEMA_SEARCH: '/mdms-v2/schema/v1/_search',
   MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
+  ANALYTICS_CONFIG_REFRESH: '/pgr-services/v2/analytics/config/_refresh',
 
   // User (for tenant bootstrap)
   USER_CREATE: '/user/users/_createnovalidate',
@@ -101,6 +102,7 @@ export const MDMS_SCHEMAS = {
   COMPLAINT_HIERARCHY: 'RAINMAKER-PGR.ComplaintHierarchy',
   TENANT: 'tenant.tenants',
   MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
+  DASHBOARD_CONFIG: 'dss.DashboardConfig',
 };
 
 // OAuth credentials

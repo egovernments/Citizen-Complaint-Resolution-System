@@ -113,14 +113,16 @@ test("load marks are one-shot and post-paint; error/'No data' path still marks f
   flushRaf();
   assert.deepEqual(histValues(m, "dashboard.first_widget_visible.ms"), [400]);
 
-  m.markAllWidgetsReady(2, 1);
+  m.markAllWidgetsReady(2, 1, 2);
   setNow(500);
   flushRaf();
   m.markAllWidgetsReady(9, 1); // repeat: no-op for the load mark
   flushRaf();
   assert.deepEqual(histValues(m, "dashboard.all_widgets_ready.ms"), [500]);
   assert.equal(m._inspect().pending.sums["dashboard.error_widgets.count"], 2);
+  assert.equal(m._inspect().pending.sums["dashboard.analytics_round_trips.count"], 2);
   assert.equal(m._inspect().load.errorWidgets, 2);
+  assert.equal(m._inspect().load.analyticsRoundTrips, 2);
 });
 
 test("mark-before-begin buffers and reconciles at beginLoad", () => {

@@ -4,6 +4,7 @@ import {
   UNIFORM_CHART_SIZE_CONSTRAINTS,
   MAP_SIZE_CONSTRAINTS,
   FULL_WIDTH_TABLE_GRID,
+  DEFAULT_CHART_GRID,
   findFirstOpenPosition,
 } from "../constants/layoutConfig";
 import { compactVertically, compactAroundPinned } from "./gridGeometry";
@@ -26,12 +27,25 @@ export const LEGACY_STORAGE_KEY = "ccrs.dashboard.catalog-layout.v1";
  * shared counter machines) silently overwrote each other's arrangement: the
  * second login reconciled the first user's saved layout against its own
  * catalog and the next persist rewrote the shared slot with the reduced set —
- * KPIs added by the first user were gone when they came back (#1276). Falls
- * back to the legacy key when identity is unavailable.
+ * KPIs added by the first user were gone when they came back (#1276). Without
+ * a complete identity there is no safe persistence scope, so callers get no
+ * key instead of falling back to the shared legacy slot.
  */
 export function storageKeyFor(tenantId, userId) {
-  if (!tenantId || !userId) return LEGACY_STORAGE_KEY;
+  if (!tenantId || !userId) return null;
   return `${LEGACY_STORAGE_KEY}.${tenantId}.${userId}`;
+}
+
+/**
+ * The anonymous public page has no user identity, yet its visitor still
+ * expects a rearranged page to survive a reload (#1797). Its slot is a fixed
+ * per-tenant key in its own `.public` namespace — disjoint by construction
+ * from every employee slot (those end in a user uuid), so a public visit on a
+ * shared machine can never read or clobber an employee's saved layout.
+ */
+export function publicStorageKeyFor(tenantId) {
+  if (!tenantId) return null;
+  return `${LEGACY_STORAGE_KEY}.${tenantId}.public`;
 }
 
 const CARD_KINDS = new Set([
@@ -72,13 +86,13 @@ export function sizeConstraintsForKpi(kpiId, kpis) {
 
 /** Default size for a freshly-added tile, by kind. */
 export function defaultSizeForKpi(kpiId, kpis) {
-  const c = sizeConstraintsForKpi(kpiId, kpis);
   const kind = kpis?.[kpiId]?.viz?.kind;
   if (CARD_KINDS.has(kind)) return { w: 2, h: 2 };
   if (kind === "map" || kind === "choropleth-map") return { w: 8, h: 6 };
   if (kind === "sla-risk-table" || kind === "table" || kind === "data-table")
-    return { w: 12, h: 5 };
-  return { w: Math.max(c.minW, 6), h: Math.max(c.minH, 6) };
+    return { w: FULL_WIDTH_TABLE_GRID.w, h: FULL_WIDTH_TABLE_GRID.h };
+  if (kind === "rankedList" || kind === "dow") return { w: 6, h: 6 };
+  return { ...DEFAULT_CHART_GRID };
 }
 
 function clampNum(v, min, max, fallback) {
@@ -186,12 +200,12 @@ export function mergeEmittedLayout(prev, next) {
  * cleared every tile) is returned as `[]` so the seed does not re-add the
  * removed tiles on reload.
  *
- * `legacyKey` (optional) is consulted when `key` holds nothing — a one-time,
- * read-only migration path so layouts saved under the global v1 key survive
- * the move to per-user keys. Persisting always writes the scoped key, so the
- * legacy slot is never mutated and stops mattering after the first save.
+ * The former shared v1 slot is deliberately not consulted: assigning that
+ * layout to whichever identity happens to log in first would leak one user's
+ * preferences into another user's dashboard.
  */
-export function readSavedLayout(storage, key, legacyKey) {
+export function readSavedLayout(storage, key) {
+  if (!key) return null;
   const readKey = (k) => {
     try {
       const raw = storage?.getItem(k);
@@ -202,12 +216,11 @@ export function readSavedLayout(storage, key, legacyKey) {
       return null;
     }
   };
-  const saved = readKey(key);
-  if (saved !== null) return saved;
-  return legacyKey && legacyKey !== key ? readKey(legacyKey) : null;
+  return readKey(key);
 }
 
 export function persistLayout(storage, key, layout) {
+  if (!key) return;
   try {
     storage?.setItem(key, JSON.stringify(layout));
   } catch {

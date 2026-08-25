@@ -27,6 +27,12 @@ class DigitApiClient {
   private stateTenantOverride: string | null = null;
   private authToken: string | null = null;
   private userInfo: UserInfo | null = null;
+  // The password the current session logged in with (in-memory only, never
+  // logged or serialized to disk). Provisioning flows (tenant_bootstrap's
+  // admin user) need it so the admin they create on a new tenant carries the
+  // operator's actual credentials — falling back to CRS_PASSWORD provisions a
+  // user the operator cannot log in as when they moved off the default.
+  private loginPassword: string | null = null;
 
   constructor() {
     this.environment = getEnvironment();
@@ -44,6 +50,7 @@ class DigitApiClient {
     this.stateTenantOverride = null;
     this.authToken = null;
     this.userInfo = null;
+    this.loginPassword = null;
   }
 
   setStateTenant(tenantId: string): void {
@@ -68,10 +75,17 @@ class DigitApiClient {
     this.stateTenantOverride = null;
     this.authToken = null;
     this.userInfo = null;
+    this.loginPassword = null;
   }
 
   isAuthenticated(): boolean {
     return this.authToken !== null;
+  }
+
+  /** Password of the current session's login, when known (null for
+   *  token-only auth). In-memory only — callers must never log it. */
+  getLoginPassword(): string | null {
+    return this.loginPassword;
   }
 
   getAuthInfo(): { authenticated: boolean; user: UserInfo | null; stateTenantId: string; token: string | null } {
@@ -89,18 +103,20 @@ class DigitApiClient {
    * Combined with a single-flight mutex this is safe even though the
    * underlying client is a process-level singleton.
    */
-  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null } {
+  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null } {
     return {
       token: this.authToken,
       user: this.userInfo,
       stateTenantOverride: this.stateTenantOverride,
+      loginPassword: this.loginPassword,
     };
   }
 
-  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null }): void {
+  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null }): void {
     this.authToken = snap.token;
     this.userInfo = snap.user;
     this.stateTenantOverride = snap.stateTenantOverride;
+    this.loginPassword = snap.loginPassword ?? null;
   }
 
   /**
@@ -112,6 +128,8 @@ class DigitApiClient {
     this.authToken = token;
     this.userInfo = user;
     this.stateTenantOverride = stateTenantOverride;
+    // Token came from upstream — the password is unknown here.
+    this.loginPassword = null;
   }
 
   // Resolve endpoint path, applying environment overrides if present
@@ -164,6 +182,7 @@ class DigitApiClient {
     const data = await response.json() as { access_token: string; UserRequest: UserInfo };
     this.authToken = data.access_token;
     this.userInfo = data.UserRequest;
+    this.loginPassword = password;
 
     // Auto-detect state tenant from login tenant ID
     // e.g. "statea.f" → "statea", "pg.citya" → "pg", "pg" → "pg"
@@ -342,6 +361,17 @@ class DigitApiClient {
     });
 
     return data.mdms || [];
+  }
+
+  // MDMS v2 Count — used to cross-check that pagination in mdmsV2SearchRaw
+  // callers collected every row for a schema, independent of page-ordering.
+  async mdmsV2Count(tenantId: string, schemaCode: string): Promise<number> {
+    const data = await this.request<{ totalCount?: number }>(this.endpoint('MDMS_COUNT'), {
+      RequestInfo: this.buildRequestInfo(),
+      MdmsCriteria: { tenantId, schemaCode },
+    });
+
+    return data.totalCount ?? 0;
   }
 
   // MDMS v2 Create

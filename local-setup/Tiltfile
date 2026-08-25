@@ -231,11 +231,6 @@ dc_resource('pgr-workflow-seed', labels=['pgr'],
     auto_init=False,
 )
 
-dc_resource('jupyter', labels=['pgr'], auto_init=True,
-    links=[
-        link('http://localhost:18888/lab', 'Jupyter Lab'),
-    ])
-
 dc_resource('digit-ui', labels=['frontend'],
     resource_deps=['kong'],  # Wait for Kong gateway to be ready
     links=[
@@ -336,15 +331,6 @@ cmd_button(
     text='Test idgen',
 )
 
-# Start Jupyter Lab button
-cmd_button(
-    name='jupyter-start',
-    argv=['sh', '-c', 'docker compose --profile tools up -d jupyter && echo "Jupyter Lab: http://localhost:18888"'],
-    location=location.NAV,
-    icon_name='science',
-    text='Start Jupyter',
-)
-
 # Start Gatus Health Dashboard button
 cmd_button(
     name='gatus-start',
@@ -364,7 +350,7 @@ cmd_button(
 #   - Proxy:         18000 (external access point)
 #   - Admin API:     18001
 #   - Manager GUI:   18002
-#   - Status:        18100
+#   - Status:        18100 (loopback only — serves unauthenticated /metrics)
 #
 # Core Services:
 #   - MDMS:          18094

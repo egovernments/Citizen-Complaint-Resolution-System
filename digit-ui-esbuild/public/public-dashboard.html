@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/browser-icon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
+    rel="stylesheet" type="text/css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"
+    type="text/css" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#00bcd1" />
+  <title>Public Dashboard</title>
+
+  <!-- The standalone entry does not load DigitUI's global reset stylesheet. -->
+  <style>
+    html,
+    body,
+    #root {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+  </style>
+
+  <!--
+    Deliberately minimal compared with index.html. The public page mounts the
+    dashboard subtree directly, with no DigitUI chrome, so it needs none of the
+    employee app's vendor CSS, keycloak adapter, xlsx CDN or header/profile DOM
+    shims. The dashboard imports its own stylesheet, which esbuild emits as this
+    entry's CSS bundle and generateHTML() links below.
+
+    globalConfigs.js IS required: STATE_LEVEL_TENANT_ID feeds getTenantId() for
+    both the analytics calls and the standalone localization fetch.
+  -->
+  <script>if(typeof process==="undefined"){window.process={env:{NODE_ENV:"production",REACT_APP_STATE_LEVEL_TENANT_ID:""}}}</script>
+  <script src="/digit-ui/globalConfigs.js"></script>
+</head>
+
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+
+</html>

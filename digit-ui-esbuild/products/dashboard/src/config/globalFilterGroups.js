@@ -4,23 +4,12 @@ import {
   normalizeComplaintTypeValue,
   repairSelection,
 } from "../utils/complaintTypeTree";
-
-function todayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function oneMonthAgoISO() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import {
+  DEFAULT_TIME_ZONE,
+  isValidTimeZone,
+  oneMonthEarlierYMD,
+  zonedYMD,
+} from "../utils/dashboardTimeZone";
 
 // Labels resolve lazily (getters call translate() at property-access time) so
 // they react to language switches while keeping the flat {id,label} contract
@@ -47,6 +36,13 @@ export const COMPLAINT_TYPE_OPTIONS = [
 /**
  * Global dashboard filters — shared dimensions across KPIs and charts.
  * timeWindow is retained for volume KPI sub-metric resolution until date-range API wiring.
+ *
+ * The date fields carry NO computed defaultValue: a module-load `new Date()` would freeze
+ * on whatever instant/browser-local zone the bundle first evaluated in, then silently
+ * disagree with the resolved dashboard timeZone for the rest of the session. buildDefaultFilters(timeZone)
+ * is the ONLY source of date defaults, computed fresh (zone-correct) every time it's called;
+ * these placeholders exist solely so `.find(f => f.id === "dateFrom")`-style field lookups
+ * (options, labels, type) stay valid without implying a usable date default.
  */
 export const GLOBAL_FILTER_FIELDS = [
   {
@@ -55,7 +51,7 @@ export const GLOBAL_FILTER_FIELDS = [
     get label() {
       return translate("DASHBOARD_FILTERS_FROM", "From");
     },
-    defaultValue: oneMonthAgoISO(),
+    defaultValue: null,
   },
   {
     id: "dateTo",
@@ -63,7 +59,7 @@ export const GLOBAL_FILTER_FIELDS = [
     get label() {
       return translate("DASHBOARD_FILTERS_TO", "To");
     },
-    defaultValue: todayISO(),
+    defaultValue: null,
   },
   {
     id: "geography",
@@ -88,9 +84,16 @@ export const GLOBAL_FILTER_FIELDS = [
 /** @deprecated use GLOBAL_FILTER_FIELDS */
 export const GLOBAL_FILTER_GROUPS = GLOBAL_FILTER_FIELDS.filter((f) => f.type === "select");
 
-export function buildDefaultFilters() {
-  const today = todayISO();
-  const monthAgo = oneMonthAgoISO();
+/**
+ * `timeZone` should be an already-resolved zone (resolveConfiguredTimeZone
+ * output); an invalid/missing value here falls back to DEFAULT_TIME_ZONE too,
+ * so every caller — threaded or not — degrades the same way the backend does.
+ */
+export function buildDefaultFilters(timeZone) {
+  const zone = isValidTimeZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE;
+  const now = new Date();
+  const today = zonedYMD(now, zone);
+  const monthAgo = oneMonthEarlierYMD(now, zone);
   const defaults = Object.fromEntries(
     GLOBAL_FILTER_FIELDS.map((field) => {
       if (field.id === "dateFrom") return [field.id, monthAgo];
@@ -110,9 +113,9 @@ export function buildDefaultFilters() {
   return defaults;
 }
 
-export function hasActiveFilters(filters) {
+export function hasActiveFilters(filters, timeZone) {
   if (!filters) return false;
-  const defaults = buildDefaultFilters();
+  const defaults = buildDefaultFilters(timeZone);
   const geography = filters.geography ?? defaults.geography;
   const complaintType = filters.complaintType ?? defaults.complaintType;
   const dateFrom = filters.dateFrom ?? defaults.dateFrom;
@@ -132,8 +135,8 @@ function isValidISODate(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export function sanitizeFilters(raw, dynamicOptions = {}) {
-  const defaults = buildDefaultFilters();
+export function sanitizeFilters(raw, dynamicOptions = {}, timeZone) {
+  const defaults = buildDefaultFilters(timeZone);
   if (!raw || typeof raw !== "object") {
     return defaults;
   }

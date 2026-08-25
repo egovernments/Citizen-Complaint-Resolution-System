@@ -1,0 +1,17 @@
+# This Dockerfile builds from the repository root to include ui-shared. Keep the
+# context limited to the files it can consume and exclude host build artefacts.
+**
+!configurator/
+!configurator/**
+!ui-shared/
+!ui-shared/**
+configurator/node_modules
+configurator/**/node_modules
+configurator/dist
+configurator/**/dist
+configurator/.env
+configurator/.env.*
+configurator/playwright-report
+configurator/test-results
+configurator/coverage
+configurator/*.log

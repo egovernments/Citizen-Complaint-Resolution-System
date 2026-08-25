@@ -43,7 +43,7 @@ docker compose -f docker-compose.yml -f docker-compose.core.yml up -d
 docker compose ps
 ```
 
-This starts all infrastructure and core services, but skips PGR, digit-ui, and Jupyter (they have `profiles: [local-dev]` in the override).
+This starts all infrastructure and core services, but skips PGR and digit-ui (they have `profiles: [local-dev]` in the override).
 
 ### 2. Configure your local environment
 

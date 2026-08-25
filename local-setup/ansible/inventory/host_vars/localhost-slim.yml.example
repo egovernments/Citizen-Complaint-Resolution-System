@@ -1,132 +1,409 @@
-# localhost-full minus Novu — self-targeting deploy for a 16 GB host
-# (e.g. Windows/WSL2 with ~12 GB for the VM). Validated end-to-end on
-# WSL2 Ubuntu 24.04, 2026-07-29.
+# ═══════════════════════════════════════════════════════════════════════════
+# localhost — SLIM profile
 #
-# The ONLY functional delta from localhost-full.yml.example is the Novu
-# notifications stack (novu-mongo/api/worker/ws/dashboard/bridge +
-# otp-publisher, ~1.5-2 GB resident): that is the one piece that risks
-# freezing a 12 GB VM. Everything else matches: core services, PGR,
-# employee UI (same esbuild branch), citizen SPA (/citizen/),
-# configurator (/configurator/), MCP (wizard tenant bootstrap works),
-# Kong, Gatus, Jupyter, seeded pg / pg.citya tenants.
+# A self-targeting Ansible deploy: the controller and the target are the same
+# machine, so `./deploy.sh` converges the box you are sitting at. No SSH, no
+# TLS, no DNS. Boots on the dump-seeded `pg` / `pg.citya` tenants, so there is
+# a working city, boundary hierarchy, complaint types and an ADMIN login the
+# moment the stack is up.
+#
+# SLIM is localhost-full minus the notification stack, sized for a 16 GB host
+# (for example Windows/WSL2 with ~12 GB allocated to the VM). Validated
+# end-to-end on WSL2 Ubuntu 24.04, 2026-07-29.
+#
+# THE ONLY FUNCTIONAL DELTA IS NOVU. The notifications profile
+# (novu-mongo/api/worker/ws/dashboard/bridge + otp-publisher, ~1.5-2 GB
+# resident) is the one piece that risks freezing a 12 GB VM. Everything else is
+# identical to full: core services, PGR, the employee UI, the citizen SPA at
+# /citizen/, the configurator at /configurator/, MCP (so the wizard's tenant
+# bootstrap works), Kong, Gatus and the seeded pg / pg.citya tenants.
+#
+# What you give up: no SMS / email / WhatsApp is sent. Everything else in the
+# complaint lifecycle — file, assign, resolve, rate, close — works unchanged.
+# See docs/LOCALHOST-FULL-AND-SLIM.md for the comparison.
 #
 # Usage:
 #   cp inventory/host_vars/localhost-slim.yml.example \
 #      inventory/host_vars/mybox.yml
 #   ./deploy.sh mybox
 # Login: http://localhost/digit-ui/  ADMIN / eGov@123
+#
+# Every key below has a default in inventory/group_vars/digit.yml unless marked
+# REQUIRED. inventory/host_vars/_example.yml is the exhaustive template — this
+# file is a working preset, and the comments say why each value is what it is.
+# ═══════════════════════════════════════════════════════════════════════════
 
+# ────────── Connection ──────────
+
+# REQUIRED. Where Ansible connects. `localhost` + `local` is what makes this a
+# self-targeting deploy: no SSH transport, commands run directly on this box.
+# Values: any IP/hostname; `ansible_connection` is `local` here, `ssh` (the
+# default) for a remote target.
 ansible_host: localhost
 ansible_connection: local
 
-# WORKAROUND, remove once the registry cert is renewed: the Let's Encrypt
-# wildcard for *.preview.egov.theflywheel.in expired 2026-07-25 and image
-# pulls fail with "x509: certificate has expired". Fresh box, so no
-# existing entries to preserve (on shared boxes, ALWAYS carry the box's
-# existing entries forward — this list REPLACES, it does not merge).
+# Hosts written into Docker's daemon.json `insecure-registries` (registries
+# reachable over plain HTTP or with an untrusted cert).
+#
+# This list REPLACES the group_vars default (`10.0.0.4:5000`, the Hetzner VPC
+# registry) — it does not merge. On a shared box, always carry that box's
+# existing entries forward.
+#
+# The entry below is a historical workaround for an expired Let's Encrypt
+# wildcard on *.preview.egov.theflywheel.in. A localhost deploy no longer needs
+# it: every image in docker-compose.egov-digit.yaml now comes from Docker Hub
+# (`egovio/*`) or ghcr.io over valid TLS, so the entry is inert. Keep it only if
+# you pin an image to that registry yourself.
+#
+# Values: list of `host` or `host:port`. Never a URL and never a path — Docker
+# refuses to start on those, which takes the whole stack down with it.
 insecure_registries: ["registry.preview.egov.theflywheel.in"]
 
+# ────────── Networking / TLS ──────────
+
+# REQUIRED. Public hostname. Used for nginx `server_name`, the Grafana root
+# URL, Let's Encrypt, and citizen-facing URLs the UI generates.
+# Values: any hostname. `localhost` for a local box; a real FQDN in production.
 domain: localhost
+
+# Whether nginx listens on 443 with an HTTP→HTTPS redirect and expects certs at
+# /etc/letsencrypt/live/<domain>/.
+# Values: true (default) | false. Must be false here — there is no certificate
+# for `localhost`, and true would leave you with a vhost that cannot serve.
 tls_enabled: false
 
+# ────────── DIGIT tenancy ──────────
+#
+# Four slugs, three different jobs. Getting these wrong is the most common way
+# to end up with a stack that boots but cannot log in.
+#
+# The values below match what db/full-dump.sql seeds, so leave them alone unless
+# you are deploying a different tenant.
+
+# REQUIRED. Top-level state/country tenant. Becomes STATE_LEVEL_TENANT_ID on the
+# DIGIT services: the encryption tenant for auth lookups, the MDMS state root,
+# and the boundary hierarchy root. Values: a root slug — `pg`, `ke`, `mz`.
+# Getting this wrong breaks login on any tenant with encrypted usernames,
+# because the lookup encrypts under the wrong tenant's key.
 state_root: pg
+
+# REQUIRED. Root tenant the citizen SPA binds to. Values: usually the same as
+# state_root, or a city tenant when the SPA is pinned to one city.
 state_tenant_id: pg
+
+# City tenant the citizen side resolves to on first load.
+# Values: any existing city tenant, `<state>.<city>`.
 boot_tenant: pg.citya
+
+# Single city/operating tenant for templates that need exactly one value.
 tenant_id: pg
+
+# Tenant the admin/citizen SPA lands on, rendered into globalConfigs as
+# STATE_LEVEL_TENANT_ID. The configurator's login screen derives its tenant-code
+# placeholder from this. Values: your city tenant, to keep the UI free of
+# hardcoded codes. Defaults to `pg` when unset.
 ui_state_tenant_id: pg.citya
 
+# Where the UI's map opens when there is no GPS fix and no complaint location.
+# Values: any lat/lng — put it inside your service area. This is Chandigarh.
 map_center:
   lat: 30.7333
   lng: 76.7794
 
+# Restrict which tenants may log in. Values: list of tenant ids, or `[]` (here)
+# to allow all. Most production deployments list exactly one city.
 login_tenant_allowlist: []
+
+# Employee-UI modules to hide. Values: list of module codes — commonly `["IM"]`
+# to hide inbox-v2 when enable_search_stack is false. Empty: hide nothing.
 employee_module_denylist: []
 
+# ────────── Country-specific UI configuration ──────────
+# group_vars defaults these to empty; every tenant must set them. These are
+# India values, matching the seeded `pg` (Punjab) tenant.
+
+# The boundary levels the complaint-location selector renders, highest first.
+# Values: whatever your hierarchy actually defines.
+#   India: State → District → Locality      Kenya: County → Sub-County → Ward
 pgr_boundary_highest_level: "State"
 pgr_boundary_lowest_level: "Locality"
+
+# What the smallest selectable boundary is called. Values: must be a real
+# boundary type in the hierarchy — `Locality`, `Ward`, …
 boundary_type: "Locality"
+
+# Boundary hierarchy name, rendered as HIERARCHY_TYPE. MUST match the hierarchy
+# actually created for this tenant. Values: `ADMIN` (what the dump seeds, and
+# the default), or `<CITY>_ADMIN` when the MCP wizard created the tenant. A
+# mismatch makes the complaint form's boundary picker 400 with
+# HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR.
 hierarchy_type: "ADMIN"
 
+# Citizen signup mobile-number validation. Length and allowed leading digits are
+# derived from the regex — there are no separate fields to keep in sync.
+# Values: India `+91` / `^[6-9][0-9]{9}$`; Kenya `+254` / `^0?[17][0-9]{8}$`.
 core_mobile_configs:
   countryCode: "+91"
   mobileNumberRegex: "^[6-9][0-9]{9}$"
 
+# Postal-code validation, read by the SPA as CORE_POSTAL_CONFIGS.
+# `postalCodePattern` is the only knob that matters — the error message and the
+# expected digit count are both derived from it.
+# Values: India `^[0-9]{6}$`, Kenya `^[0-9]{5}$`, Mozambique `^[0-9]{4}$`,
+# US `^[0-9]{5}(-[0-9]{4})?$`, UK an alphanumeric pattern.
+#
+# `postalCodeLength` and `postalCodeErrorMessage` below are legacy fields kept
+# for older UI builds; the pattern outranks them. MDMS outranks both: a
+# `fieldType: "postalCode"` row in `common-masters.FormValidations` wins over
+# anything here, so on a tenant that has that row, edit it instead.
 core_postal_configs:
   postalCodePattern: "^[0-9]{6}$"
   postalCodeLength: 6
   postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
+# ────────── Branding ──────────
+
+# Bucket name egov-filestore reports as its asset bucket.
 asset_s3_bucket: "pg-egov-assets"
+
+# Footer logos, colour and black-and-white. Values: absolute URLs, or empty for
+# none. Mirror them under /var/www/brand/ with nginx_features.brand_assets.
 footer_logo_url: ""
 footer_bw_logo_url: ""
 
-digit_ui_mode: container
-enable_digit_ui_v2: true
-digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
-digit_ui_v2_branch: "fix/citizen-ui-v2-mobile-config"
+# ────────── Frontend ──────────
 
+# How the legacy employee SPA is served.
+# Values: `container` — serve the prebuilt digit-ui image (what this profile
+#           does; nothing is built on the box);
+#         `static`    — host nginx serves a bundle built on the box at deploy time;
+#         `hmr`       — esbuild dev server in tmux, live-reload on save.
+digit_ui_mode: container
+
+# Build and serve the Vite/React-19 citizen SPA at /citizen/, separate from the
+# legacy /digit-ui/ bundle. Pair with nginx_features.digit_ui_v2 — building it
+# without the nginx flag leaves the bundle on disk and unreachable.
+# Values: true | false.
+enable_digit_ui_v2: true
+
+# Unset by default, so deploy builds the reviewed vendored `digit-ui-v2/` and
+# sibling `ui-shared/` sources from this checkout. To test an external source,
+# uncomment both values and point them at the required repo/branch; cloning is
+# performed on the target so native Vite binaries match its architecture.
+# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+# digit_ui_v2_branch: "develop"
+
+# Branch of the digit-ui-esbuild repo used when digit_ui_mode builds on the box.
+# Inert while digit_ui_mode is `container` and build_digit_ui is false.
+digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
+
+# ────────── Integration-test dashboards ──────────
+# Serve the Playwright result dashboards at /tests/ and /tests-v2/. The deploy
+# only SERVES them — the results are produced out-of-band by a test runner.
+# Values: true | false. Off here: nothing publishes results to this box.
 enable_integration_tests: false
 integration_tests_dashboard_base: "/tests-v2/"
 integration_tests_basic_auth_user: "digit-tests"
+
+# The dashboard RUN button — an on-box daemon that triggers a Playwright run.
+# CPU/RAM heavy and shares the box with the live stack. Values: true | false.
 enable_integration_tests_runner: false
 
+# ────────── Optional services ──────────
+
+# Real OTP delivery: egov-otp + user-otp + egov-notification-sms.
+# Values: true | false. False (here) means Kong mocks /user-otp/* with a canned
+# 200, so citizen login works with the fixed OTP 123456 and no SMS infra.
+# Turning it on for production also needs the mock removed from kong.yml and a
+# real SMS_PROVIDER_CLASS wired up — it defaults to Console, which only logs.
 enable_otp_services: false
+
+# Elasticsearch + egov-indexer + inbox-v2. Values: true | false.
+# Off saves ~2-3 GB. The trade: the inbox and search screens stop working —
+# pair `false` with employee_module_denylist: ["IM"] to hide the broken tab.
 enable_search_stack: false
+
+# digit-mcp + mcp-postgres. The MCP server exposes the REST shim the
+# configurator uses for tenant onboarding. Values: true | false. On here so the
+# wizard's tenant bootstrap works. Serving the shim at /v1/* also needs
+# nginx_features.mcp.
 enable_mcp: true
+
+# Build digit-mcp from the vendored in-tree source instead of pulling the
+# published image. Values: true | false.
 build_mcp: true
+
+# Build the employee SPA bundle on this box. Values: true | false.
+# False here because digit_ui_mode is `container` — the image already has it.
 build_digit_ui: false
-build_otp_publisher: false         # slim: notifications path is off
-digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
+
+# Build the OTP publisher image on this box. Values: true | false.
+# Slim: the notifications path is off, so there is nothing to publish to.
+build_otp_publisher: false
+
+# Let the deploy continue when tenant bootstrap steps fail. Values: true | false.
+# True is right for a local box booting from the dump, where some bootstrap
+# steps are already satisfied and would otherwise abort the run.
 tolerate_bootstrap_failures: true
+
+# Turbopass: on-box OSM location autocomplete for the configurator's Phase 2.
+# Needs scraped OSM data under turbopass/data on the controller.
+# Values: true | false.
 enable_turbopass: false
+
+# Self-hosted Overpass for boundary-polygon fetch. Off means the configurator
+# uses the public overpass-api.de, which is rate-limited and 504-prone.
+# Requires a prepared OSM extract on the box first. Values: true | false.
 enable_overpass: false
 
-enable_novu: false                 # slim: drops the whole notifications profile
+# ────────── Notifications (the full-vs-slim dividing line) ──────────
+#
+# THIS BLOCK IS THE ONLY FUNCTIONAL DIFFERENCE between this file and
+# localhost-full.yml.example. Flip the two flags below to `true` and you have
+# the full profile — nothing else changes.
+
+# Turn on the `notifications` compose profile: 8 extra containers
+# (novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo, novu-bridge,
+# digit-config-service, digit-user-preferences-service), roughly +1.5-2 GB
+# resident and a slower first boot. Values: true | false.
+#
+# First deploy just brings Novu up. To actually send anything: sign up at
+# http://localhost/novu/, paste the API key into novu_api_key below along with
+# the Twilio credentials, and deploy again — the second run registers the
+# integration and workflow inside Novu.
+#
+# Slim: false — this drops the whole notifications profile. The Novu settings
+# below are then inert; they are kept so switching to full is a one-line change.
+enable_novu: false
+
+# Build a subpath-rebased Novu dashboard so the SPA serves cleanly under /novu.
+# Values: true | false. REQUIRED true when Keycloak shares the domain, because
+# the stock image's nginx workaround hijacks the whole /auth/ prefix.
 build_novu_dashboard: false
+
+# Novu API key, copied from the dashboard after first sign-up. Empty (here)
+# skips the bootstrap step — Novu still comes up and can be configured by hand.
 novu_api_key: ""
+
+# Twilio credentials the bootstrap uses to register an SMS/WhatsApp integration.
+# The FROM number must be WhatsApp-enabled; the default is Twilio's sandbox.
+# SECRETS — prefer OpenBao over committing real values.
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
+
+# Put PGR on the config-driven notification path: it reads
+# PGR.NotificationRouting + PGR.NotificationTemplate from MDMS, renders and
+# localizes per recipient, and novu-bridge becomes a thin pass-through.
+# Values: true | false (false keeps the legacy hardcoded path). Requires
+# enable_novu: true and the seeded MDMS masters.
+#
+# Slim: false — it would be pointing PGR at a delivery path that is not running.
 pgr_notification_config_driven: false
-build_novu_bridge: false
-build_pgr_services: false
+
+# Which channel the bridge delivers on. Values: sms | whatsapp | email.
 novu_bridge_channel: "sms"
 
+# ────────── Keycloak SSO ──────────
+
+# Adds keycloak + token-exchange-svc and the /auth/ + /token-exchange/ nginx
+# blocks. Inert in the rest of the stack — DIGIT keeps working on OTP login
+# until auth_provider is flipped. Values: true | false.
 enable_keycloak: false
+
+# Which auth path the SPA uses. Values: `keycloak` for OIDC PKCE, `""` (here)
+# for OTP login. Do not flip until the realm is imported and a test login works.
 auth_provider: ""
+
+# OIDC public client id inside the per-tenant realm. The shipped realm template
+# defines `digit-ui`; change only if you forked the template.
 keycloak_client_id: "digit-ui"
+
+# Google federated login. Empty skips Google IdP wiring entirely.
 keycloak_google_client_id: ""
 
+# ────────── Data seeding ──────────
+
+# Init the nairobi-mdms git submodule on the controller. Values: true | false.
+# Only for tenants whose onboarding uses those JSONs.
 requires_nairobi_mdms: false
+
+# Preload db/full-dump.sql into Postgres on first boot — 54 tables, Flyway
+# history, ~20K localization rows, and the demo tenants. Values: true | false.
+#
+# REQUIRED for a fresh install: there is no SQL slow path any more, so `false`
+# on an empty database gives you a stack with no schema.
+#
+# DESTRUCTIVE on a box with existing data: the fast-path overlay also corrects
+# the named-volume mount path, which forces container recreation and wipes an
+# anonymous Postgres volume.
 db_fast_path: true
+
+# Explicit acknowledgement of that data wipe. preflight.py refuses to run
+# db_fast_path without it. Values: true | false.
 db_fast_path_ack_data_wipe: true
+
+# Run the post-deploy CI suite (XLSX dataloader + Playwright) at the end of the
+# deploy. Values: true | false. Needs a sibling `digit-ui-fix/` clone on the
+# controller. Off here — it roughly doubles deploy time.
 run_ci_tests: false
+
+# Tear the stack down before redeploying: removes containers and compose
+# networks, keeps volumes. Values: true | false. Useful on a dev box; never on
+# a tenant with live traffic.
 force_clean: false
+
+# Install the Claude Code CLI on the target and sync the controller's ~/.claude.
+# Hard-codes /root/.claude paths. Values: true | false.
 install_claude_code: false
-# Configurator stays in even on slim: with build_configurator false the
-# deploy pulls the CI-built egovio/configurator image and host nginx
-# proxies /configurator/ to that container (a tiny static-file nginx,
-# negligible RAM) — no on-box vite build. Set true to build the dist on
-# the host and serve it from host nginx instead (costs RAM at deploy).
+
+# Build the configurator SPA on this box. Values: true | false.
+#
+# False does NOT disable the configurator. With false the deploy pulls the
+# CI-built `egovio/configurator` image and host nginx proxies /configurator/ to
+# that container — a static-file nginx, negligible RAM, no on-box vite build.
+# Set true only to serve a dist you build here, which costs RAM at deploy time.
 build_configurator: false
 
+# ────────── nginx location blocks ──────────
+# Each flag renders one `location` block into the host vhost. A flag whose
+# backing service is off renders a block that proxies to nothing, so keep these
+# aligned with the enable_* flags above. Values: true | false.
+
 nginx_features:
-  brand_assets: false
-  configurator: true
-  configurator_caching: false
-  status: true
-  api_pgr: false
-  mcp: true
-  keycloak: true
-  digit_ui_v2: true
-  integration_tests: false
-  integration_tests_runner: false
+  brand_assets: false      # /brand/ — needs /var/www/brand on the host
+  configurator: true       # /configurator/ — the onboarding wizard
+  configurator_caching: false  # long-cache headers for its assets
+  status: true             # /status/ — the Gatus health dashboard
+  api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
+  mcp: true                # /mcp + /v1/* — needs enable_mcp: true
+  keycloak: true           # /auth/ + /token-exchange/ — needs enable_keycloak: true
+                           # (true here but inert while enable_keycloak is false)
+  digit_ui_v2: true        # /citizen/ — needs enable_digit_ui_v2: true
+  integration_tests: false      # /tests/ + /tests-v2/
+  integration_tests_runner: false  # /tests/api/
+
+# Leave the operator's hand-written vhost alone instead of rendering the
+# template. Values: true | false. For boxes with routing the template cannot
+# express yet.
 nginx_preserve_vhost: false
 
+# ────────── Secrets (OpenBao) ──────────
+
+# REQUIRED. Path under the kv/ mount holding this tenant's secrets. The path
+# itself is not sensitive; what is behind it is.
+# Values: convention is kv/digit/<tenant>.
 secrets_path: kv/digit/pg.citya
 
-# Local-only bootstrap values, pinned by the db_fast_path dump — do not
-# "harden" them; the dump's data must match.
+# Seeded into OpenBao ONLY on this tenant's first deploy (cas=0). Later edits
+# here are ignored — change them with `bao kv put` or the OpenBao UI.
+#
+# These are pinned by the db_fast_path dump and must not be "hardened":
+#   * postgres_password matches the dump's roles;
+#   * elasticsearch_master_password MUST stay `asd@#$@$!132123` — the dump's
+#     eg_enc_*_keys decrypt only under that value, and a mismatch throws
+#     AEADBadTagException in egov-enc-service at boot.
+# On a real deployment (no dump) replace all of them with strong values.
 bootstrap_secrets:
   postgres_password: egov123
   mcp_db_password: egov123

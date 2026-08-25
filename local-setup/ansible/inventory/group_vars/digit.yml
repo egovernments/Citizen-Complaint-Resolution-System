@@ -48,6 +48,50 @@ digit_ui_mode: static
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
 
+# ──────────────────────────────────────────────────────────────────────
+# How much observability to deploy (#1657)
+# ──────────────────────────────────────────────────────────────────────
+# Cumulative levels — each includes the ones above it. Default `traces`
+# is the whole stack, i.e. exactly what every tenant runs today, so this
+# knob only ever lets an operator take LESS.
+#
+# `gatus` and `otel-collector` carry no profile, so they run at EVERY
+# level and form the floor (~384 MB). What the levels actually gate:
+#
+#   metrics  + prometheus, node-exporter, grafana               ~1.2 GB
+#   logs     + loki, promtail                                   ~1.8 GB
+#   traces   + tempo                                            ~2.2 GB
+#
+# The collector is ungated on purpose: 12 UNPROFILED services declare
+# `depends_on: otel-collector`, and compose rejects the whole project
+# when a selected service depends on a profile-excluded one — so gating
+# it broke every ad-hoc `docker compose` command, not just low levels
+# (#1666, fixed in #1687). It also earns its place regardless of level:
+# JVM metrics flow OTLP → otel-collector → /metrics on :8889, which is
+# what Prometheus scrapes, so dropping it costs per-service JVM metrics
+# and not just traces. Tempo is the only traces-exclusive component.
+#
+# A gatus-only `uptime` level is therefore not the ~64 MB it once looked
+# like — the floor above is what any level costs. Removing the
+# application → collector dependency (a telemetry sink should never gate
+# application startup) is tracked separately.
+#
+# Lowering this value on an existing box now TEARS DOWN the containers
+# that leave the selection, rather than orphaning them running (#1687).
+#
+# Footprints are approximate. The caps from #1612 have since landed as
+# `deploy.resources.limits.memory` in docker-compose.egov-digit.yaml:
+# prometheus 512M, loki 512M, tempo 384M, otel-collector 320M,
+# grafana 256M, promtail 128M, gatus 64M. So these are enforced ceilings
+# now, though the figures below are still budget rather than measurement.
+#
+# This matters because the boxes are small: 29 services declare ~12.8 GB
+# of max heap on machines that are commonly 16 GB and have NO swap, so
+# memory pressure means OOM kills rather than slowdown. An operator who
+# wants uptime and metrics but cannot afford log and trace storage should
+# be able to say so.
+observability_level: traces
+
 # SPA configuration — stable cross-tenant defaults.
 context_path: digit-ui
 gmaps_api_key: ""
@@ -106,6 +150,11 @@ nginx_features:
   configurator: false       # /configurator + /configurator/assets
   configurator_caching: false  # /configurator/assets/ long-cache headers
   status: false             # /status/ Gatus board (sub_filter rewrites)
+  grafana: true             # /grafana/ dashboards — the only public path to
+                            # Grafana (#1604). Default on: it carries a real
+                            # login since #1602. Set false to take Grafana off
+                            # the internet entirely (reach it over an SSH
+                            # tunnel to 127.0.0.1:13000 instead).
   api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
   # Note: `/` routing is derived from `digit_ui_mode`:
@@ -198,20 +247,34 @@ mcp_repo: "{{ digit_dir }}/digit-mcp"
 mcp_repo_url: "-"
 mcp_ref: main
 
-# Where the digit-ui SPA source lives. Auto-cloned onto the target at
-# /opt/digit-ui-esbuild by the playbook. Override in host_vars to point
-# at a fork.
-digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
+# Optional git source for the digit-ui SPA, cloned onto the target at
+# /opt/digit-ui-esbuild. EMPTY BY DEFAULT (#1503): the SPA source lives in this
+# monorepo at digit-ui-esbuild/ and CI publishes it nightly as the image below,
+# so no deploy needs to clone anything. Set this in host_vars only to build a
+# fork's source on the box — and note it is only consulted by `hmr` mode, or by
+# `static` mode with digit_ui_bundle_image deliberately blanked out.
+digit_ui_esbuild_repo: ""
 digit_ui_esbuild_branch: main
 
-# Prebuilt digit-ui bundle (static mode) — the ROBUST alternative to building
-# the SPA on-host. When set, the playbook pulls this image and extracts its
-# baked /var/web/digit-ui into build/, skipping the on-host node/npm/esbuild
-# build entirely (no Node-version / missing-npm fragility). The image below is
-# public and pulls off-VPC.
+# Prebuilt digit-ui bundle (static mode) — the DEFAULT, and the robust
+# alternative to building the SPA on-host. The playbook pulls this image and
+# extracts its baked /var/web/digit-ui into build/, skipping the on-host
+# node/npm/esbuild build entirely (no Node-version / missing-npm fragility) and
+# skipping the git clone with it.
 #
-# Left commented so existing tenants keep their current on-host build. To make
-# the bundle the default for ALL tenants, uncomment this line; to opt in for a
-# single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
-# does). Set to "" in host_vars to force an on-host build even if this is on.
-# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
+# This is the multi-arch egovio Docker Hub build of THIS repo's
+# digit-ui-esbuild/ tree, rebuilt every night from develop
+# (build/build-config.yml → image-name: digit-ui-esbuild). Pin a
+# develop-<sha> / v2.12-beta tag in host_vars for a reproducible deploy.
+# Set to "" in host_vars to force an on-host build instead, which then needs
+# digit_ui_esbuild_repo pointed at a source tree.
+digit_ui_bundle_image: "egovio/digit-ui-esbuild:nightly-develop"
+
+# Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
+# the default for every tenant: gatus warns about the unusable provider and
+# carries on, so nothing changes for deployments that do not want alerts.
+#
+# Set it per tenant in host_vars to switch alerting on. Treat it as a SECRET --
+# anyone holding the URL can post into the channel -- so prefer pulling it from
+# OpenBao via secrets_path rather than committing it here.
+gatus_slack_webhook_url: ""

@@ -194,7 +194,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: enc_schema_version
+      # egov_enc_service_schema is the canonical name (db/flyway-history-map.yml);
+      # enc_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_enc_service_schema
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: none
       # DEV ONLY - override via .env or environment for non-local use
@@ -225,7 +228,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:maven-jdk21-f3a7c13
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -244,7 +247,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      # mdms_v2_schema is the canonical name (db/flyway-history-map.yml);
+      # mdms_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: mdms_v2_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
@@ -553,7 +559,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      # egov_workflow_v2_schema is the canonical name (db/flyway-history-map.yml);
+      # workflow_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_workflow_v2_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
@@ -649,7 +658,10 @@ services:
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      # boundary_service_schema is the canonical name (db/flyway-history-map.yml);
+      # boundary_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: boundary_service_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -681,7 +693,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:abac-changes-cb6a372
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -788,7 +800,10 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      # egov_filestore_schema is the canonical name (db/flyway-history-map.yml);
+      # filestore_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_filestore_schema
       SERVER_PORT: 8083
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
@@ -858,7 +873,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -884,7 +899,10 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      # egov_hrms_schema is the canonical name (db/flyway-history-map.yml);
+      # hrms_schema_version is a legacy alias that must never be (re)created,
+      # or db-history-normalize aborts the next canonical deploy on ambiguity.
+      SPRING_FLYWAY_TABLE: egov_hrms_schema
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
@@ -1130,7 +1148,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1214,7 +1232,7 @@ services:
   # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-cae07a3}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1268,7 +1286,12 @@ services:
       - "18443:8443"   # Proxy (HTTPS)
       - "18001:8001"   # Admin API
       - "18002:8002"   # Kong Manager GUI
-      - "18100:8100"   # Status endpoint
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1294,13 +1317,26 @@ services:
         condition: service_healthy
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      # sqlite store (#1610) — the config above is mounted read-only, so
+      # the database needs its own volume. Without this /data does not
+      # exist in the container and gatus panics at startup with
+      # "unable to open database file (14)" (SQLITE_CANTOPEN), taking the
+      # whole compose project down. #1630 added the storage block to the
+      # SHARED gatus/config.yaml but the volume to only one of five files.
+      - gatus_data:/data
     ports:
-      - "18889:8080"
+      - "127.0.0.1:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Slack alerting (#1609). Unset = alerting off: gatus expands the
+      # missing variable to an empty string and drops the slack provider
+      # with a warning instead of failing to start. Set it in .env to
+      # switch alerting on.
+      GATUS_SLACK_WEBHOOK_URL: ${GATUS_SLACK_WEBHOOK_URL:-}
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "false"
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
@@ -1308,6 +1344,21 @@ services:
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "false"
       GATUS_SMS_PORT: "8080"
+      # No grafana/prometheus/loki/tempo on this path, so the observability
+      # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
+      # enabled-var as true, which would make them red forever here.
+      GATUS_OBSERVABILITY: "false"
+      # No public hostname on this path — the TLS check (#1622) is off.
+      # Declared explicitly because Gatus treats an UNSET `enabled` var as
+      # true, which would leave a permanently-red check for a URL that does
+      # not resolve.
+      GATUS_TLS: "false"
+      # Non-empty on purpose. Gatus validates `url` on EVERY endpoint before it
+      # ever consults `enabled:`, so "" is not an inert placeholder -- it aborts
+      # startup with "you must specify an url for each endpoint" and takes the
+      # entire dashboard down with it. This value is only ever parsed by the
+      # config loader; the check is disabled, so it is never dialled.
+      GATUS_PUBLIC_URL: "https://localhost/"
     deploy:
       resources:
         limits:
@@ -1316,54 +1367,12 @@ services:
     networks:
       - egov-network
 
-  # ==================== Jupyter Lab for PGR Configuration ====================
-  jupyter:
-    build:
-      context: ./jupyter
-      dockerfile: Dockerfile
-    container_name: digit-jupyter
-    user: root
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      kong:
-        condition: service_healthy
-    environment:
-      DIGIT_URL: http://kong:8000
-      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
-      DIGIT_DIRECT_USER: http://egov-user:8107
-      DIGIT_DIRECT_PGR: http://pgr-services:8080
-      DIGIT_TENANT: pg
-      JUPYTER_ENABLE_LAB: "yes"
-    command: >
-      jupyter lab
-      --ip=0.0.0.0
-      --port=8888
-      --no-browser
-      --allow-root
-      --ServerApp.token=${JUPYTER_TOKEN:-digit-crs-local}
-      --ServerApp.password=''
-      --ServerApp.base_url=/jupyter
-      --ServerApp.allow_origin='*'
-    ports:
-      - "18888:8888"
-    volumes:
-      - ./jupyter/dataloader:/home/jovyan/work
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-    networks:
-      - egov-network
-
 networks:
   egov-network:
     driver: bridge
 
 volumes:
+  gatus_data:
   postgres_data: null
   es_data: null
   filestore_data: null

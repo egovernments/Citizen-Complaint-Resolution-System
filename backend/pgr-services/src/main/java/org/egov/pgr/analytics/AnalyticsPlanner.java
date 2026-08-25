@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 @Component
 public class AnalyticsPlanner {
 
-    private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");           // UTC+3
     private static final Pattern ALIAS = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]{0,63}$");
     private static final Set<String> BUCKETS = new HashSet<>(Arrays.asList("day","week","month","quarter","year"));
     private static final Pattern LAST_N_DAYS = Pattern.compile("^last_(\\d+)d$");
@@ -36,7 +35,7 @@ public class AnalyticsPlanner {
         }
     }
 
-    public Planned plan(JsonNode q, AnalyticsScope scope){
+    public Planned plan(JsonNode q, AnalyticsScope scope, BusinessCalendar calendar){
         String grainName = q.hasNonNull("grain") ? q.get("grain").asText() : inferGrain(q);
         Grain g = catalog.grain(grainName);
         if (g == null) throw new IllegalArgumentException("unknown_grain: " + grainName);
@@ -77,9 +76,13 @@ public class AnalyticsPlanner {
         if (window != null && window.hasNonNull("timeBucket")) {
             String unit = window.get("timeBucket").asText();
             if (!BUCKETS.contains(unit)) throw new IllegalArgumentException("invalid_param: timeBucket '" + unit + "'");
+            // The resolved tenant zone rides a JDBC-bound param (never string-concatenated) — the
+            // value is already ZoneId.of-validated by KpiCatalogService.resolveTimeZone, but binding
+            // it keeps this expression safe even if that validation is ever bypassed.
             String expr = g.isEpochMs(timeCol)
-                ? "date_trunc('" + unit + "', to_timestamp(" + timeCol + "/1000) AT TIME ZONE 'Etc/GMT-3')::date"
+                ? "date_trunc('" + unit + "', to_timestamp(" + timeCol + "/1000) AT TIME ZONE ?::text)::date"
                 : "date_trunc('" + unit + "', " + timeCol + ")::date";
+            if (g.isEpochMs(timeCol)) selectParams.add(calendar.zoneId.getId());
             String alias = "bucket";
             selectExprs.add(expr + " AS " + alias);
             groupExprs.add(expr);
@@ -107,7 +110,7 @@ public class AnalyticsPlanner {
                 conj.add(predicate(g, e.getKey(), e.getValue(), whereParams));
             }
         }
-        applyWindow(window, g, timeCol, conj, whereParams);
+        applyWindow(window, g, timeCol, conj, whereParams, calendar);
         applyScope(scope, g, conj, whereParams);
 
         // ---- assemble ----
@@ -285,8 +288,8 @@ public class AnalyticsPlanner {
     // ---------- window ----------
 
     /**
-     * Resolve a named window to its inclusive start instant (epoch-ms) in EAT. Every window ends at
-     * {@code now}, so the name alone fixes the interval {@code [start, now)}.
+     * Resolve a named window to its inclusive start instant (epoch-ms) in {@code zone}. Every window
+     * ends at {@code now}, so the name alone fixes the interval {@code [start, now)}.
      *
      * <p>Returns {@code null} for the boundless names ({@code all}) and for {@code live}, which is a
      * state predicate rather than a time interval — callers handle those before asking.
@@ -295,24 +298,25 @@ public class AnalyticsPlanner {
      * pinned window overlaps the dashboard's selected date range. Keeping one implementation means a
      * window can never mean one thing when planned and another when range-checked.
      */
-    static Long windowStartMs(String name, long now){
+    static Long windowStartMs(String name, long now, ZoneId zone){
         if (name == null || name.equals("all") || name.equals("live")) return null;
-        ZonedDateTime nowEat = Instant.ofEpochMilli(now).atZone(EAT);
+        ZonedDateTime nowZ = Instant.ofEpochMilli(now).atZone(zone);
         java.util.regex.Matcher lastN = LAST_N_DAYS.matcher(name);
         if (lastN.matches()) return now - Long.parseLong(lastN.group(1)) * 86400000L;
         switch (name) {
-            // dtd — day-to-date: the CALENDAR day in EAT, i.e. "today". Distinct from last_1d, which
-            // is a rolling 24h and drifts across midnight (#1462).
-            case "dtd": return nowEat.toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
-            case "wtd": return nowEat.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
-            case "mtd": return nowEat.withDayOfMonth(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
-            case "qtd": return nowEat.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L).atStartOfDay(EAT).toInstant().toEpochMilli();
-            case "ytd": return nowEat.withDayOfYear(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+            // dtd — day-to-date: the CALENDAR day in the resolved zone, i.e. "today". Distinct from
+            // last_1d, which is a rolling 24h and drifts across midnight (#1462).
+            case "dtd": return nowZ.toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "wtd": return nowZ.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "mtd": return nowZ.withDayOfMonth(1).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "qtd": return nowZ.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L).atStartOfDay(zone).toInstant().toEpochMilli();
+            case "ytd": return nowZ.withDayOfYear(1).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
             default: throw new IllegalArgumentException("invalid_param: unknown window '" + name + "'");
         }
     }
 
-    private void applyWindow(JsonNode window, Grain g, String timeCol, List<String> conj, List<Object> params){
+    private void applyWindow(JsonNode window, Grain g, String timeCol, List<String> conj, List<Object> params,
+                             BusinessCalendar calendar){
         if (window == null || !window.hasNonNull("name")) return;
         String name = window.get("name").asText();
         if (name.equals("all")) return;
@@ -320,21 +324,24 @@ public class AnalyticsPlanner {
             if (g.filterable.contains("is_open")) conj.add("is_open = ?"); else return;
             params.add(true); return;
         }
-        long now = System.currentTimeMillis();
-        Long fromMs = windowStartMs(name, now);
+        long now = calendar.nowMs;
+        Long fromMs = windowStartMs(name, now, calendar.zoneId);
         if (fromMs == null) return;
         if (g.isEpochMs(timeCol)) {
             conj.add(timeCol + " >= ?"); params.add(fromMs);
             conj.add(timeCol + " < ?");  params.add(now);
         } else { // sql date column (daily.snapshot_date)
-            conj.add(timeCol + " >= ?"); params.add(java.sql.Date.valueOf(Instant.ofEpochMilli(fromMs).atZone(EAT).toLocalDate()));
+            conj.add(timeCol + " >= ?"); params.add(java.sql.Date.valueOf(Instant.ofEpochMilli(fromMs).atZone(calendar.zoneId).toLocalDate()));
         }
     }
 
     // ---------- RBAC scope (server-injected) ----------
     private void applyScope(AnalyticsScope scope, Grain g, List<String> conj, List<Object> params){
         if (scope.tenantId != null) {
-            if (scope.tenantStateLevel) { conj.add(g.tenantColumn + " LIKE ?"); params.add(scope.tenantId + "%"); }
+            if (scope.tenantStateLevel) {
+                conj.add(g.tenantColumn + " LIKE ?");
+                params.add(escapeLikeLiteral(scope.tenantId) + "%");
+            }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
         // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
@@ -349,7 +356,7 @@ public class AnalyticsPlanner {
             if (g.boundaryColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
             conj.add(g.boundaryColumn + " LIKE ?");
-            params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+            params.add(escapeLikeLiteral(scope.boundaryPrefix) + "%");
         }
         // department scope: restrict to the union of the principal's HRMS assignment departments.
         // NULL department_code rows won't match an IN list → correctly excluded.
@@ -360,6 +367,11 @@ public class AnalyticsPlanner {
             conj.add(g.departmentColumn + " IN (" + placeholders + ")");
             params.addAll(scope.departmentCodes);
         }
+    }
+
+    /** Escape caller-controlled text before appending a SQL LIKE wildcard. */
+    static String escapeLikeLiteral(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     // ---------- sort ----------

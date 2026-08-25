@@ -1,5 +1,5 @@
 import { ENDPOINTS, OAUTH_CONFIG } from './endpoints.js';
-import { ApiClientError } from './errors.js';
+import { ApiClientError, isSessionExpired } from './errors.js';
 import type {
   RequestInfo, UserInfo, MdmsRecord, ApiError,
 } from './types.js';
@@ -19,6 +19,12 @@ export class DigitApiClient {
 
   private static readonly RETRY_STATUS_CODES = new Set([429, 503]);
   private static readonly MAX_RETRIES = 3;
+  // Survives `new DigitApiClient()` on URL change (configureDigitClient).
+  private static onSessionExpired: (() => void) | null = null;
+
+  static setSessionExpiredHandler(handler: (() => void) | null): void {
+    DigitApiClient.onSessionExpired = handler;
+  }
 
   constructor(config: DigitApiClientConfig) {
     this.baseUrl = config.url;
@@ -88,11 +94,25 @@ export class DigitApiClient {
       const response = await fetch(url, { method: 'POST', headers, body: jsonBody });
 
       if (!DigitApiClient.RETRY_STATUS_CODES.has(response.status)) {
-        const data = await response.json() as Record<string, unknown>;
+        // Kong rejects an expired token with a bodyless (or HTML) 401, so
+        // parsing before classifying threw SyntaxError and the session-expired
+        // handler never ran — the UI showed "Unexpected end of JSON input"
+        // instead of bouncing to login.
+        const data = await this.parseJsonBody(response);
         if (!response.ok || (data.Errors as ApiError[] | undefined)?.length) {
           const errors: ApiError[] = (data.Errors as ApiError[]) || [
             { code: `HTTP_${response.status}`, message: (data.message as string) || `Request failed: ${response.status}` },
           ];
+          // HRMS / PGR / access-control enforce the token; MDMS and localization
+          // often don't. An expired session therefore looks like "employees=0,
+          // access roles crashed" while tenants still load. Bounce to login.
+          if (isSessionExpired(response.status, errors)) {
+            DigitApiClient.onSessionExpired?.();
+            throw new ApiClientError(
+              [{ code: 'SESSION_EXPIRED', message: 'Your session has expired. Please log in again to continue.' }],
+              response.status,
+            );
+          }
           throw new ApiClientError(errors, response.status);
         }
         return data as T;
@@ -106,11 +126,23 @@ export class DigitApiClient {
       }
     }
 
-    const data = await lastResponse!.json().catch(() => ({})) as Record<string, unknown>;
+    const data = await this.parseJsonBody(lastResponse!);
     const errors: ApiError[] = (data.Errors as ApiError[]) || [
       { code: `HTTP_${lastResponse!.status}`, message: (data.message as string) || `Request failed after ${DigitApiClient.MAX_RETRIES} retries` },
     ];
     throw new ApiClientError(errors, lastResponse!.status);
+  }
+
+  /** Empty or non-JSON payloads (gateway 401s, HTML error pages) read as `{}`. */
+  private async parseJsonBody(response: Response): Promise<Record<string, unknown>> {
+    const text = await response.text().catch(() => '');
+    if (!text) return {};
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
   }
 
   // --- Login ---
@@ -186,6 +218,36 @@ export class DigitApiClient {
 
   // --- MDMS v2 ---
 
+  /** Default page size for DIGIT search APIs that omit a total. */
+  static readonly SEARCH_PAGE_SIZE = 100;
+  /** Infinite-loop guard when offset is ignored. Hitting this with a full last page is an error, not a silent truncate. */
+  static readonly SEARCH_MAX_PAGES = 200;
+
+  /**
+   * Walk offset/limit until a short page. MDMS v2 and boundary-hierarchy
+   * search do not return a total, so a single `limit: 100` (or 500) call
+   * silently truncates.
+   */
+  private async collectPages<T>(
+    fetchPage: (limit: number, offset: number) => Promise<T[]>,
+  ): Promise<T[]> {
+    const pageSize = DigitApiClient.SEARCH_PAGE_SIZE;
+    const maxPages = DigitApiClient.SEARCH_MAX_PAGES;
+    const all: T[] = [];
+    let offset = 0;
+    let lastWasFull = false;
+    for (let i = 0; i < maxPages; i++) {
+      const page = await fetchPage(pageSize, offset);
+      all.push(...page);
+      lastWasFull = page.length === pageSize;
+      if (!lastWasFull) return all;
+      offset += pageSize;
+    }
+    throw new Error(
+      `DIGIT search truncated after ${maxPages} pages (${all.length} rows); refusing to report a partial total`,
+    );
+  }
+
   async mdmsSearch(tenantId: string, schemaCode: string, options?: {
     limit?: number; offset?: number; uniqueIdentifiers?: string[]; isActive?: boolean;
   }): Promise<MdmsRecord[]> {
@@ -202,6 +264,23 @@ export class DigitApiClient {
       RequestInfo: this.buildRequestInfo(), MdmsCriteria: criteria,
     });
     return data.mdms || [];
+  }
+
+  /**
+   * Real total for a schema, backing the configurator's list pagination (issue #953:
+   * mdms-v2 had no count endpoint of its own, so `mdmsSearch` + client-side heuristics used
+   * to either truncate at a hardcoded limit or fake a total that grew every page). mdms-v2
+   * now exposes `_count` alongside `_search`, taking the SAME MdmsCriteria shape and
+   * returning `{ ResponseInfo, totalCount }` — no query params, unlike PGR_COUNT.
+   */
+  async mdmsCount(tenantId: string, schemaCode: string, options?: { isActive?: boolean }): Promise<number> {
+    const criteria: Record<string, unknown> = { tenantId, schemaCode };
+    if (options?.isActive !== undefined) criteria.isActive = options.isActive;
+
+    const data = await this.request<{ totalCount?: number }>(this.endpoint('MDMS_COUNT'), {
+      RequestInfo: this.buildRequestInfo(), MdmsCriteria: criteria,
+    });
+    return typeof data.totalCount === 'number' ? data.totalCount : 0;
   }
 
   async mdmsCreate(tenantId: string, schemaCode: string, uniqueIdentifier: string, recordData: Record<string, unknown>): Promise<MdmsRecord> {
@@ -313,12 +392,23 @@ export class DigitApiClient {
   }
 
   async boundaryHierarchySearch(tenantId: string, hierarchyType?: string): Promise<Record<string, unknown>[]> {
-    const criteria: Record<string, unknown> = { tenantId, limit: 100, offset: 0 };
-    if (hierarchyType) criteria.hierarchyType = hierarchyType;
-    const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
-      RequestInfo: this.buildRequestInfo(), BoundaryTypeHierarchySearchCriteria: criteria,
+    // A typed lookup fits on one page. Unscoped discovery must walk every
+    // page — Playwright onboarding leaves 200+ PW_* stubs that fill the
+    // first page and hide ADMIN.
+    if (hierarchyType) {
+      const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
+        RequestInfo: this.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, hierarchyType, limit: DigitApiClient.SEARCH_PAGE_SIZE, offset: 0 },
+      });
+      return data.BoundaryHierarchy || [];
+    }
+    return this.collectPages(async (limit, offset) => {
+      const data = await this.request<{ BoundaryHierarchy?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_HIERARCHY_SEARCH'), {
+        RequestInfo: this.buildRequestInfo(),
+        BoundaryTypeHierarchySearchCriteria: { tenantId, limit, offset },
+      });
+      return data.BoundaryHierarchy || [];
     });
-    return data.BoundaryHierarchy || [];
   }
 
   async boundaryCreate(tenantId: string, boundaries: { code: string; geometry?: Record<string, unknown> }[]): Promise<Record<string, unknown>[]> {

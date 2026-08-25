@@ -1623,7 +1623,7 @@ out skel qt;`;
             <SubmitBar
               label="Continue to Common Masters"
               onSubmit={handleContinue}
-              icon={<ChevronRight className="w-5 h-5 ml-2" />}
+              icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>
         </DigitCard>

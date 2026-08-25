@@ -212,12 +212,12 @@ function annotateRowsFromThresholds(rows, columns) {
 const DashboardTable = ({ columns, rows, emptyMessage }) => {
   // Subscribes to language/bundle changes; `language` also invalidates the
   // annotation memo so translated tag labels re-resolve on a language switch.
-  const { language } = useDashboardT();
+  const { language, i18nTick } = useDashboardT();
   const styles = DATA_TABLE_STYLES;
   const safeRows = rows ?? [];
   const annotatedRows = useMemo(
     () => annotateRowsFromThresholds(safeRows, columns),
-    [safeRows, columns, language]
+    [safeRows, columns, language, i18nTick]
   );
   const { sortState, handleSort, sortRows } = useTableSort(columns);
   const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);

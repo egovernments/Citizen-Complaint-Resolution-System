@@ -6,11 +6,13 @@ import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { generateColumns, getRefMap, generateFilterElements } from './schemaUtils';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
   const label = useResourceLabel()(resource);
+  const { canEditResource } = useMastersCapability();
   const { definition } = useSchemaDefinition(config?.schema);
 
   // Compute refMap once, reused by columns and filters
@@ -33,7 +35,7 @@ export function MdmsResourcePage() {
   const subtitle = config?.schema ? `Schema: ${config.schema}` : undefined;
 
   return (
-    <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate>
+    <DigitList title={label} subtitle={subtitle} filters={filterElements} hasCreate={canEditResource(resource)}>
       {schemaColumns ? (
         <DigitDatagrid columns={schemaColumns} rowClick="show" />
       ) : (

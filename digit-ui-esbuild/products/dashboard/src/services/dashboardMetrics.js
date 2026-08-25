@@ -1,4 +1,5 @@
 import { DASHBOARD_ROLES } from "../../roles";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
 /**
  * dashboardMetrics — client-side render-lag instrumentation (issue #1110, PR1).
@@ -20,6 +21,7 @@ import { DASHBOARD_ROLES } from "../../roles";
  *   dashboard.transfer.bytes          sum        Σ resource transferSize in the load window
  *                                                (network transfer incl. headers; 0 on cache hits)
  *   dashboard.error_widgets.count     sum        errored tiles at load settle (base kpiIds)
+ *   dashboard.analytics_round_trips.count sum     sequential analytics calls per settled batch
  * All histograms/sums use DELTA temporality (browsers are ephemeral emitters).
  * Variable tags (tenant/persona/layout_id/record_count_tier/ua_family/nav_type)
  * are DATAPOINT attributes; the resource carries only service.name=dashboard-web
@@ -175,6 +177,7 @@ function newLoadCtx(navType, t0, ttfbMs) {
     allReadyMs: null,
     allReadyPending: false,
     errorWidgets: 0,
+    analyticsRoundTrips: 0,
     slowApiCalls: 0,
     transferBytes: 0,
     quiesced: false, // load window closed (accumulators frozen)
@@ -265,7 +268,7 @@ export function markFirstWidgetVisible() {
  *  - one-shot load mark (all_widgets_ready + error_widgets + quiesce flush)
  *  - interaction-window close for the SAME reqId (filter_apply/persona_switch)
  */
-export function markAllWidgetsReady(errorCount = 0, reqId) {
+export function markAllWidgetsReady(errorCount = 0, reqId, roundTrips = 1) {
   if (!on()) return;
   const load = state.load;
   const needLoadMark = !!load && load.allReadyMs == null && !load.allReadyPending;
@@ -273,10 +276,14 @@ export function markAllWidgetsReady(errorCount = 0, reqId) {
   const mayCloseWindow = windowMatches(reqId);
   if (!needLoadMark && !mayCloseWindow) return;
 
+  const requestCount = Math.max(1, Number(roundTrips) || 1);
+  recordSum("dashboard.analytics_round_trips.count", requestCount);
+
   postPaint((ts) => {
     if (needLoadMark && state.load === load && load.allReadyMs == null) {
       load.allReadyMs = Math.max(0, ts - load.t0);
       load.errorWidgets = Math.max(0, Number(errorCount) || 0);
+      load.analyticsRoundTrips = requestCount;
       recordHist("dashboard.all_widgets_ready.ms", load.allReadyMs);
       if (load.errorWidgets > 0) recordSum("dashboard.error_widgets.count", load.errorWidgets);
       // Close the load window shortly after settle so buffered resource entries
@@ -425,6 +432,7 @@ function getTenantTag() {
  * "other". Bounded cardinality either way.
  */
 function getPersonaTag() {
+  if (isPublicDashboardRuntime()) return "PUBLIC";
   if (state.packMeta?.persona) return state.packMeta.persona;
   const info = readLocalStorage("Employee.user-info");
   const roleCodes = new Set(
@@ -443,6 +451,7 @@ function getPersonaTag() {
  */
 function getLayoutIdTag() {
   const packId = state.packMeta?.packId || "unknown";
+  if (isPublicDashboardRuntime()) return packId;
   let custom = false;
   try {
     custom = window.localStorage?.getItem("ccrs.dashboard.catalog-layout.v1") != null;
@@ -702,6 +711,7 @@ function buildLoadLogRecord(load) {
     slow_api_calls: load.slowApiCalls,
     transfer_bytes: load.transferBytes,
     error_widgets: load.errorWidgets,
+    analytics_round_trips: load.analyticsRoundTrips,
     failed_api_calls: load.failedApiCalls || 0,
   });
 }

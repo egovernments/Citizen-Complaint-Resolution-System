@@ -4,6 +4,7 @@ import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import useDashboardT from "../i18n/useDashboardT";
 import AddKpiDropdown from "./AddKpiDropdown";
+import LanguageMenu from "./LanguageMenu";
 
 /**
  * Derive the row-scope indicator from the analytics `scope` object the backend
@@ -101,6 +102,11 @@ const DashboardHeader = ({
   officerAccess,
   visibleKpiCount,
   scope,
+  readOnly = false,
+  publicMode = false,
+  // The standalone/public shell has no host TopBar, so it carries its own
+  // language switcher (#1797); embedded leaves that to DigitUI.
+  showLanguageMenu = false,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
@@ -109,6 +115,9 @@ const DashboardHeader = ({
   // `language` re-keys the memos on language switch; `i18nTick` re-keys them
   // when a locale bundle arrives asynchronously after the switch (t is stable).
   const rowScope = useMemo(() => buildRowScope(scope), [scope, language, i18nTick]);
+  // Every mode shows the same "<ward> · <period>" context line — the public
+  // page now has the filter bar too (#1797) and its visitors need to see what
+  // the numbers are scoped to. "Public view" survives as a pill beside the title.
   const subtitle = useMemo(
     () => buildSubtitle(filters, filterOptions, t, language),
     [filters, filterOptions, t, language, i18nTick]
@@ -135,6 +144,11 @@ const DashboardHeader = ({
               {title}
             </h1>
             <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
+            {publicMode ? (
+              <span className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-border tw-bg-surface-2 tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+                {t("DASHBOARD_HEADER_PUBLIC_SUBTITLE", "Public view")}
+              </span>
+            ) : null}
             {scopedRole ? (
               <span
                 title={t(
@@ -204,7 +218,9 @@ const DashboardHeader = ({
         </div>
 
         <div className="dashboard-header-controls">
-          <div className="dashboard-header-kpi-anchor">
+          {showLanguageMenu && <LanguageMenu />}
+
+          {!readOnly && <div className="dashboard-header-kpi-anchor">
             <button
               ref={addKpiRef}
               type="button"
@@ -227,16 +243,16 @@ const DashboardHeader = ({
               kpiCardData={kpiCardData}
               allowedWidgetIds={allowedWidgetIds}
             />
-          </div>
+          </div>}
 
-          <button
+          {!readOnly && <button
             type="button"
             onClick={onResetLayout}
             className="dashboard-header-btn dashboard-header-reset"
             title={t("DASHBOARD_HEADER_RESET_LAYOUT", "Reset layout")}
           >
             {t("DASHBOARD_HEADER_RESET", "Reset")}
-          </button>
+          </button>}
 
           <button
             type="button"

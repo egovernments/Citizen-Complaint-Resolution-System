@@ -1,0 +1,200 @@
+# Metrics for the k3s tier (#1618, phase 1).
+#
+# Until now the ONLY observability manifest in local-setup/k8s/ was
+# tools/gatus.yaml -- no Prometheus, Grafana, Loki, Promtail, Tempo,
+# otel-collector or node-exporter. That was confusing rather than merely
+# incomplete: the Gatus config is kept byte-identical across tiers with CI
+# enforcing it, which signals "these tiers should match", while every other
+# observability component silently did not.
+#
+# Config is kept behaviourally identical to local-setup/otel/prometheus.yml
+# wherever it can be -- same job NAMES especially, so dashboards carry over --
+# and differs only where the runtime genuinely differs. Those differences are
+# annotated inline rather than left for a reader to infer.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# Prometheus needs to discover pods and proxy to node metrics endpoints. It is
+# read-only: get/list/watch, no write verbs anywhere.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/proxy, nodes/metrics, services, endpoints, pods]
+    verbs: [get, list, watch]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      # Mirrors local-setup/otel/prometheus.yml. Same two jobs, same job names, so
+      # the dashboards provisioned from that tier resolve here unchanged.
+      - job_name: otel-collector
+        static_configs:
+          - targets: ['otel-collector.monitoring.svc.cluster.local:8889']
+
+      # node-exporter. In compose this is a container reached by DNS name; here it
+      # is a DaemonSet, so targets are discovered rather than named -- one pod per
+      # node instead of one container.
+      - job_name: node
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [monitoring]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: node-exporter
+          # `instance` should name the NODE, not the ephemeral pod -- otherwise
+          # every pod reschedule looks like a new host and breaks continuity on
+          # the Node Exporter Full dashboard.
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: instance
+
+      # No compose equivalent: kubelet/cAdvisor is where container CPU and memory
+      # live in this tier. In compose that data comes from the Docker daemon, which
+      # k3s does not run.
+      - job_name: kubelet-cadvisor
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+---
+# First PersistentVolumeClaim in this tier (#1618 item 3). k3s ships the
+# local-path provisioner, so no storage class needs configuring -- but this
+# establishes a pattern the tier has not needed before.
+#
+# Without it, metrics vanish on every pod restart, which is the same defect
+# #1645 fixes on the production tier.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: monitoring
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the PVC is ReadWriteOnce, so a rolling update
+  # would deadlock waiting for a volume the outgoing pod still holds.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        # The image runs as nobody(65534); the PVC must be group-writable by it
+        # or Prometheus cannot create its TSDB and crash-loops on first start.
+        fsGroup: 65534
+        runAsUser: 65534
+        runAsNonRoot: true
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=15d
+            # No --web.enable-lifecycle. It defaults to OFF, and that is what we
+            # want: enabling it exposes unauthenticated /-/reload and /-/quit,
+            # which is the defect #1608 fixes on the compose tier. Passing
+            # `--web.enable-lifecycle=false` to be explicit does NOT work -- the
+            # flag parser rejects it with "unexpected false" and Prometheus
+            # crash-loops. Omission is the only correct spelling.
+          ports:
+            - containerPort: 9090
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet: {path: /-/ready, port: 9090}
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet: {path: /-/healthy, port: 9090}
+            initialDelaySeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: http

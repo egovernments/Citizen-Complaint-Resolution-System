@@ -1,7 +1,7 @@
 /**
  * Citizen UI entry — forked from digit-configurator, stripped to:
  *   /login            CitizenLoginPage      mobile + OTP (fixed 123456)
- *   /dashboard        CitizenDashboardPage  one external dashboard link
+ *   /dashboard        CitizenDashboardPage  retained legacy dashboard (flagged off)
  *
  * basename=/citizen — served from /var/www/citizen on naipepea.
  *
@@ -31,10 +31,10 @@ import { apiClient, getApiBaseUrl, isKeycloakMode, hasKcToken } from './api';
 import { getKcIdToken, clearKcTokens, logoutKc } from './api/keycloak';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import './App.css';
+import { CITIZEN_HOME_PATH, LEGACY_PGR_DASHBOARD_ENABLED } from './config/featureFlags';
 
-// One QueryClient for the whole app — the PGR dashboard uses useQuery to
-// fetch /pgr-services/v2/dashboard with a 60s stale window. Carried over
-// from the configurator's CoreAdminContext default.
+// One QueryClient for the whole app. The retained PGR dashboard uses it when
+// explicitly enabled; the supported complaint/profile surfaces share it too.
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000 } },
 });
@@ -190,8 +190,13 @@ function App() {
                   path="/"
                   element={state.isAuthenticated ? <CitizenLayout /> : <Navigate to="/login" replace />}
                 >
-                  <Route index element={<Navigate to="/dashboard" replace />} />
-                  <Route path="dashboard" element={<CitizenDashboardPage />} />
+                  <Route index element={<Navigate to={CITIZEN_HOME_PATH} replace />} />
+                  <Route
+                    path="dashboard"
+                    element={LEGACY_PGR_DASHBOARD_ENABLED
+                      ? <CitizenDashboardPage />
+                      : <Navigate to="/complaints" replace />}
+                  />
                   <Route path="complaints" element={<CitizenComplaintsListPage />} />
                   <Route path="complaints/create" element={<CitizenComplaintCreatePage />} />
                   <Route path="complaints/:id/show" element={<CitizenComplaintShowPage />} />

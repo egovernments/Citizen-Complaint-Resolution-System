@@ -2,6 +2,8 @@ package org.egov.pgr.service;
 
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.policy.FieldVisibilityService;
+import org.egov.pgr.policy.SearchAccessPolicyService;
 import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
@@ -54,6 +56,8 @@ public class PGRServiceCountScopingTest {
     @Mock private PGRUtils pgrUtils;
     @Mock private ExtendedAttributesValidationService extendedAttributesValidationService;
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
+    @Mock private SearchAccessPolicyService searchAccessPolicyService;
+    @Mock private FieldVisibilityService fieldVisibilityService;
 
     private PGRService pgrService;
 
@@ -62,7 +66,7 @@ public class PGRServiceCountScopingTest {
         pgrService = new PGRService(enrichmentService, userService, workflowService,
                 serviceRequestValidator, validator, producer, config, repository, mdmsUtils,
                 complaintDomainEventService, pgrUtils, extendedAttributesValidationService,
-                encryptionDecryptionService);
+                encryptionDecryptionService, searchAccessPolicyService, fieldVisibilityService);
     }
 
     private RequestInfo requestInfo() {
@@ -76,7 +80,7 @@ public class PGRServiceCountScopingTest {
                 .when(validator).validateSearch(any(), any());
 
         assertThrows(CustomException.class, () -> pgrService.count(requestInfo(), criteria));
-        verify(repository, never()).getCount(any());
+        verify(repository, never()).getCount(any(), any());
     }
 
     @Test
@@ -84,7 +88,7 @@ public class PGRServiceCountScopingTest {
         RequestSearchCriteria criteria = new RequestSearchCriteria();
 
         assertEquals(0, pgrService.count(requestInfo(), criteria));
-        verify(repository, never()).getCount(any());
+        verify(repository, never()).getCount(any(), any());
     }
 
     @Test
@@ -95,7 +99,7 @@ public class PGRServiceCountScopingTest {
         // scopeSearchCriteria leaves userIds empty when the number matches no user.
 
         assertEquals(0, pgrService.count(requestInfo(), criteria));
-        verify(repository, never()).getCount(any());
+        verify(repository, never()).getCount(any(), any());
     }
 
     @Test
@@ -108,7 +112,7 @@ public class PGRServiceCountScopingTest {
             criteria.setUserIds(Collections.singleton("victim-uuid"));
             return null;
         }).when(enrichmentService).scopeSearchCriteria(any(), any());
-        when(repository.getCount(any())).thenReturn(1);
+        when(repository.getCount(any(), any())).thenReturn(1);
 
         assertEquals(1, pgrService.count(requestInfo(), criteria));
     }
@@ -117,7 +121,7 @@ public class PGRServiceCountScopingTest {
     void count_scopedNonEmptyCriteria_validatesScopesAndCounts() {
         RequestSearchCriteria criteria = new RequestSearchCriteria();
         criteria.setTenantId("mz.maputo");
-        when(repository.getCount(any())).thenReturn(50);
+        when(repository.getCount(any(), any())).thenReturn(50);
 
         assertEquals(50, pgrService.count(requestInfo(), criteria));
         verify(validator).validateSearch(any(), any());

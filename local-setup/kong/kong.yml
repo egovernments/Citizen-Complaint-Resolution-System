@@ -52,6 +52,22 @@ plugins:
   config:
     allowed_payload_size: 10
     size_unit: megabytes
+# Gateway metrics (#1614). Kong bundles this plugin — nothing to install.
+# It serves Prometheus-format metrics on the STATUS listener
+# (KONG_STATUS_LISTEN 0.0.0.0:8100, the port Gatus already health-checks)
+# at /metrics; Prometheus scrapes it by DNS over egov-network, so no host
+# port is published. Every citizen request crosses Kong, so this is the
+# only source of per-route status-code and latency data we have.
+#
+# per_consumer is deliberately NOT enabled: it multiplies series count for
+# little incident-response value, and metric cardinality is a real cost on
+# a memory-tight box (#1612).
+- name: prometheus
+  config:
+    status_code_metrics: true
+    latency_metrics: true
+    bandwidth_metrics: true
+    upstream_health_metrics: true
 - name: pre-function
   config:
     access:
@@ -78,8 +94,11 @@ plugins:
         -- openEndpointsWhitelist.contains(getPath().value()) — NOT prefix (a prefix would over-open,
         -- e.g. anonymous /localization/messages/v1/_upsert). AUTH_OPTIONAL = open ∪ mixed, kept
         -- VERBATIM-in-sync with env.yaml egov-open/-mixed-mode-endpoints-whitelist (+ the
-        -- boundary-service search paths CCRS migrated to in #1); a CI check enforces the two match
-        -- (Phase 3). See docs/parity-item5-gateway-rbac-design.md.
+        -- boundary-service search paths CCRS migrated to in #1), except for the two explicitly
+        -- documented Kong-only public-dashboard aliases below. The Spring gateway does not strip
+        -- anonymous client-supplied userInfo, so those aliases must stay protected there. A CI check
+        -- enforces both the shared set and that intentional exception (Phase 3). See
+        -- docs/parity-item5-gateway-rbac-design.md.
         --
         -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
         -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
@@ -110,7 +129,7 @@ plugins:
           ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
           ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
           ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
-          ["/egov-url-shortening"]=true, ["/default-data-handler/tenant/new"]=true,
+          ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
@@ -118,6 +137,20 @@ plugins:
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
           -- flips. POST-only, size- and rate-limited at the route (see below).
           ["/otel/v1/metrics"]=true, ["/otel/v1/logs"]=true,
+          -- Public-dashboard API aliases. Only these aliases are anonymous; the
+          -- existing /v2/analytics/{packs,catalog/_search,_query} employee paths
+          -- stay protected. The public controller methods ignore RequestInfo and
+          -- force the PUBLIC floor, while this pre-function also strips spoofed
+          -- userInfo from no-token bodies (defence in depth). Keep these Kong-only:
+          -- Spring's mixed-mode gateway does not provide the same normalization.
+          -- They are exact AUTH_OPTIONAL matches and exact regex routes below.
+          ["/pgr-services/v2/analytics/public/packs"]=true,
+          ["/pgr-services/v2/analytics/public/_query"]=true,
+          -- #1797: the public page's Add-KPI menu and filter-bar option lists. Same
+          -- contract: RequestInfo discarded server-side, PUBLIC-tagged tiles only,
+          -- the options endpoint takes nothing but tenantId.
+          ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
+          ["/pgr-services/v2/analytics/public/_options"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -547,6 +580,85 @@ services:
   - rainmaker
   - pgr
   routes:
+  # Credential-free dashboard aliases are more specific than the general PGR
+  # prefix route. Anchored regexes keep the route-level public rate/size limits
+  # from applying to similarly-prefixed employee or future analytics endpoints.
+  - name: pgr-public-analytics-packs-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/packs$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-query-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/_query$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-catalog-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/catalog/_search$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-options-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/_options$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
   - name: pgr-route
     paths:
     - /pgr-services
@@ -660,34 +772,6 @@ services:
     paths:
     - /digit-ui
     strip_path: false
-- name: jupyter-service
-  url: http://digit-jupyter:8888
-  tags:
-  - tools
-  - jupyter
-  routes:
-  - name: jupyter-route
-    paths:
-    - /jupyter
-    strip_path: false
-- name: grafana-service
-  url: http://grafana:3000
-  tags:
-  - observability
-  host: grafana
-  port: 3000
-  routes:
-  - name: grafana-route
-    paths:
-    - /grafana
-    strip_path: false
-    preserve_host: true
-  plugins:
-  - name: request-transformer
-    config:
-      add:
-        headers:
-        - "X-Forwarded-Proto:https"
 - name: indexer-service
   url: http://egov-indexer:8080
   tags:
@@ -706,18 +790,16 @@ services:
     paths:
     - /inbox
     strip_path: false
-- name: tempo-service
-  url: http://tempo:3200
-  tags:
-  - observability
-  routes:
-  - name: tempo-route
-    paths:
-    - /tempo
-    strip_path: true
+# NOTE: the /grafana and /tempo routes were removed (#1604). Both proxied to
+# the observability stack with no auth, and the Grafana one also created a
+# fall-through: host nginx's `location /` catch-all forwards to Kong, so a
+# tenant that disabled the nginx /grafana/ location was still served Grafana
+# through here. Grafana is now reachable only via the nginx location (gated on
+# nginx_features.grafana) and Tempo only via Grafana's server-side datasource.
+#
 # Browser -> otel-collector OTLP/HTTP ingest for the dashboard render-lag
-# instrumentation (#1110). Same-origin (follows the /tempo and /grafana
-# observability precedent) so the SPA needs no CORS work and no new host port.
+# instrumentation (#1110). Same-origin so the SPA needs no CORS work and no
+# new host port.
 # Security posture (R8): EXACT paths, POST only, /v1/traces deliberately NOT
 # exposed; per-route 1MB size cap + 60/min-per-IP rate limit; both paths are
 # whitelisted in the pre-function's AUTH_OPTIONAL above. No ingest token in v1

@@ -230,6 +230,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Unassigned",
     "module": "rainmaker-dashboard"
@@ -445,6 +450,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_LANGUAGE",
+    "message": "Language",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Last 7 days",
     "module": "rainmaker-dashboard"
@@ -482,6 +492,11 @@
   {
     "code": "DASHBOARD_HEADER_PGR_OPERATIONS",
     "message": "PGR Operations",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_PUBLIC_SUBTITLE",
+    "message": "Public view",
     "module": "rainmaker-dashboard"
   },
   {
@@ -687,6 +702,11 @@
   {
     "code": "DASHBOARD_LOGIN_SIGNING_IN",
     "message": "Signing in…",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_LOGIN_SESSION_EXPIRED",
+    "message": "Your session has expired. Please sign in again.",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1007,6 +1027,16 @@
   {
     "code": "DASHBOARD_MAP_ZOOM",
     "message": "zoom",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_DESCRIPTION",
+    "message": "This dashboard has not been enabled for this tenant.",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_PUBLIC_NOT_AVAILABLE_TITLE",
+    "message": "Public dashboard is not available",
     "module": "rainmaker-dashboard"
   },
   {

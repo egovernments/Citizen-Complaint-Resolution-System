@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""CI guard: the compose Kong gateway's auth-optional whitelist must EXACTLY match
+"""CI guard: the compose Kong gateway's shared auth-optional whitelist must match
 the K8s Spring gateway's open + mixed-mode whitelists (deployment-parity item #5,
-Phase 3).
+Phase 3), apart from explicitly reviewed Kong-only exceptions.
 
 Both stacks classify a request as auth-optional (anonymous, and not action-RBAC'd)
 by EXACT path membership. If the two lists drift, an endpoint could be anonymous on
 one stack and protected on the other — a security-critical inconsistency. This
-asserts the two lists are identical sets, so neither can drift unnoticed.
+asserts the shared paths are identical sets, and separately asserts that each
+Kong-only exception remains anonymous on Kong and protected on Spring.
+
+The public-dashboard aliases are intentionally Kong-only. Kong removes
+client-supplied RequestInfo.userInfo from anonymous bodies before proxying; the
+Spring gateway does not provide that normalization. Opening these aliases there
+would therefore turn caller-controlled roles into a security principal.
 
 Sources of truth:
   - Kong:  local-setup/kong/kong.yml            -> the AUTH_OPTIONAL Lua set
@@ -26,6 +32,15 @@ KONG = ROOT / "local-setup/kong/kong.yml"
 ENV = ROOT / "devops/deploy-as-code/charts/environments/env.yaml"
 
 _ENTRY = re.compile(r'\["(/[^"]+)"\]\s*=\s*true')
+
+# Reviewed exceptions to gateway parity. These paths MUST exist in Kong's
+# AUTH_OPTIONAL set and MUST NOT appear in either Spring whitelist.
+KONG_ONLY_AUTH_OPTIONAL = {
+    "/pgr-services/v2/analytics/public/packs",
+    "/pgr-services/v2/analytics/public/_query",
+    "/pgr-services/v2/analytics/public/catalog/_search",
+    "/pgr-services/v2/analytics/public/_options",
+}
 
 
 def _find_value(node, key):
@@ -81,32 +96,46 @@ def env_whitelist(text: str) -> set:
     return paths
 
 
-def diff(kong: set, env: set):
-    return sorted(kong - env), sorted(env - kong)
+def diff(kong: set, env: set, kong_only=KONG_ONLY_AUTH_OPTIONAL):
+    shared_kong = kong - kong_only
+    return sorted(shared_kong - env), sorted(env - shared_kong)
 
 
 def report(kong: set, env: set) -> int:
     only_kong, only_env = diff(kong, env)
-    if only_kong or only_env:
+    missing_kong_only = sorted(KONG_ONLY_AUTH_OPTIONAL - kong)
+    opened_on_spring = sorted(KONG_ONLY_AUTH_OPTIONAL & env)
+    if only_kong or only_env or missing_kong_only or opened_on_spring:
         print("Gateway auth-optional whitelist MISMATCH (Kong vs Spring gateway):\n")
         for p in only_kong:
             print(f"  + only in Kong (local-setup/kong/kong.yml):        {p}")
         for p in only_env:
             print(f"  - only in K8s  (env.yaml open+mixed whitelists):   {p}")
+        for p in missing_kong_only:
+            print(f"  ! missing required Kong-only exception:           {p}")
+        for p in opened_on_spring:
+            print(f"  ! Kong-only exception was opened on Spring:        {p}")
         print(
-            "\nThe compose and K8s gateways classify by EXACT path membership, so these "
-            "lists must be identical. Add/remove the path(s) in BOTH files."
+            "\nShared paths must exist in BOTH files. KONG_ONLY_AUTH_OPTIONAL paths must "
+            "exist only in Kong because Spring does not normalize anonymous userInfo."
         )
         return 1
-    print(f"OK: gateway auth-optional whitelists match ({len(kong)} entries).")
+    print(
+        f"OK: gateway auth-optional shared whitelists match "
+        f"({len(kong) - len(KONG_ONLY_AUTH_OPTIONAL)} shared; "
+        f"{len(KONG_ONLY_AUTH_OPTIONAL)} reviewed Kong-only)."
+    )
     return 0
 
 
 def self_test() -> int:
     base = {"/a", "/b", "/c"}
-    assert diff(base, base) == ([], []), "identical sets must not diff"
-    assert diff(base | {"/x"}, base) == (["/x"], []), "extra-in-kong not detected"
-    assert diff(base, base | {"/y"}) == ([], ["/y"]), "extra-in-env not detected"
+    assert diff(base, base, set()) == ([], []), "identical sets must not diff"
+    assert diff(base | {"/x"}, base, set()) == (["/x"], []), "extra-in-kong not detected"
+    assert diff(base, base | {"/y"}, set()) == ([], ["/y"]), "extra-in-env not detected"
+    assert diff(base | {"/x"}, base, {"/x"}) == ([], []), "Kong-only path must be excluded"
+    assert diff(base | {"/x"}, base | {"/x"}, {"/x"}) == ([], ["/x"]), \
+        "Kong-only path opened on Spring must be detected"
     print("self-test OK: drift is detected in both directions.")
     return 0
 

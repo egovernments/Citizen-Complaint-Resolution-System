@@ -12,6 +12,28 @@ import * as path from 'node:path';
 const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
 const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
 const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
+const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
+const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
+
+describe('Kong declarative route syntax', () => {
+  /**
+   * Incident: public-dashboard regex routes used the older `~^/path` form.
+   * The deployed Kong parser accepts regex paths only when they begin `~/`,
+   * so Kong exited during startup while YAML/static gateway checks stayed green.
+   */
+  test('every regex path uses the Kong 3 declarative `~/` prefix', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => !routePath.startsWith('~/'))).toEqual([]);
+  });
+
+  test('public analytics regex routes stay end-anchored and Kong-parseable', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => routePath.startsWith('~/pgr-services/v2/analytics/public/'))).toEqual([
+      '~/pgr-services/v2/analytics/public/packs$',
+      '~/pgr-services/v2/analytics/public/_query$',
+      '~/pgr-services/v2/analytics/public/catalog/_search$',
+      '~/pgr-services/v2/analytics/public/_options$',
+    ]);
+  });
+});
 
 describe('compose invocation discipline', () => {
   /**
@@ -102,12 +124,19 @@ describe('image pin immutability', () => {
   // this many times, no more, no less — extras, duplicates, AND removals
   // all fail the test until this list is updated to match. The list IS
   // the changelog of this debt; it may shrink, never grow.
+  //
+  // Renamed wholesale to the `egovio/*` Docker Hub org by e6323a09
+  // ("chore(compose): move all image refs to egovio Docker Hub org"). The
+  // count went seven -> six when the Jupyter Lab service was removed (#1743);
+  // every other entry is the same image under a new owner, so this records a
+  // rename plus one genuine retirement, not a relaxation. (Note the pre-rename
+  // names still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml},
+  // which this test does not read: it scans the base compose only.)
   const FROZEN_LATEST_DEBT: Record<string, number> = {
-    'edoburu/pgbouncer:latest': 1,
-    'tilt-demo-db-migrations:latest': 1,
-    'curlimages/curl:latest': 2, // two gate containers
-    'twinproduction/gatus:latest': 1,
-    'tilt-demo-jupyter:latest': 1,
+    'egovio/pgbouncer:latest': 1,
+    'egovio/tilt-demo-db-migrations:latest': 1,
+    'egovio/curl:latest': 2, // two gate containers
+    'egovio/gatus:latest': 1,
     'openbao/openbao:latest': 1,
     'egovio/novu-bridge-endpoint:latest': 1,
   };
@@ -161,5 +190,67 @@ describe('per-tenant overlay services exist in the base compose', () => {
     );
     const unknown = overlayServices.filter((s) => !baseServices.has(s));
     expect(unknown).toEqual([]);
+  });
+});
+
+describe('observability ports are loopback-bound in every compose file', () => {
+  /**
+   * Incident: #1603 — Grafana, Prometheus, Loki, Tempo, the otel-collector
+   * and the Gatus board were published on 0.0.0.0 (and [::]), so every one
+   * of them was reachable from the public internet on any box without a
+   * host firewall. Grafana additionally had no auth at the time.
+   *
+   * Fixed in #1606 — but the fix had to be applied in FOUR places, because
+   * these compose files are parallel full stacks rather than overlays of a
+   * single base (`docker-compose.yml`, `docker-compose.deploy.yaml` — which
+   * `performance/ansible/playbook-setup.yml` ships straight to hosts —
+   * `docker-compose.db-migrations.yml`, `docker-compose.registry.yml`, and
+   * the repo-root standalone `docker-compose.egov-digit.yaml`). YAML anchors
+   * can't span files, so there is no way to factor the mapping into one
+   * place; this contract is the substitute. Adding an observability port to
+   * a new compose file without the `127.0.0.1:` prefix fails here.
+   */
+  const REPO_ROOT = path.resolve(ROOT, '..');
+
+  // Host ports owned by the observability stack. Keyed by port so a service
+  // renamed or copied into another file is still caught.
+  const OBSERVABILITY_HOST_PORTS: Record<string, string> = {
+    '13000': 'grafana',
+    '13100': 'loki',
+    '13133': 'otel-collector health',
+    '13200': 'tempo',
+    '14317': 'otel-collector OTLP/gRPC',
+    '14318': 'otel-collector OTLP/HTTP',
+    '18889': 'gatus',
+    '19090': 'prometheus',
+  };
+
+  const composeFiles = [
+    ...fs
+      .readdirSync(ROOT)
+      .filter((f) => /^docker-compose\..*\.(yml|yaml)$/.test(f) || f === 'docker-compose.yml')
+      .map((f) => path.join(ROOT, f)),
+    path.join(REPO_ROOT, 'docker-compose.egov-digit.yaml'),
+  ].filter((f) => fs.existsSync(f));
+
+  test('every compose file that publishes one binds it to 127.0.0.1', () => {
+    const offenders: string[] = [];
+    for (const file of composeFiles) {
+      const text = fs.readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/^\s*-\s*"([^"]+)"\s*(?:#.*)?$/gm)) {
+        const mapping = m[1];
+        // A published-port mapping is `[host-ip:]host-port:container-port`.
+        const parts = mapping.split(':');
+        const hostPort = parts.length >= 2 ? parts[parts.length - 2] : null;
+        if (!hostPort || !(hostPort in OBSERVABILITY_HOST_PORTS)) continue;
+        if (!mapping.startsWith('127.0.0.1:')) {
+          offenders.push(
+            `${path.relative(REPO_ROOT, file)}: "${mapping}" ` +
+              `(${OBSERVABILITY_HOST_PORTS[hostPort]}) is not loopback-bound`,
+          );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

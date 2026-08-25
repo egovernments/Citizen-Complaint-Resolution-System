@@ -40,6 +40,11 @@ config:
         dockerfile: "build/maven/Dockerfile"
       - work-dir: "backend/novu-bridge/src/main/resources/db"
         image-name: "novu-bridge-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/novu-bridge-endpoint"
+    build:
+      - work-dir: "backend/novu-bridge-endpoint"
+        dockerfile: "backend/novu-bridge-endpoint/Dockerfile"
+        image-name: "novu-bridge-endpoint"
   - name: "builds/Citizen-Complaint-Resolution-System/backend/digit-config-service"
     build:
       - work-dir: "backend/digit-config-service"
@@ -92,12 +97,11 @@ config:
   # nightly builds the neutral-default reference image (see build/NIGHTLY-BUILDS.md).
   - name: "builds/Citizen-Complaint-Resolution-System/configurator"
     build:
-      - work-dir: "configurator"
+      - work-dir: "."
         dockerfile: "configurator/Dockerfile"
         image-name: "configurator"
   - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-v2"
     build:
-      - work-dir: "digit-ui-v2"
+      - work-dir: "."
         dockerfile: "digit-ui-v2/Dockerfile"
         image-name: "digit-ui-v2"
-

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  GRID_COLS,
-  UNIFORM_CHART_SIZE_CONSTRAINTS,
-  MAP_SIZE_CONSTRAINTS,
-  FULL_WIDTH_TABLE_GRID,
-  DEFAULT_CHART_GRID,
-  DROPPING_ITEM_ID,
-} from "../constants/layoutConfig";
+import { GRID_COLS, DROPPING_ITEM_ID } from "../constants/layoutConfig";
+import { getEmployeeInfo, getTenantId } from "../services/authService";
+import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
+import {
+  storageKeyFor,
+  publicStorageKeyFor,
+  readSavedLayout,
+  persistLayout,
+  buildSeedLayout,
+  normalizeItem,
+  resolveInitialLayout,
+  sizeConstraintsForKpi,
+  defaultSizeForKpi,
+} from "../utils/layoutStore";
 
 /**
  * useCatalogLayout — catalog-world layout hook (kpiId-keyed).
@@ -17,55 +23,7 @@ import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGe
  * swap + column-aware compaction on stop, RGL re-sync via moved flag.
  */
 
-const STORAGE_KEY = "ccrs.dashboard.catalog-layout.v1";
-
-const CARD_KINDS = new Set([
-  "number-tile-delta",
-  "number-tile",
-  "scalar",
-  "number-tile-sparkline",
-  "sparkline-card",
-]);
-
-const KPI_CARD_CONSTRAINTS = { minW: 2, minH: 2, maxW: 6, maxH: 3 };
-const LIST_CONSTRAINTS = { minW: 3, minH: 4, maxW: 12, maxH: 12 };
-
-export function sizeConstraintsForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
-  if (CARD_KINDS.has(kind)) return KPI_CARD_CONSTRAINTS;
-  switch (kind) {
-    case "map":
-    case "choropleth-map":
-      return MAP_SIZE_CONSTRAINTS;
-    case "sla-risk-table":
-    case "table":
-    case "data-table":
-      return {
-        minW: FULL_WIDTH_TABLE_GRID.minW,
-        minH: FULL_WIDTH_TABLE_GRID.minH,
-        maxW: FULL_WIDTH_TABLE_GRID.maxW,
-        maxH: FULL_WIDTH_TABLE_GRID.maxH,
-      };
-    case "rankedList":
-    case "dow":
-      return LIST_CONSTRAINTS;
-    default:
-      return UNIFORM_CHART_SIZE_CONSTRAINTS;
-  }
-}
-
-export function defaultSizeForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
-  if (CARD_KINDS.has(kind)) return { w: 2, h: 2 };
-  if (kind === "map" || kind === "choropleth-map") return { w: 8, h: 6 };
-  if (kind === "sla-risk-table" || kind === "table" || kind === "data-table") {
-    return { w: FULL_WIDTH_TABLE_GRID.w, h: FULL_WIDTH_TABLE_GRID.h };
-  }
-  if (kind === "rankedList" || kind === "dow") {
-    return { w: 6, h: 6 };
-  }
-  return { ...DEFAULT_CHART_GRID };
-}
+export { sizeConstraintsForKpi, defaultSizeForKpi };
 
 export function getDroppingItemForKpi(kpiId, kpis) {
   const c = sizeConstraintsForKpi(kpiId, kpis);
@@ -73,49 +31,13 @@ export function getDroppingItemForKpi(kpiId, kpis) {
   return { i: DROPPING_ITEM_ID, w, h, x: 0, y: 0, ...c };
 }
 
-function clampNum(v, min, max, fallback) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
-}
-
-function normalizeItem(item, kpis) {
-  const c = sizeConstraintsForKpi(item.i, kpis);
-  const w = clampNum(item.w, c.minW, c.maxW, c.minW);
-  const h = clampNum(item.h, c.minH, c.maxH, c.minH);
-  const x = Math.min(clampNum(item.x, 0, GRID_COLS - 1, 0), GRID_COLS - w);
-  const y = clampNum(item.y, 0, Number.MAX_SAFE_INTEGER, 0);
-  return { i: item.i, x, y, w, h, ...c };
-}
-
-function buildSeedLayout(packLayout, kpis) {
-  return (packLayout || [])
-    .filter((item) => kpis[item.kpiId])
-    .map((item) =>
-      normalizeItem({ i: item.kpiId, x: item.x, y: item.y, w: item.w, h: item.h }, kpis)
-    );
+function scopedStorageKey() {
+  if (isPublicDashboardRuntime()) return publicStorageKeyFor(getTenantId());
+  return storageKeyFor(getTenantId(), getEmployeeInfo()?.uuid);
 }
 
 function readSaved() {
-  try {
-    const raw = window.localStorage?.getItem(STORAGE_KEY);
-    if (raw == null) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistPositions(layout) {
-  try {
-    window.localStorage?.setItem(
-      STORAGE_KEY,
-      JSON.stringify(layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })))
-    );
-  } catch {
-    /* ignore */
-  }
+  return readSavedLayout(window.localStorage, scopedStorageKey());
 }
 
 /** Re-attach min/max constraints after geometry helpers strip them to positions only. */
@@ -131,12 +53,13 @@ function canonicalizeLayout(layout, kpis) {
 }
 
 function persist(layout) {
-  persistPositions(layout);
+  persistLayout(window.localStorage, scopedStorageKey(), layout);
 }
 
-export function useCatalogLayout(kpis, packLayout) {
+export function useCatalogLayout(kpis, packLayout, { persistent = true } = {}) {
   const seed = useMemo(() => buildSeedLayout(packLayout, kpis), [packLayout, kpis]);
   const geom = useMemo(() => createCatalogDragGeometry(kpis), [kpis]);
+  const catalogReady = Object.keys(kpis || {}).length > 0;
 
   const [layout, setLayout] = useState([]);
   const [gridSyncKey, setGridSyncKey] = useState(0);
@@ -149,19 +72,16 @@ export function useCatalogLayout(kpis, packLayout) {
   layoutRef.current = layout;
 
   useEffect(() => {
-    if (!seed.length) return;
-    const saved = readSaved();
-    const source = saved !== null ? saved : seed;
-    const reconciled = source
-      .filter((item) => kpis[item.i])
-      .map((item) => normalizeItem(item, kpis));
+    if (!catalogReady) return;
+    const saved = persistent ? readSaved() : null;
+    const reconciled = resolveInitialLayout(saved, seed, kpis);
     const repaired = geom.hasOverlaps(reconciled)
       ? geom.resolveRemainingOverlaps(reconciled, [])
       : reconciled;
     setLayout(repaired);
-    if (repaired !== reconciled) persist(repaired);
+    if (persistent && repaired !== reconciled) persist(repaired);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, geom]);
+  }, [seed, catalogReady, geom, persistent]);
 
   const syncFlagRef = useRef(false);
   const stampSync = useCallback((next) => {
@@ -173,10 +93,10 @@ export function useCatalogLayout(kpis, packLayout) {
   const applyLayout = useCallback(
     (next) => {
       const normalized = canonicalizeLayout(next, kpis);
-      persistPositions(normalized);
+      if (persistent) persist(normalized);
       setLayout(stampSync(normalized));
     },
-    [stampSync, kpis]
+    [stampSync, kpis, persistent]
   );
 
   const commitLayoutWithReflow = useCallback(

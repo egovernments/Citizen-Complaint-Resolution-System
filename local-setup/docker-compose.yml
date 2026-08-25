@@ -169,7 +169,7 @@ services:
 
   # MDMS Backend
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:maven-jdk21-f3a7c13
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -679,7 +679,7 @@ services:
       - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: egovio/egov-accesscontrol:abac-changes-cb6a372
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -807,7 +807,7 @@ services:
       - egov-network
 
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-dd641a6
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -948,7 +948,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-8116812}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1019,7 +1019,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-cae07a3}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
     container_name: digit-ui
     restart: on-failure
     ports:
@@ -1069,7 +1069,12 @@ services:
       - "18443:8443"
       - "18001:8001"
       - "18002:8002"
-      - "18100:8100"
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1128,13 +1133,26 @@ services:
         condition: service_healthy
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      # sqlite store (#1610) — the config above is mounted read-only, so
+      # the database needs its own volume. Without this /data does not
+      # exist in the container and gatus panics at startup with
+      # "unable to open database file (14)" (SQLITE_CANTOPEN), taking the
+      # whole compose project down. #1630 added the storage block to the
+      # SHARED gatus/config.yaml but the volume to only one of five files.
+      - gatus_data:/data
     ports:
-      - "18889:8080"
+      - "127.0.0.1:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Slack alerting (#1609). Unset = alerting off: gatus expands the
+      # missing variable to an empty string and drops the slack provider
+      # with a warning instead of failing to start. Set it in .env to
+      # switch alerting on.
+      GATUS_SLACK_WEBHOOK_URL: ${GATUS_SLACK_WEBHOOK_URL:-}
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "false"
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
@@ -1142,53 +1160,26 @@ services:
       GATUS_AUDIT: "false"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8080"
+      # No grafana/prometheus/loki/tempo on this path, so the observability
+      # checks (#1613) stay off. Declared explicitly: Gatus reads an UNSET
+      # enabled-var as true, which would make them red forever here.
+      GATUS_OBSERVABILITY: "false"
+      # No public hostname on this path — the TLS check (#1622) is off.
+      # Declared explicitly because Gatus treats an UNSET `enabled` var as
+      # true, which would leave a permanently-red check for a URL that does
+      # not resolve.
+      GATUS_TLS: "false"
+      # Non-empty on purpose. Gatus validates `url` on EVERY endpoint before it
+      # ever consults `enabled:`, so "" is not an inert placeholder -- it aborts
+      # startup with "you must specify an url for each endpoint" and takes the
+      # entire dashboard down with it. This value is only ever parsed by the
+      # config loader; the check is disabled, so it is never dialled.
+      GATUS_PUBLIC_URL: "https://localhost/"
     deploy:
       resources:
         limits:
           memory: 64M
           cpus: '0.1'
-    networks:
-      - egov-network
-
-  jupyter:
-    build:
-      context: ./jupyter
-      dockerfile: Dockerfile
-    container_name: digit-jupyter
-    user: root
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      kong:
-        condition: service_healthy
-    environment:
-      DIGIT_URL: http://kong:8000
-      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
-      DIGIT_DIRECT_USER: http://egov-user:8107
-      DIGIT_DIRECT_PGR: http://pgr-services:8080
-      DIGIT_TENANT: pg
-      JUPYTER_ENABLE_LAB: "yes"
-    command: >
-      jupyter lab
-      --ip=0.0.0.0
-      --port=8888
-      --no-browser
-      --allow-root
-      --ServerApp.token=${JUPYTER_TOKEN:-digit-crs-local}
-      --ServerApp.password=''
-      --ServerApp.base_url=/jupyter
-      --ServerApp.allow_origin='*'
-    ports:
-      - "18888:8888"
-    volumes:
-      - ./jupyter/dataloader:/home/jovyan/work
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
     networks:
       - egov-network
 
@@ -1225,5 +1216,6 @@ networks:
     driver: bridge
 
 volumes:
+  gatus_data:
   postgres_data: null
   minio_data: null
