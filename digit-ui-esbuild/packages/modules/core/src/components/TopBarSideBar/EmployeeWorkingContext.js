@@ -119,7 +119,7 @@ function Group({ title, children }) {
   );
 }
 
-export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId, onDismiss, anchorRef }) {
+export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId, onDismiss, anchorRef, id }) {
   const ref = useRef(null);
   // The header's own .digit-header-action-fields container is overflow:hidden
   // and 32px tall, so an absolutely-positioned panel is clipped to nothing.
@@ -216,7 +216,12 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
     <div
       className="digit-working-context-panel"
       ref={ref}
-      role="dialog"
+      id={id}
+      // A disclosure, not a dialog: it is read-only, has no close control and
+      // does not trap or restore focus. role="dialog" would promise all three
+      // to assistive tech and deliver none, so the trigger's aria-expanded +
+      // aria-controls describes the relationship honestly instead.
+      role="group"
       aria-label={label(t, "CS_WORKING_CONTEXT", "Working context")}
       // Always fixed, even before the first measurement: without it the panel
       // is briefly a normal in-flow child of the 32px, overflow:hidden action
@@ -257,9 +262,15 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
 }
 
 /** Summary + click-to-expand panel, for the desktop header. */
+let panelSeq = 0;
+
 export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isError }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef(null);
+  // Stable id so aria-controls points somewhere real; two instances can be
+  // mounted at once (header + mobile row) so it cannot be a constant.
+  const panelIdRef = useRef(null);
+  if (panelIdRef.current === null) panelIdRef.current = `digit-working-context-panel-${++panelSeq}`;
 
   if (isError) {
     return <EmployeeWorkingContextSummary t={t} isError context={null} />;
@@ -273,6 +284,7 @@ export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isEr
         ref={triggerRef}
         className="digit-working-context-trigger"
         aria-expanded={open}
+        aria-controls={panelIdRef.current}
         onClick={() => setOpen((v) => !v)}
       >
         <EmployeeWorkingContextSummary t={t} context={context} cityDetails={cityDetails} tenantId={tenantId} />
@@ -284,6 +296,7 @@ export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isEr
           cityDetails={cityDetails}
           tenantId={tenantId}
           anchorRef={triggerRef}
+          id={panelIdRef.current}
           onDismiss={() => setOpen(false)}
         />
       )}

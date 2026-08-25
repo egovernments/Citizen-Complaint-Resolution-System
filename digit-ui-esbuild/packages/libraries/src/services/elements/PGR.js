@@ -16,7 +16,12 @@ const buildRequestInfo = () => {
     key: "",
     msgId: `${new Date().getTime()}|${Digit.StoreData.getCurrentLanguage()}`,
     authToken: user?.access_token || null,
-    userInfo: user?.info,
+    // userInfo is deliberately omitted. EmployeeContextService resolves the
+    // employee from RequestInfo.userInfo.uuid, and Kong overwrites that from
+    // the token — but only where the gateway enriches. Sending our cached copy
+    // would make a caller-controlled body the lookup identity on any path
+    // without that enrichment. Leaving it out makes the backend's
+    // `user == null` branch fail closed instead.
   };
 };
 

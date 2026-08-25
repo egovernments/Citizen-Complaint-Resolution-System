@@ -6398,9 +6398,16 @@ header.digit-header .digit-dropdown-master {
 /* Desktop: the inline copy in the header is the one that shows. */
 .employee .digit-working-context-mobile { display: none; }
 @media (max-width: 640px) {
-  /* Mobile: the shared header hides its action fields, so the inline copy goes
-   * with them and the sticky row takes over. */
+  /* Mobile: the sticky row takes over. The header only drops its action fields
+   * when the page *loads* narrow — mobileView is sampled once in App.js — so
+   * resizing down from desktop leaves the inline copy rendered and both would
+   * show. Hide it explicitly rather than relying on that. */
   .employee .digit-working-context-mobile { display: block; }
+  .employee .digit-header-action-fields .digit-working-context { display: none; }
+  /* …and collapse the wrapper Header.js puts around it so it leaves no gap.
+   * Layered: the rule above always hides the content, this one removes the
+   * empty slot where :has() is supported. */
+  .employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
 }
 .employee .digit-working-context-mobile {
   position: sticky;
