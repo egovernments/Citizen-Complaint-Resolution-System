@@ -41,6 +41,19 @@ export const PGRService = {
       params: { tenantId, ...params },
     }),
 
+  // Working context for the *authenticated* employee (CCRS#1833). The backend
+  // resolves the employee from the RequestInfo auth token and returns only
+  // display-safe fields, so the UI must not pass a uuid of its own.
+  employeeContext: (tenantId) =>
+    Request({
+      url: Urls.employee_context,
+      useCache: false,
+      method: "POST",
+      auth: true,
+      userService: true,
+      params: { tenantId },
+    }),
+
   employeeSearch: (tenantId, roles) => {
     return Request({
       url: Urls.EmployeeSearch,

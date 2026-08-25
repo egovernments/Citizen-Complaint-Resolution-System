@@ -6284,4 +6284,84 @@ header.digit-header .digit-dropdown-master {
   align-items: center !important;
   padding: 0 12px !important;
   min-height: 44px !important;
+ * Employee working context (CCRS#1833)
+ * Compact line in the employee header, read-only panel on click, and a sticky
+ * row on mobile. Scoped to .employee so the citizen shell is untouched.
+ * ======================================================================== */
+.employee .digit-working-context {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.employee .digit-working-context-trigger {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.employee .digit-working-context-trigger:focus-visible {
+  outline: 2px solid var(--color-primary-accent, #c84c0e);
+  outline-offset: 2px;
+}
+.employee .digit-working-context-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-secondary, #505a5f);
+}
+.employee .digit-working-context-sep { color: #a9b0b4; }
+.employee .digit-working-context-more {
+  color: var(--color-primary-accent, #c84c0e);
+  font-weight: 500;
+}
+.employee .digit-working-context-error { font-style: italic; }
+
+.employee .digit-working-context-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: 272px;
+  max-width: 352px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d6d8da;
+  border-radius: 2px;
+  box-shadow: 0 6px 22px rgba(11, 12, 12, .16);
+  padding: 8px 0;
+  text-align: left;
+}
+.employee .digit-working-context-group { padding: 8px 15px; }
+.employee .digit-working-context-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #787878;
+  margin-bottom: 2px;
+}
+.employee .digit-working-context-group-value {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0b0c0c;
+}
+.employee .digit-working-context-qualifier { color: #505a5f; font-size: 12px; }
+.employee .digit-working-context-raw-roles { color: #505a5f; font-size: 11.5px; margin-top: 2px; }
+
+/* Mobile: its own row under the 56px topbar, sticky so the context stays put
+ * while an operator scrolls the inbox (requested on CCRS#1833). */
+.employee .digit-working-context-mobile {
+  position: sticky;
+  top: 56px;
+  z-index: 40;
+  background: #fff;
+  border-bottom: 1px solid #d6d8da;
+  padding: 6px 12px;
 }
