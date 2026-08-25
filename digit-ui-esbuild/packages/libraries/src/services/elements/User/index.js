@@ -68,14 +68,23 @@ export const UserService = {
       return adapter.logout();
     }
 
-    const userType = UserService.getType();
-    // Capture userType BEFORE we clear storage. The redirect URL has
-    // to be the explicit `/citizen/login` (not `/citizen`) — landing
-    // on the bare `/citizen` after a localStorage.clear leaves the
-    // App router with no userType to resolve from, and it falls back
-    // to the employee language-selection screen, which is the wrong
-    // "you've been logged out" landing for a citizen session.
-    const logoutRedirectURL = window?.globalConfigs?.getConfig("LOGOUT_REDIRECT_URL") || `/${window?.contextPath}/${userType === "citizen" ? "citizen/login" : "employee/user/language-selection"}`;
+    // The destination must come from the app the user is actually in — the
+    // URL — never from the stored "userType". That key is one shared
+    // localStorage entry for both apps on the origin, only some employee
+    // flows ever write it, the citizen app never does, and every logout
+    // wipes it; in practice it routinely holds the OTHER app's value or
+    // nothing at all, which sent employees to the citizen login and
+    // citizens to the employee language-selection screen (reproduced on
+    // UAT: a clean EMP001 session had no userType key, so getType()
+    // defaulted to "citizen" and logout landed on /citizen/login).
+    //
+    // The paths stay explicit (`/citizen/login`, not bare `/citizen`):
+    // after localStorage.clear the App router has no userType to resolve
+    // from and falls back to the employee language-selection screen.
+    const isEmployee = window?.location?.pathname?.split("/").includes("employee");
+    const logoutRedirectURL =
+      window?.globalConfigs?.getConfig("LOGOUT_REDIRECT_URL") ||
+      `/${window?.contextPath}/${isEmployee ? "employee/user/language-selection" : "citizen/login"}`;
     try {
       await UserService.logoutUser();
     } catch (e) {
