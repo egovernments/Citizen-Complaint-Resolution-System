@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseDepartmentExcel, parseDesignationExcel, parseComplaintTypeExcel, parseBoundaryExcel } from './excelParser';
+import {
+  parseDepartmentExcel,
+  parseDesignationExcel,
+  parseComplaintTypeExcel,
+  parseBoundaryExcel,
+  parseTenantExcel,
+} from './excelParser';
 
 // LibreOffice / Google Sheets convert TRUE / FALSE cells to JS booleans
 // when xlsx parses them. Before the ?? fix the parser used `||` for the
@@ -78,5 +84,41 @@ describe('Boundary coordinate parsing', () => {
     expect(eq?.longitude).toBe(0);
     expect(na?.latitude).toBeUndefined();
     expect(na?.longitude).toBeUndefined();
+  });
+});
+
+describe('Tenant code validation (egovernments/CCRS#1847)', () => {
+  // egov-user enforces `Pattern.createUserRequest.user.tenantId` =
+  // `^[a-zA-Z. ]*$` server-side (letters, dots, spaces — no digits). A
+  // tenant code that violates this passes tenant creation in Phase 1 but
+  // breaks employee creation in Phase 4, so the Excel parser must reject
+  // it up front at upload time.
+  it('rejects an alphanumeric tenant code', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'testcity001', tenantName: 'Test City' },
+    ]);
+    const { data, validation } = parseTenantExcel(wb);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'tenantCode', code: 'INVALID_FORMAT' })
+    );
+    expect(data).toBeNull();
+  });
+
+  it('accepts a letters-only tenant code', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'testcity', tenantName: 'Test City' },
+    ]);
+    const { data, validation } = parseTenantExcel(wb);
+    expect(validation.errors).toEqual([]);
+    expect(data?.tenant.tenantCode).toBe('testcity');
+  });
+
+  it('accepts letters with dots and spaces (e.g. sub-tenant codes)', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'ke.testcity', tenantName: 'Test City' },
+    ]);
+    const { validation } = parseTenantExcel(wb);
+    expect(validation.errors).toEqual([]);
   });
 });
