@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from "react";
 
 /**
  * "What am I here to do, where and as what" for the logged-in employee
@@ -39,8 +39,16 @@ const roleContextLabel = (t, ctx) => label(t, `${ROLE_CONTEXT_KEY}${ctx}`, ctx);
  * is also the safety net for the seeded records that carry a tenant code in
  * `boundary` instead of a real boundary.
  */
-/** City name from the resolved tenant, falling back to the raw tenant id. */
-const cityLabel = (t, cityDetails, tenantId) => label(t, cityDetails?.i18nKey, tenantId);
+/**
+ * City name for the tenant the *context* belongs to. cityDetails describes
+ * whichever city the header's ChangeCity control currently shows, which for a
+ * state-level employee need not be that tenant — using it blindly would label
+ * City A's departments and jurisdictions with City B's name.
+ */
+const cityLabel = (t, cityDetails, tenantId) => {
+  if (cityDetails?.code && tenantId && cityDetails.code !== tenantId) return tenantId;
+  return label(t, cityDetails?.i18nKey, tenantId);
+};
 
 const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   const hierarchy = String(j?.hierarchy || "").toUpperCase();
@@ -120,7 +128,9 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
   // (which the city and language controls also live in) is left alone.
   const [pos, setPos] = useState(null);
 
-  useEffect(() => {
+  // Layout effect: position before the browser paints, so the panel never
+  // shows a frame in the wrong place.
+  useLayoutEffect(() => {
     const place = () => {
       const a = anchorRef?.current;
       if (!a) return;
@@ -133,7 +143,9 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       // edge strands it in a corner. Clamped so it never leaves the viewport.
       const preferred = r.width > width ? (window.innerWidth - width) / 2 : r.right - width;
       const left = Math.max(8, Math.min(preferred, window.innerWidth - width - 8));
-      setPos({ top: Math.round(r.bottom + 8), left: Math.round(left) });
+      const next = { top: Math.round(r.bottom + 8), left: Math.round(left) };
+      // The settle pass below runs several times; only re-render on a real move.
+      setPos((prev) => (prev && prev.top === next.top && prev.left === next.left ? prev : next));
     };
     place();
     // The header is still settling when the panel mounts (web fonts, the city
@@ -206,7 +218,10 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       ref={ref}
       role="dialog"
       aria-label={label(t, "CS_WORKING_CONTEXT", "Working context")}
-      style={pos ? { position: "fixed", top: pos.top, left: pos.left } : { visibility: "hidden" }}
+      // Always fixed, even before the first measurement: without it the panel
+      // is briefly a normal in-flow child of the 32px, overflow:hidden action
+      // row and blows the header out for a frame.
+      style={pos ? { position: "fixed", top: pos.top, left: pos.left } : { position: "fixed", visibility: "hidden" }}
     >
       <Group title={label(t, "CS_WORKING_CONTEXT_CITY", "City")}>{rows.city}</Group>
 

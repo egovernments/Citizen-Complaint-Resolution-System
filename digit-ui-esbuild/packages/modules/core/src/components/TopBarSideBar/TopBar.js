@@ -145,6 +145,9 @@ const TopBar = ({
   return (
     <React.Fragment>
       <TopBarComponentMain
+        // Header.js wraps every entry in .individual-action-field and the row
+        // has gap:2rem, so a falsy entry leaves an empty 32px hole that vanishes
+        // when the query resolves. Drop them before they reach it.
         actionFields={[
           showWorkingContext && (
             <EmployeeWorkingContext
@@ -184,7 +187,7 @@ const TopBar = ({
               theme="light"
             />
           ),
-        ]}
+        ].filter(Boolean)}
         onHamburgerClick={() => {
           toggleSidebar();
         }}

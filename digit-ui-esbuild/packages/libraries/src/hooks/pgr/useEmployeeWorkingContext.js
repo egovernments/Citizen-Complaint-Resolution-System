@@ -28,11 +28,16 @@ const useEmployeeWorkingContext = (tenantId, config = {}) => {
       return context;
     },
     {
-      enabled: !!tenantId && !!userUuid && isEmployee,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
-      retry: 1,
+      // One retry only, and never on a 4xx: the endpoint is absent until #1858
+      // lands and retrying a missing route just doubles the noise.
+      retry: 0,
       ...config,
+      // Spread last so a caller can narrow the guard but never widen it —
+      // otherwise `enabled` from config drops the employee/uuid checks and a
+      // citizen-typed token on an /employee route fires this POST.
+      enabled: !!tenantId && !!userUuid && isEmployee && (config.enabled ?? true),
     }
   );
 };
