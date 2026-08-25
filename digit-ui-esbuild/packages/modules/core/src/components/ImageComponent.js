@@ -9,6 +9,13 @@ const ImageComponent = ({
   ariaLabelledby = "no-image-description",
   ...props
 }) => {
+  // An <img> with no src is always a broken-image icon, never a useful render.
+  // Several callers pass a globalConfigs value straight through (the "Powered by
+  // DIGIT" footers, tenant logos), so an unset config used to paint a broken
+  // icon plus its alt text on the login, OTP and password screens. Render
+  // nothing instead — the same guard the employee shell already applies inline.
+  if (!src) return null;
+
   // Determine the appropriate attributes based on the props
   const accessibilityProps = {};
 

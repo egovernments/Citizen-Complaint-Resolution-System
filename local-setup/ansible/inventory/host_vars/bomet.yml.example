@@ -95,10 +95,12 @@ core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
 
 # ── Branding ──
-# Footer logos shown in citizen + employee UI. Use absolute URLs; copied to
-# /var/www/brand/ when nginx_features.brand_assets: true (off below).
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 # ── feature toggles (exact Bomet shape, except MCP — see header) ──
 asset_s3_bucket: pg-egov-assets
