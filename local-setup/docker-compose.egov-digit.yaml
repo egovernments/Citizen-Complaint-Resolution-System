@@ -2088,11 +2088,23 @@ services:
   # `docker compose up`. Opt in with `COMPOSE_PROFILES=notifications`.
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
+  #
+  # Direct mode (no novu-api at all): for deployments where novu-api can't run
+  # (e.g. resource-constrained cloud VMs), these same three services also carry
+  # the `notifications-direct` profile. Set NOVU_BRIDGE_DIRECT_CHANNELS (e.g.
+  # `SMS` or `SMS,EMAIL`) and novu-bridge delivers those channels straight to
+  # Ozeki's HTTP API / SMTP, skipping Novu entirely for them — any channel left
+  # out (and WHATSAPP always) still requires Novu. `COMPOSE_PROFILES=
+  # notifications-direct` starts only digit-config-service +
+  # digit-user-preferences-service + novu-bridge — no novu-api/novu-mongo/
+  # novu-worker/novu-ws/novu-dashboard.
   digit-config-service:
     image: egovio/digit-config-service:2.12-beta-96dcf10
     container_name: digit-config-service
     restart: unless-stopped
-    profiles: ["notifications"]
+    # notifications-direct: this service is also needed when novu-bridge runs in
+    # direct mode (NOVU_BRIDGE_DIRECT_CHANNELS) without novu-api at all.
+    profiles: ["notifications", "notifications-direct"]
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2147,7 +2159,8 @@ services:
     image: egovio/digit-user-preferences-service:2.12-beta-96dcf10
     container_name: digit-user-preferences-service
     restart: unless-stopped
-    profiles: ["notifications"]
+    # notifications-direct: also needed for novu-bridge's direct mode (no novu-api).
+    profiles: ["notifications", "notifications-direct"]
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2185,7 +2198,9 @@ services:
     image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}
     container_name: novu-bridge
     restart: unless-stopped
-    profiles: ["notifications"]
+    # notifications-direct: lets novu-bridge run direct-channel delivery
+    # (NOVU_BRIDGE_DIRECT_CHANNELS) without novu-api at all — see depends_on below.
+    profiles: ["notifications", "notifications-direct"]
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2195,8 +2210,13 @@ services:
         condition: service_healthy
       digit-user-preferences-service:
         condition: service_healthy
+      # required: false — under "notifications" (novu-api included), this still
+      # waits for it healthy exactly as before. Under "notifications-direct" alone
+      # (novu-api not part of the active profile set), Compose skips the wait
+      # instead of erroring, since novu-api never starts in that profile.
       novu-api:
         condition: service_healthy
+        required: false
       otel-collector:
         condition: service_started
     volumes:
@@ -2279,6 +2299,19 @@ services:
       # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
+      # Direct delivery (bypass Novu entirely) — comma-separated channels, e.g. SMS
+      # or SMS,EMAIL. Empty (default) = no channel is direct, behavior unchanged.
+      # For deployments where novu-api can't run at all (e.g. resource-constrained
+      # cloud VMs). See novu-bridge's NovuBridgeConfiguration#isDirectChannel.
+      NOVU_BRIDGE_DIRECT_CHANNELS: ${NOVU_BRIDGE_DIRECT_CHANNELS:-}
+      OZEKI_BASE_URL: ${OZEKI_BASE_URL:-}
+      OZEKI_USERNAME: ${OZEKI_USERNAME:-}
+      OZEKI_PASSWORD: ${OZEKI_PASSWORD:-}
+      NOVU_BRIDGE_DIRECT_EMAIL_FROM: ${NOVU_BRIDGE_DIRECT_EMAIL_FROM:-}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc

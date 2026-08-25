@@ -42,19 +42,22 @@ public class DispatchPipelineService {
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
     private final MdmsServiceClient mdmsServiceClient;
+    private final DirectDeliveryService directDeliveryService;
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    NovuClient novuClient,
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
-                                   MdmsServiceClient mdmsServiceClient) {
+                                   MdmsServiceClient mdmsServiceClient,
+                                   DirectDeliveryService directDeliveryService) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.novuClient = novuClient;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
         this.mdmsServiceClient = mdmsServiceClient;
+        this.directDeliveryService = directDeliveryService;
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
@@ -188,13 +191,28 @@ public class DispatchPipelineService {
             contact.setPhone("whatsapp:+" + digitsOnly(contact.getPhone()));
         }
 
+        // Determined once, before delivery, so both the success and failure paths below
+        // (and their dispatch-log error code/message) agree on which gateway was actually used.
+        boolean viaDirect = ("SMS".equalsIgnoreCase(channel) || "EMAIL".equalsIgnoreCase(channel))
+                && config.isDirectChannel(channel);
+
         NovuClient.NovuResponse response;
         try {
-            response = novuClient.identifyThenTrigger(
-                    subscriberId, contact, channel,
-                    context.getRenderedBody(), context.getRenderedSubject(),
-                    context.getTransactionId(), event.getData(),
-                    event.getTemplateId(), event.getContentVariables());
+            if ("SMS".equalsIgnoreCase(channel) && viaDirect) {
+                response = directDeliveryService.sendSms(contact.getPhone(), context.getRenderedBody(), context.getTransactionId());
+            } else if ("EMAIL".equalsIgnoreCase(channel) && viaDirect) {
+                response = directDeliveryService.sendEmail(contact.getEmail(), context.getRenderedSubject(),
+                        context.getRenderedBody(), context.getTransactionId());
+            } else {
+                // WHATSAPP always lands here, regardless of novu.bridge.direct.channels —
+                // no generic WhatsApp gateway is wired here, and WhatsApp already requires
+                // a Twilio-approved Content template, which is Novu/Twilio-specific.
+                response = novuClient.identifyThenTrigger(
+                        subscriberId, contact, channel,
+                        context.getRenderedBody(), context.getRenderedSubject(),
+                        context.getTransactionId(), event.getData(),
+                        event.getTemplateId(), event.getContentVariables());
+            }
         } catch (CustomException ce) {
             persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
             throw ce;   // consumer logs + DLQs as before
@@ -206,8 +224,9 @@ public class DispatchPipelineService {
         Integer sc = response != null ? response.getStatusCode() : null;
         boolean delivered = sc != null && sc >= 200 && sc < 300;
         if (!delivered) {
-            persist(event, context, "FAILED", "NB_NOVU_TRIGGER_FAILED",
-                    "Novu returned status " + sc, response != null ? response.getResponse() : null, 1);
+            persist(event, context, "FAILED", viaDirect ? "NB_DIRECT_DELIVERY_FAILED" : "NB_NOVU_TRIGGER_FAILED",
+                    (viaDirect ? "Direct delivery returned status " : "Novu returned status ") + sc,
+                    response != null ? response.getResponse() : null, 1);
             return DispatchResult.builder()
                     .valid(true).preferenceAllowed(true).derivedContext(context)
                     .novuTriggered(false).novuStatusCode(sc)
@@ -300,9 +319,18 @@ public class DispatchPipelineService {
                 ? OzekiOverridesBuilder.build(config.getOzekiIntegrationIdentifier(), transactionId, formattedMobile, body)
                 : null;
 
+        // Determined once, before delivery, so the failure path's error code/message agrees
+        // with which gateway was actually used.
+        boolean viaDirect = config.isDirectChannel("SMS");
+
         NovuClient.NovuResponse response;
         try {
-            response = novuClient.trigger(config.getNovuWorkflowSms(), subscriberId, formattedMobile, payload, transactionId, overrides);
+            // When SMS is direct, `overrides` (the Ozeki-via-Novu envelope built above from
+            // config.isOtpOzekiEnabled()) simply goes unused — the two settings are
+            // independent, non-conflicting ways to route SMS to Ozeki (via Novu, or not at all).
+            response = viaDirect
+                    ? directDeliveryService.sendSms(formattedMobile, body, transactionId)
+                    : novuClient.trigger(config.getNovuWorkflowSms(), subscriberId, formattedMobile, payload, transactionId, overrides);
         } catch (CustomException ce) {
             persistOtp(event, transactionId, "FAILED", ce.getCode(), ce.getMessage(), 1);
             throw ce;
@@ -311,8 +339,8 @@ public class DispatchPipelineService {
         Integer sc = response != null ? response.getStatusCode() : null;
         boolean delivered = sc != null && sc >= 200 && sc < 300;
         persistOtp(event, transactionId, delivered ? "SENT" : "FAILED",
-                delivered ? null : "NB_NOVU_TRIGGER_FAILED",
-                delivered ? null : "Novu returned status " + sc, 1);
+                delivered ? null : (viaDirect ? "NB_DIRECT_DELIVERY_FAILED" : "NB_NOVU_TRIGGER_FAILED"),
+                delivered ? null : (viaDirect ? "Direct delivery returned status " : "Novu returned status ") + sc, 1);
 
         return DispatchResult.builder()
                 .valid(true).preferenceAllowed(true)
