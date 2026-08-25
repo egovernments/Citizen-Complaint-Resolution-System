@@ -104,6 +104,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.core.yml",
     LS / "docker-compose.tilt.yml",
     LS / "docker-compose.monitoring.yml",
+    LS / "docker-compose.matomo.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"

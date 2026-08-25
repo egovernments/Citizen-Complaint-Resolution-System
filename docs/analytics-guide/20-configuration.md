@@ -254,8 +254,8 @@ the two write endpoints (actions 30/31 → `SUPERUSER`/`MDMS_ADMIN`) exist so a
 later RBAC flip does not break analytics writes; they are inert while Kong runs
 in audit mode. Until that flip, the ops knobs are the real control.
 
-Those rows also ship in the default-data-handler seed files, but seed files alone
-never reach a **running** environment: `MdmsBulkLoader` skips a file whose tenant
-already has rows, and default-data-handler is no longer in the compose stack on
-develop/master. That is why the setup command ensures them directly — see
+Those rows also ship in `local-setup/db/full-dump.sql` (tenant `pg`), so fresh
+compose stacks have them from first boot — but a dump alone never reaches a
+**running** environment (default-data-handler is retired and was already out of
+the compose stack). That is why the setup command ensures them directly — see
 [10-setup.md](10-setup.md#one-command-per-release-line).

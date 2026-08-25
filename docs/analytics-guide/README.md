@@ -7,7 +7,7 @@ re-pointing analytics never needs a rebuild or an ansible run.
 
 | | |
 |---|---|
-| **Schema** | `common-masters.AnalyticsProvider` — `utilities/default-data-handler/src/main/resources/schema/common-masters.json` |
+| **Schema** | `common-masters.AnalyticsProvider` — `local-setup/scripts/analytics-provider-schema.json` (fresh compose stacks also get it from `local-setup/db/full-dump.sql`) |
 | **Portal runtime** | `digit-ui-esbuild/public/analytics.js` (untranspiled ES5, loaded by an inline bootstrapper in `public/index.html`) |
 | **Editor** | Configurator → **Analytics Providers** (`/manage/analytics-providers`) |
 | **Seeder** | `local-setup/scripts/seed-analytics-schema.sh` — schema + ACCESSCONTROL rows, never a record (the moz branch wraps it in `docs/migration/ccrs-migrate.cjs`) |

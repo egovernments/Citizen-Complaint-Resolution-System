@@ -1651,6 +1651,7 @@ services:
       # Profile-gated stacks: keep these beside COMPOSE_PROFILES in .env.
       # Unset means off -- gatus enables an endpoint when its variable is missing.
       GATUS_PROFILE_OTP: ${GATUS_PROFILE_OTP:-false}
+      GATUS_PROFILE_MATOMO: ${GATUS_PROFILE_MATOMO:-false}
       GATUS_CONFIGURATOR: ${GATUS_CONFIGURATOR:-true}
       GATUS_PROFILE_SEARCH: ${GATUS_PROFILE_SEARCH:-false}
       GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}

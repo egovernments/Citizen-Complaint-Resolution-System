@@ -4,15 +4,14 @@
 # WHY THIS SCRIPT EXISTS
 # ----------------------
 # The schema definition lives in
-#   utilities/default-data-handler/src/main/resources/schema/common-masters.json
-# and default-data-handler (DDH) registers it automatically for tenants created
-# AFTER that image is rebuilt. But DDH is no longer part of the compose stack on
-# develop/master (removed in 03f32d5b), and no already-running environment gets a
-# new schema from a repo file alone. This script is the only path that reaches an
-# environment that is already up.
+#   local-setup/scripts/analytics-provider-schema.json
+# (DDH is being retired, so its resource files are no longer a data source.)
+# Fresh compose stacks get the schema plus the Configurator's ACCESSCONTROL
+# actions/roleactions from local-setup/db/full-dump.sql at tenant pg; this
+# script is the only path that reaches an environment that is ALREADY up.
 #
-# It reads the definition straight out of the DDH resource file, so there is
-# exactly ONE copy of the schema in the repo.
+# The JSON file and the schema_definition row in full-dump.sql must stay in
+# sync -- the dump seeds fresh stacks, this file seeds running ones.
 #
 # DESIGN NOTES (each of these is a real, previously-observed failure mode)
 #   * Schema codes are IMMUTABLE: mdms-v2 schema/v1/_update returns HTTP 501 and
@@ -75,7 +74,7 @@ case "$TENANT" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEF_FILE="$SCRIPT_DIR/../../utilities/default-data-handler/src/main/resources/schema/common-masters.json"
+DEF_FILE="$SCRIPT_DIR/analytics-provider-schema.json"
 [ -f "$DEF_FILE" ] || { echo "FATAL: schema source not found at $DEF_FILE" >&2; exit 1; }
 
 command -v jq >/dev/null   || { echo "FATAL: jq is required" >&2; exit 1; }

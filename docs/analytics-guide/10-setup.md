@@ -8,7 +8,7 @@ last step.
 
 | Piece | Reaches an environment via | Check |
 |---|---|---|
-| The MDMS schema | `seed-analytics-schema.sh` (running env) or default-data-handler (freshly created tenants only) | `schema/v1/_search` returns `common-masters.AnalyticsProvider` |
+| The MDMS schema | `seed-analytics-schema.sh` (running env) or `local-setup/db/full-dump.sql` (fresh compose stacks) | `schema/v1/_search` returns `common-masters.AnalyticsProvider` |
 | The portal shim | a digit-ui build + deploy — `public/analytics.js` is copied verbatim into `build/`, no build-script change | `curl -sI <host>/digit-ui/analytics.js` returns a **javascript** content type |
 | The Configurator screen | a configurator build + deploy (`build_configurator`, `nginx_features.configurator`) | the **Analytics Providers** entry appears in the sidebar for SUPERUSER/MDMS_ADMIN |
 | The ops knobs | ansible re-render of `globalConfigs.js`, **optional** — absent keys read as `undefined`, which the shim treats as "not killed" | `curl -s <host>/digit-ui/globalConfigs.js \| grep ANALYTICS_` |

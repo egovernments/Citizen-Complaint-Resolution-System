@@ -487,6 +487,25 @@ data:
         interval: 60s
         conditions:
           - "[STATUS] == 200"
+
+      # Matomo self-hosted analytics (optional profile; docker-compose.matomo.yml
+      # on the compose tier). Gated so deployments without analytics stay green.
+      - name: Matomo
+        group: Analytics
+        enabled: ${GATUS_PROFILE_MATOMO}
+        url: "http://matomo:80/matomo.php"
+        interval: 60s
+        conditions:
+          - "[STATUS] < 500"
+
+      - name: Matomo DB
+        group: Analytics
+        enabled: ${GATUS_PROFILE_MATOMO}
+        url: "tcp://matomo-db:3306"
+        interval: 60s
+        conditions:
+          - "[CONNECTED] == true"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -529,6 +548,8 @@ spec:
             - name: GATUS_PROFILE_KEYCLOAK
               value: "false"
             - name: GATUS_PROFILE_NOTIFICATIONS
+              value: "false"
+            - name: GATUS_PROFILE_MATOMO
               value: "false"
             # No nginx proxy Deployments in the k3s tier either.
             # No audit-service Deployment in the k3s tier either.
