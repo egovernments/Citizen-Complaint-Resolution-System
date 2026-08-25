@@ -140,6 +140,31 @@ public class NovuBridgeConfiguration {
         return smsProvider != null && "ozeki".equalsIgnoreCase(smsProvider.trim());
     }
 
+    // ---- Direct delivery (bypass Novu entirely) ----
+    // Per-channel: a channel listed here is delivered WITHOUT Novu at all (SMS via
+    // Ozeki's HTTP API directly, EMAIL via SMTP directly), independent of
+    // smsProvider/otpSmsProvider above (those still route through Novu with an
+    // Ozeki provider override). Empty (default) = no channel is direct.
+    @Value("#{'${novu.bridge.direct.channels:}'.split(',')}")
+    private java.util.List<String> directChannels;
+
+    public boolean isDirectChannel(String channel) {
+        if (channel == null || directChannels == null) return false;
+        return directChannels.stream().anyMatch(c -> !c.trim().isEmpty() && c.trim().equalsIgnoreCase(channel.trim()));
+    }
+
+    @Value("${novu.bridge.direct.ozeki.base.url:}")
+    private String ozekiDirectBaseUrl;
+
+    @Value("${novu.bridge.direct.ozeki.username:}")
+    private String ozekiDirectUsername;
+
+    @Value("${novu.bridge.direct.ozeki.password:}")
+    private String ozekiDirectPassword;
+
+    @Value("${novu.bridge.direct.email.from:}")
+    private String directEmailFrom;
+
     // ---- Subscriber identify (upsert) TTL cache ----
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;

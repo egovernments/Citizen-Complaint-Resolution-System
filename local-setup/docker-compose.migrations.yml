@@ -84,7 +84,7 @@ services:
   novu-bridge-migration:
     image: egovio/novu-bridge-db:2.12-beta-96dcf10
     container_name: novu-bridge-migration
-    profiles: ["notifications"]   # active exactly when novu-bridge is
+    profiles: ["notifications", "notifications-direct"]   # active exactly when novu-bridge is
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -113,7 +113,7 @@ services:
   digit-config-service-migration:
     image: egovio/digit-config-service-db:2.12-beta-96dcf10
     container_name: digit-config-service-migration
-    profiles: ["notifications"]   # active exactly when digit-config-service is
+    profiles: ["notifications", "notifications-direct"]   # active exactly when digit-config-service is
     depends_on:
       postgres-db:
         condition: service_healthy

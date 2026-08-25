@@ -37,6 +37,7 @@ class EnvelopePipelineNegativesTest {
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
     private MdmsServiceClient mdmsServiceClient;
+    private DirectDeliveryService directDeliveryService;
 
     private DispatchPipelineService service;
 
@@ -51,8 +52,9 @@ class EnvelopePipelineNegativesTest {
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
         mdmsServiceClient = mock(MdmsServiceClient.class);
+        directDeliveryService = mock(DirectDeliveryService.class);
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                dispatchLogRepository, config, mdmsServiceClient);
+                dispatchLogRepository, config, mdmsServiceClient, directDeliveryService);
     }
 
     private ComplaintsDomainEvent validEvent() {
