@@ -6284,6 +6284,9 @@ header.digit-header .digit-dropdown-master {
   align-items: center !important;
   padding: 0 12px !important;
   min-height: 44px !important;
+}
+
+/* ===========================================================================
  * Employee working context (CCRS#1833)
  * Compact line in the employee header, read-only panel on click, and a sticky
  * row on mobile. Scoped to .employee so the citizen shell is untouched.
@@ -6375,6 +6378,13 @@ header.digit-header .digit-dropdown-master {
 
 /* Mobile: its own row under the 56px topbar, sticky so the context stays put
  * while an operator scrolls the inbox (requested on CCRS#1833). */
+/* Desktop: the inline copy in the header is the one that shows. */
+.employee .digit-working-context-mobile { display: none; }
+@media (max-width: 640px) {
+  /* Mobile: the shared header hides its action fields, so the inline copy goes
+   * with them and the sticky row takes over. */
+  .employee .digit-working-context-mobile { display: block; }
+}
 .employee .digit-working-context-mobile {
   position: sticky;
   top: 56px;

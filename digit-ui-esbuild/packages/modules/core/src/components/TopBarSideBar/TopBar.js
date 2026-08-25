@@ -135,16 +135,18 @@ const TopBar = ({
       />
     );
   }
-  // Desktop: the context sits beside the language/user controls. Mobile gets a
-  // sticky row below the bar instead (rendered after the header) — the header
-  // itself is too narrow to carry it without pushing the controls off-screen.
+  // Rendered in both places and switched with CSS rather than the mobileView
+  // prop: that prop is `window.innerWidth <= 640` sampled once in App.js and
+  // never recomputed, and it does not line up with the breakpoint at which the
+  // shared header hides its own action fields. Letting the media query decide
+  // keeps the two in step.
   const showWorkingContext = !CITIZEN && loggedin && (workingContext || workingContextError);
 
   return (
     <React.Fragment>
       <TopBarComponentMain
         actionFields={[
-          showWorkingContext && !mobileView && (
+          showWorkingContext && (
             <EmployeeWorkingContext
               t={t}
               context={workingContext}
@@ -214,7 +216,7 @@ const TopBar = ({
           )
         }
       />
-      {showWorkingContext && mobileView && (
+      {showWorkingContext && (
         <div className="digit-working-context-mobile">
           <EmployeeWorkingContextSummary
             t={t}
