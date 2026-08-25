@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -117,6 +118,56 @@ public class AccessPolicyRegistry {
                         + "This is indistinguishable from a role missing its ACCESSCONTROL-ROLEACTIONS mapping for this action (the DGRO incident pattern) — if these roles SHOULD have this action, check ROLEACTIONS before assuming it's simply unconfigured.",
                 actionUrl, tenantId, roles);
         return ALWAYS_ALLOW_CONDITION;
+    }
+
+    /** Cached url sets from {@link #visibleActionUrls}, keyed the same way as {@link #cache}. */
+    private final Map<String, CachedUrls> urlCache = new ConcurrentHashMap<>();
+
+    private record CachedUrls(Set<String> urls, long expiresAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() > expiresAt;
+        }
+    }
+
+    /**
+     * Every action url this caller can reach, resolved in ONE accesscontrol call and cached for the
+     * same TTL as everything else here.
+     *
+     * <p>For a caller that needs to test several urls at once, this replaces N calls that would
+     * each have fetched the identical role-scoped payload and thrown away all but one entry.
+     *
+     * @throws AccessControlUnavailableException accesscontrol could not be consulted
+     */
+    public Set<String> visibleActionUrls(RequestInfo requestInfo, String tenantId) {
+        String cacheKey = tenantId + "|*|" + roleKey(requestInfo);
+        CachedUrls cached = urlCache.get(cacheKey);
+        if (cached != null && !cached.isExpired())
+            return cached.urls();
+
+        Set<String> urls = mdmsUtils.fetchVisibleActionUrls(requestInfo, tenantId);
+        urlCache.put(cacheKey, new CachedUrls(urls, System.currentTimeMillis() + CACHE_TTL_MILLIS));
+        return urls;
+    }
+
+    /**
+     * Whether this caller can reach {@code actionUrl} at all.
+     *
+     * <p>{@code /access/v1/actions/mdms/_get} is role-scoped: an action comes back only when one of
+     * the caller's roles has an ACCESSCONTROL-ROLEACTIONS mapping to it. So "is this action visible"
+     * IS the capability question, answered by egov-accesscontrol against the same role-action master
+     * that governs every other action — no second grant model, and nothing for this service to
+     * interpret.
+     *
+     * <p>Distinct from {@link #getCondition}, which asks what an action's policy SAYS. This asks
+     * only whether the caller is granted it. An action with no policy at all is still a perfectly
+     * good capability grant, which is exactly what the dashboard's endpoint actions are.
+     *
+     * @throws AccessControlUnavailableException if accesscontrol could not be consulted — callers
+     *         must fail closed rather than read that as "not granted", which would look identical
+     *         to a legitimate denial during an outage.
+     */
+    public boolean isActionVisible(String actionUrl, RequestInfo requestInfo, String tenantId) {
+        return getAction(actionUrl, requestInfo, tenantId) != null;
     }
 
     /**

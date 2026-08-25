@@ -703,6 +703,55 @@ public class MDMSUtils {
     }
 
     /**
+     * Every action url visible to this caller's roles, in ONE call.
+     *
+     * <p>{@link #fetchAccessControlActions} already fetches the caller's whole role-scoped action
+     * list and then discards all but one url, so asking it N times fetches the same payload N
+     * times. Callers that need to test several urls at once — the dashboard's capability bootstrap
+     * asks about nine — use this instead and filter locally.
+     *
+     * <p>Same failure contract as its sibling: a successful call that simply matches nothing is an
+     * empty set, while a failed call raises {@link org.egov.pgr.policy.AccessControlUnavailableException}.
+     */
+    @SuppressWarnings("unchecked")
+    public Set<String> fetchVisibleActionUrls(RequestInfo requestInfo, String tenantId) {
+        List<String> roleCodes = extractRoleCodes(requestInfo);
+        if (roleCodes.isEmpty())
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "no roles on RequestInfo; cannot resolve access-control actions for tenant=" + tenantId);
+
+        if (requestInfo.getTs() == null)
+            requestInfo.setTs(System.currentTimeMillis());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("roleCodes", roleCodes);
+        body.put("tenantId", tenantId);
+        body.put("actionMaster", MDMS_ACCESSCONTROL_ACTIONS_MASTER);
+        body.put("RequestInfo", requestInfo);
+
+        StringBuilder url = new StringBuilder(config.getAccessControlHost())
+                .append(config.getAccessControlActionsMdmsGetPath());
+        try {
+            Object result = serviceRequestRepository.fetchResult(url, body);
+            if (result == null)
+                return Collections.emptySet();
+
+            List<Object> urls = JsonPath.read(result, "$.actions[*].url");
+            Set<String> visible = new LinkedHashSet<>();
+            if (urls != null)
+                for (Object each : urls)
+                    if (each != null)
+                        visible.add(String.valueOf(each));
+            return visible;
+        } catch (Exception e) {
+            log.error("Failed to fetch access-control actions for tenant='{}' via {} — accesscontrol call failed",
+                    tenantId, config.getAccessControlActionsMdmsGetPath(), e);
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "access-control call failed for tenant=" + tenantId, e);
+        }
+    }
+
+    /**
      * Normalized (trim+uppercase, via {@link RoleCodes}) role codes for the outbound
      * egov-accesscontrol request body — MUST use the same normalization
      * {@code AccessPolicyRegistry}'s cache key is computed from, or a cached result for one

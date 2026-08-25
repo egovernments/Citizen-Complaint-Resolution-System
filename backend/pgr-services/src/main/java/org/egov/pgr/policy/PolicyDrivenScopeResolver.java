@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.RoleCodes;
@@ -21,30 +21,33 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Config-driven ({@link ScopePolicy}) counterpart of {@link PrincipalScopeResolver}, for PGR
- * complaint search only. Deliberately a SEPARATE class in a separate package rather than another
- * method on {@link PrincipalScopeResolver}: that class is Dashboard/Analytics' own scope resolver
- * (its {@code ScopeAxis}-based {@code resolve} overloads), and a change made here to fix/extend
- * PGR search's policy-driven scoping must never risk touching Dashboard's behavior, or vice versa.
- * The two are intentionally NOT unified yet — once this engine has proven itself on PGR search,
- * Dashboard/Analytics can migrate to a {@link ScopePolicy}-driven resolve() here too and
- * {@link PrincipalScopeResolver}'s {@code ScopeAxis} machinery can retire.
+ * Config-driven ({@link ScopePolicy}) scope resolution for every surface that reads complaints.
  *
- * <p>The only thing reused from {@link PrincipalScopeResolver} is {@link
- * PrincipalScopeResolver#isPureCitizen}, which its own Javadoc already documents as the single
- * source of truth for that classification (shared with {@code EnrichmentService}) — that one is
- * meant to never drift, unlike the axis-resolution logic below. Everything else (HRMS lookup,
- * department/jurisdiction extraction) is intentionally duplicated here rather than shared, so this
- * class has no dependency on Dashboard's resolver for its own core behavior — INCLUDING its own
- * separate {@code __scope_denied__} sentinel literal, which must stay in sync with this module's
- * copy ({@link ScopePolicyEngine#UNRESOLVED_SENTINEL}, via {@link PgrSearchScope#deniedAll}) until
- * the migration above happens. Within this module, though, there is exactly ONE sentinel constant
- * ({@link ScopePolicyEngine#UNRESOLVED_SENTINEL}) — {@link #denyAllScope} delegates to {@link
- * PgrSearchScope#deniedAll} rather than keeping its own local copy (#1441 review). Unlike {@link
- * PrincipalScopeResolver}, this class has NO hard-coded tenant-wide-role bypass: whether a role is
- * unrestricted on an axis is decided ENTIRELY by the authored {@link ScopePolicy} (an explicit
- * {@code ALL} for that role/axis), even when HRMS has no data at all for the caller — see
- * {@link #resolveEmployeeScopeViaPolicy}.
+ * <p>This began as PGR complaint search's own resolver, deliberately separate from
+ * Dashboard/Analytics' {@code PrincipalScopeResolver} so that a change to one could not disturb the
+ * other, with a stated plan: <em>"once this engine has proven itself on PGR search,
+ * Dashboard/Analytics can migrate to a ScopePolicy-driven resolve() here too and
+ * PrincipalScopeResolver's ScopeAxis machinery can retire."</em> That migration is #1050, and it
+ * has happened — analytics now resolves through {@code AnalyticsRowScopeResolver}, which calls
+ * {@link SearchAccessPolicyService#resolveScope} and gets this same object back. There is one
+ * resolver and one authored policy, so the dashboard and the search API can no longer disagree
+ * about the same caller; before, they did, because the retired resolver left the jurisdiction axis
+ * unresolved on purpose.
+ *
+ * <p>Citizen classification is shared with {@code EnrichmentService} through
+ * {@link org.egov.pgr.util.Principals#isPureCitizen} — the single source of truth for that
+ * security-relevant question, which is meant never to drift. The HRMS lookup and
+ * department/jurisdiction extraction below stay local to this class.
+ *
+ * <p>Within this module there is exactly ONE deny sentinel constant
+ * ({@link ScopePolicyEngine#UNRESOLVED_SENTINEL}) — {@link #denyAllScope} delegates to
+ * {@link PgrSearchScope#deniedAll} rather than keeping its own copy (#1441 review).
+ *
+ * <p>There is NO hard-coded tenant-wide-role bypass here: whether a role is unrestricted on an axis
+ * is decided ENTIRELY by the authored {@link ScopePolicy} (an explicit {@code ALL} for that
+ * role/axis), even when HRMS has no data at all for the caller — see
+ * {@link #resolveEmployeeScopeViaPolicy}. The retired analytics resolver had such a list, which is
+ * why admin roles were unrestricted on the dashboard and policy-scoped on search.
  */
 @Component
 @Slf4j
@@ -53,16 +56,16 @@ public class PolicyDrivenScopeResolver {
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
-    private final PrincipalScopeResolver principalScopeResolver;
+    private final Principals principals;
     private final MDMSUtils mdmsUtils;
 
     @Autowired
     public PolicyDrivenScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper,
-                                      PrincipalScopeResolver principalScopeResolver, MDMSUtils mdmsUtils) {
+                                      Principals principals, MDMSUtils mdmsUtils) {
         this.config = config;
         this.restTemplate = restTemplate;
         this.mapper = mapper;
-        this.principalScopeResolver = principalScopeResolver;
+        this.principals = principals;
         this.mdmsUtils = mdmsUtils;
     }
 
@@ -96,7 +99,7 @@ public class PolicyDrivenScopeResolver {
             return denyAllScope(tenantId, stateLevel);
         }
 
-        if (principalScopeResolver.isPureCitizen(requestInfo)) {
+        if (principals.isPureCitizen(requestInfo)) {
             String uuid = u.getUuid();
             if (uuid == null || uuid.isBlank())
                 return denyAllScope(tenantId, stateLevel);
