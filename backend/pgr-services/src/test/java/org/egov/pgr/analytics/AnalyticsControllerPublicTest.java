@@ -385,7 +385,10 @@ public class AnalyticsControllerPublicTest {
             assertFalse(tile.containsKey("query"));
             assertFalse(tile.containsKey("rbac"));
         }
-        verify(kpiCatalogService, never()).getVisibleDefs(anyString(), any(AnalyticsCapabilities.class));
+        ArgumentCaptor<AnalyticsCapabilities> capabilities = ArgumentCaptor.forClass(AnalyticsCapabilities.class);
+        verify(kpiCatalogService).getVisibleDefs(eq("ke"), capabilities.capture());
+        assertTrue(capabilities.getValue().isPublicSurface(),
+                "spoofed RequestInfo must not turn the anonymous catalog into an employee query");
     }
 
     @Test

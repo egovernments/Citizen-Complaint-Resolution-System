@@ -1,10 +1,9 @@
 /**
  * Canonical employee-dashboard access floor for a newly-created tenant.
  *
- * Keep this deliberately narrower than the dashboard UI's backwards-compatible
- * fallback role list. These are the roles that the platform's reference access
- * data already grants action 4557 to. Operators can override the list through
- * tenant_bootstrap/dashboard_allowed_roles without editing the seed itself.
+ * Route discovery and every dashboard API are granted together. The browser has
+ * no role allow-list: it asks /analytics/_access, so seeding action 4557 alone
+ * would produce a link that immediately denies the same employee.
  */
 export const DEFAULT_DASHBOARD_ROLES = [
   'SUPERVISOR',
@@ -31,6 +30,59 @@ export const DASHBOARD_ACTION: Record<string, unknown> = {
   navigationURL: '/digit-ui/employee/dashboard',
 };
 
+const analyticsAction = (id: number, name: string, url: string): Record<string, unknown> => ({
+  id,
+  name,
+  url,
+  displayName: name,
+  orderNumber: 0,
+  parentModule: '',
+  enabled: false,
+  serviceCode: 'pgr-services',
+  code: 'null',
+  path: '',
+  method: 'POST',
+});
+
+/** Base capabilities required to open and use the employee dashboard. */
+export const DASHBOARD_ACCESS_ACTIONS: Record<string, unknown>[] = [
+  DASHBOARD_ACTION,
+  analyticsAction(2640, 'Analytics Access', '/pgr-services/v2/analytics/_access'),
+  analyticsAction(2641, 'Analytics Query', '/pgr-services/v2/analytics/_query'),
+  analyticsAction(2642, 'Analytics Packs', '/pgr-services/v2/analytics/packs'),
+  analyticsAction(2643, 'Analytics Catalog Search', '/pgr-services/v2/analytics/catalog/_search'),
+  analyticsAction(2644, 'Analytics Schema', '/pgr-services/v2/analytics/_schema'),
+];
+
+/** Vinoth's action-2008 row scope, embedded for source-less tenant bootstrap. */
+export const PGR_SEARCH_SCOPE_RESOURCE: Record<string, unknown> = {
+  complaint: {
+    scope: {
+      axes: ['department', 'jurisdiction'],
+      roleScopes: {
+        GRO: { department: 'ALL', jurisdiction: 'OWN' },
+        PGR_LME: { department: 'OWN', jurisdiction: 'OWN' },
+        SUPERVISOR: { department: 'OWN', jurisdiction: 'ALL' },
+      },
+      default: { department: 'ALL', jurisdiction: 'OWN' },
+    },
+    attributes: Object.fromEntries(
+      ['citizen.mobileNumber', 'citizen.name', 'citizen.userName'].map((attribute) => [
+        attribute,
+        {
+          condition: {
+            or: [
+              { '==': [{ var: 'user.attributes.tenantWide' }, true] },
+              { '==': [{ var: 'resource.complaint.accountId' }, { var: 'user.uuid' }] },
+            ],
+          },
+          onDeny: { strategy: 'REDACT' },
+        },
+      ]),
+    ),
+  },
+};
+
 export function normalizeDashboardRoles(value: unknown): string[] {
   const roles = value === undefined
     ? [...DEFAULT_DASHBOARD_ROLES]
@@ -51,10 +103,9 @@ export function normalizeDashboardRoles(value: unknown): string[] {
   return normalized;
 }
 
-export function buildDashboardConfig(roles: string[]): Record<string, unknown> {
+export function buildDashboardConfig(): Record<string, unknown> {
   return {
     id: 'default',
-    allowedRoles: [...roles],
     numberFormat: {
       en_IN: '#,##0.00',
       pt_PT: '#.##0,00',
@@ -68,9 +119,13 @@ export function buildDashboardConfig(roles: string[]): Record<string, unknown> {
   };
 }
 
-export function buildDashboardRoleAction(role: string, tenantId: string): Record<string, unknown> {
+export function buildDashboardRoleAction(
+  actionId: number,
+  role: string,
+  tenantId: string,
+): Record<string, unknown> {
   return {
-    actionid: DASHBOARD_ACTION_ID,
+    actionid: actionId,
     rolecode: role,
     tenantId,
     actioncode: '',

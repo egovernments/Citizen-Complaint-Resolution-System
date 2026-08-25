@@ -75,15 +75,29 @@ class AnalyticsSeedParityTest {
     }
 
     @Test
-    void action2008IsUntouchedByThisEffort() throws IOException {
-        // The complaint policy is #1441's. This ticket adds capability grants beside it and changes
-        // nothing about it — including not introducing a second, shadowing definition.
+    void action2008PolicyIsPresentAndIdenticalInEveryTenantSeed() throws IOException {
+        // Capability grants are useful only if the row policy they delegate to is actually
+        // authored. A bare Nairobi action 2008 makes a fresh 0→1 tenant unrestricted while the
+        // default-data path is scoped — the same action id must never mean both things.
         List<JsonNode> defaults = new ArrayList<>();
         for (JsonNode row : read(DEFAULT_ACTIONS))
             if (row.path("id").asLong() == 2008L) defaults.add(row);
 
         assertEquals(1, defaults.size(), "exactly one action 2008 in default-data");
-        assertEquals("/pgr-services/v2/request/_search", defaults.get(0).get("url").asText());
+        JsonNode expected = defaults.get(0);
+        assertEquals("/pgr-services/v2/request/_search", expected.get("url").asText());
+        assertTrue(expected.at("/resource/complaint/scope").isObject());
+
+        JsonNode nairobi = read(NAIROBI_ACTIONS);
+        int compared = 0;
+        for (JsonNode row : nairobi) {
+            JsonNode action = row.path("data");
+            if (action.path("id").asLong() != 2008L) continue;
+            compared++;
+            assertEquals(expected.path("method"), action.path("method"), row.path("tenantId").asText());
+            assertEquals(expected.path("resource"), action.path("resource"), row.path("tenantId").asText());
+        }
+        assertTrue(compared > 0, "Nairobi masters must seed action 2008");
     }
 
     @Test
@@ -148,7 +162,8 @@ class AnalyticsSeedParityTest {
 
         assertTrue(mappedTo.contains("SUPERVISOR"), "the base query action must reach supervisors");
         assertTrue(mappedTo.contains("GRO"));
-        assertFalse(mappedTo.contains("DGRO"), "DGRO is stale and deliberately not mapped");
+        assertFalse(mappedTo.contains("DGRO"),
+                "default-data keeps its existing audience; tenant_bootstrap may explicitly add DGRO to its 0→1 floor");
     }
 
     private static Map<Long, JsonNode> capabilityActions(JsonNode rows) {

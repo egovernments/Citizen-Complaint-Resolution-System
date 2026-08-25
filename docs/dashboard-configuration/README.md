@@ -14,12 +14,12 @@ frontend. Two audiences:
 | you want to change | mechanism | deploy needed? | doc |
 |---|---|---|---|
 | add / edit / retire a KPI tile (query, viz, thresholds, params) | MDMS `dss.KpiDefinition` (state root) | **No** | [10-kpi-catalog.md](10-kpi-catalog.md) |
-| which roles see which KPI | `rbac.visibleTo` on the def | **No** | [10](10-kpi-catalog.md) §7, [20](20-packs-and-rbac.md) |
-| default tile set + grid layout per role | MDMS `dss.DashboardPack` | **No** | [20-packs-and-rbac.md](20-packs-and-rbac.md) |
-| expose a KPI to anonymous/public | add `"PUBLIC"` to `visibleTo` | **No** | [20](20-packs-and-rbac.md) §2 |
+| which callers see which KPI | grant the def's `requiredActionUrl` through access-control | **No** | [10](10-kpi-catalog.md) §7, [20](20-packs-and-rbac.md) |
+| default tile set + grid layout per capability audience | MDMS `dss.DashboardPack` | **No** | [20-packs-and-rbac.md](20-packs-and-rbac.md) |
+| expose a KPI to anonymous/public | set the def's additive `public: true` marker | **No** | [20](20-packs-and-rbac.md) §2 |
 | which rows a user's tiles aggregate (department scoping) | HRMS assignments (+ role choice) | **No** | [20](20-packs-and-rbac.md) layer 1 |
 | home card for the dashboard | MDMS `tenant.citymodule` (`Dashboard` row) | **No** | [30-view-access.md](30-view-access.md) §1a |
-| which roles can *open* the view (card + deep-link route) | MDMS `dss.DashboardConfig` `allowedRoles` (fallback: `products/dashboard/roles.js` `DASHBOARD_ROLES`) | **No** | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
+| which roles can *open* and use the view | access-control actions 4557 + 2640–2644 and their roleactions | **No** | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
 | how the dashboard is mounted inside digit-ui | esbuild product module + always-on route fallback | — | [70-esbuild-embedding.md](70-esbuild-embedding.md) |
 | sidebar entry + role gating of the view | MDMS `ACCESSCONTROL-ACTIONS-TEST` + `ACCESSCONTROL-ROLEACTIONS` | **No** | [30-view-access.md](30-view-access.md) |
 | menu/card labels | localization `_upsert` + cache bust | **No** | [30](30-view-access.md) §3–4 |
@@ -43,12 +43,12 @@ and find the master.
 | doc | contents |
 |---|---|
 | [10-kpi-catalog.md](10-kpi-catalog.md) | `dss.KpiDefinition` anatomy: query grammar essentials, every `viz.kind`, params & server-side defaults, status lifecycle, versioning, and the add-a-KPI-end-to-end cookbook |
-| [20-packs-and-rbac.md](20-packs-and-rbac.md) | `dss.DashboardPack` (roles/tiles/12-col layout), the four RBAC layers (row-scope ABAC, `visibleTo`, inline PII gate, public floor), error-code table, which knob grants what |
+| [20-packs-and-rbac.md](20-packs-and-rbac.md) | `dss.DashboardPack` (capability/tiles/12-col layout), row-scope ABAC, endpoint/catalog capabilities, public floor, error-code table, which knob grants what |
 | [30-view-access.md](30-view-access.md) | Reaching the dashboard in digit-ui: citymodule, actions/roleactions + `/access/v1/actions/mdms/_get`, localization keys, the three-layer cache-bust story, and the mdms-v2 operational gotchas |
 | [40-filters-and-options.md](40-filters-and-options.md) | Where the global filter bar's options come from (scoped `_query` distincts), persistence/reconciliation, and the "option shows no data" checklist |
 | [50-sla-and-hierarchies.md](50-sla-and-hierarchies.md) | SLA target: the three sources and COALESCE order (post-#1028); boundary & complaint hierarchies as materialized path + level registry (post-#1079); extending the catalog |
 | [60-operations.md](60-operations.md) | MV refresh scheduler + manual REFRESH commands, the `asOf` staleness signal, tenant-bootstrap coverage (and the `dss.*` gap), what a redeploy wipes |
-| [70-esbuild-embedding.md](70-esbuild-embedding.md) | **The frontend architecture (PR #1062).** How the dashboard embeds into digit-ui: module registry, `App.js` `enabledModules`, the always-on route fallback vs the citymodule-gated card, `roles.js` `DASHBOARD_ROLES`, embedded mode, the analytics API client + MDMS context-path resolution, and the catalog→tile render pipeline (`useCatalog`/`useCatalogLayout`/`KpiTile`) |
+| [70-esbuild-embedding.md](70-esbuild-embedding.md) | **The frontend architecture (PR #1062).** How the dashboard embeds into digit-ui: module registry, `App.js` `enabledModules`, capability-gated route/card, embedded mode, the analytics API client + MDMS context-path resolution, and the catalog→tile render pipeline (`useCatalog`/`useCatalogLayout`/`KpiTile`) |
 | [80-live-bomet-state.md](80-live-bomet-state.md) | **Live-verified snapshot (2026-07-09).** A reproducible bomet probe: 37 published defs / 10 PUBLIC tiles, the two-pack first-match (`executive-default` vs `supervisor-default`), the anonymous inline lock, the **catalog-divergence trap** (repo seed vs mdms-v2 store vs served catalog; the #1026 stale-record no-op), the sidebar seeding bug (ACCESSCONTROL actions under `-TEST`; fixed via the actions bridge, CCRS#1106), and an empty-tile triage flow |
 | [90-localization.md](90-localization.md) | **Localizing the dashboard.** The no-fallback rule (missing message ⇒ raw key/code on screen), the three bundles the module loads, every dashboard-owned key family (`DASHBOARD_*`, KPI `titleKey`/`subtitleKey`, series/column `labelKey`s, geo-tier vocabulary), the reused platform families (`COMPLAINT_HIERARCHY.*`, boundary codes, departments), the gap-triage table, the generated en_IN pack + tenant_bootstrap floor, and the add-a-language cookbook |
 

@@ -106,7 +106,7 @@ None of these are required to upgrade — enable only what you need:
 | Feature | Flag(s) | Notes |
 |---|---|---|
 | Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + your own approved WhatsApp Content templates persisted into `RAINMAKER-PGR.NotificationProviderTemplate` (via Configurator's **Sync WhatsApp templates** UI or `local-setup/scripts/persist-provider-templates.py`) | Do **not** rely on `local-setup/db/notif-mdms-seed/seed.sh` — it seeds `TemplateBinding`/`ProviderDetail`, which the config-driven WhatsApp path no longer reads. The seeded reference Content SIDs are Twilio-account- and Meta-approval-bound; you must author and get your own approved on your own Twilio account. See Section 3.3 for channel defaults to review first |
-| Supervisor dashboard | Seed `dss.DashboardConfig` (+ `dss.KpiDefinition` / `dss.DashboardPack`), setting `allowedRoles` to gate access | MV refresh is already default-enabled (Section 4); this only controls route/card visibility |
+| Supervisor dashboard | Seed `dss.DashboardConfig`, capability-based `dss.KpiDefinition` / `dss.DashboardPack`, actions 2640–2648, navigation action 4557 and matching roleactions | MV refresh is already default-enabled (Section 4); `DashboardConfig` no longer carries employee role access |
 | PGR Visibility V1 (My/All inbox tabs, reportee-scoped inbox) | `pgr.visibility.enabled=true` / `PGR_VISIBILITY_ENABLED` + `RAINMAKER-PGR.InboxVisibilityConfig` record | Needs the new `eg_pgr_hrms_projection` table (migration #8) and HRMS Kafka topics |
 | digit-ui-v2 citizen SPA | `enable_digit_ui_v2` | Serves alongside the existing citizen UI at `/citizen/` |
 | Elasticsearch-backed inbox v2 | `enable_search_stack` | ~3GB additional RAM |

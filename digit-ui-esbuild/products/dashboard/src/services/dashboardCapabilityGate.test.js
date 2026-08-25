@@ -16,6 +16,7 @@ const DEFAULT_ACTIONS = path.join(
   REPO,
   "utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json"
 );
+const EMBEDDED_CATALOG = path.join(REPO, "digit-mcp/src/tools/dashboard-catalog-seed.ts");
 const DASHBOARD_DIR = path.join(__dirname, "../..");
 
 const BASE = "/pgr-services/v2/analytics";
@@ -146,4 +147,12 @@ test("no dashboard source carries a role allow-list", () => {
   walk(DASHBOARD_DIR);
 
   assert.deepEqual(offenders, []);
+});
+
+test("the source-less tenant bootstrap embeds the capability catalog, not legacy RBAC", () => {
+  const embedded = fs.readFileSync(EMBEDDED_CATALOG, "utf8");
+  assert.ok(embedded.includes('"requiredActionUrl"'));
+  assert.ok(!embedded.includes('"rbac"'));
+  assert.ok(!embedded.includes('"visibleTo"'));
+  assert.ok(!embedded.includes('"allowedRoles"'));
 });
