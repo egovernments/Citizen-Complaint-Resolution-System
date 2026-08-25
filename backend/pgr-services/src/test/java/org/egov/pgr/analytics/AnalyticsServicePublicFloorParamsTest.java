@@ -47,7 +47,7 @@ public class AnalyticsServicePublicFloorParamsTest {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
     }
 
-    private void publishPublicDef(String id, String queryJson) {
+    private KpiDefinition publishPublicDef(String id, String queryJson) {
         KpiDefinition def = new KpiDefinition();
         def.setId(id);
         def.setVersion("1.0.0");
@@ -57,6 +57,7 @@ public class AnalyticsServicePublicFloorParamsTest {
         rbac.setVisibleTo(Collections.singletonList("PUBLIC"));
         def.setRbac(rbac);
         when(kpiCatalogService.getDef(id, "ke")).thenReturn(Optional.of(def));
+        return def;
     }
 
     @SuppressWarnings("unchecked")
@@ -108,6 +109,30 @@ public class AnalyticsServicePublicFloorParamsTest {
         assertTrue(bound.contains("WATER"), bound.toString());
         assertFalse(bound.contains("POLICE_MISCONDUCT"), bound.toString());
         assertTrue(bound.contains("W1"), "the non-baked ward narrowing still applies: " + bound);
+    }
+
+    @Test
+    public void publicDefaultsMayNotDisplaceAPublicDefsOwnBakedFilter() {
+        KpiDefinition def = publishPublicDef("cl_water",
+                "{\"grain\":\"facts\",\"filters\":{\"service_code\":\"WATER\"}," +
+                        "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}");
+        KpiDefinition.KpiParam serviceCode = new KpiDefinition.KpiParam();
+        serviceCode.setName("serviceCode");
+        serviceCode.setDefaultValue("POLICE_MISCONDUCT");
+        def.setParams(Collections.singletonList(serviceCode));
+
+        Map<String,Object> out = service.query(
+                json("{\"queries\":{\"t\":{\"kpiId\":\"cl_water\"}}}"), null, "ke", 1);
+
+        Map<String,Object> t = entry(out, "t");
+        assertFalse(t.containsKey("error"), t.toString());
+        assertFalse(t.containsKey("paramsIgnored"),
+                "a server-declared default must not be reported as caller input: " + t);
+        ArgumentCaptor<Object[]> binds = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(anyString(), binds.capture());
+        List<Object> bound = Arrays.asList(binds.getValue());
+        assertTrue(bound.contains("WATER"), bound.toString());
+        assertFalse(bound.contains("POLICE_MISCONDUCT"), bound.toString());
     }
 
     @Test

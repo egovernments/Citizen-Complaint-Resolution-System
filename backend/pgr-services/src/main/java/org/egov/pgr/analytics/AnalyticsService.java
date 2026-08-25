@@ -425,13 +425,21 @@ public class AnalyticsService {
             log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
             return null;
         }
-        // Public floor (#1797): a param may not displace a predicate the PUBLIC def bakes itself.
-        JsonNode callerParams = isPublicFloor(callerRoles)
+        boolean publicFloor = isPublicFloor(callerRoles);
+        // Public floor (#1797): a caller param may not displace a predicate the PUBLIC def bakes
+        // itself. Do this before defaults so a rejected caller param is still reported accurately.
+        JsonNode callerParams = publicFloor
                 ? withoutBakedNarrowings(def.get(), queryNode.get("params"), paramsIgnored)
                 : queryNode.get("params");
         // #1026: apply the def's declared params[].default for any param the caller omitted.
         // Precedence: explicit caller param > declared default > the def's baked query.
         JsonNode effectiveParams = withDeclaredDefaults(def.get(), callerParams);
+        // A declared default is server configuration rather than a caller-supplied param, but it
+        // must obey the same PUBLIC invariant: it cannot redefine a KPI whose identity is baked
+        // into its query. Do not report such a default as ignored input because the caller did not
+        // supply it.
+        if (publicFloor)
+            effectiveParams = withoutBakedNarrowings(def.get(), effectiveParams, null);
 
         // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
         // params.allowed allow-list (the def is in scope here). An out-of-list value (window,
