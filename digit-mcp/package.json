@@ -39,6 +39,7 @@
     "test:openapi": "tsx test-openapi-spec.ts",
     "test:safety": "tsx test-agent-safety.ts",
     "test:dashboard-catalog": "node --test scripts/dashboard-catalog-contract.test.mjs",
+    "test:dashboard-bootstrap": "tsx --test test-dashboard-bootstrap.ts",
     "engram": "tsx engram-agent.ts",
     "prepublishOnly": "npm run build"
   },
