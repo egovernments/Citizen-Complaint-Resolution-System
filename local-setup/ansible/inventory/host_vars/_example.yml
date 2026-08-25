@@ -94,9 +94,9 @@ boot_tenant: ke.mycity
 tenant_id: ke.mycity
 
 # Optional override for the authenticated employee dashboard's initial access
-# floor. Defaults are SUPERVISOR, GRO, DGRO, and SUPERUSER. This controls the
-# current /digit-ui/employee/dashboard route only; the legacy /dashboard path
-# is outside this bootstrap contract.
+# floor. Defaults are SUPERVISOR, GRO, DGRO, and SUPERUSER. These roles receive
+# the current employee route plus its base analytics capabilities. The legacy
+# /dashboard path is outside this bootstrap contract.
 # dashboard_allowed_roles:
 #   - SUPERVISOR
 #   - GRO

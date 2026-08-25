@@ -37,8 +37,8 @@ state_tenant_id: ""
 state_root: ""
 
 # Employee roles that can discover and open the current dashboard immediately
-# after a 0→1 install. The bootstrap seeds DashboardConfig plus action 4557 and
-# matching role-action grants create-if-absent; tenant-owned records are never
+# after a 0→1 install. The bootstrap seeds DashboardConfig, action 4557, base
+# analytics capabilities 2640-2644, and matching grants create-if-absent; records are never
 # overwritten on redeploy. Override per tenant only when its role model differs.
 dashboard_allowed_roles:
   - SUPERVISOR

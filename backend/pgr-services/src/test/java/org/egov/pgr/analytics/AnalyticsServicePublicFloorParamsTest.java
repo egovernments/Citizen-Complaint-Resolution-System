@@ -51,6 +51,7 @@ public class AnalyticsServicePublicFloorParamsTest {
         def.setVersion("1.0.0");
         def.setStatus("published");
         def.setQuery(json(queryJson));
+        def.setRequiredActionUrl(AnalyticsCapabilities.QUERY);
         def.setPublicTile(true);
         when(kpiCatalogService.getDef(id, "ke")).thenReturn(Optional.of(def));
         return def;
