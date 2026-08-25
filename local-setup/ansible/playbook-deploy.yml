@@ -3713,6 +3713,7 @@
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
+          dashboard_roles: "{{ dashboard_allowed_roles }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -3737,6 +3738,7 @@
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
+          dashboard_roles: "{{ dashboard_allowed_roles }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
