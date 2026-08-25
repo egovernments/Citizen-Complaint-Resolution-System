@@ -36,6 +36,16 @@ state_tenant_id: ""
 # `pg`'s key (177813) instead of e.g. `ke`'s (74493). See PR description.
 state_root: ""
 
+# Employee roles that can discover and open the current dashboard immediately
+# after a 0→1 install. The bootstrap seeds DashboardConfig plus action 4557 and
+# matching role-action grants create-if-absent; tenant-owned records are never
+# overwritten on redeploy. Override per tenant only when its role model differs.
+dashboard_allowed_roles:
+  - SUPERVISOR
+  - GRO
+  - DGRO
+  - SUPERUSER
+
 # digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild
 # in tmux), `static` for the pre-built bundle served by host nginx.
 # Default is static; flip to hmr only on hosts where you actively want
