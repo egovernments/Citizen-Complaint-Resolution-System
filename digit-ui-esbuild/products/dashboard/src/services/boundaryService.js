@@ -15,7 +15,9 @@ import { chunkValues, runSequentialChunks } from "./sequentialChunks";
  * API: POST /boundary-service/boundary/_search?tenantId=&codes=&limit=
  */
 export async function fetchBoundariesByCodes(codes = []) {
-  if ((!hasAuth() && !isPublicDashboardRuntime()) || !codes.length) return [];
+  // Runtime flag first: hasAuth() reads employee storage, which the public
+  // runtime must never do (publicRuntimeIsolation.test.js).
+  if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return [];
 
   const tenantId = getTenantId();
   const uniqueCodes = [...new Set(codes.filter(Boolean))];
@@ -124,7 +126,7 @@ export async function fetchBoundaryRelationshipsByCodes(
   codes = [],
   { hierarchyType = "ADMIN" } = {}
 ) {
-  if ((!hasAuth() && !isPublicDashboardRuntime()) || !codes.length) return {};
+  if ((!isPublicDashboardRuntime() && !hasAuth()) || !codes.length) return {};
 
   const tenantId = getTenantId();
   const rootCode = deriveBoundaryRootCode(codes);

@@ -1,3 +1,5 @@
+import { isPublicDashboardRuntime } from "../services/dashboardRuntime";
+
 /**
  * Default brand palette — override per tenant via globalConfigs (see keys below).
  * Defaults mirror the canonical palette tokens (--primary / --chrome /
@@ -51,14 +53,19 @@ export function getSystemTitle() {
   return `${getStateLabel()} — ${getProductLabel()} System`;
 }
 
+// The anonymous public page persists under its own `-public` suffix (#1797):
+// a visitor's filter selection must survive a reload, but may never read or
+// overwrite the employee slot a logged-in user on the same browser relies on.
+const publicSuffix = () => (isPublicDashboardRuntime() ? "-public" : "");
+
 export function getLayoutStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-layout-v31`;
+  return `${getTenantId()}-supervisor-dashboard-layout-v31${publicSuffix()}`;
 }
 
 export function getSubMetricStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-submetrics-v1`;
+  return `${getTenantId()}-supervisor-dashboard-submetrics-v1${publicSuffix()}`;
 }
 
 export function getFiltersStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-filters-v4`;
+  return `${getTenantId()}-supervisor-dashboard-filters-v4${publicSuffix()}`;
 }

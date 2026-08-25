@@ -23,6 +23,7 @@ import DashboardLogin, {
   clearDashboardSession,
 } from "./components/DashboardLogin";
 import { useDashboardConfig } from "../useDashboardConfig";
+import { configurePublicDashboardRuntime } from "./services/dashboardRuntime";
 import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 import { resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
@@ -161,6 +162,12 @@ const AdminDashboard = ({ embedded = false, mode }) => {
   // `embedded` is kept as a legacy alias so Module.js (and any other caller)
   // keeps working unchanged; an explicit `mode` always wins.
   const resolvedMode = mode || (embedded ? "embedded" : "standalone");
+  // The prop and the process-level runtime flag must agree: services decide
+  // storage namespaces / anonymous transport off the flag, this component
+  // decides fetch paths off the prop. Setting the flag here (idempotent, before
+  // the first child render) means a public mount can never read or write an
+  // employee's saved layout/filters because an entry forgot the explicit call.
+  if (resolvedMode === "public") configurePublicDashboardRuntime();
   const isEmbedded = resolvedMode === "embedded";
   // Only the standalone shell owns a session: embedded inherits the host's,
   // public deliberately has none.
@@ -421,18 +428,21 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   });
   useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
+  // Public persists too (#1797) — under public-only storage keys, see
+  // config/dashboardConfig.js — and draws its option lists from the anonymous
+  // /public/_options endpoint instead of the inline distinct batch.
   const { filters, setFilter, clearFilters, applyFilterOptions } =
-    useDashboardFilters({ persistent: !publicMode, timeZone });
+    useDashboardFilters({ persistent: true, timeZone });
   const { options: filterOptions, loading: filterOptionsLoading } =
-    useFilterOptions({ enabled: !publicMode });
+    useFilterOptions({ enabled: true, publicMode });
   const tenantId = useMemo(() => getTenantId(), []);
 
   // Feed the server-scoped option lists into the filter store so persisted
   // filter values that no longer match any option get reconciled
   // (reconcileFiltersWithOptions) instead of silently sending dead params.
   useEffect(() => {
-    if (!publicMode && filterOptions) applyFilterOptions(filterOptions);
-  }, [filterOptions, applyFilterOptions, publicMode]);
+    if (filterOptions) applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions]);
   const { loading: catalogLoading, kpis, pack, error: catalogError } =
     useCatalog(tenantId, { publicMode });
 
@@ -484,7 +494,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     addKpiToLayout,
     visibleLayoutIds,
     findDragHoverTarget,
-  } = useCatalogLayout(kpis, pack?.layout, { persistent: !publicMode });
+  } = useCatalogLayout(kpis, pack?.layout, { persistent: true });
 
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
   const draggingWidgetIdRef = useRef(null);
@@ -709,7 +719,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   // BEFORE the new locale's bundles finish fetching, so the names must also
   // re-resolve when the messages actually land ("added" store event).
   const catalogItems = useMemo(
-    () => publicMode ? [] :
+    () =>
       Object.values(kpis)
         .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
         .map((def) => ({
@@ -719,7 +729,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
-    [kpis, language, i18nTick, publicMode]
+    [kpis, language, i18nTick]
   );
 
   // Re-run the batch whenever the catalog resolves, the filters change, or a
@@ -729,7 +739,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   // Group-by change would never refire this effect).
   const refsKey = useMemo(
     () => publicMode
-      ? buildPublicRefsKey(tiles, kpis)
+      ? buildPublicRefsKey(tiles, kpis, filters)
       : buildRefsKey(tiles, kpis, filters, hierOverrides),
     [tiles, filters, kpis, hierOverrides, publicMode]
   );
@@ -740,7 +750,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       return;
     }
     const refs = publicMode
-      ? buildPublicRefs(tiles, kpis)
+      ? buildPublicRefs(tiles, kpis, filters)
       : buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -926,7 +936,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   return (
     <DashboardLayout
       embedded={embedded}
-      readOnly={publicMode}
+      readOnly={false}
       publicMode={publicMode}
       visibleLayoutIds={visibleLayoutIds}
       catalogItems={catalogItems}
@@ -1002,9 +1012,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
           containerPadding={[0, 0]}
           compactType={null}
           allowOverlap={false}
-          isDraggable={!publicMode}
-          isResizable={!publicMode}
-          isDroppable={!publicMode && isExternalDrag}
+          isDraggable
+          isResizable
+          isDroppable={isExternalDrag}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
           onDropDragOver={handleDropDragOver}
@@ -1021,7 +1031,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
             const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
               <TypeFilterIgnoredNote />
             ) : null;
-            const removeBtn = publicMode ? null : (
+            const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
                 onClick={(e) => {
@@ -1106,7 +1116,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                 </div>
                 {ignoredNote}
                 {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
-                {!publicMode && <ResizeGrip />}
+                <ResizeGrip />
               </section>
             );
           })}

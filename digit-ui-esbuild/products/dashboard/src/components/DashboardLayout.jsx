@@ -51,6 +51,9 @@ const DashboardLayout = ({
       className={`dashboard-root${embedded ? " dashboard-embedded" : ""}${publicMode ? " dashboard-public" : ""} tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground`}
       style={brandStyle}
     >
+      {/* The employee nav sidebar stays off the public page; its filter bar,
+          Add KPI / Reset and language switcher render through the header and
+          main column like every other mode (#1797). */}
       {!embedded && !publicMode && <Sidebar onSignOut={onSignOut} />}
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
@@ -71,6 +74,7 @@ const DashboardLayout = ({
           scope={scope}
           readOnly={readOnly}
           publicMode={publicMode}
+          showLanguageMenu={!embedded}
         />
         <main
           className={

@@ -404,6 +404,12 @@
     appearance: none;
   }
 
+  /* Language switcher chip (standalone/public header, #1797): match the
+     header buttons' 2rem height so the controls row stays one line. */
+  .dashboard-header-controls .dashboard-language-chip {
+    @apply tw-h-8 tw-min-h-8 tw-min-w-0 tw-shrink-0;
+  }
+
   .dashboard-header-controls .dashboard-header-btn:hover {
     @apply tw-bg-muted;
   }

@@ -29,6 +29,8 @@ describe('Kong declarative route syntax', () => {
     expect(KONG_REGEX_PATHS.filter((routePath) => routePath.startsWith('~/pgr-services/v2/analytics/public/'))).toEqual([
       '~/pgr-services/v2/analytics/public/packs$',
       '~/pgr-services/v2/analytics/public/_query$',
+      '~/pgr-services/v2/analytics/public/catalog/_search$',
+      '~/pgr-services/v2/analytics/public/_options$',
     ]);
   });
 });

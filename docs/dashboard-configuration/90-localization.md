@@ -27,6 +27,31 @@ shell at boot. The TopBar language dropdown (host `ChangeLanguage`) drives local
 dashboard re-renders in place, including the imperatively-drawn Leaflet layers and pin popups
 (re-keyed on `i18n.language`).
 
+### 1.1 The public page (`/digit-ui/public-dashboard`)
+
+There is no DigitUI shell and no host i18next on the anonymous page, so
+`products/dashboard/src/i18n/localeRuntime.js` fetches the same four bundles itself from
+`/localization/messages/v1/_search` (auth-optional on Kong) at the **state root**, for the active
+locale **plus `en_IN`** as the fallback chain. Since #1797 the page carries its own language
+switcher (`components/LanguageMenu.jsx`, in the header):
+
+- **options** come from `common-masters.StateInfo[0].languages` at the state root, exactly like
+  the TopBar (`hasLocalisation` must be `true`; a single declared language hides the menu);
+- **switching** calls `setLanguage()`, which remembers the choice under
+  `localStorage["ccrs.dashboard.public-locale.v1"]` — deliberately *not* `Employee.locale`, so a
+  public visit never reads or rewrites the language of an employee session in the same browser —
+  loads the bundle and re-renders every `useDashboardT` consumer in place;
+- **first visit** defaults to `globalConfigs` `LOCALE_DEFAULT` + `_` + `LOCALE_REGION` (the
+  employee app's boot locale), else `en_IN`.
+
+**Seeding caveat (bomet).** The menu lists whatever `StateInfo.languages` declares; it does not
+know whether a `rainmaker-dashboard` pack exists for that locale. `ke` declares `en_IN` +
+`sw_KE`, but only `en_IN` and `pt_PT` dashboard packs ship in
+`local-setup/db/dss-mdms-seed/l10n/` — so picking Swahili on bomet today renders the dashboard's
+own chrome in the English fallback until a `sw_KE` pack is upserted (`enable-dashboard.sh`
+already warns on exactly this mismatch). The fix is data: translate the pack, upsert it at the
+state root, cache-bust (§4.1).
+
 Two resolution seams in `products/dashboard/src/i18n/`:
 
 - `translate(key, seedEnglish)` / `useDashboardT()` — chrome strings; missing ⇒ raw key.

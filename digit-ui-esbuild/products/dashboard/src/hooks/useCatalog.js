@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchPack, fetchCatalog, fetchPublicPack } from '../services/analyticsService';
+import { fetchPack, fetchCatalog, fetchPublicPack, fetchPublicCatalog } from '../services/analyticsService';
 import { markInteraction, setPackMeta } from '../services/dashboardMetrics';
 
 // Role set observed at the previous catalog fetch (module-scoped: survives
@@ -61,16 +61,23 @@ export function useCatalog(tenantId, { publicMode = false } = {}) {
 
     let cancelled = false;
     const request = publicMode
-      // Public is a curated, read-only surface. /public/packs already contains
-      // every descriptor it may render, so never open or call catalog/_search.
-      ? fetchPublicPack(tenantId).then((packRes) => [packRes, null])
+      // Public: the pack is the fail-closed gate, so read it first; only an
+      // enabled tenant gets the PUBLIC catalog (the Add-KPI menu source, #1797).
+      // A catalog failure degrades to the pack's own descriptors rather than
+      // blanking a page that can still render its default tiles.
+      ? fetchPublicPack(tenantId).then((packRes) =>
+          packRes?.enabled === false
+            ? [packRes, { tiles: [] }]
+            : fetchPublicCatalog(tenantId)
+                // Degrade to the pack's own descriptors: the default tiles
+                // still render, only the Add-KPI menu is reduced.
+                .catch(() => ({ tiles: packRes?.tiles || [] }))
+                .then((catalogRes) => [packRes, catalogRes]))
       : Promise.all([fetchPack(tenantId), fetchCatalog(tenantId)]);
     request
       .then(([packRes, catalogRes]) => {
         if (cancelled) return;
-        const catalogTiles = publicMode
-          ? (packRes?.tiles || [])
-          : (catalogRes?.tiles || []);
+        const catalogTiles = catalogRes?.tiles || [];
         const allKpis = Object.fromEntries(
           catalogTiles.map(k => [k.kpiId, k])
         );
