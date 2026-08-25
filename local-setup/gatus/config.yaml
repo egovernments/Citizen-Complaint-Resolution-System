@@ -472,3 +472,22 @@ endpoints:
     interval: 60s
     conditions:
       - "[STATUS] == 200"
+
+  # Matomo self-hosted analytics (docker-compose.matomo.yml, optional profile).
+  # If the profile is not running these go red on the dashboard, which is the
+  # honest signal -- the pair only deploys where analytics is enabled.
+  - name: Matomo
+    group: Analytics
+    enabled: ${GATUS_PROFILE_MATOMO}
+    url: "http://matomo:80/matomo.php"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Matomo DB
+    group: Analytics
+    enabled: ${GATUS_PROFILE_MATOMO}
+    url: "tcp://matomo-db:3306"
+    interval: 60s
+    conditions:
+      - "[CONNECTED] == true"

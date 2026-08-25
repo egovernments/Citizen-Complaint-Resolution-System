@@ -181,6 +181,61 @@ server {
   }
 
 {% endif %}
+{% if nginx_features.matomo | default(false) %}
+  # ── Matomo tracking endpoints, proxied SAME-ORIGIN ──────────────────────
+  # Pairs with local-setup/docker-compose.matomo.yml (dashboard bound to
+  # 127.0.0.1:{{ matomo_port | default(8080) }}) and the MDMS AnalyticsProvider
+  # row scriptUrl:/matomo/matomo.js. ONLY the tracker and collector are exposed,
+  # deliberately: Matomo emits absolute asset URLs, so serving the whole app
+  # under /matomo/ breaks its dashboard — admins reach that via an SSH tunnel.
+  #
+  # Same-origin means the portal loads the tracker over its OWN scheme (works
+  # with no TLS listener) and needs no ANALYTICS_SCRIPT_HOSTS entry.
+  #
+  # Host header is Matomo's OWN origin, not $host: Matomo refuses a Host it
+  # does not recognise, the installer records the origin it was driven on
+  # (127.0.0.1:{{ matomo_port | default(8080) }}), and the matomo:5-apache
+  # image ignores MATOMO_GENERAL_TRUSTED_HOSTS. The tracked page URL travels
+  # in the payload's url= parameter, so nothing is lost.
+  location = /matomo/matomo.js {
+    proxy_pass http://127.0.0.1:{{ matomo_port | default(8080) }}/matomo.js;
+    proxy_set_header Host 127.0.0.1:{{ matomo_port | default(8080) }};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  location = /matomo/matomo.php {
+    proxy_pass http://127.0.0.1:{{ matomo_port | default(8080) }}/matomo.php;
+    proxy_set_header Host 127.0.0.1:{{ matomo_port | default(8080) }};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+{% if matomo_dashboard | default(false) %}
+
+  # ── Matomo DASHBOARD under the /matomo/ prefix ──────────────────────────
+  # The two exact-match (`location =`) tracker blocks above always win over this
+  # prefix, so tracking is unaffected. Host is $host (not the pin) so Matomo's
+  # absolute URLs carry the portal host; X-Forwarded-Uri + Matomo's own
+  # proxy_uri_header=1 (set by `ccrs-migrate --matomo --matomo-dashboard`) keep
+  # the /matomo prefix on generated links. This publishes an ADMIN CONSOLE with
+  # visitor data on the public domain — protect it with a strong password, and
+  # consider an allow/deny below. Off unless matomo_dashboard: true.
+  location /matomo/ {
+    proxy_pass http://127.0.0.1:{{ matomo_port | default(8080) }}/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Uri /matomo;
+    proxy_http_version 1.1;
+  }
+{% endif %}
+
+{% endif %}
 {% if nginx_features.mcp %}
   # DIGIT MCP server (HTTP transport at /mcp; healthcheck at /mcp/healthz).
   # Streaming-friendly: long timeouts and buffering disabled for SSE.

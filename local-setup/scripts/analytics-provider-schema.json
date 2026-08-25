@@ -1,0 +1,95 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.AnalyticsProvider",
+    "description": "One row per analytics/error destination the SPA may initialise. type picks the adapter (MATOMO|GA4|POSTHOG|SENTRY|CUSTOM); not enum-constrained because schema/v1/_update returns 501. enabled is false on create so an unseeded env stays dark. The shim reads the state tenant and the active city tenant; a city row overrides the state row of the same code. settings and adapter are open forward-compat buckets. adapter.callTemplates is DATA ONLY, never eval'd. x-ref-schema omitted on purpose.",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Analytics Provider",
+      "type": "object",
+      "required": [
+        "code",
+        "type",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Permanent identity key. Also the MDMS uniqueIdentifier - immutable after create."
+        },
+        "type": {
+          "type": "string",
+          "description": "Adapter key. v1 catalog: MATOMO | GA4 | POSTHOG | SENTRY | CUSTOM. Not enum-constrained (see schema description)."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Master on/off for this destination. The Configurator Create form writes false unless the field is named exactly 'active', so a newly created row is born OFF."
+        },
+        "order": {
+          "type": "number"
+        },
+        "scriptUrl": {
+          "type": "string",
+          "description": "https only; hostname must match the ops-controlled ANALYTICS_SCRIPT_HOSTS allowlist in globalConfigs. MDMS cannot widen that allowlist."
+        },
+        "endpointUrl": {
+          "type": "string"
+        },
+        "siteId": {
+          "type": "string",
+          "description": "STRING, not integer - preserves leading zeros and non-numeric vendor ids."
+        },
+        "measurementId": {
+          "type": "string"
+        },
+        "apiKey": {
+          "type": "string"
+        },
+        "dsn": {
+          "type": "string"
+        },
+        "globalName": {
+          "type": "string",
+          "description": "CUSTOM only. Name of the global array the call templates are pushed onto. Must match /^_[A-Za-z0-9_]{1,40}$/."
+        },
+        "sampleRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "disablePageViews": {
+          "type": "boolean",
+          "description": "Negative polarity on purpose: the Configurator Create form writes false for every boolean not named 'active', and MDMS never applies JSON-Schema defaults. A positively-named trackPageViews with default true would be created as false."
+        },
+        "trackClicks": {
+          "type": "boolean"
+        },
+        "trackErrors": {
+          "type": "boolean"
+        },
+        "surfaces": {
+          "type": "string",
+          "description": "Comma-separated: citizen,employee. Empty/absent = both. A STRING, not an array: an empty array from the UI serialises to {} through Kong and the validator then rejects it."
+        },
+        "scrubPatterns": {
+          "type": "string",
+          "description": "Comma-separated extra regex sources. APPENDED to the built-in scrubbers, never replacing them."
+        },
+        "settings": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "adapter": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "CUSTOM only: { scriptUrl?, globalName?, callTemplates: { init?, pageView?, event? } }."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

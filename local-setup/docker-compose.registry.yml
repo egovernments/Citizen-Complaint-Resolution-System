@@ -1608,6 +1608,7 @@ services:
       # These services are ungated in this file, so the toggles are fixed:
       # "true" where the service always starts, "false" where it is absent.
       GATUS_PROFILE_OTP: "true"
+      GATUS_PROFILE_MATOMO: "false"
       GATUS_CONFIGURATOR: "false"
       GATUS_PROFILE_SEARCH: "true"
       GATUS_PROFILE_MCP: "false"

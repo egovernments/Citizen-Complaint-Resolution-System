@@ -514,6 +514,58 @@ force_clean: false
 # is a Linux box running as root.
 install_claude_code: false
 
+# ────────── Analytics (portal usage + error tracking) ──────────
+#
+# WHICH DESTINATIONS RUN IS **DATA, NOT CONFIG**. One MDMS row per
+# destination in `common-masters.AnalyticsProvider`, managed in the
+# Configurator under System → Analytics Providers. With no rows — the state
+# of a fresh environment — the portal loads its analytics shim, finds
+# nothing, and sends nowhere. Nothing below turns analytics ON.
+#
+# So why are these three here at all? Because they are the knobs MDMS must
+# NOT be able to set: they decide whether third-party script may run in a
+# citizen's browser at all, and MDMS is writable from the Configurator UI.
+# Ops keeps them; admins get the harmless ones.
+#
+# ALL THREE ARE OPTIONAL. Every one has a `| default(...)` in
+# templates/globalConfigs.js.j2, so an inventory that never mentions them
+# renders exactly as before — no edit is required to adopt the feature.
+#
+# Full guide: docs/analytics-guide/  (start with 10-setup.md; the complete
+# self-hosted Matomo walkthrough is 50-self-hosted-matomo.md)
+
+# Hard off switch. `true` disables the shim entirely, whatever MDMS says —
+# the environment-wide panic button when a destination misbehaves. Note the
+# polarity: ONLY an explicit `true` disables. That is deliberate, and the
+# opposite of dashboard_metrics_enabled, which is on-by-default.
+# analytics_kill_switch: false
+
+# Extra hostnames a destination's scriptUrl may load from, ON TOP of the
+# built-in vendor list (www.googletagmanager.com, js.sentry-cdn.com,
+# browser.sentry-cdn.com, *.sentry.io, *.posthog.com).
+#
+# Needed for a SELF-HOSTED collector, whose hostname is specific to your
+# environment and therefore cannot be baked into the code. MDMS cannot widen
+# this list — that is the whole point of it living here.
+#
+# Exact hostnames, or a dot-boundary wildcard like "*.example.gov.mz".
+# There is no prefix wildcard: "matomo.*" would have accepted
+# matomo.<anything-an-attacker-registers>.com.
+#
+# NOT needed if your collector is same-origin (e.g. scriptUrl
+# "/matomo/matomo.js" proxied by your own nginx) — that form needs no
+# allowlist entry at all, and is the only one that works on an
+# http-only environment.
+# analytics_script_hosts:
+#   - matomo.example.gov.mz
+#   - stats.example.gov.mz
+
+# Allow `type: "CUSTOM"` destinations to initialise. CUSTOM is the one type
+# where an MDMS row names the script that gets loaded, so it stays off unless
+# ops opts in — on an environment where any employee token can write MDMS,
+# that write access is effectively script-injection access.
+# analytics_custom_enabled: false
+
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 
 nginx_features:
@@ -527,6 +579,17 @@ nginx_features:
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
+  matomo: false              # /matomo/matomo.{js,php} — SAME-ORIGIN tracking proxy for the
+                             # self-hosted Matomo stack (local-setup/docker-compose.matomo.yml,
+                             # dashboard on 127.0.0.1:8080 — see matomo_port). The stack itself
+                             # is provisioned by `ccrs-migrate --matomo` ON the box (compose up,
+                             # unattended install, MDMS destination row born disabled); this flag
+                             # only makes the two locations survive the next ansible deploy.
+                             # matomo_port: 8080          # published dashboard port, if changed
+# matomo_dashboard: false    # ALSO serve the full Matomo UI at <host>/matomo/ (no SSH tunnel).
+                             # Publishes an admin console with visitor data on the public domain —
+                             # keep the strong admin password, consider an allow/deny on the location.
+                             # Provisioned in one go by `ccrs-migrate --matomo --matomo-dashboard`.
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
