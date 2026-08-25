@@ -273,7 +273,17 @@ export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isEr
   if (panelIdRef.current === null) panelIdRef.current = `digit-working-context-panel-${++panelSeq}`;
 
   if (isError) {
-    return <EmployeeWorkingContextSummary t={t} isError context={null} />;
+    // Wrapped in .digit-working-context like every other render of this component, NOT returned
+    // bare. Both copies (header + mobile row) mount on the failure path too, and the max-width
+    // 640px rules that hide the header copy are keyed on .digit-working-context — a bare summary
+    // matches neither the hide rule nor the :has() wrapper-collapse rule, so after a
+    // desktop-to-mobile resize the header error and the sticky-row error would both render. That
+    // is also the state on any deployment where the employee-context route is not live yet.
+    return (
+      <div className="digit-working-context">
+        <EmployeeWorkingContextSummary t={t} isError context={null} />
+      </div>
+    );
   }
   if (!context) return null;
 
