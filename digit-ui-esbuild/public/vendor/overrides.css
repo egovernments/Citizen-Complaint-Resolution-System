@@ -6306,27 +6306,34 @@ header.digit-header .digit-dropdown-master {
   outline: 2px solid var(--color-primary-accent, #c84c0e);
   outline-offset: 2px;
 }
+/* Single line, truncated — the employee topbar is 56px and this sits beside
+ * the city/language controls, so it must never wrap or push them off-screen.
+ * block + nowrap (rather than flex) so text-overflow actually applies. */
 .employee .digit-working-context-summary {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+  display: block;
+  max-width: 22rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   line-height: 1.35;
-  color: var(--color-text-secondary, #505a5f);
+  /* Inherit the header's own text colour. The employee topbar is dark in CCRS
+   * (#22394D) but light elsewhere, so a fixed grey is unreadable on one of
+   * them — inheriting tracks whatever the shell uses for its own controls. */
+  color: inherit;
+  opacity: .85;
 }
-.employee .digit-working-context-sep { color: #a9b0b4; }
-.employee .digit-working-context-more {
-  color: var(--color-primary-accent, #c84c0e);
-  font-weight: 500;
-}
+.employee .digit-working-context-summary > * { vertical-align: baseline; }
+.employee .digit-working-context-sep { opacity: .5; margin: 0 5px; }
+/* Stand out by weight, not hue: the brand orange fails contrast on the dark
+ * topbar, and the accent has to work on both grounds. */
+.employee .digit-working-context-more { font-weight: 700; opacity: 1; margin-left: 3px; }
 .employee .digit-working-context-error { font-style: italic; }
 
+/* Positioned inline as fixed by the component (the header container is
+ * overflow:hidden), so only the chrome lives here. */
 .employee .digit-working-context-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 50;
+  z-index: 10000;
   min-width: 272px;
   max-width: 352px;
   max-height: 70vh;
@@ -6347,11 +6354,22 @@ header.digit-header .digit-dropdown-master {
   color: #787878;
   margin-bottom: 2px;
 }
+/* The panel renders inside the topbar subtree, which colours its descendants
+ * white for the dark header. Re-assert the panel's own palette on every child
+ * or the values are white-on-white. */
+.employee .digit-working-context-panel,
+.employee .digit-working-context-panel div,
+.employee .digit-working-context-panel span {
+  color: #0b0c0c;
+}
 .employee .digit-working-context-group-value {
   font-size: 13px;
   line-height: 1.5;
   color: #0b0c0c;
 }
+.employee .digit-working-context-panel .digit-working-context-group-label { color: #787878; }
+.employee .digit-working-context-panel .digit-working-context-qualifier,
+.employee .digit-working-context-panel .digit-working-context-raw-roles { color: #505a5f; }
 .employee .digit-working-context-qualifier { color: #505a5f; font-size: 12px; }
 .employee .digit-working-context-raw-roles { color: #505a5f; font-size: 11.5px; margin-top: 2px; }
 
@@ -6364,4 +6382,11 @@ header.digit-header .digit-dropdown-master {
   background: #fff;
   border-bottom: 1px solid #d6d8da;
   padding: 6px 12px;
+}
+/* This row paints its own white ground, so it cannot inherit the dark
+ * topbar's white text. */
+.employee .digit-working-context-mobile .digit-working-context-summary {
+  color: var(--color-text-secondary, #505a5f);
+  opacity: 1;
+  max-width: 100%;
 }

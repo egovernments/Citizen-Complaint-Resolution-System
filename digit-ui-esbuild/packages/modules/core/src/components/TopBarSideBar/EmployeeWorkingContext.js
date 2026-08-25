@@ -39,15 +39,20 @@ const roleContextLabel = (t, ctx) => label(t, `${ROLE_CONTEXT_KEY}${ctx}`, ctx);
  * is also the safety net for the seeded records that carry a tenant code in
  * `boundary` instead of a real boundary.
  */
-const jurisdictionLabel = (t, j) => {
+/** City name from the resolved tenant, falling back to the raw tenant id. */
+const cityLabel = (t, cityDetails, tenantId) => label(t, cityDetails?.i18nKey, tenantId);
+
+const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   const hierarchy = String(j?.hierarchy || "").toUpperCase();
   const boundary = j?.boundary;
   if (!boundary) return null;
+  // HRMS stores a city-wide jurisdiction as the tenant code itself rather than
+  // a boundary code (the same records BoundaryComponent filters out of the
+  // cascade). Rendering it raw shows an operator "pg.citest" as if it were a
+  // place; show the city they are already looking at instead.
+  if (boundary === tenantId) return cityLabel(t, cityDetails, tenantId);
   return label(t, `${hierarchy}_${String(boundary).toUpperCase()}`, boundary);
 };
-
-/** City name from the resolved tenant, falling back to the raw tenant id. */
-const cityLabel = (t, cityDetails, tenantId) => label(t, cityDetails?.i18nKey, tenantId);
 
 /** First value plus a +N marker, so the header never wraps. */
 function Truncated({ values }) {
@@ -64,7 +69,7 @@ export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantI
   if (isError) {
     return (
       <div className="digit-working-context-summary digit-working-context-error">
-        {t("CS_WORKING_CONTEXT_UNAVAILABLE")}
+        {label(t, "CS_WORKING_CONTEXT_UNAVAILABLE", "Working context unavailable")}
       </div>
     );
   }
@@ -102,11 +107,38 @@ function Group({ title, children }) {
   );
 }
 
-export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId, onDismiss }) {
+export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId, onDismiss, anchorRef }) {
   const ref = useRef(null);
+  // The header's own .digit-header-action-fields container is overflow:hidden
+  // and 32px tall, so an absolutely-positioned panel is clipped to nothing.
+  // Position fixed against the trigger instead — that way no ancestor's
+  // overflow or stacking context can hide it, and the shared header container
+  // (which the city and language controls also live in) is left alone.
+  const [pos, setPos] = useState(null);
+
+  useEffect(() => {
+    const place = () => {
+      const a = anchorRef?.current;
+      if (!a) return;
+      const r = a.getBoundingClientRect();
+      // Prefer right-aligning to the trigger; clamp so it never leaves the viewport.
+      const width = 272;
+      const left = Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8));
+      setPos({ top: Math.round(r.bottom + 8), left: Math.round(left) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchorRef]);
 
   useEffect(() => {
     const onDocClick = (e) => {
+      // The trigger toggles itself; dismissing here too would fight it.
+      if (anchorRef?.current?.contains(e.target)) return;
       if (ref.current && !ref.current.contains(e.target)) onDismiss?.();
     };
     const onEsc = (e) => {
@@ -118,7 +150,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [onDismiss]);
+  }, [onDismiss, anchorRef]);
 
   const rows = useMemo(() => {
     if (!context) return null;
@@ -128,7 +160,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       roleContexts: (context.roleContexts || []).map((c) => roleContextLabel(t, c)).filter(Boolean),
       roles: (context.roles || []).map((r) => roleLabel(t, r)).filter(Boolean),
       jurisdictions: (context.jurisdictions || [])
-        .map((j) => ({ name: jurisdictionLabel(t, j), type: j?.boundaryType }))
+        .map((j) => ({ name: jurisdictionLabel(t, j, cityDetails, context.tenantId || tenantId), type: j?.boundaryType }))
         .filter((j) => j.name),
     };
   }, [t, context, cityDetails, tenantId]);
@@ -136,16 +168,22 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
   if (!rows) return null;
 
   return (
-    <div className="digit-working-context-panel" ref={ref} role="dialog" aria-label={t("CS_WORKING_CONTEXT")}>
-      <Group title={t("CS_WORKING_CONTEXT_CITY")}>{rows.city}</Group>
+    <div
+      className="digit-working-context-panel"
+      ref={ref}
+      role="dialog"
+      aria-label={label(t, "CS_WORKING_CONTEXT", "Working context")}
+      style={pos ? { position: "fixed", top: pos.top, left: pos.left } : { visibility: "hidden" }}
+    >
+      <Group title={label(t, "CS_WORKING_CONTEXT_CITY", "City")}>{rows.city}</Group>
 
-      <Group title={t("CS_WORKING_CONTEXT_DEPARTMENT")}>
+      <Group title={label(t, "CS_WORKING_CONTEXT_DEPARTMENT", "Department")}>
         {rows.departments.length
           ? rows.departments.map((d, i) => <div key={i}>{d}</div>)
           : null}
       </Group>
 
-      <Group title={t("CS_WORKING_CONTEXT_ROLE")}>
+      <Group title={label(t, "CS_WORKING_CONTEXT_ROLE", "Role")}>
         {rows.roleContexts.length || rows.roles.length ? (
           <React.Fragment>
             {rows.roleContexts.map((c, i) => (
@@ -156,7 +194,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
         ) : null}
       </Group>
 
-      <Group title={t("CS_WORKING_CONTEXT_JURISDICTION")}>
+      <Group title={label(t, "CS_WORKING_CONTEXT_JURISDICTION", "Jurisdiction")}>
         {rows.jurisdictions.length
           ? rows.jurisdictions.map((j, i) => (
               <div key={i}>
@@ -173,6 +211,7 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
 /** Summary + click-to-expand panel, for the desktop header. */
 export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isError }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
 
   if (isError) {
     return <EmployeeWorkingContextSummary t={t} isError context={null} />;
@@ -183,6 +222,7 @@ export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isEr
     <div className="digit-working-context">
       <button
         type="button"
+        ref={triggerRef}
         className="digit-working-context-trigger"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -195,6 +235,7 @@ export function EmployeeWorkingContext({ t, context, cityDetails, tenantId, isEr
           context={context}
           cityDetails={cityDetails}
           tenantId={tenantId}
+          anchorRef={triggerRef}
           onDismiss={() => setOpen(false)}
         />
       )}
