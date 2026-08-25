@@ -73,11 +73,13 @@ public class AnalyticsServicePublicFloorParamsTest {
                 "\"hier\":{\"kpiId\":\"cl_public\",\"params\":{\"hierLevel\":\"1\"}}," +
                 "\"prior\":{\"kpiId\":\"cl_public\",\"params\":{\"compare\":\"prior\"}}," +
                 "\"window\":{\"kpiId\":\"cl_public\",\"params\":{\"window\":\"all\"}}," +
+                "\"dateFromOnly\":{\"kpiId\":\"cl_public\",\"params\":{\"dateFrom\":\"2026-07-01\"}}," +
+                "\"dateToOnly\":{\"kpiId\":\"cl_public\",\"params\":{\"dateTo\":\"2026-07-31\"}}," +
                 "\"inline\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}}"),
                 null, "ke", 1);
 
         assertFalse(entry(out, "ok").containsKey("error"), entry(out, "ok").toString());
-        for (String rejected : Arrays.asList("hier", "prior", "window"))
+        for (String rejected : Arrays.asList("hier", "prior", "window", "dateFromOnly", "dateToOnly"))
             assertEquals("invalid_param", entry(out, rejected).get("error"), rejected);
         assertEquals("kpi_forbidden", entry(out, "inline").get("error"));
         assertEquals(Boolean.TRUE, out.get("partial"));

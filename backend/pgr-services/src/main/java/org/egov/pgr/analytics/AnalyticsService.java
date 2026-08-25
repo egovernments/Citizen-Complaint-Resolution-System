@@ -76,7 +76,8 @@ public class AnalyticsService {
      * degrades to the same PUBLIC floor. Each is a narrowing predicate the composer layers under
      * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
      * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
-     * Values are scalar strings, length-capped, and the dates must be ISO calendar days.
+     * Values are scalar strings, length-capped, and dates must be ISO calendar days supplied as a
+     * pair.
      */
     static final Set<String> PUBLIC_QUERY_PARAMS =
             Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
@@ -99,7 +100,7 @@ public class AnalyticsService {
     /**
      * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
      * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
-     * non-scalar or blank value, over-long value, or non-ISO-day date.
+     * non-scalar or blank value, over-long value, non-ISO-day date, or incomplete date range.
      */
     static ObjectNode sanitizePublicParams(JsonNode params) {
         if (params == null || params.isNull()) return null;
@@ -124,6 +125,9 @@ public class AnalyticsService {
                 throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
             clean.put(name, text);
         }
+        if (clean.has("dateFrom") != clean.has("dateTo"))
+            throw new IllegalArgumentException(
+                    "invalid_param: dateFrom and dateTo must be supplied together");
         return clean;
     }
 

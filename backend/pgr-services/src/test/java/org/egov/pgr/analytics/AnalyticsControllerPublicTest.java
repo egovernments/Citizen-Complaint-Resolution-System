@@ -325,6 +325,8 @@ public class AnalyticsControllerPublicTest {
                 "{\"ward\":[\"W1\",\"W2\"]}",                 // non-scalar
                 "{\"ward\":\"   \"}",                          // blank
                 "{\"dateFrom\":\"01/07/2026\"}",               // not an ISO day
+                "{\"dateFrom\":\"2026-07-01\"}",               // incomplete range
+                "{\"dateTo\":\"2026-07-31\"}",                 // incomplete range
                 "{\"serviceCode\":\"" + "x".repeat(129) + "\"}", // over-long
         };
         for (String params : rejected) {

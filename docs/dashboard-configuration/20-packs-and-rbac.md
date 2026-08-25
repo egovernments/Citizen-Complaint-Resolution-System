@@ -201,10 +201,10 @@ auth-optional aliases under `/v2/analytics/public/*` (`AnalyticsController`), ea
 `/public/_query` accepts a ref for **any PUBLIC-tagged def** (not only pack tiles — the pack is
 the enablement gate, `visibleTo` is the disclosure boundary), and its `params` are rebuilt from a
 fixed allow-list — `dateFrom`, `dateTo`, `ward`, `serviceCode`, `complaintPath` — i.e. exactly
-the global filter bar. Each value must be a non-empty scalar ≤ 128 chars and the dates ISO
-calendar days; any other key (`hierLevel`, `compare`, `series`, `window`, …), shape or value is a
-whole-batch `400 invalid_param`. So the anonymous page gets the same Ward / Complaint type / date
-filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
+the global filter bar. Each value must be a non-empty scalar ≤ 128 chars; dates must be ISO
+calendar days supplied together. Any other key (`hierLevel`, `compare`, `series`, `window`, …),
+shape or value is a whole-batch `400 invalid_param`. So the anonymous page gets the same Ward /
+Complaint type / date filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
 sparklines), no Group-by level switch and no per-complaint pin source.
 
 Three details of that policy worth knowing when authoring PUBLIC defs:
