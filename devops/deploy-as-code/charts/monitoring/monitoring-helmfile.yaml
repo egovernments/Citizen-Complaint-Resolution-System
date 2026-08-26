@@ -29,6 +29,7 @@ environments:
           traces: false
           probes: false
           kafkaUi: false
+          gatus: false
       - ../environments/env-secrets.yaml
       - ../environments/env.yaml
 ---
@@ -330,6 +331,20 @@ releases:
     # would be the wrong one anyway -- the chart writes
     # `release: <.Release.Name>` (_helpers.tpl:43), which here is `blackbox`,
     # not the `kube-prometheus-stack` the operator's selector matches.
+
+- name: gatus
+  # Gatus health dashboard (#1619). A single at-a-glance up/down page for every
+  # tier, with optional Slack alerting. Local chart, so the whole-values
+  # passthrough is safe (no values.schema.json to reject unknown keys, unlike
+  # otel-collector above) AND needed -- the chart reads .Values.global.domain
+  # for its ingress host. Independent of the metrics/logs stack: it probes
+  # services directly, so it is useful even with nothing else here enabled.
+  installed: {{ default false (index $mon "gatus") }}
+  namespace: {{ .Values.namespace | default "default-namespace" }}
+  chart: ./gatus
+  version: 0.1.0
+  values:
+  - {{ .Values | toYaml | nindent 8 }}
 
 - name: kafka-ui
   # Kafka admin console. NOT monitoring -- it is a write-capable admin UI, so it

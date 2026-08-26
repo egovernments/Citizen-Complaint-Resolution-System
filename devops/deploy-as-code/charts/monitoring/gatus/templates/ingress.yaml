@@ -1,0 +1,34 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := include "gatus.host" . -}}
+# Gatus on its own sub-domain (see values.yaml for why not a sub-path). TLS is
+# provisioned by cert-manager's ingress-shim from the cluster-issuer annotation
+# -- the same mechanism the egov ingresses use -- so a fresh deploy gets a
+# Let's Encrypt cert with no manual secret creation, once DNS for $host points
+# at the ingress load balancer.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gatus
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gatus
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ printf "%s-tls-certs" $host | quote }}
+{{- end }}

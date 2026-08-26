@@ -1,0 +1,77 @@
+# Gatus health dashboard (#1619). Defaults target the deploy-as-code (helm)
+# tier as it runs on EKS: DIGIT services in `egov`, backbone infra in
+# `backbone`, monitoring in `monitoring`. Endpoints use cross-namespace FQDNs
+# (<svc>.<ns>) so a Gatus pod in `monitoring` can reach every tier.
+#
+# This file is the DEFAULT layer. The monitoring-helmfile also passes the
+# merged env values tree in after it, so `global.domain` and the `secrets.*`
+# blocks come from charts/environments — nothing environment-specific is
+# baked in here.
+
+namespace: monitoring
+
+image:
+  repository: twinproduction/gatus
+  # Pinned, never :latest -- Gatus rejects config keys its version does not
+  # know, so the running version and this chart's config must stay in step.
+  tag: v5.36.0
+  pullPolicy: IfNotPresent
+
+# Gatus is exposed on its OWN subdomain, not a path on the main host. Gatus's
+# UI is a single-page app that loads its assets from absolute paths (/js, /css),
+# so it cannot be served under a sub-path such as /status without breaking the
+# page (a long-standing upstream limitation). grafana already owns /monitoring
+# on the main host, so Gatus gets `status.<domain>` instead. cert-manager
+# issues the TLS cert via the ingress-shim, exactly as the egov ingresses do.
+ingress:
+  enabled: true
+  className: nginx
+  # Sub-domain prefix prepended to global.domain -> e.g. status.cms-saas.digit.org.
+  # Set `host` directly to override the computed name entirely.
+  subdomain: status
+  host: ""
+  clusterIssuer: letsencrypt-prod
+
+# sqlite uptime history (#1610). A PVC, not emptyDir, so history survives pod
+# reschedules. local-path/gp2 default StorageClass; 1Gi is generous since Gatus
+# prunes per-endpoint (100 results / 50 events).
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClassName: ""
+
+resources:
+  limits:
+    memory: 128Mi
+    cpu: "200m"
+  requests:
+    memory: 64Mi
+    cpu: "100m"
+
+gatus:
+  ui:
+    title: DIGIT - Health Dashboard
+    description: Real-time health monitoring for all DIGIT services on this cluster
+
+  # External RDS is not an in-cluster Service, so its host is environment
+  # specific. Set this (e.g. via env.yaml `gatus.postgresHost`) to add a TCP
+  # reachability check for the database. Left empty -> the PostgreSQL check is
+  # omitted rather than rendered permanently red against an unresolved name.
+  postgresHost: ""
+  postgresPort: 5432
+
+  # Public end-to-end TLS check. Unlike every in-cluster check, this traverses
+  # DNS, the ingress, TLS termination and routing -- the real citizen path, and
+  # the only check that would catch an expired public certificate. Left empty,
+  # it defaults to https://<global.domain>/digit-ui/ so a fresh deploy gets the
+  # check for free; set an explicit URL to point it elsewhere.
+  publicUrl: ""
+
+  # Optional per-group toggles. Everything DIGIT deploys here is on; flip a
+  # group off if a deployment does not run it.
+  groups:
+    otp: true
+    search: true
+    mcp: true
+    notifications: true
+    observability: true
