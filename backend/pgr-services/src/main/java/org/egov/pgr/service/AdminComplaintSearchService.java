@@ -75,7 +75,10 @@ public class AdminComplaintSearchService {
                 // by PGRService#applyEmployeeDepartmentScope, which would otherwise substitute the
                 // caller's own HRMS department if they also hold a role in
                 // pgr.department.scope.roles — see RequestSearchCriteria#skipEmployeeDepartmentScope.
-                .skipEmployeeDepartmentScope(true);
+                .skipEmployeeDepartmentScope(true)
+                // Same reasoning for jurisdiction: this cross-tenant admin search must not be
+                // silently narrowed to the caller's own HRMS jurisdiction either.
+                .skipEmployeeJurisdictionScope(true);
 
         if (!CollectionUtils.isEmpty(adminCriteria.getDepartmentCode()))
             builder.departmentCodes(resolveDepartmentCodes(adminCriteria.getTenantId(), adminCriteria.getDepartmentCode()));

@@ -199,6 +199,13 @@ public class PGRConfiguration {
     @Value("${pgr.department.scope.roles:}")
     private List<String> departmentScopeRoles;
 
+    // Jurisdiction scope — opt-in: an employee is restricted to complaints filed in their own HRMS
+    // jurisdiction (boundary) in complaint search/count/plainSearch ONLY if they hold one of these
+    // roles. Empty (default) = no employee role is jurisdiction-scoped, preserving pre-existing
+    // unrestricted search behavior on upgrade. See EmployeeJurisdictionScopeService.
+    @Value("${pgr.jurisdiction.scope.roles:}")
+    private List<String> jurisdictionScopeRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;

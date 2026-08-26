@@ -65,6 +65,8 @@ public class PGRService {
 
     private EmployeeDepartmentScopeService employeeDepartmentScopeService;
 
+    private EmployeeJurisdictionScopeService employeeJurisdictionScopeService;
+
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
@@ -72,7 +74,8 @@ public class PGRService {
                       ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
                       ExtendedAttributesValidationService extendedAttributesValidationService,
                       EncryptionDecryptionService encryptionDecryptionService,
-                      EmployeeDepartmentScopeService employeeDepartmentScopeService) {
+                      EmployeeDepartmentScopeService employeeDepartmentScopeService,
+                      EmployeeJurisdictionScopeService employeeJurisdictionScopeService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -87,6 +90,7 @@ public class PGRService {
         this.extendedAttributesValidationService = extendedAttributesValidationService;
         this.encryptionDecryptionService = encryptionDecryptionService;
         this.employeeDepartmentScopeService = employeeDepartmentScopeService;
+        this.employeeJurisdictionScopeService = employeeJurisdictionScopeService;
     }
 
 
@@ -154,6 +158,9 @@ public class PGRService {
         enrichmentService.enrichSearchRequest(requestInfo, criteria);
 
         if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
+
+        if (!applyEmployeeJurisdictionScope(requestInfo, criteria))
             return new ArrayList<>();
 
         if(criteria.isEmpty())
@@ -308,6 +315,9 @@ public class PGRService {
         if (!applyEmployeeDepartmentScope(requestInfo, criteria))
             return 0;
 
+        if (!applyEmployeeJurisdictionScope(requestInfo, criteria))
+            return 0;
+
         Integer count = repository.getCount(criteria);
         return count;
     }
@@ -345,11 +355,38 @@ public class PGRService {
         return employeeDepartmentScopeService.applyScope(requestInfo, scopeTenantId, criteria);
     }
 
+    /**
+     * Employee-only, opt-in: restricts {@code criteria} to the searching employee's own
+     * jurisdiction (boundary) only if they hold a role in {@code pgr.jurisdiction.scope.roles}.
+     * Mirrors {@link #applyEmployeeDepartmentScope} exactly, including its skip conditions.
+     */
+    private boolean applyEmployeeJurisdictionScope(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (criteria.isSkipEmployeeJurisdictionScope())
+            return true;
+
+        // A createdBy search targets a specific complaint-filer, not the caller's own jurisdiction —
+        // forcing the caller's jurisdiction onto it would silently drop results filed under a
+        // different jurisdiction, defeating the point of searching by createdBy at all.
+        if (!CollectionUtils.isEmpty(criteria.getCreatedBy()))
+            return true;
+
+        if (requestInfo.getUserInfo() == null
+                || !USERTYPE_EMPLOYEE.equalsIgnoreCase(requestInfo.getUserInfo().getType()))
+            return true;
+
+        String scopeTenantId = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        return employeeJurisdictionScopeService.applyScope(requestInfo, scopeTenantId, criteria);
+    }
+
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         validator.validatePlainSearch(criteria);
 
         if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
+
+        if (!applyEmployeeJurisdictionScope(requestInfo, criteria))
             return new ArrayList<>();
 
         criteria.setIsPlainSearch(true);

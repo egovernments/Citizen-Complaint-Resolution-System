@@ -54,6 +54,15 @@ public class PGRConstants {
     public static final String HRMS_CURRENT_DEPARTMENT_JSONPATH =
             "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].department";
 
+    // ALL of the employee's jurisdiction boundary codes — an employee can hold multiple
+    // jurisdiction entries (e.g. different roles at different boundary levels), so every one is
+    // collected, not just the first. Used for jurisdiction-scoped employee search
+    // (EmployeeJurisdictionScopeService). Jurisdictions live at the top level of the HRMS employee
+    // record (not nested under assignments), and unlike assignments carry no
+    // isCurrentAssignment-style flag, so there is no "current" one to filter on.
+    public static final String HRMS_CURRENT_JURISDICTION_JSONPATH =
+            "$.Employees[0].jurisdictions[*].boundary";
+
     public static final String HRMS_DESIGNATION_JSONPATH = "$.Employees.*.assignments[?(@.department=='{department}')].designation";
 
     public static final String HRMS_EMP_NAME_JSONPATH = "$.Employees.*.user.name";

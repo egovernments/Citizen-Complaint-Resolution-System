@@ -141,6 +141,19 @@ public class RequestSearchCriteria {
     @JsonIgnore
     private boolean skipEmployeeDepartmentScope;
 
+    // Server-resolved only — never bound from the request body. Matches against the complaint's
+    // stored ads.locality (exact boundary-code match). Set by EmployeeJurisdictionScopeService to
+    // restrict an employee's search to their own HRMS jurisdiction. Kept separate from the
+    // client-bindable `locality` field above so an employee's own explicit locality filter and
+    // their jurisdiction scope simply AND together (intersect) instead of one overwriting the other.
+    @JsonIgnore
+    private Set<String> jurisdictionBoundaryCodes;
+
+    // Mirrors skipEmployeeDepartmentScope — set by AdminComplaintSearchService so the SUPERUSER
+    // cross-tenant admin search isn't silently narrowed to the caller's own locality either.
+    @JsonIgnore
+    private boolean skipEmployeeJurisdictionScope;
+
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
         && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null

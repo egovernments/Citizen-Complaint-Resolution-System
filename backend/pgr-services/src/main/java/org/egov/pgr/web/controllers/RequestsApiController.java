@@ -54,15 +54,19 @@ public class RequestsApiController{
 
     /**
      * RequestSearchCriteria's internal fields (visibility predicate, workflow
-     * pre-resolution, plain-search flag) are populated server-side only.
-     * `@JsonIgnore` does not stop `@ModelAttribute` query-param binding, so
-     * disallow them explicitly — a client-supplied `visibilityIds` would
-     * otherwise ride into the visibility OR-predicate.
+     * pre-resolution, plain-search flag, employee department/jurisdiction scope
+     * bypass) are populated server-side only. `@JsonIgnore` does not stop
+     * `@ModelAttribute` query-param binding, so disallow them explicitly — a
+     * client-supplied `visibilityIds` would otherwise ride into the visibility
+     * OR-predicate, and a client-supplied `skipEmployeeDepartmentScope=true` /
+     * `skipEmployeeJurisdictionScope=true` would let any employee bypass their
+     * own department/jurisdiction scoping outright.
      */
     @InitBinder
     public void disallowInternalCriteriaFields(org.springframework.web.bind.WebDataBinder binder) {
         binder.setDisallowedFields("visibilityIds*", "visibilityUnassignedStates*",
-                "serviceRequestIds*", "userIds*", "isPlainSearch*");
+                "serviceRequestIds*", "userIds*", "isPlainSearch*",
+                "skipEmployeeDepartmentScope*", "skipEmployeeJurisdictionScope*");
     }
 
 

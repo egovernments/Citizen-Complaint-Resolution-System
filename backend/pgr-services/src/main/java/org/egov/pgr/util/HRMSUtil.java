@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_CURRENT_DEPARTMENT_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_CURRENT_JURISDICTION_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_REPORTING_TO_JSONPATH;
 
 @Component
@@ -91,6 +92,37 @@ public class HRMSUtil {
             return departments == null ? Collections.emptyList() : departments;
         } catch (Exception e) {
             log.warn("Failed to parse HRMS current-assignment department for uuid: {}", uuid, e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * ALL of the employee's jurisdiction boundary codes — an employee can hold multiple
+     * jurisdiction entries (e.g. different roles at different boundary levels), so every one is
+     * returned, not just the first. Mirrors {@link #getCurrentDepartment}, which likewise gathers
+     * every current-assignment department rather than a single value. Jurisdictions carry no
+     * isCurrentAssignment-style flag, so there's no "current" one to filter on. Returns an empty
+     * list (never throws) if the employee has no jurisdiction, or the HRMS response can't be
+     * parsed.
+     */
+    public List<String> getCurrentJurisdiction(String uuid, RequestInfo requestInfo, String tenantId) {
+
+        StringBuilder url = getHRMSURI(Collections.singletonList(uuid), tenantId);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+
+        if (res == null) {
+            log.warn("HRMS returned null for employee UUID: {}", uuid);
+            return Collections.emptyList();
+        }
+
+        try {
+            List<String> jurisdictions = JsonPath.read(res, HRMS_CURRENT_JURISDICTION_JSONPATH);
+            return jurisdictions == null ? Collections.emptyList() : jurisdictions;
+        } catch (Exception e) {
+            log.warn("Failed to parse HRMS jurisdiction for uuid: {}", uuid, e);
             return Collections.emptyList();
         }
     }
