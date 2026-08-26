@@ -123,30 +123,12 @@ resource "aws_s3_bucket_public_access_block" "filestore_bucket_access" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_policy" "filestore_bucket_policy" {
-  depends_on = [aws_s3_bucket_public_access_block.filestore_bucket_access]
-  bucket = aws_s3_bucket.filestore_bucket.id
-  policy = data.aws_iam_policy_document.filestore_bucket_policy.json
-}
-
-data "aws_iam_policy_document" "filestore_bucket_policy" {
-  depends_on = [aws_s3_bucket_public_access_block.filestore_bucket_access]
-  statement {
-    sid           = "PublicReadGetObject"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    actions = [
-      "s3:GetObject",
-    ]
-
-    resources = [
-      "${aws_s3_bucket.filestore_bucket.arn}/*",
-    ]
-  }
-}
+# No bucket policy on the filestore bucket: it is PRIVATE (all four public-access
+# blocks are on above). The egov-filestore service reads/writes it with the
+# filestore IAM user's credentials and proxies downloads, so public read is
+# neither needed nor wanted. A PublicReadGetObject policy here also conflicts with
+# block_public_policy=true and fails the apply with AccessDenied. (The assets
+# bucket is the public one — that keeps its policy.)
 
 resource "aws_iam_policy" "filestore_policy" {
   name        = "${var.cluster_name}-filestore_policy"  # Replace with your desired policy name
