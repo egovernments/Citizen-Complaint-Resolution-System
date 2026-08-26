@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-bootstrap
+  namespace: {{ .Values.namespace | default "egov" }}
+  annotations:
+    # post-install/post-upgrade: egov-user must already be running — the script
+    # itself polls /user/health and retries, so a small lead time is fine.
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: user-bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["sh", "/seed/user-seed.sh"]
+          env:
+            - name: EGOV_USER_HOST
+              value: {{ .Values.egovUserHost | quote }}
+            - name: SEED_TENANTS
+              value: {{ .Values.seedTenants | quote }}
+          volumeMounts:
+            - name: script
+              mountPath: /seed
+      volumes:
+        - name: script
+          configMap:
+            name: user-bootstrap-script

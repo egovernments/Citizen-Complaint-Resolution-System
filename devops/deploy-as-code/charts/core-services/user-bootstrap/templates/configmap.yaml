@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-bootstrap-script
+  namespace: {{ .Values.namespace | default "egov" }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  user-seed.sh: |-
+{{ .Files.Get "files/user-seed.sh" | indent 4 }}
