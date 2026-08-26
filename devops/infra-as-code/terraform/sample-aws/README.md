@@ -27,26 +27,34 @@ As part of the **EKS upgrade to Kubernetes v1.33**, the following updates and en
 
 ## Deploy IAM policy
 
-The identity that runs `terraform apply`/`destroy` needs a broad set of
-permissions — it creates and destroys a VPC, EKS, RDS, S3, IAM roles, and the
-cluster's load balancers. The complete policy covering the **entire create +
-destroy lifecycle** is checked in at
-[`deploy-iam-policy.json`](./deploy-iam-policy.json); create it once as a managed
-policy and attach it to the deploy user/role before the first apply. It fits in a
-single managed policy (well under the 6144-char limit), so it is a one-time
-attach — nothing to add piecemeal later.
+The identity that runs `terraform apply`/`destroy` creates and destroys a VPC,
+EKS, RDS, S3, IAM roles, and the cluster's load balancer. The policy covering the
+full lifecycle is checked in at
+[`deploy-iam-policy.json`](./deploy-iam-policy.json); attach it to the deploy
+user/role before the first apply. It is intentionally structured for a
+least-privilege review:
 
-It deliberately includes a few actions that the DEFAULT deploy does not exercise,
-so you never have to come back for them:
+- **`InfraLifecycle`** — the EC2/EKS/RDS/S3/KMS/ELB/etc. actions on `*`. This
+  includes `elasticloadbalancing:DescribeLoadBalancers` + `DeleteLoadBalancer`
+  (required to remove the ingress ELB on teardown — without them the VPC cannot
+  be destroyed) and the KMS actions for the optional customer-managed CMK.
+- **`ScopedIamWrites`** — the privilege-escalation-sensitive IAM write actions
+  (`CreateUser`, `CreateRole`, `AttachUserPolicy`, `PassRole`, …) are **NOT** on
+  `*`. They are scoped by ARN to only the resources this module creates
+  (`user/*-filestore-user`, `role/*-cluster-*`, `role/*-eks-node-group-*`,
+  `role/ebs-csi-driver-*`, the two module policies, and the EKS OIDC provider).
+  So the deploy identity cannot create an arbitrary IAM user/role and attach
+  admin to it. IAM read (`Get*`/`List*`) stays broad.
 
-- **`elasticloadbalancing:*` (describe/delete)** — to clean up the ingress ELB on
-  teardown (see the Teardown section).
-- **KMS key administration** (`kms:DescribeKey`, `PutKeyPolicy`, `CreateGrant`,
-  `ScheduleKeyDeletion`, …) — only used if you opt into a customer-managed CMK.
-  **EKS secrets encryption is off by default** (`create_kms_key = false`,
-  `encryption_config = null` on the `eks` module); etcd is still encrypted at
-  rest with the EKS AWS-managed key. To use a customer CMK, just drop those two
-  lines — the policy already grants what that path needs.
+If a future change to the module introduces a differently-named IAM resource, the
+apply will fail with an IAM `AccessDenied` and the corresponding ARN pattern in
+`ScopedIamWrites` needs widening — that is the intended trade-off for not holding
+`iam:*` on `*`.
+
+**EKS secrets encryption is off by default** (`create_kms_key = false`,
+`encryption_config = null` on the `eks` module); etcd is still encrypted at rest
+with the EKS AWS-managed key. The KMS actions in the policy are only exercised if
+you opt into a customer CMK by dropping those two lines.
 
 ## Teardown — delete Kubernetes LoadBalancers FIRST
 
@@ -67,7 +75,7 @@ aws elb describe-load-balancers --region <region> \
 terraform destroy
 ```
 
-`deploy-iam-policy.json` includes `elasticloadbalancing:Describe*` +
+`deploy-iam-policy.json` includes `elasticloadbalancing:DescribeLoadBalancers` +
 `DeleteLoadBalancer` so the deploy identity can detect and clean up an ELB that
 was orphaned anyway. Without those, a least-privileged deploy user cannot remove
 the orphan and the VPC teardown cannot complete.
