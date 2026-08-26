@@ -524,32 +524,59 @@ flags. Setting back to `false` sweeps the running search containers.
 ### Set the OOTB theme (issue #1035)
 
 MDMS (`common-masters.ThemeConfig`) is the single source of truth for theme
-colors — full stop. There is no committed preset file anywhere in this repo
-(not in the frontend app, not in ansible) for the deploy to seed from; the
-frontend only ever reads MDMS at runtime.
+colors at runtime — the frontend never reads a preset file, only MDMS. Two
+ways to get colors into it, pick whichever fits:
 
-The schema registers itself automatically — `common-masters.ThemeConfig` is
-part of default-data-handler's standard `common-masters.json` schema
-bundle, so every tenant gets it on first deploy with no ansible step
-required (same as any other `common-masters.*` schema).
+**Named OOTB preset (Bomet Blue / Maputo Green)** — the committed preset
+catalog these seed from lives at `local-setup/ansible/files/theme-presets/`
+— ops/deploy data, not part of the frontend app, never imported by any
+application code:
 
-Setting the actual colors is a one-time, post-deploy step through the
-Configurator, which has a dedicated tabbed editor with a live preview for
-this schema (the same editor on both Create and Edit — Theme Config →
+```bash
+# In host_vars/<tenant>.yml:
+seed_theme_preset: bomet-blue    # or maputo-green — see local-setup/ansible/files/theme-presets/
+./deploy.sh <tenant>
+# Add-on to an existing deploy, without a full re-run:
+./deploy.sh <tenant> --tags theme-seed
+```
+
+Seeds the `common-masters.ThemeConfig` MDMS schema (if not already present)
+plus the named preset's data row, at both the state root and the city
+tenant — mirroring how the reference `kenya-green` theme is seeded at both
+`ke` and `ke.nairobi`. Idempotent: re-running, or switching to a different
+`seed_theme_preset`, deactivates whichever theme was previously active for
+that tenant rather than leaving two active side by side.
+
+`seed_theme_preset` stays in `host_vars/<tenant>.yml` after the first
+deploy — it's not a one-shot flag. A marker file on the target
+(`theme-seed/.seeded-preset`) records which preset was last seeded by this
+mechanism, so **every later routine `./deploy.sh <tenant>` run is a no-op**
+for theme-seeding once that marker matches `seed_theme_preset`. This is
+deliberate: without it, any theme change made afterwards through the
+Configurator would get silently reverted on the next unrelated redeploy.
+The seed only (re)runs when this is the first deploy (no marker yet),
+`seed_theme_preset` itself changes to a different preset code, or
+`seed_theme_preset_force: true` is set to force a re-seed regardless.
+
+**Hand-entered / custom theme, or editing colors after seeding** — through
+the Configurator, which has a dedicated tabbed editor with a live preview
+for this schema (the same editor on both Create and Edit — Theme Config →
 Create):
 
-1. Deploy the tenant as usual (`./deploy.sh <tenant>`).
-2. Log into the Configurator, go to **Theme Config → Create**.
-3. Fill in `code` / `name`, set `version: "3"`, and fill in the colors —
-   hover any field to see which part of the live preview it drives.
-4. Save, then toggle it active (and deactivate whichever theme was
-   previously active — MDMS does not enforce exclusivity itself; see
-   `digitInitData` in `packages/libraries/src/services/molecules/Store/service.js`,
-   which just takes whichever active row it's handed first).
+1. Log into the Configurator, go to **Theme Config → Create**.
+2. Fill in `code` / `name`, set `version: "3"`, and fill in the colors —
+   hover any field to see which part of the live preview it drives. Reuse
+   an existing theme's values as a starting point by opening it in the
+   Configurator and copying the fields you want.
+3. Save — Create deactivates whichever OTHER theme was previously active
+   for this tenant automatically (MDMS does not enforce exclusivity
+   itself; see `digitInitData` in
+   `packages/libraries/src/services/molecules/Store/service.js`, which
+   just takes whichever active row it's handed first), so a tenant is
+   never left with two "active" rows fighting over which one renders.
 
-There's no separate "preset name" to reference — reuse an existing theme's
-values as a starting point by opening it in the Configurator and copying
-the fields you want, rather than by pointing at a repo file.
+Once seeded (either way), MDMS is authoritative: further theme edits
+happen live via the Configurator's Theme Config screen.
 
 ### Just check that everything's wired up correctly
 

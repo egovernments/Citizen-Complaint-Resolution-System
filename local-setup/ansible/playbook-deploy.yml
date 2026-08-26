@@ -4302,6 +4302,142 @@
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
 
+    # ─────────── OOTB theme MDMS seed ───────────
+    # MDMS (common-masters.ThemeConfig) is the single source of truth for
+    # theme colors at runtime — the frontend never reads a preset file, only
+    # MDMS. The committed OOTB preset catalog this seeds FROM lives purely as
+    # ops/deploy data (local-setup/ansible/files/theme-presets/), never
+    # inside the frontend app and never imported by any application code —
+    # the standalone equivalent of DDH's file loader, scoped to just the
+    # theme. Opt-in via `seed_theme_preset: <preset-code>` (e.g. bomet-blue,
+    # maputo-green — see local-setup/ansible/files/theme-presets/). Seeds at
+    # BOTH the state root and the city tenant, mirroring how the reference
+    # kenya-green theme is seeded at both ke and ke.nairobi. Idempotent —
+    # safe to re-run, and re-running with a different preset deactivates the
+    # prior one (see seed-theme.py) so a tenant never ends up with two
+    # "active" themes.
+    #   • Fresh install: runs automatically when `seed_theme_preset` is set.
+    #   • Add-on to an existing deploy: ./deploy.sh <tenant> --tags theme-seed
+    #
+    # `seed_theme_preset` is a persistent host_vars setting, not a one-shot
+    # bootstrap flag — it stays in the file long after the tenant's first
+    # deploy. Without a gate, EVERY later routine redeploy (for any reason)
+    # would re-run this and silently revert any theme change made since via
+    # the Configurator (a color tweak, or switching to a bespoke theme
+    # entirely), because seed-theme.py always re-asserts the named preset is
+    # the active one. A marker file records which preset was last seeded
+    # here by THIS mechanism; a run is skipped once that matches
+    # `seed_theme_preset`, so this only (re)acts on first bootstrap or a
+    # deliberate change to `seed_theme_preset` itself — never on a routine
+    # redeploy. Set `seed_theme_preset_force: true` to force a re-seed
+    # regardless (e.g. to deliberately discard live drift and reset to the
+    # committed preset).
+    - name: "theme-seed — read the last-seeded marker, if any"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/theme-seed/.seeded-preset"
+      register: theme_seed_marker_raw
+      failed_when: false
+      changed_when: false
+
+    - name: "theme-seed — decide whether this run should actually (re)seed"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.set_fact:
+        theme_seed_marker: "{{ (theme_seed_marker_raw.content | b64decode | trim) if (theme_seed_marker_raw.content is defined) else '' }}"
+
+    - name: "theme-seed — resolve whether to run this time"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.set_fact:
+        theme_seed_should_run: "{{ (theme_seed_marker != seed_theme_preset) or (seed_theme_preset_force | default(false) | bool) }}"
+
+    - name: "theme-seed — skip notice (already seeded here; not touching a possibly-customized live theme)"
+      when:
+        - seed_theme_preset is defined
+        - not (theme_seed_should_run | bool)
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.debug:
+        msg: >-
+          theme-seed: '{{ seed_theme_preset }}' was already seeded on this host
+          (marker: {{ digit_dir }}/theme-seed/.seeded-preset). Skipping so this
+          routine run can't revert a theme changed since via the Configurator.
+          Set seed_theme_preset_force: true to force a re-seed anyway.
+
+    - name: "theme-seed — stage schema + preset + seeder on target"
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/theme-seed/"
+      loop:
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/common-masters.json"
+        - "{{ playbook_dir }}/files/theme-presets/{{ seed_theme_preset }}.json"
+        - "{{ playbook_dir }}/../scripts/seed-theme.py"
+
+    - name: "theme-seed — resolve state-root and city tenants for this run"
+      # Self-contained (unlike the untagged "ui-tenant — pick..." resolver
+      # above, which needs a login-probe task that a `--tags theme-seed`
+      # add-on run skips) so both tenants always resolve, even on the
+      # tag-filtered path. Root is derived from state_tenant_id, NOT
+      # state_root — state_root is a compose boot-pin that intentionally
+      # diverges from the logical tenant tree for MCP-onboarded countries
+      # (e.g. Maputo: state_root=pg, state_tenant_id=mz — the theme belongs
+      # under mz, not the pg boot pin).
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.set_fact:
+        theme_seed_root_tenant: "{{ state_tenant_id | regex_replace('\\..*$', '') }}"
+        theme_seed_city_tenant: "{{ ui_state_tenant_id | default(city_tenant | default(state_tenant_id ~ '.citya')) }}"
+
+    - name: "theme-seed — seed the ThemeConfig master at the state root (idempotent)"
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/theme-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        THEME_TENANT={{ theme_seed_root_tenant }} \
+        DIGIT_USERNAME={{ theme_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ theme_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ theme_seed_root_tenant }} \
+        SCHEMA_FILE={{ digit_dir }}/theme-seed/common-masters.json \
+        DATA_FILE={{ digit_dir }}/theme-seed/{{ seed_theme_preset }}.json \
+        python3 seed-theme.py
+      register: theme_seed_state
+      changed_when: "'created' in (theme_seed_state.stdout | default(''))"
+      failed_when: "theme_seed_state.rc != 0 or 'DONE' not in (theme_seed_state.stdout | default(''))"
+
+    - name: "theme-seed — seed the ThemeConfig master at the city tenant (idempotent)"
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/theme-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        THEME_TENANT={{ theme_seed_city_tenant }} \
+        DIGIT_USERNAME={{ theme_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ theme_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ theme_seed_root_tenant }} \
+        SCHEMA_FILE={{ digit_dir }}/theme-seed/common-masters.json \
+        DATA_FILE={{ digit_dir }}/theme-seed/{{ seed_theme_preset }}.json \
+        python3 seed-theme.py
+      register: theme_seed_city
+      changed_when: "'created' in (theme_seed_city.stdout | default(''))"
+      failed_when: "theme_seed_city.rc != 0 or 'DONE' not in (theme_seed_city.stdout | default(''))"
+
+    - name: "theme-seed — result"
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.debug:
+        msg: "{{ (theme_seed_state.stdout_lines | default([])) + (theme_seed_city.stdout_lines | default([])) }}"
+
+    - name: "theme-seed — record the seeded preset (gates future routine redeploys)"
+      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.copy:
+        content: "{{ seed_theme_preset }}"
+        dest: "{{ digit_dir }}/theme-seed/.seeded-preset"
+
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
