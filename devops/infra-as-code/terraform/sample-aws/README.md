@@ -45,6 +45,11 @@ least-privilege review:
   `role/ebs-csi-driver-*`, the two module policies, and the EKS OIDC provider).
   So the deploy identity cannot create an arbitrary IAM user/role and attach
   admin to it. IAM read (`Get*`/`List*`) stays broad.
+- **`ScopedS3BucketMgmt` / `ScopedS3Objects`** — S3 write/delete is scoped to the
+  deployment's own buckets (`*-assets-bucket`, `*-filestore-bucket`) and, for
+  objects only, the terraform state bucket (`*-tfstate-*/*`, which the S3 backend
+  must write). So it cannot create or delete arbitrary buckets or objects. S3
+  read (`Get*`/`ListBucket`) stays broad.
 
 If a future change to the module introduces a differently-named IAM resource, the
 apply will fail with an IAM `AccessDenied` and the corresponding ARN pattern in
