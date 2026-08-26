@@ -26,12 +26,12 @@ variable "availability_zones" {
 
 variable "kubernetes_version" {
   description = "kubernetes version"
-  default = "1.33"
+  default = "1.34"  # 1.33 exited EKS standard support; pick a currently-supported version
 }
 
 variable "db_version" {
   description = "DB version"
-  default = "15.12"
+  default = "15.18"  # 15.12 minor deprecated on RDS; use a current 15.x
 }
 
 variable "db_instance_class" {
