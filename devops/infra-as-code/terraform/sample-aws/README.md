@@ -34,10 +34,12 @@ full lifecycle is checked in at
 user/role before the first apply. It is intentionally structured for a
 least-privilege review:
 
-- **`InfraLifecycle`** — the EC2/EKS/RDS/S3/KMS/ELB/etc. actions on `*`. This
-  includes `elasticloadbalancing:DescribeLoadBalancers` + `DeleteLoadBalancer`
-  (required to remove the ingress ELB on teardown — without them the VPC cannot
-  be destroyed) and the KMS actions for the optional customer-managed CMK.
+- **`InfraLifecycle`** — the EC2/EKS/RDS/KMS/etc. actions on `*`, including the
+  KMS actions for the optional customer-managed CMK. It intentionally carries
+  **no** `elasticloadbalancing` permissions: the cluster's ELB is created and
+  destroyed by Kubernetes, so it is removed by deleting the `LoadBalancer`
+  Service before `terraform destroy` (see the Teardown section), not by the
+  deploy identity.
 - **`ScopedIamWrites`** — the privilege-escalation-sensitive IAM write actions
   (`CreateUser`, `CreateRole`, `AttachUserPolicy`, `PassRole`, …) are **NOT** on
   `*`. They are scoped by ARN to only the resources this module creates
@@ -71,19 +73,21 @@ orphaned and its ENIs stay attached in the public subnets, which blocks subnet +
 Internet Gateway deletion and hangs the destroy on `DependencyViolation`.
 
 ```bash
-# remove the LB services (ingress-nginx and any others) while the cluster is alive
-kubectl delete svc -A --field-selector spec.type=LoadBalancer
-# confirm the ELB is gone before proceeding (needs elasticloadbalancing:Describe*)
-aws elb describe-load-balancers --region <region> \
-  --query 'LoadBalancerDescriptions[].LoadBalancerName'
+# delete the LB services (ingress-nginx and any others) while the cluster is
+# alive; the controller then deletes the cloud ELB for you. --wait blocks until
+# the Service (and its ELB) are actually gone.
+kubectl delete svc -A --field-selector spec.type=LoadBalancer --wait=true
+# confirm none remain (via kubectl — no cloud LB permission needed)
+kubectl get svc -A --field-selector spec.type=LoadBalancer
 # only then:
 terraform destroy
 ```
 
-`deploy-iam-policy.json` includes `elasticloadbalancing:DescribeLoadBalancers` +
-`DeleteLoadBalancer` so the deploy identity can detect and clean up an ELB that
-was orphaned anyway. Without those, a least-privileged deploy user cannot remove
-the orphan and the VPC teardown cannot complete.
+Because the ELB is removed by the cluster (not the deploy identity), the deploy
+policy needs **no** `elasticloadbalancing` permissions — it stays purely
+terraform-scoped. If you skip this step and destroy the cluster first, the ELB is
+orphaned and its ENIs block subnet + IGW deletion; recovering then requires
+someone with `elasticloadbalancing:DeleteLoadBalancer` to delete it manually.
 
 ## Documentation
 

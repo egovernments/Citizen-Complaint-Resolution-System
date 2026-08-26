@@ -83,8 +83,6 @@
         "eks:UpdateClusterVersion",
         "eks:UpdateNodegroupConfig",
         "eks:UpdateNodegroupVersion",
-        "elasticloadbalancing:DeleteLoadBalancer",
-        "elasticloadbalancing:DescribeLoadBalancers",
         "events:DeleteRule",
         "events:DescribeRule",
         "events:ListTagsForResource",
