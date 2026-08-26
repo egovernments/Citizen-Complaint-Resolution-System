@@ -27,19 +27,20 @@ As part of the **EKS upgrade to Kubernetes v1.33**, the following updates and en
 
 ## Deploy IAM policy
 
-The identity that runs `terraform apply` needs a broad set of permissions —
-it creates a VPC, EKS, RDS, S3, IAM roles, and (by default) a customer-managed
-**KMS key for EKS secrets encryption**. The complete policy is checked in at
+The identity that runs `terraform apply` needs a broad set of permissions — it
+creates a VPC, EKS, RDS, S3, and IAM roles. The complete, minimal policy that is
+known to deploy this module is checked in at
 [`deploy-iam-policy.json`](./deploy-iam-policy.json); attach it to the deploy
 user/role before the first apply.
 
-Note the KMS actions specifically: the module's default
-`cluster_encryption_config` provisions a CMK, so the policy must include
-`kms:CreateKey`, `DescribeKey`, `PutKeyPolicy`, `EnableKeyRotation`,
-`CreateGrant`, and `ScheduleKeyDeletion` (for destroy). Omitting these fails the
-apply mid-way with an AccessDenied on the KMS key. If you deliberately run
-without a CMK, set `create_kms_key = false` + `encryption_config = null` on the
-`eks` module instead (etcd is still encrypted at rest with an AWS-managed key).
+**EKS secrets encryption is off by default** (`create_kms_key = false`,
+`encryption_config = null` on the `eks` module) so the module deploys under a
+least-privileged deploy identity. etcd is still encrypted at rest with the EKS
+AWS-managed key. To use a **customer-managed CMK** instead, drop those two lines
+and additionally grant the deploy identity: `kms:DescribeKey`, `kms:GetKeyPolicy`,
+`kms:PutKeyPolicy`, `kms:GetKeyRotationStatus`, `kms:EnableKeyRotation`,
+`kms:CreateGrant`, and `kms:ScheduleKeyDeletion` (the last for `destroy`).
+Without those, the CMK path fails the apply mid-way with an AccessDenied.
 
 ## Documentation
 

@@ -224,6 +224,15 @@ module "eks" {
   enable_cluster_creator_admin_permissions = true
   endpoint_public_access  = true
   endpoint_private_access = true
+  # No customer-managed CMK by default: the module's default cluster_encryption_config
+  # provisions a KMS key, which needs kms:DescribeKey/PutKeyPolicy/GetKeyPolicy/
+  # GetKeyRotationStatus/EnableKeyRotation/CreateGrant/ScheduleKeyDeletion — perms a
+  # least-privileged deploy user typically does NOT have, so the apply fails mid-way.
+  # etcd is still encrypted at rest with the EKS AWS-managed key. To use a customer
+  # CMK, drop these two lines and grant those KMS actions to the deploy identity
+  # (see README + deploy-iam-policy.json).
+  create_kms_key = false
+  encryption_config = null
   authentication_mode = "API_AND_CONFIG_MAP"
   create_cloudwatch_log_group = false
   subnet_ids      = concat(module.network.private_subnets, module.network.public_subnets)
