@@ -11,7 +11,7 @@
 set -e
 
 EGOV_USER_HOST="${EGOV_USER_HOST:-http://egov-user:8107}"
-MAX_RETRIES=30
+MAX_RETRIES=120   # ~10min: a fresh deploy egov-user needs Flyway + JVM start + scheduling
 RETRY_INTERVAL=5
 
 # Tenants to seed ADMIN/GRO into. Override via env when adding new cities.
