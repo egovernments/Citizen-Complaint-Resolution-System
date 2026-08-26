@@ -170,6 +170,13 @@ spec:
               # first boot. (The dump's encrypted user rows become undecryptable,
               # which is fine — real users are provisioned via the egov-user API,
               # encrypted with THIS deploy's key; see the user-bootstrap chart.)
-              psql -v ON_ERROR_STOP=1 -c "TRUNCATE eg_enc_asymmetric_keys, eg_enc_symmetric_keys;"
+              # Also clear the dump's users: with the keys above gone, every
+              # dump eg_user row is encrypted with a key that no longer exists,
+              # so any egov-user search touching one throws "Unknown error in
+              # decryption process" (this breaks egov-hrms startup, which looks
+              # up the INTERNAL_MICROSERVICE user and gets null). Real users come
+              # fresh from the egov-user API (user-bootstrap). CASCADE also clears
+              # eg_userrole_v1 / eg_user_address / audit / login-attempts.
+              psql -v ON_ERROR_STOP=1 -c "TRUNCATE eg_enc_asymmetric_keys, eg_enc_symmetric_keys; TRUNCATE eg_user CASCADE;"
 
               echo "db-seed: done"
