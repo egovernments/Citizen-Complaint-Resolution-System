@@ -34,12 +34,10 @@
 #
 # ROLES — the one judgement call, and why the default is what it is.
 #
-#   The repo seed (ansible/nairobi-mdms/mdms/dss/*.json) is authored against
-#   the CANONICAL CCRS role taxonomy — PGR_SUPERVISOR, PGR_ADMIN, PGR_LME,
-#   GRO, DGRO, SUPERVISOR, SUPERUSER — and that is what this script uses by
-#   default. It is the right default because it matches a stock CCRS install,
-#   it matches the FE's own fallback gate, and it is the shape every other
-#   seed file in the repo assumes.
+#   Catalog records no longer contain roles. DASHBOARD_ALLOWED_ROLES names the
+#   small install-time audience that receives BOTH the navigation action and
+#   the base analytics capabilities. egov-accesscontrol remains authoritative;
+#   there is no browser-side allow-list to keep in sync.
 #
 #   Deployments that predate CCRS or that were onboarded with their own
 #   taxonomy (moz: CMS_SUPERVISOR / CMS_CASE_MANAGER / CMS_RECEPTION_OFFICER)
@@ -47,11 +45,9 @@
 #
 #     ROLE_MAP="PGR_SUPERVISOR=CMS_SUPERVISOR,PGR_LME=CMS_CASE_MANAGER"
 #
-#   The remap is applied to every rbac.visibleTo entry in the catalog, to the
-#   pack personas, and to DASHBOARD_ALLOWED_ROLES. NEVER invent a role: a KPI
-#   visible only to a role nobody holds is invisible, and a sidebar link for a
-#   role that fails the FE gate is a link that bounces. Step 0 therefore
-#   counts live holders for every target role and STOPS if any has none
+#   The remap is applied to DASHBOARD_ALLOWED_ROLES. NEVER invent a role: a
+#   grant to a role nobody holds is inert. Step 0 therefore counts live holders
+#   for every target role and STOPS if all of them are empty
 #   (override with ALLOW_EMPTY_ROLES=true if you are seeding ahead of an HRMS
 #   import).
 #
@@ -110,11 +106,9 @@ ADMIN_USER="${ADMIN_USER:-SUPERADMIN}"                    # SUPERADMIN on a DDH-
 ADMIN_PASS="${ADMIN_PASS:-eGov@123}"
 
 # Roles. See the ROLES block in the header for why the default is canonical.
-ROLE_MAP="${ROLE_MAP:-}"                                  # "SRC=DST,SRC=DST" applied to catalog rbac + pack + allowedRoles
+ROLE_MAP="${ROLE_MAP:-}"                                  # "SRC=DST,SRC=DST" applied to dashboard access grants
 DASHBOARD_ALLOWED_ROLES="${DASHBOARD_ALLOWED_ROLES:-SUPERVISOR,PGR_SUPERVISOR,GRO,DGRO,PGR_LME,PGR_ADMIN,SUPERUSER}"
-# ^ dss.DashboardConfig.allowedRoles — the route/card gate (#1258). Pre-#1258
-#   bundles ignore this and use the identical hardcoded list, so keeping the
-#   default aligned with the FE fallback means both eras behave the same.
+# ^ install-time access floor; each role receives action 4557 plus 2640-2644.
 ALLOW_EMPTY_ROLES="${ALLOW_EMPTY_ROLES:-false}"           # true = don't stop when a target role has no holders
 
 # Department scoping (#1280). Employees are scoped to their HRMS department;
@@ -127,9 +121,10 @@ DEPARTMENT_SCOPING="${DEPARTMENT_SCOPING:-}"              # "" (enforce) | disab
 DASHBOARD_LOCALES="${DASHBOARD_LOCALES:-}"                # comma list; default = every locale with a pack in DSS_L10N_DIR
 L10N_BATCH="${L10N_BATCH:-200}"                           # messages per _upsert call
 
-# Sidebar action. 4557 is the dashboard action id shipped in the ACCESSCONTROL
-# seed; override if your deployment renumbered actions.
+# Current employee-dashboard navigation plus base API actions. The legacy
+# /dashboard path is intentionally outside this contract.
 DASHBOARD_ACTION_ID="${DASHBOARD_ACTION_ID:-4557}"
+DASHBOARD_ACCESS_ACTION_IDS="${DASHBOARD_ACCESS_ACTION_IDS:-$DASHBOARD_ACTION_ID 2640 2641 2642 2643 2644}"
 
 # Postgres — used ONLY for read-only preflight facts (role holders, fact
 # departments, corrupt-row detection). Every write goes through an API.
@@ -411,17 +406,7 @@ PY
     ok "no schema-as-data corruption in dss.* at $DASHBOARD_TENANT"
   fi
 
-  # -- roles: does every KPI have a live audience, and can anyone reach it? --
-  #
-  # The naive check ("every referenced role must have holders") is too blunt to
-  # be useful: even the reference deployment has catalog roles nobody holds
-  # (PGR_ADMIN and PGR_SUPERVISOR are empty on bomet), and a KPI with one
-  # unused role among several live ones is perfectly visible. What actually
-  # breaks a deployment is narrower, so check for exactly that:
-  #   ERROR — a KPI whose ENTIRE audience is roles nobody holds (invisible)
-  #   ERROR — no gate role has any holders at all (nobody can open the page)
-  #   WARN  — an unused role that leaves every KPI covered (harmless, but it
-  #           is usually the first sign you meant to pass a ROLE_MAP)
+  # -- roles: can anyone receive the access-control grants? -----------------
   build_role_map
   local roles
   roles="$(target_roles)"
@@ -437,54 +422,19 @@ PY
   printf '%s' "$holders_json" | jq -r 'to_entries|sort_by(-.value)[]|"     \(.key): \(.value) holders"'
 
   local role_report
-  role_report="$(python3 - "$DSS_DATA_DIR" "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" "$holders_json" <<'PY'
-import json,os,sys
-d, rmap, allowed, holders = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3], json.loads(sys.argv[4])
-live = lambda r: holders.get(rmap.get(r, r), 0) > 0
-unwrap = lambda r: r['data'] if isinstance(r.get('data'), dict) else r
-kpis = [unwrap(k) for k in json.load(open(os.path.join(d, 'KpiDefinition.json')))]
-orphans = []
-for k in kpis:
-    vis = ((k.get('rbac') or {}).get('visibleTo')) or []
-    # Mirror KpiDefinition.isVisibleTo exactly. PUBLIC is an ADDITIVE audience
-    # marker for authenticated callers, not a ceiling — strip it, and an empty
-    # remaining ceiling means "visible to every authenticated role". So only a
-    # NON-EMPTY ceiling of entirely unheld roles makes a KPI unreachable.
-    ceiling = [r for r in vis if r != 'PUBLIC']
-    if ceiling and not any(live(r) for r in ceiling):
-        orphans.append(k.get('id', '<no id>'))
-# Report gate roles by their POST-remap name. Printing the source name for a
-# remapped role claims holders for a role that has none — the report has to
-# name the role the seed actually writes.
+  role_report="$(python3 - "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" "$holders_json" <<'PY'
+import json,sys
+rmap, allowed, holders = json.loads(sys.argv[1]), sys.argv[2], json.loads(sys.argv[3])
 gate = [rmap.get(r.strip(), r.strip()) for r in allowed.split(',') if r.strip()]
 gate = list(dict.fromkeys(gate))
-gate_live = [r for r in gate if live(r)]
-dead = sorted({rmap.get(r, r) for k in kpis
-               for r in (((k.get('rbac') or {}).get('visibleTo')) or [])
-               if r != 'PUBLIC' and not live(r)})
-print(json.dumps({'orphans': orphans, 'gate_live': gate_live,
-                  'gate_dead': [r for r in gate if not live(r)], 'dead': dead}))
+gate_live = [r for r in gate if holders.get(r, 0) > 0]
+print(json.dumps({'gate_live': gate_live,
+                  'gate_dead': [r for r in gate if holders.get(r, 0) == 0]}))
 PY
 )"
-  local orphans gate_live gate_dead dead
-  orphans="$(printf '%s' "$role_report" | jq -r '.orphans | join(", ")')"
+  local gate_live gate_dead
   gate_live="$(printf '%s' "$role_report" | jq -r '.gate_live | join(", ")')"
   gate_dead="$(printf '%s' "$role_report" | jq -r '.gate_dead | join(", ")')"
-  dead="$(printf '%s' "$role_report" | jq -r '.dead | join(", ")')"
-
-  if [[ -n "$orphans" ]]; then
-    if [[ "$ALLOW_EMPTY_ROLES" == true ]]; then
-      warn "KPIs visible to nobody (ALLOW_EMPTY_ROLES=true): $orphans"
-    else
-      err "these KPIs would be visible to NO ONE — every role in their rbac.visibleTo is unheld:"
-      err "  $orphans"
-      note "Remap with ROLE_MAP=\"PGR_SUPERVISOR=<your-role>,...\", or ALLOW_EMPTY_ROLES=true"
-      note "if you are seeding ahead of an HRMS import."
-      fatal=1
-    fi
-  else
-    ok "every KPI has at least one role with live holders"
-  fi
 
   if [[ -z "$gate_live" ]]; then
     err "no role in DASHBOARD_ALLOWED_ROLES has any holders — nobody could open the dashboard"
@@ -494,7 +444,6 @@ PY
     ok "gate roles with holders: $gate_live"
     [[ -n "$gate_dead" ]] && warn "gate roles with no holders (harmless, but check the taxonomy): $gate_dead"
   fi
-  [[ -n "$dead" ]] && note "catalog references these unheld roles: $dead"
 
   # -- department scope: the #1280 trap ------------------------------------
   local facts empty
@@ -724,35 +673,27 @@ update_record() {
 }
 
 # =============================================================================
-# STEP 3 — dss.DashboardConfig: the nav/route gate + number format + scoping.
+# STEP 3 — dss.DashboardConfig: number format + scoping.
 #
-# One record, id "default", at the state root. Pre-#1258 FE bundles ignore it
-# and use their hardcoded gate; seeding it anyway means the deployment is
-# already correct the moment the bundle is rebuilt.
+# Access is absent by design: egov-accesscontrol actions and grants are the
+# only employee dashboard authorization source.
 # =============================================================================
 step3() {
   step step3 "${STEP_TITLES[3]}"
   local rec
-  rec="$(python3 - "$DSS_DATA_DIR/DashboardConfig.json" "$ROLE_MAP_JSON" \
-                   "$DASHBOARD_ALLOWED_ROLES" "$DEPARTMENT_SCOPING" <<'PY'
+  rec="$(python3 - "$DSS_DATA_DIR/DashboardConfig.json" "$DEPARTMENT_SCOPING" <<'PY'
 import json,os,sys
-path, rmap, allowed, scoping = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3], sys.argv[4]
+path, scoping = sys.argv[1], sys.argv[2]
 base = json.load(open(path))[0] if os.path.exists(path) else {"id": "default"}
 # Seed files are MDMS-v2 wrapped; the record we write is the inner object.
 if isinstance(base.get("data"), dict): base = base["data"]
 base["id"] = "default"
-# Dedupe AFTER the remap, preserving order: several canonical roles routinely
-# collapse onto one target (PGR_SUPERVISOR and PGR_ADMIN -> SUPERVISOR and
-# SUPERUSER on a stock box), and a role listed twice in the written record is
-# noise the operator has to reason about later.
-base["allowedRoles"] = list(dict.fromkeys(
-    rmap.get(r.strip(), r.strip()) for r in allowed.split(',') if r.strip()))
+base.pop("allowedRoles", None)
 if scoping: base["departmentScoping"] = scoping
 else: base.pop("departmentScoping", None)
 print(json.dumps(base))
 PY
 )"
-  log "allowedRoles: $(printf '%s' "$rec" | jq -r '.allowedRoles | join(", ")')"
   [[ -n "$DEPARTMENT_SCOPING" ]] && warn "departmentScoping=$DEPARTMENT_SCOPING — widens visibility for ALL employees on $DASHBOARD_TENANT"
   if [[ "$DRY_RUN" == true ]]; then log "[dry-run] would seed dss.DashboardConfig/default"; return 0; fi
   local body resp; body="$(mktemp)"
@@ -794,20 +735,18 @@ PY
   # A stock tenant genuinely may not have it: on the box this was found, `pg`
   # had 368 roleactions rows and 246 actions, and no action id 4557 at all.
   if [[ "$DRY_RUN" != true ]]; then
-    local action_rows
-    action_rows="$(psql_q "select count(*) from eg_mdms_data
-        where schemacode like 'ACCESSCONTROL-ACTIONS%' and tenantid='$DASHBOARD_TENANT'
-          and data->>'id' = '$DASHBOARD_ACTION_ID' and isactive")"
-    if [[ "${action_rows:-0}" -eq 0 ]]; then
-      err "action id $DASHBOARD_ACTION_ID does not exist at $DASHBOARD_TENANT — cannot grant it"
-      note "The dashboard's sidebar action must be seeded first, in BOTH masters"
-      note "(ACCESSCONTROL-ACTIONS.actions and ACCESSCONTROL-ACTIONS-TEST.actions-test —"
-      note "the bridge in 30-view-access.md §5 explains why both). A reference deployment"
-      note "carries it as: {\"id\": $DASHBOARD_ACTION_ID, \"name\": \"Dashboard\", …}."
-      note "Then re-run: --only step4"
-      return 1
-    fi
-    ok "action id $DASHBOARD_ACTION_ID exists at $DASHBOARD_TENANT (${action_rows} master row(s))"
+    local action_id action_rows
+    for action_id in $DASHBOARD_ACCESS_ACTION_IDS; do
+      action_rows="$(psql_q "select count(*) from eg_mdms_data
+          where schemacode like 'ACCESSCONTROL-ACTIONS%' and tenantid='$DASHBOARD_TENANT'
+            and data->>'id' = '$action_id' and isactive")"
+      if [[ "${action_rows:-0}" -eq 0 ]]; then
+        err "dashboard action id $action_id does not exist at $DASHBOARD_TENANT — cannot grant the access floor"
+        note "Seed action 4557 and analytics actions 2640-2644, then re-run: --only step4"
+        return 1
+      fi
+    done
+    ok "navigation and base analytics actions exist at $DASHBOARD_TENANT"
 
     # mdms-v2 validates roleactions' x-ref fields by comparing the field VALUE
     # against the referenced record's uniqueIdentifier. That only works where
@@ -862,25 +801,25 @@ PY
       where schemacode='ACCESSCONTROL-ROLEACTIONS.roleactions' and tenantid='$DASHBOARD_TENANT'")"
   maxid="${maxid:-0}"
   for role in $gate_roles; do
-    local uid="${role}.${DASHBOARD_ACTION_ID}"
-    if [[ "$DRY_RUN" == true ]]; then log "[dry-run] grant $uid"; continue; fi
-    maxid=$((maxid+1))
-    local rec body resp
-    rec="$(jq -nc --argjson t "$template" --arg r "$role" --argjson a "$DASHBOARD_ACTION_ID" \
-      --argjson i "$maxid" '$t + {id:$i, actionid:$a, rolecode:$r}')"
-    body="$(mktemp)"
-    jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg u "$uid" --argjson d "$rec" \
-      '{RequestInfo:$ri, Mdms:{tenantId:$t, schemaCode:"ACCESSCONTROL-ROLEACTIONS.roleactions",
-        uniqueIdentifier:$u, data:$d, isActive:true}}' > "$body"
-    resp="$(mdms_post /mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions "$body")"; rm -f "$body"
-    if printf '%s' "$resp" | grep -qiE 'DUPLICATE|Duplicate record'; then log "  $uid — already granted"
-    elif printf '%s' "$resp" | grep -qi '"mdms"'; then ok "granted $uid"
-    else
-      # A failed grant is not cosmetic: that role gets no sidebar entry. Fail
-      # the step rather than warning and reporting the dashboard enabled.
-      err "$uid: $(printf '%s' "$resp" | head -c 200)"
-      grant_failed=1
-    fi
+    for action_id in $DASHBOARD_ACCESS_ACTION_IDS; do
+      local uid="${role}.${action_id}"
+      if [[ "$DRY_RUN" == true ]]; then log "[dry-run] grant $uid"; continue; fi
+      maxid=$((maxid+1))
+      local rec body resp
+      rec="$(jq -nc --argjson t "$template" --arg r "$role" --argjson a "$action_id" \
+        --argjson i "$maxid" '$t + {id:$i, actionid:$a, rolecode:$r}')"
+      body="$(mktemp)"
+      jq -n --argjson ri "$REQUEST_INFO" --arg t "$DASHBOARD_TENANT" --arg u "$uid" --argjson d "$rec" \
+        '{RequestInfo:$ri, Mdms:{tenantId:$t, schemaCode:"ACCESSCONTROL-ROLEACTIONS.roleactions",
+          uniqueIdentifier:$u, data:$d, isActive:true}}' > "$body"
+      resp="$(mdms_post /mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions "$body")"; rm -f "$body"
+      if printf '%s' "$resp" | grep -qiE 'DUPLICATE|Duplicate record'; then log "  $uid — already granted"
+      elif printf '%s' "$resp" | grep -qi '"mdms"'; then ok "granted $uid"
+      else
+        err "$uid: $(printf '%s' "$resp" | head -c 200)"
+        grant_failed=1
+      fi
+    done
   done
   [[ ${grant_failed:-0} -eq 0 ]] || { err "one or more sidebar grants failed"; return 1; }
   note "accesscontrol reads MDMS live, but clients cache actions — users must re-login (step 6)."
@@ -1010,7 +949,7 @@ step7() {
   [[ "${admin:-0}" -gt 0 ]] && ok "catalog serves KPIs to an authenticated admin" \
     || { err "catalog is empty for the admin principal"; rc=1; }
 
-  # Sidebar grants. Step 7 previously verified the data plane only, so a run
+  # Navigation + base capability grants. Step 7 previously verified the data plane only, so a run
   # in which every grant failed still ended with "Dashboard enabled" — the
   # user would reach the page by URL and never see a link to it.
   local granted expected
@@ -1020,18 +959,18 @@ step7() {
   # grants on a correctly granted deployment.
   granted="$(psql_q "select count(*) from eg_mdms_data
       where schemacode='ACCESSCONTROL-ROLEACTIONS.roleactions' and tenantid='$DASHBOARD_TENANT'
-        and data->>'actionid' = '${DASHBOARD_ACTION_ID}' and isactive")"
-  expected="$(python3 - "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" <<'PY'
+        and data->>'actionid' = any(string_to_array('${DASHBOARD_ACCESS_ACTION_IDS// /,}', ',')) and isactive")"
+  expected="$(python3 - "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" "$DASHBOARD_ACCESS_ACTION_IDS" <<'PY'
 import json,sys
 rmap=json.loads(sys.argv[1])
 roles=[rmap.get(r.strip(),r.strip()) for r in sys.argv[2].split(',') if r.strip()]
-print(len(dict.fromkeys(roles)))
+print(len(dict.fromkeys(roles)) * len(sys.argv[3].split()))
 PY
 )"
   if [[ "${granted:-0}" -ge "${expected:-1}" ]]; then
-    ok "sidebar action granted to ${granted} role(s)"
+    ok "dashboard access floor has ${granted} role-action grants"
   else
-    err "sidebar action granted to only ${granted:-0} of ${expected} gate role(s) — the link will be missing for the rest"
+    err "dashboard access floor has only ${granted:-0} of ${expected} grants — some roles will miss navigation or API access"
     rc=1
   fi
 

@@ -105,6 +105,18 @@ export function fetchSchema() {
   return postAnalytics("/_schema", { tenantId: getTenantId() });
 }
 
+/**
+ * POST /v2/analytics/_access — the sole source of dashboard nav/route
+ * authorization. egov-accesscontrol resolves the caller's roles server-side
+ * (via the RequestInfo already attached by postAnalytics) and evaluates them
+ * against the analytics capability action ids; the frontend sends no role
+ * list and applies no allowlist of its own.
+ * Returns { allowed: boolean, capabilities?: string[] }.
+ */
+export function fetchAccess(tenantId) {
+  return postAnalytics("/_access", { tenantId });
+}
+
 export function runBatchQueries(queries) {
   return postAnalytics("/_query", {
     tenantId: getTenantId(),

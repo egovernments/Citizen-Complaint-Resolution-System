@@ -36,9 +36,7 @@ public class AnalyticsServicePublicFloorParamsTest {
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(Collections.emptyList());
         kpiCatalogService = mock(KpiCatalogService.class);
         when(kpiCatalogService.resolveTimeZone(anyString())).thenReturn(ZoneId.of("Africa/Nairobi"));
-        PrincipalScopeResolver scopeResolver = mock(PrincipalScopeResolver.class);
-        when(scopeResolver.resolve(isNull(), eq("ke"), eq(1)))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+        AnalyticsRowScopeResolver scopeResolver = mock(AnalyticsRowScopeResolver.class);
         service = new AnalyticsService(planner, catalog, jdbc, kpiCatalogService, scopeResolver,
                 new KpiQueryComposer(catalog), new AnalyticsMetrics(), null);
     }
@@ -53,9 +51,8 @@ public class AnalyticsServicePublicFloorParamsTest {
         def.setVersion("1.0.0");
         def.setStatus("published");
         def.setQuery(json(queryJson));
-        KpiDefinition.KpiRbac rbac = new KpiDefinition.KpiRbac();
-        rbac.setVisibleTo(Collections.singletonList("PUBLIC"));
-        def.setRbac(rbac);
+        def.setRequiredActionUrl(AnalyticsCapabilities.QUERY);
+        def.setPublicTile(true);
         when(kpiCatalogService.getDef(id, "ke")).thenReturn(Optional.of(def));
         return def;
     }
@@ -77,7 +74,7 @@ public class AnalyticsServicePublicFloorParamsTest {
                 "\"dateFromOnly\":{\"kpiId\":\"cl_public\",\"params\":{\"dateFrom\":\"2026-07-01\"}}," +
                 "\"dateToOnly\":{\"kpiId\":\"cl_public\",\"params\":{\"dateTo\":\"2026-07-31\"}}," +
                 "\"inline\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}}"),
-                null, "ke", 1);
+                null, AnalyticsCapabilities.publicSurface(), "ke", 1);
 
         assertFalse(entry(out, "ok").containsKey("error"), entry(out, "ok").toString());
         for (String rejected : Arrays.asList("hier", "prior", "window", "dateFromOnly", "dateToOnly"))
@@ -98,7 +95,8 @@ public class AnalyticsServicePublicFloorParamsTest {
                 "\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}");
 
         Map<String,Object> out = service.query(json("{\"queries\":{\"t\":{\"kpiId\":\"cl_water\"," +
-                "\"params\":{\"serviceCode\":\"POLICE_MISCONDUCT\",\"ward\":\"W1\"}}}}"), null, "ke", 1);
+                "\"params\":{\"serviceCode\":\"POLICE_MISCONDUCT\",\"ward\":\"W1\"}}}}"), null,
+                AnalyticsCapabilities.publicSurface(), "ke", 1);
 
         Map<String,Object> t = entry(out, "t");
         assertFalse(t.containsKey("error"), t.toString());
@@ -122,7 +120,8 @@ public class AnalyticsServicePublicFloorParamsTest {
         def.setParams(Collections.singletonList(serviceCode));
 
         Map<String,Object> out = service.query(
-                json("{\"queries\":{\"t\":{\"kpiId\":\"cl_water\"}}}"), null, "ke", 1);
+                json("{\"queries\":{\"t\":{\"kpiId\":\"cl_water\"}}}"), null,
+                AnalyticsCapabilities.publicSurface(), "ke", 1);
 
         Map<String,Object> t = entry(out, "t");
         assertFalse(t.containsKey("error"), t.toString());
@@ -146,13 +145,15 @@ public class AnalyticsServicePublicFloorParamsTest {
         u.setRoles(Collections.singletonList(r));
         u.setTenantId("ke");
         ri.setUserInfo(u);
-        PrincipalScopeResolver resolver = mock(PrincipalScopeResolver.class);
-        when(resolver.resolve(eq(ri), eq("ke"), eq(1))).thenReturn(new AnalyticsScope("ke", true, null, null, null));
+        AnalyticsRowScopeResolver resolver = mock(AnalyticsRowScopeResolver.class);
+        when(resolver.resolve(eq(ri), eq("ke"), eq(1)))
+                .thenReturn(new org.egov.pgr.policy.PgrSearchScope("ke", true, null, null, null));
         AnalyticsService authed = new AnalyticsService(planner, catalog, jdbc, kpiCatalogService, resolver,
                 new KpiQueryComposer(catalog), new AnalyticsMetrics(), null);
 
         Map<String,Object> out = authed.query(json("{\"queries\":{\"t\":{\"kpiId\":\"cl_water\"," +
-                "\"params\":{\"serviceCode\":\"ROADS\"}}}}"), ri, "ke", 1);
+                "\"params\":{\"serviceCode\":\"ROADS\"}}}}"), ri,
+                AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         // Unchanged pre-#1797 behaviour for employees: the filter bar replaces the baked eq.
         assertFalse(entry(out, "t").containsKey("paramsIgnored"));

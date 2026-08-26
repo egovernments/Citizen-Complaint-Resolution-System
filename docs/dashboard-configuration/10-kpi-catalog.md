@@ -258,12 +258,13 @@ Goal: a "Complaints via WhatsApp (last 30d)" number card for supervisors.
      },
      "params": [ { "name": "window", "default": "last_30d",
                    "allowed": ["last_7d","last_30d","mtd"] } ],
-     "rbac": { "visibleTo": ["SUPERVISOR","PGR_SUPERVISOR","PGR_ADMIN"] }
+     "requiredActionUrl": "/pgr-services/v2/analytics/_query"
    }
    ```
 
-2. **Set the role ceiling** — `rbac.visibleTo` (see `20-packs-and-rbac.md` §visibleTo for the
-   exact semantics of `[]` and `PUBLIC`).
+2. **Set the capability gate** — `requiredActionUrl` must name a seeded access-control action.
+   Grant that action to the intended roles through `ACCESSCONTROL-ROLEACTIONS`. Use
+   `public: true` separately when the anonymous surface may expose the tile.
 
 3. **Upsert to MDMS** at the state root (`dss` / `KpiDefinition`, tenant `ke`) via
    mdms-v2 `_create`/`_update`. In git-driven deployments also add it to the seed file
@@ -272,8 +273,8 @@ Goal: a "Complaints via WhatsApp (last 30d)" number card for supervisors.
 4. **Optionally add it to a pack** so it appears in the default layout: append the id to
    `tiles` and a `{kpiId,x,y,w,h}` entry to `layout` in `dss.DashboardPack`
    (see `20-packs-and-rbac.md`). Without a pack entry the KPI is still available in the
-   dashboard's Add-KPI picker (served by `/catalog/_search`) for any role that passes
-   `visibleTo`.
+   dashboard's Add-KPI picker (served by `/catalog/_search`) for callers granted its
+   `requiredActionUrl`.
 
 5. **Title/localization** — `viz.title` renders today; if/when the i18n layer lands, add the
    `titleKey` message to the localization store (module upsert + cache flush — see

@@ -59,9 +59,22 @@ public class MDMSUtils {
 
     // serviceCode -> SLA millis (from RAINMAKER-PGR.ComplaintHierarchy LEAF rows' slaHours),
     // cached per state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
-    // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
-    // pgr-services restart to take effect, same staleness window the migration map had.
-    private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+    // #432). Same TTL / never-cache-empty / serve-stale-on-failure semantics as the notification
+    // and department caches above — issue #1238: the previous process-lifetime cache pinned
+    // whatever the FIRST SLA-sorted search happened to see, so a transient MDMS miss cached an
+    // empty map forever, and a configurator slaHours edit never reached the ORDER BY without a
+    // restart. In both cases every complaint type fell back to the uniform business-level SLA
+    // while the UI kept displaying the real per-type budget, which collapses
+    // `sla - (now - createdtime)` to a constant minus elapsed — i.e. plain creation order. That
+    // is why the inbox SLA column stayed correctly ordered WITHIN a complaint type but not across
+    // types.
+    private static final class TimedSlaMap {
+        final Map<String, Long> value;
+        final long fetchedAt;
+        TimedSlaMap(Map<String, Long> value) { this.value = value; this.fetchedAt = System.currentTimeMillis(); }
+        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
+    }
+    private final Map<String, TimedSlaMap> serviceCodeToSlaCache = new ConcurrentHashMap<>();
 
     // Config-driven notification masters, cached per state-level tenant with a short TTL
     // (pgr.notification.mdms.cache.ttl.ms, default 60s). Configurator edits to
@@ -111,12 +124,26 @@ public class MDMSUtils {
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
      * slaHours (interior nodes carry no slaHours and are skipped by the Number guard below).
-     * Cached per state-level tenant. Returns an empty map (never null) on MDMS failure,
-     * so callers can fall back to the uniform business-level SLA.
+     * Cached per state-level tenant with the same short TTL as the notification masters, so a
+     * configurator slaHours edit takes effect without a pgr-services restart. Returns an empty
+     * map (never null) on MDMS failure, so callers can fall back to the uniform business-level SLA.
      */
     public Map<String, Long> getServiceCodeToSlaMillis(String tenantId) {
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        return serviceCodeToSlaCache.computeIfAbsent(stateTenant, this::fetchServiceCodeToSlaMillis);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedSlaMap cached = serviceCodeToSlaCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.value;
+
+        Map<String, Long> fetched = fetchServiceCodeToSlaMillis(stateTenant);
+        if (!fetched.isEmpty()) {
+            serviceCodeToSlaCache.put(stateTenant, new TimedSlaMap(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR a hierarchy that genuinely carries no slaHours.
+        // Never cache an empty result (retry on the next SLA-sorted search); serve a stale
+        // non-empty entry if we have one rather than degrading the entire inbox ordering to
+        // creation order for the rest of the process lifetime because of one MDMS blip.
+        return cached != null ? cached.value : fetched;
     }
 
     private Map<String, Long> fetchServiceCodeToSlaMillis(String stateTenant) {
@@ -699,6 +726,55 @@ public class MDMSUtils {
                     actionUrl, tenantId, config.getAccessControlActionsMdmsGetPath(), e);
             throw new org.egov.pgr.policy.AccessControlUnavailableException(
                     "access-control call failed for url=" + actionUrl + " tenant=" + tenantId, e);
+        }
+    }
+
+    /**
+     * Every action url visible to this caller's roles, in ONE call.
+     *
+     * <p>{@link #fetchAccessControlActions} already fetches the caller's whole role-scoped action
+     * list and then discards all but one url, so asking it N times fetches the same payload N
+     * times. Callers that need to test several urls at once — the dashboard's capability bootstrap
+     * asks about nine — use this instead and filter locally.
+     *
+     * <p>Same failure contract as its sibling: a successful call that simply matches nothing is an
+     * empty set, while a failed call raises {@link org.egov.pgr.policy.AccessControlUnavailableException}.
+     */
+    @SuppressWarnings("unchecked")
+    public Set<String> fetchVisibleActionUrls(RequestInfo requestInfo, String tenantId) {
+        List<String> roleCodes = extractRoleCodes(requestInfo);
+        if (roleCodes.isEmpty())
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "no roles on RequestInfo; cannot resolve access-control actions for tenant=" + tenantId);
+
+        if (requestInfo.getTs() == null)
+            requestInfo.setTs(System.currentTimeMillis());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("roleCodes", roleCodes);
+        body.put("tenantId", tenantId);
+        body.put("actionMaster", MDMS_ACCESSCONTROL_ACTIONS_MASTER);
+        body.put("RequestInfo", requestInfo);
+
+        StringBuilder url = new StringBuilder(config.getAccessControlHost())
+                .append(config.getAccessControlActionsMdmsGetPath());
+        try {
+            Object result = serviceRequestRepository.fetchResult(url, body);
+            if (result == null)
+                return Collections.emptySet();
+
+            List<Object> urls = JsonPath.read(result, "$.actions[*].url");
+            Set<String> visible = new LinkedHashSet<>();
+            if (urls != null)
+                for (Object each : urls)
+                    if (each != null)
+                        visible.add(String.valueOf(each));
+            return visible;
+        } catch (Exception e) {
+            log.error("Failed to fetch access-control actions for tenant='{}' via {} — accesscontrol call failed",
+                    tenantId, config.getAccessControlActionsMdmsGetPath(), e);
+            throw new org.egov.pgr.policy.AccessControlUnavailableException(
+                    "access-control call failed for tenant=" + tenantId, e);
         }
     }
 

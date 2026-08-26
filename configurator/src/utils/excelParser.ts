@@ -197,12 +197,16 @@ export function parseTenantExcel(workbook: XLSX.WorkBook): {
       message: 'Tenant code is required',
       code: 'REQUIRED_FIELD',
     });
-  } else if (!/^[A-Za-z][A-Za-z0-9.]*$/.test(tenantCode)) {
+  } else if (!/^[a-zA-Z. ]*$/.test(tenantCode)) {
+    // Mirrors egov-user's server-side Pattern.createUserRequest.user.tenantId
+    // constraint (`^[a-zA-Z. ]*$`) — no digits allowed. A tenant code that
+    // fails this check passes tenant creation but breaks employee creation
+    // three phases later, so it must be rejected here at upload time.
     errors.push({
       row: 1,
       field: 'tenantCode',
       value: tenantCode,
-      message: 'Tenant code must start with a letter and contain only letters, numbers, and dots',
+      message: 'Tenant code must contain only letters, dots, and spaces (numbers are not supported)',
       code: 'INVALID_FORMAT',
     });
   }

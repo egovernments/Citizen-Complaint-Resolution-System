@@ -2201,6 +2201,23 @@ button[class*="toast-close"] svg,
 .employee .digit-sidebar .digit-sidebar-search-container ::placeholder {
   color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.55)) !important;
 }
+/* CCRS#1469: typed text was invisible in the sidebar's nav filter.
+ *
+ * The rules above colour the *input* white for the dark sidebar, but the
+ * generic input-standardisation block below (which lists
+ * `.digit-text-input-field`) paints TextInput's wrapper solid white. The input
+ * itself is transparent, so the painted stack ended up white text on a white
+ * wrapper — the filtering worked, you just could not see what you had typed.
+ *
+ * Keep the wrapper and its inner container transparent so the translucent
+ * container behind them shows through and the white text stays legible. */
+.employee .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
+.employee .digit-sidebar .digit-sidebar-search-container .input-container {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
 
 /* Sidebar position — vendor `top: 0` + topbar height 72 + sidebar
  * effective top from layout = 64. With our 56px topbar override the

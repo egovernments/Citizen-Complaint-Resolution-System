@@ -18,6 +18,13 @@ import {
   DASHBOARD_KPI_DEFINITIONS,
   DASHBOARD_PACKS,
 } from './dashboard-catalog-seed.js';
+import {
+  DASHBOARD_ACCESS_ACTIONS,
+  PGR_SEARCH_SCOPE_RESOURCE,
+  buildDashboardConfig,
+  buildDashboardRoleAction,
+  normalizeDashboardRoles,
+} from './dashboard-bootstrap-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -1115,6 +1122,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       'Bootstrap a new state-level tenant root by copying ALL schemas and essential MDMS data from an existing tenant (e.g. "pg"). ' +
       'This is REQUIRED before creating employees, PGR complaints, or any service under a new tenant root. ' +
       'Copies: all schema definitions, IdFormat records, Department records, Designation records, StateInfo, and InboxQueryConfiguration. ' +
+      'Seeds the current employee dashboard catalog and create-if-absent access floor for a small explicit role set. ' +
       'Also provisions an ADMIN user on the new tenant and copies workflow definitions (PGR, etc.) from source. ' +
       'After bootstrap, use city_setup to create city-level tenants. ' +
       'Call this ONCE when you create a new tenant root (e.g. "tenant", "ke") before doing anything else under it.',
@@ -1177,6 +1185,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
             'rejects pincode: [] on update; absence is the off state.',
         },
+        dashboard_roles: {
+          type: 'array',
+          minItems: 1,
+          uniqueItems: true,
+          items: { type: 'string' },
+          description:
+            'Employee roles that receive the dashboard navigation action and base API capabilities on a fresh ' +
+            'tenant. Defaults to SUPERVISOR, GRO, DGRO, and SUPERUSER. Existing tenant ' +
+            'DashboardConfig, actions, and role-action records are never overwritten.',
+        },
         user_validation: {
           type: 'array',
           description:
@@ -1209,6 +1227,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+      const dashboardRoles = normalizeDashboardRoles(args.dashboard_roles);
 
       // Register the target with egov-enc-service BEFORE anything below needs
       // to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
@@ -1548,11 +1567,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
         'dss.KpiDefinition',
         'dss.DashboardPack',
-        // Per-tenant dashboard config: nav/route role gate (allowedRoles,
-        // #1258) + number display mask (numberFormat, #1213). Nothing else
-        // seeds this master on a new root — without it both features silently
-        // fall back to built-in behavior.
-        'dss.DashboardConfig',
+        // dss.DashboardConfig is deliberately not copied from the source: its
+        // role gate is tenant-owned, so inheriting pg's broad fallback set is
+        // not a safe 0→1 default. The create-if-absent floor below seeds the
+        // explicit install role set and preserves an existing target record.
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
@@ -1584,6 +1602,35 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               msg.includes('Values defined against unique fields cannot be empty');
             if (!isSchemaRace || attempt === maxAttempts - 1) throw err;
             await new Promise((res) => setTimeout(res, 500 * (1 << attempt))); // 500ms, 1s, 2s
+          }
+        }
+        throw lastErr;
+      }
+
+      // A newly-created action reaches the reference validator through Kafka.
+      // The immediately-following roleaction write can therefore see the
+      // action/role schemas but not their rows yet. Retry only reference errors;
+      // a genuinely missing role still fails loudly after the bounded wait.
+      async function mdmsCreateWithReferenceWait(
+        tenant: string,
+        schemaCode: string,
+        uniqueIdentifier: string,
+        data: Record<string, unknown>,
+      ): Promise<void> {
+        const maxAttempts = 5;
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            await mdmsCreateWithSchemaWait(tenant, schemaCode, uniqueIdentifier, data);
+            return;
+          } catch (error) {
+            lastErr = error;
+            const msg = error instanceof Error ? error.message : String(error);
+            const isReferenceRace =
+              msg.includes('REFERENCE_VALIDATION_ERR') ||
+              msg.toLowerCase().includes('reference validation');
+            if (!isReferenceRace || attempt === maxAttempts - 1) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 500 * (1 << attempt)));
           }
         }
         throw lastErr;
@@ -1901,8 +1948,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // (#1394). These are tenant-invariant platform definitions with no tenant
       // identity, so seed them from the repo, create-if-absent — a live record
       // from the source copy (or a prior run) wins; a fresh/empty root gets the
-      // full canonical catalog. dss.DashboardConfig is intentionally NOT floored
-      // (its allowedRoles/scoping are tenant-specific, operator-owned).
+      // full canonical catalog. Tenant-specific DashboardConfig/access floors
+      // are handled immediately afterwards and remain create-if-absent.
       {
         const catalogFloor: Array<[string, Record<string, unknown>[]]> = [
           ['dss.KpiDefinition', DASHBOARD_KPI_DEFINITIONS],
@@ -1938,6 +1985,130 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 results.data.skipped.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
               } else {
                 results.data.failed.push(`${schemaCode}/${id ?? '?'} (catalog floor): ${msg}`);
+              }
+            }
+          }
+        }
+      }
+
+      // Step 2c: make the employee dashboard discoverable on a true 0→1 install.
+      //
+      // Catalog records alone only render a dashboard after navigation and route
+      // authorization have admitted the employee. Seed all three parts as a
+      // create-if-absent floor: tenant config, action 4557 plus base analytics
+      // capabilities 2640-2644, and the matching role→action grants.
+      // A target record always wins, so re-running bootstrap never broadens or
+      // narrows an operator-managed deployment.
+      {
+        const configSchema = 'dss.DashboardConfig';
+        const actionsSchema = 'ACCESSCONTROL-ACTIONS-TEST.actions-test';
+        const roleActionsSchema = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
+
+        const [configs, actions, roleActions] = await Promise.all([
+          fetchAllMdmsV2Raw(target, configSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, actionsSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, roleActionsSchema).catch(() => []),
+        ]);
+        const exactTenant = (record: MdmsRecord) => record.tenantId === target && record.isActive;
+
+        // A fresh tenant copied from an older live source can inherit a bare action 2008. In
+        // compatibility mode that means unrestricted rows, so attach #1441's canonical scope
+        // only when the target has no authored scope of its own. Existing authored policy wins.
+        const searchAction = actions.find((record) =>
+          exactTenant(record) && Number((record.data as { id?: number })?.id) === 2008);
+        if (searchAction) {
+          const searchData = searchAction.data as Record<string, unknown>;
+          const complaint = (searchData.resource as { complaint?: { scope?: unknown } } | undefined)?.complaint;
+          if (complaint?.scope) {
+            results.data.skipped.push(`${actionsSchema}/2008 (ABAC scope already authored)`);
+          } else {
+            try {
+              await digitApi.mdmsV2UpdateData(searchAction, {
+                ...searchData,
+                method: 'POST',
+                resource: PGR_SEARCH_SCOPE_RESOURCE,
+              });
+              results.data.copied.push(`${actionsSchema}/2008 (ABAC scope floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): ${msg}`);
+            }
+          }
+        } else {
+          results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): action is missing`);
+        }
+
+        const haveConfig = configs.some((record) =>
+          exactTenant(record) && (record.data as { id?: string })?.id === 'default');
+        if (haveConfig) {
+          results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+        } else {
+          try {
+            await mdmsCreateWithSchemaWait(
+              target,
+              configSchema,
+              'default',
+              buildDashboardConfig(),
+            );
+            results.data.copied.push(`${configSchema}/default (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${configSchema}/default (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const action of DASHBOARD_ACCESS_ACTIONS) {
+          const actionId = Number(action.id);
+          const haveAction = actions.some((record) =>
+            exactTenant(record) && Number((record.data as { id?: number })?.id) === actionId);
+          if (haveAction) {
+            results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            continue;
+          }
+          try {
+            await mdmsCreateWithSchemaWait(target, actionsSchema, String(actionId), { ...action });
+            results.data.copied.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${actionsSchema}/${actionId} (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const role of dashboardRoles) {
+          for (const action of DASHBOARD_ACCESS_ACTIONS) {
+            const actionId = Number(action.id);
+            const haveGrant = roleActions.some((record) => {
+              if (!exactTenant(record)) return false;
+              const data = record.data as { actionid?: number; rolecode?: string };
+              return Number(data?.actionid) === actionId && data?.rolecode === role;
+            });
+            const uid = `${actionId}.${role}`;
+            if (haveGrant) {
+              results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithReferenceWait(
+                target,
+                roleActionsSchema,
+                uid,
+                buildDashboardRoleAction(actionId, role, target),
+              );
+              results.data.copied.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              } else {
+                results.data.failed.push(`${roleActionsSchema}/${uid} (dashboard access floor): ${msg}`);
               }
             }
           }
