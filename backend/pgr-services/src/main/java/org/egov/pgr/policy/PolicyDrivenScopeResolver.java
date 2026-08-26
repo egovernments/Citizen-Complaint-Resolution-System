@@ -5,9 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.util.Principals;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.util.HrmsScopeSemantics;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.util.RoleCodes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -221,7 +222,7 @@ public class PolicyDrivenScopeResolver {
         JsonNode assignments = emp.get("assignments");
         if (assignments != null && assignments.isArray()) {
             for (JsonNode a : assignments) {
-                boolean active = a.path("isCurrentAssignment").asBoolean(true);
+                boolean active = HrmsScopeSemantics.isCurrentAssignment(a);
                 String dept = a.path("department").asText(null);
                 if (active && dept != null && !dept.isEmpty()) departments.add(dept);
             }
@@ -238,7 +239,7 @@ public class PolicyDrivenScopeResolver {
                 // records carry the same isActive semantic (eg_hrms_jurisdiction.isActive), so a
                 // stale/superseded jurisdiction (e.g. after a transfer) must not stay unioned into
                 // the caller's scope forever.
-                boolean active = j.path("isActive").asBoolean(true);
+                boolean active = HrmsScopeSemantics.isActiveJurisdiction(j);
                 String boundary = j.path("boundary").asText(null);
                 if (active && boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
             }

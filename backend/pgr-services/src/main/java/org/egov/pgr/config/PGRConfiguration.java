@@ -150,6 +150,17 @@ public class PGRConfiguration {
     @Value("${egov.hrms.search.endpoint}")
     private String hrmsEndPoint;
 
+    // Display-only employee working-context classification. Deployments can map their own
+    // functional role codes to the three product-level contexts without a service code change.
+    @Value("#{'${pgr.employee.context.resolver-role-codes:PGR_LME,GRO,DGRO}'.split(',')}")
+    private List<String> employeeContextResolverRoleCodes;
+
+    @Value("#{'${pgr.employee.context.citizen-role-codes:CITIZEN}'.split(',')}")
+    private List<String> employeeContextCitizenRoleCodes;
+
+    @Value("#{'${pgr.employee.context.admin-role-codes:PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR}'.split(',')}")
+    private List<String> employeeContextAdminRoleCodes;
+
     //Notification
     @Value("${egov.user.event.notification.enabled}")
     private Boolean isUserEventsNotificationEnabled;

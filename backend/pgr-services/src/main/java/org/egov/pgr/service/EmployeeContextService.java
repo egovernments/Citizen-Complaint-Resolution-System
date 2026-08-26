@@ -1,13 +1,13 @@
 package org.egov.pgr.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
+import org.egov.pgr.util.HrmsScopeSemantics;
 import org.egov.pgr.web.models.EmployeeWorkingContext;
 import org.egov.pgr.web.models.RequestInfoWrapper;
 import org.egov.tracer.model.CustomException;
@@ -26,7 +26,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Builds the display-only working context for the authenticated employee. */
+/**
+ * Builds the display-only working context for the authenticated employee.
+ *
+ * <p>This projection does not derive or grant complaint access. Authorization remains owned by
+ * the policy-driven scope resolver; this endpoint uses an independently self-scoped UUID lookup
+ * because it must return the authenticated employee's display metadata, never another employee's.
+ * Activity-flag interpretation is shared with the policy resolver through
+ * {@link HrmsScopeSemantics} so the two views cannot drift on legacy/null HRMS data.
+ */
 @Service
 @Slf4j
 public class EmployeeContextService {
@@ -35,26 +43,19 @@ public class EmployeeContextService {
     public static final String CITIZEN = "CITIZEN";
     public static final String ADMIN = "ADMIN";
 
-    private static final Set<String> RESOLVER_ROLE_CODES = Set.of("PGR_LME", "GRO", "DGRO");
-    private static final Set<String> CITIZEN_ROLE_CODES = Set.of("CITIZEN");
-
-    /**
-     * Keep ADMIN aligned with the tenant-wide roles used by PrincipalScopeResolver. These are the
-     * roles for which PGR already treats a missing employee department as legitimately unrestricted.
-     */
-    private static final Set<String> ADMIN_ROLE_CODES = Set.of(
-            "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN", "STADMIN",
-            "SUPERVISOR", "PGR_SUPERVISOR");
-
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
-    private final ObjectMapper mapper;
+    private final Set<String> resolverRoleCodes;
+    private final Set<String> citizenRoleCodes;
+    private final Set<String> adminRoleCodes;
 
     @Autowired
-    public EmployeeContextService(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper) {
+    public EmployeeContextService(PGRConfiguration config, RestTemplate restTemplate) {
         this.config = config;
         this.restTemplate = restTemplate;
-        this.mapper = mapper;
+        this.resolverRoleCodes = normalizeRoleCodes(config.getEmployeeContextResolverRoleCodes());
+        this.citizenRoleCodes = normalizeRoleCodes(config.getEmployeeContextCitizenRoleCodes());
+        this.adminRoleCodes = normalizeRoleCodes(config.getEmployeeContextAdminRoleCodes());
     }
 
     public EmployeeWorkingContext getContext(RequestInfo requestInfo, String tenantId) {
@@ -69,7 +70,7 @@ public class EmployeeContextService {
         }
 
         JsonNode employee = searchEmployee(requestInfo, tenantId, user.getUuid());
-        if (employee == null) {
+        if (employee == null || !employee.isObject()) {
             return unavailable(tenantId);
         }
 
@@ -100,11 +101,11 @@ public class EmployeeContextService {
                 .toUriString();
 
         try {
-            Object response = restTemplate.postForObject(
+            JsonNode response = restTemplate.postForObject(
                     url,
                     RequestInfoWrapper.builder().requestInfo(requestInfo).build(),
-                    Map.class);
-            JsonNode employees = mapper.valueToTree(response).path("Employees");
+                    JsonNode.class);
+            JsonNode employees = response == null ? null : response.path("Employees");
             if (!employees.isArray() || employees.isEmpty()) {
                 return null;
             }
@@ -129,7 +130,7 @@ public class EmployeeContextService {
             return Collections.emptyList();
         }
         for (JsonNode assignment : assignments) {
-            if (!assignment.path("isCurrentAssignment").asBoolean(false)) {
+            if (!HrmsScopeSemantics.isCurrentAssignment(assignment)) {
                 continue;
             }
             String department = text(assignment, "department");
@@ -148,6 +149,8 @@ public class EmployeeContextService {
             return Collections.emptyList();
         }
         for (Role role : user.getRoles()) {
+            // Deliberately display only roles stamped for the logged-in tenant, as required by
+            // #1833. Authorization inheritance is policy-owned and must not be inferred here.
             if (role == null || StringUtils.isBlank(role.getCode())
                     || !tenantId.equals(role.getTenantId())) {
                 continue;
@@ -167,9 +170,9 @@ public class EmployeeContextService {
             codes.add(role.getCode());
         }
         List<String> contexts = new ArrayList<>(3);
-        if (!Collections.disjoint(codes, RESOLVER_ROLE_CODES)) contexts.add(RESOLVER);
-        if (!Collections.disjoint(codes, CITIZEN_ROLE_CODES)) contexts.add(CITIZEN);
-        if (!Collections.disjoint(codes, ADMIN_ROLE_CODES)) contexts.add(ADMIN);
+        if (!Collections.disjoint(codes, resolverRoleCodes)) contexts.add(RESOLVER);
+        if (!Collections.disjoint(codes, citizenRoleCodes)) contexts.add(CITIZEN);
+        if (!Collections.disjoint(codes, adminRoleCodes)) contexts.add(ADMIN);
         return contexts;
     }
 
@@ -180,7 +183,7 @@ public class EmployeeContextService {
             return Collections.emptyList();
         }
         for (JsonNode jurisdiction : values) {
-            if (jurisdiction.has("isActive") && !jurisdiction.path("isActive").asBoolean()) {
+            if (!HrmsScopeSemantics.isActiveJurisdiction(jurisdiction)) {
                 continue;
             }
             String hierarchy = text(jurisdiction, "hierarchy");
@@ -205,6 +208,19 @@ public class EmployeeContextService {
     private String text(JsonNode node, String field) {
         String value = node.path(field).asText(null);
         return StringUtils.isBlank(value) ? null : value;
+    }
+
+    private static Set<String> normalizeRoleCodes(List<String> configuredCodes) {
+        if (configuredCodes == null) {
+            return Collections.emptySet();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String configuredCode : configuredCodes) {
+            if (StringUtils.isNotBlank(configuredCode)) {
+                normalized.add(configuredCode.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        return Collections.unmodifiableSet(normalized);
     }
 
     private EmployeeWorkingContext unavailable(String tenantId) {
