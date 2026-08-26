@@ -272,8 +272,9 @@ export function buildLineChartGrid({ bottomPadding = 0 } = {}) {
 
 export function resolveLineChartXAxisLabelHeight(categories, containerWidth) {
   const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const step = resolveLineChartXLabelStep(categories.length, containerWidth);
   const labelSlotWidth =
-    categories.length > 1 ? gridWidth / (categories.length - 1) : gridWidth;
+    categories.length > 1 ? (gridWidth / (categories.length - 1)) * step : gridWidth;
   return resolveVerticalXAxisLabelHeight(categories, labelSlotWidth, {
     minHeightPx: 22,
     maxHeightPx: 56,
@@ -293,6 +294,20 @@ export function buildLineChartSeriesData(series, categoryCount) {
 
 export function estimateLineChartGridWidth(containerWidth) {
   return Math.max(100, (containerWidth || 280) - LINE_CHART_Y_AXIS_LABEL_WIDTH);
+}
+
+/** Smallest horizontal gap a shown x-axis label may occupy before its neighbors get skipped. */
+export const LINE_CHART_MIN_X_LABEL_SLOT_PX = 40;
+
+/**
+ * How many categories apart the visible x-axis labels must be to keep at least
+ * LINE_CHART_MIN_X_LABEL_SLOT_PX between them. step=1 shows every label.
+ */
+export function resolveLineChartXLabelStep(categoryCount, containerWidth) {
+  if (categoryCount <= 1) return 1;
+  const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const perCategoryWidth = gridWidth / (categoryCount - 1);
+  return Math.max(1, Math.ceil(LINE_CHART_MIN_X_LABEL_SLOT_PX / perCategoryWidth));
 }
 
 /** Negative min shifts the first point right, clear of y-axis labels. */
@@ -317,8 +332,9 @@ export function buildLineChartXAxis(categories, containerWidth) {
     containerWidth
   );
   const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const step = resolveLineChartXLabelStep(categories.length, containerWidth);
   const labelSlotWidth =
-    categories.length > 1 ? gridWidth / (categories.length - 1) : gridWidth;
+    categories.length > 1 ? (gridWidth / (categories.length - 1)) * step : gridWidth;
   const xAxisLabelHeight = resolveVerticalXAxisLabelHeight(categories, labelSlotWidth, {
     minHeightPx: 22,
     maxHeightPx: 56,
@@ -337,6 +353,10 @@ export function buildLineChartXAxis(categories, containerWidth) {
       formatter: (value) => {
         const index = Math.round(Number(value));
         if (index < 0 || index >= categories.length) return "";
+        // Enforce a minimum horizontal spread between shown labels: only every
+        // `step`-th category (plus the last one, so the range always ends
+        // labeled) renders text — the rest stay blank instead of cramming.
+        if (index % step !== 0 && index !== categories.length - 1) return "";
         const label = categories[index] ?? "";
         return formatWrappedChartLabel(label, labelSlotWidth);
       },
