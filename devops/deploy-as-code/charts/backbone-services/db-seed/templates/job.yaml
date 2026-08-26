@@ -161,4 +161,15 @@ spec:
               # the retry sees an empty DB and reloads from scratch.
               psql -v ON_ERROR_STOP=1 --single-transaction --quiet -f /tmp/full-dump.sql
 
+              # Drop the dump's deployment-specific encryption keys. The dump
+              # carries eg_enc_asymmetric_keys/eg_enc_symmetric_keys encrypted
+              # with the SOURCE deployment's egov-enc-service master key. A fresh
+              # deploy has its own master key, so egov-enc-service crash-loops on
+              # startup with "AEADBadTagException: Tag mismatch" trying to decrypt
+              # them. Clearing the tables makes enc-service generate fresh keys on
+              # first boot. (The dump's encrypted user rows become undecryptable,
+              # which is fine — real users are provisioned via the egov-user API,
+              # encrypted with THIS deploy's key; see the user-bootstrap chart.)
+              psql -v ON_ERROR_STOP=1 -c "TRUNCATE eg_enc_asymmetric_keys, eg_enc_symmetric_keys;"
+
               echo "db-seed: done"
