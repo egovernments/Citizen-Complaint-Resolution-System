@@ -6302,3 +6302,153 @@ header.digit-header .digit-dropdown-master {
   padding: 0 12px !important;
   min-height: 44px !important;
 }
+
+/* ===========================================================================
+ * Employee working context (CCRS#1833)
+ * Compact line in the employee header, read-only panel on click, and a sticky
+ * row on mobile. Scoped to .employee so the citizen shell is untouched.
+ * ======================================================================== */
+/* The header's action-field row is overflow:hidden, so anything wider than the
+ * space left over is sliced off at the edge rather than truncated. A flex item
+ * will not shrink below its content until min-width:0 is set, so without this
+ * the context overflows the container and loses its first characters instead
+ * of ending in an ellipsis. */
+/* Only the field holding the context may shrink — applying this to every
+ * action field let the avatar collapse into an oval. If :has() is unsupported
+ * the rule is simply skipped, which degrades to the clipping it replaces
+ * rather than to broken controls. */
+.employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
+.employee .digit-working-context {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.employee .digit-working-context-trigger { min-width: 0; max-width: 100%; }
+/* Circular avatar must keep its aspect ratio regardless of flex pressure. */
+.employee .digit-header-action-fields .digit-profile-image,
+.employee .digit-header-action-fields img[alt="Profile"],
+.employee .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
+.employee .digit-working-context-trigger {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.employee .digit-working-context-trigger:focus-visible {
+  outline: 2px solid var(--color-primary-accent, #c84c0e);
+  outline-offset: 2px;
+}
+/* Single line, truncated — the employee topbar is 56px and this sits beside
+ * the city/language controls, so it must never wrap or push them off-screen.
+ * block + nowrap (rather than flex) so text-overflow actually applies. */
+.employee .digit-working-context-summary {
+  display: block;
+  max-width: 22rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 1.35;
+  /* Inherit the header's own text colour. The employee topbar is dark in CCRS
+   * (#22394D) but light elsewhere, so a fixed grey is unreadable on one of
+   * them — inheriting tracks whatever the shell uses for its own controls. */
+  color: inherit;
+  opacity: .85;
+}
+.employee .digit-working-context-summary > * { vertical-align: baseline; }
+.employee .digit-working-context-sep { opacity: .5; margin: 0 5px; }
+/* Stand out by weight, not hue: the brand orange fails contrast on the dark
+ * topbar, and the accent has to work on both grounds. */
+.employee .digit-working-context-more { font-weight: 700; opacity: 1; margin-left: 3px; }
+.employee .digit-working-context-error { font-style: italic; }
+
+/* Positioned inline as fixed by the component (the header container is
+ * overflow:hidden), so only the chrome lives here. */
+.employee .digit-working-context-panel {
+  z-index: 10000;
+  min-width: 272px;
+  max-width: 352px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d6d8da;
+  border-radius: 2px;
+  box-shadow: 0 6px 22px rgba(11, 12, 12, .16);
+  padding: 8px 0;
+  text-align: left;
+}
+.employee .digit-working-context-group { padding: 8px 15px; }
+.employee .digit-working-context-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #787878;
+  margin-bottom: 2px;
+}
+/* The panel renders inside the topbar subtree, which colours its descendants
+ * white for the dark header. Re-assert the panel's own palette on every child
+ * or the values are white-on-white. */
+.employee .digit-working-context-panel,
+.employee .digit-working-context-panel div,
+.employee .digit-working-context-panel span {
+  color: #0b0c0c;
+}
+.employee .digit-working-context-group-value {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0b0c0c;
+}
+.employee .digit-working-context-panel .digit-working-context-group-label { color: #787878; }
+.employee .digit-working-context-panel .digit-working-context-qualifier,
+.employee .digit-working-context-panel .digit-working-context-raw-roles { color: #505a5f; }
+.employee .digit-working-context-qualifier { color: #505a5f; font-size: 12px; }
+.employee .digit-working-context-raw-roles { color: #505a5f; font-size: 11.5px; margin-top: 2px; }
+
+/* Mobile: its own row under the 56px topbar, sticky so the context stays put
+ * while an operator scrolls the inbox (requested on CCRS#1833). */
+/* Desktop: the inline copy in the header is the one that shows. */
+.employee .digit-working-context-mobile { display: none; }
+@media (max-width: 640px) {
+  /* Mobile: the sticky row takes over. The header only drops its action fields
+   * when the page *loads* narrow — mobileView is sampled once in App.js — so
+   * resizing down from desktop leaves the inline copy rendered and both would
+   * show. Hide it explicitly rather than relying on that. */
+  .employee .digit-working-context-mobile { display: block; }
+  .employee .digit-header-action-fields .digit-working-context { display: none; }
+  /* …and collapse the wrapper Header.js puts around it so it leaves no gap.
+   * Layered: the rule above always hides the content, this one removes the
+   * empty slot where :has() is supported. */
+  .employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
+}
+.employee .digit-working-context-mobile {
+  position: sticky;
+  top: 56px;
+  z-index: 40;
+  background: #fff;
+  border-bottom: 1px solid #d6d8da;
+  padding: 6px 12px;
+}
+/* In the mobile row the trigger spans the bar so the whole strip is tappable,
+ * and the summary is centred in it. */
+.employee .digit-working-context-mobile .digit-working-context,
+.employee .digit-working-context-mobile .digit-working-context-trigger { display: block; width: 100%; }
+.employee .digit-working-context-mobile .digit-working-context-trigger { padding: 0; text-align: center; }
+.employee .digit-working-context-mobile .digit-working-context-summary { text-align: center; }
+/* Panel is fixed and positioned by the component; keep it inside narrow screens. */
+@media (max-width: 640px) {
+  .employee .digit-working-context-panel { max-width: calc(100vw - 16px); }
+}
+
+/* This row paints its own white ground, so it cannot inherit the dark
+ * topbar's white text. */
+.employee .digit-working-context-mobile .digit-working-context-summary {
+  color: var(--color-text-secondary, #505a5f);
+  opacity: 1;
+  max-width: 100%;
+}
