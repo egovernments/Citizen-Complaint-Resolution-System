@@ -26,7 +26,7 @@ variable "availability_zones" {
 
 variable "kubernetes_version" {
   description = "kubernetes version"
-  default = "1.34"  # 1.33 exited EKS standard support; pick a currently-supported version
+  default = "1.35"  # currently-supported EKS version (1.33 exited standard support)
 }
 
 variable "db_version" {
@@ -36,7 +36,11 @@ variable "db_version" {
 
 variable "db_instance_class" {
   description = "DB instance class"
-  default = "db.t4g.medium"
+  # t3.medium (x86), not the cheaper t4g.medium (Graviton): db.t4g.medium hit
+  # InsufficientInstanceCapacity in ap-south-1a and 1b (2026-08-11), which fails
+  # the RDS create and aborts the whole apply. t3.medium is the x86 twin
+  # (+~$7/mo) and had capacity in all three AZs. Revisit t4g if capacity returns.
+  default = "db.t3.medium"
 }
 
 variable "architecture" {
