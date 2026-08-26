@@ -17,19 +17,41 @@ image:
   tag: v5.36.0
   pullPolicy: IfNotPresent
 
-# Gatus is exposed on its OWN subdomain, not a path on the main host. Gatus's
-# UI is a single-page app that loads its assets from absolute paths (/js, /css),
-# so it cannot be served under a sub-path such as /status without breaking the
-# page (a long-standing upstream limitation). grafana already owns /monitoring
-# on the main host, so Gatus gets `status.<domain>` instead. cert-manager
-# issues the TLS cert via the ingress-shim, exactly as the egov ingresses do.
+# nginx sidecar that serves Gatus under a sub-PATH. Gatus's SPA loads assets and
+# calls its API from absolute paths (/js, /css, /api/v1), so it cannot run under
+# a sub-path unaided; this proxy sub_filters those paths to add the prefix (same
+# recipe as the ansible tier). Official nginx includes ngx_http_sub_module.
+proxyImage:
+  repository: nginx
+  tag: 1.27-alpine
+  pullPolicy: IfNotPresent
+
+# Ports: Gatus itself listens on gatusPort (in-pod only); the sidecar listens on
+# proxyPort and is what the Service/ingress target.
+gatusPort: 8080
+proxyPort: 8081
+
+proxyResources:
+  limits:
+    memory: 64Mi
+    cpu: "100m"
+  requests:
+    memory: 16Mi
+    cpu: "20m"
+
+# Gatus is served under `path` on the MAIN domain (not a sub-domain): the sidecar
+# proxy above rewrites the SPA so the sub-path works. This avoids a new DNS record
+# (the main domain already resolves, so cert-manager issues TLS immediately) and
+# avoids enabling snippet annotations on the shared ingress-nginx controller.
+# grafana owns /monitoring on the same host; Gatus takes /status.
 ingress:
   enabled: true
   className: nginx
-  # Sub-domain prefix prepended to global.domain -> e.g. status.cms-saas.digit.org.
-  # Set `host` directly to override the computed name entirely.
-  subdomain: status
+  # Defaults to global.domain. Set `host` to override the hostname entirely.
   host: ""
+  path: /status
+  # Defaults to <host>-gatus-tls. cert-manager fills it from the cluster-issuer.
+  tlsSecret: ""
   clusterIssuer: letsencrypt-prod
 
 # sqlite uptime history (#1610). A PVC, not emptyDir, so history survives pod

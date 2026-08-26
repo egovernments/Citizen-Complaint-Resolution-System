@@ -41,8 +41,9 @@ spec:
       labels:
         app: gatus
       annotations:
-        # Roll the pod when the endpoint catalogue changes.
+        # Roll the pod when the endpoint catalogue or the /status proxy changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/status-proxy: {{ include (print $.Template.BasePath "/status-proxy-configmap.yaml") . | sha256sum }}
     spec:
       containers:
         - name: gatus
@@ -85,10 +86,40 @@ spec:
               subPath: config.yaml
             - name: data
               mountPath: /data
+        # Sidecar nginx that serves Gatus under {{ .Values.ingress.path }} by
+        # sub_filter-rewriting the SPA's absolute asset/API paths. See
+        # status-proxy-configmap.yaml for why this is needed and why it is a
+        # sidecar rather than an ingress snippet.
+        - name: status-proxy
+          image: "{{ .Values.proxyImage.repository }}:{{ .Values.proxyImage.tag }}"
+          imagePullPolicy: {{ .Values.proxyImage.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.proxyPort | default 8081 }}
+          resources:
+{{ toYaml .Values.proxyResources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.proxyPort | default 8081 }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.proxyPort | default 8081 }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: status-proxy-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
       volumes:
         - name: config
           configMap:
             name: gatus-config
+        - name: status-proxy-config
+          configMap:
+            name: gatus-status-proxy
         - name: data
         {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:

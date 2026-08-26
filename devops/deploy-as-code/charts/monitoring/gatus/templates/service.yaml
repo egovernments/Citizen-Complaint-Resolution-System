@@ -9,5 +9,11 @@ spec:
   selector:
     app: gatus
   ports:
-    - port: 8080
-      targetPort: 8080
+    # The /status ingress targets the sidecar proxy, which rewrites the SPA and
+    # forwards to Gatus. Port 8080 stays exposed for direct port-forward/debug.
+    - name: proxy
+      port: {{ .Values.proxyPort | default 8081 }}
+      targetPort: {{ .Values.proxyPort | default 8081 }}
+    - name: http
+      port: {{ .Values.gatusPort | default 8080 }}
+      targetPort: {{ .Values.gatusPort | default 8080 }}

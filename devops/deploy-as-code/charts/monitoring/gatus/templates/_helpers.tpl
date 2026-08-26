@@ -1,11 +1,12 @@
 {{/*
-Public hostname Gatus is served on. Explicit `ingress.host` wins; otherwise
-`<subdomain>.<global.domain>` (e.g. status.cms-saas.digit.org).
+Public hostname Gatus is served on. Explicit `ingress.host` wins; otherwise the
+main `global.domain` (Gatus lives under `ingress.path`, e.g.
+cms-saas.digit.org/status).
 */}}
 {{- define "gatus.host" -}}
 {{- if .Values.ingress.host -}}
 {{- .Values.ingress.host -}}
 {{- else -}}
-{{- printf "%s.%s" .Values.ingress.subdomain .Values.global.domain -}}
+{{- .Values.global.domain -}}
 {{- end -}}
 {{- end -}}
