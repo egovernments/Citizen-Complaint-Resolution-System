@@ -132,6 +132,19 @@ spec:
                 exit 1
               fi
 
+              # The dump's objects are owned by role "egov" (pg_dump emits ~500
+              # ALTER ... OWNER TO egov). That role must exist before the load or
+              # the first OWNER TO aborts the whole single-transaction load with
+              # "role egov does not exist". Create it idempotently as NOLOGIN and
+              # grant it to the connecting user, so a deployment whose DB user is
+              # not "egov" (e.g. an RDS master named "ccrs") still owns and can
+              # access every seeded object by inheritance.
+              if ! psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='egov'" | grep -q 1; then
+                echo "db-seed: creating owner role 'egov'"
+                psql -v ON_ERROR_STOP=1 -c "CREATE ROLE egov NOLOGIN"
+              fi
+              psql -c "GRANT egov TO CURRENT_USER" 2>/dev/null || true
+
               # ON_ERROR_STOP makes psql fail the Job on the first bad
               # statement instead of plowing through and leaving the DB
               # half-seeded, which is far harder to diagnose.
