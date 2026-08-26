@@ -74,6 +74,143 @@ It takes around 60 minutes, use `tail -f /opt/digit/digit-stack-up.mycity.progre
 
 Use domain name instead of localhost, if used one during configuration.
 
+---
+
+# Kubernetes Deployment (AWS)
+
+The steps above run everything on a single machine — great for a demo or a small
+city. For a bigger, always-on deployment that can grow with demand, DIGIT can run
+on Amazon's managed Kubernetes (EKS). This path sets up the cloud infrastructure
+for you and then installs DIGIT onto it.
+
+It's more involved than the single-machine path, so it assumes you're comfortable
+with an AWS account and a terminal.
+
+## What you'll need
+
+- An AWS account, and permission to create things in it. There's a ready-made
+  permissions file at
+  `devops/infra-as-code/terraform/sample-aws/deploy-iam-policy.json` — hand it to
+  your AWS admin to attach to your user once, and it covers everything from
+  creating the setup to tearing it down.
+- A few command-line tools installed: `terraform`, the `aws` CLI, `kubectl`,
+  `helm`, and `helmfile`.
+
+> **One thing to watch: tool versions.** Use **Helm 3** and **Helmfile 0.x**. The
+> newest Helm (4) and Helmfile (1.x) changed things these charts depend on and
+> will fail. If you hit a strange error right at the start, this is almost always
+> why.
+
+## Step 1 — Create the cloud infrastructure
+
+This one command spins up the whole environment: the network, the Kubernetes
+cluster, a Postgres database, and the file storage.
+
+```bash
+cd devops/infra-as-code/terraform/sample-aws
+```
+
+Open `variables.tf` and fill in the few values marked `#REPLACE` — a name for
+your cluster, a name/username/password for the database, the name for your file
+storage bucket, and which AWS region to use. Then:
+
+```bash
+terraform init
+terraform plan      # shows what it will create
+terraform apply     # creates it (takes ~20-30 minutes)
+```
+
+When it finishes, connect your terminal to the new cluster:
+
+```bash
+aws eks update-kubeconfig --name <your-cluster-name> --region <your-region>
+```
+
+## Step 2 — Fill in your deployment details
+
+Two files under `devops/deploy-as-code/charts/environments/` hold your settings.
+
+In **`env.yaml`**, replace the placeholders:
+
+| Setting | What it is | Example |
+|---|---|---|
+| `domain` | The web address people will use to reach the apps. | `cms.mydomain.com` |
+| `db-host` | The address of the database you just created (Terraform prints it at the end). | `mycity-db.xxxx.rds.amazonaws.com` |
+| `fixed-bucketname` | The storage bucket for uploaded files (photos on complaints, etc.). | `mycity-filestore` |
+| `assets_s3_bucket` | The storage bucket that serves the app's front-end files. | `mycity-assets` |
+| `tenant_id` | Your tenant's short name. The bundled sample data uses `pg`; keep that unless you know you need your own. | `pg` |
+
+In **`env-secrets.yaml`**, set your database username and password.
+
+> **A note on secrets.** This file lives in the public code, so it must **not**
+> contain real passwords for anything sensitive. For the notification service,
+> you create its keys yourself and keep them in the cluster only. Run this once
+> before deploying:
+>
+> ```bash
+> kubectl -n backbone create secret generic novu-secrets \
+>   --from-literal=jwt-secret=$(openssl rand -hex 24) \
+>   --from-literal=store-encryption-key=$(openssl rand -hex 16) \
+>   --from-literal=novu-secret-key=$(openssl rand -hex 24)
+> ```
+
+## Step 3 — Install DIGIT
+
+DIGIT starts with a ready-made set of sample data (roles, labels, a default
+tenant). To load it, open
+`charts/backbone-services/backboneservices-helmfile.yaml` and set the `db-seed`
+entry to `installed: true`. Then install everything:
+
+```bash
+cd devops/deploy-as-code
+helmfile -f digit-helmfile.yaml -e env apply
+```
+
+The first run takes a while — the services set up their databases and start up
+one by one. Watch progress with `kubectl get pods -A`; you're waiting for
+everything to reach `Running`. The admin account is created for you in the
+background once the user service is ready.
+
+**Want the dashboards too?** Monitoring (Grafana) and the health page (Gatus) are
+off by default. To turn them on, un-comment the monitoring line in
+`digit-helmfile.yaml`, switch the `monitoring` toggles on in `env.yaml` (including
+`gatus`), create a `grafana-admin` secret the same way as above, and run the
+install command again.
+
+## Step 4 — Add your city
+
+Open the **Configurator** at `https://<your-domain>/configurator/` and sign in
+with the admin user (`ADMIN` / `eGov@123` unless you changed it) and your tenant
+name. From there you upload your city and boundary sheets to get it running —
+exactly like the single-machine setup.
+
+> Setting up a whole new **country/state** (rather than a city under the sample
+> one) needs a few extra setup steps behind the scenes — ask the DIGIT team if
+> that's what you need.
+
+## Accessing Services
+
+| What | URL | Login Details |
+|---|---|---|
+| Employee app | `https://<your-domain>/digit-ui/` | Admin Username, Admin Password |
+| Citizen app | `https://<your-domain>/citizen` | Mobile Number with OTP |
+| Configurator | `https://<your-domain>/configurator/` | Admin Username, Admin Password, Tenant name |
+| Health dashboard | `https://<your-domain>/status/` | |
+| Dashboards (Grafana) | `https://<your-domain>/monitoring` | Username `admin`, password from the `grafana-admin` secret |
+
+## Taking it down
+
+When you want to remove everything, there's **one important step first**: delete
+the load balancers Kubernetes created, *before* tearing down the infrastructure.
+If you skip this, a leftover load balancer keeps the network alive and the
+teardown gets stuck.
+
+```bash
+kubectl delete svc -A --field-selector spec.type=LoadBalancer
+cd devops/infra-as-code/terraform/sample-aws
+terraform destroy
+```
+
 
 
 
