@@ -261,6 +261,18 @@ public class PGRConfiguration {
     @Value("${egov.boundary.search.url}")
     private String boundarySearchEndpoint;
 
+    // Boundary-relationships subtree search — expands a jurisdiction boundary code (whatever
+    // level it sits at) to every descendant code beneath it, so a jurisdiction mapped above leaf
+    // level still matches complaints filed at leaf granularity. See BoundaryUtil.
+    @Value("${egov.boundary.relationship.search.url:/boundary-service/boundary-relationships/_search}")
+    private String boundaryRelationshipSearchEndpoint;
+
+    // TTL for BoundaryUtil's per-boundary-code subtree cache. The boundary tree changes rarely, so
+    // this can be long-lived; kept separate from analyticsConfigCacheTtlMs/notificationMdmsCacheTtlMs
+    // since it caches a different kind of thing (a boundary-service subtree, not an MDMS master).
+    @Value("${pgr.jurisdiction.subtree.cache.ttl.ms:300000}")
+    private Long jurisdictionSubtreeCacheTtlMs;
+
     @Value("${pgr.kafka.create.inbox.topic}")
     private String inboxCreateTopic;
 

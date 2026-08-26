@@ -142,8 +142,10 @@ public class RequestSearchCriteria {
     private boolean skipEmployeeDepartmentScope;
 
     // Server-resolved only — never bound from the request body. Matches against the complaint's
-    // stored ads.locality (exact boundary-code match). Set by EmployeeJurisdictionScopeService to
-    // restrict an employee's search to their own HRMS jurisdiction. Kept separate from the
+    // stored ads.locality (still an exact-code match in PGRQueryBuilder). Set by
+    // EmployeeJurisdictionScopeService to the union of the employee's own HRMS jurisdiction
+    // codes PLUS every descendant beneath each of them (BoundaryUtil) — so a jurisdiction mapped
+    // above leaf level still matches leaf-level complaints under it. Kept separate from the
     // client-bindable `locality` field above so an employee's own explicit locality filter and
     // their jurisdiction scope simply AND together (intersect) instead of one overwriting the other.
     @JsonIgnore

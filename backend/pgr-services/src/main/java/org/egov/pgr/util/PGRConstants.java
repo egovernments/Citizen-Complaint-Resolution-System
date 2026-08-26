@@ -54,14 +54,22 @@ public class PGRConstants {
     public static final String HRMS_CURRENT_DEPARTMENT_JSONPATH =
             "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].department";
 
-    // ALL of the employee's jurisdiction boundary codes — an employee can hold multiple
-    // jurisdiction entries (e.g. different roles at different boundary levels), so every one is
-    // collected, not just the first. Used for jurisdiction-scoped employee search
-    // (EmployeeJurisdictionScopeService). Jurisdictions live at the top level of the HRMS employee
-    // record (not nested under assignments), and unlike assignments carry no
-    // isCurrentAssignment-style flag, so there is no "current" one to filter on.
-    public static final String HRMS_CURRENT_JURISDICTION_JSONPATH =
-            "$.Employees[0].jurisdictions[*].boundary";
+    // ALL of the employee's jurisdiction ENTRIES (boundary code + the hierarchy it belongs to) —
+    // an employee can hold multiple jurisdiction entries (e.g. different roles at different
+    // boundary levels), so every one is collected, not just the first. The hierarchy travels
+    // alongside each boundary code (rather than being read separately/discarded) because
+    // BoundaryUtil must query boundary-service's subtree search on the SAME hierarchy the code was
+    // defined under — a row's hierarchy need not be the one PGR complaints are filed against on
+    // every tenant. Used for jurisdiction-scoped employee search (EmployeeJurisdictionScopeService).
+    // Jurisdictions live at the top level of the HRMS employee record (not nested under
+    // assignments), and unlike assignments carry no isCurrentAssignment-style flag, so there is no
+    // "current" one to filter on.
+    public static final String HRMS_CURRENT_JURISDICTIONS_JSONPATH = "$.Employees[0].jurisdictions[*]";
+
+    // Every root node boundary-service hands back for a boundary-relationships subtree search
+    // (codes=<code>&includeChildren=true) — each root's own `children[]` nests recursively. See
+    // BoundaryUtil#fetchDescendants.
+    public static final String BOUNDARY_RELATIONSHIP_ROOTS_JSONPATH = "$.TenantBoundary[0].boundary[*]";
 
     public static final String HRMS_DESIGNATION_JSONPATH = "$.Employees.*.assignments[?(@.department=='{department}')].designation";
 
