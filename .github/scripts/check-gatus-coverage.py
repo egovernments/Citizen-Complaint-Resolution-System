@@ -373,11 +373,25 @@ def k8s_targets(root: pathlib.Path):
 def k8s_targets_from_docs(docs):
     """Collapse Services by selector; see k8s_targets. Split out to be testable."""
     by_selector = {}
+    ext_aliases = {}   # ExternalName Service name -> the in-cluster service it points at
     for doc in docs:
         if doc.get("kind") != "Service":
             continue
         name = doc["metadata"]["name"]
-        sel = doc.get("spec", {}).get("selector") or {}
+        spec = doc.get("spec", {}) or {}
+        # An ExternalName Service is a cross-namespace ALIAS, not a workload of its own:
+        # `grafana` in `digit` with externalName grafana.monitoring.svc... is the SAME
+        # grafana the monitoring-ns Service fronts (#1613's aliases let the digit-ns
+        # Gatus pod reach the monitoring stack #1618 deploys). Resolve it to its target,
+        # exactly as compose network aliases are resolved -- NOT as a selector-less
+        # Service, which would key by (ns, name) and collide with the real target,
+        # misreading one workload reached two ways as two workloads sharing a name.
+        if spec.get("type") == "ExternalName":
+            target = str(spec.get("externalName", "")).split(".")[0]
+            if target:
+                ext_aliases[name] = target
+            continue
+        sel = spec.get("selector") or {}
         # Namespace is part of the identity: two Services in different namespaces with
         # the same selector front DIFFERENT workloads, and collapsing them would mask
         # one. Everything is in `digit` today, which is exactly when this looks safe.
@@ -425,6 +439,14 @@ def k8s_targets_from_docs(docs):
                 )
             out[n] = canonical
             owner[n] = gkey
+
+    # Resolve ExternalName aliases against the real services, the same way compose
+    # network aliases resolve to their backing service. An alias whose name equals
+    # its target (grafana -> grafana.monitoring) collapses onto the real service's
+    # own entry (a no-op), so it no longer reads as a second workload; an alias with
+    # a distinct name points a Gatus check at the target it fronts.
+    for alias, target in ext_aliases.items():
+        out[alias] = out.get(target, target)
     return out
 
 
@@ -746,6 +768,38 @@ def self_test() -> int:
     except GuardError as e:
         if "duplicate" not in str(e).lower() or "different workloads" in str(e).lower():
             failures.append(f"duplicate manifest got the cross-workload message: {e}")
+
+    # 3f. an ExternalName Service is a cross-namespace ALIAS, not a second workload.
+    #     grafana(digit) -> grafana.monitoring.svc must collapse onto the real
+    #     grafana(monitoring) rather than collide by name -- the #1613-alias vs
+    #     #1618-real-Service case. Without this it raised "front different workloads".
+    collapsed = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if collapsed != {"grafana": "grafana"}:
+        failures.append(f"ExternalName alias did not collapse onto its target: {collapsed}")
+    #     ...an alias whose NAME differs from its target still resolves to (covers) it.
+    aliased = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "graf", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if aliased != {"graf": "grafana"}:
+        failures.append(f"ExternalName alias to a distinct target resolved wrong: {aliased}")
+    #     ...and two DIFFERENT real workloads sharing a name (neither an ExternalName)
+    #     must STILL collide -- the fix must not have blunted the cross-workload guard.
+    try:
+        k8s_targets_from_docs([
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-a"},
+             "spec": {"selector": {"app": "a"}}},
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-b"},
+             "spec": {"selector": {"app": "b"}}},
+        ])
+        failures.append("ExternalName handling blunted the real cross-workload collision guard")
+    except GuardError:
+        pass
 
     # 4. a dangling check is caught
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:
