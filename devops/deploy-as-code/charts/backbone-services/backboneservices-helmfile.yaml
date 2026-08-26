@@ -360,6 +360,11 @@ releases:
     # forged login.
     - novu:
         secrets:
+          # Preferred: name a Secret created out of band (see env-secrets.yaml),
+          # so no signing key is committed to this public repo and the chart
+          # skips the three values below. `index`/`default` so an env-secrets
+          # without this key still renders (missingkey=error otherwise).
+          existingSecret: {{ index .Values.secrets.novu "existingSecret" | default "" | quote }}
           jwtSecret: {{ .Values.secrets.novu.jwtSecret | quote }}
           storeEncryptionKey: {{ .Values.secrets.novu.storeEncryptionKey | quote }}
           novuSecretKey: {{ .Values.secrets.novu.novuSecretKey | quote }}

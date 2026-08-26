@@ -117,6 +117,7 @@ plugins:
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
           ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
+          ["/localization/messages/cache-bust"]=true,
           ["/tenant/v1/tenant/_search"]=true,
           ["/egov-location/boundarys"]=true,
           ["/egov-location/boundarys/boundariesByBndryTypeNameAndHierarchyTypeName"]=true,

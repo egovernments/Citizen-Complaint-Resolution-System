@@ -59,6 +59,7 @@ environments:
 {{-     fail "`monitoring:` in charts/environments/env.yaml must be a map of component toggles (metrics/logs/dashboards/traces/probes/kafkaUi), not a single value" }}
 {{-   end }}
 {{-   $mon = .Values.monitoring }}
+{{- end }}
 {{- /* Grafana admin credentials (#1650).
 
        Two mutually exclusive paths, resolved once here so the release block
