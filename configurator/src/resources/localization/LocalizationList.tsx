@@ -2,13 +2,19 @@ import { useListContext } from 'ra-core';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAvailableLocales, type LocaleOption } from '@/hooks/useAvailableLocales';
+import { AVAILABLE_LOCALES } from '@/providers/i18nProvider';
 import { LocalizationToolbar } from './LocalizationToolbar';
 
 const truncate = (s: unknown) => {
   const t = String(s ?? '');
   return t.length > 80 ? t.slice(0, 80) + '…' : t;
 };
+
+// The configurator's supported locales — one editable column each.
+const LOCALE_CODES = AVAILABLE_LOCALES.map((l) => l.locale);
+const LOCALE_NAME: Record<string, string> = Object.fromEntries(
+  AVAILABLE_LOCALES.map((l) => [l.locale, l.name]),
+);
 
 // Sentinel for the "all modules" option — Radix Select disallows an empty value.
 const ALL_MODULES = '__all__';
@@ -56,16 +62,14 @@ function ModuleSelector() {
 }
 
 /** One editable column per locale (msg__<locale>) so every language can be
- *  edited inline, side by side. `locales` is the tenant's own configured set
- *  (StateInfo.languages via useAvailableLocales) — NOT the configurator app's
- *  own UI-chrome locales, which is a different, unrelated list (see #1712). */
-function MultiLocaleDatagrid({ locales }: { locales: LocaleOption[] }) {
+ *  edited inline, side by side. */
+function MultiLocaleDatagrid() {
   const columns: DigitColumn[] = [
     { source: 'code', label: 'app.fields.code' },
     { source: 'module', label: 'app.fields.module' },
-    ...locales.map(({ value: loc, label }) => ({
+    ...LOCALE_CODES.map((loc) => ({
       source: `msg__${loc}`,
-      label,
+      label: `${LOCALE_NAME[loc]} (${loc})`,
       editable: true as const,
       render: (record: Record<string, unknown>) => {
         const v = record[`msg__${loc}`];
@@ -81,13 +85,6 @@ function MultiLocaleDatagrid({ locales }: { locales: LocaleOption[] }) {
 }
 
 export function LocalizationList() {
-  // Tenant-scoped locales (StateInfo.languages) — same source every other
-  // localization screen (Create/Edit/Toolbar/BulkImport) already uses. Was
-  // previously the configurator app's own fixed UI-chrome locale list, which
-  // showed languages the tenant never configured and the wrong regional code
-  // for shared languages (e.g. pt_BR instead of a tenant's pt_PT) — #1712.
-  const { locales } = useAvailableLocales();
-  const localeCodes = locales.map((l) => l.value);
   return (
     <DigitList
       title="app.resources.localization"
@@ -97,10 +94,10 @@ export function LocalizationList() {
       // Permanent filter so the FIRST getList already pivots every locale.
       // LocalesFilterSetup used to apply this in a debounced effect, so the
       // badge flashed en_IN-only (~7900) then the union (~14000).
-      filter={{ locales: localeCodes }}
+      filter={{ locales: LOCALE_CODES }}
     >
       <ModuleSelector />
-      <MultiLocaleDatagrid locales={locales} />
+      <MultiLocaleDatagrid />
     </DigitList>
   );
 }
