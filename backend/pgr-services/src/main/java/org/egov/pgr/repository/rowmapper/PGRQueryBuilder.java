@@ -192,6 +192,17 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, localities);
         }
 
+        // Server-resolved jurisdiction scope (see EmployeeJurisdictionScopeService) — never bound
+        // from the request body. Exact match against ads.locality only; ANDs with the client-bound
+        // `locality` clause above rather than replacing it, so an employee's own explicit locality
+        // filter and their jurisdiction scope simply intersect.
+        Set<String> jurisdictionBoundaryCodes = criteria.getJurisdictionBoundaryCodes();
+        if (!CollectionUtils.isEmpty(jurisdictionBoundaryCodes)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ads.locality IN (").append(createQuery(jurisdictionBoundaryCodes)).append(")");
+            addToPreparedStatement(preparedStmtList, jurisdictionBoundaryCodes);
+        }
+
         if (criteria.getFromDate() != null) {
             addClauseIfRequired(preparedStmtList, builder);
 

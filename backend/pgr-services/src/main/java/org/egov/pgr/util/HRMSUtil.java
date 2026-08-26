@@ -7,17 +7,21 @@ import org.apache.commons.lang3.StringUtils;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.ServiceRequestRepository;
+import org.egov.pgr.web.models.EmployeeJurisdiction;
 import org.egov.pgr.web.models.RequestInfoWrapper;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_CURRENT_DEPARTMENT_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_CURRENT_JURISDICTIONS_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_REPORTING_TO_JSONPATH;
 
 @Component
@@ -91,6 +95,51 @@ public class HRMSUtil {
             return departments == null ? Collections.emptyList() : departments;
         } catch (Exception e) {
             log.warn("Failed to parse HRMS current-assignment department for uuid: {}", uuid, e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * ALL of the employee's jurisdiction entries (boundary code + hierarchy) — an employee can
+     * hold multiple jurisdiction entries (e.g. different roles at different boundary levels), so
+     * every one is returned, not just the first. Mirrors {@link #getCurrentDepartment}, which
+     * likewise gathers every current-assignment department rather than a single value.
+     * Jurisdictions carry no isCurrentAssignment-style flag, so there's no "current" one to filter
+     * on. The hierarchy travels with each code — see {@link EmployeeJurisdiction} — because
+     * expanding a code to its descendant subtree (BoundaryUtil) must query boundary-service on
+     * that same hierarchy. Returns an empty list (never throws) if the employee has no
+     * jurisdiction, or the HRMS response can't be parsed.
+     */
+    public List<EmployeeJurisdiction> getCurrentJurisdictions(String uuid, RequestInfo requestInfo, String tenantId) {
+
+        StringBuilder url = getHRMSURI(Collections.singletonList(uuid), tenantId);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+
+        if (res == null) {
+            log.warn("HRMS returned null for employee UUID: {}", uuid);
+            return Collections.emptyList();
+        }
+
+        try {
+            List<Map<String, Object>> rows = JsonPath.read(res, HRMS_CURRENT_JURISDICTIONS_JSONPATH);
+            if (CollectionUtils.isEmpty(rows))
+                return Collections.emptyList();
+
+            List<EmployeeJurisdiction> jurisdictions = new ArrayList<>();
+            for (Map<String, Object> row : rows) {
+                Object boundary = row.get("boundary");
+                Object hierarchy = row.get("hierarchy");
+                // A row missing either field can't be expanded or matched — skip it rather than
+                // guess, same as HRMS returning no jurisdictions at all.
+                if (boundary != null && hierarchy != null)
+                    jurisdictions.add(new EmployeeJurisdiction(hierarchy.toString(), boundary.toString()));
+            }
+            return jurisdictions;
+        } catch (Exception e) {
+            log.warn("Failed to parse HRMS jurisdiction for uuid: {}", uuid, e);
             return Collections.emptyList();
         }
     }

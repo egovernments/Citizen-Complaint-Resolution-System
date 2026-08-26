@@ -1240,6 +1240,28 @@ public class NotificationService {
         } catch (Exception e) {
             log.warn("Failed building base placeholders for {}", service.getServiceRequestId(), e);
         }
+        // {website} comes from egov.ui.app.host.map (per-tenant), same source as the rate/reopen
+        // links — isolated so a tenant missing from the map doesn't blank the placeholders above.
+        try {
+            String website = getUiAppHost(tenantId);
+            if (StringUtils.hasText(website)) put(v, "website", website);
+        } catch (Exception e) {
+            log.warn("Could not resolve {website} for {}: {}", service.getServiceRequestId(), e.getMessage());
+        }
+        // {rate_link} / {reopen_link}: same deep links enrichEventRequest() attaches as
+        // ActionItems on the in-app event, exposed here so a NotificationTemplate can also
+        // embed them directly (e.g. in a WhatsApp/SMS body). Blank (not literal placeholder)
+        // when the tenant has no egov.ui.app.host.map entry.
+        try {
+            String website = getUiAppHost(tenantId);
+            if (StringUtils.hasText(website)) {
+                String id = service.getServiceRequestId();
+                put(v, "rate_link", website + config.getRateLink().replace("{application-id}", id));
+                put(v, "reopen_link", website + config.getReopenLink().replace("{application-id}", id));
+            }
+        } catch (Exception e) {
+            log.warn("Could not resolve {rate_link}/{reopen_link} for {}: {}", service.getServiceRequestId(), e.getMessage());
+        }
         // Localized enrichment (nicer complaint_type / status labels). Isolated: a localization
         // outage must NOT abort the base placeholders above.
         try {

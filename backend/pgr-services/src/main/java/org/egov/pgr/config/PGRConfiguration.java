@@ -199,6 +199,13 @@ public class PGRConfiguration {
     @Value("${pgr.department.scope.roles:}")
     private List<String> departmentScopeRoles;
 
+    // Jurisdiction scope — opt-in: an employee is restricted to complaints filed in their own HRMS
+    // jurisdiction (boundary) in complaint search/count/plainSearch ONLY if they hold one of these
+    // roles. Empty (default) = no employee role is jurisdiction-scoped, preserving pre-existing
+    // unrestricted search behavior on upgrade. See EmployeeJurisdictionScopeService.
+    @Value("${pgr.jurisdiction.scope.roles:}")
+    private List<String> jurisdictionScopeRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;
@@ -253,6 +260,18 @@ public class PGRConfiguration {
 
     @Value("${egov.boundary.search.url}")
     private String boundarySearchEndpoint;
+
+    // Boundary-relationships subtree search — expands a jurisdiction boundary code (whatever
+    // level it sits at) to every descendant code beneath it, so a jurisdiction mapped above leaf
+    // level still matches complaints filed at leaf granularity. See BoundaryUtil.
+    @Value("${egov.boundary.relationship.search.url:/boundary-service/boundary-relationships/_search}")
+    private String boundaryRelationshipSearchEndpoint;
+
+    // TTL for BoundaryUtil's per-boundary-code subtree cache. The boundary tree changes rarely, so
+    // this can be long-lived; kept separate from analyticsConfigCacheTtlMs/notificationMdmsCacheTtlMs
+    // since it caches a different kind of thing (a boundary-service subtree, not an MDMS master).
+    @Value("${pgr.jurisdiction.subtree.cache.ttl.ms:300000}")
+    private Long jurisdictionSubtreeCacheTtlMs;
 
     @Value("${pgr.kafka.create.inbox.topic}")
     private String inboxCreateTopic;
