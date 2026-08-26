@@ -27,20 +27,26 @@ As part of the **EKS upgrade to Kubernetes v1.33**, the following updates and en
 
 ## Deploy IAM policy
 
-The identity that runs `terraform apply` needs a broad set of permissions — it
-creates a VPC, EKS, RDS, S3, and IAM roles. The complete, minimal policy that is
-known to deploy this module is checked in at
-[`deploy-iam-policy.json`](./deploy-iam-policy.json); attach it to the deploy
-user/role before the first apply.
+The identity that runs `terraform apply`/`destroy` needs a broad set of
+permissions — it creates and destroys a VPC, EKS, RDS, S3, IAM roles, and the
+cluster's load balancers. The complete policy covering the **entire create +
+destroy lifecycle** is checked in at
+[`deploy-iam-policy.json`](./deploy-iam-policy.json); create it once as a managed
+policy and attach it to the deploy user/role before the first apply. It fits in a
+single managed policy (well under the 6144-char limit), so it is a one-time
+attach — nothing to add piecemeal later.
 
-**EKS secrets encryption is off by default** (`create_kms_key = false`,
-`encryption_config = null` on the `eks` module) so the module deploys under a
-least-privileged deploy identity. etcd is still encrypted at rest with the EKS
-AWS-managed key. To use a **customer-managed CMK** instead, drop those two lines
-and additionally grant the deploy identity: `kms:DescribeKey`, `kms:GetKeyPolicy`,
-`kms:PutKeyPolicy`, `kms:GetKeyRotationStatus`, `kms:EnableKeyRotation`,
-`kms:CreateGrant`, and `kms:ScheduleKeyDeletion` (the last for `destroy`).
-Without those, the CMK path fails the apply mid-way with an AccessDenied.
+It deliberately includes a few actions that the DEFAULT deploy does not exercise,
+so you never have to come back for them:
+
+- **`elasticloadbalancing:*` (describe/delete)** — to clean up the ingress ELB on
+  teardown (see the Teardown section).
+- **KMS key administration** (`kms:DescribeKey`, `PutKeyPolicy`, `CreateGrant`,
+  `ScheduleKeyDeletion`, …) — only used if you opt into a customer-managed CMK.
+  **EKS secrets encryption is off by default** (`create_kms_key = false`,
+  `encryption_config = null` on the `eks` module); etcd is still encrypted at
+  rest with the EKS AWS-managed key. To use a customer CMK, just drop those two
+  lines — the policy already grants what that path needs.
 
 ## Teardown — delete Kubernetes LoadBalancers FIRST
 
