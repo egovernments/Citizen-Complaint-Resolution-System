@@ -80,10 +80,15 @@ services:
       retries: 5
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
+    #
+    # 384M OOM-looped on bomet (#1824): the blocklist replay at startup, not
+    # retention, is the driver — ~380 MB to replay 13,364 compacted blocks
+    # from a 6.3 GB store, before any query workload runs. 768M gives
+    # headroom over that rather than sitting right at the edge of it.
     deploy:
       resources:
         limits:
-          memory: 384M   # 24h retention, small blocks
+          memory: 768M
     networks:
       - egov-network
 
