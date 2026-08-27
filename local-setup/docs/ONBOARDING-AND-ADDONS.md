@@ -844,7 +844,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   WhatsApp specifics: Content templates must be authored and approved at the
   provider **first**, then synced to Content-SIDs (configurator UI or headless
   CLI). Full walkthrough:
-  [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  [`../../docs/novu-notifications/README.md`](../../docs/novu-notifications/README.md)
   (§5 covers templates → SIDs → test-send → drive a real complaint), with
   `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
   provider-onboarding runbook alongside it.
