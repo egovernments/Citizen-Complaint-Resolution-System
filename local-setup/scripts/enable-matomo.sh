@@ -172,9 +172,15 @@ step2() {
       v=$(head -c 48 /dev/urandom | base64 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24)
       if $DRY_RUN; then sub "would append $k=<generated> to $env"
       else printf '%s=%s\n' "$k" "$v" >> "$env"; ok "$k generated"; fi
-      # NOTE: a full ./deploy.sh stores these in OpenBao and rewrites them from
-      # there. Values written by this script are .env-only until then, which is
-      # fine — the deploy's lineinfile leaves an existing line alone.
+      # NOTE: a full ./deploy.sh stores these in OpenBao and rewrites .env from
+      # there — its lineinfile REPLACES the line, it does not leave it alone.
+      # (An earlier version of this comment claimed otherwise, and was wrong.)
+      # That would be destructive, because MariaDB bakes this password in at
+      # initialisation and only ALTER USER can change it, so the playbook now
+      # ADOPTS whatever is already here before it generates anything — see
+      # "Matomo — read credentials already present in .env" in
+      # playbook-deploy.yml. Values written by this script therefore survive the
+      # first ansible deploy and get imported into OpenBao rather than replaced.
     fi
   done
 
@@ -242,6 +248,12 @@ step4() {
   # generates it and stores it in OpenBao, and a second, different password
   # minted by this script would leave the two disagreeing about a credential
   # nobody can then look up.
+  #
+  # Matomo owns the password hash from install time, so ansible cannot recover
+  # what you use here. Put it into OpenBao yourself if this box will later be
+  # deployed with ansible — the playbook detects the situation and prints the
+  # exact command rather than fabricating a replacement:
+  #   bao kv put <secrets_path> matomo_admin_password=<the password>
   if [ -z "${MATOMO_ADMIN_PASSWORD:-}" ]; then
     fail "MATOMO_ADMIN_PASSWORD is not set — this is the one value you supply."
     sub "If this tenant has been deployed with ansible, take the stored one:"

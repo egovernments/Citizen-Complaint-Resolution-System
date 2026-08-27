@@ -104,6 +104,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.core.yml",
     LS / "docker-compose.tilt.yml",
     LS / "docker-compose.monitoring.yml",
+    LS / "docker-compose.matomo.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -144,6 +145,20 @@ EXEMPT = {
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
     "openbao": "deploy-time secrets store: no runtime dependents, binds 127.0.0.1 only",
     "gatus": "the monitor itself",
+    # Analytics (#1254). Same reasoning as the observability plumbing above and
+    # deliberately the same verdict: Gatus is the DIGIT serving-stack dashboard,
+    # and Matomo being down costs a report, not a complaint. The portal's
+    # analytics shim fails soft by design — nothing citizen-facing depends on
+    # any of these three.
+    #
+    # They are also profile-gated (`profiles: [matomo]`) and off by default, so
+    # an unconditional Gatus check would be red on every deployment that has not
+    # opted in — the exact false-alarm pattern that teaches operators to ignore
+    # the board. If Matomo monitoring is ever wanted it needs the same
+    # per-tier toggle the observability entries note.
+    "matomo": "analytics, not a serving dependency: profile-gated and off by default; the portal's shim fails soft when it is absent",
+    "matomo-db": "analytics store: no published port, reachable only inside egov-network, and read by nothing the platform serves",
+    "matomo-archiver": "no port: runs console core:archive on a loop, exposes no listener",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created

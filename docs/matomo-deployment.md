@@ -218,6 +218,27 @@ It asks for **two 30 Gi volumes** (Matomo + MariaDB), publishes at
 `https://<domain>/matomo` with the deployment's existing `<domain>-tls-certs`,
 and runs in the `backbone` namespace.
 
+### Known gap: visitor IPs on this tier
+
+Matomo here records the **ingress controller's** address, not the visitor's, so
+geolocation reports a single point and IP anonymisation has little left to
+anonymise. The compose tier does not have this problem — it sets
+`General.proxy_client_headers`, which is verified there.
+
+Fixing it is a cluster-topology decision, and both options are wrong in the
+other's environment:
+
+| Option | Correct when | Cost |
+|---|---|---|
+| `controller.config.use-forwarded-headers: "true"` | behind a trusted L7 load balancer that sets `X-Forwarded-For` | applies to **every** ingress in the cluster; where pods are reachable without passing the LB, a client can forge its own source IP |
+| `controller.service.externalTrafficPolicy: Local` | you want the true source IP without trusting any header | drops traffic on nodes running no controller pod; needs an LB that health-checks node ports |
+
+> Note for anyone copying the eGov install note: it specifies
+> `nginx.ingress.kubernetes.io/use-forwarded-headers: "true"` as a per-Ingress
+> annotation. ingress-nginx implements `use-forwarded-headers` only as a
+> controller ConfigMap setting, so that annotation is **inert** — it looks like
+> the problem is solved and it is not. This chart no longer sets it.
+
 ### 3. Know what you are running: `bitnamilegacy`
 
 Every image this chart and its mariadb subchart pin is **404 on Docker Hub

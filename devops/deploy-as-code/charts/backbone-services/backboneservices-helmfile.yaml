@@ -13,6 +13,28 @@ templates:
     namespace: backbone
     missingFileHandler: Warn
 
+{{- /* Matomo credentials (#1254).
+
+       Read with `index` and a dict default rather than
+       `.Values.secrets.matomo.password`: helmfile renders with missingkey=error,
+       so the dotted form is a hard parse failure against any env-secrets.yaml
+       written before these keys existed — and that breaks EVERY release in this
+       file, not just matomo. Same reasoning, and same idiom, as the Grafana
+       block in charts/monitoring/monitoring-helmfile.yaml.
+
+       Nothing is validated here on purpose. A `fail` at this level fires on
+       every render of backbone-services even when matomo is `installed: false`;
+       the check belongs where it only runs when the release does, which is
+       matomo/templates/validate-credentials.yaml. */}}
+{{- $msec := dict }}
+{{- if and (hasKey .Values "secrets") (hasKey .Values.secrets "matomo") }}
+{{-   $msec = index .Values.secrets "matomo" }}
+{{- end }}
+{{- $matomoExistingSecret := index $msec "existingSecret" | default "" }}
+{{- $matomoPassword := index $msec "password" | default "" }}
+{{- $matomoDbPassword := index $msec "dbPassword" | default "" }}
+{{- $matomoDbRootPassword := index $msec "dbRootPassword" | default "" }}
+
 releases:
 # Listed first so the seed dump lands before core-services' Flyway init
 # containers run. Ships disabled — see db-seed/values.yaml for why loading a
@@ -379,8 +401,14 @@ releases:
     # `matomo:5-apache` image has no such support and needs a human through an
     # 8-step browser wizard — so the k8s tier is the one place Matomo really is
     # installed by the deploy. matomoSkipInstall stays false for that reason.
-    - matomoUsername: admin
-      matomoPassword: {{ .Values.secrets.matomo.password | quote }}
+    # existingSecret is the preferred path: a Kubernetes Secret carrying a
+    # matomo-password key, created out of band (sealed-secret / external-secret /
+    # OpenBao-synced), so nothing credential-shaped is committed. When it is set
+    # the chart reads the Secret and matomoPassword is ignored; when it is not,
+    # the chart's validate-credentials.yaml refuses an empty or placeholder one.
+    - existingSecret: {{ $matomoExistingSecret | quote }}
+      matomoUsername: admin
+      matomoPassword: {{ $matomoPassword | quote }}
       matomoEmail: {{ printf "admin@%s" .Values.global.domain | quote }}
       matomoWebsiteName: "DIGIT Portal"
       matomoWebsiteHost: {{ printf "https://%s" .Values.global.domain | quote }}
@@ -391,8 +419,8 @@ releases:
         image:
           repository: bitnamilegacy/mariadb
         auth:
-          rootPassword: {{ .Values.secrets.matomo.dbRootPassword | quote }}
-          password: {{ .Values.secrets.matomo.dbPassword | quote }}
+          rootPassword: {{ $matomoDbRootPassword | quote }}
+          password: {{ $matomoDbPassword | quote }}
         metrics:
           image:
             repository: bitnamilegacy/mysqld-exporter
@@ -410,18 +438,38 @@ releases:
     # `backbone` namespace (the *default template above), where that secret
     # already lives — so unlike novu this needs no cluster-issuer annotation.
     #
-    # use-forwarded-headers is what makes visitor IPs real: without it every
-    # visit is attributed to the ingress controller's address, geolocation
-    # reports one city, and the "anonymise visitor IP" privacy setting has
-    # nothing meaningful left to anonymise. Same concern the compose tier
-    # handles with proxy_client_headers.
+    # VISITOR IPs ARE NOT SOLVED HERE, and this is the honest version of a
+    # comment that previously claimed otherwise. An earlier revision set
+    #   nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    # as a per-Ingress annotation. ingress-nginx does not implement that as an
+    # annotation at all — `use-forwarded-headers` is a CONTROLLER ConfigMap
+    # setting — so it was inert, and the visitor-IP guarantee it appeared to
+    # give was never in effect. Removed rather than left as decoration.
+    #
+    # Getting real visitor IPs on this tier is a cluster-topology decision that
+    # cannot be made from inside one release, because both options are wrong in
+    # the other's environment:
+    #
+    #   controller.config.use-forwarded-headers: "true"
+    #       correct behind a trusted L7 load balancer that sets
+    #       X-Forwarded-For. Applied on the shared ingress-nginx release it
+    #       affects EVERY ingress in the cluster, and where pods are reachable
+    #       without passing the LB it lets a client forge its own source IP.
+    #
+    #   controller.service.externalTrafficPolicy: Local
+    #       preserves the true source IP without trusting any header, at the
+    #       cost of dropping traffic on nodes that run no controller pod, and
+    #       needs an LB that health-checks node ports.
+    #
+    # Until ops chooses, Matomo on this tier records the controller's address:
+    # geolocation reports a single point and IP anonymisation has little left to
+    # anonymise. The compose tier is unaffected — it sets
+    # General.proxy_client_headers, which IS verified there.
     - ingress:
         enabled: true
         hostname: {{ .Values.global.domain | quote }}
         path: /matomo
         pathType: Prefix
-        annotations:
-          nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
         # `tls: true` on its own is enough: this chart derives the secret name
         # as <hostname>-tls-certs, which is already the name every other ingress
         # here uses. Adding an extraTls entry for the same host — the obvious

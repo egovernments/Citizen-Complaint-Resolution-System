@@ -2041,6 +2041,65 @@
     #
     # Gated on enable_matomo so tenants that never turn analytics on do not
     # accumulate secrets they have no use for.
+    # ── Adopt credentials that are already on the box ────────────────────
+    #
+    # scripts/enable-matomo.sh can bring Matomo up on a running box before this
+    # tenant has ever been deployed with ansible. It writes its own generated
+    # MATOMO_DB_PASSWORD into .env, and MariaDB bakes that value in at
+    # initialisation — a password only changeable with ALTER USER, never by
+    # editing .env.
+    #
+    # So generating a fresh one here would be silently destructive: the
+    # lineinfile below REPLACES the .env line, OpenBao would be handed a
+    # password the database has never heard of, and the next `docker compose up`
+    # would leave Matomo unable to reach its own database. Read what is already
+    # there and adopt it, so the deploy imports the incremental install's
+    # credentials rather than overwriting them.
+    - name: "Matomo — read credentials already present in .env"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.env"
+      register: matomo_env_slurp
+      failed_when: false
+      when: enable_matomo | default(false)
+      no_log: true
+
+    # Whether Matomo has ALREADY been installed on this box matters for the
+    # admin password specifically: once installed, Matomo owns the password hash
+    # and a value generated here can never be the real one. Storing it anyway
+    # would put an unusable credential in OpenBao under a name that promises the
+    # opposite.
+    - name: "Matomo — detect a pre-existing install"
+      ansible.builtin.shell:
+        cmd: |
+          if docker exec digit-matomo grep -q '^\[PluginsInstalled\]' \
+               /var/www/html/config/config.ini.php 2>/dev/null; then
+            echo INSTALLED
+          else
+            echo FRESH
+          fi
+        executable: /bin/bash
+      register: matomo_preexisting
+      changed_when: false
+      failed_when: false
+      when:
+        - enable_matomo | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "Matomo — extract the on-box credentials"
+      ansible.builtin.set_fact:
+        _matomo_env_db_pw: >-
+          {{ ((matomo_env_slurp.content | default('') | b64decode)
+              | regex_findall('^MATOMO_DB_PASSWORD=(.*)$', multiline=True)
+              | first | default('', true)) | trim }}
+        _matomo_env_db_root_pw: >-
+          {{ ((matomo_env_slurp.content | default('') | b64decode)
+              | regex_findall('^MATOMO_DB_ROOT_PASSWORD=(.*)$', multiline=True)
+              | first | default('', true)) | trim }}
+        _matomo_already_installed: >-
+          {{ 'INSTALLED' in (matomo_preexisting.stdout | default('')) }}
+      when: enable_matomo | default(false)
+      no_log: true
+
     - name: "OpenBao — re-read tenant secrets (Grafana may have bumped the version)"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
@@ -2056,11 +2115,18 @@
     # deploy and discard it whenever OpenBao already had a value.
     - name: "Matomo — resolve database and admin passwords (generate if absent)"
       ansible.builtin.set_fact:
+        # Order matters and is the whole point: OpenBao first (the record of
+        # truth once a tenant has been deployed), then whatever is ALREADY in
+        # .env (an enable-matomo.sh install, whose value MariaDB has baked in),
+        # and only then a fresh one. `or` short-circuits, so the generator runs
+        # only when both sources are genuinely empty.
         matomo_db_pw: >-
           {{ bao_secrets_matomo.json.data.data.matomo_db_password | default('', true)
+             or _matomo_env_db_pw | default('', true)
              or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
         matomo_db_root_pw: >-
           {{ bao_secrets_matomo.json.data.data.matomo_db_root_password | default('', true)
+             or _matomo_env_db_root_pw | default('', true)
              or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
         # The Matomo SUPERUSER password, for the headless install. Deliberately
         # generated rather than taken from host_vars: the browser wizard would
@@ -2070,9 +2136,18 @@
         #   bao kv get -field=matomo_admin_password {{ secrets_path }}
         # Read ONLY at first install; changing it later means changing it in
         # Matomo, since Matomo owns the hash from that point on.
+        #
+        # There is deliberately no .env fallback here: enable-matomo.sh takes the
+        # admin password from the operator and never writes it down, so there is
+        # nothing on the box to adopt. If Matomo is already installed and OpenBao
+        # has no record, a generated value would be a fabrication — Matomo owns
+        # the hash from install time — so it is left EMPTY and the persist below
+        # skips it, rather than storing something that cannot work under a name
+        # that says it can.
         matomo_admin_pw: >-
           {{ bao_secrets_matomo.json.data.data.matomo_admin_password | default('', true)
-             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+             or ('' if (_matomo_already_installed | default(false) | bool)
+                 else lookup('password', '/dev/null length=24 chars=ascii_letters,digits')) }}
       when: enable_matomo | default(false)
       no_log: true
 
@@ -2092,8 +2167,10 @@
           {{ {'options': {'cas': bao_secrets_matomo.json.data.metadata.version | int},
               'data': bao_secrets_matomo.json.data.data
                       | combine({'matomo_db_password': matomo_db_pw,
-                                 'matomo_db_root_password': matomo_db_root_pw,
-                                 'matomo_admin_password': matomo_admin_pw})} }}
+                                 'matomo_db_root_password': matomo_db_root_pw})
+                      | combine({'matomo_admin_password': matomo_admin_pw}
+                                if (matomo_admin_pw | default('', true) | length > 0)
+                                else {})} }}
         status_code: [200]
       when:
         - enable_matomo | default(false)
@@ -2112,6 +2189,19 @@
     # why rotating them is a documented procedure (ALTER USER inside matomo-db,
     # then `console config:set` inside matomo) rather than an edit here: Matomo
     # keeps its own copy in config/config.ini.php from the moment it installs.
+    - name: "Matomo — warn when the admin password is not recoverable"
+      ansible.builtin.debug:
+        msg: >-
+          Matomo is already installed on this box but OpenBao holds no
+          matomo_admin_password — it was installed out of band (probably
+          scripts/enable-matomo.sh). Nothing here can recover it. Import the one
+          you used so it is not lost:
+          bao kv put {{ secrets_path }} matomo_admin_password=<the password>
+      when:
+        - enable_matomo | default(false)
+        - _matomo_already_installed | default(false) | bool
+        - (matomo_admin_pw | default('', true)) | length == 0
+
     # Only the DATABASE passwords reach .env — compose interpolates those. The
     # admin password stays in OpenBao and is passed to the install task as a
     # task-scoped env var, so it never lands on disk on the target.
@@ -5020,18 +5110,44 @@
           if docker exec digit-matomo grep -q '^\[PluginsInstalled\]' "$CFG" 2>/dev/null; then
             echo "NOCHANGE matomo already installed"; exit 0
           fi
-          docker cp {{ digit_dir }}/matomo-bootstrap.php digit-matomo:/tmp/matomo-bootstrap.php
+          docker cp {{ digit_dir }}/matomo-bootstrap.php digit-matomo:/tmp/matomo-bootstrap.php || {
+            echo "FAILED could not copy the bootstrap script into the container"; exit 1
+          }
+          OUT=""
           for pass in 1 2; do
             echo "--- bootstrap pass $pass ---"
-            docker exec -u www-data \
-              -e MB_LOGIN="$MB_LOGIN" \
-              -e MB_PASSWORD="$MB_PASSWORD" \
-              -e MB_EMAIL="$MB_EMAIL" \
-              -e MB_SITE_NAME="$MB_SITE_NAME" \
-              -e MB_SITE_URL="$MB_SITE_URL" \
-              -e MB_TRUSTED_HOSTS="$MB_TRUSTED_HOSTS" \
-              digit-matomo php /tmp/matomo-bootstrap.php
+            # Capture AND echo: the rc has to be checked (a PHP fatal exits 1 and
+            # would otherwise be swallowed by the loop, leaving the task's status
+            # to whatever pass 2 happened to do), and the operator still needs to
+            # see what it said.
+            if ! P=$(docker exec -u www-data \
+                  -e MB_LOGIN="$MB_LOGIN" \
+                  -e MB_PASSWORD="$MB_PASSWORD" \
+                  -e MB_EMAIL="$MB_EMAIL" \
+                  -e MB_SITE_NAME="$MB_SITE_NAME" \
+                  -e MB_SITE_URL="$MB_SITE_URL" \
+                  -e MB_TRUSTED_HOSTS="$MB_TRUSTED_HOSTS" \
+                  digit-matomo php /tmp/matomo-bootstrap.php 2>&1); then
+              echo "$P"
+              echo "FAILED bootstrap pass $pass returned non-zero"; exit 1
+            fi
+            echo "$P"
+            OUT="$OUT$P"
           done
+
+          # Prove it rather than assume it. The two facts that together mean a
+          # usable install, and that a half-finished run does NOT produce:
+          #   [PluginsInstalled] -- the bundled plugins are in, so the tracker's
+          #                         tables exist (without them every hit is a 400)
+          #   SITE_ID=           -- a measurable exists to send hits to
+          if ! docker exec digit-matomo grep -q '^\[PluginsInstalled\]' "$CFG" 2>/dev/null; then
+            echo "FAILED bootstrap finished but config.ini.php has no [PluginsInstalled]"; exit 1
+          fi
+          case "$OUT" in
+            *SITE_ID=*) : ;;
+            *) echo "FAILED bootstrap finished but no site was created"; exit 1 ;;
+          esac
+          echo "INSTALLED matomo"
         executable: /bin/bash
       environment:
         MB_LOGIN: "{{ matomo_admin_user | default('admin') }}"
@@ -5050,8 +5166,16 @@
         MB_TRUSTED_HOSTS: "127.0.0.1:{{ upstream_matomo_port | default(18081) }},matomo"
       register: matomo_bootstrap
       changed_when: "'INSTALLED' in matomo_bootstrap.stdout"
-      failed_when: false
-      no_log: true
+      # A failed install used to be reported as a successful deploy: the task
+      # carried `failed_when: false` and the status branch below treated
+      # "not SKIP and not NOCHANGE" as installed, so a PHP fatal, a failed copy
+      # or a database that never came up all ended with a green deploy and no
+      # analytics. Fail on the rc instead; the script exits 0 for the two
+      # legitimate no-op paths (container not running, already installed).
+      failed_when: matomo_bootstrap.rc != 0
+      # NOT no_log. The password reaches the container through `environment:`,
+      # which ansible does not print, and the script never echoes it — while
+      # no_log would hide the one thing an operator needs when this fails.
       when:
         - enable_matomo | default(false)
         - matomo_auto_install | default(true)
@@ -5059,6 +5183,10 @@
 
     - name: "Matomo — show install result"
       ansible.builtin.debug:
+        # Each branch is keyed to a marker the script actually prints. The old
+        # version reached "INSTALLED" by elimination, which is how a failure
+        # came to announce success; there is now an explicit final branch for
+        # "none of the above" rather than an optimistic default.
         msg: >-
           Matomo: {{
             'container not running — install skipped'
@@ -5069,7 +5197,9 @@
                         ' — password: bao kv get -field=matomo_admin_password ' ~ secrets_path ~
                         ' (tunnel: ssh -L ' ~ (upstream_matomo_port | default(18081)) ~
                         ':127.0.0.1:' ~ (upstream_matomo_port | default(18081)) ~ ' ' ~
-                        inventory_hostname ~ ')'))
+                        inventory_hostname ~ ')'
+                        if ('INSTALLED' in (matomo_bootstrap.stdout | default('')))
+                        else 'state UNKNOWN — the bootstrap printed no recognised marker'))
           }}
       when:
         - enable_matomo | default(false)
