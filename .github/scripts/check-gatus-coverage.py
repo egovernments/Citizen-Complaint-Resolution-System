@@ -385,13 +385,46 @@ def k8s_targets(root: pathlib.Path):
     return k8s_targets_from_docs(docs)
 
 
+def _external_name_alias(spec):
+    """(service, namespace) an in-cluster ExternalName points at, else None.
+
+    A `type: ExternalName` Service has no selector and fronts no workload of its
+    own -- it is a DNS alias. local-setup/k8s/tools/gatus.yaml uses five of them
+    (#1613) so that Gatus, which runs in `digit`, can reach the observability
+    stack in `monitoring` by the SAME bare hostnames the compose tier uses; that
+    textual identity between the two endpoint catalogues is a thing this guard
+    itself requires.
+
+    Only an alias whose target is in-cluster counts. An ExternalName pointing at
+    something outside the cluster (`api.example.com`) really is its own distinct
+    target and must keep being treated as one.
+    """
+    if (spec.get("type") or "") != "ExternalName":
+        return None
+    host = (spec.get("externalName") or "").rstrip(".")
+    for suffix in (".svc.cluster.local", ".svc"):
+        if host.endswith(suffix):
+            parts = host[: -len(suffix)].split(".")
+            if len(parts) == 2 and all(parts):
+                return parts[0], parts[1]
+    return None
+
+
 def k8s_targets_from_docs(docs):
     """Collapse Services by selector; see k8s_targets. Split out to be testable."""
     by_selector = {}
+    aliases = []          # (alias name, target service name)
     for doc in docs:
         if doc.get("kind") != "Service":
             continue
         name = doc["metadata"]["name"]
+        spec = doc.get("spec", {}) or {}
+        # Resolve in-cluster ExternalName aliases AFTER the real Services, so an
+        # alias declared before its target still lands on the right canonical.
+        alias = _external_name_alias(spec)
+        if alias is not None:
+            aliases.append((name, alias[0]))
+            continue
         sel = doc.get("spec", {}).get("selector") or {}
         # Namespace is part of the identity: two Services in different namespaces with
         # the same selector front DIFFERENT workloads, and collapsing them would mask
@@ -440,6 +473,24 @@ def k8s_targets_from_docs(docs):
                 )
             out[n] = canonical
             owner[n] = gkey
+
+    # Aliases last. An alias to a Service this file also declares resolves to the
+    # SAME canonical target, so `grafana` in digit and `grafana` in monitoring
+    # stop looking like two workloads fighting over one name -- which is what
+    # they were reported as, wrongly, since #1613 added the aliases. The guard's
+    # "Rename one" advice is actively harmful here: renaming either would break
+    # the bare-hostname resolution the alias exists to provide.
+    for alias_name, target in aliases:
+        if alias_name in out and out[alias_name] != out.get(target, target):
+            # A real Service and an alias to something ELSE both claim this name.
+            # That is a genuine collision and still cannot be represented.
+            raise GuardError(
+                f"k8s Service {alias_name!r} is declared both as a real Service "
+                f"(target {out[alias_name]!r}) and as an ExternalName alias of "
+                f"{target!r}. A Gatus URL names only the host, so this map cannot "
+                f"tell them apart. Rename one."
+            )
+        out[alias_name] = out.get(target, target)
     return out
 
 
@@ -726,6 +777,39 @@ def self_test() -> int:
     ])
     if grouped != {"kafka": "kafka", "redpanda": "kafka", "redis": "redis"}:
         failures.append(f"selector grouping wrong: {grouped}")
+
+    # 3c-bis. in-cluster ExternalName aliases are aliases, not rival workloads
+    #         (#1613 put five of them in digit pointing at monitoring; the guard
+    #         called that a name collision and told operators to rename one,
+    #         which would have broken the bare-hostname resolution they exist for).
+    aliased = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName",
+                  "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if aliased != {"grafana": "grafana"}:
+        failures.append(f"in-cluster ExternalName alias not collapsed onto its target: {aliased}")
+
+    # ...and the alias must not need its target declared first.
+    reordered = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName",
+                  "externalName": "grafana.monitoring.svc.cluster.local"}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+    ])
+    if reordered != {"grafana": "grafana"}:
+        failures.append(f"ExternalName alias declared before its target broke: {reordered}")
+
+    # ...while an ExternalName pointing OUTSIDE the cluster is still its own target.
+    external = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "payments", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "api.example.com"}},
+    ])
+    if external != {"payments": "payments"}:
+        failures.append(f"off-cluster ExternalName wrongly treated as an alias: {external}")
 
     # 3d. the grouping key is namespace-aware, but the returned map is keyed by bare
     #     Service name (a Gatus host has no namespace). Two same-named Services in
