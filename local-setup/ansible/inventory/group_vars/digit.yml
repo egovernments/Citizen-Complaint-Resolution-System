@@ -76,6 +76,24 @@ enable_search_stack: false
 # nothing same-origin to talk to. preflight.py refuses the combination.
 enable_matomo: false
 
+# Install Matomo headlessly during the deploy instead of leaving its 8-step
+# browser wizard for a human (#1254). Default ON, because "packaged" ought to
+# mean the deploy finishes with something that tracks.
+#
+# The superuser password is generated once and stored in OpenBao — never in
+# host_vars — and read back with:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Better than a wizard-typed password on every axis: unique per tenant, never
+# on disk in the inventory, and recoverable.
+#
+# Set false to keep the manual wizard (tunnel to 127.0.0.1:18081 and click
+# through it). Nothing else changes; the rest of the packaging is identical.
+matomo_auto_install: true
+matomo_admin_user: admin
+# matomo_admin_email defaults to admin@<domain>, matomo_site_name to <domain>,
+# and the site URL to this deployment's own origin. Override in host_vars if
+# the reports should carry different labels.
+
 # ──────────────────────────────────────────────────────────────────────
 # How much observability to deploy (#1657)
 # ──────────────────────────────────────────────────────────────────────

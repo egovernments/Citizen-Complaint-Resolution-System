@@ -11,8 +11,8 @@
 #   1. Preflight — stack up, overlay present, ports free, disk headroom
 #   2. Credentials — MATOMO_* lines in .env, generated once if absent
 #   3. Start — `docker compose --profile matomo up -d` for the three services
-#   4. Install gate — Matomo's browser installer is the ONE manual step; print
-#      the exact tunnel command and stop here until it has been done
+#   4. Install — bootstrap Matomo headlessly (two passes; no browser wizard).
+#      Needs MATOMO_ADMIN_PASSWORD exported; that is the only human input.
 #   5. Settings — trusted_hosts + proxy_client_headers (post-install only)
 #   6. Verify — endpoints answer, archiver alive, and say what is still missing
 #
@@ -35,7 +35,7 @@
 #   ./enable-matomo.sh --list          # print the ordered steps + exit
 #   ./enable-matomo.sh --help          # full help
 #   ./enable-matomo.sh --only step6    # just re-run the verification
-#   ./enable-matomo.sh --from step5    # resume after finishing the installer
+#   MATOMO_ADMIN_PASSWORD=... ./enable-matomo.sh   # the one required input
 #   ./enable-matomo.sh --dry-run       # print what it WOULD do, run nothing
 #
 # Turning it back OFF: set enable_matomo: false and re-deploy. The playbook
@@ -58,7 +58,7 @@ declare -A STEP_DESC=(
   [step1]="Preflight — stack up, overlay present, port free, disk headroom"
   [step2]="Credentials — MATOMO_* in .env (generated once, never rotated here)"
   [step3]="Start — docker compose --profile matomo up -d"
-  [step4]="Install gate — the one manual step (Matomo's browser installer)"
+  [step4]="Install — headless bootstrap, no browser wizard"
   [step5]="Settings — trusted_hosts + proxy_client_headers"
   [step6]="Verify — endpoints, archiver, nginx blocks"
 )
@@ -209,38 +209,95 @@ step3() {
   die "matomo did not answer on 127.0.0.1:$MATOMO_PORT within 120s — check: docker logs digit-matomo"
 }
 
-# Is Matomo installed? NOT `test -f config.ini.php`: the image writes that on
-# first boot with only [General] installation_first_accessed in it. The
-# [database] section is what the installer's database step adds.
+# Is Matomo installed?
+#
+# Two wrong answers to avoid. `test -f config.ini.php` is wrong because the
+# image writes that file on first boot carrying only
+# [General] installation_first_accessed. And `[database]` is wrong TOO once
+# step4 exists: step4 seeds [database] itself, before installing, so testing it
+# reports "installed" for an instance with no schema at all — a false positive
+# that makes the install look successful and leaves nothing tracking.
+#
+# [PluginsInstalled] is the honest signal: it is written only after the bundled
+# plugins have actually been installed, by this bootstrap or by the wizard.
 matomo_installed() {
-  docker exec digit-matomo grep -q '^\[database\]' /var/www/html/config/config.ini.php 2>/dev/null
+  docker exec digit-matomo grep -q '^\[PluginsInstalled\]' /var/www/html/config/config.ini.php 2>/dev/null
 }
 
 step4() {
   hdr 4 "${STEP_DESC[step4]}"
-  if $DRY_RUN; then sub "would check whether matomo is installed"; return 0; fi
-  if matomo_installed; then ok "matomo is installed"; return 0; fi
+  if $DRY_RUN; then sub "would install matomo headlessly (two bootstrap passes)"; return 0; fi
+  if matomo_installed; then ok "matomo is already installed"; return 0; fi
 
-  # This gate is deliberate. Matomo's installer creates the SUPERUSER account,
-  # and nothing automated should be choosing that password — so the official
-  # matomo:5-apache image has no unattended-install path and we do not fake one.
-  # (The k8s tier's Bitnami chart does install unattended; see
-  # devops/deploy-as-code/charts/backbone-services/matomo.)
-  warn "Matomo is not installed yet — this is the one manual step."
-  echo
-  sub "1. From your workstation, tunnel to it (it is bound to loopback on purpose):"
-  sub "     ssh -L $MATOMO_PORT:127.0.0.1:$MATOMO_PORT <this-host>"
-  sub "2. Open http://127.0.0.1:$MATOMO_PORT/ and work through the 8 steps."
-  sub "     Database fields arrive pre-filled from the container — leave them."
-  sub "     Website URL: clear the field FIRST; it is pre-filled with 'https://'"
-  sub "     and typing over it produces 'http://hosthttps://'."
-  sub "     Step 7 (JavaScript Tracking Code): SKIP IT. Do not copy the snippet."
-  sub "     The portal's analytics shim already does that job plus PII scrubbing;"
-  sub "     pasting it creates a second tracker and doubles every count."
-  sub "     Note the Site ID (normally 1) — you need it in the configurator."
-  sub "3. Then re-run:  $0 --from step5"
-  echo
-  exit 3
+  local script="$DIGIT_HOME/matomo-bootstrap.php"
+  if [ ! -f "$script" ]; then
+    fail "matomo-bootstrap.php is not on this box."
+    sub "The deploy copies it. Either run ./deploy.sh <tenant> once, or copy it:"
+    sub "  scp local-setup/ansible/files/matomo-bootstrap.php <host>:$DIGIT_HOME/"
+    exit 1
+  fi
+
+  # The ONE input a human supplies, same convention as enable-notifications.sh
+  # and its TWILIO_* variables. Not generated here on purpose: a full deploy
+  # generates it and stores it in OpenBao, and a second, different password
+  # minted by this script would leave the two disagreeing about a credential
+  # nobody can then look up.
+  if [ -z "${MATOMO_ADMIN_PASSWORD:-}" ]; then
+    fail "MATOMO_ADMIN_PASSWORD is not set — this is the one value you supply."
+    sub "If this tenant has been deployed with ansible, take the stored one:"
+    sub "  bao kv get -field=matomo_admin_password <secrets_path>"
+    sub "Otherwise choose one, and re-run:"
+    sub "  MATOMO_ADMIN_PASSWORD='...' $0 --from step4"
+    exit 1
+  fi
+
+  # Matomo cannot bootstrap its own Environment without database credentials,
+  # so [database] has to exist before the script runs. The wizard writes it from
+  # its form; here it comes from the same value already in .env. Appended only
+  # when absent — Matomo owns this file from the moment it installs.
+  local dbpw
+  dbpw=$(grep '^MATOMO_DB_PASSWORD=' "$DIGIT_HOME/.env" | head -1 | cut -d= -f2-)
+  if [ -z "$dbpw" ]; then
+    die "MATOMO_DB_PASSWORD missing from $DIGIT_HOME/.env — run step2 first"
+  fi
+  if docker exec digit-matomo grep -q '^\[database\]' /var/www/html/config/config.ini.php 2>/dev/null; then
+    ok "[database] already in config.ini.php"
+  else
+    printf '\n[database]\nhost = "matomo-db"\nusername = "matomo"\npassword = "%s"\ndbname = "matomo"\ntables_prefix = "matomo_"\ncharset = "utf8mb4"\n' \
+      "$dbpw" | docker exec -u www-data -i digit-matomo sh -c 'cat >> /var/www/html/config/config.ini.php'
+    ok "seeded [database] into config.ini.php"
+  fi
+
+  docker cp "$script" digit-matomo:/tmp/matomo-bootstrap.php >/dev/null
+
+  # TWO passes, and it is required — see the header of matomo-bootstrap.php.
+  # Pass 1 builds the schema against an empty database; pass 2 runs in a fresh
+  # process whose plugin manager can see that schema, installs the bundled
+  # plugins and creates the site. One pass leaves an install that looks complete
+  # and answers HTTP 400 on every tracking request.
+  #
+  # -u www-data: as root it leaves root-owned files under tmp/ and config/, and
+  # the next www-data run dies on an unwritable cache directory.
+  local pass
+  for pass in 1 2; do
+    sub "bootstrap pass $pass"
+    docker exec -u www-data \
+      -e MB_LOGIN="${MATOMO_ADMIN_USER:-admin}" \
+      -e MB_PASSWORD="$MATOMO_ADMIN_PASSWORD" \
+      -e MB_EMAIL="${MATOMO_ADMIN_EMAIL:-admin@matomo.local}" \
+      -e MB_SITE_NAME="${MATOMO_SITE_NAME:-DIGIT Portal}" \
+      -e MB_SITE_URL="${MATOMO_SITE_URL:-http://localhost}" \
+      -e MB_TRUSTED_HOSTS="127.0.0.1:$MATOMO_PORT,matomo" \
+      digit-matomo php /tmp/matomo-bootstrap.php 2>&1 | sed 's/^/          /'
+  done
+
+  if matomo_installed; then
+    ok "matomo installed — sign in as ${MATOMO_ADMIN_USER:-admin}"
+    sub "over a tunnel: ssh -L $MATOMO_PORT:127.0.0.1:$MATOMO_PORT <this-host>"
+  else
+    fail "bootstrap ran but matomo still reports uninstalled — check the output above"
+    exit 1
+  fi
 }
 
 step5() {

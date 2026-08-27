@@ -2054,7 +2054,7 @@
     # `or`, not `ternary` — see the Grafana note above: Jinja evaluates every
     # filter argument eagerly, so ternary would run the generator on every
     # deploy and discard it whenever OpenBao already had a value.
-    - name: "OpenBao — resolve Matomo database passwords (generate if absent)"
+    - name: "Matomo — resolve database and admin passwords (generate if absent)"
       ansible.builtin.set_fact:
         matomo_db_pw: >-
           {{ bao_secrets_matomo.json.data.data.matomo_db_password | default('', true)
@@ -2062,12 +2062,23 @@
         matomo_db_root_pw: >-
           {{ bao_secrets_matomo.json.data.data.matomo_db_root_password | default('', true)
              or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+        # The Matomo SUPERUSER password, for the headless install. Deliberately
+        # generated rather than taken from host_vars: the browser wizard would
+        # have a human type one, and a generated-and-stored secret is better on
+        # every axis — unique per tenant, never in a (gitignored, but still
+        # on-disk) inventory file, and recoverable with
+        #   bao kv get -field=matomo_admin_password {{ secrets_path }}
+        # Read ONLY at first install; changing it later means changing it in
+        # Matomo, since Matomo owns the hash from that point on.
+        matomo_admin_pw: >-
+          {{ bao_secrets_matomo.json.data.data.matomo_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
       when: enable_matomo | default(false)
       no_log: true
 
     # ONE write for both keys. Two cas-guarded writes in a row cannot work: the
     # first bumps the version the second is guarded against.
-    - name: "OpenBao — persist generated Matomo database passwords"
+    - name: "OpenBao — persist generated Matomo passwords"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         method: POST
@@ -2081,12 +2092,14 @@
           {{ {'options': {'cas': bao_secrets_matomo.json.data.metadata.version | int},
               'data': bao_secrets_matomo.json.data.data
                       | combine({'matomo_db_password': matomo_db_pw,
-                                 'matomo_db_root_password': matomo_db_root_pw})} }}
+                                 'matomo_db_root_password': matomo_db_root_pw,
+                                 'matomo_admin_password': matomo_admin_pw})} }}
         status_code: [200]
       when:
         - enable_matomo | default(false)
         - (bao_secrets_matomo.json.data.data.matomo_db_password | default('', true)) | length == 0
           or (bao_secrets_matomo.json.data.data.matomo_db_root_password | default('', true)) | length == 0
+          or (bao_secrets_matomo.json.data.data.matomo_admin_password | default('', true)) | length == 0
       no_log: true
 
     # Written with lineinfile rather than into the TENANT SECRETS block so that
@@ -2099,6 +2112,9 @@
     # why rotating them is a documented procedure (ALTER USER inside matomo-db,
     # then `console config:set` inside matomo) rather than an edit here: Matomo
     # keeps its own copy in config/config.ini.php from the moment it installs.
+    # Only the DATABASE passwords reach .env — compose interpolates those. The
+    # admin password stays in OpenBao and is passed to the install task as a
+    # task-scoped env var, so it never lands on disk on the target.
     - name: "OpenBao — put the stored Matomo database passwords into .env"
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
@@ -4904,6 +4920,161 @@
                            ~ secrets_path ~
                            ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
 
+    # ==================== Matomo headless install (#1254) ====================
+    #
+    # Removes the last manual step from the compose tier. Matomo's 8-step
+    # browser wizard creates the schema, installs the bundled plugins, and makes
+    # the superuser and the first site; files/matomo-bootstrap.php does the same
+    # through Matomo's own API, so `./deploy.sh <tenant>` lands a Matomo that is
+    # already tracking rather than one waiting on a human with an SSH tunnel.
+    #
+    # The superuser password is NOT chosen here and never appears in the
+    # inventory: generated once and kept in OpenBao, exactly like the Grafana
+    # admin password, and read back with
+    #   bao kv get -field=matomo_admin_password <secrets_path>
+    # That is strictly better than a wizard-typed one — unique per tenant, never
+    # written to a file, and recoverable.
+    #
+    # Set `matomo_auto_install: false` to keep the browser wizard instead.
+    - name: "Matomo — copy the bootstrap script to the target"
+      ansible.builtin.copy:
+        src: files/matomo-bootstrap.php
+        dest: "{{ digit_dir }}/matomo-bootstrap.php"
+        mode: "0644"
+      when:
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+        - ansible_system != "Darwin"
+
+    # Matomo cannot bootstrap its own Environment without database credentials,
+    # so [database] must exist before the script runs. The wizard writes it from
+    # its form; here it comes from the same values already in .env.
+    #
+    # Rendered to a FILE rather than appended from a heredoc inside the shell
+    # task: a heredoc nested in a YAML block scalar carries the block's
+    # indentation into config.ini.php, and an indented INI section is not worth
+    # gambling on.
+    - name: "Matomo — render the [database] snippet"
+      ansible.builtin.copy:
+        dest: "{{ digit_dir }}/matomo-db.ini"
+        mode: "0600"
+        content: |
+
+          [database]
+          host = "matomo-db"
+          username = "matomo"
+          password = "{{ matomo_db_pw | default('') }}"
+          dbname = "matomo"
+          tables_prefix = "matomo_"
+          charset = "utf8mb4"
+      no_log: true
+      when:
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+        - ansible_system != "Darwin"
+
+    # Appended only when absent — never rewritten. Matomo owns this file from
+    # the moment it installs, and a second [database] section would shadow the
+    # first in ways that depend on parser order.
+    - name: "Matomo — seed [database] into config.ini.php (once)"
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+            echo "SKIP matomo container not running"; exit 0
+          fi
+          CFG=/var/www/html/config/config.ini.php
+          if docker exec digit-matomo grep -q '^\[database\]' "$CFG" 2>/dev/null; then
+            echo "NOCHANGE [database] already present"; exit 0
+          fi
+          docker exec -u www-data -i digit-matomo sh -c "cat >> $CFG" < {{ digit_dir }}/matomo-db.ini
+          echo "seeded [database]"
+        executable: /bin/bash
+      register: matomo_db_seed
+      changed_when: "'seeded' in matomo_db_seed.stdout"
+      failed_when: false
+      when:
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+        - ansible_system != "Darwin"
+
+    # Two passes, and this is required rather than defensive habit — see the
+    # header of files/matomo-bootstrap.php. Pass 1 lays down the schema against
+    # an empty database; pass 2 starts a FRESH process whose plugin manager can
+    # actually see that schema, installs the bundled plugins and creates the
+    # site. Done in one pass you get an install that looks complete — schema,
+    # superuser, site, working UI — and returns HTTP 400 on every tracking
+    # request, because no plugin table was ever created.
+    #
+    # -u www-data: as root it leaves root-owned files under tmp/ and config/,
+    # and the next www-data run dies with "the directory
+    # /var/www/html/tmp/cache/tracker/ is not writable".
+    - name: "Matomo — headless install (two passes)"
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+            echo "SKIP matomo container not running"; exit 0
+          fi
+          CFG=/var/www/html/config/config.ini.php
+          if docker exec digit-matomo grep -q '^\[PluginsInstalled\]' "$CFG" 2>/dev/null; then
+            echo "NOCHANGE matomo already installed"; exit 0
+          fi
+          docker cp {{ digit_dir }}/matomo-bootstrap.php digit-matomo:/tmp/matomo-bootstrap.php
+          for pass in 1 2; do
+            echo "--- bootstrap pass $pass ---"
+            docker exec -u www-data \
+              -e MB_LOGIN="$MB_LOGIN" \
+              -e MB_PASSWORD="$MB_PASSWORD" \
+              -e MB_EMAIL="$MB_EMAIL" \
+              -e MB_SITE_NAME="$MB_SITE_NAME" \
+              -e MB_SITE_URL="$MB_SITE_URL" \
+              -e MB_TRUSTED_HOSTS="$MB_TRUSTED_HOSTS" \
+              digit-matomo php /tmp/matomo-bootstrap.php
+          done
+        executable: /bin/bash
+      environment:
+        MB_LOGIN: "{{ matomo_admin_user | default('admin') }}"
+        MB_PASSWORD: "{{ matomo_admin_pw | default('') }}"
+        # Matomo validates this and rejects a dotless domain outright:
+        # "admin@localhost" fails, "admin@matomo.local" passes. Deployments do
+        # exist with domain: localhost, so fall back rather than fail the
+        # install on an address nobody will ever read mail at.
+        MB_EMAIL: >-
+          {{ matomo_admin_email
+             | default('admin@' ~ domain if '.' in domain else 'admin@matomo.local', true) }}
+        MB_SITE_NAME: "{{ matomo_site_name | default(domain) }}"
+        MB_SITE_URL: "{{ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain }}"
+        # The loopback origin an operator would reach the UI on, plus the
+        # in-network service name the archiver container calls.
+        MB_TRUSTED_HOSTS: "127.0.0.1:{{ upstream_matomo_port | default(18081) }},matomo"
+      register: matomo_bootstrap
+      changed_when: "'INSTALLED' in matomo_bootstrap.stdout"
+      failed_when: false
+      no_log: true
+      when:
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+        - ansible_system != "Darwin"
+
+    - name: "Matomo — show install result"
+      ansible.builtin.debug:
+        msg: >-
+          Matomo: {{
+            'container not running — install skipped'
+            if ('SKIP' in (matomo_bootstrap.stdout | default('')))
+            else ('already installed'
+                  if ('NOCHANGE' in (matomo_bootstrap.stdout | default('')))
+                  else ('INSTALLED. Sign in as ' ~ (matomo_admin_user | default('admin')) ~
+                        ' — password: bao kv get -field=matomo_admin_password ' ~ secrets_path ~
+                        ' (tunnel: ssh -L ' ~ (upstream_matomo_port | default(18081)) ~
+                        ':127.0.0.1:' ~ (upstream_matomo_port | default(18081)) ~ ' ' ~
+                        inventory_hostname ~ ')'))
+          }}
+      when:
+        - enable_matomo | default(false)
+        - matomo_auto_install | default(true)
+
     # ==================== Matomo post-install settings ====================
     #
     # Two General settings that Matomo cannot learn on its own and that the
@@ -4958,11 +5129,13 @@
             echo "SKIP matomo container not running"; exit 0
           fi
           # NOT `test -f "$CFG"`: the image writes config.ini.php on first boot
-          # with only `[General] installation_first_accessed`, so the file exists
-          # long before anyone has installed anything. The [database] section is
-          # what the installer's database step adds, so that is the real signal.
-          if ! docker exec digit-matomo grep -q '^\[database\]' "$CFG" 2>/dev/null; then
-            echo "SKIP matomo not installed yet (no [database] section in config.ini.php)"; exit 0
+          # carrying only `[General] installation_first_accessed`, so the file
+          # exists long before anything is installed. NOT `[database]` either —
+          # the install task above seeds that section BEFORE installing, so it
+          # would report installed for an instance with no schema.
+          # [PluginsInstalled] is written only once the bundled plugins are in.
+          if ! docker exec digit-matomo grep -q '^\[PluginsInstalled\]' "$CFG" 2>/dev/null; then
+            echo "SKIP matomo not installed yet (no [PluginsInstalled] in config.ini.php)"; exit 0
           fi
           CHANGED=0
           # The POSITIONAL 'Section.key[]=<json>' form, not --section/--key/--value.

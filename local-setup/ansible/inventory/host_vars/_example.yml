@@ -339,13 +339,17 @@ enable_search_stack: false
 # either half on its own. The admin UI is bound to 127.0.0.1 and is reached
 # over an SSH tunnel; only the two tracking endpoints are public.
 #
-# First deploy leaves Matomo uninstalled on purpose: its 8-step browser
-# installer creates the admin account, and no one else should choose that
-# password. The deploy prints the tunnel command; re-run it once you are done
-# so the proxy + trusted-host settings land.
+# The deploy INSTALLS Matomo for you (matomo_auto_install, default true) — no
+# browser wizard. The superuser password is generated and kept in OpenBao:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Reach the UI over a tunnel: ssh -L 18081:127.0.0.1:18081 <host>
 #
 # See docs/matomo-deployment.md for the full walkthrough.
 # enable_matomo: false
+# matomo_auto_install: true       # false = click through the wizard yourself
+# matomo_admin_user: admin        # the Matomo superuser login
+# matomo_admin_email: ""          # defaults to admin@<domain>
+# matomo_site_name: ""            # defaults to <domain>; the label on reports
 # matomo_archive_interval: 3600   # seconds between report-archiving passes
 # upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
 

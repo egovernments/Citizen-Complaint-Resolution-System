@@ -41,16 +41,16 @@ Two other things this is not:
 |---|---|---|
 | Where | `local-setup/` | `devops/deploy-as-code/` |
 | Switch | `enable_matomo: true` in `host_vars/<tenant>.yml` | `installed: true` on the `matomo` release |
-| Matomo install | **one manual browser step** | unattended, done by the chart |
+| Matomo install | unattended, by the deploy | unattended, by the chart |
 | Public surface | two tracking endpoints only | `/matomo` ingress |
 | Verified | yes — installed and tracked end to end | template-level only (see §Status) |
 
-The two tiers differ in one way that matters. The compose tier uses the
-**official** `matomo:5-apache` image, which has no unattended-install support,
-so a human walks the 8-step installer once. The k8s tier uses Bitnami's chart,
-which does install unattended from `matomoUsername` / `matomoPassword`. That is
-not an oversight in either direction — see §"Why the compose tier still has a
-manual step".
+Both tiers install Matomo without a human. They get there differently: the k8s
+tier uses Bitnami's chart, which installs from `matomoUsername` /
+`matomoPassword`; the compose tier uses the **official** `matomo:5-apache`
+image, which has no such support, so the deploy drives Matomo's own install API
+directly (`local-setup/ansible/files/matomo-bootstrap.php`). See §"How the
+headless install works" for why that script exists and what it does.
 
 ---
 
@@ -101,29 +101,37 @@ platform except the docker network.
 **Roughly 1 GB of RAM** for the three. On a 16 GB box with no swap that is a
 real allocation — which is why the default is off.
 
-### 2. Run the installer (the one manual step)
+### 2. Sign in
 
-The admin UI is on loopback deliberately. Tunnel to it:
+There is nothing to install — `./deploy.sh` already did it. The deploy prints:
+
+```
+Matomo: INSTALLED. Sign in as admin — password: bao kv get -field=matomo_admin_password <secrets_path>
+```
+
+The password is generated once and kept in OpenBao. It is never written to
+`host_vars`, and it is not something you choose — which is deliberate, and
+better than the wizard's typed password on every axis: unique per tenant, never
+on disk in the inventory, and recoverable at any time with that command.
+
+The admin UI is on loopback, so reach it through a tunnel:
 
 ```bash
 ssh -L 18081:127.0.0.1:18081 <your-digit-host>
+# then open http://127.0.0.1:18081/
 ```
 
-Open `http://127.0.0.1:18081/` and work through the eight steps.
+Note the **Site ID** (normally `1`) — you need it when pointing the portal at
+this instance.
 
-- **Database Setup** — the fields arrive pre-filled from the container. Leave
-  them exactly as they are.
-- **Superuser** — this is your Matomo admin login. You choose it; nothing
-  automated does.
-- **Set up a Website** — name it for the deployment, e.g. `DIGIT Portal`. Use
-  the portal's own origin as the URL.
-- **JavaScript Tracking Code** — **skip this screen. Do not copy the snippet.**
-  Note the **Site ID** (normally `1`) and move on.
-- **Timezone** — report days are cut on this boundary and changing it later
-  breaks report continuity. Pick the zone you will read reports in.
+> Matomo's dashboard will offer to show you a **JavaScript tracking code**.
+> Ignore it. The portal's analytics shim already sends these events, with PII
+> scrubbing on top; pasting Matomo's snippet creates a second, independent
+> tracker that doubles every count and bypasses every guard.
 
-Then re-run the deploy (or `enable-matomo.sh --from step5`) so the post-install
-settings land. It is idempotent.
+Prefer to click through the wizard yourself? Set `matomo_auto_install: false`.
+Everything else about the packaging is identical; you get an uninstalled Matomo
+on loopback and the eight steps.
 
 ### 3. Adding it to a box that is already running
 
@@ -131,16 +139,24 @@ If you would rather not re-run a full deploy, there is an incremental path,
 matching `enable-dashboard.sh` and `enable-notifications.sh`:
 
 ```bash
-# on the box
-local-setup/scripts/enable-matomo.sh            # all steps
+# on the box — MATOMO_ADMIN_PASSWORD is the one value you supply
+MATOMO_ADMIN_PASSWORD='...' local-setup/scripts/enable-matomo.sh
 local-setup/scripts/enable-matomo.sh --list     # what it will do
 local-setup/scripts/enable-matomo.sh --dry-run  # change nothing
 local-setup/scripts/enable-matomo.sh --only step6   # just verify
 ```
 
-It preflights, generates the credentials, starts the three containers, stops at
-the install gate with the exact instructions, applies the post-install settings,
-and verifies.
+It preflights, generates the database credentials, starts the three containers,
+installs Matomo headlessly, applies the post-install settings, and verifies.
+
+`MATOMO_ADMIN_PASSWORD` is required rather than generated — same convention as
+`enable-notifications.sh` and its `TWILIO_*` variables. If ansible has already
+deployed this tenant, use the password it stored, so the two do not disagree
+about a credential nobody can then look up:
+
+```bash
+bao kv get -field=matomo_admin_password <secrets_path>
+```
 
 It deliberately **does not touch the nginx vhost.**
 `/etc/nginx/sites-enabled/<site>` is generated by ansible, so hand-edits there
@@ -342,34 +358,74 @@ Also note the throttle: reports for today are recomputed at most every 900
 seconds, so an archiving run that reports `Processed 0 archives` immediately
 after another one is behaving correctly, not failing.
 
-**`config.ini.php` exists before Matomo is installed.** The image writes it on
-first boot containing only `[General] installation_first_accessed`. Anything
-testing "is Matomo installed?" must look for the `[database]` section, which is
-what the installer's database step adds — not for the file.
+**"Is Matomo installed?" has two wrong answers and one right one.** The image
+writes `config.ini.php` on first boot containing only
+`[General] installation_first_accessed`, so testing for the *file* is wrong. And
+testing for the `[database]` section is wrong too once the deploy exists, since
+the deploy seeds that section *before* installing — it would report "installed"
+for an instance with no schema at all, which is a false positive that makes a
+failed install look successful. `[PluginsInstalled]` is the honest signal: it is
+written only once the bundled plugins are actually in.
+
+**Matomo rejects an email address with no dot in the domain.** `admin@localhost`
+fails validation outright; `admin@matomo.local` passes. This matters because the
+admin email defaults to `admin@<domain>`, and deployments with
+`domain: localhost` do exist — the deploy falls back rather than failing the
+whole install on an address nobody will read mail at.
 
 **The installer's Website URL field is pre-filled with `https://`.** Typing over
 it produces `http://hosthttps://`. Clear the field completely first.
 
 ---
 
-## Why the compose tier still has a manual step
+## How the headless install works
 
-Matomo's installer creates the **superuser account**, and nothing automated
-should be choosing that password. The official `matomo:5-apache` image offers no
-unattended-install path, and Matomo 5's console has no `core:create-superuser`
-either — verified against the running image's `console list`. Scripting the
-installer's HTTP steps is possible and deliberately not done: it is brittle
-across versions, and the thing it would automate is precisely the thing an
-operator should own.
+Matomo ships no unattended installer for the official image, and Matomo 5's
+console has no `core:create-superuser` — checked against the running image's
+`console list`. But its wizard is thin: `plugins/Installation/Controller.php`
+comes down to a handful of API calls. `local-setup/ansible/files/matomo-bootstrap.php`
+makes those calls directly. It drives Matomo's own code rather than scraping its
+forms, so there are no nonces or HTML to break on an upgrade.
 
-Everything *else* is packaged: containers, credentials, the reverse proxy,
-report archiving, post-install settings, teardown, and an incremental path onto
-a running box.
+The deploy runs it **twice**, and that is required rather than defensive:
 
-The k8s tier does install unattended because Bitnami's image supports it and the
-password comes from the SOPS-covered secrets file rather than from a default.
+| Pass | What it does |
+|---|---|
+| 1 | creates the schema, the superuser and `trusted_hosts`; **defers** the site |
+| 2 | installs the bundled plugins, runs component updates, creates the site |
 
----
+The reason is process-scoped state. `Environment->init()` builds the plugin
+manager's view of the world at startup, and on pass 1 that happens against an
+empty database — so `installLoadedPlugins()` later in the same process sees a
+stale view and silently does nothing. A second process, starting against the
+schema pass 1 laid down, gets it right.
+
+Three things about this were learned the hard way and are worth keeping:
+
+**Plugin installation is a separate step from creating the schema, and it is
+the one that is easy to miss entirely** — because in a browser install it is not
+part of the wizard at all. `FrontController::init()` calls
+`installLoadedPlugins()` on *every request*, so the web installer gets it for
+free. A CLI script never goes through `FrontController`. Skip it and you get an
+install that looks completely finished — schema, superuser, site, working UI,
+successful login — that answers **HTTP 400 on every tracking request**, because
+the tracker touches `matomo_custom_dimensions` and no plugin table was ever
+created. `DbHelper::createTables()` creates core tables only.
+
+**It must run as `www-data`.** As root it leaves root-owned files under `tmp/`
+and `config/`, and the next `www-data` run dies with *the directory
+`/var/www/html/tmp/cache/tracker/` is not writable*. The console warns about
+this if you ever run it as root; the warning is worth heeding.
+
+**`console core:update` is not needed alongside it.** Measured: pass 2's own
+component update covers the same ground and the result tracks. It is harmless if
+you run it, but it is not load-bearing.
+
+The superuser password is generated once and stored in OpenBao, exactly like the
+Grafana admin password, and read back with
+`bao kv get -field=matomo_admin_password <secrets_path>`. That is a better
+answer than a wizard-typed password rather than a compromise: unique per tenant,
+never on disk in the inventory, and recoverable.
 
 ## Turning it off, and removing the data
 
@@ -415,6 +471,11 @@ through a real nginx proxy:
   computed `nb_visits` / `nb_uniq_visitors` rows
 - **the post-install `config:set` task applies**, is idempotent on re-run (no
   duplicate array entries), and repairs a setting that has been removed
+- **the headless install works from an empty volume** — schema, 68 plugins, 78
+  component updates, superuser and site, with no browser involved; the resulting
+  instance accepts a tracking hit (`200`, action stored) and the generated
+  superuser genuinely authenticates (login `302`, dashboard `200`, no bounce
+  back to the login form). Re-running it is a no-op
 - `yamllint`, `ansible-lint` (0 failures, 0 warnings, production profile) and
   `ansible-playbook --syntax-check` all pass
 - `preflight.py --self-test`: 34/34, including three new Matomo cases
@@ -426,6 +487,13 @@ through a real nginx proxy:
 check does not gate the tracker, and archiving succeeds with an untrusted
 `--url`. Both settings are kept as cheap insurance, but the comments in the code
 now say what was measured rather than repeating the folklore. See §Traps.
+
+**One earlier conclusion reversed.** This work first shipped with the browser
+wizard as a deliberate manual step, on the reasoning that an operator should
+choose the admin password. That was wrong twice over: Matomo's installer is only
+a handful of API calls, so headless is achievable; and a generated password held
+in OpenBao is better than a typed one, not a compromise — which is exactly the
+pattern this repo already uses for Grafana.
 
 **Not verified — no cluster was available:** everything about the Helm tier
 beyond rendering. The chart lints and templates; it has not been applied, so the

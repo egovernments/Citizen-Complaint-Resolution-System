@@ -470,10 +470,12 @@ want soon:
 - `observability_level` — `metrics`, `logs` or `traces` (the default, meaning
   everything). Lowering it deploys fewer monitoring containers.
 - `enable_matomo` — self-hosted web analytics for the portal. Three more
-  containers, about 1 GB. Standing it up sends nothing anywhere: pointing the
-  portal at it is a separate MDMS step, so collection turns on and off without
-  a redeploy. Pair it with `nginx_features.matomo`. There is a turn-key
-  installer, `scripts/enable-matomo.sh`, and a full walkthrough in
+  containers, about 1 GB. The deploy installs Matomo for you — no browser
+  wizard — and stores the generated admin password in OpenBao. Standing it up
+  sends nothing anywhere: pointing the portal at it is a separate MDMS step, so
+  collection turns on and off without a redeploy. Pair it with
+  `nginx_features.matomo`. There is a turn-key installer,
+  `scripts/enable-matomo.sh`, and a full walkthrough in
   [`docs/matomo-deployment.md`](../docs/matomo-deployment.md).
 - `run_ci_tests` — runs the Postman and Playwright suites at the end of every
   deploy. Adds 5–10 minutes.
