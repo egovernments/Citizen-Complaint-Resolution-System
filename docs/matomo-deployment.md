@@ -220,6 +220,10 @@ and runs in the `backbone` namespace.
 
 ### Known gap: visitor IPs on this tier
 
+> Tracked as **#1904**. Split out of this work because it is not a Matomo
+> problem — nothing sets source-IP handling on the shared ingress-nginx
+> controller, so every Ingress in the cluster has the same blind spot.
+
 Matomo here records the **ingress controller's** address, not the visitor's, so
 geolocation reports a single point and IP anonymisation has little left to
 anonymise. The compose tier does not have this problem — it sets

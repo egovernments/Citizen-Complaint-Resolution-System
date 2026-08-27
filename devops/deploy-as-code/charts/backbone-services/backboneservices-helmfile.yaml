@@ -461,6 +461,10 @@ releases:
     #       cost of dropping traffic on nodes that run no controller pod, and
     #       needs an LB that health-checks node ports.
     #
+    # Tracked as #1904, split out because it is not a Matomo problem: nothing
+    # sets source-IP handling on this controller at all, so every Ingress in the
+    # cluster has the same blind spot.
+    #
     # Until ops chooses, Matomo on this tier records the controller's address:
     # geolocation reports a single point and IP anonymisation has little left to
     # anonymise. The compose tier is unaffected — it sets
