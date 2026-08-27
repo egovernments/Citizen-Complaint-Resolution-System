@@ -1,5 +1,7 @@
 # Dashboard configuration
 
+Dashboard with [40 default KPIs](../../ansible/nairobi-mdms/mdms/dss/KpiDefinition.json) is visible to SUPERVISOR, GRO, DGRO, and SUPERUSER out of the box.
+
 ## What ships by default on a fresh `tenant_bootstrap`
 
 | MDMS record | What it is |
