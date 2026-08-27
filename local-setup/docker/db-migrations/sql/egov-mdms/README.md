@@ -67,9 +67,12 @@ egovernments/CCRS#1252, reported unresolved on the issue.
 
 The migration, in one transaction:
 
-1. deactivates duplicate active records per tenant, keeping the most recently
-   modified, so the re-key cannot collide on `(tenantid, schemacode,
-   uniqueidentifier)`;
+1. deactivates duplicate active records per tenant — preferring a `code`-bearing
+   row, then the most recently modified — so the re-key cannot collide on
+   `(tenantid, schemacode, uniqueidentifier)`. Ranking only the `code`-less rows
+   would leave a tenant that already has a `DEFAULT` record plus a stale
+   value-keyed one with **two** active records, the stale one invalid against the
+   schema installed below;
 2. re-keys the survivor to `code = "DEFAULT"` (and `uniqueidentifier = DEFAULT`),
    **preserving** its configured `REOPENSLA`;
 3. rewrites the REOPENSLA-keyed schema **in place** to the code-keyed definition,

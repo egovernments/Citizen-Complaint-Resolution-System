@@ -117,8 +117,11 @@ back to `pgr.complain.idle.time`, so the configured value appears to be ignored.
 value-keyed schema: `x-unique` is `["REOPENSLA"]` and the data record has no
 `code`. Apply
 `local-setup/docker/db-migrations/sql/egov-mdms/V20260827000000__uiconstants_recode_from_reopensla_key.sql`
-— it is idempotent, needs no restart, and the README next to it has the
-apply-by-hand command for a box whose db-migrations image predates the file.
+— it is idempotent, and the README next to it has the apply-by-hand command for
+a box whose db-migrations image predates the file. If the first Save afterwards
+is still rejected — as an unknown property rather than `UNIQUE_KEY_UPDATE_ERR` —
+restart `mdms-backend`: whether mdms-v2 caches schema definitions in memory has
+not been verified here, and a cached pre-migration schema would reject `code`.
 
 **REOPEN never appears.** A non-positive `REOPENSLA` is treated as misconfigured
 and ignored (with a warning in the `pgr-services` log) rather than hiding REOPEN

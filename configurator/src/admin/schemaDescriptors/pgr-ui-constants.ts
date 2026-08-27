@@ -30,6 +30,12 @@ export const pgrUiConstantsDescriptor: SchemaDescriptor = {
       path: 'code',
       widget: 'text',
       required: true,
+      // Shown on create, hidden on edit. mdms-v2 rejects an update that changes
+      // an x-unique field, so leaving this editable would re-create the exact
+      // trap this record was re-keyed to escape: a Save that always 400s, just
+      // on a different field. The update path merges into `existing.data`
+      // (dataProvider.ts), so a hidden `code` still round-trips intact.
+      hidden: 'edit',
       label: 'Record key',
       help: 'Record key. The UI surfaces read a single constants record, so use DEFAULT unless you are deliberately keeping several variants. Fixed once the record exists — mdms-v2 rejects an update that changes it.',
     },

@@ -34,16 +34,25 @@ BEGIN;
 --    readers take the first row anyway -- MDMSUtils.doFetchReopenWindowMillis
 --    reads rows.get(0), useReopenWindow reads data[0] -- so a tenant carrying
 --    several active records already has an arbitrary winner.
+--
+--    Ranks EVERY active record, not just the code-less ones, and prefers a
+--    code-bearing row. A tenant that already carries a DEFAULT record AND a
+--    stale value-keyed one is the case that matters: ranking only the code-less
+--    rows leaves the stale one at rn=1, and step 2 then skips it (a DEFAULT
+--    record already exists, so the re-key would violate the PK). The tenant ends
+--    up with two active records, one of them invalid against the schema this
+--    migration installs -- which 400s on the operator's next save.
 WITH ranked AS (
   SELECT id,
          row_number() OVER (
            PARTITION BY tenantid
-           ORDER BY lastmodifiedtime DESC NULLS LAST, createdtime DESC NULLS LAST
+           ORDER BY (data ? 'code') DESC,
+                    lastmodifiedtime DESC NULLS LAST,
+                    createdtime DESC NULLS LAST
          ) AS rn
   FROM eg_mdms_data
   WHERE schemacode = 'RAINMAKER-PGR.UIConstants'
     AND isactive = true
-    AND NOT (data ? 'code')
 )
 UPDATE eg_mdms_data d
    SET isactive = false
