@@ -330,11 +330,12 @@ enable_search_stack: false
 # the configurator/frontend uses for tenant onboarding. Serving that shim
 # through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
 #
-# Image source: the playbook's "Resolve MCP image tag" task defaults to the
-# PUBLIC pin `ghcr.io/subhashini-egov/digit-mcp:<tag>`, and passes it to
-# compose verbatim (no `docker_registry` prefix) — so a public-internet box
-# works out of the box. Set `build_mcp: true` to build from the vendored
-# in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
+# Image source: unless `build_mcp: true` (local build) or `mcp_image:` is set
+# here, the playbook leaves MCP_IMAGE empty and Compose's own
+# `${MCP_IMAGE:-egovio/digit-mcp:<tag>}` fallback in docker-compose.egov-digit.yaml
+# pulls the PUBLIC pin — so a public-internet box works out of the box with no
+# `docker_registry` prefix needed. Set `build_mcp: true` to build from the
+# vendored in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
 # Hetzner VPC registry (10.0.0.4:5000) the target must be VPC-internal:
 # compose validates every image before starting any service, so an
 # unreachable one fails the whole `docker compose up`.
