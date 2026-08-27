@@ -64,12 +64,12 @@
 #
 # Idempotent: re-runs report existing records as skipped. By DEFAULT it does
 # NOT overwrite a live record that already exists — see --update and the
-# "stale catalog" note in docs/dashboard-configuration/60-operations.md §4.
+# "stale catalog" note in docs/dashboard-configuration.md.
 #
 # RUNBOOK: the full operator runbook — prerequisites, the role-remap decision,
 # the data caveats that make a correct seed look broken, and a symptom -> cause
 # table for every known blocker — is posted as a comment on the enablement PR
-# (#1400) and graduates into docs/dashboard-configuration/ on merge. Read it
+# (#1400) and graduates into docs/dashboard-configuration.md on merge. Read it
 # before a first run on an unfamiliar deployment.
 # =============================================================================
 
