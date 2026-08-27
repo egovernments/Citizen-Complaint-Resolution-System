@@ -499,10 +499,44 @@ services:
     environment: { SPRING_FLYWAY_ENABLED: "false" }
     depends_on: { egov-accesscontrol-migration: { condition: service_completed_successfully } }
 
-  # Retire the consolidated db-migrations container. Its migrate-all.sh looks for
-  # the OLD *_schema_version tables, which the re-bake renamed to K8s names — it
-  # would 42P07 and block its dependents (idgen/user/localization), which now have
-  # their own migrators. No-op it so its unremovable service_completed_successfully
-  # gate is satisfied.
+  # The consolidated db-migrations container, BUILT from the repo rather than
+  # pulled, and gating nothing.
+  #
+  # It used to be defined in docker-compose.egov-digit.yaml off the mutable
+  # `egovio/tilt-demo-db-migrations:latest` tag, with idgen/user/localization/
+  # enc-service hard-gated on it via service_completed_successfully. There is no
+  # rebuild pipeline behind that tag, so the image froze on the PRE-normalisation
+  # history names (egov_user_schema_version) while migrate-all.sh moved to the
+  # canonical ones. db-history-normalize renames those tables on every boot, so
+  # the stale image found no history, tried to bootstrap one, and collided with
+  # the renamed table's leftover index — `relation "egov_user_schema_version_pk"
+  # already exists`, exit 1. Four services then never started.
+  #
+  # This overlay used to paper over that with `entrypoint: ["true"]`, which only
+  # worked while the overlay was layered: `docker compose -f
+  # docker-compose.egov-digit.yaml up` alone still ran the real thing and parked
+  # egov-user in Created. That is exactly how bomet lost every login on
+  # 2026-08-26. The service and its gates are gone from the base file now, so
+  # there is nothing left to neutralise and this can be the real definition.
+  #
+  # Its remaining job is the egov-mdms step: DATA-level fixes to eg_mdms_data /
+  # eg_mdms_schema_definition, which no per-service migrator owns (mdms-backend-
+  # migration owns those tables' DDL, not their rows). The other steps re-run
+  # against histories the per-service migrators have already filled and report
+  # "up to date" — harmless now that the names are canonical, and building from
+  # source is what keeps them that way.
+  #
+  # Gates NOTHING: a data fix that fails must never black-hole the stack again.
   db-migrations:
-    entrypoint: ["true"]
+    build:
+      context: ./docker/db-migrations
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
+      mdms-backend-migration: { condition: service_completed_successfully }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+    restart: "no"
+    networks: [egov-network]
