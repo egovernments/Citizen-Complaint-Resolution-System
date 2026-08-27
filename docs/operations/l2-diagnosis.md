@@ -472,7 +472,7 @@ is a deployment change, not something to apply on the box**, because anything ed
 |---|---|---|---|---|
 | `prometheus` | 512M | | `egov-otp` | 512M |
 | `loki` | 512M | | `user-otp` | 512M |
-| `tempo` | 384M | | `egov-notification-sms` | 512M |
+| `tempo` | 768M | | `egov-notification-sms` | 512M |
 | `otel-collector` | 320M | | `node-exporter` | 64M |
 | `grafana` | 256M | | | |
 | `promtail` | 128M | | | |
