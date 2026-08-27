@@ -538,5 +538,16 @@ services:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       FLYWAY_USER: egov
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # ONLY the egov-mdms step. In THIS stack every other service migrate-all.sh
+      # knows about has its own migrator above, so those histories were written
+      # by the egovio/*-db images and do not match this repo's sql/ trees:
+      # re-running them fails validation on a checksum mismatch (verified against
+      # db/full-dump.sql), and with validation off Flyway replays DDL out of
+      # order against a populated database instead. egov-localization and
+      # egov-enc-service open V1 with DROP TABLE IF EXISTS, which is the silent
+      # data-loss mode db/flyway-history-map.yml exists to prevent. The default
+      # ("all") is left for the standalone stacks that have no per-service
+      # migrators and therefore own every history they write.
+      MIGRATION_SERVICES: egov-mdms
     restart: "no"
     networks: [egov-network]
