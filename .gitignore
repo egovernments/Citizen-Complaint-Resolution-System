@@ -128,6 +128,13 @@ spring.log
 performance/k6/config/environments.js
 performance/ansible/inventory.ini
 
+# Raw k6 run artefacts. Tens of MB per run and not reviewable in a diff — keep
+# them out of the repo and publish the derived tables in performance/docs/
+# instead. Already-tracked files (the March 2026 runs) are unaffected.
+performance/results/*/metrics.csv
+performance/results/*/metrics.csv.gz
+performance/results/*/k6-output.json
+
 # ─── Docker ──────────────────────────────────────────────────────────────────
 docker-compose.override.yml
 

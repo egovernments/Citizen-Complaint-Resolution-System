@@ -30,6 +30,16 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Bomet Run (24 Aug 2026)',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/run-24-08-26/' },
+          { text: 'Executive Summary', link: '/run-24-08-26/executive-summary' },
+          { text: 'Findings', link: '/run-24-08-26/findings' },
+          { text: 'Capacity Planning', link: '/run-24-08-26/recommendations-transition-plan' },
+        ]
+      },
+      {
         text: 'Developer Guide',
         items: [
           { text: 'Architecture', link: '/architecture' },
