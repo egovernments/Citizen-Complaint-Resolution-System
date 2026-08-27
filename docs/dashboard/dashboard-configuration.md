@@ -1,18 +1,6 @@
 # Dashboard configuration
 
-What a fresh tenant gets by default, and the APIs to change it. Replaces the old
-`docs/dashboard-configuration/` and `docs/dashboard-demo/` doc sets, which described a setup flow
-and role model that no longer exist (pre-#1408 catalog seeding, pre-#1871 ABAC capabilities).
-Superseded by, and requires, [#1902](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1902)
-— all four services below (`digit-mcp`, `default-data-handler`, `digit-ui-esbuild`, `pgr-services`)
-need to actually be running current `master` for any of this to hold; a stale pin on any one of them
-silently reproduces the exact problems this doc set was rewritten to stop describing.
-
 ## What ships by default on a fresh `tenant_bootstrap`
-
-No manual step, no `enable-dashboard.sh`, no separate script. `tenant_bootstrap` seeds all of this
-directly from the repo (`ansible/nairobi-mdms/mdms/dss/*.json`), independent of whether the source
-tenant it's copying from has any of it:
 
 | MDMS record | What it is |
 |---|---|
@@ -33,10 +21,6 @@ And on the access-control side:
 Each `dss.KpiDefinition` / `dss.DashboardPack` record declares which of the above tiers it needs via
 a `requiredActionUrl` field — e.g. `"requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"`.
 A KPI with `"public": true` instead bypasses auth entirely and appears on the public dashboard.
-
-This is coarser than the old per-KPI `rbac.visibleTo` role list (removed by #1871) — there is no
-built-in way to gate a single KPI to one arbitrary role without also gating everything else on that
-tier. See "Adding a new capability tier" below if you need that.
 
 ## Updating it — APIs
 
