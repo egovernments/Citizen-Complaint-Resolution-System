@@ -1162,6 +1162,18 @@
         src: ../docker-compose.monitoring.yml
         dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
 
+    # Self-hosted Matomo overlay (#1254). Copied and layered ALWAYS, exactly
+    # like the monitoring overlay above and for the same reason: its three
+    # services carry `profiles: [matomo]`, so the -f flag costs nothing until
+    # `enable_matomo: true` selects them. Copying it unconditionally also means
+    # an operator turning the flag on gets a working file without a separate
+    # sync step, and `docker compose ... config` on the box always describes
+    # the full set of things that COULD run.
+    - name: Copy Matomo overlay
+      copy:
+        src: ../docker-compose.matomo.yml
+        dest: "{{ digit_dir }}/docker-compose.matomo.yml"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -1585,6 +1597,7 @@
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
+              + (['matomo']        if enable_matomo        | default(false) else [])
               + _obs_profiles
             ) | join(',')
           }}
@@ -1599,7 +1612,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + matomo + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -1607,6 +1620,7 @@
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.monitoring.yml' +
+            ' -f docker-compose.matomo.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -2007,6 +2021,95 @@
         line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
         create: true
         mode: '0600'
+      no_log: true
+
+    # ── Matomo's MariaDB credentials (#1254) ────────────────────────────
+    #
+    # Same generate-if-absent-then-persist shape as the Grafana password above,
+    # and for the same reason: the bootstrap seed is cas:0, so it only ever
+    # fires on a tenant's very first deploy. Any box that existed before Matomo
+    # did would otherwise fall through to the compose file's literal fallback,
+    # which is a shared, published string.
+    #
+    # Re-READ rather than reusing `bao_secrets`: the Grafana task above may have
+    # written, which bumps the secret's version, and the persist below is
+    # cas-guarded against exactly that version. Reusing the stale snapshot would
+    # send a version OpenBao has already moved past, and the write would be
+    # rejected with a 400 on precisely the tenants that needed it most (the ones
+    # being upgraded). One extra read is cheap; a deploy that fails only on
+    # upgrade is not.
+    #
+    # Gated on enable_matomo so tenants that never turn analytics on do not
+    # accumulate secrets they have no use for.
+    - name: "OpenBao — re-read tenant secrets (Grafana may have bumped the version)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        status_code: [200]
+      register: bao_secrets_matomo
+      when: enable_matomo | default(false)
+      no_log: true
+
+    # `or`, not `ternary` — see the Grafana note above: Jinja evaluates every
+    # filter argument eagerly, so ternary would run the generator on every
+    # deploy and discard it whenever OpenBao already had a value.
+    - name: "OpenBao — resolve Matomo database passwords (generate if absent)"
+      ansible.builtin.set_fact:
+        matomo_db_pw: >-
+          {{ bao_secrets_matomo.json.data.data.matomo_db_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+        matomo_db_root_pw: >-
+          {{ bao_secrets_matomo.json.data.data.matomo_db_root_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      when: enable_matomo | default(false)
+      no_log: true
+
+    # ONE write for both keys. Two cas-guarded writes in a row cannot work: the
+    # first bumps the version the second is guarded against.
+    - name: "OpenBao — persist generated Matomo database passwords"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        # One template expression so `cas` reaches OpenBao as a JSON number, and
+        # `combine` so the write merges instead of replacing the tenant's other
+        # secrets — both for the reasons spelled out on the Grafana persist.
+        body: >-
+          {{ {'options': {'cas': bao_secrets_matomo.json.data.metadata.version | int},
+              'data': bao_secrets_matomo.json.data.data
+                      | combine({'matomo_db_password': matomo_db_pw,
+                                 'matomo_db_root_password': matomo_db_root_pw})} }}
+        status_code: [200]
+      when:
+        - enable_matomo | default(false)
+        - (bao_secrets_matomo.json.data.data.matomo_db_password | default('', true)) | length == 0
+          or (bao_secrets_matomo.json.data.data.matomo_db_root_password | default('', true)) | length == 0
+      no_log: true
+
+    # Written with lineinfile rather than into the TENANT SECRETS block so that
+    # turning Matomo on does not rewrite a block every other tenant shares.
+    #
+    # IMPORTANT: MariaDB reads MARIADB_PASSWORD / MARIADB_ROOT_PASSWORD only
+    # when it initialises an EMPTY data directory. Changing these values later
+    # does not change the database's actual credentials — it just makes Matomo
+    # unable to log in. That is why they are generated once and persisted, and
+    # why rotating them is a documented procedure (ALTER USER inside matomo-db,
+    # then `console config:set` inside matomo) rather than an edit here: Matomo
+    # keeps its own copy in config/config.ini.php from the moment it installs.
+    - name: "OpenBao — put the stored Matomo database passwords into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        create: true
+        mode: '0600'
+      loop:
+        - { key: 'MATOMO_DB_PASSWORD', value: "{{ matomo_db_pw | default('') }}" }
+        - { key: 'MATOMO_DB_ROOT_PASSWORD', value: "{{ matomo_db_root_pw | default('') }}" }
+      when: enable_matomo | default(false)
       no_log: true
 
     # Keycloak-tier secrets — appended as a separate marked block so the
@@ -2737,7 +2840,11 @@
       changed_when: "'Recreated' in post_secrets_recreate.stdout or 'Started' in post_secrets_recreate.stdout"
       when: ansible_system != "Darwin"
 
-    # Tear down observability tiers that are no longer active (#1657).
+    # Tear down profile-gated stacks that are no longer active (#1657, #1254).
+    #
+    # Originally observability-only; Matomo joined it because it has exactly the
+    # same shape — a profile-gated group of containers that an operator turns
+    # off in host_vars and reasonably expects to stop running.
     #
     # `docker compose up` only declines to START services outside the selected
     # profiles -- it never STOPS ones already running. So lowering
@@ -2753,26 +2860,26 @@
     #
     # Only fires when a tier is genuinely inactive AND its containers exist, so a
     # steady-state redeploy is a no-op rather than a needless stop/start.
-    - name: "Observability — stop tiers this tenant no longer runs"
+    - name: "Optional stacks — stop the profiles this tenant no longer runs"
       ansible.builtin.shell: |
         set -e
         GONE=""
-        for svc in {{ _obs_teardown | join(' ') }}; do
+        for svc in {{ _profile_teardown | join(' ') }}; do
           if docker ps -a --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx "digit-${svc}"; then
             GONE="$GONE $svc"
           fi
         done
-        [ -z "$GONE" ] && { echo "NOCHANGE no inactive observability containers"; exit 0; }
+        [ -z "$GONE" ] && { echo "NOCHANGE no inactive profile containers"; exit 0; }
         echo "removing:$GONE"
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} rm -sf $GONE
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
-      register: obs_teardown
-      changed_when: "'NOCHANGE' not in obs_teardown.stdout"
+      register: profile_teardown
+      changed_when: "'NOCHANGE' not in profile_teardown.stdout"
       when:
         - ansible_system != "Darwin"
-        - _obs_teardown | length > 0
+        - _profile_teardown | length > 0
       vars:
         # Services belonging to each tier, so an inactive tier can be named.
         #
@@ -2785,23 +2892,31 @@
         # runs (every instrumented service depends on it) -- see the comment on
         # the service in docker-compose.egov-digit.yaml.
         #
-        # All six listed below are gated. tempo/loki/promtail in
-        # docker-compose.egov-digit.yaml; prometheus and grafana likewise; and
-        # node-exporter in docker-compose.monitoring.yml, which is always
-        # layered as an -f flag but whose one service still carries
-        # `profiles: [obs-metrics]` (since #1657). Layered-always and
-        # started-always are different things.
-        _obs_tier_services:
+        # Every service listed below is gated. tempo/loki/promtail in
+        # docker-compose.egov-digit.yaml; prometheus and grafana likewise;
+        # node-exporter in docker-compose.monitoring.yml; and the three matomo
+        # services in docker-compose.matomo.yml. Those last four live in
+        # overlays that are always layered as an -f flag yet still carry a
+        # `profiles:` key — layered-always and started-always are different
+        # things, and that distinction is the whole reason this task exists.
+        _profile_tier_services:
           obs-metrics: [prometheus, grafana, node-exporter]
           obs-logs: [loki, promtail]
           obs-traces: [tempo]
+          # Matomo (#1254). All three are gated, so the same
+          # settles-after-one-run property holds. `rm -sf` removes the
+          # CONTAINERS; the matomo_data and matomo_db_data volumes are
+          # untouched, so the install and every recorded visit survive
+          # `enable_matomo: false` and come back when it is turned on again.
+          # Removing the data is a deliberate, separate `docker volume rm`.
+          matomo: [matomo, matomo-db, matomo-archiver]
         # Derived from compose_profiles, not _obs_profiles: the latter is a
         # task-scoped `vars:` entry on the set_fact above, so it does not exist
         # by the time this task runs. compose_profiles IS a fact and already
-        # carries the obs-* tiers.
-        _obs_teardown: >-
+        # carries the obs-* tiers and matomo.
+        _profile_teardown: >-
           {{
-            _obs_tier_services
+            _profile_tier_services
             | dict2items
             | rejectattr('key', 'in', (compose_profiles | default('')).split(','))
             | map(attribute='value') | flatten
@@ -4788,6 +4903,108 @@
                             bao kv get -field=grafana_admin_password '
                            ~ secrets_path ~
                            ' | docker exec -i digit-grafana grafana cli admin reset-admin-password --password-from-stdin' }}
+
+    # ==================== Matomo post-install settings ====================
+    #
+    # Two General settings that Matomo cannot learn on its own and that the
+    # container image will not accept as environment variables — matomo:5-apache
+    # reads MATOMO_DATABASE_* and nothing else, so MATOMO_GENERAL_* is silently
+    # inert. `console config:set` writes them into the installed
+    # config/config.ini.php, which lives on the matomo_data volume and therefore
+    # survives redeploys.
+    #
+    # 1. trusted_hosts[] = matomo
+    #    The installer records only the origin the operator reached it through
+    #    (127.0.0.1:<port>), and the archiver container calls
+    #    `core:archive --url=http://matomo/` over the docker network.
+    #
+    #    Be honest about how load-bearing this is: MEASURED, archiving succeeds
+    #    with an untrusted --url. Forcing real work (invalidate, then archive
+    #    with --url=http://definitely-not-trusted.invalid/) processed 4 archives
+    #    and reported no error, because this image supports CliMulti and archives
+    #    in CLI subprocesses that never make an HTTP request. Where the host
+    #    WOULD matter is the fallback path: with exec()/shell_exec unavailable,
+    #    CliMulti degrades to fetching index.php over HTTP, and that request hits
+    #    the API's trusted-host check. Cheap insurance against a mode we do not
+    #    control, not a fix for a failure seen here.
+    #
+    # 2. proxy_client_headers[] = HTTP_X_FORWARDED_FOR
+    #    Tracking arrives through the host nginx, so Matomo's default
+    #    REMOTE_ADDR is nginx itself. Without this every visit in the country is
+    #    attributed to one IP: geolocation reports a single city and the
+    #    "anonymise visitor IP" privacy setting has nothing meaningful to
+    #    anonymise. This is what makes the X-Forwarded-For header the nginx
+    #    tracking blocks already send actually get used.
+    #
+    # Deliberately best-effort and deliberately AFTER the stack is up: until an
+    # operator has walked the browser installer there is no config.ini.php to
+    # write to, and a fresh `enable_matomo: true` deploy is expected to land in
+    # exactly that state. Skipping quietly and saying so beats failing a deploy
+    # over a setting that only matters once someone has finished installing.
+    - name: "Matomo — apply proxy + trusted-host settings (best effort, post-install)"
+      # `cmd:` rather than the free-form `shell: |` used elsewhere in this file.
+      # Free-form module args go through ansible's split_args(), which tokenises
+      # the whole script looking for trailing key=value pairs — and this script
+      # carries `General.trusted_hosts[]="matomo"` (an `=` inside nested quotes)
+      # plus backslash line-continuations, which it cannot balance. The failure
+      # is `ERROR! failed at splitting arguments, either an unbalanced jinja2
+      # block or quotes` at PARSE time, so the whole playbook refuses to run,
+      # not just this task. Naming cmd: explicitly skips that parsing entirely.
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          CFG=/var/www/html/config/config.ini.php
+          if ! docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-matomo; then
+            echo "SKIP matomo container not running"; exit 0
+          fi
+          # NOT `test -f "$CFG"`: the image writes config.ini.php on first boot
+          # with only `[General] installation_first_accessed`, so the file exists
+          # long before anyone has installed anything. The [database] section is
+          # what the installer's database step adds, so that is the real signal.
+          if ! docker exec digit-matomo grep -q '^\[database\]' "$CFG" 2>/dev/null; then
+            echo "SKIP matomo not installed yet (no [database] section in config.ini.php)"; exit 0
+          fi
+          CHANGED=0
+          # The POSITIONAL 'Section.key[]=<json>' form, not --section/--key/--value.
+          # `config:set --help` is explicit that the option form "cannot append to
+          # arrays", and both of these settings ARE arrays — passing --key='name[]'
+          # is accepted and writes nothing useful. The value must be JSON encoded,
+          # hence the embedded double quotes.
+          #
+          # grep the rendered config first rather than re-running config:set
+          # blindly: `[]=` APPENDS, so an unguarded rerun grows the array by one
+          # duplicate entry on every deploy.
+          if ! docker exec digit-matomo grep -q 'trusted_hosts\[\] *= *"matomo"' "$CFG"; then
+            docker exec digit-matomo php /var/www/html/console config:set \
+              'General.trusted_hosts[]="matomo"'
+            CHANGED=1
+          fi
+          if ! docker exec digit-matomo grep -q 'proxy_client_headers\[\] *= *"HTTP_X_FORWARDED_FOR"' "$CFG"; then
+            docker exec digit-matomo php /var/www/html/console config:set \
+              'General.proxy_client_headers[]="HTTP_X_FORWARDED_FOR"'
+            CHANGED=1
+          fi
+          [ "$CHANGED" -eq 0 ] && echo "NOCHANGE matomo settings already applied"
+          exit 0
+        executable: /bin/bash
+      register: matomo_settings
+      changed_when: "'NOCHANGE' not in matomo_settings.stdout and 'SKIP' not in matomo_settings.stdout"
+      failed_when: false
+      when:
+        - enable_matomo | default(false)
+        - ansible_system != "Darwin"
+
+    - name: Show Matomo status
+      ansible.builtin.debug:
+        msg: >-
+          Matomo: {{ 'settings applied (trusted_hosts + proxy_client_headers)'
+                     if ('SKIP' not in (matomo_settings.stdout | default('')))
+                     else 'NOT INSTALLED YET — tunnel to it and run the browser installer:
+                           ssh -L ' ~ (upstream_matomo_port | default(18081)) ~ ':127.0.0.1:'
+                           ~ (upstream_matomo_port | default(18081)) ~ ' ' ~ inventory_hostname ~
+                           ' then open http://127.0.0.1:' ~ (upstream_matomo_port | default(18081)) ~ '/ .
+                           Re-run the deploy afterwards so these settings land.' }}
+      when: enable_matomo | default(false)
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's
