@@ -25,18 +25,24 @@ A KPI with `"public": true` instead bypasses auth entirely and appears on the pu
 ## Updating it — APIs
 
 All of the above is live MDMS data. Change it with the standard `mdms-v2` record APIs — no rebuild,
-no redeploy, no restart:
+no redeploy, no restart. Exact JSON shape (every field, with a real example) for each record type
+below is in [`dashboard-rbac-design/95-mdms-schema-reference.md`](dashboard-rbac-design/95-mdms-schema-reference.md):
 
 - **Add or edit a KPI**: `POST /mdms-v2/v2/_create/dss.KpiDefinition` (new) or
-  `POST /mdms-v2/v2/_update/dss.KpiDefinition` (existing — include the record's `id`).
-- **Change a pack's tile set or layout**: same, against `dss.DashboardPack`.
-- **Change number formatting**: same, against `dss.DashboardConfig`.
-- **Change which roles hold a capability tier**: `POST /mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions`
-  — add/remove a `{rolecode, actionid}` row for the tier's action id (2646/2647/2648 above).
+  `POST /mdms-v2/v2/_update/dss.KpiDefinition` (existing — include the record's `id`). Shape:
+  [§ `dss.KpiDefinition`](dashboard-rbac-design/95-mdms-schema-reference.md#dsskpidefinition).
+- **Change a pack's tile set or layout**: same, against `dss.DashboardPack`. Shape:
+  [§ `dss.DashboardPack`](dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardpack).
+- **Change number formatting**: same, against `dss.DashboardConfig`. Shape:
+  [§ `dss.DashboardConfig`](dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardconfig).
+- **Change which roles hold a capability tier**: `POST /mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions`
+  to grant (there's no meaningful `_update` target — the unique key is the `{rolecode, actionid}`
+  pair, not a separate id) — deactivate to revoke. Shape:
+  [§ `ACCESSCONTROL-ROLEACTIONS.roleactions`](dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-roleactionsroleactions).
 - **Add a new capability tier**: create a new action under `ACCESSCONTROL-ACTIONS-TEST.actions-test`
   with a `/pgr-services/v2/analytics/capabilities/<name>` URL, grant it to whichever roles via
   `ACCESSCONTROL-ROLEACTIONS.roleactions`, then point the relevant KPI/pack's `requiredActionUrl`
-  at it.
+  at it. Shape: [§ `ACCESSCONTROL-ACTIONS-TEST.actions-test`](dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-actions-testactions-test).
 - **Change labels**: `_upsert` the message key against the tenant's localization module, then
   `POST /localization/messages/cache-bust`.
 
