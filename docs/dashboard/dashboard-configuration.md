@@ -1,6 +1,6 @@
 # Dashboard configuration
 
-Dashboard with [40 default KPIs](../../ansible/nairobi-mdms/mdms/dss/KpiDefinition.json) is visible to SUPERVISOR, GRO, DGRO, and SUPERUSER out of the box.
+Out of the box, GRO/DGRO/SUPERVISOR/SUPERUSER see 27 of the [40 default KPIs](../../ansible/nairobi-mdms/mdms/dss/KpiDefinition.json) (the base tier); SUPERVISOR and SUPERUSER additionally hold the officer tier, for 30. See the capability-tier table below — visibility is per-tier, not uniform across these four roles.
 
 ## What ships by default on a fresh `tenant_bootstrap`
 
@@ -14,7 +14,7 @@ And on the access-control side:
 
 | Grant | Purpose | Held by (as shipped) |
 |---|---|---|
-| Nav action `4557` | Dashboard sidebar entry | SUPERVISOR, GRO, DGRO, SUPERUSER |
+| Nav action `4557` | Dashboard **sidebar** entry | SUPERVISOR, GRO, DGRO, SUPERUSER |
 | Capability actions `2640–2645` (`_access`, `_query`, `packs`, `catalog/_search`, `_schema`, `config/_refresh`) | Base dashboard usage | Same as above |
 | `2646` `capabilities/officer` | Officer-tier KPIs | PGR_SUPERVISOR, PGR_ADMIN, SUPERUSER, SUPERVISOR, MDMS_ADMIN, HRMS_ADMIN |
 | `2647` `capabilities/reports` | Reports-tier KPIs | PGR_VIEWER, TICKET_REPORT_VIEWER |
@@ -23,6 +23,22 @@ And on the access-control side:
 Each `dss.KpiDefinition` / `dss.DashboardPack` record declares which of the above tiers it needs via
 a `requiredActionUrl` field — e.g. `"requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"`.
 A KPI with `"public": true` instead bypasses auth entirely and appears on the public dashboard.
+
+### The home-screen widget is a separate mechanism, and currently doesn't ship
+
+Action 4557 above only gates the **sidebar** entry. Some deployments (bomet) also show a Dashboard
+**card on the employee home screen** — that's driven by a `"Dashboard"` row in `tenant.citymodule`,
+copied by `tenant_bootstrap` from the source tenant like everything else in that step. The base
+`default-data-handler` seed (`utilities/default-data-handler/.../tenant/tenant.citymodule.json`) only
+lists `Workbench`/`PGR`/`HRMS` — no `Dashboard` row — so a tenant bootstrapped from a source that was
+never hand-patched (i.e. most fresh installs) gets the sidebar entry but no home-screen card. This is
+the same "bootstrap copies from source, base seed never had it" gap #1408 already fixed for
+`dss.KpiDefinition`/`DashboardPack`, just not extended to this record. Add it yourself with:
+
+```json
+{ "code": "Dashboard", "order": 14, "active": true, "module": "Dashboard", "tenants": [{ "code": "<tenantId>" }] }
+```
+against `tenant.citymodule` (`POST /mdms-v2/v2/_create/tenant.citymodule`) if you want the card now.
 
 ## Updating it — APIs
 
