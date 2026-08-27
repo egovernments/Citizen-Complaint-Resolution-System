@@ -74,15 +74,20 @@ For Ansible, use inventory rather than editing `/opt/digit/.env`:
 ```yaml
 enable_novu: true
 pgr_notification_config_driven: true
-novu_bridge_channels_enabled: "SMS"
+seed_notifications: true
+novu_bridge_channels_enabled: "SMS,WHATSAPP"
 novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
 novu_bridge_proxy_allowed_roles: "SUPERUSER,MDMS_ADMIN"
 
 novu_admin_email: "<from secret manager>"
 novu_admin_password: "<from secret manager>"
+
+twilio_account_sid: "<from secret manager>"
+twilio_auth_token: "<from secret manager>"
+twilio_whatsapp_from: "whatsapp:+<approved sender>"
 ```
 
-Run the normal deployment playbook after setting inventory. On a fresh dual-channel environment, leave the Twilio WhatsApp variables empty and keep the gate at `SMS` for this first pass. Create the primary SMS integration in step 4, then add the WhatsApp credentials and open `WHATSAPP` in step 5. Direct changes to the generated `.env` will be overwritten on the next Ansible deployment.
+Set every value before starting, then run the normal deployment playbook once. Do not run the full deployment a second time just to create Novu integrations or workflows; step 5 performs that targeted operation against the running Novu API. Keep complaint traffic stopped until the provider and workflow verification is complete. Direct changes to the generated `.env` will be overwritten on the next Ansible deployment.
 
 ## 3. Bootstrap the platform and base MDMS
 
@@ -113,7 +118,7 @@ Steps 1–6:
 
 The installer and MDMS seeder are create-or-skip, not desired-state reconcilers. Review existing rows instead of assuming a rerun repaired them. The seed contains example WhatsApp Content SIDs; replace them with templates from the configured provider account before enabling production WhatsApp delivery.
 
-For Ansible, the playbook performs the equivalent service, key, workflow, and MDMS bootstrap when `enable_novu` is true. Treat a nonfatal provider-bootstrap warning as an incomplete notification deployment.
+For Ansible, the playbook starts the services, mints/wires the key, and seeds MDMS when `enable_novu` is true. The explicit workflow/provider bootstrap in step 5 is the compatibility path for current master and the final verification after the playbook completes.
 
 ## 4. Create the ordinary SMS provider first
 
@@ -160,6 +165,12 @@ export TWILIO_WHATSAPP_FROM='whatsapp:+<approved sender>'
 export CHANNELS_ENABLED=SMS,WHATSAPP
 export NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP=twilio-whatsapp
 
+# Current-master compatibility: Novu 2.3 derives workflow IDs from names,
+# and dotted event IDs otherwise create new suffixed workflows on every run.
+export NOVU_ENV_FILE=/dev/null
+export NOVU_WORKFLOW_NAME=complaints-whatsapp
+export NOVU_EVENT_WORKFLOWS=complaints-workflow-apply,complaints-workflow-assign
+
 ./scripts/enable-notifications.sh --from step7 --local --yes
 ```
 
@@ -171,15 +182,42 @@ NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP=twilio-whatsapp
 
 Then recreate `novu-bridge`. Merely exporting the value for one installer run is not durable.
 
-For Ansible, complete the second pass with durable inventory and rerun the deployment playbook:
+For an Ansible-managed deployment, the credentials and bridge integration identifier are already durable in inventory from step 2. Do **not** run the deployment again. Run only the repository bootstrap script against the Novu API that is already up:
 
-```yaml
-novu_bridge_channels_enabled: "SMS,WHATSAPP"
-novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
-twilio_account_sid: "<from secret manager>"
-twilio_auth_token: "<from secret manager>"
-twilio_whatsapp_from: "whatsapp:+<approved sender>"
+```bash
+cd /opt/ccrs/backend/novu-bridge/config
+
+# Inject these three through the operator's secret mechanism. They are shown
+# as exports only to make the script's input contract explicit.
+export TWILIO_ACCOUNT_SID='<from secret manager>'
+export TWILIO_AUTH_TOKEN='<from secret manager>'
+export TWILIO_WHATSAPP_FROM='whatsapp:+<approved sender>'
+
+export NOVU_BASE_URL='http://127.0.0.1:14002'
+export NOVU_API_KEY="$(sudo sed -n 's/^NOVU_API_KEY=//p' /opt/digit/.env | tail -1)"
+export NOVU_ENV_FILE=/dev/null
+export NOVU_INTEGRATION_NAME=twilio-whatsapp
+export NOVU_INTEGRATION_ID=twilio-whatsapp
+export NOVU_WORKFLOW_ID=complaints-whatsapp
+export NOVU_WORKFLOW_NAME=complaints-whatsapp
+export NOVU_SMS_WORKFLOW_ID=complaints-sms
+export NOVU_EMAIL_WORKFLOW_ID=complaints-email
+export NOVU_EVENT_WORKFLOWS=complaints-workflow-apply,complaints-workflow-assign
+
+bash ./bootstrap-novu-whatsapp.sh
+
+unset NOVU_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM
 ```
+
+This command does not start or restart DIGIT and does not trigger a notification. It only calls Novu's integration and workflow administration APIs. Run it from the repository directory so `load-dotenv.sh` remains beside the bootstrap script.
+
+The compatibility variables are intentional:
+
+- `NOVU_ENV_FILE=/dev/null` prevents the tracked dummy `.env.novu` values from filling an omitted variable.
+- `NOVU_WORKFLOW_NAME=complaints-whatsapp` forces Novu 2.3 to create the exact ID the bridge triggers.
+- normalized `NOVU_EVENT_WORKFLOWS` values make the current script's existence check rerun-safe.
+
+On current master, an existing integration is create-or-skip: this command will not rotate credentials under an existing `twilio-whatsapp` identifier. Update/delete that integration in Novu before rerunning, or use the reconciliation behavior from PR #1912. A first-time bootstrap does not have this limitation.
 
 For a deployment without WhatsApp, stop after step 6 and create the required workflows with Novu `POST /v2/workflows`; the current all-in-one workflow bootstrap requires Twilio WhatsApp credentials even for an SMS/email-only rollout.
 
