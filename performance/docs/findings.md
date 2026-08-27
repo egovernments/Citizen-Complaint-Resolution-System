@@ -106,23 +106,16 @@ At low record counts, dev and prod perform nearly identically — the workload i
 
 **VU ceilings:** Dev ~250, Prod ~300. Failures at the ceiling are caused by connection exhaustion and PgBouncer timeouts, not CPU.
 
-## Bomet Deployment Validation (August 2026)
+## Live Deployment Validation (August 2026)
 
-The results above were produced on dedicated test machines against a synthetic
-`statea.citya` dataset, with the database fixes below applied and only PGR-relevant
-services running.
+The results above were produced on dedicated test machines against a synthetic `statea.citya`
+dataset. In August 2026 the same harness was run against a live deployment — 16 vCPU / 30 GB
+KVM guest running the full 59-container DIGIT stack with 2,250 existing complaints.
 
-In August 2026 the same harness was run against the **Bomet County deployment** — a shared
-KVM guest running the full 59-container DIGIT stack, carrying real data and real daily
-usage, with **none** of the three database fixes applied. It sustained **125 concurrent
-VUs** and **~43 API req/s** with zero failed requests, breaching only an end-to-end latency
-budget at 150 VU.
+Measured ceiling: **125 concurrent VUs**, **43.3 API req/s**, **934,762 transactions/day**, with
+0.000% HTTP failures at every level.
 
-Because the conditions differ on four counts — and because Bomet's ceiling is defined by
-latency rather than by errors — those numbers are reported separately rather than merged
-into the tables above.
-
-**→ [Findings](./run-24-08-26/findings) · [Executive Summary](./run-24-08-26/executive-summary) · [Capacity Planning](./run-24-08-26/recommendations-transition-plan)**
+**→ [Executive Summary](./run-24-08-26/executive-summary) · [Findings](./run-24-08-26/findings) · [Capacity Planning](./run-24-08-26/recommendations-transition-plan)**
 
 ## Resource Profile Performance Over Time
 

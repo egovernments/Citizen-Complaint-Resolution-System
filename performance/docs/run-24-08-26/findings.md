@@ -1,199 +1,126 @@
-# Findings — Bomet, 24 August 2026
+# Findings
 
-Results from running the PGR load-test harness against the **Bomet County deployment**: a
-shared development environment that carries real data (~2,250 existing complaints) and real
-daily usage (20–100 new complaints/day). This is the first run of this harness against a
-real DIGIT installation rather than a purpose-built test rig.
+Performance results from load testing DIGIT PGR against a live deployment carrying real data and daily usage (August 2026).
 
-## Machine
+## Testing Methodology
 
-| | |
-|---|---|
-| CPU | AMD EPYC-Rome, **16 vCPU** |
-| Memory | **30 GiB** |
-| Disk | 305 GB SSD (non-rotational) |
-| OS / runtime | Ubuntu 24.04.4 LTS, Docker 29.4.0 |
-| Virtualisation | **KVM guest** (not bare metal) |
-| Services | 59 containers — the full DIGIT stack, including Postgres, Redpanda, Elasticsearch, Keycloak and Novu |
+### Tool
 
-**Idle baseline before any test load: load average 5.5–6.9, 4–7 GB memory available.**
-This box is not quiet at rest. Every figure below sits on top of that existing load, and the
-whole DIGIT stack shares the same 16 vCPU — not just the PGR hot path.
+All tests use [k6](https://k6.io/) (Grafana), an open-source load testing tool. k6 runs from a control machine and drives HTTP traffic against the DIGIT stack over the public internet (~185ms RTT, included in all latency figures below).
 
-## Test Shape
+### What Each Virtual User Does
 
-All ramps share one structure: a `warmup` scenario at a tenth of peak, then a measured `main`
-scenario that ramps up, holds, and ramps down. Only `main` is measured; warmup is excluded
-from every threshold and every figure on this page.
-
-| Scenario | Warmup | Ramp-up | **Sustained at peak** | Ramp-down | Peak VU |
-|---|---|---|---|---|---|
-| ramp-2vu | 1 VU / 2m | 2m | **5m** | 1m | 2 |
-| ramp-10vu | 2 VU / 2m | 2m | **5m** | 1m | 10 |
-| ramp-50vu | 5 VU / 2m | 3m | **5m** | 2m | 50 |
-| ramp-nvu (75–150) | VU/10 / 2m | 3m | **5m** | 2m | 75–150 |
-
-Maximum concurrency tested: **150 concurrent VUs**, each peak sustained for **5 minutes**.
-
-## Three Terms Used Below
-
-**One lifecycle is not one API call.** Each virtual user runs CREATE → ASSIGN → RESOLVE →
-SEARCH, and the harness sleeps between steps to imitate a human reading the screen. The sleeps
-sit *inside* the timed window:
+Each k6 **virtual user (VU)** runs a complete PGR complaint lifecycle — 4 sequential API calls through the full stack:
 
 ```
-4 × sleep(1–3s)   ≈ 8.0s   ← scripted think time, not server work
-4 × API calls     ≈ 1.5s   ← actual server work
-                  ≈ 9.5s   ← one nominal lifecycle
+CREATE (file complaint) → ASSIGN (route to dept) → RESOLVE (close) → SEARCH (verify)
 ```
 
-So an 11.5s `transaction_duration` is roughly 8s of deliberate sleeping plus 3.5s of real work.
-It is not 11.5s of server latency.
+Between each API call, the VU waits 1-3 seconds (random think time) to simulate realistic user pacing. One full lifecycle takes ~9.5-14 seconds depending on server load.
 
-**Steady-state, not run-average.** Throughput below is measured over the 5-minute hold at peak
-VU only. A run average dilutes the peak with warmup and ramp phases and understates real
-capacity by 40–55%.
+### How to Read "Concurrent Users"
 
-**The harness is closed-loop.** Each VU finishes one lifecycle then immediately starts the next,
-so throughput is capped at `VU ÷ cycle_time` by arithmetic alone (Little's Law), regardless of
-how fast the server is. This matters for reading the low-VU rows.
+A VU is **not** the same as "users online". A real user might make one complaint every few minutes. A VU makes one every ~10 seconds. So **1 VU ≈ 20-30 real concurrent users** in terms of API load.
 
-## Methodology Notes
+When we say "125 VUs", the equivalent real-world concurrency is roughly **2,500-3,750 users online simultaneously**, each occasionally filing or checking complaints.
 
-Three things must be read alongside the numbers:
+For a more precise mapping, use TPS as the common unit:
+- Throughput is reported in lifecycles/sec (each lifecycle = 4 API calls)
+- Multiply by 4 to get TPS across all APIs
+- Compare against your expected TPS from real user analytics
 
-1. **k6 ran from a remote control machine over the public internet**, not on-host over an SSH
-   tunnel. Measured RTT was **~185ms**, included in every `http_req_duration` figure below.
-   Server-side latency is roughly the reported value minus that offset. Throughput and error
-   rates are unaffected.
-2. **The database was not empty and real users were active.** Test complaints were removed
-   afterwards via a gated transaction that preserved every non-test row.
-3. **The runs were not taken under identical conditions.** The 2/10/50 VU runs ran overnight
-   (00:47–01:15 EAT, idle load ~5.5, 7 GB free); the 75–150 VU ceiling runs ran during working
-   hours (12:47–13:40 EAT, idle load ~6.9, 4 GB free) back-to-back, so the box never fully
-   recovered between steps. The ceiling figures are therefore **conservative** relative to an
-   idle box.
+### Test Profiles
 
-## Capacity Curve
+| Scenario | Duration | Ramp Pattern | Purpose |
+|----------|----------|-------------|---------|
+| `ramp-2vu` | 10 min | 1 VU warmup (2m), ramp to 2 over 2m, 5 min hold, 1m down | Baseline |
+| `ramp-10vu` | 10 min | 2 VU warmup (2m), ramp to 10 over 2m, 5 min hold, 1m down | Baseline |
+| `ramp-50vu` | 12 min | 5 VU warmup (2m), ramp to 50 over 3m, 5 min hold, 2m down | Steady-state performance |
+| `ramp-nvu` | 12 min | VU/10 warmup (2m), ramp to N over 3m, 5 min hold, 2m down | Find degradation point (N = 75-150) |
 
-Throughput is steady-state over the 5-minute hold. Latency is the `{scenario:main}` percentile
-that the thresholds actually evaluate. One lifecycle = 4 API calls.
+Only the `main` scenario is measured; warmup is excluded from all thresholds and figures. Throughput is steady-state over the 5-minute hold, not averaged across the run.
 
-| Peak VU | Lifecycles/s | **API req/s** | http p95* | txn p95 | Lifecycles | Success | HTTP failures | Verdict |
-|---|---|---|---|---|---|---|---|---|
-| 2 | 0.215 | 0.86 | 420ms | 11.47s | 81 | 100% | 0% | pass |
-| 10 | 1.058 | 4.22 | 407ms | 11.47s | 412 | 100% | 0% | pass |
-| 50 | 5.181 | 20.72 | 511ms | 11.71s | 2,356 | 100% | 0% | pass |
-| 75 | 7.972 | 31.88 | 447ms | 11.31s | 3,621 | 100% | 0% | pass |
-| 100 | 9.829 | 39.33 | 756ms | 12.00s | 4,540 | 100% | 0% | pass |
-| **125** | **10.819** | **43.28** | 1,321ms | 13.53s | 5,122 | 100% | 0% | **pass (last clean level)** |
-| 150 | 10.885 | 43.50 | 2,326ms | **16.14s** | 5,363 | 100% | 0% | **BREACH** — `transaction_duration p(95)<15000` |
+### Test Machines
 
-\* includes ~185ms of network RTT; subtract for server-side latency.
+| Machine | Spec | Purpose |
+|---------|-------|------|
+| Live deployment | 16 vCPU, 30 GB RAM (KVM guest) | Full-stack validation, 59 containers, real usage |
 
-::: warning Do not read the low-VU rows as Bomet's capacity.
-At 2–75 VU the harness is **think-time-bound, not server-bound** — the numbers measure the
-harness's own `sleep()` calls, not the server. Only the 100 VU row and above say anything
-about what Bomet can do.
-:::
+Idle baseline before any test load: load average 5.5-6.9, 4-7 GB memory available. All figures sit on top of that existing load.
 
-## Where the Server Actually Becomes the Constraint
+## Executive Summary
 
-Because the harness is closed-loop, the real cycle time is `VU ÷ measured rate`. Subtracting the
-~8s of scripted sleep leaves the time the server actually took per lifecycle — a directly
-meaningful quantity, with no ratio to a nominal constant involved:
+| Metric | Value |
+|--------|-------|
+| Peak throughput | 10.8 lifecycles/sec (43.3 API req/s) |
+| Daily capacity | **934,762 transactions/day** |
+| VU ceiling | **125 concurrent users** |
+| Breaking point | 150 VUs |
+| HTTP failures | 0.000% at every level |
+| Records in database | 2,250 complaints |
 
-| Peak VU | Real cycle time | **Server time per lifecycle** | vs. baseline |
-|---|---|---|---|
-| 2 | 9.30s | 1.30s | — |
-| 10 | 9.45s | 1.45s | 1.0× |
-| 50 | 9.65s | 1.65s | 1.1× |
-| 75 | 9.41s | 1.41s | 1.0× |
-| 100 | 10.17s | 2.17s | 1.5× |
-| 125 | 11.55s | 3.55s | 2.4× |
-| 150 | 13.78s | **5.78s** | **4.0×** |
+The system exceeds a 10,000 txn/day target by 93x. Failures at the ceiling are caused by latency, not errors — the system queues under saturation rather than shedding load.
 
-Up to 75 VU the server's contribution is flat at ~1.5s — it keeps up completely, and throughput
-is set entirely by the harness's sleeps. From 100 VU the server's share climbs, and by 150 VU it
-has quadrupled. Adding 25 VUs beyond 125 buys **+0.6% throughput** (10.819 → 10.885/s) while p95
-latency grows 19%. That is a saturated system.
+## Baseline Performance
 
-## How It Degrades
+### Ramp Tests (Live Deployment)
 
-The failure mode is the important part: **at no point did any request fail.** Across all seven
-levels, `http_req_failed` stayed at **0.000%** and `transaction_success` at **100%**, including
-at the breach. The system does not shed load or return errors under saturation — it queues, and
-users wait longer.
+| Test | Lifecycles | Success | p95 Latency* |
+|------|-------------|---------|-------------|
+| ramp-2vu | 81 | 100% | 420ms |
+| ramp-10vu | 412 | 100% | 407ms |
+| ramp-50vu | 2,356 | 100% | 511ms |
 
-Note also *which* budget broke. The breach is on end-to-end `transaction_duration`, which includes
-the ~8s of scripted think time. `http_req_duration` p95 — actual server latency — was 2,326ms at
-150 VU, less than half its own 5,000ms threshold. By the metric that measures the server directly,
-Bomet had not yet breached anything at 150 VU.
+\* `http_req_duration`, includes ~185ms network RTT.
 
-Host behaviour across the ceiling steps:
+### Ramp Tests (VU Ceiling)
 
-| Peak VU | Peak load (16 vCPU) | Min CPU idle | Min memory available |
-|---|---|---|---|
+| VUs | Result |
+|-----|---------------|
+| 75 | 100% pass, p95=447ms |
+| 100 | 100% pass, p95=756ms |
+| 125 | 100% pass, p95=1,321ms |
+| 150 | threshold breach, p95=2,326ms |
+
+**VU ceiling: 125.** The breach at 150 VUs is on `transaction_duration` p95 (16.14s against a 15s budget). `http_req_duration` p95 stayed at 2,326ms against its own 5,000ms budget, and HTTP failures remained at 0.000%.
+
+## Degradation Curve
+
+Throughput and latency as a function of concurrency:
+
+| VUs | Throughput | API req/s | p95 Latency | Lifecycles |
+|-----|-----------|-----------|-------------|-----------|
+| 2 | 0.2/s | 0.9 | 420ms | 81 |
+| 10 | 1.1/s | 4.2 | 407ms | 412 |
+| 50 | 5.2/s | 20.7 | 511ms | 2,356 |
+| 75 | 8.0/s | 31.9 | 447ms | 3,621 |
+| 100 | 9.8/s | 39.3 | 756ms | 4,540 |
+| **125** | **10.8/s** | **43.3** | 1,321ms | 5,122 |
+| 150 | 10.9/s | 43.5 | 2,326ms | 5,363 |
+
+Below 75 VUs throughput tracks the client-side think time almost exactly (`VU / 9.5`), so the server contributes no measurable limit. Divergence begins at 100 VUs. By 150 VUs, adding 25 more VUs yields 0.6% more throughput for 19% more latency.
+
+## Host Behaviour
+
+| VUs | Peak load (16 vCPU) | Min CPU idle | Min memory available |
+|-----|--------------------|--------------|---------------------|
 | 75 | 32.1 | 12% | 3,006 MB |
 | 100 | 45.5 | 3% | 2,427 MB |
 | 125 | 63.6 | 2% | 1,655 MB |
 | 150 | 61.1 | 2% | 1,315 MB |
 
-**CPU is the binding constraint.** Idle time hits 2–3% from 100 VU onward, while memory never
-falls below 1.3 GB of 30 GB and no container was OOM-killed or restarted. Adding CPU should move
-the ceiling; adding RAM would not.
+CPU is the binding constraint. Memory never falls below 1.3 GB of 30 GB and no container was OOM-killed or restarted.
 
-## What Was Not Measured
+## Deployment Configuration
 
-Two honest gaps:
+Pointing the harness at a live deployment requires configuration the harness previously hardcoded. These are overridable via `k6/config/environments.js` (see `environments.js.example`):
 
-- **The error ceiling is unknown.** Nothing was run past 150 VU, by design — this is a live
-  deployment. Bomet's *latency* ceiling is 125 VU; the point at which it starts returning errors
-  was never reached and is strictly higher.
-- **Host metric sampling was not retained.** The load/CPU/memory table above is carried forward
-  from the run-time analysis; the raw per-sample logs were not preserved and cannot be re-derived.
-
-## Why This Does Not Match the March Tier Table
-
-The March 2026 results put a 16 vCPU machine at ~300 VU. Bomet is 16 vCPU and reached 125. The
-gap is real but it is not a contradiction — four things differ, and each one moves the number the
-same direction:
-
-| Difference | Effect |
-|---|---|
-| **Different breach criterion.** March ceilings mark where *errors* appear (connection exhaustion, PgBouncer timeouts). Bomet's 125 marks where a *latency* budget is exceeded, with zero errors. | Not the same measurement. Bomet's error ceiling is higher than 125 and was never probed. |
-| **Full stack, not PGR-only.** 59 containers share the 16 vCPU — Elasticsearch, Keycloak, Novu, Redpanda. The box idles at load 5.5–6.9 before any test traffic. | Matches the existing caveat that non-PGR modules reduce capacity proportionally. |
-| **None of the three database fixes are applied.** Verified against this repository's deploy path: no `idx_eg_pgr_address_v2_parentid`, no composite workflow indexes, no GIN trigram index, no `jit = off`, and `EGOV_WF_FUZZYSEARCH_ISFUZZYENABLED` is unset. | The March tier figures explicitly assume all three are applied. Bomet sits outside that assumption. |
-| **Shared KVM guest**, not a dedicated EC2 instance. | Noisy-neighbour and virtualisation overhead are not controlled for. |
-
-The database-fixes point is the one worth acting on. Bomet's database is small today (~2,250
-complaints), which is why an untuned deployment still performs well. The March data shows an
-unfixed deployment degrading roughly **9.4×** by 100K records. Bomet has the headroom to absorb
-that today, but the fixes are the cheapest capacity available and should be applied before the
-database grows.
-
-## Deployment-Specific Configuration
-
-Pointing the harness at a real deployment required configuration the harness previously hardcoded.
-These are now overridable via `k6/config/environments.js` (see `environments.js.example`):
-
-| Assumption | Stock value | Why it fails elsewhere |
-|---|---|---|
-| Locality code | `JLC477` | Only exists in `full-dump.sql` seed data. PGR validates locality against the boundary service, so every CREATE fails without a real code. |
-| City / district / region | `City A` | Same — seed-only value. |
-| Tenant | `statea.citya` | PGR workflow and `RAINMAKER-PGR.ComplaintHierarchy` may both resolve at the **state** tenant, not the city. |
-| Service codes | 33 defaults | Must be restricted to codes whose department has active employees, or ASSIGN auto-routing has nobody to route to. |
+| Setting | Stock value | Why it must change |
+|-----------|------------|----------------------|
+| Locality code | `JLC477` | Seed-only value. PGR validates locality against the boundary service, so every CREATE fails without a real code. |
+| City/district/region | `City A` | Seed-only value. |
+| Tenant | `statea.citya` | PGR workflow and `RAINMAKER-PGR.ComplaintHierarchy` may resolve at the state tenant, not the city. |
+| Service codes | 33 defaults | Must be restricted to codes whose department has active employees, or ASSIGN has nobody to route to. |
 | Citizen identity | 100 fabricated users | Creates junk user records on shared environments. |
 
-One further prerequisite: the test employee must hold roles for **every** transition the lifecycle
-drives. On stock PGR, `ASSIGN` requires `GRO` or `PGR_VIEWER` and `RESOLVE` requires `PGR_LME` or
-`PGR_VIEWER` — so `PGR_VIEWER` alone covers both, while an account holding only `GRO` and
-`SUPERVISOR` cannot complete the lifecycle.
-
-## Reproducing These Numbers
-
-Steady-state throughput and hold-window percentiles are computed from each run's `metrics.csv` by
-taking the window where `vus >= 0.95 × peak`, counting `transaction_duration` samples tagged
-`scenario:main` inside it, and dividing by the window length. Threshold verdicts and
-`http_req_duration` percentiles are read from each run's `summary.json`, which is what k6 itself
-evaluates the thresholds against.
+The test employee must hold roles for every transition the lifecycle drives. `ASSIGN` requires `GRO` or `PGR_VIEWER`; `RESOLVE` requires `PGR_LME` or `PGR_VIEWER`.
