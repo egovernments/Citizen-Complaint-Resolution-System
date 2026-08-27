@@ -1316,7 +1316,7 @@
         mcp_image: >-
           {{ mcp_image
              | default('digit-mcp:local' if (build_mcp | default(false))
-                       else 'ghcr.io/subhashini-egov/digit-mcp:2.12-draft-20260525-034354') }}
+                       else 'egovio/digit-mcp:master-b4f0eeb8d') }}
 
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)

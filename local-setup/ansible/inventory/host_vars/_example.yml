@@ -331,7 +331,7 @@ enable_search_stack: false
 # through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
 #
 # Image source: the playbook's "Resolve MCP image tag" task defaults to the
-# PUBLIC pin `ghcr.io/subhashini-egov/digit-mcp:<tag>`, and passes it to
+# PUBLIC pin `egovio/digit-mcp:<tag>`, and passes it to
 # compose verbatim (no `docker_registry` prefix) — so a public-internet box
 # works out of the box. Set `build_mcp: true` to build from the vendored
 # in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
