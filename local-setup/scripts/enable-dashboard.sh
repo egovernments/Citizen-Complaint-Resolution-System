@@ -64,12 +64,12 @@
 #
 # Idempotent: re-runs report existing records as skipped. By DEFAULT it does
 # NOT overwrite a live record that already exists — see --update and the
-# "stale catalog" note in docs/dashboard-configuration.md.
+# "stale catalog" note in docs/dashboard/dashboard-configuration.md.
 #
 # RUNBOOK: the full operator runbook — prerequisites, the role-remap decision,
 # the data caveats that make a correct seed look broken, and a symptom -> cause
 # table for every known blocker — is posted as a comment on the enablement PR
-# (#1400) and graduates into docs/dashboard-configuration.md on merge. Read it
+# (#1400) and graduates into docs/dashboard/dashboard-configuration.md on merge. Read it
 # before a first run on an unfamiliar deployment.
 # =============================================================================
 
@@ -618,7 +618,7 @@ for r in recs:
     # envelope we build. Posting the wrapper stores a record whose only fields
     # are tenantId+data, which passes schema validation nowhere and reads back
     # as a KPI with no id. Tolerate the v1-flat shape too: both exist in this
-    # repo for other masters (see docs/dashboard-rbac-design/20-…, B-3).
+    # repo for other masters (see docs/dashboard/dashboard-rbac-design/20-…, B-3).
     inner = r['data'] if isinstance(r, dict) and isinstance(r.get('data'), dict) else r
     print(json.dumps(remap(inner)))
 PY
