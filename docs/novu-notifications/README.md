@@ -16,6 +16,21 @@ PGR transition
 
 PGR resolves recipients and renders content. The bridge gates channels, selects the workflow/provider, triggers Novu, and records trigger outcomes. Configurator manages routing, content, and initial provider creation; deployment automation must establish the platform first.
 
+## The complete Ansible sequence
+
+For a new Ansible-managed deployment, the linear path is:
+
+1. Put every supported durable notification setting and the WhatsApp-bootstrap credentials in `inventory/host_vars/<deployment>.yml` using the block in step 2. Ordinary-SMS provider credentials live in Novu and are added in step 3.
+2. Run `./deploy.sh <deployment>` once. It starts Novu, mints and wires the Novu API key, enables config-driven PGR, and seeds notification MDMS.
+3. If SMS is enabled, create the distinct ordinary-SMS provider and make it the primary Novu `sms` integration as described in step 4.
+4. Run `bootstrap-novu-whatsapp.sh` once with the explicit environment contract in step 5. This creates the WhatsApp integration and the exact workflow identifiers without running Ansible again.
+5. For real WhatsApp delivery, replace the seeded example Content SIDs with mappings from the configured Twilio account. Author or verify PGR routing and message templates in Configurator.
+6. Verify the configuration, then generate a real complaint transition only when a delivery test is intended.
+
+Steps 1–4 are sufficient for a non-delivery platform/bootstrap validation. Actual end-to-end delivery also requires steps 5–6.
+
+The uppercase values in step 5 are inputs to the shell script; do not add them to Ansible YAML. The playbook does not read `NOVU_WORKFLOW_NAME`, `NOVU_SMS_WORKFLOW_ID`, `NOVU_EMAIL_WORKFLOW_ID`, or `NOVU_EVENT_WORKFLOWS`. Conversely, keep the lowercase Ansible variables in inventory so a future deployment does not revert the configuration. `NOVU_API_KEY` is normally minted during step 2 and read from `/opt/digit/.env` by the targeted command afterward.
+
 ## Before you start
 
 You need:
@@ -29,7 +44,7 @@ You need:
 
 Compose and Ansible are the supported bootstrap paths. The Helm charts deploy components but do not currently perform the complete PGR flag, workflow, provider, and MDMS bootstrap described here.
 
-Do not enable a channel until its workflow and provider are ready.
+Do not allow complaint traffic until every enabled channel has its workflow and provider ready.
 
 ## 1. Choose channels and providers
 
@@ -88,6 +103,11 @@ twilio_whatsapp_from: "whatsapp:+<approved sender>"
 ```
 
 Set every value before starting, then run the normal deployment playbook once. Do not run the full deployment a second time just to create Novu integrations or workflows; step 5 performs that targeted operation against the running Novu API. Keep complaint traffic stopped until the provider and workflow verification is complete. Direct changes to the generated `.env` will be overwritten on the next Ansible deployment.
+
+```bash
+cd /opt/ccrs/local-setup/ansible
+./deploy.sh <deployment>
+```
 
 ## 3. Bootstrap the platform and base MDMS
 
