@@ -23,7 +23,6 @@ set -euo pipefail
 #   NOVU_ENV_NAME          (default: digit-dev)
 #   NOVU_ENV_COLOR         (default: #4F46E5)
 #   NOVU_WORKFLOW_ID       (default: complaints-whatsapp — MUST match novu.bridge.workflow.id.whatsapp, i.e. what the bridge triggers)
-#   NOVU_WORKFLOW_NAME     (default: Complaints WhatsApp Workflow)
 #   NOVU_INTEGRATION_NAME  (default: twilio-whatsapp)
 #   NOVU_INTEGRATION_ID    (default: twilio-whatsapp)
 #   NOVU_SMS_BODY          (default: Complaint {{payload.complaintNo}} status is {{payload.status}})
@@ -73,7 +72,6 @@ NOVU_BASE_URL="${NOVU_BASE_URL:-http://localhost:1336}"
 NOVU_ENV_NAME="${NOVU_ENV_NAME:-digit-dev}"
 NOVU_ENV_COLOR="${NOVU_ENV_COLOR:-#4F46E5}"
 NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp}"
-NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-Complaints WhatsApp Workflow}"
 NOVU_INTEGRATION_NAME="${NOVU_INTEGRATION_NAME:-twilio-whatsapp}"
 NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
 NOVU_SMS_BODY="${NOVU_SMS_BODY:-Complaint {{payload.complaintNo}} status is {{payload.status}}}"
@@ -129,26 +127,22 @@ api_post() {
     "${NOVU_BASE_URL}${path}"
 }
 
+api_put() {
+  local path="$1"
+  local payload="$2"
+  curl -sS --fail-with-body \
+    -X PUT \
+    -H "$AUTH_HEADER" \
+    -H "$JSON_HEADER" \
+    -d "$payload" \
+    "${NOVU_BASE_URL}${path}"
+}
+
 api_get_no_fail() {
   local path="$1"
   curl -sS \
     -H "$AUTH_HEADER" \
     "${NOVU_BASE_URL}${path}" || true
-}
-
-api_post_with_status() {
-  local path="$1"
-  local payload="$2"
-  local body_file
-  body_file="$(mktemp)"
-  local status
-  status="$(curl -sS -o "$body_file" -w '%{http_code}' \
-    -X POST \
-    -H "$AUTH_HEADER" \
-    -H "$JSON_HEADER" \
-    -d "$payload" \
-    "${NOVU_BASE_URL}${path}" || true)"
-  echo "${status}|${body_file}"
 }
 
 extract_id() {
@@ -202,18 +196,19 @@ fi
 echo "==> Checking/creating Twilio integration: ${NOVU_INTEGRATION_ID}"
 INTEGRATIONS_JSON="$(api_get "/v1/integrations")"
 if [[ -n "$ENV_ID" ]]; then
-  INTEGRATION_ID="$(echo "$INTEGRATIONS_JSON" | jq -r --arg ident "$NOVU_INTEGRATION_ID" --arg env "$ENV_ID" '
+  INTEGRATION_JSON="$(echo "$INTEGRATIONS_JSON" | jq -c --arg ident "$NOVU_INTEGRATION_ID" --arg env "$ENV_ID" '
     (.. | arrays | .[]? | select(type=="object")) as $i
     | select(($i.identifier // "") == $ident and (($i._environmentId // $i.environmentId // "") == $env))
-    | ($i._id // $i.id // empty)
+    | $i
   ' | head -n1)"
 else
-  INTEGRATION_ID="$(echo "$INTEGRATIONS_JSON" | jq -r --arg ident "$NOVU_INTEGRATION_ID" '
+  INTEGRATION_JSON="$(echo "$INTEGRATIONS_JSON" | jq -c --arg ident "$NOVU_INTEGRATION_ID" '
     (.. | arrays | .[]? | select(type=="object")) as $i
     | select(($i.identifier // "") == $ident)
-    | ($i._id // $i.id // empty)
+    | $i
   ' | head -n1)"
 fi
+INTEGRATION_ID="$(extract_id "${INTEGRATION_JSON:-}")"
 
 if [[ -z "${INTEGRATION_ID}" ]]; then
   if [[ -n "$ENV_ID" ]]; then
@@ -269,16 +264,52 @@ if [[ -z "${INTEGRATION_ID}" ]]; then
   fi
   echo "    Created integration id: $INTEGRATION_ID"
 else
-  echo "    Found integration id: $INTEGRATION_ID"
+  # ApiKey-authenticated integration reads intentionally omit credentials, so
+  # comparing the desired secrets with the stored values is impossible. PUT
+  # the complete desired state on every run: this rotates credentials and
+  # repairs name/sender/active drift without deleting the integration.
+  INTEGRATION_ENV_ID="$(echo "$INTEGRATION_JSON" | jq -r '._environmentId // .environmentId // empty')"
+  if [[ -z "$INTEGRATION_ENV_ID" ]]; then
+    echo "Existing integration $INTEGRATION_ID has no environment id; refusing an incomplete update." >&2
+    exit 1
+  fi
+  UPDATE_INTEGRATION_PAYLOAD="$(jq -cn \
+    --arg name "$NOVU_INTEGRATION_NAME" \
+    --arg ident "$NOVU_INTEGRATION_ID" \
+    --arg env "$INTEGRATION_ENV_ID" \
+    --arg sid "$TWILIO_ACCOUNT_SID" \
+    --arg token "$TWILIO_AUTH_TOKEN" \
+    --arg from "$TWILIO_WHATSAPP_FROM" \
+    '{
+      name:$name,
+      identifier:$ident,
+      _environmentId:$env,
+      active:true,
+      check:false,
+      credentials:{
+        accountSid:$sid,
+        token:$token,
+        from:$from
+      }
+    }')"
+  UPDATED_INTEGRATION="$(api_put "/v1/integrations/${INTEGRATION_ID}" "$UPDATE_INTEGRATION_PAYLOAD")"
+  UPDATED_INTEGRATION_ID="$(extract_id "$UPDATED_INTEGRATION")"
+  if [[ "$UPDATED_INTEGRATION_ID" != "$INTEGRATION_ID" ]]; then
+    echo "Failed to reconcile integration $INTEGRATION_ID: response did not identify the same integration." >&2
+    echo "$UPDATED_INTEGRATION" | jq . >&2
+    exit 1
+  fi
+  echo "    Reconciled integration id: $INTEGRATION_ID"
 fi
 
 # Idempotent create of a Novu v2 workflow: skip when the workflowId already
 # exists in WORKFLOWS_JSON, otherwise POST /v2/workflows with the given steps.
-# Args: <workflowId> <workflowName> <steps-json-array>
+# Novu 2.3 derives workflowId from name even when workflowId is supplied, so
+# name intentionally equals the desired id and the response is verified.
+# Args: <workflowId> <steps-json-array>
 ensure_channel_workflow() {
   local wf_id="$1"
-  local wf_name="$2"
-  local steps_json="$3"
+  local steps_json="$2"
 
   local wf_exists
   wf_exists="$(echo "$WORKFLOWS_JSON" | jq -r --arg wid "$wf_id" '
@@ -295,11 +326,10 @@ ensure_channel_workflow() {
   local payload
   payload="$(jq -cn \
     --arg wfId "$wf_id" \
-    --arg name "$wf_name" \
     --argjson steps "$steps_json" \
     '{
       workflowId:$wfId,
-      name:$name,
+      name:$wfId,
       active:true,
       validatePayload:false,
       isTranslationEnabled:false,
@@ -319,6 +349,10 @@ ensure_channel_workflow() {
     echo "$created" | jq . >&2
     exit 1
   fi
+  if [[ "$created_id" != "$wf_id" ]]; then
+    echo "Novu created workflow id '$created_id', expected '$wf_id'." >&2
+    exit 1
+  fi
   echo "    Created workflow: $created_id"
 }
 
@@ -334,7 +368,7 @@ WHATSAPP_STEPS="$(jq -cn --arg body "$NOVU_SMS_BODY" '[
     controlValues:{ body:$body }
   }
 ]')"
-ensure_channel_workflow "$NOVU_WORKFLOW_ID" "$NOVU_WORKFLOW_NAME" "$WHATSAPP_STEPS"
+ensure_channel_workflow "$NOVU_WORKFLOW_ID" "$WHATSAPP_STEPS"
 
 echo "==> Checking/creating novu-bridge channel workflows: ${NOVU_SMS_WORKFLOW_ID}, ${NOVU_EMAIL_WORKFLOW_ID}"
 # novu-bridge triggers these fixed per-channel workflows (see
@@ -361,97 +395,25 @@ EMAIL_STEPS='[
     }
   }
 ]'
-ensure_channel_workflow "$NOVU_SMS_WORKFLOW_ID" "$NOVU_SMS_WORKFLOW_ID" "$SMS_STEPS"
-ensure_channel_workflow "$NOVU_EMAIL_WORKFLOW_ID" "$NOVU_EMAIL_WORKFLOW_ID" "$EMAIL_STEPS"
+ensure_channel_workflow "$NOVU_SMS_WORKFLOW_ID" "$SMS_STEPS"
+ensure_channel_workflow "$NOVU_EMAIL_WORKFLOW_ID" "$EMAIL_STEPS"
 
 echo "==> Checking/creating event-convention workflows: ${NOVU_EVENT_WORKFLOWS}"
 IFS=',' read -r -a EVENT_WF_IDS <<< "$NOVU_EVENT_WORKFLOWS"
 for EVENT_WF_ID in "${EVENT_WF_IDS[@]}"; do
   EVENT_WF_ID="$(echo "$EVENT_WF_ID" | xargs)"
   [[ -z "$EVENT_WF_ID" ]] && continue
-  EVENT_WORKFLOW_EXISTS="$(echo "$WORKFLOWS_JSON" | jq -r --arg wid "$EVENT_WF_ID" '
-    [
-      (.. | arrays | .[]? | select(type=="object") | select((.workflowId // "") == $wid))
-    ] | length
-  ')"
-
-  if [[ "$EVENT_WORKFLOW_EXISTS" == "0" ]]; then
-    EVENT_NAME_PRETTY="$(echo "$EVENT_WF_ID" | tr '.' ' ')"
-    EVENT_WF_ID_EFFECTIVE="$EVENT_WF_ID"
-    EVENT_CREATE_PAYLOAD="$(jq -cn \
-      --arg wfId "$EVENT_WF_ID_EFFECTIVE" \
-      --arg name "$EVENT_NAME_PRETTY" \
-      '{
-        workflowId:$wfId,
-        name:$name,
-        active:true,
-        validatePayload:false,
-        isTranslationEnabled:false,
-        steps:[
-          {
-            name:"Send WhatsApp via Twilio",
-            type:"sms",
-            controlValues:{
-              body:"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}"
-            }
-          }
-        ]
-      }')"
-
-    CREATE_RESULT="$(api_post_with_status "/v2/workflows" "$EVENT_CREATE_PAYLOAD")"
-    CREATE_STATUS="${CREATE_RESULT%%|*}"
-    CREATE_BODY_FILE="${CREATE_RESULT#*|}"
-    CREATED_EVENT_WF="$(cat "$CREATE_BODY_FILE")"
-    rm -f "$CREATE_BODY_FILE"
-
-    if [[ "$CREATE_STATUS" == "422" ]]; then
-      EVENT_WF_ID_EFFECTIVE="$(slugify "$EVENT_WF_ID")"
-      echo "    Workflow ID '$EVENT_WF_ID' rejected by Novu (422). Retrying with '$EVENT_WF_ID_EFFECTIVE'."
-      EVENT_CREATE_PAYLOAD="$(jq -cn \
-        --arg wfId "$EVENT_WF_ID_EFFECTIVE" \
-        --arg name "$EVENT_NAME_PRETTY" \
-        '{
-          workflowId:$wfId,
-          name:$name,
-          active:true,
-          validatePayload:false,
-          isTranslationEnabled:false,
-          steps:[
-            {
-              name:"Send WhatsApp via Twilio",
-              type:"sms",
-              controlValues:{
-                body:"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}"
-              }
-            }
-          ]
-        }')"
-      RETRY_RESULT="$(api_post_with_status "/v2/workflows" "$EVENT_CREATE_PAYLOAD")"
-      RETRY_STATUS="${RETRY_RESULT%%|*}"
-      RETRY_BODY_FILE="${RETRY_RESULT#*|}"
-      CREATED_EVENT_WF="$(cat "$RETRY_BODY_FILE")"
-      rm -f "$RETRY_BODY_FILE"
-      if [[ "$RETRY_STATUS" -lt 200 || "$RETRY_STATUS" -ge 300 ]]; then
-        echo "Failed creating workflow ${EVENT_WF_ID} with normalized id ${EVENT_WF_ID_EFFECTIVE} (HTTP ${RETRY_STATUS})" >&2
-        echo "$CREATED_EVENT_WF" | jq . >&2
-        exit 1
-      fi
-    elif [[ "$CREATE_STATUS" -lt 200 || "$CREATE_STATUS" -ge 300 ]]; then
-      echo "Failed creating workflow ${EVENT_WF_ID} (HTTP ${CREATE_STATUS})" >&2
-      echo "$CREATED_EVENT_WF" | jq . >&2
-      exit 1
-    fi
-
-    CREATED_EVENT_WF_ID="$(echo "$CREATED_EVENT_WF" | jq -r '.workflowId // .data.workflowId // empty')"
-    if [[ -z "${CREATED_EVENT_WF_ID}" ]]; then
-      echo "Failed creating workflow ${EVENT_WF_ID}" >&2
-      echo "$CREATED_EVENT_WF" | jq . >&2
-      exit 1
-    fi
-    echo "    Created workflow: $CREATED_EVENT_WF_ID (source event: $EVENT_WF_ID)"
-  else
-    echo "    Workflow already exists: $EVENT_WF_ID"
-  fi
+  EVENT_WF_ID_EFFECTIVE="$(slugify "$EVENT_WF_ID")"
+  EVENT_STEPS='[
+    {
+      "name":"Send WhatsApp via Twilio",
+      "type":"sms",
+      "controlValues":{
+        "body":"Complaint {{payload.complaintNo}} status {{payload.workflowState}} for tenant {{payload.tenantId}}"
+      }
+    }
+  ]'
+  ensure_channel_workflow "$EVENT_WF_ID_EFFECTIVE" "$EVENT_STEPS"
 done
 
 echo
