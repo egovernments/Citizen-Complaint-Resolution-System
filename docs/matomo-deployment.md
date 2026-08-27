@@ -476,6 +476,15 @@ through a real nginx proxy:
   instance accepts a tracking hit (`200`, action stored) and the generated
   superuser genuinely authenticates (login `302`, dashboard `200`, no bounce
   back to the login form). Re-running it is a no-op
+- **the ansible tasks themselves were executed**, not just linted: the five
+  Matomo tasks were lifted verbatim out of `playbook-deploy.yml` into a minimal
+  play and run against a throwaway container. They installed it, the templated
+  values all landed (`tls_enabled: false` produced `http://` in the site URL,
+  and the dotted-domain email fallback produced `admin@<domain>`), tracking
+  returned `200`, and a second run reported **`changed=0`** with no duplicated
+  `trusted_hosts` entries, no second `[database]` section and no extra site or
+  user rows. Worth stating because these tasks carry `failed_when: false` — a
+  green play is not on its own evidence that anything worked
 - `yamllint`, `ansible-lint` (0 failures, 0 warnings, production profile) and
   `ansible-playbook --syntax-check` all pass
 - `preflight.py --self-test`: 34/34, including three new Matomo cases
