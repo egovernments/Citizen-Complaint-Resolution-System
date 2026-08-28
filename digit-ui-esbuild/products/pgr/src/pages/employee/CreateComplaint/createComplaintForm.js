@@ -104,9 +104,17 @@ const CreateComplaintForm = ({
   // token doesn't carry the department, so look it up from HRMS by the
   // current user's uuid (same source AssigneeComponent uses).
   const hrmsContext = window?.globalConfigs?.getConfig?.("HRMS_CONTEXT_PATH") || "egov-hrms";
+  // Same rationale as AssigneeComponent: this is the logged-in user's own
+  // record, which cannot change mid-session, so the 1s/5s defaults only cost
+  // repeat fetches on every remount of the create form.
   const { data: currentEmployeeData } = Digit.Hooks.useCustomAPIHook({
     url: `/${hrmsContext}/employees/_search`,
     params: { tenantId, uuids: user?.info?.uuid },
+    changeQueryName: `hrms-current-employee-${user?.info?.uuid}`,
+    options: {
+      staleTime: 5 * 60 * 1000,
+      cacheTime: 10 * 60 * 1000,
+    },
     config: { enabled: !!user?.info?.uuid },
   });
   // All departments the logged-in employee is actively assigned to. A user
