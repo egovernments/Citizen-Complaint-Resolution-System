@@ -25,6 +25,10 @@ import {
   buildDashboardRoleAction,
   normalizeDashboardRoles,
 } from './dashboard-bootstrap-seed.js';
+import {
+  EMPLOYEE_CONTEXT_ACTION_ID,
+  reconcileEmployeeContextPolicy,
+} from './employee-context-policy-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -1991,7 +1995,61 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       }
 
-      // Step 2c: make the employee dashboard discoverable on a true 0→1 install.
+      // Step 2c: guarantee the role-independent employee context policy.
+      //
+      // Copying ACCESSCONTROL-ACTIONS-TEST from the source handles the normal
+      // path, but an older source can either lack action 2635 or carry #1867's
+      // legacy condition-less form. Reconcile that gap from the repository so
+      // every newly bootstrapped root gets the same user.type == EMPLOYEE
+      // policy. Deliberately do not create ROLEACTIONS: functional roles are
+      // not part of this decision. A different authored condition is surfaced
+      // as a failure rather than silently overwritten.
+      async function ensureEmployeeContextPolicyInSchema(
+        actionsSchema: string,
+        floorLabel: string,
+      ): Promise<void> {
+        const actions = await fetchAllMdmsV2Raw(target, actionsSchema).catch(() => []);
+        const existing = actions.find((record) =>
+          record.tenantId === target
+            && record.isActive
+            && Number((record.data as { id?: number })?.id) === EMPLOYEE_CONTEXT_ACTION_ID);
+        const reconciliation = reconcileEmployeeContextPolicy(
+          existing?.data as Record<string, unknown> | undefined,
+        );
+        const resultKey = `${actionsSchema}/${EMPLOYEE_CONTEXT_ACTION_ID} (${floorLabel})`;
+
+        try {
+          if (reconciliation.kind === 'create') {
+            await mdmsCreateWithSchemaWait(
+              target,
+              actionsSchema,
+              String(EMPLOYEE_CONTEXT_ACTION_ID),
+              reconciliation.data,
+            );
+            results.data.copied.push(resultKey);
+          } else if (reconciliation.kind === 'update' && existing) {
+            await digitApi.mdmsV2UpdateData(existing, reconciliation.data);
+            results.data.copied.push(`${resultKey} (reconciled)`);
+          } else if (reconciliation.kind === 'current') {
+            results.data.skipped.push(resultKey);
+          } else if (reconciliation.kind === 'conflict') {
+            results.data.failed.push(`${resultKey}: ${reconciliation.reason}`);
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (isDuplicateError(msg)) {
+            results.data.skipped.push(resultKey);
+          } else {
+            results.data.failed.push(`${resultKey}: ${msg}`);
+          }
+        }
+      }
+      await ensureEmployeeContextPolicyInSchema(
+        'ACCESSCONTROL-ACTIONS-TEST.actions-test',
+        'employee policy floor',
+      );
+
+      // Step 2d: make the employee dashboard discoverable on a true 0→1 install.
       //
       // Catalog records alone only render a dashboard after navigation and route
       // authorization have admitted the employee. Seed all three parts as a
@@ -2315,6 +2373,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       } catch (e) {
         results.data.failed.push(`ACCESSCONTROL-ACTIONS.actions bridge: ${e instanceof Error ? e.message : String(e)}`);
       }
+
+      // Existing tenants may already have #1867's condition-less action in
+      // the non-TEST runtime schema. The bridge is create-if-absent, so it
+      // cannot repair that row by itself; reconcile it after the bridge.
+      await ensureEmployeeContextPolicyInSchema(
+        'ACCESSCONTROL-ACTIONS.actions',
+        'employee runtime policy floor',
+      );
 
       // Evict egov-user's Redis cache before creating the ADMIN user.
       // egov-user derives the state-level tenant by splitting the city tenantId

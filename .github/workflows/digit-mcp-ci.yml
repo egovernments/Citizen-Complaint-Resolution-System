@@ -40,4 +40,6 @@ jobs:
       # Offline unit tests only — the test-*.ts suites that need a live DIGIT
       # environment (test-integration, test-e2e-new-tenant, …) stay out of CI.
       - name: Unit tests (no environment required)
-        run: npx tsx test-master-localizations.ts
+        run: |
+          npx tsx test-master-localizations.ts
+          npm run test:employee-context-policy
