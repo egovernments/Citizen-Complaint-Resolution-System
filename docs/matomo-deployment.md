@@ -7,7 +7,9 @@ with Google Analytics, citizen browsing data leaves the deployment's
 infrastructure. With Matomo On-Premise, the visit data stays in a database the
 deployment owns.
 
-This document covers **standing the server up**, on both deployment tiers.
+This document covers **standing the server up** on the **compose / Ansible**
+tier (`local-setup/`). The Kubernetes / Helm tier is packaged separately —
+see [`docs/matomo-kubernetes.md`](matomo-kubernetes.md).
 
 ## What this is not
 
@@ -35,22 +37,25 @@ Two other things this is not:
 
 ---
 
-## Which tier are you on?
+## The two tiers
 
 | | Compose / Ansible | Kubernetes / Helm |
 |---|---|---|
-| Where | `local-setup/` | `devops/deploy-as-code/` |
+| Where | `local-setup/` — **this document** | `devops/deploy-as-code/` — [`matomo-kubernetes.md`](matomo-kubernetes.md) |
 | Switch | `enable_matomo: true` in `host_vars/<tenant>.yml` | `installed: true` on the `matomo` release |
 | Matomo install | unattended, by the deploy | unattended, by the chart |
 | Public surface | two tracking endpoints only | `/matomo` ingress |
-| Verified | yes — installed and tracked end to end | template-level only (see §Status) |
+| Verified | installed and tracked end to end | template-level only |
 
-Both tiers install Matomo without a human. They get there differently: the k8s
+Both tiers install Matomo without a human, and get there differently. The k8s
 tier uses Bitnami's chart, which installs from `matomoUsername` /
-`matomoPassword`; the compose tier uses the **official** `matomo:5-apache`
-image, which has no such support, so the deploy drives Matomo's own install API
-directly (`local-setup/ansible/files/matomo-bootstrap.php`). See §"How the
-headless install works" for why that script exists and what it does.
+`matomoPassword`. This tier uses the **official** `matomo:5-apache` image, which
+has no such support, so the deploy drives Matomo's own install API directly
+(`local-setup/ansible/files/matomo-bootstrap.php`) — see §"How the headless
+install works".
+
+Everything below §"Pointing the portal at it" is shared: it applies whichever
+tier you deployed.
 
 ---
 
@@ -181,98 +186,6 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
 to the digit-ui location, whose `try_files` ends at the SPA shell. nginx answers
 **200** with HTML. Nothing looks broken; the browser just tries to execute HTML
 as JavaScript.
-
----
-
-## Kubernetes / Helm tier
-
-The chart is vendored at
-`devops/deploy-as-code/charts/backbone-services/matomo` (Bitnami matomo 11.0.0,
-taken from `DIGIT-DevOps@central-instance-deployment`), with its `mariadb` and
-`common` subcharts vendored unpacked under `charts/`, matching how the
-`postgresql` chart in the same directory is vendored.
-
-### 1. Set the secrets first
-
-In `devops/deploy-as-code/charts/environments/env-secrets.yaml`:
-
-```yaml
-secrets:
-    matomo:
-        password: <the Matomo superuser password>
-        dbPassword: <MariaDB app password>
-        dbRootPassword: <MariaDB root password>
-```
-
-**Before the first apply, not after.** The chart installs Matomo unattended, and
-its first run is the only moment `matomoPassword` is read. Fixing it later means
-resetting the password from inside the pod.
-
-### 2. Turn it on
-
-In `charts/backbone-services/backboneservices-helmfile.yaml`, flip the `matomo`
-release to `installed: true`. That is the only switch — the chart has no second
-internal gate.
-
-It asks for **two 30 Gi volumes** (Matomo + MariaDB), publishes at
-`https://<domain>/matomo` with the deployment's existing `<domain>-tls-certs`,
-and runs in the `backbone` namespace.
-
-### Known gap: visitor IPs on this tier
-
-> Tracked as **#1904**. Split out of this work because it is not a Matomo
-> problem — nothing sets source-IP handling on the shared ingress-nginx
-> controller, so every Ingress in the cluster has the same blind spot.
-
-Matomo here records the **ingress controller's** address, not the visitor's, so
-geolocation reports a single point and IP anonymisation has little left to
-anonymise. The compose tier does not have this problem — it sets
-`General.proxy_client_headers`, which is verified there.
-
-Fixing it is a cluster-topology decision, and both options are wrong in the
-other's environment:
-
-| Option | Correct when | Cost |
-|---|---|---|
-| `controller.config.use-forwarded-headers: "true"` | behind a trusted L7 load balancer that sets `X-Forwarded-For` | applies to **every** ingress in the cluster; where pods are reachable without passing the LB, a client can forge its own source IP |
-| `controller.service.externalTrafficPolicy: Local` | you want the true source IP without trusting any header | drops traffic on nodes running no controller pod; needs an LB that health-checks node ports |
-
-> Note for anyone copying the eGov install note: it specifies
-> `nginx.ingress.kubernetes.io/use-forwarded-headers: "true"` as a per-Ingress
-> annotation. ingress-nginx implements `use-forwarded-headers` only as a
-> controller ConfigMap setting, so that annotation is **inert** — it looks like
-> the problem is solved and it is not. This chart no longer sets it.
-
-### 3. Know what you are running: `bitnamilegacy`
-
-Every image this chart and its mariadb subchart pin is **404 on Docker Hub
-today.** Verified against the registry API:
-
-| Pinned by the chart | On Docker Hub | Under `bitnamilegacy/` |
-|---|---|---|
-| `bitnami/matomo:5.3.2-debian-12-r12` | 404 | present |
-| `bitnami/os-shell:12-debian-12-r50` | 404 | present |
-| `bitnami/apache-exporter:1.0.10-debian-12-r55` | 404 | present |
-| `bitnami/mariadb:12.0.2-debian-12-r0` | 404 | present |
-| `bitnami/mysqld-exporter:0.17.2-debian-12-r16` | 404 | present |
-
-Bitnami moved its legacy tags to the `bitnamilegacy/` namespace, so the helmfile
-release re-points every one of them there — the same remedy, for the same cause,
-as the kafka-kraft exporters a few releases above it. Deployed as the guide
-writes it, without those overrides, the release is ImagePullBackOff on every
-pod, not a partial degradation.
-
-One image could not be fixed from the helmfile: the chart hardcodes
-`bitnami/os-shell` inside its `sidecars:` template string, where no values
-override reaches it. That one is patched in the vendored `values.yaml` and
-carries a `LOCAL MODIFICATION` comment — **re-apply it if the chart is ever
-re-vendored from upstream.**
-
-And be clear about what `bitnamilegacy` *means*: those tags are frozen and
-receive no further updates, security ones included. For a server holding citizen
-browsing data that is a real posture cost. The durable fix is mirroring these
-into `egovio/` with version tags, which needs registry push rights this work did
-not have — the same follow-up the kafka comment names.
 
 ---
 
@@ -501,9 +414,9 @@ through a real nginx proxy:
   instance accepts a tracking hit (`200`, action stored) and the generated
   superuser genuinely authenticates (login `302`, dashboard `200`, no bounce
   back to the login form). Re-running it is a no-op
-- **the ansible tasks themselves were executed**, not just linted: the five
-  Matomo tasks were lifted verbatim out of `playbook-deploy.yml` into a minimal
-  play and run against a throwaway container. They installed it, the templated
+- **the ansible tasks themselves were executed**, not just linted: the Matomo
+  tasks were lifted verbatim out of `playbook-deploy.yml` into a minimal play
+  and run against a throwaway container. They installed it, the templated
   values all landed (`tls_enabled: false` produced `http://` in the site URL,
   and the dotted-domain email fallback produced `admin@<domain>`), tracking
   returned `200`, and a second run reported **`changed=0`** with no duplicated
@@ -513,9 +426,13 @@ through a real nginx proxy:
 - `yamllint`, `ansible-lint` (0 failures, 0 warnings, production profile) and
   `ansible-playbook --syntax-check` all pass
 - `preflight.py --self-test`: 34/34, including three new Matomo cases
-- the Helm chart renders through both `helm template` and `helmfile template`,
-  every rendered image resolves to a tag that exists, and `spec.tls` has exactly
-  one entry
+- `check-gatus-coverage.py` — both its own self-test and its real run. That
+  guard had been failing on master since #1613 (it read the `digit`-namespace
+  ExternalName aliases as workloads colliding with the real ones in
+  `monitoring`), and it exits on its first error, so it had never actually got
+  as far as checking whether this overlay was covered. Fixed here, because the
+  overlay's registration is what needs it: it now reports
+  `OK: 91 compose services, 29 k3s Services, 57 endpoints per tier, no drift`
 
 **Two claims corrected by testing rather than inherited:** the trusted-host
 check does not gate the tracker, and archiving succeeds with an untrusted
@@ -529,6 +446,7 @@ a handful of API calls, so headless is achievable; and a generated password held
 in OpenBao is better than a typed one, not a compromise — which is exactly the
 pattern this repo already uses for Grafana.
 
-**Not verified — no cluster was available:** everything about the Helm tier
-beyond rendering. The chart lints and templates; it has not been applied, so the
-unattended install, the two 30 Gi PVCs and the ingress are unexercised.
+**The Kubernetes tier is not in this document** and not in the pull request that
+carries it — it is packaged separately in
+[`docs/matomo-kubernetes.md`](matomo-kubernetes.md), with its own account of what
+was and was not verified there.
