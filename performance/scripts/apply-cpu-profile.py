@@ -39,12 +39,21 @@ def get_running_containers():
 
 
 def _verify(cid):
-    """Return the container's current NanoCpus, or None if unreadable."""
+    """Return "0" when the container is genuinely unthrottled, else the quota.
+
+    Reads the cgroup rather than HostConfig.NanoCpus: that metadata field cannot
+    be cleared by `docker update` and stays stale (cosmetic) until the container
+    is recreated, so trusting it reports throttling that is no longer enforced —
+    and, worse, reports success when it still is.
+    """
     r = subprocess.run(
-        ["docker", "inspect", cid, "--format", "{{.HostConfig.NanoCpus}}"],
+        ["docker", "exec", cid, "cat", "/sys/fs/cgroup/cpu.max"],
         capture_output=True, text=True
     )
-    return r.stdout.strip() if r.returncode == 0 else None
+    if r.returncode != 0:
+        return None
+    quota = r.stdout.strip().split()[0] if r.stdout.strip() else ""
+    return "0" if quota == "max" else quota
 
 
 def apply_profile(profile_path):
@@ -98,8 +107,13 @@ def remove_limits():
 
     removed, errors, still_limited = 0, [], []
     for svc, cid in containers.items():
+        # `--cpus 0` is a SILENT NO-OP: the daemon ignores a zero NanoCPUs and
+        # leaves the cgroup quota in place, so the container stays throttled
+        # while docker reports success. Clearing cpu-quota/cpu-period is the
+        # only form that actually resets cpu.max to "max". Verified on
+        # Docker 29 — `--cpus 0` left every container throttled.
         r = subprocess.run(
-            ["docker", "update", "--cpus", "0", cid],
+            ["docker", "update", "--cpu-quota", "-1", "--cpu-period", "0", cid],
             capture_output=True, text=True
         )
         if r.returncode == 0:
