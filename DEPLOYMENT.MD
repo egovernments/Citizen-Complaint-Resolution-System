@@ -103,16 +103,46 @@ with an AWS account and a terminal.
 
 ## Step 1 — Create the cloud infrastructure
 
-This one command spins up the whole environment: the network, the Kubernetes
-cluster, a Postgres database, and the file storage.
+This sets up the whole environment: the network, the Kubernetes cluster, a
+Postgres database, and the file storage. It's two quick parts.
+
+**First, give Terraform a place to keep its notes.** Terraform records what it
+builds (its "state") in an S3 bucket, with a small table alongside it so two
+people can't run it at the same time. A helper creates both — you just pick a name:
 
 ```bash
-cd devops/infra-as-code/terraform/sample-aws
+cd devops/infra-as-code/terraform/sample-aws/remote-state
+terraform init
+terraform apply -var="bucket_name=mycity-tfstate-4821"   # must be globally unique
+cd ..
 ```
 
-Open `variables.tf` and fill in the few values marked `#REPLACE` — a name for
-your cluster, a name/username/password for the database, the name for your file
-storage bucket, and which AWS region to use. Then:
+Then open `main.tf` and, near the top, replace the two
+`<terraform_state_bucket_name>` markers with that same name **in quotes**:
+
+```hcl
+    bucket         = "mycity-tfstate-4821"
+    dynamodb_table = "mycity-tfstate-4821"
+```
+
+> **About the `<...>` markers.** Throughout these files, anything in angle
+> brackets is a "fill this in" placeholder. Always replace it with a real value
+> **in quotes** — leaving the brackets, or dropping the quotes, is the most
+> common cause of a confusing error at this first step.
+
+**Now create everything.** Open `variables.tf` and set these values (again, real
+values in quotes):
+
+| In `variables.tf` | What it is | Example |
+|---|---|---|
+| `cluster_name` | A name for your Kubernetes cluster. | `"mycity"` |
+| `db_name` | A name for the database. | `"ccrsdb"` |
+| `db_username` | The database's admin username. | `"ccrs"` |
+| `db_password` | The database password. It has **no default**, so also add a line `db_password = "…"` in a `terraform.tfvars` file (or Terraform will ask for it each run). | |
+
+The rest of `variables.tf` already has sensible defaults (region, Kubernetes
+version, database size, number of servers) — leave them unless you have a reason
+to change them. Then:
 
 ```bash
 terraform init
