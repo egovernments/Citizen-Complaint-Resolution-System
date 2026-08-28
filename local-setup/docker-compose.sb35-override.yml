@@ -1,0 +1,112 @@
+# Spring Boot 3.5 + Java 25 LTS + Virtual Threads — Docker Compose Override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.sb35-override.yml up -d
+#
+# Prerequisites:
+#   Build SB35 images from egovernments/Digit-Core branch feat/spring-boot-3.5-virtual-threads
+#   using the build/maven/Dockerfile with eclipse-temurin:25-jre-alpine runtime.
+#   Tag images as digit-sb35/<service>:latest.
+#
+# What this overlay does:
+#   - Replaces stock DIGIT images with SB35-migrated images (Java 25 + virtual threads)
+#   - Fixes OTEL JDBC driver mismatches (tracer lib auto-registers OpenTelemetryDriver)
+#   - Renames Redis properties for Spring Boot 3.x (spring.redis.* → spring.data.redis.*)
+#   - Sets spring.main.allow-bean-definition-overriding=true (required for DIGIT bean patterns)
+#   - Disables OTEL exporters where they cause OOM (no collector in local-setup)
+#
+# Runtime gotchas documented:
+#   1. OTEL JDBC driver: SB35 tracer lib auto-registers io.opentelemetry.instrumentation.jdbc.OpenTelemetryDriver.
+#      Services with SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver in base compose
+#      will fail with "Driver claims to not accept jdbcUrl". Fix: override to OTEL driver class.
+#   2. Redis properties: SB 3.x renamed spring.redis.* → spring.data.redis.*. Services using
+#      Redis (egov-user, egov-localization, egov-url-shortening) need SPRING_DATA_REDIS_* env vars.
+#   3. Actuator base path: Defaults to /actuator in SB 3.x. egov-user healthcheck expects /user/health,
+#      so needs -Dmanagement.endpoints.web.base-path=/
+#   4. OTEL exporters: Without a collector, log/trace/metric exporters spam connection errors to
+#      localhost:4318 and cause OOM on memory-constrained containers. Disable with OTEL_*_EXPORTER=none.
+#   5. Kong DNS: After recreating containers, Kong caches stale IPs. Run `docker restart kong-gateway`.
+#
+# Related PR: https://github.com/egovernments/Digit-Core/pull/1241
+# Migration guide: https://gist.github.com/ChakshuGautam/23fc6d3e53f5b490896033c61ecb60fd
+
+services:
+  mdms-backend:
+    image: digit-sb35/mdms-v2:latest
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-enc-service:
+    image: digit-sb35/egov-enc-service:latest
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-idgen:
+    image: digit-sb35/egov-idgen:latest
+    environment:
+      # Fix: base compose sets DRIVER_CLASS=org.postgresql.Driver but OTEL driver auto-registers
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: io.opentelemetry.instrumentation.jdbc.OpenTelemetryDriver
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-user:
+    image: digit-sb35/egov-user:latest
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+      # SB 3.x renamed spring.redis.* → spring.data.redis.*
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true -Dmanagement.endpoints.web.base-path=/
+
+  egov-workflow-v2:
+    image: digit-sb35/egov-workflow-v2:latest
+    environment:
+      # Fix: base compose sets DRIVER_CLASS=org.postgresql.Driver but OTEL driver auto-registers
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: io.opentelemetry.instrumentation.jdbc.OpenTelemetryDriver
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-localization:
+    image: digit-sb35/egov-localization:latest
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx512m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  boundary-service:
+    image: digit-sb35/boundary-service:latest
+    environment:
+      # Fix: base compose sets DRIVER_CLASS=org.postgresql.Driver but OTEL driver auto-registers
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: io.opentelemetry.instrumentation.jdbc.OpenTelemetryDriver
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-accesscontrol:
+    image: digit-sb35/egov-accesscontrol:latest
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-persister:
+    image: digit-sb35/egov-persister:latest
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-filestore:
+    image: digit-sb35/egov-filestore:latest
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  egov-url-shortening:
+    image: digit-sb35/egov-url-shortening:latest
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
+
+  pgr-services:
+    image: digit-sb35/pgr-services:latest
+    environment:
+      # Disable OTEL exporters — no collector in local-setup, prevents OOM from connection spam
+      OTEL_TRACES_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx300m -Dspring.threads.virtual.enabled=true -Dspring.main.allow-bean-definition-overriding=true
