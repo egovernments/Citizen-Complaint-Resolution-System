@@ -21,7 +21,7 @@ releases:
 # `installed:` is the ONLY switch, as with every sibling release here. Flipping
 # it to true is sufficient; the chart has no second internal gate.
 - name: db-seed
-  installed: false
+  installed: true
   chart: ./db-seed
   namespace: egov
   version: 0.1.0
