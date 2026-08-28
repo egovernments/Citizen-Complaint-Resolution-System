@@ -130,6 +130,7 @@ plugins:
           ["/egov-mdms-service/v1/_reload"]=true, ["/egov-mdms-service/v1/_reloadobj"]=true,
           ["/egov-mdms-service-test/v1/_search"]=true,
           ["/mdms-v2/v1/_search"]=true, ["/mdms-v2/v2/_search"]=true, ["/mdms-v2/schema/v1/_search"]=true,
+          ["/egov-workflow-v2/egov-wf/businessservice/_search"]=true,
           ["/boundary-service/boundary-relationships/_search"]=true,
           ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
           ["/boundary-service/boundary/_search"]=true,
