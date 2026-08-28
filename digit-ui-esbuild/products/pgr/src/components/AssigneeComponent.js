@@ -15,6 +15,13 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   const { roles = [], department, allDepartments } = config?.populators || {};
 
   // Fetch employee data based on roles
+  // Staff lists change on the scale of HRMS edits, not seconds. The hook's
+  // defaults (cacheTime 1s / staleTime 5s) drop the entry almost as soon as the
+  // action modal closes, so every re-open refetched the FULL employee list —
+  // measured: three modal opens produced three identical ~220KB fetches. Each
+  // in-flight copy sits in egov-hrms's heap, so the redundant calls inflated
+  // its peak memory for no user-visible benefit. Minutes-long windows collapse
+  // an open/close/re-open cycle to a single request.
   const { 
     isLoading: isEmployeeDataLoading, 
     data: employeeData, 
@@ -24,6 +31,11 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
     params: {
       tenantId: tenantId,
       roles: roles.join(","),
+    },
+    changeQueryName: `hrms-assignees-${tenantId}-${roles.join(",")}`,
+    options: {
+      staleTime: 5 * 60 * 1000,
+      cacheTime: 10 * 60 * 1000,
     },
     config: {
       enabled: roles.length > 0,
