@@ -25,8 +25,12 @@ export interface LandingRoutes {
   CITIZEN_LOGIN: string;
   /** Existing employee login. */
   EMPLOYEE_LOGIN: string;
-  /** Training / help centre. */
+  /** Training / help centre (the in-app Tutorial page). */
   TRAINING: string;
+  /** Google Drive "preview" URL for the tutorial video (…/file/d/<id>/preview). */
+  TUTORIAL_VIDEO: string;
+  /** Google Drive "preview" URL for the user manual PDF (…/file/d/<id>/preview). */
+  TUTORIAL_MANUAL: string;
   /** About-the-portal page. */
   ABOUT: string;
   /** Contacts page. */
@@ -64,6 +68,11 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   // Placeholders — point these at real pages (or external CMS URLs) during
   // integration. "#" renders the control disabled rather than as a dead link.
   TRAINING: "#",
+  // Google Drive "preview" embed — requires "Anyone with the link" sharing.
+  TUTORIAL_VIDEO: "https://drive.google.com/file/d/15osF6NECKE5xvQ6NB7bSv2RgoOFniNZz/preview",
+  // CONFIRM the manual's Drive file ID before go-live — "#" renders the panel
+  // as "content coming soon" instead of a broken embed.
+  TUTORIAL_MANUAL: "#",
   ABOUT: "#",
   CONTACTS: "#",
   FAQ: "#",

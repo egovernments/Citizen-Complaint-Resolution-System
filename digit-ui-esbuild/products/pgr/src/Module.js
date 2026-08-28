@@ -37,6 +37,8 @@ import CreatePGRFlow from "./pages/citizen/Create/CreatePGRFlowV2";
 import PGRLandingEntry from "./pages/citizen/Landing/AppEntry";
 // Public privacy-policy page (shell-free), mounted by core at /<contextPath>/privacy-policy.
 import PGRPrivacyPolicyPage from "./pages/citizen/Landing/PrivacyPolicyPage";
+// Public tutorial page (shell-free), mounted by core at /<contextPath>/tutorial.
+import PGRTutorialPage from "./pages/citizen/Landing/TutorialPage";
 
 
 export const PGRReducers = getRootReducer;
@@ -141,6 +143,7 @@ const componentsToRegister = {
   CreatePGRFlow: CreatePGRFlow,
   PGRLandingPage: PGRLandingEntry,
   PGRPrivacyPolicy: PGRPrivacyPolicyPage,
+  PGRTutorial: PGRTutorialPage,
 };
 
 export const initPGRComponents = () => {

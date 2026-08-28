@@ -58,6 +58,12 @@ export function LandingRenderer({
   const routes = React.useMemo(() => mergeRoutes(routeOverrides), [routeOverrides]);
   const tokenStyle = React.useMemo(() => buildTokenStyle(tokens), [tokens]);
 
+  // Configurator-editable tab title (PGR_LANDING_TAB_TITLE) — index.html's
+  // static <title> is just the pre-hydration fallback.
+  React.useEffect(() => {
+    if (typeof document !== "undefined") document.title = c("TAB_TITLE");
+  }, [c]);
+
   // Sticky nav (48px) vs keyboard-focus / skip-link jumps (WCAG 2.4.11); the
   // scroll container is <html>, so set for the page's lifetime and restore.
   React.useEffect(() => {

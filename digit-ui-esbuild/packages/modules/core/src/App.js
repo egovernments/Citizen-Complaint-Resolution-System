@@ -77,6 +77,8 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
   const PGRLandingPage = Digit?.ComponentRegistryService?.getComponent?.("PGRLandingPage");
   // Public privacy-policy page — also shell-free; linked from the landing.
   const PGRPrivacyPolicy = Digit?.ComponentRegistryService?.getComponent?.("PGRPrivacyPolicy");
+  // Public tutorial page — also shell-free; linked from the landing header.
+  const PGRTutorial = Digit?.ComponentRegistryService?.getComponent?.("PGRTutorial");
   let sourceUrl = `${window.location.origin}/citizen`;
   const commonProps = {
     stateInfo,
@@ -105,6 +107,11 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
       {PGRPrivacyPolicy && (
         <Route exact path={`/${window?.contextPath}/privacy-policy`}>
           <PGRPrivacyPolicy />
+        </Route>
+      )}
+      {PGRTutorial && (
+        <Route exact path={`/${window?.contextPath}/tutorial`}>
+          <PGRTutorial />
         </Route>
       )}
      {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/employee`}>
