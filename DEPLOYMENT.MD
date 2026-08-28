@@ -191,12 +191,13 @@ In **`env.yaml`**, replace the placeholders:
 In **`env-secrets.yaml`**, set your database username and password.
 
 > **A note on secrets.** This file lives in the public code, so it must **not**
-> contain real passwords for anything sensitive. For the notification service,
-> you create its keys yourself and keep them in the cluster only. Run this once
-> before deploying:
+> contain real passwords for anything sensitive. For the notification service
+> (novu), you create its keys yourself and keep them in the cluster only. Create
+> novu's namespace first (the deploy reuses it), then the secret, before deploying:
 >
 > ```bash
-> kubectl -n backbone create secret generic novu-secrets \
+> kubectl create namespace novu
+> kubectl -n novu create secret generic novu-secrets \
 >   --from-literal=jwt-secret=$(openssl rand -hex 24) \
 >   --from-literal=store-encryption-key=$(openssl rand -hex 16) \
 >   --from-literal=novu-secret-key=$(openssl rand -hex 24)
@@ -222,8 +223,15 @@ background once the user service is ready.
 **Want the dashboards too?** Monitoring (Grafana) and the health page (Gatus) are
 off by default. To turn them on, un-comment the monitoring line in
 `digit-helmfile.yaml`, switch the `monitoring` toggles on in `env.yaml` (including
-`gatus`), create a `grafana-admin` secret the same way as above, and run the
-install command again.
+`gatus`), create the `grafana-admin` secret in the **`monitoring`** namespace, and
+run the install command again:
+
+```bash
+kubectl create namespace monitoring
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password=<a-password>
+```
 
 ## Step 4 — Add your city
 
