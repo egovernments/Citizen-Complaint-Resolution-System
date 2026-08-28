@@ -77,7 +77,7 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   // Number carried over from the approved prototype — CONFIRM the official
   // WhatsApp line before go-live (set to "#" to disable all WhatsApp CTAs
   // including the floating action).
-  WHATSAPP: "https://wa.me/258820000008",
+  WHATSAPP: "#",
   GREEN_LINE: "tel:8007777",
   PHONE: "tel:+258214900000",
 };

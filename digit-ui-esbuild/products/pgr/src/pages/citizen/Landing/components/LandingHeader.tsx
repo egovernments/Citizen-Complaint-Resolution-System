@@ -76,7 +76,7 @@ export function LandingHeader({ routes, emblemUrl, navItems }: LandingHeaderProp
             className={cn("flex items-center gap-3 no-underline", FOCUS_RING, "rounded-[var(--pgrl-radius)]")}
           >
             {emblemUrl ? (
-              <img src={emblemUrl} alt="" className="h-12 w-12 shrink-0 object-contain" />
+              <img src={emblemUrl} alt="" className="h-24 w-24 shrink-0 object-contain" />
             ) : (
               <span
                 aria-hidden

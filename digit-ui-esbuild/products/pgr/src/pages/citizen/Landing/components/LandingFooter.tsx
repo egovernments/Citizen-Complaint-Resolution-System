@@ -15,6 +15,8 @@ import { CONTAINER, FOCUS_RING_DARK } from "../tokens";
 
 export interface LandingFooterProps {
   routes: LandingRoutes;
+  /** Government emblem; mirrors LandingHeader — absent renders no image. */
+  emblemUrl?: string;
 }
 
 interface FooterGroup {
@@ -63,7 +65,7 @@ const FOOT_LINK = cn(
   FOCUS_RING_DARK
 );
 
-export function LandingFooter({ routes }: LandingFooterProps) {
+export function LandingFooter({ routes, emblemUrl }: LandingFooterProps) {
   const { c } = useLandingCopy();
   const year = new Date().getFullYear();
 
@@ -71,19 +73,22 @@ export function LandingFooter({ routes }: LandingFooterProps) {
     <footer className="bg-[hsl(var(--pgrl-deep))]">
       <div className={cn(CONTAINER, "grid grid-cols-1 gap-8 py-12 sm:grid-cols-2 lg:grid-cols-6")}>
         {/* Identity */}
-        <div className="sm:col-span-2">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--pgrl-on-primary)/0.7)]">
-            {c("GOV_NAME")}
-          </p>
-          <p className="mb-0 mt-1 text-lg font-bold leading-snug text-[hsl(var(--pgrl-on-primary))]">
-            {c("PORTAL_NAME")}
-          </p>
-          <p className="mb-0 mt-2 text-sm text-[hsl(var(--pgrl-on-primary)/0.8)]">
-            {c("FOOTER_ORG")} · {c("TAGLINE")}
-          </p>
-          <p className="mb-0 mt-3 inline-block rounded-full bg-[hsl(var(--pgrl-accent)/0.15)] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[hsl(var(--pgrl-accent))]">
-            {c("MOTTO_VALUES")}
-          </p>
+        <div className="flex items-start gap-3 sm:col-span-2">
+          {emblemUrl && <img src={emblemUrl} alt="" className="h-24 w-24 shrink-0 object-contain" />}
+          <div>
+            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--pgrl-on-primary)/0.7)]">
+              {c("GOV_NAME")}
+            </p>
+            <p className="mb-0 mt-1 text-lg font-bold leading-snug text-[hsl(var(--pgrl-on-primary))]">
+              {c("PORTAL_NAME")}
+            </p>
+            <p className="mb-0 mt-2 text-sm text-[hsl(var(--pgrl-on-primary)/0.8)]">
+              {c("FOOTER_ORG")} · {c("TAGLINE")}
+            </p>
+            <p className="mb-0 mt-3 inline-block rounded-full bg-[hsl(var(--pgrl-accent)/0.15)] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[hsl(var(--pgrl-accent))]">
+              {c("MOTTO_VALUES")}
+            </p>
+          </div>
         </div>
 
         {GROUPS.map((group) => (

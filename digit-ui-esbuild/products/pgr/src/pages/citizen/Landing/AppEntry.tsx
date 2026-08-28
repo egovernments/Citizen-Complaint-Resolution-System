@@ -27,7 +27,7 @@ export function PGRLandingEntry() {
     [ctx]
   );
 
-  return <PGRLandingPage routes={routes} />;
+  return <PGRLandingPage routes={routes} emblemUrl="/digit-ui/emblem.png" />;
 }
 
 export default PGRLandingEntry;

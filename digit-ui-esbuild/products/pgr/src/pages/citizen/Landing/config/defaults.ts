@@ -28,7 +28,11 @@ export const DEFAULT_LANDING_SECTIONS: LandingSectionConfig[] = [
   row("steps", "steps", 50),
   row("channels", "channels", 60),
   row("privacy", "privacy", 70),
-  row("news", "news", 80),
+  // news (order 80) hidden by default — LandingRenderer renders whatever is
+  // present in `sections` with no `enabled` filtering on this fallback path
+  // (see useLandingConfig: the default config is returned as-is, unfiltered),
+  // so omitting the row is what actually hides it. Re-add via MDMS
+  // RAINMAKER-PGR.LandingSection to bring it back for a given tenant.
   row("institutions", "institutions", 90),
   row("cta", "cta", 100),
   row("footer", "footer", 110),
