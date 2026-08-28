@@ -245,15 +245,3 @@ kubectl delete svc -A --field-selector spec.type=LoadBalancer
 cd devops/infra-as-code/terraform/sample-aws
 terraform destroy
 ```
-
-
-
-
-
-
-
-
-
-
-
-

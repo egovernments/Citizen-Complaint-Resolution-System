@@ -1,15 +1,9 @@
-# Copy this file to terraform.tfvars and fill in your values:
+# Copy to terraform.tfvars (auto-loaded by terraform, and gitignored so the DB
+# password stays out of the repo), then set the four values below. Everything
+# else in variables.tf has a sensible default.
 #
-#   cp terraform.tfvars.example terraform.tfvars
-#
-# terraform.tfvars is loaded automatically by `terraform plan`/`apply` and is
-# gitignored, so your database password never lands in the repo. These are the
-# only per-deployment values you must set here; everything else in variables.tf
-# has a sensible default.
-#
-# NOTE: the Terraform state bucket is NOT set here — a backend block cannot read
-# tfvars. Edit that name directly in main.tf's `backend "s3"` block (create the
-# bucket first with the ./remote-state helper). See DEPLOYMENT.MD.
+# The state bucket is set separately, in main.tf's backend block — a backend
+# can't read tfvars. See DEPLOYMENT.MD.
 
 # A name for your Kubernetes cluster.
 cluster_name = "mycity"
