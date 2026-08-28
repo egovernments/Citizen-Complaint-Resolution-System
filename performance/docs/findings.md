@@ -110,12 +110,13 @@ At low record counts, dev and prod perform nearly identically — the workload i
 
 The results above were produced on dedicated test machines against a synthetic `statea.citya`
 dataset. In August 2026 the same harness was run against a live deployment — 16 vCPU / 30 GB
-KVM guest running the full 59-container DIGIT stack with 2,250 existing complaints.
+KVM guest running the full 59-container DIGIT stack with ~2,300 existing complaints — as a
+CPU-profile matrix (2, 4, 8 and 16 vCPU × 2, 10 and 50 VUs) plus a burst ladder.
 
-Measured ceiling: **125 concurrent VUs**, **43.3 API req/s**, **934,762 transactions/day**, with
-0.000% HTTP failures at every level.
+Peak sustained throughput at the 16 vCPU profile: **2.204 lifecycles/sec**, **8.80 API req/s**,
+**190,426 transactions/day**, 100% success. VU ceiling under 1% errors: **80 VUs**.
 
-**→ [Executive Summary](./run-24-08-26/executive-summary) · [Findings](./run-24-08-26/findings) · [Capacity Planning](./run-24-08-26/recommendations-transition-plan)**
+**→ [Executive Summary](./run-28-08-26/executive-summary) · [Findings](./run-28-08-26/findings) · [Capacity Planning](./run-28-08-26/recommendations-transition-plan)**
 
 ## Resource Profile Performance Over Time
 
