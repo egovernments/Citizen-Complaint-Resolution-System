@@ -3867,6 +3867,12 @@ accesscontrol-roleaction-2344	pg	SUPERUSER.4621	ACCESSCONTROL-ROLEACTIONS.roleac
 accesscontrol-action-4622	pg	4622	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 4622, "url": "/boundary-service/boundary-relationships/_delete", "code": "null", "name": "Delete boundary relationship", "path": "", "enabled": false, "displayName": "Delete boundary relationship", "orderNumber": 0, "serviceCode": "boundary-hierarchy", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2345	pg	ACCOUNT_ADMIN.4622	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 4622, "actioncode": "", "tenantId": "pg", "id": 2345}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 accesscontrol-roleaction-2346	pg	SUPERUSER.4622	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "SUPERUSER", "actionid": 4622, "actioncode": "", "tenantId": "pg", "id": 2346}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2347	pg	ACCOUNT_ADMIN.15	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 15, "actioncode": "", "tenantId": "pg", "id": 2347}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2348	pg	ACCOUNT_ADMIN.26	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 26, "actioncode": "", "tenantId": "pg", "id": 2348}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2351	pg	ACCOUNT_ADMIN.27	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 27, "actioncode": "", "tenantId": "pg", "id": 2351}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-action-4623	pg	4623	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 4623, "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.RejectionReasons", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create RejectionReasons", "orderNumber": 0, "serviceCode": "MDMS", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2349	pg	MDMS_ADMIN.4623	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "MDMS_ADMIN", "actionid": 4623, "actioncode": "", "tenantId": "pg", "id": 2349}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+accesscontrol-roleaction-2350	pg	ACCOUNT_ADMIN.4623	ACCESSCONTROL-ROLEACTIONS.roleactions	{"rolecode": "ACCOUNT_ADMIN", "actionid": 4623, "actioncode": "", "tenantId": "pg", "id": 2350}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 \.
 
 
@@ -4074,6 +4080,7 @@ SUPERVISOR	pg	29	pg	2026-05-13 09:13:47.758
 PGR_LME	pg	29	pg	2026-05-13 09:13:47.758
 CSR	pg	29	pg	2026-05-13 09:13:47.758
 SUPERUSER	pg	29	pg	2026-05-13 09:13:47.758
+ACCOUNT_ADMIN	pg	29	pg	2026-05-13 09:13:47.758
 CITIZEN	pg	29	pg	2026-05-13 09:13:47.758
 DGRO	pg	29	pg	2026-05-13 09:13:47.758
 EMPLOYEE	pg	30	pg	2026-05-13 09:13:47.883
