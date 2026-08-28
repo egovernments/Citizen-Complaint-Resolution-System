@@ -1534,7 +1534,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-b4f0eeb}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-0938bdf}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1702,7 +1702,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the SPA Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-b4f0eeb}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-c287d49}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1732,7 +1732,7 @@ services:
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-b4f0eeb}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-c287d49}
     container_name: configurator
     ports:
       - "18890:80"
