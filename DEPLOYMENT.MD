@@ -1,5 +1,9 @@
 # Deployment Process
 
+> 📹 **Prefer to follow along?** There's a screen-recorded walkthrough of the
+> single-machine setup, plus a set of example tenant-onboarding sheets, in
+> [`docs/onboarding-example/`](docs/onboarding-example/).
+
 ## Hardware Requirements
 
 1. CPU - 8vCPU+
@@ -217,7 +221,9 @@ install command again.
 Open the **Configurator** at `https://<your-domain>/configurator/` and sign in
 with the admin user (`ADMIN` / `eGov@123` unless you changed it) and your tenant
 name. From there you upload your city and boundary sheets to get it running —
-exactly like the single-machine setup.
+exactly like the single-machine setup. See
+[`docs/onboarding-example/`](docs/onboarding-example/) for sample sheets
+(boundaries, masters, complaint hierarchy, employees) you can copy and adapt.
 
 > Setting up a whole new **country/state** (rather than a city under the sample
 > one) needs a few extra setup steps behind the scenes — ask the DIGIT team if
