@@ -1,13 +1,6 @@
 [
   {
     "rolecode": "EMPLOYEE",
-    "actionid": 2635,
-    "actioncode": "",
-    "tenantId": "{tenantid}",
-    "id": 1844
-  },
-  {
-    "rolecode": "EMPLOYEE",
     "actionid": 2634,
     "actioncode": "",
     "tenantId": "{tenantid}",
