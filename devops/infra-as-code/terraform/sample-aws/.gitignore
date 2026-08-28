@@ -1,0 +1,8 @@
+# Real per-deployment values (contains the DB password) — never commit.
+terraform.tfvars
+
+# Local Terraform state and working dir (state lives in the S3 backend).
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

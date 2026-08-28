@@ -130,19 +130,24 @@ Then open `main.tf` and, near the top, replace the two
 > **in quotes** — leaving the brackets, or dropping the quotes, is the most
 > common cause of a confusing error at this first step.
 
-**Now create everything.** Open `variables.tf` and set these values (again, real
-values in quotes):
+**Now create everything.** Copy the example settings file and fill it in:
 
-| In `variables.tf` | What it is | Example |
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Open `terraform.tfvars` and set:
+
+| Setting | What it is | Example |
 |---|---|---|
 | `cluster_name` | A name for your Kubernetes cluster. | `"mycity"` |
-| `db_name` | A name for the database. | `"ccrsdb"` |
+| `db_name` | A name for the database (no hyphens). | `"ccrsdb"` |
 | `db_username` | The database's admin username. | `"ccrs"` |
-| `db_password` | The database password. It has **no default**, so also add a line `db_password = "…"` in a `terraform.tfvars` file (or Terraform will ask for it each run). | |
+| `db_password` | A strong database password. This file stays out of git, so it's safe to put here. | |
 
-The rest of `variables.tf` already has sensible defaults (region, Kubernetes
-version, database size, number of servers) — leave them unless you have a reason
-to change them. Then:
+Everything else has sensible defaults (region, Kubernetes version, database size,
+number of servers) in `variables.tf` — leave them unless you have a reason to
+change them. Then:
 
 ```bash
 terraform init

@@ -4,8 +4,7 @@
 #
 
 variable "cluster_name" {
-  description = "Name of the Kubernetes cluster"
-  default = <cluster_name> #REPLACE
+  description = "Name of the Kubernetes cluster. Set it in terraform.tfvars (see terraform.tfvars.example)."
 }
 
 variable "vpc_cidr_block" {
@@ -86,13 +85,11 @@ variable "max_worker_nodes" {
 }
 
 variable "db_name" {
-  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail"
-  default = <db_name> #REPLACE
+  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail. Set it in terraform.tfvars."
 }
 
 variable "db_username" {
-  description = "RDS database user name"
-  default = <db_username> #REPLACE
+  description = "RDS database user name. Set it in terraform.tfvars."
 }
 
 variable "filestore_namespace" {
@@ -100,6 +97,7 @@ variable "filestore_namespace" {
   default = "egov" #REPLACE
 }
 
-#DO NOT fill in here. This will be asked at runtime
+# Set it in terraform.tfvars (which is gitignored), or leave it unset and
+# Terraform will prompt for it at runtime.
 variable "db_password" {}
 

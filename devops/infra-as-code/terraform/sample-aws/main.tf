@@ -1,11 +1,15 @@
 terraform {
+  # A backend block cannot read variables or terraform.tfvars, so these two
+  # values must be edited here by hand. Replace the placeholder with the bucket
+  # name you created with the ./remote-state helper (see terraform.tfvars.example
+  # and DEPLOYMENT.MD). The S3 bucket and the DynamoDB lock table share one name.
   backend "s3" {
-    bucket = <terraform_state_bucket_name>
+    bucket = "REPLACE_ME-tfstate-bucket"
     key    = "terraform-setup/terraform.tfstate"
     region = "ap-south-1"
-    # The below line is optional depending on whether you are using DynamoDB for state locking and consistency
-    dynamodb_table = <terraform_state_bucket_name>
-    # The below line is optional if your S3 bucket is encrypted
+    # Optional: state locking/consistency via DynamoDB (same name as the bucket).
+    dynamodb_table = "REPLACE_ME-tfstate-bucket"
+    # Optional: only if your S3 bucket is encrypted.
     encrypt = true
   }
   required_providers {
