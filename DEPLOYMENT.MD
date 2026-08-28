@@ -148,7 +148,7 @@ Open `terraform.tfvars` and set:
 | `cluster_name` | A name for your Kubernetes cluster. | `"mycity"` |
 | `db_name` | A name for the database (no hyphens). | `"ccrsdb"` |
 | `db_username` | The database's admin username. | `"ccrs"` |
-| `db_password` | A strong database password. This file stays out of git, so it's safe to put here. | |
+| `db_password` | A strong database password. **Avoid `/`, `@`, `"`, and spaces** — RDS rejects those. This file stays out of git, so it's safe to put here. | |
 
 Everything else has sensible defaults (region, Kubernetes version, database size,
 number of servers) in `variables.tf` — leave them unless you have a reason to
@@ -165,6 +165,14 @@ When it finishes, connect your terminal to the new cluster:
 ```bash
 aws eks update-kubeconfig --name <your-cluster-name> --region <your-region>
 ```
+
+> **If `terraform init` / `apply` errors:**
+> - `S3 bucket "..." does not exist` — you skipped the state-backend step. Create
+>   it first (`cd remote-state && terraform apply -var="bucket_name=..."`), using
+>   the **same name** you put in `main.tf`, then re-run `terraform init`.
+> - `MasterUserPassword is not a valid password` — your `db_password` has a
+>   character RDS rejects (`/`, `@`, `"`, or a space). Pick one without those.
+> - `dynamodb_table is deprecated` — harmless warning on newer Terraform; ignore it.
 
 ## Step 2 — Fill in your deployment details
 

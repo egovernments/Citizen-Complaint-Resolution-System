@@ -14,5 +14,7 @@ db_name = "ccrsdb"
 # The database admin username.
 db_username = "ccrs"
 
-# The database password. Keep this file (terraform.tfvars) out of git.
+# The database password (this becomes the RDS master password). RDS rules:
+# 8-128 characters, printable ASCII, but NOT / @ " or spaces (RDS rejects those
+# with "MasterUserPassword is not a valid password"). Keep this file out of git.
 db_password = "change-me-to-a-strong-password"
