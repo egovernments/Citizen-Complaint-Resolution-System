@@ -1,8 +1,9 @@
 # Deployment Process
 
-> 📹 **Prefer to follow along?** There's a screen-recorded walkthrough of the
-> single-machine setup, plus a set of example tenant-onboarding sheets, in
-> [`docs/onboarding-example/`](docs/onboarding-example/).
+**📹 Prefer to follow along?** A walkthrough of the single-machine setup (example
+onboarding sheets are in [`docs/onboarding-example/`](docs/onboarding-example/)):
+
+<video src="https://github.com/egovernments/Citizen-Complaint-Resolution-System/raw/fix/master-k8s-deploy-convergence/docs/onboarding-example/ansible-setup-walkthrough.mp4" controls width="720"></video>
 
 ## Hardware Requirements
 
