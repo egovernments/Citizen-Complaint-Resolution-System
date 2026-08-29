@@ -22,6 +22,12 @@ const NAV: { to: string; label: string; icon: React.ComponentType<{ className?: 
 export default function CitizenLayout() {
   const { state, logout } = useApp();
   const navigate = useNavigate();
+  // Country dial prefix from globalConfigs (injected by nginx/Ansible) — same
+  // source the login page uses. Falls back to +254 only if unconfigured, so the
+  // logged-in header matches the tenant's countryCode instead of hardcoding it.
+  const countryCode =
+    (window as unknown as { globalConfigs?: { getConfig?: (k: string) => { countryCode?: string } | undefined } })
+      .globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS')?.countryCode ?? '+254';
 
   return (
     <div className="min-h-screen flex flex-col bg-muted/20">
@@ -35,7 +41,7 @@ export default function CitizenLayout() {
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-primary-foreground/80">
-              {state.user?.name || (state.user?.mobile ? `+254 ${state.user.mobile}` : '')}
+              {state.user?.name || (state.user?.mobile ? `${countryCode} ${state.user.mobile}` : '')}
             </span>
             <Button
               size="sm"
