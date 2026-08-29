@@ -5,6 +5,7 @@
 - `e2e/specs/` — Playwright end-to-end tests against a running DIGIT UI + backend stack.
 - `e2e/utils/` — shared helpers (e.g. `auth.ts`'s `loginViaApi`, which injects a token via `localStorage` instead of driving the login form).
 - `e2e/pages/` — page objects used by some specs.
+- `e2e/kc-parity/` — UI-only PGR lifecycle spec plus the Keycloak-parity harness. Writes real data, so it is excluded from the default collection and only runs with `BASE_URL` set. See [`e2e/kc-parity/README.md`](e2e/kc-parity/README.md).
 - Jest-based schema/smoke tests live alongside the Playwright config at the top level (see `package.json`).
 
 ## Running the E2E suite

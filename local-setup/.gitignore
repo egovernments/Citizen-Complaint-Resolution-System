@@ -37,3 +37,5 @@ tmp/
 
 # OTEL Java Agent (21MB binary - use otel/download-agent.sh instead)
 otel/opentelemetry-javaagent.jar
+tests/test-results*/
+tests/playwright-report/
