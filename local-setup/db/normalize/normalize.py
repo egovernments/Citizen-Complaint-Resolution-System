@@ -92,6 +92,7 @@ def decide(
 import os
 import subprocess
 import sys
+import time
 from typing import Iterable, List
 
 MAP_PATH = os.environ.get("MAP_PATH", "/map.yml")
@@ -124,6 +125,14 @@ LOCK_TIMEOUT = "30s"        # abort a blocked LOCK TABLE
 STATEMENT_TIMEOUT = "300s"  # cap any single statement server-side
 SUBPROCESS_TIMEOUT = 600    # hard client-side backstop on the psql process (seconds)
 
+# postgres-db's healthcheck is plain `pg_isready`, which reports ready against the
+# docker-entrypoint-initdb.d temp server too (that's how a fresh fast-path volume
+# loads full-dump.sql). Postgres then restarts into its real server, and depends_on:
+# service_healthy does not cover that restart — connections during it get refused.
+# Retry through that window instead of treating it as the deliberate abort below.
+CONNECT_RETRY_SECONDS = 60
+CONNECT_RETRY_INTERVAL = 2
+
 
 def psql(sql: str, *, capture: bool = True) -> str:
     """Run SQL. ON_ERROR_STOP=1 so a failure is a non-zero exit, not a warning.
@@ -151,6 +160,18 @@ def psql(sql: str, *, capture: bool = True) -> str:
         sys.stderr.write(proc.stderr or "")
         raise subprocess.CalledProcessError(proc.returncode, "psql", proc.stdout, proc.stderr)
     return (proc.stdout or "").strip()
+
+
+def wait_for_connection() -> None:
+    deadline = time.monotonic() + CONNECT_RETRY_SECONDS
+    while True:
+        try:
+            psql("SELECT 1;")
+            return
+        except subprocess.CalledProcessError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(CONNECT_RETRY_INTERVAL)
 
 
 def list_tables() -> Set[str]:
@@ -209,6 +230,7 @@ COMMIT;
 
 def main() -> int:
     services = load_map(MAP_PATH)
+    wait_for_connection()
     present = list_tables()
 
     # Decide everything first, so an abort happens BEFORE anything is modified.
