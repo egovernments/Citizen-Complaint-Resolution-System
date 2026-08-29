@@ -140,7 +140,7 @@ const SideNav = ({
               className="digit-sidebar-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("Search")}
+              placeholder={t("CORE_COMMON_SEARCH")}
               autoFocus={true}
               iconFill={primaryColor}
             ></TextInput>
@@ -286,7 +286,7 @@ const SideNav = ({
         {filteredItems.length > 0 ? (
           renderItems(filteredItems)
         ) : (
-          hovered && <div className="digit-msb-no-results">{t("No Results Found")}</div>
+          hovered && <div className="digit-msb-no-results">{t("CORE_COMMON_NO_RESULTS_FOUND")}</div>
         )}
       </div>
       {hovered && !hideAccessbilityTools && (
@@ -294,7 +294,7 @@ const SideNav = ({
           <div>
             <div className="digit-sidebar-bottom-item" onClick={()=> onBottomItemClick && onBottomItemClick("Help")}>
               <SVG.Help width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
-              <span className="digit-sidebar-bottom-item-text">{t("Help")}</span>
+              <span className="digit-sidebar-bottom-item-text">{t("CORE_COMMON_HELP")}</span>
             </div>
             <div className={`digit-sidebar-bottom-item`} onClick={()=> onBottomItemClick && onBottomItemClick("Settings")}>
               <SVG.Settings
@@ -302,11 +302,11 @@ const SideNav = ({
                 height={bottomIconSize}
                 fill={primaryColor}
               />
-              <span className="digit-sidebar-bottom-item-text">{t("Settings")}</span>
+              <span className="digit-sidebar-bottom-item-text">{t("CORE_COMMON_SETTINGS")}</span>
             </div>
             <div className={`digit-sidebar-bottom-item`} onClick={()=>onBottomItemClick && onBottomItemClick("Logout")}>
               <SVG.Logout width={bottomIconSize} height={bottomIconSize} fill={primaryColor} />
-              <span className="digit-sidebar-bottom-item-text">{t("Logout")}</span>
+              <span className="digit-sidebar-bottom-item-text">{t("CORE_COMMON_LOGOUT")}</span>
             </div>
             <hr className={`divider`}></hr>
           </div>
