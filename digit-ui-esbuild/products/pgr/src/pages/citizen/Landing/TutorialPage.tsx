@@ -4,7 +4,7 @@
 // LandingFooter as the main landing page (not a page-specific chrome) so the
 // site reads as one portal — see LandingRenderer for the reference assembly.
 //
-// Sidebar items each preview a Google Drive file (video / PDF) via Drive's
+// Sidebar items each embed a video (YouTube /embed/<id>) or a Drive file via Drive's
 // embeddable "/preview" iframe endpoint — same disabled-placeholder
 // convention as the rest of routes.ts: "#" renders a "content coming soon"
 // panel instead of a broken embed.
@@ -94,6 +94,15 @@ export function PGRTutorialPage({ routes: routeOverrides }: TutorialPageProps) {
   const src = routes[item.routeKey];
   const configured = !!src && src !== "#";
 
+  // The embeddable URL is not always openable in a tab: youtube-nocookie /embed
+  // and Drive /preview both need converting back to their public watch/view form.
+  const watchUrl = React.useMemo(() => {
+    if (!src) return src;
+    const yt = src.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]+)/);
+    if (yt) return `https://www.youtube.com/watch?v=${yt[1]}`;
+    return src.replace(/\/preview(\?.*)?$/, "/view");
+  }, [src]);
+
   return (
     <div className="v2-scope" style={buildTokenStyle()}>
       <div className="pgr-landing flex min-h-screen flex-col bg-[hsl(var(--pgrl-page))] text-[hsl(var(--pgrl-ink))]">
@@ -103,7 +112,7 @@ export function PGRTutorialPage({ routes: routeOverrides }: TutorialPageProps) {
         <main className={cn(CONTAINER, "flex-1 py-10")}>
           <h1 className="mb-6 text-2xl font-bold text-[hsl(var(--pgrl-ink))]">{c("TUTORIAL_PAGE_TITLE")}</h1>
           <div className="flex flex-col gap-6 md:flex-row">
-            <nav aria-label={c("TUTORIAL_PAGE_TITLE")} className="w-full shrink-0 overflow-hidden rounded-[var(--pgrl-radius)] md:w-72">
+            <nav aria-label={c("TUTORIAL_PAGE_TITLE")} className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--pgrl-radius)] bg-[hsl(var(--pgrl-deep))] md:w-72">
               <ul className="m-0 flex list-none flex-col gap-0 p-0">
                 {ITEMS.map((it, i) => {
                   const isActive = i === active;
@@ -127,6 +136,23 @@ export function PGRTutorialPage({ routes: routeOverrides }: TutorialPageProps) {
                   );
                 })}
               </ul>
+
+              {/* Direct link, last and spaced away from the options: some networks
+                  and Google consent redirects block the embed, so the material
+                  must stay reachable. */}
+              {configured ? (
+                <a
+                  className={cn(
+                    "mt-auto block px-4 py-3 text-sm underline !text-[hsl(var(--pgrl-on-primary)/0.85)]",
+                    FOCUS_RING
+                  )}
+                  href={watchUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {c(item.labelKey)} &rarr;
+                </a>
+              ) : null}
             </nav>
 
             <div className="flex-1 overflow-hidden rounded-[var(--pgrl-radius)] border border-solid border-[hsl(var(--pgrl-line))] bg-black">
@@ -136,7 +162,8 @@ export function PGRTutorialPage({ routes: routeOverrides }: TutorialPageProps) {
                   src={src}
                   title={c(item.labelKey)}
                   className="h-[70vh] min-h-[480px] w-full"
-                  allow="autoplay"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               ) : (

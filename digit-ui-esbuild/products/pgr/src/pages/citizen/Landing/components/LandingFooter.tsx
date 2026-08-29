@@ -74,7 +74,7 @@ export function LandingFooter({ routes, emblemUrl }: LandingFooterProps) {
       <div className={cn(CONTAINER, "grid grid-cols-1 gap-8 py-12 sm:grid-cols-2 lg:grid-cols-6")}>
         {/* Identity */}
         <div className="flex items-start gap-3 sm:col-span-2">
-          {emblemUrl && <img src={emblemUrl} alt="" className="h-24 w-24 shrink-0 object-contain" />}
+          {emblemUrl && <img src={emblemUrl} alt="" className="h-20 w-20 shrink-0 object-contain" />}
           <div>
             <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--pgrl-on-primary)/0.7)]">
               {c("GOV_NAME")}

@@ -28,6 +28,7 @@ export interface LandingRoutes {
   /** Training / help centre (the in-app Tutorial page). */
   TRAINING: string;
   /** Google Drive "preview" URL for the tutorial video (…/file/d/<id>/preview). */
+  /** Embeddable video URL (YouTube /embed/<id>, or a Drive …/file/d/<id>/preview). */
   TUTORIAL_VIDEO: string;
   /** Google Drive "preview" URL for the user manual PDF (…/file/d/<id>/preview). */
   TUTORIAL_MANUAL: string;
@@ -69,10 +70,8 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   // integration. "#" renders the control disabled rather than as a dead link.
   TRAINING: "#",
   // Google Drive "preview" embed — requires "Anyone with the link" sharing.
-  TUTORIAL_VIDEO: "https://drive.google.com/file/d/15osF6NECKE5xvQ6NB7bSv2RgoOFniNZz/preview",
-  // CONFIRM the manual's Drive file ID before go-live — "#" renders the panel
-  // as "content coming soon" instead of a broken embed.
-  TUTORIAL_MANUAL: "#",
+  TUTORIAL_VIDEO: "https://www.youtube-nocookie.com/embed/WROuBqhDNGU",
+  TUTORIAL_MANUAL: "https://drive.google.com/file/d/1hmKmZQ7ma6TYREkzGOuUuiq33tbSuOFo/preview",
   ABOUT: "#",
   CONTACTS: "#",
   FAQ: "#",

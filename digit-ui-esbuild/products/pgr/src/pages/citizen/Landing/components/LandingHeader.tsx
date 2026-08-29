@@ -70,13 +70,13 @@ export function LandingHeader({ routes, emblemUrl, navItems }: LandingHeaderProp
     <>
       <header className="bg-[hsl(var(--pgrl-surface))] font-sans">
         {/* Masthead */}
-        <div className={cn(CONTAINER, "flex items-center justify-between gap-4 py-4")}>
+        <div className={cn(CONTAINER, "flex items-center justify-between gap-4 py-1")}>
           <LandingLink
             to={routes.HOME}
             className={cn("flex items-center gap-3 no-underline", FOCUS_RING, "rounded-[var(--pgrl-radius)]")}
           >
             {emblemUrl ? (
-              <img src={emblemUrl} alt="" className="h-24 w-24 shrink-0 object-contain" />
+              <img src={emblemUrl} alt="" className="h-20 w-20 shrink-0 object-contain" />
             ) : (
               <span
                 aria-hidden
