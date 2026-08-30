@@ -131,7 +131,12 @@ const SelectOtp = ({
   userType = "citizen",
   canSubmit,
 }) => {
-  const [timeLeft, setTimeLeft] = useState(30);
+  const RESEND_COOLDOWN_SECS = 120;
+  // m:ss — "2:00", "1:25", "0:07". With a 2-minute cooldown a raw seconds
+  // count ("120 segundos") reads poorly; a clock face needs no unit word,
+  // which also spares a per-locale "seconds" suffix.
+  const formatTimeLeft = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+  const [timeLeft, setTimeLeft] = useState(RESEND_COOLDOWN_SECS);
 
   useInterval(
     () => {
@@ -142,7 +147,7 @@ const SelectOtp = ({
 
   const handleResendOtp = () => {
     onResend();
-    setTimeLeft(30);
+    setTimeLeft(RESEND_COOLDOWN_SECS);
   };
 
   const tr = (key, fallback) => {
@@ -158,7 +163,7 @@ const SelectOtp = ({
         <OtpBoxes value={otp} onChange={onOtpChange} hasError={!error} />
         {timeLeft > 0 ? (
           <p style={{ marginTop: "12px", fontSize: "0.875rem", color: "var(--color-text-secondary, #6B7280)" }}>
-            {`${t("CS_RESEND_ANOTHER_OTP")} ${timeLeft} ${t("CS_RESEND_SECONDS")}`}
+            {`${t("CS_RESEND_ANOTHER_OTP")} ${formatTimeLeft(timeLeft)}`}
           </p>
         ) : (
           <p
@@ -277,8 +282,7 @@ const SelectOtp = ({
         >
           {timeLeft > 0 ? (
             <span>
-              {tr("CS_RESEND_ANOTHER_OTP", "Resend OTP in")} {timeLeft}
-              {t("CS_RESEND_SECONDS") === "CS_RESEND_SECONDS" ? "s" : ` ${t("CS_RESEND_SECONDS")}`}
+              {tr("CS_RESEND_ANOTHER_OTP", "Resend OTP in")} {formatTimeLeft(timeLeft)}
             </span>
           ) : (
             <button
