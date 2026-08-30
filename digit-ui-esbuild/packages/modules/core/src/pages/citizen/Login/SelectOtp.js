@@ -131,7 +131,7 @@ const SelectOtp = ({
   userType = "citizen",
   canSubmit,
 }) => {
-  const RESEND_COOLDOWN_SECS = 60;
+  const RESEND_COOLDOWN_SECS = 120;
   const [timeLeft, setTimeLeft] = useState(RESEND_COOLDOWN_SECS);
 
   useInterval(
