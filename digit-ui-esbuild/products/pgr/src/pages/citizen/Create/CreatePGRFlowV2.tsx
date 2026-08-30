@@ -24,7 +24,6 @@ import { complaintLabel } from "../../../utils/complaintLabel";
 import { isVisibleOnEntrance } from "../../../utils/testingTenant";
 import PGRDatePicker from "../../../components/PGRDatePicker";
 import PgrFileUpload from "../../../components/PgrFileUpload";
-import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -120,7 +119,6 @@ interface FormData {
   SelectSubComplaintType?: ServiceDef | null;
   GeoLocationsPoint?: GeoPoint | null;
   landmark?: string;
-  postalCode?: string;
   SelectedBoundary?: BoundaryNode | null;
   description?: string;
   ComplaintImagesPoint?: string[]; // fileStoreIds
@@ -246,7 +244,7 @@ interface StepShellProps {
 // Consolidated 3-step wizard (was 6 screens). Each step groups what used to be
 // separate screens so the citizen reaches Submit in far fewer taps:
 //   complaint — "what is it about?" (related-to dispatcher) + the complaint type
-//   where     — map pin + ward (auto-cascaded from the pin) + landmark/postal
+//   where     — map pin + ward (auto-cascaded from the pin) + landmark
 //   details   — description + dynamic category fields + photos + consents → submit
 const STEPS = [
   { id: "complaint", title: "Complaint", sub: "Tell us about the issue" },
@@ -389,7 +387,6 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
         landmark: validateString(formData?.landmark),
         buildingName: "",
         street: "",
-        pincode: validateString(formData?.postalCode),
         locality: {
           // SelectedBoundary FIRST: it is the confirmed cascade value (a real
           // boundary-tree code, and the user's manual correction when they
@@ -903,16 +900,12 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
             withoutLabel: true,
             // Map height tuned to balance the Location-details pane once the mz
             // boundary cascade is expanded (Província → Distrito → Município +
-            // postal + landmark + tip ≈ this tall). Citizen flow only; the shared
+            // landmark + tip ≈ this tall). Citizen flow only; the shared
             // component otherwise fills calc(100vh-400px).
             mapHeight: "520px",
           }}
           formData={data}
           onSelect={(_key: string, value: GeoPoint) => {
-            // Postal code is NOT mirrored from the pin: geocoder pincodes come in
-            // foreign formats ("0101-03") that fail the tenant's pattern and block
-            // NEXT with a validation error the citizen never typed. The field is
-            // optional — leave it to manual entry only.
             patch({ GeoLocationsPoint: value });
           }}
         />
@@ -952,14 +945,6 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
   const wardHint = data?.GeoLocationsPoint?.ward;
   const wardFromMap = !!(wardHint?.code || wardHint?.name);
 
-  // Optional postal code (master's field, ported to moz's formData model on the
-  // master->moz merge). moz deliberately does NOT mirror it from the map pin
-  // (see the GeoLocationsPoint onSelect note below), so it is purely the manual
-  // entry; validate only when something was typed, via the shared
-  // isPostalCodeValid() so this can't drift from the employee form / payload.
-  const effectivePincode = data?.postalCode ?? "";
-  const showPostalError = effectivePincode.length > 0 && !isPostalCodeValid(effectivePincode);
-
   return (
     <div>
       <SectionHeader
@@ -983,29 +968,6 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
         ) : (
           <p className="text-sm text-destructive">Boundary component not registered.</p>
         )}
-
-        <Field
-          label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
-          htmlFor="postal-code"
-          error={showPostalError ? getPostalCodeErrorMessage(t) : undefined}
-        >
-          <Input
-            id="postal-code"
-            type="text"
-            // Numeric keyboard hint only when the configured pattern is
-            // digit-only (KE 5, MZ 4, IN 6 — every real deployment today);
-            // alnum/dash tenants (UK / US 5+4 examples in _example.yml) get
-            // the full keyboard their pattern needs. No keystroke filtering
-            // either way — the shared validator is the sole gate, so input
-            // is never mangled before it reaches isPostalCodeValid().
-            inputMode={isPostalCodeNumeric() ? "numeric" : "text"}
-            pattern={isPostalCodeNumeric() ? "[0-9]*" : undefined}
-            maxLength={16}
-            invalid={showPostalError}
-            value={effectivePincode}
-            onChange={(e) => patch({ postalCode: e.target.value })}
-          />
-        </Field>
 
         <Field
           label={tr(t, "CS_COMPLAINT_LANDMARK__DETAILS", "Landmark") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}
@@ -1592,7 +1554,6 @@ const CreatePGRFlowV2: React.FC = () => {
   const stateTenant =
     Digit.ULBService.getStateId() ||
     (baseTenant ? String(baseTenant).split(".")[0] : baseTenant);
-  const tenants: any = Digit.Hooks.pgr.useTenants();
 
   // Seed from the session draft ONLY on a document reload (mid-flow F5) so the
   // citizen doesn't lose their answers to an accidental refresh. Every other
@@ -1683,11 +1644,11 @@ const CreatePGRFlowV2: React.FC = () => {
   const caseRelatedTo = formData.caseRelatedTo;
 
   // Mount the MDMS validation mirror: fetches common-masters.FormValidations
-  // (and MobileNumberValidation) and publishes the tenant's postalCode rule to
-  // window.__DIGIT_FORM_VALIDATIONS — the channel isPostalCodeValid() /
-  // getPostalCodeErrorMessage() read FIRST. Without this, the v2 flow would
-  // silently keep validating against the globalConfigs fallback while the
-  // employee form honours the (higher-precedence) MDMS row.
+  // (and MobileNumberValidation) and publishes the tenant's rules to
+  // window.__DIGIT_FORM_VALIDATIONS. Mobile validation reads this channel
+  // first; without it the v2 flow would silently keep validating against the
+  // globalConfigs fallback while the employee form honours the
+  // (higher-precedence) MDMS row.
   Digit.Hooks.pgr.useMobileValidation(baseTenant);
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
@@ -1869,30 +1830,6 @@ const CreatePGRFlowV2: React.FC = () => {
     // mount, letting a last-step draft submit with empty mandatory dynamic fields.
   }, [stepIndex, formData, serviceDefs, templateFields, hasDispatcher]);
 
-  function pincodeAllowlistOk(): boolean {
-    const wardResolved =
-      !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
-    if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
-    if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
-    // Case-fold (postal codes may be alnum now, e.g. "sw1a 1aa" vs the
-    // seeded "SW1A 1AA") and strip leading zeros only for purely numeric
-    // values — "0100" ≡ "100" for a numeric pincode, but a leading zero in
-    // an alnum code is significant.
-    const norm = (v: unknown) => {
-      const s = String(v ?? "").trim().toUpperCase();
-      return /^[0-9]+$/.test(s) ? s.replace(/^0+/, "") || "0" : s;
-    };
-    const list = norm(formData.postalCode);
-    const configured =
-      Array.isArray(tenants) &&
-      tenants.some((tnt: any) => Array.isArray(tnt?.pincode) && tnt.pincode.length > 0);
-    if (!configured) return true;
-    return tenants.some(
-      (tnt: any) =>
-        Array.isArray(tnt?.pincode) &&
-        tnt.pincode.some((p: unknown) => norm(p) === list)
-    );
-  }
 
   function handleContinue() {
     if (!stepIsValid) {
@@ -1900,10 +1837,6 @@ const CreatePGRFlowV2: React.FC = () => {
       return;
     }
     if (isLast) {
-      if (!pincodeAllowlistOk()) {
-        setError(t("CS_COMMON_PINCODE_NOT_SERVICABLE"));
-        return;
-      }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
       const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user, evidenceDocType);

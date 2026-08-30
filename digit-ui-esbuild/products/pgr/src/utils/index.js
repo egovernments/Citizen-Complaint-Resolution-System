@@ -195,7 +195,6 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
         "landmark": formData?.landmark,
         "buildingName": formData?.AddressOne,
         "street": formData?.AddressTwo,
-        "pincode": formData?.postalCode,
         // `SelectedBoundary` is the deepest node the operator picked
         // in the PGR boundary cascade (e.g. the Ward). Falls back to
         // the legacy `SelectLocality` key so any caller that still
