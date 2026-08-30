@@ -71,7 +71,7 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   TRAINING: "#",
   // Google Drive "preview" embed — requires "Anyone with the link" sharing.
   TUTORIAL_VIDEO: "https://www.youtube-nocookie.com/embed/WROuBqhDNGU",
-  TUTORIAL_MANUAL: "https://drive.google.com/file/d/1hmKmZQ7ma6TYREkzGOuUuiq33tbSuOFo/preview",
+  TUTORIAL_MANUAL: "https://drive.google.com/file/d/1mcI4Ft796rHzaSP8Mv1T4Jht5IwAJIdb/preview",
   ABOUT: "#",
   CONTACTS: "#",
   FAQ: "#",
