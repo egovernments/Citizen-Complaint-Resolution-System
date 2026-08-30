@@ -193,6 +193,16 @@ const ComplaintPhotos = ({ t, serviceWrapper }) => {
                 video:fullscreen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
                 video:-webkit-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
                 video:-moz-full-screen { width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; object-fit: contain !important; }
+                /* CCSD-2153 defense-in-depth: the platform vendored CSS once shipped
+                   video::-webkit-media-controls-panel { top: 55%; position: absolute; }
+                   which pins the Chrome control bar mid-video (fullscreen) and half
+                   outside small timeline tiles. PR #1696 removed it, but it was
+                   re-introduced on a production box via a local commit to the
+                   vendored files. revert defers to the browser default, and as an
+                   !important author rule it beats any non-important vendored rule
+                   regardless of load order — so the panel renders normally even if
+                   the culprit ever ships again. */
+                video::-webkit-media-controls-panel { position: revert !important; top: revert !important; width: revert !important; }
                 `}
             </style>
             {thumbs.length > 0 && (
