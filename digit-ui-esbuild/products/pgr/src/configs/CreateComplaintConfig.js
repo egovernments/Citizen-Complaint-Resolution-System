@@ -1,4 +1,3 @@
-import { isPostalCodeValid } from "../utils/postalCode";
 
 export const CreateComplaintConfig = {
   get tenantId() { return Digit.ULBService.getCurrentTenantId(); },
@@ -244,59 +243,6 @@ export const CreateComplaintConfig = {
               label: "CS_COMPLAINT_DETAILS_PIN_LOCATION",
               populators: {
                 name: "GeoLocationsPoint",
-              },
-            },
-            {
-              inline: true,
-              label: "CS_COMPLAINT_POSTALCODE__DETAILS",
-              // "text", not "number": the configured postalCodePattern may be
-              // alnum or dash-suffixed (UK / US 5+4 examples in
-              // _example.yml), and a number input physically can't hold those
-              // shapes — the shared validator would then reject every value
-              // the widget allows, making the field unfillable. The native
-              // maxLength cap (TextInput passes populators.validation.maxlength
-              // through) still applies to text inputs.
-              type: "text",
-              disable: false,
-              populators: {
-                name: "postalCode",
-                // Postal code is optional in Nairobi — the boundary picker
-                // already pins the complaint to a Ward, and many citizens
-                // don't know the postal code (which is the post-office area
-                // code, not a residential identifier in KE). We still
-                // validate format if anything is entered.
-                required: false,
-                validation: {
-                  required: false,
-                  // No configured postal pattern needs more than this many
-                  // digits — caps unbounded typing client-side (RenderFormFields
-                  // reads populators.validation.maxlength, lowercase) instead of
-                  // relying solely on the pattern check, which only surfaces
-                  // its error on submit.
-                  maxlength: 16,
-                  // Postal-code shape is per-country — enforced through the
-                  // shared isPostalCodeValid() (utils/postalCode.js), the same
-                  // check createComplaintForm.js runs at submit, so this field
-                  // rule can't drift from it. A react-hook-form `validate`
-                  // rule, NOT `pattern`: FieldV1 copies validation.pattern
-                  // onto the native input's pattern attribute, and on a text
-                  // input the browser then blocks submit with its own
-                  // unlocalized "Please match the requested format" bubble
-                  // (made worse by React stringifying a RegExp value with its
-                  // slashes, so the native check failed for EVERY value). A
-                  // validate function is consumed by react-hook-form only and
-                  // never reaches the DOM.
-                  validate: (value) => isPostalCodeValid(value),
-                },
-                // Static fallback only: createComplaintForm.js overrides this
-                // per render with the dynamic, length-aware message from
-                // getPostalCodeErrorMessage(t) ("Please enter a valid 4-digit
-                // postal code" on a 4-digit tenant — the same text the
-                // citizen v2 flow shows). This generic, still-localized key
-                // remains for any consumer that renders the raw config,
-                // rather than the old fixed "…5 digit…" key, which lied
-                // about the length on any non-5-digit tenant (CCRS#722).
-                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
               },
             },
 

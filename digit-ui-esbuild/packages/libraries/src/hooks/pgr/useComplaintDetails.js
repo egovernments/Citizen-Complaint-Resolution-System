@@ -69,25 +69,31 @@ const getDetailsRow = ({ id, service, complaintType, boundaryAncestors }) => ({
   // it used to be folded into the Address line, which read as one run-on
   // "TEST ADDRESS, TEST LANDMARK" value.
   CS_COMPLAINT_LANDMARK__DETAILS: service.address?.landmark || "NA",
-  // QA #31/#25 (product call): Endereço shows the TYPED address when one
-  // exists. The typed complainant address is persisted by the BACKEND into
-  // the User Service and returned as service.citizen.correspondenceAddress
-  // (the extendedAttributes copy is stripped on write) — masking there is
-  // backend policy. Typed location parts follow (landmark deliberately NOT
-  // here — it has its own row above); only when nothing was typed does the
-  // row fall back to the READABLE administrative chain, leaf upward
-  // ("Municipio Namaacha, Namaacha, Maputo Provincia"). The raw boundary
-  // key and tenant/authority name of the original composition stay gone.
+  // CCSD-2207 (supersedes the QA #31/#25 typed-only product call): the
+  // READABLE administrative chain, leaf upward ("Municipio Namaacha,
+  // Namaacha, Maputo Provincia"), is ALWAYS part of the row — it is the one
+  // location every complaint has (the map/dropdown selection), so the field
+  // can no longer render blank or as a bare pincode. Typed parts stay as a
+  // prefix when present: the complainant address the backend persists into
+  // the User Service (returned as service.citizen.correspondenceAddress;
+  // the extendedAttributes copy is stripped on write — masking there is
+  // backend policy) and the typed location parts. landmark is deliberately
+  // NOT here (own row above); pincode is deliberately gone (CCSD-2207 —
+  // "address, <pincode>" was the reported garbage, and the field is being
+  // retired from intake). The raw boundary key and tenant/authority name of
+  // the original composition stay gone.
   ES_CREATECOMPLAINT_ADDRESS: (() => {
     const typed = [
       service.citizen?.correspondenceAddress,
       (service.extendedAttributes || {}).complainantAddress,
       service.address.buildingName,
       service.address.street,
-      service.address.pincode,
     ].filter((v) => v && String(v).trim());
-    if (typed.length) return typed;
-    return [...(boundaryAncestors || [])].reverse().map((b) => readableBoundary(b?.code));
+    const chain = [...(boundaryAncestors || [])].reverse().map((b) => readableBoundary(b?.code)).filter(Boolean);
+    const parts = [...typed, ...chain];
+    // "NA" (landmark-row parity) rather than a blank labelled row when the
+    // complaint predates boundaries or the chain lookup fails.
+    return parts.length ? parts : "NA";
   })(),
 });
 
