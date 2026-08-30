@@ -40,6 +40,10 @@ export const LANDING_COPY = {
   // Chrome ------------------------------------------------------------------
   GOV_NAME: { pt: "República de Moçambique", en: "Republic of Mozambique" },
   PORTAL_NAME: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
+  // Browser tab title — set via document.title in LandingRenderer/TutorialPage
+  // (an index.html <title> can't read MDMS), so this stays editable from the
+  // Configurator's localization screen without a rebuild.
+  TAB_TITLE: { pt: "Fala Cidadão", en: "Fala Cidadão" },
   ORG_NAMES: { pt: "Inspecção-Geral do Estado (IGE)", en: "Inspectorate-General of the State (IGE)" },
   FOOTER_ORG: { pt: "IGE", en: "IGE" },
   TAGLINE: { pt: "O cidadão fala. O Estado responde.", en: "The citizen speaks. The State responds." },
@@ -59,7 +63,7 @@ export const LANDING_COPY = {
   NAV_HOME: { pt: "Início", en: "Home" },
   NAV_SUBMIT: { pt: "Submeter Manifestação", en: "Submit a Case" },
   NAV_TRACK: { pt: "Acompanhar Processo", en: "Track a Case" },
-  NAV_TRAINING: { pt: "Formação e Ajuda", en: "Training & Help" },
+  NAV_TRAINING: { pt: "Tutorial", en: "Tutorial" },
   NAV_ABOUT: { pt: "Sobre o Portal", en: "About the Portal" },
   NAV_CONTACTS: { pt: "Contactos", en: "Contacts" },
 
@@ -190,6 +194,15 @@ export const LANDING_COPY = {
     en: "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
   },
 
+  // Tutorial (full page) -----------------------------------------------------
+  TUTORIAL_PAGE_TITLE: { pt: "Tutorial", en: "Tutorial" },
+  TUTORIAL_VIDEO_LABEL: {
+    pt: "Como Submeter uma Reclamação (Vídeo)",
+    en: "How to Submit a Complaint (Video)",
+  },
+  TUTORIAL_MANUAL_LABEL: { pt: "Manual de Uso (PDF)", en: "User Manual (PDF)" },
+  TUTORIAL_PENDING: { pt: "Conteúdo em preparação.", en: "Content coming soon." },
+
   // News ---------------------------------------------------------------—---
   NEWS_TITLE: { pt: "Últimas Actualizações", en: "Latest Updates" },
   NEWS_READ_MORE: { pt: "Ler mais", en: "Read more" },
@@ -257,7 +270,8 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { labelKey: "NAV_HOME", route: "HOME" },
   { labelKey: "NAV_SUBMIT", route: "REGISTER_COMPLAINT" },
-  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" }
+  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" },
+  { labelKey: "NAV_TRAINING", route: "TRAINING" }
 ];
 
 export interface ManifestationType {

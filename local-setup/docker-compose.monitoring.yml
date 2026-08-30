@@ -41,7 +41,9 @@ services:
       # appear on the host AFTER the container starts propagate in and show up
       # in the filesystem panels. Docker's default rprivate hides them. The
       # Ubuntu deploy targets mount / as `shared` by default, so rslave binds
-      # cleanly there.
-      - /:/rootfs:ro,rslave
+      # cleanly there. Docker Desktop's macOS VM does NOT mark / shared/slave,
+      # so rslave fails outright ("path / ... is not a shared or slave mount")
+      # — plain ro there; live-mounted-after-start paths just won't propagate.
+      - /:/rootfs:ro
     networks:
       - egov-network

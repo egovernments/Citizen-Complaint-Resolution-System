@@ -23,11 +23,12 @@ export function PGRLandingEntry() {
       CITIZEN_LOGIN: `/${ctx}/citizen/login`,
       EMPLOYEE_LOGIN: `/${ctx}/employee`,
       PRIVACY: `/${ctx}/privacy-policy`,
+      TRAINING: `/${ctx}/tutorial`,
     }),
     [ctx]
   );
 
-  return <PGRLandingPage routes={routes} />;
+  return <PGRLandingPage routes={routes} emblemUrl="/digit-ui/emblem.png" />;
 }
 
 export default PGRLandingEntry;

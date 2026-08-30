@@ -444,7 +444,7 @@ export const CitizenSideBar = ({
         ]
       : []),
     {
-      label: t("Language"),
+      label: t("CORE_COMMON_LANGUAGE"),
       children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
       type: "custom",
       icon: "Language",

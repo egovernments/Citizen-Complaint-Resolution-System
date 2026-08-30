@@ -7507,7 +7507,7 @@
     },
     {
         "code": "PGR_LANDING_NAV_TRAINING",
-        "message": "Training & Help",
+        "message": "Tutorial",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -8180,6 +8180,36 @@
     {
         "code": "PGR_LANDING_PRIVACY_PAGE_P5",
         "message": "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TAB_TITLE",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_PAGE_TITLE",
+        "message": "Tutorial",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_VIDEO_LABEL",
+        "message": "How to Submit a Complaint (Video)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_MANUAL_LABEL",
+        "message": "User Manual (PDF)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_PENDING",
+        "message": "Content coming soon.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

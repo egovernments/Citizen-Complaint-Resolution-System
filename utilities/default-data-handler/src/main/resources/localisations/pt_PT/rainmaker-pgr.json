@@ -721,7 +721,7 @@
     },
     {
         "code": "PGR_LANDING_NAV_TRAINING",
-        "message": "Formação e Ajuda",
+        "message": "Tutorial",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1550,6 +1550,36 @@
     {
         "code": "PGR_LANDING_PRIVACY_PAGE_P5",
         "message": "As suas informações serão conservadas apenas durante o período necessário para processar a sua reclamação, cumprir obrigações legais e manter os registos oficiais do Governo. O utilizador pode solicitar o acesso às suas informações pessoais ou a respetiva correção, sujeito à legislação aplicável e a quaisquer restrições necessárias para proteger investigações em curso.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TAB_TITLE",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_PAGE_TITLE",
+        "message": "Tutorial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_VIDEO_LABEL",
+        "message": "Como Submeter uma Reclamação (Vídeo)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_MANUAL_LABEL",
+        "message": "Manual de Uso (PDF)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TUTORIAL_PENDING",
+        "message": "Conteúdo em preparação.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

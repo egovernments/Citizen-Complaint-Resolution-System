@@ -208,7 +208,7 @@ const Hamburger = ({
                   false
                 )
               ) : (
-                <div className="digit-msb-no-results">{t("No Results Found")}</div>
+                <div className="digit-msb-no-results">{t("CORE_COMMON_NO_RESULTS_FOUND")}</div>
               )}
             </div>
           )}
@@ -331,7 +331,7 @@ const Hamburger = ({
               }
             </span>
             <span className={`digit-msb-item-label ${"usermanuals"}`}>
-              {t(userManualLabel) || t("UserManuals")}
+              {t(userManualLabel) || t("CORE_COMMON_USER_MANUALS")}
             </span>
           </div>
         </div>
@@ -342,7 +342,7 @@ const Hamburger = ({
         )
       }
       {localStorage.getItem("token") && <div className={`digit-msb-sidebar-bottom ${theme || ""}`}>
-        <Button onClick={onLogoutClick} label={t("Logout")} icon={"Logout"} variation={"secondary"} size={"medium"} />
+        <Button onClick={onLogoutClick} label={t("CORE_COMMON_LOGOUT")} icon={"Logout"} variation={"secondary"} size={"medium"} />
       </div>}
     </div>
   ) :  null;

@@ -25,8 +25,13 @@ export interface LandingRoutes {
   CITIZEN_LOGIN: string;
   /** Existing employee login. */
   EMPLOYEE_LOGIN: string;
-  /** Training / help centre. */
+  /** Training / help centre (the in-app Tutorial page). */
   TRAINING: string;
+  /** Google Drive "preview" URL for the tutorial video (…/file/d/<id>/preview). */
+  /** Embeddable video URL (YouTube /embed/<id>, or a Drive …/file/d/<id>/preview). */
+  TUTORIAL_VIDEO: string;
+  /** Google Drive "preview" URL for the user manual PDF (…/file/d/<id>/preview). */
+  TUTORIAL_MANUAL: string;
   /** About-the-portal page. */
   ABOUT: string;
   /** Contacts page. */
@@ -64,6 +69,9 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   // Placeholders — point these at real pages (or external CMS URLs) during
   // integration. "#" renders the control disabled rather than as a dead link.
   TRAINING: "#",
+  // Google Drive "preview" embed — requires "Anyone with the link" sharing.
+  TUTORIAL_VIDEO: "https://www.youtube-nocookie.com/embed/WROuBqhDNGU",
+  TUTORIAL_MANUAL: "https://drive.google.com/file/d/1hmKmZQ7ma6TYREkzGOuUuiq33tbSuOFo/preview",
   ABOUT: "#",
   CONTACTS: "#",
   FAQ: "#",
@@ -77,7 +85,7 @@ export const DEFAULT_LANDING_ROUTES: LandingRoutes = {
   // Number carried over from the approved prototype — CONFIRM the official
   // WhatsApp line before go-live (set to "#" to disable all WhatsApp CTAs
   // including the floating action).
-  WHATSAPP: "https://wa.me/258820000008",
+  WHATSAPP: "#",
   GREEN_LINE: "tel:8007777",
   PHONE: "tel:+258214900000",
 };
