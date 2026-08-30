@@ -62,6 +62,16 @@ function MdmsEditFields() {
           />
         );
       })}
+
+      {/* The MDMS envelope's own isActive (normalizeMdmsRecord's `_isActive`),
+          not a schema field — every master gets this the same way, regardless
+          of whether it also happens to carry its own in-`data` active/enabled
+          field. dataProvider.ts's update() reads this back out of the submit
+          payload (falling back to true when absent, i.e. every OTHER caller
+          that doesn't render this checkbox keeps today's always-reactivate
+          behavior). Unchecking + Save is the same soft-delete `mdmsUpdate(...,
+          false)` path as the resource's Delete action. */}
+      <BooleanInput source="_isActive" label="Active" />
     </>
   );
 }

@@ -450,7 +450,8 @@ async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
   // deactivated. Non-leaf-adapter callers filter isActive themselves below.
   const records = await mdmsSearchAll(client, tenant, config.schema!);
   if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
-  return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+  const visible = config.includeInactive ? records : records.filter((r) => r.isActive);
+  return visible.map((r) => normalizeMdmsRecord(r, config));
 }
 
 async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
@@ -1130,13 +1131,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
-          const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
+          // includeInactive resources (egovernments/CCRS#1846) skip the isActive
+          // push-down entirely — deactivated rows are the thing being audited,
+          // not soft-deleted noise to hide.
+          const all = config.includeInactive
+            ? await mdmsSearchAll(client, tenant, config.schema!)
+            : await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
           // Defensive fallback for any MDMS build that ignores the isActive criterion —
           // degrades to filtering client-side, never worse than the pre-push-down behavior.
-          const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-          const sorted = clientSort(active, field, order);
+          const visible = config.includeInactive ? all : all.filter((r) => r.isActive);
+          const mapped = visible.map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(mapped, field, order);
           const data = clientPaginate(sorted, page, perPage);
-          return { data, total: active.length };
+          return { data, total: mapped.length };
         }
       }
 
@@ -1174,8 +1181,8 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
         // Try uniqueIdentifier lookup first (fast path for records we created)
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const active = records.filter((r) => r.isActive);
-        if (active.length) return { data: normalizeMdmsRecord(active[0], config) };
+        const visible = config.includeInactive ? records : records.filter((r) => r.isActive);
+        if (visible.length) return { data: normalizeMdmsRecord(visible[0], config) };
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
         const all = await mdmsGetList(client, config, tenantId);
         const found = all.find((r) => String(r.id) === String(params.id));
@@ -1498,10 +1505,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        // Opt-in reactivation: when meta.includeInactive is set, fall back to a
-        // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
-        // that delete() left occupied (mdmsUpdate below forces isActive: true).
-        const includeInactive = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
+        // Opt-in reactivation: when meta.includeInactive OR the resource's own
+        // config.includeInactive is set, fall back to a soft-deleted (inactive)
+        // row so Remove -> re-Add (or unchecking/rechecking the _isActive
+        // widget below) can resurrect the uid delete() left occupied.
+        const includeInactive =
+          Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive) ||
+          Boolean(config.includeInactive);
         const existing = records.find((r) => r.isActive) ?? (includeInactive ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         // Strip the metadata that normalizeMdmsRecord glued onto the
@@ -1514,6 +1524,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const incoming = config.leafServiceDefAdapter
           ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
           : (params.data as Record<string, unknown>);
+        // The generic `_isActive` checkbox (MdmsResourceEdit/RoleActionEdit) is
+        // the one `_`-prefixed field callers are allowed to set — it's the MDMS
+        // envelope's isActive, not a `data` field, so it's read here rather
+        // than surviving into `sanitized` below. Absent (every edit form that
+        // doesn't render the checkbox) defaults to true, preserving the prior
+        // always-reactivate-on-save behavior for every other caller.
+        const desiredIsActive = typeof incoming._isActive === 'boolean' ? incoming._isActive : true;
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;
@@ -1521,7 +1538,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
-        const updated = await client.mdmsUpdate(existing, true);
+        const updated = await client.mdmsUpdate(existing, desiredIsActive);
         if (config.leafServiceDefAdapter) {
           const all = await mdmsGetList(client, config, tenantId);
           const found = all.find((r) => String(r.id) === String(params.id));

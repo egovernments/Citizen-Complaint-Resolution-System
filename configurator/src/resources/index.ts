@@ -44,6 +44,8 @@ export { AccessActionList } from './access-actions/AccessActionList';
 export { AccessActionShow } from './access-actions/AccessActionShow';
 export { RoleActionList } from './role-actions/RoleActionList';
 export { RoleActionShow } from './role-actions/RoleActionShow';
+export { RoleActionCreate } from './role-actions/RoleActionCreate';
+export { RoleActionEdit } from './role-actions/RoleActionEdit';
 export { WorkflowServiceList } from './workflow-services/WorkflowServiceList';
 export { WorkflowServiceShow } from './workflow-services/WorkflowServiceShow';
 export { WorkflowProcessList } from './workflow-processes/WorkflowProcessList';
