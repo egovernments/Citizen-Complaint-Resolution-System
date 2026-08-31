@@ -19,9 +19,9 @@
 |------------|-------------------|---------------------|
 | 2 | 40–60 | Pilot / demo |
 | 10 | 200–300 | Small ULB |
-| 80 | 1,600–2,400 | **Comfortable ceiling, zero errors** |
-| 160 | 3,200–4,800 | **Maximum before failure** |
-| 320 | 6,400–9,600 | System collapses |
+| 80 | 1,600–2,400 | **Highest verified level, zero errors** |
+| 160 | 3,200–4,800 | Tested, but the result is not trustworthy — see below |
+| 320 | 6,400–9,600 | Tested, but the result is not trustworthy — see below |
 
 Treat the 20–30 ratio as a rule of thumb for conversation. Treat complaints per day as the number to sign up to.
 
@@ -31,7 +31,9 @@ Treat the 20–30 ratio as a rule of thumb for conversation. Treat complaints pe
 
 **The minimum supported machine is 16 vCPU / 32 GiB, and there is no smaller configuration.** The stack holds 26.8 GB of memory before it serves a single request, so a pilot and a large city need the same hardware. Sizing is not a menu.
 
-That machine handles **694,000 complaints per day with zero errors**, and up to **1,076,000 per day** at its absolute limit — 69x and 108x a 10,000/day target.
+That machine handles **694,000 complaints per day with zero errors** — 69x a 10,000/day target, and the number to plan and contract against.
+
+Its upper limit is **not known**. Testing above that level was invalidated by a software configuration fault, not by the hardware running out. The practical read is that 694,000/day is a floor on what one machine can do, not a ceiling.
 
 You do not need Kubernetes until you are past roughly 700,000 complaints/day, past 1M stored records, or you need the system to survive a machine failure.
 
@@ -51,13 +53,17 @@ This test machine sits marginally *below* the 32 GiB floor set out in the next s
 | 160 test users | 12.463 | 1,076,803 | 2.20s | 0.670% |
 | 320 test users | 1.113 | 96,163 | 60s (timeout) | 41.12% |
 
+The last two rows are shown for completeness but **should not be used for planning**. Both were measured while the complaints service was running out of Java memory because of a configuration limit that has nothing to do with the size of the machine. They record a misconfiguration, not capacity.
+
 **Three numbers matter commercially:**
 
 **Peak with zero errors — 694,138 complaints/day.** Every request succeeded, and response times stayed under half a second. This is the number to quote in a contract or an SLA.
 
-**Absolute maximum — 1,076,803 complaints/day.** Still 98.83% successful, but errors have appeared and responses have slowed roughly five-fold. Survivable in a surge; not somewhere to operate.
+**The upper limit is unknown, and that is the honest answer.** Above 80 test users the complaints service ran out of its allotted Java memory — a fixed 384 MB allowance, set in configuration, unrelated to the machine's 30 GB. Everything measured above that point describes a software fault rather than the capacity of the hardware, so no maximum can be quoted from this campaign.
 
-**Collapse — beyond that.** At 320 test users the system stops completing work entirely: 41% of requests fail and throughput falls below what 20 test users achieved. The edge is sharp, not gradual. There is no graceful degradation to rely on.
+**One finding from that fault is worth acting on regardless of scale.** When the service ran out of memory it did not slow down, return errors and recover. It stopped permanently: it kept accepting connections, answered none, and stayed that way for six hours until it was restarted by hand. It could not recover on its own, and nothing restarted it automatically. Any deployment should therefore assume that a memory-related failure needs human intervention, and should be monitored for "accepting requests but not answering" rather than only for crashes.
+
+**Recommended before quoting any figure above 694,000/day:** have platform engineering raise the memory allowance and add a timeout to the message-queue call that caused the permanent hang, then re-run the ladder. Both are small changes. The full technical detail is in [When the heap gave out](./findings#when-the-heap-gave-out).
 
 ---
 
@@ -119,7 +125,7 @@ Because the floor is also the point at which a single machine stops being proces
 
 | Configuration | Complaints/day, zero errors | Absolute maximum | Platform |
 |---|---|---|---|
-| **1 × 16 vCPU / 32 GiB** | **694,000** (measured) | **1,076,000** (measured) | Docker Compose |
+| **1 × 16 vCPU / 32 GiB** | **694,000** (measured) | not established | Docker Compose |
 | 2 × 16 vCPU / 32 GiB + managed database | ~1,390,000 (projected) | — | Kubernetes |
 | ~15 × 16 vCPU / 32 GiB + managed database | ~10,000,000 (projected) | — | Kubernetes + re-architecture |
 
@@ -141,7 +147,7 @@ Everything above comes from one machine. Everything in this section above one ma
 
 **Roughly 2 application servers at the 16 vCPU / 32 GiB floor, plus a separate database server.**
 
-One machine can technically reach 1M/day, but only by running at its absolute limit with errors present and responses five times slower. Running two machines at the comfortable zero-error rate covers 1M/day with capacity to spare, and lets you lose one machine without an outage.
+A single machine has been verified only to 694,000/day. It may well do more — its true limit was never established — but nothing above that figure has been measured cleanly, so two machines is the defensible plan for 1M/day. Running two at the verified zero-error rate covers 1M/day with capacity to spare, and lets you lose one machine without an outage.
 
 | | |
 |---|---|
@@ -243,7 +249,7 @@ Expected daily complaint volume?
 4. **The tests ran against a nearly empty database** — about 2,300 stored complaints. Performance falls substantially as stored data grows, and earlier testing showed throughput dropping roughly six-fold between an empty database and 1M records. **Any deployment above 100,000 complaints/day needs an archiving policy from day one.**
 5. **These numbers are complaints-only.** Running other DIGIT modules on the same machine reduces available capacity proportionally.
 6. **The figures were measured without the three database fixes applied.** With them, earlier testing was 9.4x better at 100K records.
-7. **The failure edge is sharp.** The system does not degrade gracefully — it goes from 0.67% errors to 41% errors and no completed work between 160 and 320 test users. Size with headroom.
+7. **The upper limit was never measured, because the software failed before the hardware did.** Above 80 test users the complaints service exhausted a fixed 384 MB Java memory allowance and stopped permanently — it kept accepting requests, answered none, and needed a manual restart six hours later. Figures above 80 test users in this document therefore describe that fault, not capacity. Size with headroom, and re-test after the configuration is corrected.
 8. **Access-control filtering was introduced to complaint search between the two test rounds.** The searches in the error-based ladder carry a department and jurisdiction filter that the earlier ramp tests did not, so the two rounds are not identical conditions.
 9. **Cost estimates use AWS on-demand pricing** in Mumbai (ap-south-1). Graviton (ARM) instances are around 42% cheaper than Intel equivalents. The 1M and 10M/day figures are rough order-of-magnitude only and need a proper quote.
 10. **Response times include ~185ms of network round-trip** — the load generator ran over the public internet rather than on the machine itself.

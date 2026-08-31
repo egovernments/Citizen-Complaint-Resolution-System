@@ -12,9 +12,9 @@ A single-machine DIGIT deployment sustains **125 concurrent users** and **931,82
 | Breaking point | 150 VU (end-to-end p95 16.38s vs 15s budget) |
 | HTTP failures, all levels | **0.000%** |
 | Success rate, all levels | **100%** |
-| Error-based ceiling | **160 VU** (0.67% HTTP failures) |
-| Peak throughput at ceiling | **51.24 API req/s** (12.463 lifecycles/sec) |
-| Daily capacity at ceiling | **1,076,803 transactions/day** |
+| Highest clean measurement | **80 VU** (0.000% HTTP failures) |
+| Peak throughput, clean | **32.75 API req/s** (8.034 lifecycles/sec) |
+| Daily capacity, clean | **694,138 transactions/day** |
 | Records in database | ~2,300 complaints |
 
 ## What We Tested
@@ -55,7 +55,11 @@ The ramp tests above stop on a latency budget and record 0.000% HTTP failures at
 | **160** | **12.463/s** | **51.24** | 2,200ms | 98.83% | **0.67%** |
 | 320 | 1.113/s | 7.25 | 60,000ms | 0% | 41.12% |
 
-**The ceiling is 160 VU** — the last level below a 5% failure rate, and also the point of peak measured throughput at 1,076,803 transactions/day. Up to 80 VU the deployment is bound by client think time rather than by the server: measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly and server p95 moves only 108ms across a fourfold concurrency increase. At 160 VU throughput falls short of the think-time model for the first time and the first errors appear. At 320 VU the stack collapses — p95 pins at the 60s timeout, no transaction completes, and throughput drops below the 20 VU level.
+Up to 80 VU the deployment is bound by client think time rather than by the server: measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly and server p95 moves only 108ms across a fourfold concurrency increase. Those levels return 0.000% failures and are clean measurements.
+
+**The 160 and 320 VU rows do not locate a ceiling.** Both were measured while `pgr-services` was exhausting a 384 MB JVM heap — a fixed cap unrelated to the machine's 30.6 GiB. The first `OutOfMemoryError` fired during the 160 VU level and killed the Kafka producer's sender thread; because `CustomKafkaTemplate.send` waits on an untimed `CompletableFuture.get()`, every later create and update parked forever and the service never recovered. The 320 VU level therefore ran against an already-broken service, and its 41% failure rate measures that rather than saturation. See [When the heap gave out](./findings#when-the-heap-gave-out).
+
+**The deployment's ceiling above 80 VU is unmeasured**, and the ladder needs re-running with a realistic heap before any higher figure is quoted.
 
 ## Constrained CPU Profiles
 

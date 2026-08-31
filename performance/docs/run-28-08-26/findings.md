@@ -167,11 +167,42 @@ This ladder ran three days after the ramp tests, and attribute-based access cont
 | **160** | **12.463** | **51.24** | 2.20s | 98.83% | **0.670%** |
 | 320 | 1.113 | 7.25 | 60.00s | 0% | 41.12% |
 
-Unthrottled the ceiling is **160 VU** — the last level below a 5% failure rate, and simultaneously the point of peak throughput at 1,076,803 transactions/day. The ladder stopped at 320 VU by design; 640 VU was not run.
+The 160 and 320 VU rows are **not capacity measurements**. Both were taken while `pgr-services` was running out of Java heap, for reasons unrelated to the size of the machine. This was found on 31 August 2026 while investigating a separate question, and is set out in [When the heap gave out](#when-the-heap-gave-out) below. The rows are kept because the throughput figures are real, but they do not locate the deployment's ceiling.
+
+The highest level that is a clean measurement is **80 VU** — 8.034 lifecycles/sec, 694,138 transactions/day, 0.000% failures, 449ms server p95. Everything at or below it completed before the first heap error.
 
 Below 160 VU the deployment is bound by client think time, not by the server. Measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly — 2.066 predicted against 2.081 measured at 20 VU, 8.264 against 8.034 at 80 VU — and server p95 rises only from 341ms to 449ms across a fourfold concurrency increase. Host load average reached 12.93 at 40 VU and 24.86 at 80 VU on 16 vCPU.
 
-At 160 VU throughput falls short of the think-time model for the first time (12.463 measured against 16.529 predicted) and the first HTTP failures appear. At 320 VU the collapse is complete: p95 pins at the 60s client timeout, no transaction completes end to end, and throughput drops below what 20 VU achieved.
+At 160 VU throughput falls short of the think-time model for the first time (12.463 measured against 16.529 predicted) and the first HTTP failures appear. At 320 VU throughput drops below what 20 VU achieved and p95 pins at the 60s client timeout. That reads like classic congestive collapse, and it was originally recorded as such — but the cause was a heap exhaustion that began during the 160 VU level, not saturation of the machine.
+
+### When the Heap Gave Out
+
+`pgr-services` runs with `JAVA_OPTS=-Xmx384m` — a 384 MB heap, fixed, on a 30.6 GiB host with no container memory limit set. During the 160 VU level the JVM exhausted it. At 01:55:38 UTC it threw `java.lang.OutOfMemoryError: Java heap space`, and did so 421 times over the following four and a half minutes. There were none in the preceding 16 hours of container uptime, which attributes them to this ladder.
+
+The failure did not stop there. The `OutOfMemoryError` stopped Spring's `KafkaMessageListenerContainer` and took the Kafka producer's sender thread with it. `org.egov.tracer.kafka.CustomKafkaTemplate.send` waits on `CompletableFuture.get()` **with no timeout**, so with no sender thread no send can ever complete. Every subsequent complaint create or update parked permanently. A thread dump taken six hours later showed:
+
+| | |
+|---|---|
+| Tomcat workers, total | 130 |
+| In state `WAITING` on `CompletableFuture.get()` | **130** |
+| — inside `PGRService.create` | 113 |
+| — inside `PGRService.update` | 17 |
+| `kafka-producer-network-thread` present | **0** |
+| Container CPU | 0.15% |
+
+The service accepted connections and answered none. Its healthcheck had failed 512 consecutive times. Because the `OutOfMemoryError` killed a listener thread rather than the main thread, the JVM never exited and Docker never restarted the container, so the deployment stayed wedged until it was restarted by hand. **It cannot recover on its own.**
+
+What this means for the two affected rows:
+
+- **320 VU** ran against a service whose Kafka producer was already dead — the first OOM preceded it. Its 372 `CREATE` 504s measure a broken service, not a saturated one. It is not a valid data point.
+- **160 VU** carries 12 `RESOLVE` rejections with `INVALID ACTION`, logged between 01:54:27 and 01:54:48 — 50 seconds before the first OOM. These are best read as the same heap exhaustion stalling workflow state commits past the harness's think time, not as an independent failure mode.
+
+Two defects follow from this, independent of load testing:
+
+1. **The heap is capped at 384 MB** on a machine with 30.6 GiB and no container memory limit. Nothing is gained by the cap.
+2. **`CustomKafkaTemplate.send` blocks on an untimed `CompletableFuture.get()`**, which converts any Kafka producer failure into permanent, total, self-sustaining unavailability. The OOM was survivable; the untimed wait is what made it terminal.
+
+**The deployment's actual ceiling above 80 VU is unmeasured.** The software gave out before the hardware did, and the ladder needs re-running with a realistic heap before any figure above 80 VU is quoted.
 
 Comparing like for like at the same concurrency, the `cpu-16` profile returned 1.331 lifecycles/sec at 15.31s p95 where the unthrottled machine returned 8.034 lifecycles/sec at 0.45s — six times the throughput at a thirty-fourth of the latency. This is the clearest measure of how far a per-service CPU profile sits from the machine it is named after.
 
@@ -206,7 +237,9 @@ Under `cpu-2` and `cpu-4` the host was never the bottleneck — CPU idle stayed 
 
 In the burst ladder, 320 VU drove load average to 32.6 while CPU idle stayed at 64% — threads blocked on queues rather than burning CPU.
 
-Available memory stayed between 800 MB and 4.4 GB of 30.6 GiB across the whole campaign, against a resting footprint of 26.8 GB and no swap. There were no OOM kills, no container restarts attributable to load, and Kong returned 200 at every check — but the margin never exceeded about 15% of the machine, which is the practical argument for provisioning 32 GiB rather than 30.
+Available memory stayed between 800 MB and 4.4 GB of 30.6 GiB across the whole campaign, against a resting footprint of 26.8 GB and no swap. The margin never exceeded about 15% of the machine, which is the practical argument for provisioning 32 GiB rather than 30.
+
+The **host** never ran out of memory and the kernel OOM killer never fired. `pgr-services` nonetheless exhausted its own JVM heap, which is capped at 384 MB regardless of how much memory the machine has — see [When the heap gave out](#when-the-heap-gave-out). Kong returned 200 at every check, and Docker restarted no container during the campaign; in this case that was the problem rather than a reassurance, because it left the wedged service running.
 
 ## Deployment Configuration
 
