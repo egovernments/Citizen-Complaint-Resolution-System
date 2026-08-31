@@ -1065,7 +1065,7 @@ Steps:
 1. total  = pgrCount(CITY_TENANT)                            — every complaint on the tenant.
 2. queue  = pgrCount(CITY_TENANT, { status: PENDINGFORASSIGNMENT }).
 3. Assert 0 < queue <= total. A non-empty queue is a real precondition of this suite: lifecycle.setup.ts seeds a PENDINGFORASSIGNMENT complaint every run and pickWorkableComplaint() consumes them, so an empty queue means the filter (or the seed) is broken.
-4. rows = pgrSearch(status, limit > queue); assert rows.length === queue EXACTLY, and that every row's applicationStatus is PENDINGFORASSIGNMENT — the server must return the whole queue and nothing else.
+4. Page the filtered search (the deployment caps one _search page at 200 rows regardless of limit) and assert the DISTINCT serviceRequestIds collected equal 'queue' exactly, every row PENDINGFORASSIGNMENT — the server must surface the whole queue, nothing else, nothing twice.
 5. Assert the page size is honoured EXACTLY: pgrSearch(status, limit 25).length === min(25, queue).
 6. Independent recount: sweep the UNFILTERED complaint list page by page and count PENDINGFORASSIGNMENT locally; assert it equals 'queue'. This is the only assertion here that cannot be satisfied by an internally-consistent-but-wrong server (skipped, with an annotation, on tenants too large to sweep).
 
@@ -1091,25 +1091,35 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
     ).toBeGreaterThan(0);
     expect(queue, 'a filtered queue can never exceed the tenant total').toBeLessThanOrEqual(total);
 
-    // The filtered search must return the WHOLE queue and nothing but the queue.
-    const rows = await pgrSearch(auth, CITY_TENANT, {
-      status: QUEUE_STATUS,
-      limit: queue + 5,
-    });
+    // The filtered search must surface the WHOLE queue and nothing but the
+    // queue. Paged, not one giant limit: the deployment caps a single _search
+    // page (bomet returns at most 200 rows however large the limit), so a
+    // one-shot fetch conflates "filter is broken" with "page cap reached".
+    // Distinct srids also catch overlapping pages, which rows.length never did.
+    const QUEUE_PAGE = 100;
+    const seenSrids = new Set<string>();
+    for (let offset = 0; offset < queue + QUEUE_PAGE; offset += QUEUE_PAGE) {
+      const page = await pgrSearch(auth, CITY_TENANT, {
+        status: QUEUE_STATUS,
+        limit: QUEUE_PAGE,
+        offset,
+      });
+      if (page.length === 0) break;
+      for (const w of page) {
+        const svc = w.service as Record<string, unknown> | undefined;
+        expect(
+          String(svc?.applicationStatus ?? ''),
+          `_search must return ONLY ${QUEUE_STATUS} complaints`,
+        ).toBe(QUEUE_STATUS);
+        seenSrids.add(String(svc?.serviceRequestId ?? ''));
+      }
+      if (page.length < QUEUE_PAGE) break;
+    }
     expect(
-      rows.length,
-      `_search must return every ${QUEUE_STATUS} complaint _count promised (${queue})`,
+      seenSrids.size,
+      `paging the ${QUEUE_STATUS} filter must surface every complaint _count promised ` +
+        `(${queue}), each exactly once`,
     ).toBe(queue);
-    const returnedStatuses = [
-      ...new Set(
-        rows.map((w) =>
-          String((w.service as Record<string, unknown> | undefined)?.applicationStatus ?? ''),
-        ),
-      ),
-    ];
-    expect(returnedStatuses, `_search must return ONLY ${QUEUE_STATUS} complaints`).toEqual([
-      QUEUE_STATUS,
-    ]);
 
     // Page size honoured exactly — not "at most".
     const pageSize = 25;
