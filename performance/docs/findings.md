@@ -58,9 +58,13 @@ CPU limits are applied to running containers via `docker update` (no restart nee
 
 | Machine | Specs | Role |
 |---------|-------|------|
-| Dev | 8 vCPU, 16 GB RAM (AWS EC2) | Constrained-resource testing |
+| Dev | 8 vCPU, 16 GB RAM (AWS EC2) | Constrained-resource testing (March 2026) |
 | Prod | 16 vCPU, 32 GB RAM (AWS EC2) | Full-scale testing, 1M record DB |
 | Bomet | 16 vCPU, 30 GB RAM (KVM guest) | Live deployment validation, Aug 2026 |
+
+**Minimum deployment spec.** These are the machines used for testing, not a sizing recommendation. A DIGIT Complaints Management deployment requires a minimum of **16 vCPU / 32 GiB** — the stack holds roughly 26.8 GB of memory at rest and does not fit in anything smaller. See [Capacity Planning](./recommendations-transition-plan#the-hardware-floor-16-vcpu-32-gib).
+
+The March 2026 stack was roughly 30 containers and fitted into 16 GB. The August 2026 stack is 57–59 containers holding 26.8 GB at rest, so the 8 vCPU / 16 GB machine above is a historical test rig and no longer a viable deployment target. Its figures are retained for the constrained-resource analysis, not as a sizing option.
 
 ## Executive Summary
 
@@ -69,7 +73,7 @@ CPU limits are applied to running containers via `docker update` (no restart nee
 | Peak throughput (empty DB) | 37 lifecycles/sec |
 | Throughput at 1M records | 6.3 lifecycles/sec |
 | Daily capacity at 1M | **544,320 transactions/day** |
-| VU ceiling (dev, 8 vCPU) | ~250 concurrent users |
+| VU ceiling (dev, 8 vCPU, March 2026 stack) | ~250 concurrent users |
 | VU ceiling (prod, 16 vCPU) | ~300 concurrent users |
 | Performance issues identified | **3** |
 | Throughput recovery after fixes | **9.4x** |

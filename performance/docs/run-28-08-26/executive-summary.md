@@ -70,12 +70,14 @@ A second campaign capped the DIGIT services with `docker update` to measure smal
 
 Measured on the same host at 50 VU, `cpu-16` returned 2.204 lifecycles/sec at 6,621ms server p95 while the unthrottled machine returned 5.165 lifecycles/sec at 517ms. Treat the profile figures as conservative floors, not as vCPU-equivalent machine sizes.
 
+**None of these profiles describes a deployable machine.** They constrain CPU only, on a host that still has the full 30 GiB of memory. A real machine of the same nominal size would also have proportionally less memory, and below 32 GiB the stack does not fit at all. The minimum deployment spec is **16 vCPU / 32 GiB**; the profiles below the top one exist to show where CPU becomes the binding constraint, not to offer smaller options.
+
 ## Test Infrastructure
 
 | Component | Spec |
 |-----------|------|
 | CPU | AMD EPYC-Rome, 16 vCPU |
-| Memory | 30 GiB |
+| Memory | 30 GiB (26.8 GB held by the stack at rest, 4.5 GB available, **no swap**) |
 | Disk | 305 GB SSD (non-rotational) |
 | OS / runtime | Ubuntu 24.04.4 LTS, Docker 29.4.0 |
 | Virtualisation | KVM guest |

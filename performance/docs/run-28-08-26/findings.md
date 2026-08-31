@@ -47,7 +47,9 @@ Only the `main` scenario is measured; warmup is excluded from all thresholds and
 |---------|-------|------|
 | Live deployment | 16 vCPU, 30 GB RAM (KVM guest) | Full-stack validation, 59 containers, real usage |
 
-Idle baseline before any test load: load average 5.5-6.9, ~28 GB of the 30 GB already in use at rest. All figures sit on top of that existing load.
+Idle baseline before any test load: load average 5.5-6.9, and 26.8 GB of the 30.6 GiB held by the stack at rest leaving 4.5 GB available, with **no swap configured**. All figures sit on top of that existing load.
+
+That resting footprint is the reason the minimum deployment spec is **16 vCPU / 32 GiB**. The stack costs the same to keep running regardless of the volume it serves, and below 32 GiB it does not fit in memory — it would have to swap, and a set of JVM services that swaps thrashes rather than slows, because the garbage collector touches memory the operating system has paged to disk. The machine tested here is marginally under that floor, which makes its figures conservative.
 
 ## Executive Summary
 
@@ -108,7 +110,7 @@ A second campaign applied per-service CPU limits via `docker update` (no restart
 | `cpu-8` | 8 vCPU | ~20 of 59 containers |
 | `cpu-16` | 16 vCPU | ~20 of 59 containers |
 
-**A profile is not equivalent to a machine of that size.** It pins each service to a fixed slice of the budget, whereas an unthrottled machine lets services burst into each other's idle headroom. The two were measured on the same host with the same `ramp-50vu` scenario roughly 30 minutes apart:
+**A profile is not equivalent to a machine of that size, and none of them is a deployable configuration.** A profile pins each service to a fixed slice of the CPU budget, whereas an unthrottled machine lets services burst into each other's idle headroom. It also constrains CPU only — the host still has its full 30 GiB of memory throughout, where a real machine of the same nominal size would have proportionally less and could not hold the stack at all. These profiles locate the point at which CPU becomes the binding constraint; they are not smaller sizing options. The two were measured on the same host with the same `ramp-50vu` scenario roughly 30 minutes apart:
 
 | ramp-50vu | `cpu-16` profile | Unthrottled |
 |-----------|-----------------|-------------|
@@ -204,7 +206,7 @@ Under `cpu-2` and `cpu-4` the host was never the bottleneck — CPU idle stayed 
 
 In the burst ladder, 320 VU drove load average to 32.6 while CPU idle stayed at 64% — threads blocked on queues rather than burning CPU.
 
-Available memory stayed between 800 MB and 4.4 GB of 30 GB across the whole campaign. There were no OOM kills, no container restarts attributable to load, and Kong returned 200 at every check.
+Available memory stayed between 800 MB and 4.4 GB of 30.6 GiB across the whole campaign, against a resting footprint of 26.8 GB and no swap. There were no OOM kills, no container restarts attributable to load, and Kong returned 200 at every check — but the margin never exceeded about 15% of the machine, which is the practical argument for provisioning 32 GiB rather than 30.
 
 ## Deployment Configuration
 

@@ -29,7 +29,9 @@ Treat the 20–30 ratio as a rule of thumb for conversation. Treat complaints pe
 
 ## The Bottom Line
 
-A single 16 vCPU machine running Docker Compose handles **694,000 complaints per day with zero errors**, and up to **1,076,000 per day** at its absolute limit. That is 69x and 108x a 10,000/day target.
+**The minimum supported machine is 16 vCPU / 32 GiB, and there is no smaller configuration.** The stack holds 26.8 GB of memory before it serves a single request, so a pilot and a large city need the same hardware. Sizing is not a menu.
+
+That machine handles **694,000 complaints per day with zero errors**, and up to **1,076,000 per day** at its absolute limit — 69x and 108x a 10,000/day target.
 
 You do not need Kubernetes until you are past roughly 700,000 complaints/day, past 1M stored records, or you need the system to survive a machine failure.
 
@@ -37,7 +39,9 @@ You do not need Kubernetes until you are past roughly 700,000 complaints/day, pa
 
 ## What One Server Handles
 
-Measured on a live 16 vCPU / 30 GB machine running the full 59-container stack, with no artificial limits applied.
+Measured on a live 16 vCPU / 30 GiB machine running the full 59-container stack, with no artificial limits applied.
+
+This test machine sits marginally *below* the 32 GiB floor set out in the next section. It ran with 4.5 GB of memory to spare at rest and no swap configured — thinner headroom than a new deployment should be given, which makes the figures below conservative rather than optimistic.
 
 | Load | Complaints/sec | **Complaints/day** | Response time | Failures |
 |------|---------------|-------------------|--------------|----------|
@@ -70,49 +74,62 @@ The same 16 vCPU host was tested twice: once with each service given a fixed sli
 
 The commercial takeaway is simple: **how the machine is configured matters more than how big the machine is.** A deployment that caps each service to a fixed allocation wastes most of the hardware it is paying for, because no service can use another's idle capacity. Confirm with the implementation team that per-service CPU limits are not set before sizing up hardware — it is free capacity.
 
-This also means older tier figures based on capped profiles understate real machines. They are treated below as conservative floors.
+It also means any older figure derived from a capped profile understates a real machine by roughly this factor, and none of those figures should be read as a machine size.
 
 ---
 
-## Tier Map: Which Spec Handles What
+## The Hardware Floor: 16 vCPU / 32 GiB
 
-### Tier 1 — Pilot / Small ULB (4 vCPU, 8 GB RAM)
+**This is a requirement, not a recommendation.** There is no smaller supported configuration of DIGIT Complaints Management, and the docs deliberately no longer offer one.
 
-| | |
-|---|---|
-| Safe daily volume | **~18,600 complaints/day** |
-| Concurrent users before errors | ~10 test users (200–300 real) |
-| Database ceiling | Under 100K records |
-| Estimated cost | ~$72/month (Graviton) · ~$124/month (Intel) |
-
-**Good for:** pilots, demos, small ULBs.
-**Watch for:** response times exceed the 15-second budget at every level tested. At 50 test users it collapses to 15% success.
-
-### Tier 2 — Medium City (8 vCPU, 16 GB RAM)
+Measured on the live deployment at rest, with no test load running at all:
 
 | | |
 |---|---|
-| Safe daily volume | **~59,900 complaints/day** |
-| Concurrent users without errors | 50 test users (1,000–1,500 real) |
-| Database ceiling | 300K records comfortably, 500K with tuning |
-| Estimated cost | ~$143/month (Graviton) · ~$248/month (Intel) |
+| Memory held by the stack while idle | **26.8 GB** |
+| Total machine memory | 30.6 GiB |
+| Memory left available | 4.5 GB |
+| Swap configured | **None** |
+| Containers running | 57 |
 
-**Good for:** mid-size cities, state pilots.
-**Watch for:** throughput plateaus early — extra load turns into waiting, not more work done.
+The stack costs the same to keep running whether it serves ten complaints a day or seven hundred thousand. Below 32 GiB it does not fit in memory at all. It would have to swap, and a set of JVM services that swaps does not simply run slower — it thrashes, because the Java garbage collector periodically touches memory the operating system has paged out to disk. The system does not degrade gracefully in that state; it stops responding while consuming the whole machine.
 
-### Tier 3 — Large City / State (16 vCPU, 30 GB RAM)
+**The commercial consequence is the important one:** a pilot needs the same hardware as a large city. The difference between a small deployment and a large one is stored data, support and operations — not machine size. Budget for the floor from day one; there is no cheaper entry point, and attempting one produces a deployment that cannot be made to work.
 
-| | |
-|---|---|
-| Safe daily volume | **~694,100 complaints/day, zero errors** |
-| Absolute maximum | ~1,076,800 complaints/day at 0.67% errors |
-| Concurrent users, zero errors | 80 test users (1,600–2,400 real) |
-| Maximum before failure | 160 test users (3,200–4,800 real) |
-| Database ceiling | 1M+ records |
-| Estimated cost | ~$287/month (Graviton) · ~$496/month (Intel) |
+### Why the floor is 16 vCPU and not more
 
-**Good for:** large cities, state rollouts, high-volume deployments.
-**This is the only tier measured on a real unthrottled machine.** Tiers 1 and 2 come from capped profiles and are conservative floors.
+At the point where the system collapsed under test, the machine's CPU was **64% idle** at a load average of 32.6. It was not short of processor — its threads were blocked waiting on queues and database connections. Adding cores to a single machine does not lift that ceiling.
+
+Below 16 vCPU, CPU is very much the binding constraint. The constrained-profile tests, which squeeze each service into a fixed share of the processor, show the stack failing to complete a single complaint end to end at the tightest settings. 16 vCPU is the point where processor stops being the limit, and past it more cores buy very little.
+
+### Memory above the floor
+
+32 GiB covers the application stack. It does **not** cover a database that has been allowed to grow on the same machine. Postgres needs memory in proportion to the data it holds, so either:
+
+- move the database to its own server once stored complaints pass roughly 500,000, or
+- add memory to the host in step with the data, and accept that the machine is now doing two jobs.
+
+The first is strongly preferred, and is required in every configuration above one machine.
+
+---
+
+## Scaling Above the Floor
+
+Because the floor is also the point at which a single machine stops being processor-bound, **scale out by adding machines of this size rather than by growing one machine.**
+
+| Configuration | Complaints/day, zero errors | Absolute maximum | Platform |
+|---|---|---|---|
+| **1 × 16 vCPU / 32 GiB** | **694,000** (measured) | **1,076,000** (measured) | Docker Compose |
+| 2 × 16 vCPU / 32 GiB + managed database | ~1,390,000 (projected) | — | Kubernetes |
+| ~15 × 16 vCPU / 32 GiB + managed database | ~10,000,000 (projected) | — | Kubernetes + re-architecture |
+
+Only the first row is measured. Everything below it is arithmetic from that measurement, and is discussed in the next section.
+
+### Growing one machine instead of adding machines
+
+A single 32 vCPU / 64 GiB host is a reasonable choice when you want headroom to run **other DIGIT modules** alongside complaints, or to keep the database co-located for longer. It is **not** an effective way to buy more complaint throughput: the evidence above says the machine was queue-bound, not processor-bound, at its ceiling, so the extra cores would sit idle for the same reason the existing ones did.
+
+If the goal is more complaints per day, the second machine is worth more than a bigger first machine.
 
 ---
 
@@ -122,14 +139,14 @@ Everything above comes from one machine. Everything in this section above one ma
 
 ### 1 Million Complaints/Day
 
-**Roughly 2 application servers of Tier 3 spec, plus a separate database server.**
+**Roughly 2 application servers at the 16 vCPU / 32 GiB floor, plus a separate database server.**
 
 One machine can technically reach 1M/day, but only by running at its absolute limit with errors present and responses five times slower. Running two machines at the comfortable zero-error rate covers 1M/day with capacity to spare, and lets you lose one machine without an outage.
 
 | | |
 |---|---|
 | Required rate | 11.6 complaints/sec |
-| Application servers | **2 × 16 vCPU / 30 GB** |
+| Application servers | **2 × 16 vCPU / 32 GiB** |
 | Database | Separate managed database, not on the app servers |
 | Platform | Kubernetes — Docker Compose is single-machine and cannot spread load |
 | Records accumulated | **365 million per year** |
@@ -144,7 +161,7 @@ One machine can technically reach 1M/day, but only by running at its absolute li
 | | |
 |---|---|
 | Required rate | 115.7 complaints/sec |
-| Application servers | **~15 × 16 vCPU / 30 GB** (projected) |
+| Application servers | **~15 × 16 vCPU / 32 GiB** (projected) |
 | Records accumulated | **3.65 billion per year** |
 | Rough infrastructure cost | Order of $8,000–15,000/month, requires a proper quote |
 
@@ -198,18 +215,20 @@ Move to Kubernetes when **any** of these is true:
 ```
 Expected daily complaint volume?
 │
-├─ < 18K/day ──────────────► Tier 1 (4 vCPU / 8 GB)      ~$72–124/mo
+│  Every option below starts at the same floor:
+│  16 vCPU / 32 GiB. There is no smaller spec.
 │
-├─ 18K – 60K/day ──────────► Tier 2 (8 vCPU / 16 GB)     ~$143–248/mo
-│   └─ Past 300K records? → plan Tier 3
+├─ Up to 694K/day ─────────► 1 × 16 vCPU / 32 GiB       ~$287–496/mo
+│   │                         The same machine serves a pilot
+│   │                         and a large city.
+│   └─ Past 500K stored records? → move the database to its
+│                                  own server, or add memory
 │
-├─ 60K – 694K/day ─────────► Tier 3 (16 vCPU / 30 GB)    ~$287–496/mo
-│   └─ Past 1M records? → archive, or plan Kubernetes
-│
-├─ 694K – 1M/day ──────────► Kubernetes, 2 app nodes     ~$900–1,400/mo
+├─ 694K – 1.4M/day ────────► Kubernetes, 2 app nodes    ~$900–1,400/mo
+│                             of 16 vCPU / 32 GiB
 │                             + managed database + archiving policy
 │
-└─ Beyond 1M/day ──────────► Architecture programme, not a purchase
+└─ Beyond 1.4M/day ────────► Architecture programme, not a purchase
                               ~15 nodes at 10M/day, plus queue
                               repartitioning and data partitioning
 ```
@@ -218,12 +237,13 @@ Expected daily complaint volume?
 
 ## Key Caveats
 
-1. **Tier 3 comes from a real machine; Tiers 1 and 2 come from capped profiles.** A capped profile pins each service to a fixed slice, whereas a real machine lets services share idle capacity — worth roughly 6x. Treat Tiers 1 and 2 as conservative floors.
-2. **Everything above one machine is projection.** Node counts for 1M and 10M/day are arithmetic from measured single-machine throughput. No multi-machine configuration was tested.
-3. **The tests ran against a nearly empty database** — about 2,300 stored complaints. Performance falls substantially as stored data grows, and earlier testing showed throughput dropping roughly six-fold between an empty database and 1M records. **Any deployment above 100,000 complaints/day needs an archiving policy from day one.**
-4. **These numbers are complaints-only.** Running other DIGIT modules on the same machine reduces available capacity proportionally.
-5. **The figures were measured without the three database fixes applied.** With them, earlier testing was 9.4x better at 100K records.
-6. **The failure edge is sharp.** The system does not degrade gracefully — it goes from 0.67% errors to 41% errors and no completed work between 160 and 320 test users. Size with headroom.
-7. **Access-control filtering was introduced to complaint search between the two test rounds.** The searches in the error-based ladder carry a department and jurisdiction filter that the earlier ramp tests did not, so the two rounds are not identical conditions.
-8. **Cost estimates use AWS on-demand pricing** in Mumbai (ap-south-1). Graviton (ARM) instances are around 42% cheaper than Intel equivalents. The 1M and 10M/day figures are rough order-of-magnitude only and need a proper quote.
-9. **Response times include ~185ms of network round-trip** — the load generator ran over the public internet rather than on the machine itself.
+1. **16 vCPU / 32 GiB is a floor, not a starting point in a range.** Earlier versions of this document offered 4 vCPU / 8 GB and 8 vCPU / 16 GB options. Those are withdrawn: the stack's resident memory footprint has roughly doubled as the platform has grown, and it no longer fits. Figures for those configurations came from capped CPU profiles rather than real machines of that size, and should not be quoted.
+2. **The tested machine had 30.6 GiB, marginally under the 32 GiB floor**, and no swap. It worked, with 4.5 GB spare at rest. Treat 32 GiB as the number to provision and 30 GiB as the observed minimum that happened to hold.
+3. **Everything above one machine is projection.** Node counts for 1M and 10M/day are arithmetic from measured single-machine throughput. No multi-machine configuration was tested.
+4. **The tests ran against a nearly empty database** — about 2,300 stored complaints. Performance falls substantially as stored data grows, and earlier testing showed throughput dropping roughly six-fold between an empty database and 1M records. **Any deployment above 100,000 complaints/day needs an archiving policy from day one.**
+5. **These numbers are complaints-only.** Running other DIGIT modules on the same machine reduces available capacity proportionally.
+6. **The figures were measured without the three database fixes applied.** With them, earlier testing was 9.4x better at 100K records.
+7. **The failure edge is sharp.** The system does not degrade gracefully — it goes from 0.67% errors to 41% errors and no completed work between 160 and 320 test users. Size with headroom.
+8. **Access-control filtering was introduced to complaint search between the two test rounds.** The searches in the error-based ladder carry a department and jurisdiction filter that the earlier ramp tests did not, so the two rounds are not identical conditions.
+9. **Cost estimates use AWS on-demand pricing** in Mumbai (ap-south-1). Graviton (ARM) instances are around 42% cheaper than Intel equivalents. The 1M and 10M/day figures are rough order-of-magnitude only and need a proper quote.
+10. **Response times include ~185ms of network round-trip** — the load generator ran over the public internet rather than on the machine itself.
