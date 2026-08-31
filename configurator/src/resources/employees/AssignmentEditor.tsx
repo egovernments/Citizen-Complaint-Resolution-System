@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { uniqueBy } from '@/lib/uniqueBy';
 import type { Employee, EmployeeAssignment } from '@/api/types';
 import { useEmployeeLookup } from '@/admin/hrms/useEmployeeLookup';
 import { ReportingToSelect } from './ReportingToSelect';
@@ -101,6 +102,18 @@ export function AssignmentEditor({
   const { data: designations, isLoading: designationsLoading } = useGetList<NamedRecord>(
     'designations',
     { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' }, filter: tenantFilter },
+  );
+
+  // Both pickers submit `code`, so two master records sharing a code would
+  // render as duplicate SelectItems with the same value — Radix marks every one
+  // of them checked and concatenates their labels into the trigger (#1923).
+  const departmentChoices = useMemo(
+    () => uniqueBy(departments, (d) => d.code),
+    [departments],
+  );
+  const designationChoices = useMemo(
+    () => uniqueBy(designations, (d) => d.code),
+    [designations],
   );
 
   const { employees: managerCandidates, isLoading: managersLoading } = useEmployeeLookup(tenantFilter);
@@ -204,7 +217,7 @@ export function AssignmentEditor({
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {(departments ?? []).map((d) => (
+                        {departmentChoices.map((d) => (
                           <SelectItem key={d.code} value={d.code} data-value={d.code}>
                             {d.name ?? d.code}
                           </SelectItem>
@@ -230,7 +243,7 @@ export function AssignmentEditor({
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {(designations ?? []).map((d) => (
+                        {designationChoices.map((d) => (
                           <SelectItem key={d.code} value={d.code} data-value={d.code}>
                             {d.name ?? d.code}
                           </SelectItem>

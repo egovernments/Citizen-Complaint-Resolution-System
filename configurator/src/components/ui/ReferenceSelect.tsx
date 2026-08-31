@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 export interface ReferenceSelectProps {
   /** The react-admin resource to fetch choices from (e.g. 'departments', 'roles') */
@@ -88,7 +89,7 @@ export function ReferenceSelect({
         <SelectValue placeholder="Select..." />
       </SelectTrigger>
       <SelectContent>
-        {data?.map((record) => {
+        {uniqueBy(data, (record) => String(record.id)).map((record) => {
           const id = String(record.id);
           const label = String((record as Record<string, unknown>)[displayField] ?? id);
           return (
