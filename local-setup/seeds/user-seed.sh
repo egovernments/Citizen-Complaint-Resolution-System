@@ -108,10 +108,19 @@ create_user() {
 #   RESOLVEBYSUPERVISOR   → SUPERVISOR
 #   FORWARD/AUTO          → AUTO_ESCALATE
 # Plus the generic ones (SUPERUSER, EMPLOYEE, DGRO) for completeness.
+#
+# ACCOUNT_ADMIN: Kong gateway RBAC (ENFORCE_RBAC, since #1837) maps the
+# tenant-bootstrap write endpoints (ACCESSCONTROL-ROLEACTIONS/-ACTIONS-TEST
+# and dss.* creates) to this role ONLY. The MCP tenant bootstrap runs as
+# THIS seeded ADMIN, so without the role every fresh non-pg deploy dies at
+# the mcp-bootstrap gate with a wall of AccessDeniedException. The playbook's
+# post-bootstrap ensure-ADMIN task and MCP's own provisioning already grant
+# it — this seed was the one place left out.
 roles_admin() {
   local T=$1
   echo "[
     {\"code\": \"SUPERUSER\",    \"name\": \"Super User\",            \"tenantId\": \"$T\"},
+    {\"code\": \"ACCOUNT_ADMIN\",\"name\": \"Account Admin\",         \"tenantId\": \"$T\"},
     {\"code\": \"EMPLOYEE\",     \"name\": \"Employee\",              \"tenantId\": \"$T\"},
     {\"code\": \"CITIZEN\",      \"name\": \"Citizen\",               \"tenantId\": \"$T\"},
     {\"code\": \"CSR\",          \"name\": \"Customer Service Rep\",  \"tenantId\": \"$T\"},

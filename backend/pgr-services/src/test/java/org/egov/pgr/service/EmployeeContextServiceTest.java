@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -204,6 +205,25 @@ class EmployeeContextServiceTest {
                 () -> service.getContext(request, TENANT));
 
         assertTrue(error.getMessage().contains("authenticated user UUID"));
+    }
+
+    @Test
+    void authenticatedNonEmployeeIsRejectedBeforeHrmsLookup() {
+        RequestInfo request = RequestInfo.builder()
+                .userInfo(User.builder()
+                        .uuid("citizen-uuid")
+                        .userName("CITIZEN-1")
+                        .tenantId(TENANT)
+                        .type("CITIZEN")
+                        .roles(List.of(role("CITIZEN", "Citizen", TENANT)))
+                        .build())
+                .build();
+
+        CustomException error = assertThrows(CustomException.class,
+                () -> service.getContext(request, TENANT));
+
+        assertTrue(error.getMessage().contains("only to employees"));
+        verifyNoInteractions(restTemplate);
     }
 
     private static RequestInfo employeeRequest(Role... roles) {

@@ -45,7 +45,12 @@ const TopBar = ({
         setProfilePic(resolved);
       }
     }
-  }, [profilePic !== null, userDetails?.info?.uuid]);
+    // #997 follow-up: depend on the session-cached photo (UserProfile.js
+    // writes it there right after a successful upload) instead of our own
+    // `profilePic` output — otherwise a photo uploaded mid-session never
+    // refetches here and the header keeps showing the pre-upload state
+    // until a hard reload.
+  }, [userDetails?.info?.uuid, Digit.UserService.getUser()?.info?.photo]);
 
   const CitizenHomePageTenantId = Digit.ULBService.getCitizenCurrentTenant(true);
 

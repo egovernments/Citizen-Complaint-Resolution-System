@@ -132,6 +132,18 @@ describe('resourceRegistry', () => {
     assert.strictEqual(getResourceConfig('mobile-validation'), undefined, 'mobile-validation alias must be removed');
   });
 
+  it('never keys a master on a value operators edit (#1252)', () => {
+    // pgr-ui-constants used to declare idField: 'REOPENSLA' — the record's only
+    // value doubling as its key. mdms-v2 rejects updates that change an x-unique
+    // field, so Save on the reopen window always returned 400
+    // UNIQUE_KEY_UPDATE_ERR and the window could not be changed by any route.
+    const uiConstants = getResourceConfig('pgr-ui-constants');
+    assert.ok(uiConstants);
+    assert.strictEqual(uiConstants.idField, 'code');
+    // Same defect, same fix, one master earlier — keep both honest.
+    assert.strictEqual(getResourceConfig('map-config')?.idField, 'code');
+  });
+
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {
     // `tenant.branding` is not registered on `ke` — the previous `branding`
     // entry 404'd. Keep this assertion until branding becomes a real schema.
