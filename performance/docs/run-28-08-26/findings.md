@@ -1,6 +1,6 @@
 # Findings
 
-Performance results from load testing DIGIT PGR against a live deployment carrying real data and daily usage (August 2026), run as a CPU-profile matrix plus a burst ladder.
+Performance results from load testing DIGIT PGR against a live deployment carrying real data and daily usage (August 2026), run as an unthrottled concurrency ladder plus a constrained CPU-profile matrix and a burst ladder.
 
 ## Testing Methodology
 
@@ -22,7 +22,7 @@ Between each API call, the VU waits 1-3 seconds (random think time) to simulate 
 
 A VU is **not** the same as "users online". A real user might make one complaint every few minutes. A VU makes one every ~10 seconds. So **1 VU ≈ 20-30 real concurrent users** in terms of API load.
 
-When we say "80 VUs", the equivalent real-world concurrency is roughly **1,600-2,400 users online simultaneously**, each occasionally filing or checking complaints.
+When we say "125 VUs", the equivalent real-world concurrency is roughly **2,500-3,750 users online simultaneously**, each occasionally filing or checking complaints.
 
 For a more precise mapping, use TPS as the common unit:
 - Throughput is reported in lifecycles/sec (each lifecycle = 4 API calls)
@@ -33,25 +33,13 @@ For a more precise mapping, use TPS as the common unit:
 
 | Scenario | Duration | Ramp Pattern | Purpose |
 |----------|----------|-------------|---------|
-| `ramp-2vu` | 10 min | 1 VU warmup (2m), ramp to 2 over 2m, 5 min hold, 1m down | Matrix low level |
-| `ramp-10vu` | 10 min | 2 VU warmup (2m), ramp to 10 over 2m, 5 min hold, 1m down | Matrix mid level |
-| `ramp-50vu` | 12 min | 5 VU warmup (2m), ramp to 50 over 3m, 5 min hold, 2m down | Matrix top level |
+| `ramp-2vu` | 10 min | 1 VU warmup (2m), ramp to 2 over 2m, 5 min hold, 1m down | Baseline low level |
+| `ramp-10vu` | 10 min | 2 VU warmup (2m), ramp to 10 over 2m, 5 min hold, 1m down | Baseline mid level |
+| `ramp-50vu` | 12 min | 5 VU warmup (2m), ramp to 50 over 3m, 5 min hold, 2m down | Baseline top level |
+| `ramp-nvu` | 13 min | 5 VU warmup (2m), ramp to N over 3m, 5 min hold, 2m down (N = 75, 100, 125, 150) | Find sustainable ceiling |
 | `burst` | configurable | Instant jump to N VUs, hold (N = 20, 40, 80, 160, 320) | Find VU ceiling by error rate |
 
-Only the `main` scenario is measured; warmup is excluded from all thresholds and figures. Throughput is steady-state over the 5-minute hold, not averaged across the run. `burst` declares no thresholds — its levels are judged on measured error rate.
-
-### Resource Profiles
-
-CPU limits are applied to running containers via `docker update` (no restart needed). Each profile file names a per-service CPU share summing to the profile budget; about 20 of the 59 running containers match a named service, and the remainder stay unlimited.
-
-| Profile | Total CPU budget | Applied to |
-|---------|-----------------|-----------|
-| `cpu-2` | 2 vCPU | ~20 of 59 containers |
-| `cpu-4` | 4 vCPU | ~20 of 59 containers |
-| `cpu-8` | 8 vCPU | ~20 of 59 containers |
-| `cpu-16` | 16 vCPU | ~20 of 59 containers |
-
-A profile is not equivalent to a machine of that size: it pins each service to a fixed slice of the budget, whereas an unthrottled machine lets services burst into each other's idle headroom. Measured on the same host at 50 VU, `cpu-16` gives 2.204 lifecycles/sec while the machine unthrottled gives ~5.4 lifecycles/sec at 359ms p95; at 10 VU the two agree (1.054 vs 1.058 lifecycles/sec) because that level is think-time-bound. Profile figures should therefore be read as profile names, not as vCPU-equivalent machine sizes.
+Only the `main` scenario is measured; warmup is excluded from all thresholds and figures. Throughput is steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), not averaged across the run.
 
 ### Test Machines
 
@@ -65,22 +53,74 @@ Idle baseline before any test load: load average 5.5-6.9, ~28 GB of the 30 GB al
 
 | Metric | Value |
 |--------|-------|
-| Peak throughput | 2.204 lifecycles/sec (8.80 API req/s), `cpu-16` at 50 VU |
-| Daily capacity | **190,426 transactions/day** |
-| VU ceiling | **80 concurrent users** (last burst level under 1% errors) |
-| 5% error rate crossed at | 320 VU |
-| Matrix cells passing all thresholds | 3 of 12 |
+| Peak throughput | 10.785 lifecycles/sec (43.15 API req/s) at 125 VU |
+| Daily capacity | **931,824 transactions/day** |
+| Max sustainable concurrent users | **125 VU** |
+| Breaking point | 150 VU (end-to-end p95 16.38s vs 15s budget) |
+| HTTP failures, all levels | 0.000% |
 | Records in database | ~2,300 complaints |
 
-The 16 vCPU profile exceeds a 10,000 txn/day target by 19x and is not saturated at the top of the matrix. Below 8 vCPU the container quota binds before the host does — CPU idle stayed at 60-90% while the stack collapsed.
+The deployment exceeds a 10,000 txn/day target by 93x. Throughput rises linearly to 125 VU and flattens above it; latency is the first budget to give, and no level tested returned a single HTTP failure.
 
 ## Baseline Performance
 
-### Ramp Tests (CPU Profile Matrix)
+### Ramp Tests (No CPU Limits)
 
 Steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), counting only lifecycles that reach RESOLVED. One lifecycle = 4 API calls.
 
-| Profile | VU | Lifecycles/s | API req/s | http p95* | http p99* | txn p95† | Success | HTTP fail |
+| VU | Lifecycles/s | API req/s | http p95* | http p99* | txn p95† | txn p99† | Success | HTTP fail |
+|----|-------------|-----------|----------|----------|---------|---------|---------|-----------|
+| 2 | 0.214 | 0.86 | 416ms | 439ms | 11.40s | 11.77s | 100% | 0.000% |
+| 10 | 1.054 | 4.20 | 407ms | 429ms | 11.44s | 12.19s | 100% | 0.000% |
+| 50 | 5.165 | 20.66 | 517ms | 572ms | 11.74s | 12.39s | 100% | 0.000% |
+| 75 | 7.947 | 31.78 | 456ms | 513ms | 11.32s | 12.06s | 100% | 0.000% |
+| 100 | 9.798 | 39.20 | 794ms | 954ms | 12.13s | 12.88s | 100% | 0.000% |
+| **125** | **10.785** | **43.15** | 1,413ms | 1,835ms | 13.73s | 14.51s | **100%** | **0.000%** |
+| 150 | 10.851 | 43.37 | 2,477ms | 3,063ms | 16.38s | 17.42s | 100% | 0.000% |
+
+\* `http_req_duration`, includes ~185ms network RTT.
+† `transaction_duration`, the full 4-call lifecycle including ~8s of think time.
+
+### Threshold Verdicts
+
+Declared thresholds: `transaction_duration` p95 < 15s and p99 < 25s, `transaction_success` rate > 0.95, `http_req_failed` rate < 0.01, `http_req_duration` p95 < 5s and p99 < 10s.
+
+| VU | Verdict |
+|----|---------|
+| 2 | **All thresholds passed** |
+| 10 | **All thresholds passed** |
+| 50 | **All thresholds passed** |
+| 75 | **All thresholds passed** |
+| 100 | **All thresholds passed** |
+| 125 | **All thresholds passed** |
+| 150 | `transaction_duration` p95 crossed (16.38s vs 15s) |
+
+Six of the seven levels pass every threshold. Only 150 VU crosses, and it crosses on end-to-end latency alone — server latency, failure rate and success rate all stay well inside budget.
+
+## Constrained CPU Profiles
+
+A second campaign applied per-service CPU limits via `docker update` (no restart needed) to measure the same stack under smaller budgets. Each profile file names a per-service CPU share summing to the profile budget; about 20 of the 59 running containers match a named service, and the remainder stay unlimited.
+
+| Profile | Total CPU budget | Applied to |
+|---------|-----------------|-----------|
+| `cpu-2` | 2 vCPU | ~20 of 59 containers |
+| `cpu-4` | 4 vCPU | ~20 of 59 containers |
+| `cpu-8` | 8 vCPU | ~20 of 59 containers |
+| `cpu-16` | 16 vCPU | ~20 of 59 containers |
+
+**A profile is not equivalent to a machine of that size.** It pins each service to a fixed slice of the budget, whereas an unthrottled machine lets services burst into each other's idle headroom. The two were measured on the same host with the same `ramp-50vu` scenario roughly 30 minutes apart:
+
+| ramp-50vu | `cpu-16` profile | Unthrottled |
+|-----------|-----------------|-------------|
+| Iterations | 1,299 | 2,446 |
+| API req/s | 7.26 | 13.50 |
+| Server p95 | 6,621ms | 360ms |
+
+Profile figures should therefore be read as profile names, not as vCPU-equivalent machine sizes.
+
+### Matrix Results
+
+| Profile | VU | Lifecycles/s | API req/s | http p95 | http p99 | txn p95 | Success | HTTP fail |
 |---------|----|-------------|-----------|----------|----------|---------|---------|-----------|
 | cpu-2 | 2 | 0.066 | 0.27 | 11.19s | 14.94s | 43.6s | 100% | 0% |
 | cpu-2 | 10 | 0.051 | 0.27 | 60.29s | 60.57s | 188.8s | 68.0% | 13.33% |
@@ -93,33 +133,11 @@ Steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), count
 | cpu-8 | 50 | 0.693 | 2.80 | 24.13s | 27.50s | 85.6s | 100% | 0% |
 | cpu-16 | 2 | 0.204 | 0.83 | 0.83s | 1.24s | 11.5s | 100% | 0% |
 | cpu-16 | 10 | 1.054 | 4.21 | 0.60s | 0.81s | 11.4s | 100% | 0% |
-| **cpu-16** | **50** | **2.204** | **8.80** | 7.31s | 8.68s | 29.5s | **100%** | **0%** |
+| cpu-16 | 50 | 2.204 | 8.80 | 7.31s | 8.68s | 29.5s | 100% | 0% |
 
-\* `http_req_duration`, includes ~185ms network RTT.
-† `transaction_duration`, the full 4-call lifecycle including ~8s of think time.
+Three of the twelve cells pass every threshold — `cpu-8` at 2 VU, and `cpu-16` at 2 and 10 VU. Everywhere else at least the latency budget is crossed; only `cpu-2` at 10 and 50 VU and `cpu-4` at 50 VU also cross the failure and success-rate budgets.
 
-### Threshold Verdicts
-
-Declared thresholds: `transaction_duration` p95 < 15s and p99 < 25s, `transaction_success` rate > 0.95, `http_req_failed` rate < 0.01, `http_req_duration` p95 < 5s and p99 < 10s.
-
-| Profile | VU | Verdict |
-|---------|----|---------|
-| cpu-2 | 2 | Latency thresholds crossed |
-| cpu-2 | 10 | Latency, `http_req_failed` and `transaction_success` crossed |
-| cpu-2 | 50 | Latency, `http_req_failed` and `transaction_success` crossed |
-| cpu-4 | 2 | Latency thresholds crossed |
-| cpu-4 | 10 | Latency thresholds crossed |
-| cpu-4 | 50 | Latency, `http_req_failed` and `transaction_success` crossed |
-| cpu-8 | 2 | **All thresholds passed** |
-| cpu-8 | 10 | Latency thresholds crossed |
-| cpu-8 | 50 | Latency thresholds crossed |
-| cpu-16 | 2 | **All thresholds passed** |
-| cpu-16 | 10 | **All thresholds passed** |
-| cpu-16 | 50 | Latency thresholds crossed |
-
-Three of the twelve cells pass every threshold. Everywhere else at least the latency budget is crossed; only `cpu-2` at 10 and 50 VU and `cpu-4` at 50 VU also cross the failure and success-rate budgets.
-
-### Burst Tests (VU Ceiling)
+### Burst Tests Under `cpu-16`
 
 `burst.js` (`constant-vus`, no thresholds declared) run under the `cpu-16` profile:
 
@@ -131,12 +149,13 @@ Three of the twelve cells pass every threshold. Everywhere else at least the lat
 | 160 | 0.567 | 6.41 | 36.64s | 93.2% | 3.34% |
 | 320 | 0.000 | 9.26 | 60.00s | 0% | 67.4% |
 
-**VU ceiling: 80** — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU; the ladder stopped there by design and 640 VU was not run. Peak throughput is at 40 VU; above it the added concurrency converts into latency first and errors after.
+Under the `cpu-16` profile the ceiling is 80 VU — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU. This is the throttled ceiling, not the machine's; the unthrottled ladder above reached 150 VU at 0.000% failures.
 
 ## Degradation Points by Profile
 
 | Profile | Peak throughput | Saturation | All thresholds pass at | Errors > 5% | Max HTTP failure rate |
 |---------|----------------|-----------|----------------------|-------------|----------------------|
+| Unthrottled | 10.851/s (150 VU) | 125 VU | 2-125 VU | never | 0.000% |
 | cpu-2 | 0.066/s (2 VU) | Below 2 VU | never | 10 VU | 91.84% |
 | cpu-4 | 0.216/s (10 VU) | 10 VU | never | 50 VU | 53.61% |
 | cpu-8 | 0.693/s (50 VU) | Plateau from 10 VU | 2 VU | never | 0% |
@@ -144,11 +163,11 @@ Three of the twelve cells pass every threshold. Everywhere else at least the lat
 
 **Key observations:**
 
+- **Unthrottled**, throughput scales linearly from 2 to 125 VU and flattens above it. Server p95 stays under 1.5s through 125 VU. The only budget breached anywhere in the ladder is end-to-end latency at 150 VU.
 - **cpu-2** is saturated below the lowest level tested. At 2 VU it still completes every lifecycle, but at 11.19s http p95. At 10 VU success drops to 68.0%, and at 50 VU no lifecycle reaches RESOLVED at all.
 - **cpu-4** peaks at 10 VU (0.216 lifecycles/sec) and collapses at 50 VU — throughput falls to 0.049/s at 15.2% success and 53.61% HTTP failures.
 - **cpu-8** returns the same throughput at 10 and 50 VU (0.683 vs 0.693 lifecycles/sec) at 100% success. The extra load is absorbed entirely as latency: http p95 rises from 4.26s to 24.13s.
-- **cpu-16** is not saturated at 50 VU — throughput is still rising with concurrency (0.204 → 1.054 → 2.204 lifecycles/sec) at 100% success and 0% failures, and sits below the think-time ceiling of 5.4 lifecycles/sec (50 VU ÷ 9.2s per iteration).
-- **Latency, not errors, is the first thing to give.** Every profile crosses its latency budget before it crosses its failure budget, and cpu-8 and cpu-16 never cross the failure budget inside the matrix at all.
+- **Latency, not errors, is the first thing to give.** Every profile crosses its latency budget before it crosses its failure budget, and the unthrottled ladder never crosses the failure budget at all.
 
 ## Host Behaviour
 
