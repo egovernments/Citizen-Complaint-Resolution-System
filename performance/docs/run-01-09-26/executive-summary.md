@@ -10,7 +10,8 @@ A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **320 concurrent test 
 | HTTP failures at 240, 280 and 320 VU | **0.000%** |
 | Lifecycle success at 240, 280 and 320 VU | **100.00%** |
 | Error-based ceiling | **Not found** |
-| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU |
+| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
+| Saturation point | **At or below 120 VU** |
 | Response time at 320 VU | 11.5s p95 |
 | Pod restarts, whole campaign | **0** |
 | Records in database | ~193 at start, ~17,700 at end |
@@ -35,18 +36,29 @@ Throughout this document, **lifecycle success** is the share of lifecycles that 
 | 40 | 4.532/s | 18.44 | 391,565/day | 164ms | 100.00% | 0.000% |
 | 80 | 8.810/s | 35.85 | 761,184/day | 203ms | 100.00% | 0.000% |
 | **160** | **16.259/s** | **66.33** | **1,404,778/day** | 669ms | 99.57% | 0.268% |
+| 120 | 7.939/s | 32.67 | 685,930/day | 3,188ms | **100.00%** | **0.000%** |
+| 160 | 7.842/s | 32.56 | 677,549/day | 5,254ms | **100.00%** | **0.000%** |
 | 200 | 10.549/s | 43.69 | 911,434/day | 4,667ms | 99.93% | 0.017% |
 | 240 | 9.714/s | 40.63 | 839,290/day | 7,405ms | **100.00%** | **0.000%** |
 | 280 | 8.983/s | 37.97 | 776,131/day | 9,589ms | **100.00%** | **0.000%** |
 | 320 | 7.948/s | 34.00 | 686,707/day | 11,454ms | **100.00%** | **0.000%** |
 
-**The 20-160 group and the 200-320 group are not directly comparable.** They were measured hours apart while the database grew roughly ninety-fold, from 193 records to ~17,700. Within each group the trend holds; across them it does not. See the confound section in [Findings](./findings#the-data-volume-confound).
+**No two levels here ran against the same database.** The campaign grew stored records from 193 to roughly 21,000, monotonically, in run order — and the 120 and 160 VU levels were run *last*, against the largest dataset. That is why the series is not monotonic in VU order. Only levels run adjacent in time are comparable; see [the confound section](./findings#the-data-volume-confound).
 
 ## Where the Limit Is
 
-**There is no error-based limit below 320 VU.** Across 240, 280 and 320 VU — 15,636 requests — not one returned an error and every lifecycle reached `RESOLVED`.
+**There is no error-based limit below 320 VU.** Across 240, 280 and 320 VU — 15,636 requests — not one returned an error and every lifecycle reached `RESOLVED`. Adding the 120 and 160 VU levels brings that to 24,300 requests with zero failures.
 
-The limit that does exist is a **throughput limit**, and the deployment passes it somewhere around 160-200 VU. Above that, each additional 40 VUs costs 8-11% of completed work and adds 19-59% to response time. The system is saturated and queueing; it is not failing.
+The limit that does exist is a **throughput limit**, and the deployment is past it at every level in the gated series. Comparing levels run adjacent in time — the only fair comparison available — additional concurrency always costs throughput and adds latency:
+
+| Pair | Throughput | Response time |
+|------|-----------|---------------|
+| 120 → 160 VU | **−0.3%** | **+65%** |
+| 200 → 240 VU | −7.0% | +59% |
+| 240 → 280 VU | −6.5% | +29% |
+| 280 → 320 VU | −10.5% | +19% |
+
+The 120 → 160 pair is the clearest: throughput flat to within 0.3%, latency up two-thirds. **The deployment is already saturated at 120 VU**, the lowest level tested with the gate, so its peak sits below that and was not measured.
 
 Which limit matters depends on what you are protecting. If the requirement is that requests succeed, this deployment has headroom beyond anything tested. If the requirement is a response-time budget, it is exceeded well before any error appears — 320 VU answers every request, but takes 11.5 seconds at p95 to do it.
 

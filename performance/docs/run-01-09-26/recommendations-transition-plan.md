@@ -47,12 +47,14 @@ Measured on a 4-machine Kubernetes cluster with one copy of each service running
 | 40 test users | 4.532 | 391,565 | 0.16s | **0.000%** |
 | 80 test users | 8.810 | 761,184 | 0.20s | **0.000%** |
 | **160 test users** | **16.259** | **1,404,778** | **0.67s** | 0.268% |
+| 120 test users | 7.939 | 685,930 | 3.19s | **0.000%** |
+| 160 test users | 7.842 | 677,549 | 5.25s | **0.000%** |
 | 200 test users | 10.549 | 911,434 | 4.67s | 0.017% |
 | 240 test users | 9.714 | 839,290 | 7.41s | **0.000%** |
 | 280 test users | 8.983 | 776,131 | 9.59s | **0.000%** |
 | 320 test users | 7.948 | 686,707 | 11.45s | **0.000%** |
 
-**An important caveat on this table.** The top four rows and the bottom four rows were measured hours apart, and the amount of stored data grew enormously in between — from about 200 complaints to nearly 18,000. Stored data is the single biggest influence on speed in every test we have run. Compare rows within each group; do not compare across the gap.
+**An important caveat on this table.** No two rows were measured against the same amount of stored data. The testing itself grew the database from about 200 complaints to roughly 21,000, and stored data is the single biggest influence on speed in every test we have run. The 120 and 160 user rows were measured *last*, against the most data, which is why they look slower than the 200 user row despite being a lighter load. Rows measured close together in time can be compared; rows far apart cannot.
 
 **Two numbers worth carrying into a conversation:**
 
@@ -64,17 +66,20 @@ Measured on a 4-machine Kubernetes cluster with one copy of each service running
 
 ## Where the Limit Actually Is
 
-The deployment does not have a failure point in the range we tested. It has a **speed ceiling**, and it passes it somewhere around 160–200 test users.
+The deployment does not have a failure point in the range we tested. It has a **speed ceiling**, and it is already past that ceiling at every level we measured with the settling step in place.
 
-Past that point, adding more users makes things worse rather than better:
+Comparing levels tested close together — the only fair comparison, given the growing database — adding users always costs work and adds waiting:
 
 | Going from | To | Work completed | Response time |
 |---|---|---|---|
-| 200 users | 240 users | −7.9% | +59% |
-| 240 users | 280 users | −7.5% | +29% |
-| 280 users | 320 users | −11.5% | +19% |
+| 120 users | 160 users | **−0.3%** | **+65%** |
+| 200 users | 240 users | −7.0% | +59% |
+| 240 users | 280 users | −6.5% | +29% |
+| 280 users | 320 users | −10.5% | +19% |
 
-Every extra 40 users costs about a tenth of the throughput and adds substantially to the wait. This is what a system at capacity looks like: work queues up rather than being rejected.
+The first row is the clearest signal. Going from 120 to 160 users produced **no additional work at all** — throughput was flat to within a third of a percent — while people waited two-thirds longer. That is a system at capacity.
+
+**This means the deployment is already saturated at 120 test users**, the lowest level we tested this way, and its best operating point is somewhere below that. We did not measure it.
 
 The practical implication is that **capacity planning here should be driven by an acceptable response time, not by an error budget.** An error budget would never trigger.
 
@@ -109,5 +114,5 @@ For a live deployment this means: after a sustained traffic spike, the system ne
 3. **Stored data grew ninety-fold during the campaign**, from about 200 complaints to nearly 18,000, which is why levels measured hours apart are not comparable.
 4. **The database was small throughout.** Even 18,000 complaints is a small deployment. Earlier testing on other environments showed throughput falling substantially between an empty database and one million records, so any deployment expecting high volume needs an archiving policy from the start.
 5. **These numbers are complaints-only.** Running other DIGIT modules on the same cluster reduces available capacity.
-6. **The highest level tested was 320 test users.** The deployment's actual failure point is unknown, because we did not reach it.
+6. **The highest level tested was 320 test users, and nothing failed at any level.** The deployment's failure point is unknown because we never reached it. Its *best* operating point is also unknown, for the opposite reason — we never tested below 120 users with the settling step, and it was already saturated there.
 7. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.

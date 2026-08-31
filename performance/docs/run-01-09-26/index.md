@@ -12,7 +12,9 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **320 concurrent test users · 0.000% failed requests · 100.00% lifecycle success.** No error ceiling was found at any level tested.
 
-**16.259 lifecycles/s · 66.33 API req/s at 160 VU** — the highest throughput observed, though measured against a much smaller database than the later levels.
+**16.259 lifecycles/s · 66.33 API req/s at 160 VU** — the highest throughput observed, but against ~7,000 stored records, roughly a third of what the later levels faced. It is not a capacity figure.
+
+**The deployment is saturated at 120 VU**, the lowest level tested with a drain gate: 120 and 160 VU return identical throughput (32.67 vs 32.56 API req/s) while latency rises 65%. Its actual peak sits below 120 VU and was not measured.
 
 **Zero pod restarts** across twelve load levels and roughly 17,700 complaints.
 
@@ -22,4 +24,4 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **The system saturates well before it fails.** Above ~160-200 VU each additional 40 VUs costs 8-11% of completed work and adds 19-59% to response time, without producing a single error. At 320 VU every request succeeds — and takes 11.5 seconds at p95.
 
-**Levels measured hours apart are not comparable.** The campaign grew the database from 193 records to ~17,700, and stored data volume drives throughput. The 20-160 VU group and the 200-320 VU group should be read separately.
+**No two levels ran against the same database.** The campaign grew stored records from 193 to roughly 21,000, monotonically in run order, and the 120 and 160 VU levels were run last against the largest dataset. The series is therefore not monotonic in VU order, and only levels run adjacent in time can be compared. This is the main thing to fix before repeating the run.

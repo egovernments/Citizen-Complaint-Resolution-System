@@ -66,7 +66,8 @@ Replicas are **1** on every service in the complaint path (`pgr-services`, `egov
 | HTTP failures at 240, 280 and 320 VU | **0.000%** |
 | Lifecycle success at 240, 280 and 320 VU | **100.00%** |
 | Error-based ceiling | **Not found** — no level reached the 5% budget |
-| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU |
+| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
+| Saturation point | **At or below 120 VU** — the lowest gated level, already on the plateau |
 | Pod restarts across the whole campaign | **0** |
 
 **No error ceiling exists below 320 VU on this deployment.** Load is absorbed as latency, not as failure: throughput falls and response times climb, but requests keep succeeding. The run was stopped at 320 VU because the ladder ran out of planned levels, not because anything broke.
@@ -81,6 +82,8 @@ Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls.
 | 40 | 4.532 | 18.44 | 164ms | 126ms | 1.7s | 100.00% | 0.000% |
 | 80 | 8.810 | 35.85 | 203ms | 157ms | 3.0s | 100.00% | 0.000% |
 | **160** | **16.259** | **66.33** | 669ms | 337ms | 5.6s | 99.57% | 0.268% |
+| 120‡ | 7.939 | 32.67 | 3,188ms | 1,561ms | 5.9s | **100.00%** | **0.000%** |
+| 160‡ | 7.842 | 32.56 | 5,254ms | 2,709ms | 8.1s | **100.00%** | **0.000%** |
 | 200 | 10.549 | 43.69 | 4,667ms | 2,416ms | 7.0s | 99.93% | 0.017% |
 | 240 | 9.714 | 40.63 | 7,405ms | 3,667ms | 10.7s | **100.00%** | **0.000%** |
 | 280 | 8.983 | 37.97 | 9,589ms | 5,009ms | 13.9s | **100.00%** | **0.000%** |
@@ -88,6 +91,7 @@ Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls.
 
 \* `http_req_duration` — server response time, including ~24ms network RTT.
 † Different denominators — see [Reading the Two Percentage Columns](#reading-the-two-percentage-columns).
+‡ Run last, against the largest database of the campaign — see [The Data-Volume Confound](#the-data-volume-confound). Listed here by VU count, not by run order.
 
 **The 20-160 VU rows and the 200-320 VU rows are not directly comparable.** They were measured hours apart with the database growing throughout — see [The Data-Volume Confound](#the-data-volume-confound). Within each group the trend is sound; across the two, it is not.
 
@@ -100,18 +104,20 @@ Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls.
 
 One failed request anywhere in the chain fails the whole lifecycle, so the lifecycle failure rate runs several times the request failure rate. At 160 VU, 23 failed requests out of 8,571 (0.268%) cost 9 lifecycles out of 2,101 (0.43% — leaving 99.57% success).
 
-### Throughput Falls as Concurrency Rises
+### The Deployment Is Saturated Across Every Level Tested
 
-Above roughly 160 VU, adding virtual users **reduces** completed work:
+Because each level ran against a slightly larger database than the one before it (see [The Data-Volume Confound](#the-data-volume-confound)), levels far apart in time cannot be compared directly. **Adjacent pairs, run within minutes of each other, can.** Every such pair tells the same story:
 
-| VU | Lifecycles/s | Change | http p95 | Change |
-|----|-------------|--------|----------|--------|
-| 200 | 10.549 | — | 4,667ms | — |
-| 240 | 9.714 | −7.9% | 7,405ms | +59% |
-| 280 | 8.983 | −7.5% | 9,589ms | +29% |
-| 320 | 7.948 | −11.5% | 11,454ms | +19% |
+| Pair | Throughput | http p95 |
+|------|-----------|----------|
+| 120 → 160 VU | **−0.3%** | **+65%** |
+| 200 → 240 VU | −7.0% | +59% |
+| 240 → 280 VU | −6.5% | +29% |
+| 280 → 320 VU | −10.5% | +19% |
 
-Each 40-VU step costs about 8-11% of throughput and buys 19-59% more latency. This is textbook saturation: the deployment is at capacity, and additional concurrency converts directly into queueing.
+In every case additional concurrency buys latency and no additional work. The 120 → 160 pair is the sharpest: throughput is flat to within 0.3% — 32.67 against 32.56 API req/s — while p95 rises by two-thirds. That is a saturation plateau, and it means **the deployment is already at capacity at 120 VU**, the lowest level in the gated series.
+
+**The peak therefore sits below 120 VU and was not measured.** Locating it needs a ladder below 120 with a fixed dataset, which this campaign did not run.
 
 What it does **not** do is fail. Across 240, 280 and 320 VU — 15,636 requests in total — **not one request returned an error**, and every lifecycle reached `RESOLVED`. Whatever the limiting resource is, the stack queues on it rather than shedding load.
 
@@ -147,9 +153,22 @@ The campaign wrote roughly **17,700 complaints** onto a starting database of 193
 
 This is visible in the numbers. At 200 VU the ungated pass — run earlier, against a smaller database — recorded 59.47 API req/s; the gated pass at the same 200 VU recorded 43.69 req/s. The gate removed the failures but did not cause the slowdown; the database had grown roughly threefold in between.
 
-The consequence is that the **20-160 VU levels and the 200-320 VU levels cannot be compared directly.** The peak throughput figure of 16.259 lifecycles/sec at 160 VU was measured against a database an order of magnitude smaller than the one the 320 VU level faced. Read the 200-320 group as an internally consistent saturation curve, and the earlier group separately.
+The consequence is stronger than it first appears: **no two levels in this campaign ran against the same dataset.** Records grew monotonically with every level, in run order:
 
-A cleanly comparable ladder needs either a database reset between levels or a dataset large enough that the run's own writes are negligible. Neither was done here.
+| Level (run order) | Approx. records at run time |
+|---|---|
+| 200 VU | ~15,000 |
+| 240 VU | ~16,300 |
+| 280 VU | ~17,500 |
+| 320 VU | ~18,700 |
+| 120 VU | ~19,900 |
+| 160 VU | ~20,900 |
+
+This is why the series is not monotonic in VU order — 200 VU records 43.69 API req/s while 120 VU records 32.67, even though 120 VU is the lighter load. The 120 and 160 levels were run **last**, against the largest database, so their lower throughput reflects data volume rather than concurrency.
+
+Two things follow. **Only adjacent levels are comparable**, and those are used for the saturation analysis above. And **the peak throughput figure of 16.259 lifecycles/sec at 160 VU from the early group should be read as "highest observed at ~7,000 records"** — roughly a third of the data the later levels faced — not as a capacity figure.
+
+A cleanly comparable ladder needs either a database reset between levels or a dataset large enough that the run's own writes are negligible. Neither was done here, and it is the main thing to fix before running this again.
 
 ## Stability
 
