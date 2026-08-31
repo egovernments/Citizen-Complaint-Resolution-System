@@ -14,7 +14,7 @@ configurator (DIGIT Studio), Kong, host nginx on port 80, Gatus health board,
 Grafana/Prometheus/Loki/Tempo observability, OpenBao — on the dump-seeded
 `pg` / `pg.citya` tenants. Login works immediately.
 
-Two sizing profiles (see step 4):
+Two sizing profiles (see step 5):
 
 | Template | Fits | Difference |
 |----------|------|------------|
@@ -23,7 +23,7 @@ Two sizing profiles (see step 4):
 
 ## Prerequisites
 
-- **Windows 11.** Step 0's `vmIdleTimeout` fix does not work on Windows 10 —
+- **Windows 11.** Step 2's `vmIdleTimeout` fix does not work on Windows 10 —
   see the note there for the Windows 10 workaround.
 - Hardware virtualization enabled (Intel VT-x / AMD SVM — usually on by
   default; enable in BIOS if step 1 errors with `0x80370102`).
@@ -57,7 +57,7 @@ systemd=true
 
 then `wsl --shutdown` in PowerShell and relaunch Ubuntu.
 
-## 2. Stop the WSL VM from shutting itself down  ← do this before deploying
+## 2. Stop WSL from shutting the stack down  ← do this before deploying
 
 **This is the single most disruptive Windows-only behaviour, and it is not
 obvious.** WSL has **two** independent idle timers, and you must disable both:
@@ -106,7 +106,7 @@ vmIdleTimeout=-1
 then `wsl --shutdown` from PowerShell and reopen Ubuntu.
 
 > The deploy manages the `memory` / `swap` / `processors` keys in this same
-> file (step 5) using `ini_file`, which edits only its own keys — your
+> file (step 6) using `ini_file`, which edits only its own keys — your
 > `vmIdleTimeout` line is preserved across deploys. Verified.
 
 > **Windows 10:** `vmIdleTimeout` is Windows-11-only. There, keep an
