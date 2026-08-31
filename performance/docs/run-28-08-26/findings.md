@@ -99,6 +99,15 @@ One failed request anywhere in the chain fails the whole lifecycle, so the lifec
 A lifecycle can also fail with **no** failed request at all — if all four calls return 200 but the final SEARCH does not report `RESOLVED`, or if the run ends mid-lifecycle. And the denominators drift further apart the worse things get, because dying lifecycles bail early and never issue their remaining calls: `cpu-2` at 50 VU averaged 1.66 requests per lifecycle against 4.04 when healthy. The columns coincide at 100% only in the trivial case where nothing failed.
 
 
+### Why API req/s Is Not Exactly Four Times Lifecycles/s
+
+A lifecycle is four API calls, but the `API req/s` column counts every HTTP request the harness issues, and two sources fall outside those four:
+
+- **One login per virtual user.** Each VU authenticates once and caches the token, so a run issues one extra request per VU however many lifecycles it completes. In short, high-concurrency runs that is a large share. The `cpu-16` burst at 80 VU issued 1,040 requests for 240 completed lifecycles, and 240 x 4 + 80 logins = 1,040 exactly.
+- **Lifecycles still in flight when the run ends.** A VU part-way through a lifecycle has issued requests but completed no iteration. This matters when one lifecycle takes a large fraction of the run, which is precisely the slow throttled rows: the `cpu-16` burst at 160 VU (36.64s server p95, two-minute hold) issued 107 requests beyond what logins and completed lifecycles account for.
+
+Neither inflates throughput — `Lifecycles/s` counts only lifecycles that reached RESOLVED. It does mean the ratio between the two columns climbs above 4 as a profile slows, and climbs furthest exactly where the stack is struggling. Healthy rows sit at 3.98-4.11; the degraded ones reach 5-21.
+
 ### Threshold Verdicts
 
 Declared thresholds: `transaction_duration` p95 < 15s and p99 < 25s, `transaction_success` rate > 0.95, `http_req_failed` rate < 0.01, `http_req_duration` p95 < 5s and p99 < 10s.
@@ -128,13 +137,18 @@ A second campaign applied per-service CPU limits via `docker update` (no restart
 
 The third column is the one that explains the results. Under the profile named for 16 vCPU, the service that actually files and updates complaints is pinned to eight tenths of one core.
 
-**A profile is not equivalent to a machine of that size, and none of them is a deployable configuration.** A profile pins each service to a fixed slice of the CPU budget, whereas an unthrottled machine lets services burst into each other's idle headroom. It also constrains CPU only — the host still has its full 30 GiB of memory throughout, where a real machine of the same nominal size would have proportionally less and could not hold the stack at all. These profiles locate the point at which CPU becomes the binding constraint; they are not smaller sizing options. The two were measured on the same host with the same `ramp-50vu` scenario roughly 30 minutes apart:
+**A profile is not equivalent to a machine of that size, and none of them is a deployable configuration.** A profile pins each service to a fixed slice of the CPU budget, whereas an unthrottled machine lets services burst into each other's idle headroom. It also constrains CPU only — the host still has its full 30 GiB of memory throughout, where a real machine of the same nominal size would have proportionally less and could not hold the stack at all. These profiles locate the point at which CPU becomes the binding constraint; they are not smaller sizing options. The two were measured on the same host with the same `ramp-50vu` scenario 29 minutes apart on 28 August. The unthrottled arm exists because a failsafe had cleared the CPU limits before that run started, which invalidated it as a `cpu-16` measurement and left a clean unthrottled one on the same host and the same day.
 
-| ramp-50vu | `cpu-16` profile | Unthrottled |
+**These are whole-run figures, not the steady-state figures used in every table on this page**, so they deliberately do not match the 50 VU rows elsewhere. This is the only place two runs are compared head to head, and the whole run is used because it puts both arms on the same basis.
+
+| `ramp-50vu`, whole run | `cpu-16` profile | Unthrottled |
 |-----------|-----------------|-------------|
 | Iterations | 1,299 | 2,446 |
+| Lifecycles/s | 1.798 | 3.367 |
 | API req/s | 7.26 | 13.50 |
 | Server p95 | 6,621ms | 360ms |
+
+**1.9x the throughput at one-eighteenth of the latency**, on identical hardware 29 minutes apart.
 
 Profile figures should therefore be read as profile names, not as vCPU-equivalent machine sizes.
 
@@ -274,12 +288,12 @@ Comparing like for like at the same concurrency, the `cpu-16` profile returned 1
 
 ## Host Behaviour
 
-| Profile | Min CPU idle | Where the limit binds |
-|---------|-------------|----------------------|
-| cpu-2 | 60-90% | Container CPU quota |
-| cpu-4 | 60-90% | Container CPU quota |
-| cpu-8 | 1.9% (at 50 VU) | Host CPU |
-| cpu-16 | 5.6% (at 50 VU) | Host CPU |
+| Profile | Host CPU idle observed | Where the limit binds |
+|---------|----------------------|----------------------|
+| cpu-2 | 60-90% throughout | Container CPU quota |
+| cpu-4 | 60-90% throughout | Container CPU quota |
+| cpu-8 | falls to 1.9% (at 50 VU) | Host CPU |
+| cpu-16 | falls to 5.6% (at 50 VU) | Host CPU |
 
 Under `cpu-2` and `cpu-4` the host was never the bottleneck — CPU idle stayed between 60% and 90% while the stack collapsed, so the cgroup caps bind rather than the machine. Host pressure appears only from `cpu-8` up.
 
