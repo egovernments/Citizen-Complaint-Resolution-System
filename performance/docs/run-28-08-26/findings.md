@@ -55,14 +55,17 @@ That resting footprint is the reason the minimum deployment spec is **16 vCPU / 
 
 | Metric | Value |
 |--------|-------|
-| Peak throughput | 10.785 lifecycles/sec (43.15 API req/s) at 125 VU |
-| Daily capacity | **931,824 transactions/day** |
-| Max sustainable concurrent users | **125 VU** |
-| Breaking point | 150 VU (end-to-end p95 16.38s vs 15s budget) |
-| HTTP failures, all levels | 0.000% |
+| Peak throughput, ramp ladder | 10.785 lifecycles/sec (43.15 API req/s) at 125 VU |
+| Daily capacity, ramp ladder | **931,824 transactions/day** |
+| Max sustainable concurrent users, ramp ladder | **125 VU** |
+| Breaking point, ramp ladder | 150 VU (end-to-end p95 16.38s vs 15s budget) |
+| HTTP failures across the ramp ladder | 0.000% |
+| Highest clean level, burst ladder | **80 VU — 8.034 lifecycles/sec, 694,138/day, 0.000% failures** |
 | Records in database | ~2,300 complaints |
 
-The deployment exceeds a 10,000 txn/day target by 93x. Throughput rises linearly to 125 VU and flattens above it; latency is the first budget to give, and no level tested returned a single HTTP failure.
+**Two ladders, two numbers — read them as such.** The *ramp* ladder stops on a latency budget and reached 125 VU / 931,824 per day with no HTTP failure at any level. The *burst* ladder, run three days later to find the failure point by error rate instead, is clean only to 80 VU / 694,138 per day; its 160 and 320 VU levels were invalidated by a JVM heap exhaustion and are withdrawn — see [When the heap gave out](#when-the-heap-gave-out). The two ladders used different scenarios, different stopping rules and different access-control conditions, so neither number supersedes the other. **694,138/day is the figure to plan against**, because it is the one measured with zero failures under the stricter test.
+
+The deployment exceeds a 10,000 txn/day target by at least 69x. Throughput rises linearly to 125 VU on the ramp ladder and flattens above it; latency is the first budget to give there, and no level of that ladder returned a single HTTP failure.
 
 ## Baseline Performance
 
@@ -196,7 +199,7 @@ Three of the twelve cells pass every threshold — `cpu-8` at 2 VU, and `cpu-16`
 | 160 | 0.567 | 6.41 | 36.64s | 93.2% | 3.34% |
 | 320 | 0.000 | 9.26 | 60.00s | 0% | 67.4% |
 
-Under the `cpu-16` profile the ceiling is 80 VU — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU. This is the throttled ceiling, not the machine's; the unthrottled ladder below reaches 160 VU before errors appear.
+Under the `cpu-16` profile the ceiling is 80 VU — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU. This is the throttled ceiling, not the machine's; the unthrottled ladder below is clean to 80 VU, and its higher levels were invalidated by the heap exhaustion described in [When the heap gave out](#when-the-heap-gave-out).
 
 ### Burst Tests Unthrottled
 
@@ -216,7 +219,7 @@ The 160 and 320 VU rows are **not capacity measurements**. Both were taken while
 
 The highest level that is a clean measurement is **80 VU** — 8.034 lifecycles/sec, 694,138 transactions/day, 0.000% failures, 449ms server p95. Everything at or below it completed before the first heap error.
 
-Below 160 VU the deployment is bound by client think time, not by the server. Measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly — 2.066 predicted against 2.081 measured at 20 VU, 8.264 against 8.034 at 80 VU — and server p95 rises only from 341ms to 449ms across a fourfold concurrency increase. Host load average reached 12.93 at 40 VU and 24.86 at 80 VU on 16 vCPU.
+Up to 80 VU the deployment is bound by client think time, not by the server. Measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly — 2.066 predicted against 2.081 measured at 20 VU, 8.264 against 8.034 at 80 VU — and server p95 rises only from 341ms to 449ms across a fourfold concurrency increase. Host load average reached 12.93 at 40 VU and 24.86 at 80 VU on 16 vCPU.
 
 At 160 VU throughput falls short of the think-time model for the first time (12.463 measured against 16.529 predicted) and the first HTTP failures appear. At 320 VU throughput drops below what 20 VU achieved and p95 pins at the 60s client timeout. That reads like classic congestive collapse, and it was originally recorded as such — but the cause was a heap exhaustion that began during the 160 VU level, not saturation of the machine.
 
@@ -255,11 +258,11 @@ Comparing like for like at the same concurrency, the `cpu-16` profile returned 1
 
 | Profile | Peak throughput | Saturation | All thresholds pass at | Errors > 5% | Max HTTP failure rate |
 |---------|----------------|-----------|----------------------|-------------|----------------------|
-| Unthrottled | 10.851/s (150 VU) | 125 VU | 2-125 VU | never | 0.000% |
+| Unthrottled (ramp) | 10.851/s (150 VU) | 125 VU | 2-125 VU | never | 0.000% |
 | cpu-2 | 0.066/s (2 VU) | Below 2 VU | never | 10 VU | 91.84% |
 | cpu-4 | 0.216/s (10 VU) | 10 VU | never | 50 VU | 53.61% |
 | cpu-8 | 0.693/s (50 VU) | Plateau from 10 VU | 2 VU | never | 0% |
-| cpu-16 | 2.204/s (50 VU) | Not saturated at 50 VU | 2 and 10 VU | 160 VU (burst) | 0% in matrix, 67.4% at 320 VU |
+| cpu-16 | 2.204/s (50 VU) | Not saturated at 50 VU | 2 and 10 VU | 320 VU (burst) | 0% in matrix, 67.4% at 320 VU |
 
 **Key observations:**
 
@@ -267,7 +270,7 @@ Comparing like for like at the same concurrency, the `cpu-16` profile returned 1
 - **cpu-2** is saturated below the lowest level tested. At 2 VU it still completes every lifecycle, but at 11.19s http p95. At 10 VU success drops to 68.0%, and at 50 VU no lifecycle reaches RESOLVED at all.
 - **cpu-4** peaks at 10 VU (0.216 lifecycles/sec) and collapses at 50 VU — throughput falls to 0.049/s, with 15.2% of *lifecycles* succeeding while 53.61% of *requests* failed. The two figures have different denominators and are not meant to be complementary; see [Reading the two percentage columns](#reading-the-two-percentage-columns).
 - **cpu-8** returns the same throughput at 10 and 50 VU (0.683 vs 0.693 lifecycles/sec) at 100% success. The extra load is absorbed entirely as latency: http p95 rises from 4.26s to 24.13s.
-- **Latency, not errors, is the first thing to give.** Every profile crosses its latency budget before it crosses its failure budget, and the unthrottled ladder never crosses the failure budget at all.
+- **Latency, not errors, is the first thing to give.** Every profile crosses its latency budget before it crosses its failure budget, and the unthrottled *ramp* ladder never crosses the failure budget at all. The unthrottled *burst* ladder does show failures, but only at levels invalidated by the heap exhaustion, so it does not contradict this.
 
 ## Host Behaviour
 
