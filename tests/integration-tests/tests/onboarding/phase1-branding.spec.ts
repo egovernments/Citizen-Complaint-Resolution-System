@@ -38,7 +38,11 @@ const createdTenants: string[] = [];
 const tempFiles: string[] = [];
 
 function freshIds() {
-  const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+  // Letters-only — the upload parser rejects digits in tenant codes (mirrors
+  // egov-user's `^[a-zA-Z. ]*$`); see utils/onboarding.freshOnboardingIds.
+  const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, '0')}`.replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
   return {
     SUFFIX,
     TENANT_CODE: `${ROOT}.pwt${SUFFIX}`,

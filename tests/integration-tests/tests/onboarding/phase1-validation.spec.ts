@@ -11,7 +11,7 @@
  * Validation rules under test live in `src/utils/excelParser.ts` and
  * mirror the configurator's source code:
  *   - "Tenant code is required" — empty `tenantCode` cell.
- *   - "Tenant code must start with a letter and contain only letters,
+ *   - "Tenant code must contain only letters, dots, and spaces
  *     numbers, and dots" — regex `^[A-Za-z][A-Za-z0-9.]*$`.
  *   - "Excel sheet is empty" — sheet has headers but no data rows.
  *
@@ -27,7 +27,14 @@ import { ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const SUFFIX = Date.now().toString().slice(-8);
+// Letters-only: egov-user validates tenantId against `^[a-zA-Z. ]*$` (no
+// digits), and the configurator's upload parser now mirrors that rule — a
+// numeric suffix is rejected at Step 1.1 before "File loaded:" ever renders.
+// Same digit->letter map (0->a .. 9->j) as utils/onboarding.freshOnboardingIds.
+const SUFFIX = Date.now()
+  .toString()
+  .slice(-8)
+  .replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
 const ROOT = ROOT_TENANT;
 
 const FIX_INVALID_CODE = path.join(os.tmpdir(), `tenant-invalid-code-${SUFFIX}.xlsx`);
@@ -76,8 +83,9 @@ async function loginAndOpenUploadStep(page: Page): Promise<void> {
 test.describe('Onboarding — Phase 1 validation', () => {
   test.beforeAll(async () => {
     await writeTenantFixture(FIX_INVALID_CODE, {
-      // Starts with a digit — violates `^[A-Za-z][A-Za-z0-9.]*$`.
-      tenantCode: `1bad${SUFFIX}`,
+      // Contains digits — violates the parser's `^[a-zA-Z. ]*$` (which mirrors
+      // egov-user's tenantId constraint; digits are not permitted at all).
+      tenantCode: `bad1code${SUFFIX}`,
       tenantName: `PW Invalid Code ${SUFFIX}`,
       displayName: `PW Invalid Code ${SUFFIX}`,
       tenantType: 'City',
@@ -105,7 +113,7 @@ test.describe('Onboarding — Phase 1 validation', () => {
     // top-of-page destructive alert and the per-step validation bullet
     // list. `.first()` scopes the assertion to whichever paints first.
     await expect(
-      page.getByText('Tenant code must start with a letter and contain only letters, numbers, and dots').first(),
+      page.getByText('Tenant code must contain only letters, dots, and spaces (numbers are not supported)').first(),
     ).toBeVisible({ timeout: 15_000 });
 
     // We must still be on Step 1.1 — the wizard should not have
