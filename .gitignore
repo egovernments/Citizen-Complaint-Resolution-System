@@ -134,6 +134,8 @@ performance/ansible/inventory.ini
 performance/results/*/metrics.csv
 performance/results/*/metrics.csv.gz
 performance/results/*/k6-output.json
+performance/results/*/run-manifest.env
+performance/results/dashboard-fixtures/
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
 docker-compose.override.yml
