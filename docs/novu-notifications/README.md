@@ -64,25 +64,76 @@ Wait for `failed=0`. This starts Novu and the bridge, enables config-driven PGR,
 
 Do not run `deploy.sh` again for provider or workflow setup.
 
-## 3. Add the ordinary-SMS provider
+Before continuing, prove that Ansible actually minted and wired a usable key. A
+green play recap is not sufficient on current master because the provider
+bootstrap is allowed to fail without failing the deployment.
 
-SMS and WhatsApp are both Novu `sms` integrations, but they require different senders. Open **Configurator -> Notifications -> Providers** while logged into the state-root tenant and create the ordinary SMS provider:
+```bash
+export NOVU_BASE_URL='http://127.0.0.1:14002'
+export NOVU_API_KEY="$(sudo sed -n 's/^NOVU_API_KEY=//p' /opt/digit/.env | tail -1)"
 
-```json
-{
-  "channel": "SMS",
-  "providerId": "twilio",
-  "name": "Twilio SMS",
-  "identifier": "twilio-sms",
-  "credentials": {
-    "accountSid": "<secret>",
-    "token": "<secret>",
-    "from": "+<sms sender>"
-  }
-}
+test -n "$NOVU_API_KEY"
+test "$NOVU_API_KEY" != changeme
+curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
+  "$NOVU_BASE_URL/v1/integrations" >/dev/null
 ```
 
-In Novu, make this the primary `sms` integration. The bridge uses the primary integration for ordinary SMS and explicitly selects `twilio-whatsapp` for WhatsApp.
+Stop if any command fails. Configurator provider operations go through
+`novu-bridge`; they cannot work while the bridge has an empty, placeholder, or
+invalid Novu key.
+
+## 3. Add the ordinary-SMS provider
+
+SMS and WhatsApp are both Novu `sms` integrations, but they require different
+senders. Current master does **not** automate the ordinary-SMS integration or
+make it primary. It automates only the WhatsApp integration. This is a bootstrap
+automation gap; until it is fixed, this step requires both Configurator and the
+Novu API.
+
+The SMS/WhatsApp integration-selection fix does not provision either provider.
+It assumes ordinary SMS is already primary and only makes WhatsApp select
+`twilio-whatsapp` explicitly at dispatch time.
+
+Open **Configurator -> Notifications -> Providers** while logged in as an
+employee with an allowed provider-management role. Select **Add Provider** and
+enter:
+
+```text
+Channel:      SMS
+Provider ID:  twilio
+Name:         Twilio SMS
+Identifier:   twilio-sms
+Account SID:  <secret>
+Auth Token:   <secret>
+From:         +<sms sender>
+```
+
+Configurator creates an active Novu integration, but it cannot make it primary,
+edit it, delete it, or validate the Twilio credentials. Its **Verify** action
+only confirms that Novu reports the integration as active.
+
+Promote the new integration with Novu's administration API:
+
+```bash
+SMS_INTEGRATION_ID="$(
+  curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
+    "$NOVU_BASE_URL/v1/integrations" \
+  | jq -er '.data[] | select(.identifier == "twilio-sms") | ._id'
+)"
+
+curl -fsS -X POST \
+  -H "Authorization: ApiKey $NOVU_API_KEY" \
+  "$NOVU_BASE_URL/v1/integrations/$SMS_INTEGRATION_ID/set-primary" \
+  >/dev/null
+
+curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
+  "$NOVU_BASE_URL/v1/integrations" \
+| jq '[.data[] | {identifier,providerId,channel,active,primary}]'
+```
+
+Confirm that `twilio-sms` has `active: true` and `primary: true`. The bridge uses
+this primary integration for ordinary SMS and explicitly selects
+`twilio-whatsapp` for WhatsApp.
 
 If ordinary SMS is not required, remove `SMS` from `novu_bridge_channels_enabled` and skip this step.
 
@@ -136,17 +187,15 @@ Do not create `COMPLAINTS.WORKFLOW.*` Novu workflows. They belong to a retired e
 ## 5. Verify the bootstrap
 
 ```bash
-NOVU_API_KEY="$(sudo sed -n 's/^NOVU_API_KEY=//p' /opt/digit/.env | tail -1)"
+curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
+  "$NOVU_BASE_URL/v1/integrations" \
+  | jq '[.data[] | {identifier,providerId,channel,active,primary}]'
 
 curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
-  http://127.0.0.1:14002/v1/integrations \
-  | jq '[.data[] | {identifier,providerId,channel,active}]'
-
-curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
-  'http://127.0.0.1:14002/v2/workflows?limit=100&page=0' \
+  "$NOVU_BASE_URL/v2/workflows?limit=100&page=0" \
   | jq '[.data.workflows[].workflowId]'
 
-unset NOVU_API_KEY
+unset NOVU_API_KEY NOVU_BASE_URL SMS_INTEGRATION_ID
 ```
 
 Confirm:
@@ -172,14 +221,16 @@ Business-initiated WhatsApp messages require an approved Twilio Content SID. The
 
 ## What Configurator can and cannot do
 
-Configurator can create provider integrations, manage the three notification MDMS masters, sync WhatsApp templates, validate configuration, and display bridge dispatch logs.
+Configurator can create provider integrations, manage the three notification MDMS masters, sync WhatsApp templates, validate notification MDMS, and display bridge dispatch logs.
 
-Configurator cannot start Novu, enable the Compose profile, set PGR/bridge environment flags, mint or wire the Novu API key, create the fixed workflows, rotate/delete integrations, or select the primary SMS integration. Those remain deployment or Novu administration operations.
+Configurator cannot start Novu, enable the Compose profile, set PGR/bridge environment flags, mint or wire the Novu API key, create the fixed workflows, rotate/delete integrations, select the primary SMS integration, or verify provider credentials. Those remain deployment or Novu administration operations.
 
 ## Code references
 
 - Ansible deployment: [`local-setup/ansible/playbook-deploy.yml`](../../local-setup/ansible/playbook-deploy.yml)
 - Workflow/provider bootstrap: [`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh`](../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh)
 - Notification MDMS seed: [`local-setup/scripts/seed-notifications.py`](../../local-setup/scripts/seed-notifications.py)
+- Configurator provider UI: [`configurator/src/resources/notification-providers/NotificationProviderList.tsx`](../../configurator/src/resources/notification-providers/NotificationProviderList.tsx)
+- Provider administration API: [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java)
 - PGR routing/rendering: [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java)
 - Bridge dispatch: [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java)
