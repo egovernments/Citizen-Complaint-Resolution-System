@@ -12,6 +12,9 @@ A single-machine DIGIT deployment sustains **125 concurrent users** and **931,82
 | Breaking point | 150 VU (end-to-end p95 16.38s vs 15s budget) |
 | HTTP failures, all levels | **0.000%** |
 | Success rate, all levels | **100%** |
+| Error-based ceiling | **160 VU** (0.67% HTTP failures) |
+| Peak throughput at ceiling | **51.24 API req/s** (12.463 lifecycles/sec) |
+| Daily capacity at ceiling | **1,076,803 transactions/day** |
 | Records in database | ~2,300 complaints |
 
 ## What We Tested
@@ -20,7 +23,9 @@ Every test iteration runs one complete PGR complaint lifecycle — **4 API calls
 
 **CREATE** (file complaint) → **ASSIGN** (route to department) → **RESOLVE** (close it) → **SEARCH** (verify status)
 
-This exercises Kong, PGR Services, Workflow, Persister, Kafka, and Postgres — the entire hot path. Seven concurrency levels were tested — 2, 10, 50, 75, 100, 125 and 150 VUs — each held at peak for 5 minutes, with no CPU limits applied.
+This exercises Kong, PGR Services, Workflow, Persister, Kafka, and Postgres — the entire hot path. Seven concurrency levels were tested — 2, 10, 50, 75, 100, 125 and 150 VUs — each held at peak for 5 minutes, with no CPU limits applied. A burst ladder at 20, 40, 80, 160 and 320 VUs, also unthrottled, was run separately to locate the failure point by error rate rather than by latency.
+
+The ramp figures and the burst ladder were measured three days apart, and attribute-based access control was introduced to PGR search in between. The SEARCH step therefore carries a department and jurisdiction filter in the burst ladder that was absent from the ramp tests, and the two sets are not identical conditions. The employee driving the burst ladder was granted the departments and wards matching the complaints it files, so the filter resolves rather than rejecting every row.
 
 ## Capacity at Scale
 
@@ -37,6 +42,20 @@ Throughput rises linearly to 125 VUs, then flattens:
 | 150 | 10.851/s | 43.37 | 937,526/day | 2,477ms |
 
 Going from 125 to 150 VUs adds **0.6% throughput** while server p95 latency grows 75% and the end-to-end budget is breached.
+
+## Error-Based Ceiling
+
+The ramp tests above stop on a latency budget and record 0.000% HTTP failures at every level, so they never locate the point at which the deployment actually fails. A separate burst ladder pushed the unthrottled stack until errors appeared, holding each level at a constant VU count for 2 minutes.
+
+| VUs | Throughput | API req/s | Server p95 | Success | HTTP failures |
+|-----|-----------|-----------|-----------|---------|--------------|
+| 20 | 2.081/s | 8.48 | 341ms | 100% | 0.00% |
+| 40 | 4.091/s | 16.67 | 348ms | 100% | 0.00% |
+| 80 | 8.034/s | 32.75 | 449ms | 100% | 0.00% |
+| **160** | **12.463/s** | **51.24** | 2,200ms | 98.83% | **0.67%** |
+| 320 | 1.113/s | 7.25 | 60,000ms | 0% | 41.12% |
+
+**The ceiling is 160 VU** — the last level below a 5% failure rate, and also the point of peak measured throughput at 1,076,803 transactions/day. Up to 80 VU the deployment is bound by client think time rather than by the server: measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly and server p95 moves only 108ms across a fourfold concurrency increase. At 160 VU throughput falls short of the think-time model for the first time and the first errors appear. At 320 VU the stack collapses — p95 pins at the 60s timeout, no transaction completes, and throughput drops below the 20 VU level.
 
 ## Constrained CPU Profiles
 

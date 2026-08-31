@@ -149,7 +149,29 @@ Three of the twelve cells pass every threshold — `cpu-8` at 2 VU, and `cpu-16`
 | 160 | 0.567 | 6.41 | 36.64s | 93.2% | 3.34% |
 | 320 | 0.000 | 9.26 | 60.00s | 0% | 67.4% |
 
-Under the `cpu-16` profile the ceiling is 80 VU — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU. This is the throttled ceiling, not the machine's; the unthrottled ladder above reached 150 VU at 0.000% failures.
+Under the `cpu-16` profile the ceiling is 80 VU — the last level below 1% HTTP failures. The 5% error rate is crossed at 320 VU. This is the throttled ceiling, not the machine's; the unthrottled ladder below reaches 160 VU before errors appear.
+
+### Burst Tests Unthrottled
+
+The same `burst.js` ladder run with no CPU limits applied, each level held at a constant VU count for 2 minutes. Container quotas were confirmed absent by reading `/sys/fs/cgroup/cpu.max` on all 59 container scopes, which returned `max` in every case; `HostConfig.NanoCpus` was not trusted, as it retains stale values after a quota is cleared.
+
+This ladder ran three days after the ramp tests, and attribute-based access control was introduced to PGR search in the interval. The SEARCH step therefore evaluates a department and jurisdiction filter here that did not exist in the ramp figures, so the two sets are not identical conditions and the ceiling should not be read as a direct extension of the ramp curve. The employee driving the ladder was temporarily granted the three departments and seven wards corresponding to the complaints the harness files, so the filter resolves to a non-empty result set rather than rejecting every row; that grant was reverted after the run.
+
+| VUs | Lifecycles/s | API req/s | http p95 | Success | `http_req_failed` |
+|-----|-------------|-----------|----------|---------|------------------|
+| 20 | 2.081 | 8.48 | 0.34s | 100% | 0.000% |
+| 40 | 4.091 | 16.67 | 0.35s | 100% | 0.000% |
+| 80 | 8.034 | 32.75 | 0.45s | 100% | 0.000% |
+| **160** | **12.463** | **51.24** | 2.20s | 98.83% | **0.670%** |
+| 320 | 1.113 | 7.25 | 60.00s | 0% | 41.12% |
+
+Unthrottled the ceiling is **160 VU** — the last level below a 5% failure rate, and simultaneously the point of peak throughput at 1,076,803 transactions/day. The ladder stopped at 320 VU by design; 640 VU was not run.
+
+Below 160 VU the deployment is bound by client think time, not by the server. Measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly — 2.066 predicted against 2.081 measured at 20 VU, 8.264 against 8.034 at 80 VU — and server p95 rises only from 341ms to 449ms across a fourfold concurrency increase. Host load average reached 12.93 at 40 VU and 24.86 at 80 VU on 16 vCPU.
+
+At 160 VU throughput falls short of the think-time model for the first time (12.463 measured against 16.529 predicted) and the first HTTP failures appear. At 320 VU the collapse is complete: p95 pins at the 60s client timeout, no transaction completes end to end, and throughput drops below what 20 VU achieved.
+
+Comparing like for like at the same concurrency, the `cpu-16` profile returned 1.331 lifecycles/sec at 15.31s p95 where the unthrottled machine returned 8.034 lifecycles/sec at 0.45s — six times the throughput at a thirty-fourth of the latency. This is the clearest measure of how far a per-service CPU profile sits from the machine it is named after.
 
 ## Degradation Points by Profile
 
