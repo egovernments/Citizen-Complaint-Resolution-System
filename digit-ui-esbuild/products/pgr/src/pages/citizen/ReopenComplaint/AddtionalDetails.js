@@ -92,13 +92,18 @@ const AddtionalDetails = (props) => {
         "REOPEN",
         assignes
       );
-      // Merge into the CURRENT stored object, not the hook's copy — that copy
+      // `department` is linked at ASSIGN time: the employee action modal stamps
+      // the picked assignee's HRMS department onto additionalDetail.department
+      // (PGRDetails.js); complaints are born "NA" since the hierarchy master is
+      // deliberately unmapped. Every update round-trips the WHOLE service
+      // object from the client and the backend trusts it — a payload whose
+      // department is missing/"NA" gets re-derived from that unmapped
+      // hierarchy ("NA" again), overwriting the stamp. The hook's copy here
       // can be up to 15 minutes stale (global react-query staleTime, no
-      // override here). A stale pre-ASSIGN copy round-trips without the
-      // stamped `department`; the backend re-derives it from the
-      // (deliberately unmapped) hierarchy as "NA", and department-scoped
-      // roles lose the complaint. On fetch failure, fall back to the cached
-      // copy — no worse than before.
+      // override), so a pre-ASSIGN copy would do exactly that, and
+      // department-scoped roles then lose the complaint. Merge into the
+      // CURRENT stored object instead; on fetch failure fall back to the
+      // cached copy — no worse than before.
       try {
         const fresh = await Digit.PGRService.search(wfTenant, { serviceRequestId: businessId });
         const freshService = fresh?.ServiceWrappers?.[0]?.service;
