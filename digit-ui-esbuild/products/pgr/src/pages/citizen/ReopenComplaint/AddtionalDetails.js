@@ -92,16 +92,13 @@ const AddtionalDetails = (props) => {
         "REOPEN",
         assignes
       );
-      // The hook's copy can be up to 15 minutes STALE (global react-query
-      // staleTime; useComplaintDetails sets no override). A citizen who viewed
-      // the complaint before it was assigned reopens with a copy whose
-      // additionalDetail predates the ASSIGN-time department stamp — the
-      // update round-trips without it, the backend re-derives from the
-      // (deliberately unmapped) hierarchy and stores "NA", and
-      // department-scoped supervisors lose the complaint entirely (verified
-      // end-to-end on UAT: supervisor sees nothing, not even a direct
-      // complaint-number lookup). Re-fetch and merge into the CURRENT stored
-      // object; fall back to the cached copy on failure (no worse than before).
+      // Merge into the CURRENT stored object, not the hook's copy — that copy
+      // can be up to 15 minutes stale (global react-query staleTime, no
+      // override here). A stale pre-ASSIGN copy round-trips without the
+      // stamped `department`; the backend re-derives it from the
+      // (deliberately unmapped) hierarchy as "NA", and department-scoped
+      // roles lose the complaint. On fetch failure, fall back to the cached
+      // copy — no worse than before.
       try {
         const fresh = await Digit.PGRService.search(wfTenant, { serviceRequestId: businessId });
         const freshService = fresh?.ServiceWrappers?.[0]?.service;
