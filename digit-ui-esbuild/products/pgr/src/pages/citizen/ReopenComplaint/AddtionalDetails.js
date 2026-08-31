@@ -104,6 +104,12 @@ const AddtionalDetails = (props) => {
       // department-scoped roles then lose the complaint. Merge into the
       // CURRENT stored object instead; on fetch failure fall back to the
       // cached copy — no worse than before.
+      //
+      // Deliberately reopen-only (product call, full workflow sweep 2026-08-31):
+      // the RATE flow has the same stale-cache exposure but only reaches the
+      // terminal CLOSEDAFTER* states, which have no REOPEN — a wiped
+      // department there affects closed-record reporting only, not routing,
+      // and is accepted.
       try {
         const fresh = await Digit.PGRService.search(wfTenant, { serviceRequestId: businessId });
         const freshService = fresh?.ServiceWrappers?.[0]?.service;
