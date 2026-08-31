@@ -15,6 +15,64 @@ const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.
 const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
 const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
 
+describe('JVM OOM dashboard service scope', () => {
+  /**
+   * Incident: #1925 — the OOM panels queried every non-empty service_name.
+   * Promtail also labels Loki and Grafana logs with service_name, so Loki's
+   * query-completion log included the literal OutOfMemoryError expression and
+   * became a false OOM event on the next dashboard refresh.
+   */
+  const dashboard = JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, 'otel', 'grafana', 'provisioning', 'dashboards', 'jvm-services.json'),
+      'utf8',
+    ),
+  );
+  const expectedJvmServices = [
+    'audit-service',
+    'boundary-service',
+    'digit-config-service',
+    'egov-accesscontrol',
+    'egov-bndry-mgmnt',
+    'egov-enc-service',
+    'egov-filestore',
+    'egov-hrms',
+    'egov-idgen',
+    'egov-indexer',
+    'egov-localization',
+    'egov-notification-sms',
+    'egov-otp',
+    'egov-persister',
+    'egov-url-shortening',
+    'egov-user',
+    'egov-workflow-v2',
+    'inbox',
+    'keycloak',
+    'mdms-backend',
+    'novu-bridge',
+    'pgr-services',
+    'user-otp',
+  ];
+
+  test('OOM panels use the explicit JVM application allowlist', () => {
+    const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);
+    expect(oomPanels).toHaveLength(2);
+
+    for (const panel of oomPanels) {
+      const expr = panel.targets[0].expr as string;
+      const selector = expr.match(/service_name=~"\^\(([^)]+)\)\$"/);
+      expect(selector).not.toBeNull();
+      expect(selector![1].split('|')).toEqual(expectedJvmServices);
+      expect(expr).not.toContain('service_name=~".+"');
+    }
+  });
+
+  test('OOM panels cannot select observability or non-JVM infrastructure logs', () => {
+    const excluded = ['grafana', 'loki', 'promtail', 'otel-collector', 'prometheus', 'tempo'];
+    expect(expectedJvmServices).toEqual(expect.not.arrayContaining(excluded));
+  });
+});
+
 describe('Kong declarative route syntax', () => {
   /**
    * Incident: public-dashboard regex routes used the older `~^/path` form.
