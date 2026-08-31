@@ -161,6 +161,17 @@ plugins:
           -- the options endpoint takes nothing but tenantId.
           ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
           ["/pgr-services/v2/analytics/public/_options"]=true,
+          -- novu-bridge configurator-proxy POSTs: these endpoints authenticate
+          -- INSIDE novu-bridge (ProxyAuthFilter introspects the Authorization:
+          -- Bearer token against egov-user /user/_details and enforces
+          -- novu.bridge.proxy.allowed.roles). Their clients send NO
+          -- RequestInfo.authToken body, so without this whitelist the global
+          -- POST enrichment 401s every Configurator provider create/verify/
+          -- test-send before the bridge sees it. Kong-only: the bridge is not
+          -- routed by the Spring gateway tier.
+          ["/novu-bridge/novu-adapter/v1/providers"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -691,7 +702,9 @@ services:
 # providers/verify, POST providers/test-send). The /dispatch/* diagnostics
 # trio stays unrouted on purpose. Auth happens INSIDE novu-bridge
 # (ProxyAuthFilter validates the DIGIT bearer token against egov-user
-# /user/_details) — Kong is a dumb router here. novu-bridge listens on 8080
+# /user/_details) — Kong routes without adding its own auth, which is why
+# the three POST paths sit in the AUTH_OPTIONAL whitelist above: the global
+# POST auth-enrichment would otherwise 401 their Bearer-only requests. novu-bridge listens on 8080
 # with servlet context /novu-bridge, so strip_path:false with the
 # context-prefixed path is correct.
 - name: novu-bridge-proxy
