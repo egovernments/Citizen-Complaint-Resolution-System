@@ -23,6 +23,8 @@ Every test iteration runs one complete PGR complaint lifecycle — **4 API calls
 
 **CREATE** (file complaint) → **ASSIGN** (route to department) → **RESOLVE** (close it) → **SEARCH** (verify status)
 
+Throughout this document, **lifecycle success** is the share of lifecycles that completed all four steps and ended in `RESOLVED`, while **request fail** is the share of individual HTTP requests that errored. They have different denominators — roughly four requests per lifecycle — so they do not sum to 100. See [Reading the two percentage columns](./findings#reading-the-two-percentage-columns).
+
 This exercises Kong, PGR Services, Workflow, Persister, Kafka, and Postgres — the entire hot path. Seven concurrency levels were tested — 2, 10, 50, 75, 100, 125 and 150 VUs — each held at peak for 5 minutes, with no CPU limits applied. A burst ladder at 20, 40, 80, 160 and 320 VUs, also unthrottled, was run separately to locate the failure point by error rate rather than by latency.
 
 The ramp figures and the burst ladder were measured three days apart, and attribute-based access control was introduced to PGR search in between. The SEARCH step therefore carries a department and jurisdiction filter in the burst ladder that was absent from the ramp tests, and the two sets are not identical conditions. The employee driving the burst ladder was granted the departments and wards matching the complaints it files, so the filter resolves rather than rejecting every row.
@@ -47,7 +49,7 @@ Going from 125 to 150 VUs adds **0.6% throughput** while server p95 latency grow
 
 The ramp tests above stop on a latency budget and record 0.000% HTTP failures at every level, so they never locate the point at which the deployment actually fails. A separate burst ladder pushed the unthrottled stack until errors appeared, holding each level at a constant VU count for 2 minutes.
 
-| VUs | Throughput | API req/s | Server p95 | Success | HTTP failures |
+| VUs | Throughput | API req/s | Server p95 | Lifecycle success | Request fail |
 |-----|-----------|-----------|-----------|---------|--------------|
 | 20 | 2.081/s | 8.48 | 341ms | 100% | 0.00% |
 | 40 | 4.091/s | 16.67 | 348ms | 100% | 0.00% |
@@ -65,14 +67,14 @@ Up to 80 VU the deployment is bound by client think time rather than by the serv
 
 A second campaign capped the DIGIT services with `docker update` to measure smaller budgets on the same host. These figures are **not** equivalent to machines of that size — a profile pins each service to a fixed slice, whereas an unthrottled machine lets services burst into each other's idle headroom.
 
-| Profile | Peak at | Throughput | API req/s | Daily Capacity | Success |
+| Profile | Peak at | Throughput | API req/s | Daily Capacity | Lifecycle success |
 |---------|---------|-----------|-----------|---------------|---------|
 | cpu-2 | 2 VU | 0.066/s | 0.27 | 5,702/day | 100% |
 | cpu-4 | 10 VU | 0.216/s | 0.88 | 18,662/day | 100% |
 | cpu-8 | 50 VU | 0.693/s | 2.80 | 59,875/day | 100% |
 | cpu-16 | 50 VU | 2.204/s | 8.80 | 190,426/day | 100% |
 
-Measured on the same host at 50 VU, `cpu-16` returned 2.204 lifecycles/sec at 6,621ms server p95 while the unthrottled machine returned 5.165 lifecycles/sec at 517ms. Treat the profile figures as conservative floors, not as vCPU-equivalent machine sizes.
+`cpu-16` divides a 16 vCPU budget across 31 services rather than giving the stack 16 vCPU; `pgr-services` itself is pinned to **0.80 of a core**. Because a request chain is sequential, no service can borrow another's idle time, and CFS quota stops a container outright once its slice is spent — so latency suffers far more than throughput. Measured on the same host at 50 VU, `cpu-16` returned 2.204 lifecycles/sec at 6,621ms server p95 while the unthrottled machine returned 5.165 lifecycles/sec at 517ms. See [Why cpu-16 is not a 16 vCPU machine](./findings#why-cpu-16-is-not-a-16-vcpu-machine). Treat the profile figures as conservative floors, not as vCPU-equivalent machine sizes.
 
 **None of these profiles describes a deployable machine.** They constrain CPU only, on a host that still has the full 30 GiB of memory. A real machine of the same nominal size would also have proportionally less memory, and below 32 GiB the stack does not fit at all. The minimum deployment spec is **16 vCPU / 32 GiB**; the profiles below the top one exist to show where CPU becomes the binding constraint, not to offer smaller options.
 

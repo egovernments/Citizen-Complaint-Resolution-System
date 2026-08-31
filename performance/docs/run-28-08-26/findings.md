@@ -70,7 +70,7 @@ The deployment exceeds a 10,000 txn/day target by 93x. Throughput rises linearly
 
 Steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), counting only lifecycles that reach RESOLVED. One lifecycle = 4 API calls.
 
-| VU | Lifecycles/s | API req/s | http p95* | http p99* | txn p95† | txn p99† | Success | HTTP fail |
+| VU | Lifecycles/s | API req/s | http p95* | http p99* | txn p95† | txn p99† | Lifecycle success‡ | Request fail‡ |
 |----|-------------|-----------|----------|----------|---------|---------|---------|-----------|
 | 2 | 0.214 | 0.86 | 416ms | 439ms | 11.40s | 11.77s | 100% | 0.000% |
 | 10 | 1.054 | 4.20 | 407ms | 429ms | 11.44s | 12.19s | 100% | 0.000% |
@@ -82,6 +82,19 @@ Steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), count
 
 \* `http_req_duration`, includes ~185ms network RTT.
 † `transaction_duration`, the full 4-call lifecycle including ~8s of think time.
+‡ Different denominators — see [Reading the two percentage columns](#reading-the-two-percentage-columns).
+
+### Reading the Two Percentage Columns
+
+**The two percentage columns are not complements and will not sum to 100.** They count different things over different denominators:
+
+- **Lifecycle success** (`transaction_success`) — the share of *lifecycles* that completed all four steps and ended in `RESOLVED`. Denominator: lifecycles.
+- **Request fail** (`http_req_failed`) — the share of individual *HTTP requests* that returned an error. Denominator: requests, about 4 per lifecycle when healthy.
+
+One failed request anywhere in the chain fails the whole lifecycle, so the lifecycle failure rate runs several times the request failure rate. Worked through on `cpu-4` at 50 VU, using whole-run counters — the tables report the 5-minute hold window instead, so these figures differ from the row above and illustrate the relationship rather than restate it: 225 of 672 requests failed (33.5%), and that killed 108 of 163 lifecycles, leaving 33.7% success. The two percentages sum to 67%, and nothing is unaccounted for.
+
+A lifecycle can also fail with **no** failed request at all — if all four calls return 200 but the final SEARCH does not report `RESOLVED`, or if the run ends mid-lifecycle. And the denominators drift further apart the worse things get, because dying lifecycles bail early and never issue their remaining calls: `cpu-2` at 50 VU averaged 1.66 requests per lifecycle against 4.04 when healthy. The columns coincide at 100% only in the trivial case where nothing failed.
+
 
 ### Threshold Verdicts
 
@@ -103,12 +116,14 @@ Six of the seven levels pass every threshold. Only 150 VU crosses, and it crosse
 
 A second campaign applied per-service CPU limits via `docker update` (no restart needed) to measure the same stack under smaller budgets. Each profile file names a per-service CPU share summing to the profile budget; about 20 of the 59 running containers match a named service, and the remainder stay unlimited.
 
-| Profile | Total CPU budget | Applied to |
-|---------|-----------------|-----------|
-| `cpu-2` | 2 vCPU | ~20 of 59 containers |
-| `cpu-4` | 4 vCPU | ~20 of 59 containers |
-| `cpu-8` | 8 vCPU | ~20 of 59 containers |
-| `cpu-16` | 16 vCPU | ~20 of 59 containers |
+| Profile | Total CPU budget | `pgr-services` slice | Applied to |
+|---------|-----------------|---------------------|-----------|
+| `cpu-2` | 2 vCPU | **0.10 vCPU** | 30 of 57 containers |
+| `cpu-4` | 4 vCPU | **0.20 vCPU** | 30 of 57 containers |
+| `cpu-8` | 8 vCPU | **0.40 vCPU** | 30 of 57 containers |
+| `cpu-16` | 16 vCPU | **0.80 vCPU** | 30 of 57 containers |
+
+The third column is the one that explains the results. Under the profile named for 16 vCPU, the service that actually files and updates complaints is pinned to eight tenths of one core.
 
 **A profile is not equivalent to a machine of that size, and none of them is a deployable configuration.** A profile pins each service to a fixed slice of the CPU budget, whereas an unthrottled machine lets services burst into each other's idle headroom. It also constrains CPU only — the host still has its full 30 GiB of memory throughout, where a real machine of the same nominal size would have proportionally less and could not hold the stack at all. These profiles locate the point at which CPU becomes the binding constraint; they are not smaller sizing options. The two were measured on the same host with the same `ramp-50vu` scenario roughly 30 minutes apart:
 
@@ -120,9 +135,39 @@ A second campaign applied per-service CPU limits via `docker update` (no restart
 
 Profile figures should therefore be read as profile names, not as vCPU-equivalent machine sizes.
 
+### Why `cpu-16` Is Not a 16 vCPU Machine
+
+The gap above is large enough to be worth explaining, because "16 vCPU throttled" and "16 vCPU unthrottled" sound like they should be the same machine.
+
+`cpu-16` does not give the stack 16 vCPU. It divides a 16 vCPU budget across 31 named services and pins each one independently:
+
+| Service | vCPU |
+|---------|------|
+| postgres-db | 3.20 |
+| redpanda | 2.00 |
+| elasticsearch | 2.00 |
+| kong | 1.20 |
+| keycloak | 0.80 |
+| **pgr-services** | **0.80** |
+| egov-workflow-v2 | 0.64 |
+| egov-user | 0.64 |
+| egov-persister | 0.64 |
+| *(22 further services)* | *3.60* |
+| **Total** | **16.56** |
+
+Three consequences follow from pinning rather than sharing.
+
+**A request chain is sequential.** A single CREATE walks Kong → pgr-services → workflow → user → idgen → Postgres, one hop at a time. At any instant one service is working and the rest are idle. Unthrottled, whichever service is busy can use the whole machine. Partitioned, `pgr-services` cannot exceed 0.8 even while 15 vCPU sit idle beside it. The partition forbids precisely the borrowing that makes the machine fast.
+
+**CFS quota is bursty, not smooth.** `--cpus 0.8` grants 80ms of CPU per 100ms scheduling period. Once a container exhausts its slice it is stopped outright until the next period begins, so latency arrives in discrete chunks even on an otherwise idle host. This is why **latency degrades far more than throughput does**: at 50 VU throughput differs by 2.3x (2.204 against 5.165 lifecycles/sec) while server p95 differs by 14x (7.31s against 517ms).
+
+**The partition is partial.** 30 of the 57 running containers matched a named service and were capped; the remaining 27 stayed unlimited, so the profile is not even a uniform 16 vCPU allocation.
+
+The practical reading: a per-service CPU allocation is a much harsher constraint than a machine of the same total size, and the difference grows with how many services a request touches. A profile named `cpu-16` behaves like far less than 16 vCPU.
+
 ### Matrix Results
 
-| Profile | VU | Lifecycles/s | API req/s | http p95 | http p99 | txn p95 | Success | HTTP fail |
+| Profile | VU | Lifecycles/s | API req/s | http p95 | http p99 | txn p95 | Lifecycle success | Request fail |
 |---------|----|-------------|-----------|----------|----------|---------|---------|-----------|
 | cpu-2 | 2 | 0.066 | 0.27 | 11.19s | 14.94s | 43.6s | 100% | 0% |
 | cpu-2 | 10 | 0.051 | 0.27 | 60.29s | 60.57s | 188.8s | 68.0% | 13.33% |
@@ -143,7 +188,7 @@ Three of the twelve cells pass every threshold — `cpu-8` at 2 VU, and `cpu-16`
 
 `burst.js` (`constant-vus`, no thresholds declared) run under the `cpu-16` profile:
 
-| VUs | Lifecycles/s | API req/s | http p95 | Success | `http_req_failed` |
+| VUs | Lifecycles/s | API req/s | http p95 | Lifecycle success | Request fail |
 |-----|-------------|-----------|----------|---------|------------------|
 | 20 | 1.840 | 7.81 | 1.65s | 100% | 0.000% |
 | **40** | **2.208** | **9.68** | 4.59s | 99.6% | 0.086% |
@@ -159,7 +204,7 @@ The same `burst.js` ladder run with no CPU limits applied, each level held at a 
 
 This ladder ran three days after the ramp tests, and attribute-based access control was introduced to PGR search in the interval. The SEARCH step therefore evaluates a department and jurisdiction filter here that did not exist in the ramp figures, so the two sets are not identical conditions and the ceiling should not be read as a direct extension of the ramp curve. The employee driving the ladder was temporarily granted the three departments and seven wards corresponding to the complaints the harness files, so the filter resolves to a non-empty result set rather than rejecting every row; that grant was reverted after the run.
 
-| VUs | Lifecycles/s | API req/s | http p95 | Success | `http_req_failed` |
+| VUs | Lifecycles/s | API req/s | http p95 | Lifecycle success | Request fail |
 |-----|-------------|-----------|----------|---------|------------------|
 | 20 | 2.081 | 8.48 | 0.34s | 100% | 0.000% |
 | 40 | 4.091 | 16.67 | 0.35s | 100% | 0.000% |
@@ -220,7 +265,7 @@ Comparing like for like at the same concurrency, the `cpu-16` profile returned 1
 
 - **Unthrottled**, throughput scales linearly from 2 to 125 VU and flattens above it. Server p95 stays under 1.5s through 125 VU. The only budget breached anywhere in the ladder is end-to-end latency at 150 VU.
 - **cpu-2** is saturated below the lowest level tested. At 2 VU it still completes every lifecycle, but at 11.19s http p95. At 10 VU success drops to 68.0%, and at 50 VU no lifecycle reaches RESOLVED at all.
-- **cpu-4** peaks at 10 VU (0.216 lifecycles/sec) and collapses at 50 VU — throughput falls to 0.049/s at 15.2% success and 53.61% HTTP failures.
+- **cpu-4** peaks at 10 VU (0.216 lifecycles/sec) and collapses at 50 VU — throughput falls to 0.049/s, with 15.2% of *lifecycles* succeeding while 53.61% of *requests* failed. The two figures have different denominators and are not meant to be complementary; see [Reading the two percentage columns](#reading-the-two-percentage-columns).
 - **cpu-8** returns the same throughput at 10 and 50 VU (0.683 vs 0.693 lifecycles/sec) at 100% success. The extra load is absorbed entirely as latency: http p95 rises from 4.26s to 24.13s.
 - **Latency, not errors, is the first thing to give.** Every profile crosses its latency budget before it crosses its failure budget, and the unthrottled ladder never crosses the failure budget at all.
 
