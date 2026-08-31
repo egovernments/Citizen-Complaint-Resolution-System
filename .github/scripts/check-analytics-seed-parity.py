@@ -26,6 +26,7 @@ NAIROBI_ACTIONS = ROOT / "ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/a
 FULL_DUMP = ROOT / "local-setup/db/full-dump.sql"
 
 CAPABILITY_IDS = set(range(2640, 2649))
+DASHBOARD_ACTION_ID = 4557
 
 
 class ParityError(Exception):
@@ -75,19 +76,16 @@ def capability_actions(rows):
     }
 
 
-def full_dump_actions():
+def full_dump_actions(action_ids):
     actions = {}
     with FULL_DUMP.open(encoding="utf-8") as dump:
         for line in dump:
-            if not line.startswith("accesscontrol-action-26"):
+            columns = line.rstrip("\n").split("\t")
+            if len(columns) < 5 or columns[3] != "ACCESSCONTROL-ACTIONS-TEST.actions-test":
                 continue
-            for column in line.rstrip("\n").split("\t"):
-                if not column.startswith('{"id"'):
-                    continue
-                action = json.loads(column)
-                if action.get("id") in CAPABILITY_IDS:
-                    actions[action["id"]] = action
-                break
+            action = json.loads(columns[4])
+            if action.get("id") in action_ids:
+                actions[action["id"]] = action
     return actions
 
 
@@ -145,12 +143,25 @@ def check():
             require(actual.get("url") == expected.get("url"), f"{tenant} action {action_id} URL differs")
             require(actual.get("method") == expected.get("method"), f"{tenant} action {action_id} method differs")
 
-    dump = full_dump_actions()
+    dump = full_dump_actions(CAPABILITY_IDS)
     require(set(dump) == set(defaults), "full dump capability ids differ from default data")
     for action_id, expected in defaults.items():
         actual = dump[action_id]
         require(actual.get("url") == expected.get("url"), f"full dump action {action_id} URL differs")
         require(actual.get("method") == expected.get("method"), f"full dump action {action_id} method differs")
+
+    dashboard_rows = [
+        row["data"]
+        for row in nairobi_rows
+        if row.get("data", {}).get("id") == DASHBOARD_ACTION_ID
+    ]
+    require(len(dashboard_rows) == 1, "expected exactly one Nairobi Dashboard action 4557")
+    dump_dashboard = full_dump_actions({DASHBOARD_ACTION_ID})
+    require(set(dump_dashboard) == {DASHBOARD_ACTION_ID}, "full dump action 4557 is missing")
+    require(
+        dump_dashboard[DASHBOARD_ACTION_ID] == dashboard_rows[0],
+        "full dump action 4557 differs from the Nairobi Dashboard action",
+    )
 
     mapped_roles = {row.get("rolecode") for row in role_rows if row.get("actionid") == 2641}
     require("SUPERVISOR" in mapped_roles, "base query action must reach SUPERVISOR")

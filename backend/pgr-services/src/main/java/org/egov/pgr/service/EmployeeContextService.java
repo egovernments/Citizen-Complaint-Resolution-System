@@ -39,6 +39,8 @@ import java.util.Set;
 @Slf4j
 public class EmployeeContextService {
 
+    private static final String EMPLOYEE_USER_TYPE = "EMPLOYEE";
+
     public static final String RESOLVER = "RESOLVER";
     public static final String CITIZEN = "CITIZEN";
     public static final String ADMIN = "ADMIN";
@@ -63,6 +65,10 @@ public class EmployeeContextService {
         if (user == null || StringUtils.isBlank(user.getUuid())) {
             throw new CustomException("PGR_EMPLOYEE_CONTEXT_NO_USER",
                     "Employee working context requires an authenticated user UUID");
+        }
+        if (!EMPLOYEE_USER_TYPE.equalsIgnoreCase(user.getType())) {
+            throw new CustomException("PGR_EMPLOYEE_CONTEXT_NOT_EMPLOYEE",
+                    "Employee working context is available only to employees");
         }
         if (StringUtils.isBlank(tenantId)) {
             throw new CustomException("PGR_EMPLOYEE_CONTEXT_NO_TENANT",
