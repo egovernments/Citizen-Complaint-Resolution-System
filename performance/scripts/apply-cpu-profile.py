@@ -2,8 +2,16 @@
 """Apply CPU limits from a profile YAML to running Docker containers.
 
 Usage:
-    python3 apply-cpu-profile.py <profile.yml>
-    python3 apply-cpu-profile.py --remove   # remove all CPU limits
+    python3 apply-cpu-profile.py <profile.yml> [--project NAME]
+    python3 apply-cpu-profile.py --remove [--project NAME]
+
+Every action is scoped to ONE compose project. Without a project filter the
+label lookup below matches every compose-managed container on the host, so
+--remove would clear CPU quotas belonging to unrelated stacks: harmless on a
+dedicated box, destructive on a shared one. The project comes from --project,
+else $COMPOSE_PROJECT_NAME, else auto-detection when exactly one compose
+project is running. With several running and none named, this refuses rather
+than guessing.
 
 Containers are resolved by their `com.docker.compose.service` label rather than
 via `docker compose ps`. The previous implementation shelled out to
@@ -16,15 +24,51 @@ nothing. A profile matrix run that way yields identical unthrottled results
 under four different profile labels, and the remove path silently leaves the
 stack throttled. Resolving by label works regardless of how compose was invoked.
 """
+import os
 import yaml
 import subprocess
 import sys
 
 
-def get_running_containers():
-    """Map compose service name -> container id for every running container."""
+def list_projects():
+    """Distinct compose project labels among running containers."""
+    r = subprocess.run(
+        ["docker", "ps", "--format", "{{.Label \"com.docker.compose.project\"}}"],
+        capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        return []
+    return sorted({p for p in r.stdout.split() if p})
+
+
+def resolve_project(explicit=None):
+    """Pick the single compose project to act on, or None to abort.
+
+    Fails closed: with several projects running and none named, guessing would
+    mean reaching into another stack.
+    """
+    if explicit:
+        return explicit
+    if os.environ.get("COMPOSE_PROJECT_NAME"):
+        return os.environ["COMPOSE_PROJECT_NAME"]
+    projects = list_projects()
+    if len(projects) == 1:
+        return projects[0]
+    if not projects:
+        print("ERROR: no running compose-managed containers found.", file=sys.stderr)
+        return None
+    print("ERROR: %d compose projects are running: %s. Refusing to guess which "
+          "to touch - pass --project NAME or set COMPOSE_PROJECT_NAME."
+          % (len(projects), projects), file=sys.stderr)
+    return None
+
+
+def get_running_containers(project):
+    """Map compose service name -> container id, within one compose project."""
     result = subprocess.run(
-        ["docker", "ps", "--format", "{{.Label \"com.docker.compose.service\"}} {{.ID}}"],
+        ["docker", "ps",
+         "--filter", "label=com.docker.compose.project=%s" % project,
+         "--format", "{{.Label \"com.docker.compose.service\"}} {{.ID}}"],
         capture_output=True, text=True
     )
     if result.returncode != 0:
@@ -56,15 +100,16 @@ def _verify(cid):
     return "0" if quota == "max" else quota
 
 
-def apply_profile(profile_path):
-    """Apply CPU limits from profile YAML."""
+def apply_profile(profile_path, project):
+    """Apply CPU limits from profile YAML, within one compose project."""
     with open(profile_path) as f:
         profile = yaml.safe_load(f)
 
-    containers = get_running_containers()
+    containers = get_running_containers(project)
     if not containers:
-        print("ERROR: resolved 0 running containers. Refusing to report success "
-              "for a no-op profile application.", file=sys.stderr)
+        print("ERROR: resolved 0 running containers in project %s. Refusing to "
+              "report success for a no-op profile application." % project,
+              file=sys.stderr)
         return 1
 
     applied, skipped, errors = 0, [], []
@@ -97,16 +142,22 @@ def apply_profile(profile_path):
     return 0
 
 
-def remove_limits():
-    """Remove all CPU limits from running containers."""
-    containers = get_running_containers()
+def remove_limits(project):
+    """Remove CPU limits from this compose project's containers only."""
+    containers = get_running_containers(project)
     if not containers:
-        print("ERROR: resolved 0 running containers. CPU limits may still be in "
-              "place — NOT reporting success.", file=sys.stderr)
+        print("ERROR: resolved 0 running containers in project %s. CPU limits "
+              "may still be in place — NOT reporting success." % project,
+              file=sys.stderr)
         return 1
 
-    removed, errors, still_limited = 0, [], []
+    removed, errors, still_limited, untouched = 0, [], [], 0
     for svc, cid in containers.items():
+        # Already unlimited, so leave it alone. Keeps the blast radius to the
+        # containers a profile actually limited.
+        if _verify(cid) == "0":
+            untouched += 1
+            continue
         # `--cpus 0` is a SILENT NO-OP: the daemon ignores a zero NanoCPUs and
         # leaves the cgroup quota in place, so the container stays throttled
         # while docker reports success. Clearing cpu-quota/cpu-period is the
@@ -123,7 +174,9 @@ def remove_limits():
         else:
             errors.append(f"{svc}: {r.stderr.strip()}")
 
-    print(f"Removed CPU limits from {removed} containers")
+    print("Removed CPU limits from %d containers in project %s%s"
+          % (removed, project,
+             " (%d already unlimited)" % untouched if untouched else ""))
     if errors:
         print(f"Errors: {errors}", file=sys.stderr)
     if still_limited:
@@ -132,7 +185,22 @@ def remove_limits():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    project_arg = None
+    if "--project" in args:
+        i = args.index("--project")
+        if i + 1 >= len(args):
+            print("ERROR: --project needs a value", file=sys.stderr)
+            sys.exit(1)
+        project_arg = args[i + 1]
+        del args[i:i + 2]
+    if not args:
         print(__doc__)
         sys.exit(1)
-    sys.exit(remove_limits() if sys.argv[1] == "--remove" else apply_profile(sys.argv[1]))
+
+    project = resolve_project(project_arg)
+    if not project:
+        sys.exit(1)
+
+    sys.exit(remove_limits(project) if args[0] == "--remove"
+             else apply_profile(args[0], project))

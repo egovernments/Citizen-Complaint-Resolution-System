@@ -37,10 +37,15 @@
         owner: ubuntu
       when: cpu_profile != 'baseline'
 
+    # `compose_project` is optional: the script auto-detects when exactly one
+    # compose project is running, and refuses when several are. Set it when the
+    # target host carries more than one stack, so --remove cannot reach into
+    # a project this run did not throttle.
     - name: Apply CPU profile
       shell: >
         cd {{ digit_dir }} &&
         python3 apply-cpu-profile.py {{ 'cpu-profile.yml' if cpu_profile != 'baseline' else '--remove' }}
+        {{ ('--project ' + compose_project) if compose_project is defined else '' }}
       become_user: ubuntu
       register: profile_result
 

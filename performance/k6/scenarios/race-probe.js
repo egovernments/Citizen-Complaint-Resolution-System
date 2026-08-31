@@ -23,6 +23,7 @@ import { Counter, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
 import { login, makeRequestInfo } from '../helpers/auth.js';
 import { createComplaint } from '../helpers/pgr.js';
+import { SERVICE_CODES, LOCALITIES } from './pgr-lifecycle.js';
 import { getEnv } from '../config/environments.js';
 
 const MODE = __ENV.MODE || 'nosleep';
@@ -89,15 +90,18 @@ export default function () {
   const env = getEnv();
   if (!auth(env)) return;
 
-  const svcCodes = env.serviceCodes;
-  const locs = env.localities;
+  // SERVICE_CODES / LOCALITIES already fall back to the seed defaults when the
+  // env config supplies none, so this scenario runs against dev and prod too
+  // rather than throwing on iteration one.
   const i = exec.vu.idInTest + exec.scenario.iterationInTest;
-  const serviceCode = svcCodes[i % svcCodes.length];
-  const locality = locs[i % locs.length];
+  const serviceCode = SERVICE_CODES[i % SERVICE_CODES.length];
+  const locality = LOCALITIES[i % LOCALITIES.length];
+  const citizenPhone = env.citizenPhone || `9900000${String((i % 100) + 1).padStart(3, '0')}`;
+  const citizenName = env.citizenName || `LoadTestCitizen_${(i % 100) + 1}`;
 
   const service = createComplaint(
     env.baseUrl, token, userInfo, env.tenant, serviceCode,
-    env.citizenPhone, env.citizenName, locality, env.city
+    citizenPhone, citizenName, locality, env.city
   );
   if (!service) return;
 

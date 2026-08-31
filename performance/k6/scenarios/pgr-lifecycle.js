@@ -52,7 +52,7 @@ const ALL_SERVICE_CODES = [
   'Others',
 ];
 
-const SERVICE_CODES = (() => {
+export const SERVICE_CODES = (() => {
   const env = getEnv();
   const svc = env.serviceCodes;
   return (Array.isArray(svc) && svc.length > 0) ? svc : ALL_SERVICE_CODES;
@@ -60,7 +60,7 @@ const SERVICE_CODES = (() => {
 
 // Boundary codes to rotate across. Falls back to the stock seed locality only
 // if the env config doesn't supply real ones.
-const LOCALITIES = (() => {
+export const LOCALITIES = (() => {
   const env = getEnv();
   const loc = env.localities;
   return (Array.isArray(loc) && loc.length > 0) ? loc : ['JLC477'];
