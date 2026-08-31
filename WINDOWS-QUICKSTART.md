@@ -1,7 +1,8 @@
 # Windows Quickstart — DIGIT via WSL2 in one session
 
-Re-validated **2026-08-31** on Windows 11 (build 26200), 16 GB / i7-1255U,
-WSL 2.7.11 + Ubuntu 24.04, from a wiped Docker state. Brings up the full DIGIT
+Re-validated **2026-09-01** on Windows 11 (build 26200), 16 GB / i7-1255U,
+WSL 2.7.11 + Ubuntu 24.04 — including a cold run on a distro created from
+scratch (`wsl --install` → green in ~35 min, `failed=0`). Brings up the full DIGIT
 stack with `./deploy.sh <name>` — the playbook self-heals every WSL-specific
 quirk (memory caps, mount propagation, Node toolchain), so the happy path is
 short. The same steps work on any Linux machine or VM; only the WSL2 sections
@@ -27,8 +28,9 @@ Two sizing profiles (see step 5):
   see the note there for the Windows 10 workaround.
 - Hardware virtualization enabled (Intel VT-x / AMD SVM — usually on by
   default; enable in BIOS if step 1 errors with `0x80370102`).
-- ≥ 16 GB RAM and ~60 GB free disk. (Measured: the WSL disk grew to 38 GB
-  with the slim profile and a full image set.)
+- ≥ 16 GB RAM and ~40 GB free disk. (Measured on a cold build: 54 images,
+  **20 GB** on the WSL disk. A distro that has accumulated several image
+  versions over time reaches ~38 GB, so leave headroom.)
 - **Do NOT install Docker Desktop** (or disable its WSL integration for this
   distro). The playbook installs Docker Engine natively inside WSL and manages
   its daemon; Docker Desktop's injected `docker` conflicts with it.
@@ -48,7 +50,10 @@ uname -a                      # must contain "microsoft ... WSL2"
 systemctl is-system-running   # "running" or "degraded" (Ubuntu 24.04 default)
 ```
 
-If systemd reports `offline`, add to `/etc/wsl.conf`:
+A current Ubuntu-24.04 image already ships `/etc/wsl.conf` with
+`[boot] systemd=true`, so this should just work — verified on a freshly
+installed distro. If systemd nonetheless reports `offline`, add to
+`/etc/wsl.conf`:
 
 ```ini
 [boot]
@@ -232,11 +237,13 @@ end-to-end validation probes.
 tail -f /opt/digit/digit-stack-up.mybox.progress
 ```
 
-Measured on this machine: a from-scratch run with a warm Docker image cache
-took **40 min** (the long poles are the image pull, the `digit-ui-v2` npm
-install + vite build, and the local `digit-mcp` image build). From a genuinely
-empty image cache, budget longer — the image set is ~29 GB. Re-runs into a
-healthy stack are idempotent: **5–6 min** measured across three runs.
+Measured on this machine, on a distro created from scratch with an empty image
+cache: **29 min 06 s** for the deploy itself, `failed=0`, no manual
+intervention — about **35 min** counting `wsl --install`, apt and the clone.
+The long poles are the 54-image pull, the `digit-ui-v2` npm install + vite
+build, and the local `digit-mcp` image build; the total is bandwidth-bound, so
+your mileage will vary with the connection. Re-runs into a healthy stack are
+idempotent: **5–7 min**, measured across five runs.
 
 ### What success looks like
 

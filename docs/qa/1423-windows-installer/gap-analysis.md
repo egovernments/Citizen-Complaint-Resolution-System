@@ -208,3 +208,56 @@ So this is a **re-deploy / long-lived-box bug**, not a first-install bug — whi
 matches the previous operator's history exactly: ~10 `./deploy.sh karun-slim`
 attempts spread over weeks. The fix and its verification are unchanged; only
 the "who hits it" claim needed correcting.
+
+## Cold run verdict — a first-timer CAN complete this
+
+Full deploy on the virgin distro, unpatched master (`a705cb73`), profile
+`localhost-slim`:
+
+```
+PLAY RECAP
+mybox : ok=134  changed=47  unreachable=0  failed=0  skipped=205
+EXIT=0
+
+===== INFRA VALIDATION RESULTS =====
+All containers:        HEALTHY
+Public UI:             200 OK
+Configurator:          200 OK
+Gatus /status/:        200 OK
+MCP /mcp:              200 OK
+Auth flow:             access_token minted
+MDMS StateInfo:        non-empty
+OpenBao:               unsealed + initialized
+====================================
+```
+
+**Deploy elapsed: 29 min 06 s** (20:40:00 → 21:09:06), zero fatals, zero
+manual intervention. Add ~5 min for `wsl --install` + apt + clone, so
+**~35 min zero-to-green** on this hardware and connection.
+
+Final state: 38 containers, 30 healthy, 54 images, **20 GB** on the WSL disk
+(the ~29 GB figure elsewhere is an older distro's accumulated multi-version
+cache; 20 GB is the actual working set). All five nginx-fronted URLs serve
+(`grafana` 302 → login). Browser end-to-end on this cold stack: **8/8 PASS**,
+including a real employee form login (ADMIN / City A), `Employee.token`
+issued, and the PGR inbox rendering.
+
+Notably **no `x509: certificate has expired`** on the cold pull — the
+troubleshooting entry for `registry.preview.egov.theflywheel.in` did not
+trigger. Keep the entry (certs lapse), but it is not a current blocker.
+
+Paths exercised for the first time and all clean: NodeSource Node 20 install
+(v20.20.2), cold `npm install` + vite build of digit-ui-v2, local digit-mcp
+image build, host nginx install, and the full 54-image pull.
+
+### Residual caveats for a first-timer
+
+* Timing is bandwidth-bound; 29 min reflects this connection.
+* The three cosmetic defects above (S3 logo, missing localization codes,
+  `+254`) are present on the cold stack too — they are not artifacts of the
+  reused environment.
+* `wsl --install` was run with `--no-launch`, so the interactive
+  first-launch **user creation** prompt was not exercised. The deploy runs as
+  root regardless, so this does not affect the outcome.
+* `.wslconfig` already carried the caps from the host, so the cold run did not
+  re-trigger the fail-fast — that path was validated separately (see above).
