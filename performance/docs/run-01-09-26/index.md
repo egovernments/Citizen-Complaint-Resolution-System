@@ -16,7 +16,7 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **The deployment is saturated at 120 VU**, the lowest level tested with a drain gate: 120 and 160 VU return identical throughput (32.67 vs 32.56 API req/s) while latency rises 65%. Its actual peak sits below 120 VU and was not measured.
 
-**Zero pod restarts** across twelve load levels and roughly 17,700 complaints.
+**Zero pod restarts** across fourteen load levels and 19,238 complaints.
 
 ## Read This First
 
@@ -24,4 +24,4 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **The system saturates well before it fails.** Above ~160-200 VU each additional 40 VUs costs 8-11% of completed work and adds 19-59% to response time, without producing a single error. At 320 VU every request succeeds — and takes 11.5 seconds at p95.
 
-**No two levels ran against the same database.** The campaign grew stored records from 193 to roughly 21,000, monotonically in run order, and the 120 and 160 VU levels were run last against the largest dataset. The series is therefore not monotonic in VU order, and only levels run adjacent in time can be compared. This is the main thing to fix before repeating the run.
+**No two levels ran against the same database.** The campaign grew stored records from 195 to 19,433, monotonically in run order, and the 120 and 160 VU levels ran last against the largest dataset. The series is therefore not monotonic in VU order, and only levels run adjacent in time can be compared. [Findings](./findings#results) carries the full curve with the record count at every level. This is the main thing to fix before repeating the run.

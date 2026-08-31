@@ -69,31 +69,52 @@ Replicas are **1** on every service in the complaint path (`pgr-services`, `egov
 | Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
 | Saturation point | **At or below 120 VU** — the lowest gated level, already on the plateau |
 | Pod restarts across the whole campaign | **0** |
+| Records in database | 195 at start, 19,433 at end |
 
 **No error ceiling exists below 320 VU on this deployment.** Load is absorbed as latency, not as failure: throughput falls and response times climb, but requests keep succeeding. The run was stopped at 320 VU because the ladder ran out of planned levels, not because anything broke.
 
-## Baseline Performance
+## Results
 
-Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls.
+Three passes were run. Only the **gated pass** is a result; the two ungated passes are reported because the difference between them is itself a finding, and because the ungated ladder is the only place levels below 120 VU were measured.
 
-| VU | Lifecycles/s | API req/s | http p95* | http avg* | http max* | Lifecycle success† | Request fail† |
-|----|-------------|-----------|----------|----------|----------|---------|-----------|
-| 20 | 2.218 | 9.03 | 357ms | 147ms | 1.0s | 100.00% | 0.000% |
-| 40 | 4.532 | 18.44 | 164ms | 126ms | 1.7s | 100.00% | 0.000% |
-| 80 | 8.810 | 35.85 | 203ms | 157ms | 3.0s | 100.00% | 0.000% |
-| **160** | **16.259** | **66.33** | 669ms | 337ms | 5.6s | 99.57% | 0.268% |
-| 120‡ | 7.939 | 32.67 | 3,188ms | 1,561ms | 5.9s | **100.00%** | **0.000%** |
-| 160‡ | 7.842 | 32.56 | 5,254ms | 2,709ms | 8.1s | **100.00%** | **0.000%** |
-| 200 | 10.549 | 43.69 | 4,667ms | 2,416ms | 7.0s | 99.93% | 0.017% |
-| 240 | 9.714 | 40.63 | 7,405ms | 3,667ms | 10.7s | **100.00%** | **0.000%** |
-| 280 | 8.983 | 37.97 | 9,589ms | 5,009ms | 13.9s | **100.00%** | **0.000%** |
-| 320 | 7.948 | 34.00 | 11,454ms | 6,804ms | 18.8s | **100.00%** | **0.000%** |
+Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls. Every level ran against a different database, because the campaign's own writes accumulated — the **Records** column gives the number present when each level started, and is the single most important column for reading the rest.
+
+### Gated pass — the result
+
+Each level waited for the persister's Kafka lag to reach zero and the indexer's to fall below 1,000 before starting.
+
+| # | VU | Records | Lifecycles/s | API req/s | http p95* | http avg* | http max* | Lifecycle success† | Request fail† |
+|---|----|---------|-------------|-----------|----------|----------|----------|---------|-----------|
+| 5 | **120** | 17,337 | 7.939 | **32.67** | 3,188ms | 1,561ms | 5.9s | **100.00%** | **0.000%** |
+| 6 | **160** | 18,381 | 7.842 | **32.56** | 5,254ms | 2,709ms | 8.1s | **100.00%** | **0.000%** |
+| 1 | 200 | 12,233 | 10.549 | 43.69 | 4,667ms | 2,416ms | 7.0s | 99.93% | 0.017% |
+| 2 | 240 | 13,638 | 9.714 | 40.63 | 7,405ms | 3,667ms | 10.7s | **100.00%** | **0.000%** |
+| 3 | 280 | 14,952 | 8.983 | 37.97 | 9,589ms | 5,009ms | 13.9s | **100.00%** | **0.000%** |
+| 4 | 320 | 16,184 | 7.948 | 34.00 | 11,454ms | 6,804ms | 18.8s | **100.00%** | **0.000%** |
+
+Rows are ordered by VU; the **#** column gives run order. Note that 120 and 160 VU ran *last*, against the largest database, which is why they sit below 200 VU on throughput despite being the lighter load. **Read adjacent run numbers, not adjacent VU counts.**
+
+**24,300 requests across six levels, zero failures, zero pod restarts.**
+
+### Ungated passes — superseded
+
+The same scenarios with a fixed 45-second pause instead of a drain gate. Retained because they are the evidence for [Why the Gate Matters](#why-the-gate-matters), and because levels below 120 VU exist only here.
+
+| # | VU | Records | Lifecycles/s | API req/s | http p95* | Lifecycle success† | Request fail† | `INVALID ACTION` |
+|---|----|---------|-------------|-----------|----------|---------|-----------|-----------------|
+| 1 | 20 | 195 | 2.218 | 9.03 | 357ms | 100.00% | 0.000% | 0 |
+| 2 | 40 | 480 | 4.532 | 18.44 | 164ms | 100.00% | 0.000% | 0 |
+| 3 | 80 | 1,061 | 8.810 | 35.85 | 203ms | 100.00% | 0.000% | 0 |
+| 4 | 160 | 2,214 | 16.259 | 66.33 | 669ms | 99.57% | 0.268% | 8 |
+| 5 | 320 | 4,315 | 20.200 | 102.67 | 1,994ms | **1.14%** | **56.952%** | **2,688** |
+| 6 | 200 | 7,118 | 14.516 | 59.47 | 2,594ms | 94.97% | 1.367% | 61 |
+| 7 | 240 | 9,028 | 12.552 | 52.12 | 4,892ms | 95.32% | 0.766% | 14 |
+| 8 | 280 | 10,695 | 11.448 | 48.14 | 7,233ms | 98.24% | 1.191% | 0 |
 
 \* `http_req_duration` — server response time, including ~24ms network RTT.
 † Different denominators — see [Reading the Two Percentage Columns](#reading-the-two-percentage-columns).
-‡ Run last, against the largest database of the campaign — see [The Data-Volume Confound](#the-data-volume-confound). Listed here by VU count, not by run order.
 
-**The 20-160 VU rows and the 200-320 VU rows are not directly comparable.** They were measured hours apart with the database growing throughout — see [The Data-Volume Confound](#the-data-volume-confound). Within each group the trend is sound; across the two, it is not.
+The 66.33 API req/s at 160 VU is the highest figure the campaign produced, and it is **not a capacity number**: it was measured against 2,214 records, an eighth of what the gated levels faced, on a curve that had not begun to flatten (20→40→80→160 grew 2.04×, 1.94×, 1.85× for each doubling). The 102.67 req/s at 320 VU is higher still and worthless — 57% of those requests were fast failures, and only 1.14% of lifecycles completed.
 
 ### Reading the Two Percentage Columns
 
@@ -149,20 +170,22 @@ The practical consequence for load testing is that levels must not inherit each 
 
 ## The Data-Volume Confound
 
-The campaign wrote roughly **17,700 complaints** onto a starting database of 193. Every level added to the stored data that later levels then had to query.
+The campaign wrote **19,238 complaints** onto a starting database of 195. Every level added to the stored data that later levels then had to query, so each level faced a larger database than the one before it.
 
-This is visible in the numbers. At 200 VU the ungated pass — run earlier, against a smaller database — recorded 59.47 API req/s; the gated pass at the same 200 VU recorded 43.69 req/s. The gate removed the failures but did not cause the slowdown; the database had grown roughly threefold in between.
+This is visible in the numbers. At 200 VU the ungated pass — run against 7,118 records — recorded 59.47 API req/s; the gated pass at the same 200 VU, against 12,233 records, recorded 43.69 req/s. The gate removed the failures but did not cause the 26% slowdown; the database had grown 72% in between.
 
 The consequence is stronger than it first appears: **no two levels in this campaign ran against the same dataset.** Records grew monotonically with every level, in run order:
 
-| Level (run order) | Approx. records at run time |
+| Level (gated, run order) | Records present at run start |
 |---|---|
-| 200 VU | ~15,000 |
-| 240 VU | ~16,300 |
-| 280 VU | ~17,500 |
-| 320 VU | ~18,700 |
-| 120 VU | ~19,900 |
-| 160 VU | ~20,900 |
+| 200 VU | 12,233 |
+| 240 VU | 13,638 |
+| 280 VU | 14,952 |
+| 320 VU | 16,184 |
+| 120 VU | 17,337 |
+| 160 VU | 18,381 |
+
+Across all three passes the database went from 195 records to **19,433** — the campaign wrote 19,238 complaints, roughly a hundredfold increase on what it started with.
 
 This is why the series is not monotonic in VU order — 200 VU records 43.69 API req/s while 120 VU records 32.67, even though 120 VU is the lighter load. The 120 and 160 levels were run **last**, against the largest database, so their lower throughput reflects data volume rather than concurrency.
 
@@ -172,7 +195,7 @@ A cleanly comparable ladder needs either a database reset between levels or a da
 
 ## Stability
 
-**Zero pod restarts across the entire campaign** — twelve load levels, roughly 17,700 complaints, and not one restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
+**Zero pod restarts across the entire campaign** — fourteen load levels across three passes, 19,238 complaints, and not one restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
 
 That result is only meaningful because the JVM heap was raised for the test. See [Deployment Configuration](#deployment-configuration).
 

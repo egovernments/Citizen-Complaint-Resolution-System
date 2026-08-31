@@ -54,7 +54,7 @@ Measured on a 4-machine Kubernetes cluster with one copy of each service running
 | 280 test users | 8.983 | 776,131 | 9.59s | **0.000%** |
 | 320 test users | 7.948 | 686,707 | 11.45s | **0.000%** |
 
-**An important caveat on this table.** No two rows were measured against the same amount of stored data. The testing itself grew the database from about 200 complaints to roughly 21,000, and stored data is the single biggest influence on speed in every test we have run. The 120 and 160 user rows were measured *last*, against the most data, which is why they look slower than the 200 user row despite being a lighter load. Rows measured close together in time can be compared; rows far apart cannot.
+**An important caveat on this table.** No two rows were measured against the same amount of stored data. The testing itself grew the database from about 200 complaints to roughly 19,400, and stored data is the single biggest influence on speed in every test we have run. The 120 and 160 user rows were measured *last*, against the most data, which is why they look slower than the 200 user row despite being a lighter load. Rows measured close together in time can be compared; rows far apart cannot.
 
 **Two numbers worth carrying into a conversation:**
 

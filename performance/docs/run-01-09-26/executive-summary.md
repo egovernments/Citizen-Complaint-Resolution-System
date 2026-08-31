@@ -14,7 +14,7 @@ A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **320 concurrent test 
 | Saturation point | **At or below 120 VU** |
 | Response time at 320 VU | 11.5s p95 |
 | Pod restarts, whole campaign | **0** |
-| Records in database | ~193 at start, ~17,700 at end |
+| Records in database | 195 at start, 19,433 at end |
 
 ## What We Tested
 
@@ -43,7 +43,7 @@ Throughout this document, **lifecycle success** is the share of lifecycles that 
 | 280 | 8.983/s | 37.97 | 776,131/day | 9,589ms | **100.00%** | **0.000%** |
 | 320 | 7.948/s | 34.00 | 686,707/day | 11,454ms | **100.00%** | **0.000%** |
 
-**No two levels here ran against the same database.** The campaign grew stored records from 193 to roughly 21,000, monotonically, in run order — and the 120 and 160 VU levels were run *last*, against the largest dataset. That is why the series is not monotonic in VU order. Only levels run adjacent in time are comparable; see [the confound section](./findings#the-data-volume-confound).
+**No two levels here ran against the same database.** The campaign grew stored records from 195 to 19,433, monotonically in run order — and the 120 and 160 VU levels were run *last*, against 17,337 and 18,381 records respectively. That is why the series is not monotonic in VU order. Only levels run adjacent in time are comparable; the full curve with per-level record counts is in [Findings](./findings#results).
 
 ## Where the Limit Is
 
@@ -64,7 +64,7 @@ Which limit matters depends on what you are protecting. If the requirement is th
 
 ## Stability
 
-**Zero pod restarts across twelve load levels and ~17,700 complaints.**
+**Zero pod restarts across fourteen load levels and 19,238 complaints.**
 
 That result depends on a change made for the test. Every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi — roughly a quarter of the memory already allocated to it. The heap was raised to ~58% of each container's limit for this campaign, and `-XX:+ExitOnOutOfMemoryError` added, before any load was applied.
 
