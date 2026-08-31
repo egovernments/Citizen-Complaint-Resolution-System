@@ -12,6 +12,7 @@ import * as path from 'node:path';
 const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
 const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
 const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
+const MIGRATIONS_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.migrations.yml'), 'utf8');
 const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
 const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
 
@@ -28,48 +29,57 @@ describe('JVM OOM dashboard service scope', () => {
       'utf8',
     ),
   );
-  const expectedJvmServices = [
-    'audit-service',
-    'boundary-service',
-    'digit-config-service',
-    'egov-accesscontrol',
-    'egov-bndry-mgmnt',
-    'egov-enc-service',
-    'egov-filestore',
-    'egov-hrms',
-    'egov-idgen',
-    'egov-indexer',
-    'egov-localization',
-    'egov-notification-sms',
-    'egov-otp',
-    'egov-persister',
-    'egov-url-shortening',
-    'egov-user',
-    'egov-workflow-v2',
-    'inbox',
-    'keycloak',
-    'mdms-backend',
-    'novu-bridge',
-    'pgr-services',
-    'user-otp',
-  ];
+  const serviceBlocks = (compose: string) => {
+    const headers = [...compose.matchAll(/^  ([a-z0-9][a-z0-9_-]*):\s*$/gm)];
+    return headers.map((header, index) => ({
+      name: header[1],
+      body: compose.slice(header.index, headers[index + 1]?.index ?? compose.length),
+    }));
+  };
+  const jvmEnvironment =
+    /^\s*(?:-\s*)?(?:JAVA_OPTS|JAVA_TOOL_OPTIONS|ES_JAVA_OPTS|FLYWAY_[A-Z_]+)(?::|=)/m;
+  const baseJvmServices = serviceBlocks(BASE_COMPOSE)
+    .filter(
+      ({ body }) =>
+        jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
+    )
+    .map(({ name }) => name);
+  const migrationJvmServices = serviceBlocks(MIGRATIONS_COMPOSE)
+    .filter(({ name, body }) => name.endsWith('-migration') && /^\s*FLYWAY_[A-Z_]+:/m.test(body))
+    .map(({ name }) => name);
+  const expectedJvmServices = [...new Set([...baseJvmServices, ...migrationJvmServices])].sort();
+  const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);
+  const selectorServices = oomPanels.map((panel: { targets: Array<{ expr: string }> }) => {
+    const selector = panel.targets[0].expr.match(/service_name=~"\^\(([^)]+)\)\$"/);
+    expect(selector).not.toBeNull();
+    return selector![1].split('|');
+  });
 
-  test('OOM panels use the explicit JVM application allowlist', () => {
-    const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);
+  test('OOM panels use the JVM allowlist derived from deployed service definitions', () => {
     expect(oomPanels).toHaveLength(2);
 
-    for (const panel of oomPanels) {
-      const expr = panel.targets[0].expr as string;
-      const selector = expr.match(/service_name=~"\^\(([^)]+)\)\$"/);
-      expect(selector).not.toBeNull();
-      expect(selector![1].split('|')).toEqual(expectedJvmServices);
-      expect(expr).not.toContain('service_name=~".+"');
+    for (const services of selectorServices) {
+      expect(services).toEqual(expectedJvmServices);
     }
   });
 
   test('OOM panels cannot select observability or non-JVM infrastructure logs', () => {
     const excluded = ['grafana', 'loki', 'promtail', 'otel-collector', 'prometheus', 'tempo'];
-    expect(expectedJvmServices).toEqual(expect.not.arrayContaining(excluded));
+    for (const services of selectorServices) {
+      for (const service of excluded) {
+        expect(services).not.toContain(service);
+      }
+    }
+  });
+
+  test('OOM panels cannot regress to a catch-all selector', () => {
+    for (const panel of oomPanels) {
+      expect(panel.targets[0].expr).not.toContain('service_name=~".+"');
+    }
+  });
+
+  test('dashboard version supersedes UI-saved copies from the previous version', () => {
+    expect(dashboard.version).toBeGreaterThanOrEqual(100);
   });
 });
 
