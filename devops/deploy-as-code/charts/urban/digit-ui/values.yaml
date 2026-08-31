@@ -27,12 +27,61 @@ healthChecks:
   livenessProbePath: "/digit-ui/"
   readinessProbePath: "/digit-ui/"
     
+# globalConfigs.js — served by this chart, same-origin, rather than fetched
+# from object storage at runtime.
+#
+# The SPA calls Digit.Utils.getConfig during initLibraries, so if this file is
+# missing the page renders blank while still returning HTTP 200 — invisible to
+# uptime checks. Hosting it here removes a hand-managed upload step that
+# nothing verified at deploy time.
+#
+# Set `enabled: false` to fall back to the old behaviour, in which case supply
+# the <script> tag yourself via `custom-js-injection` (see environments/env.yaml).
+globalConfigs:
+  enabled: true
+  stateTenantId: "pg"
+  contextPath: "digit-ui"
+  gmapsApiKey: ""
+  finEnv: "dev"
+  centralInstanceEnabled: false
+  footerBWLogoURL: "/digit-ui/brand/digit-footer-bw.png"
+  footerLogoURL: "/digit-ui/brand/digit-footer.png"
+  digitHomeURL: "https://www.digit.org/"
+  assetS3Bucket: ""
+  configModuleName: "commonMDMSConfig"
+  localeRegion: "IN"
+  localeDefault: "en"
+  mdmsContext: "mdms-v2"
+  hrmsContext: "egov-hrms"
+  invalidEmployeeRoles: ["SYSTEM"]
+  authProvider: "digit"
+  citizenAuthProvider: "digit"
+  employeeAuthProvider: "digit"
+  pgrBoundaryHighestLevel: "District"
+  pgrBoundaryLowestLevel: "Ward"
+  boundaryType: "Ward"
+  hierarchyType: "ADMIN"
+  complaintHierarchyType: ""
+  mapCenter: {"lat": 20.5937, "lng": 78.9629}
+  mapTenant: "pg"
+  employeeModuleDenylist: ["IM"]
+  loginTenantAllowlist: []
+  coreMobileConfigs: {"countryCode": "+91", "mobileNumberRegex": "^[6-9][0-9]{9}$"}
+  corePostalConfigs: {}
+  dashboardMetricsEnabled: false
+  keycloakUrl: ""
+  keycloakRealm: ""
+  keycloakClientId: ""
+  tokenExchangeUrl: ""
+
 extraVolumes: |
-  - name: js-injection
+  - name: digit-ui-config
     configMap:
-      name: digit-ui
+      name: digit-ui-config
 
 extraVolumeMounts: |
-  - mountPath: /etc/nginx/conf.d/sub_filter.conf
-    name: js-injection
-    subPath: sub_filter.conf
+  - mountPath: /etc/nginx/conf.d/default.conf
+    name: digit-ui-config
+    subPath: default.conf
+  - mountPath: /host-nginx
+    name: digit-ui-config
