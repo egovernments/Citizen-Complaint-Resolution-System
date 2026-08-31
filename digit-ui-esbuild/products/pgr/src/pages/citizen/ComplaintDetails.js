@@ -167,7 +167,11 @@ function WorkflowComponent({ complaintDetails, id }) {
   // COMMENT is excluded (no citizen page for it); REOPEN honors the idle-window.
   const current = workflowData?.ProcessInstances?.[0];
   const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
-  const maxIdle = typeof complainMaxIdleTime === "number" ? complainMaxIdleTime : 3600000;
+  // Tenants with no ComplainClosingTime configured fall back to 72h, not the 1h this
+  // carried before: an hour expires while the citizen is still reading the resolution,
+  // and pgr-services' own backstop (pgr.complain.idle.time, 240h by default) is far
+  // wider — so the UI was hiding a REOPEN the backend would still have accepted.
+  const maxIdle = typeof complainMaxIdleTime === "number" ? complainMaxIdleTime : 72 * 60 * 60 * 1000;
   const reopenWindowOpen =
     typeof lastModifiedTime === "number" && Number.isFinite(lastModifiedTime) && Date.now() - lastModifiedTime < maxIdle;
   const citizenActions = (current?.nextActions || [])

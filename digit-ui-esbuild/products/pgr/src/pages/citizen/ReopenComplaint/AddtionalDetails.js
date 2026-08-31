@@ -92,6 +92,31 @@ const AddtionalDetails = (props) => {
         "REOPEN",
         assignes
       );
+      // `department` is linked at ASSIGN time: the employee action modal stamps
+      // the picked assignee's HRMS department onto additionalDetail.department
+      // (PGRDetails.js); complaints are born "NA" since the hierarchy master is
+      // deliberately unmapped. Every update round-trips the WHOLE service
+      // object from the client and the backend trusts it — a payload whose
+      // department is missing/"NA" gets re-derived from that unmapped
+      // hierarchy ("NA" again), overwriting the stamp. The hook's copy here
+      // can be up to 15 minutes stale (global react-query staleTime, no
+      // override), so a pre-ASSIGN copy would do exactly that, and
+      // department-scoped roles then lose the complaint. Merge into the
+      // CURRENT stored object instead; on fetch failure fall back to the
+      // cached copy — no worse than before.
+      //
+      // Deliberately reopen-only (product call, full workflow sweep 2026-08-31):
+      // the RATE flow has the same stale-cache exposure but only reaches the
+      // terminal CLOSEDAFTER* states, which have no REOPEN — a wiped
+      // department there affects closed-record reporting only, not routing,
+      // and is accepted.
+      try {
+        const fresh = await Digit.PGRService.search(wfTenant, { serviceRequestId: businessId });
+        const freshService = fresh?.ServiceWrappers?.[0]?.service;
+        if (freshService) complaintDetails.service = freshService;
+      } catch (e) {
+        /* network hiccup — proceed with the cached copy */
+      }
       // CCSD-2012: MERGE the reopen reason into additionalDetail instead of
       // replacing the object. Replacing dropped the `department` stamped at
       // create/ASSIGN, so the backend re-derived it from the serviceCode —
