@@ -92,6 +92,23 @@ const AddtionalDetails = (props) => {
         "REOPEN",
         assignes
       );
+      // The hook's copy can be up to 15 minutes STALE (global react-query
+      // staleTime; useComplaintDetails sets no override). A citizen who viewed
+      // the complaint before it was assigned reopens with a copy whose
+      // additionalDetail predates the ASSIGN-time department stamp — the
+      // update round-trips without it, the backend re-derives from the
+      // (deliberately unmapped) hierarchy and stores "NA", and
+      // department-scoped supervisors lose the complaint entirely (verified
+      // end-to-end on UAT: supervisor sees nothing, not even a direct
+      // complaint-number lookup). Re-fetch and merge into the CURRENT stored
+      // object; fall back to the cached copy on failure (no worse than before).
+      try {
+        const fresh = await Digit.PGRService.search(wfTenant, { serviceRequestId: businessId });
+        const freshService = fresh?.ServiceWrappers?.[0]?.service;
+        if (freshService) complaintDetails.service = freshService;
+      } catch (e) {
+        /* network hiccup — proceed with the cached copy */
+      }
       // CCSD-2012: MERGE the reopen reason into additionalDetail instead of
       // replacing the object. Replacing dropped the `department` stamped at
       // create/ASSIGN, so the backend re-derived it from the serviceCode —
