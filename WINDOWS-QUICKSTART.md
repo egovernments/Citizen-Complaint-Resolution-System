@@ -93,7 +93,10 @@ Aug 31 11:20:33 systemd[1]: Stopping docker.service - Docker Application Contain
 That is the trap: the VM is up, `wsl -l -v` says `Running`, `uptime` shows no
 reboot — and the stack is gone anyway.
 
-Put **both** in `%UserProfile%\.wslconfig`:
+Put **both** in `%UserProfile%\.wslconfig`. While you're in the file, set the
+memory caps too — the deploy will otherwise write them itself and then stop,
+costing you a second `wsl --shutdown` (step 6 explains that stop). Setting all
+five keys now means **one** shutdown instead of two:
 
 ```ini
 [general]
@@ -101,9 +104,21 @@ instanceIdleTimeout=-1
 
 [wsl2]
 vmIdleTimeout=-1
+memory=12GB      # 16 GB machine. On 32 GB use 20GB and set wsl_memory_gb: 20
+swap=16GB        # in your host_vars, so the deploy agrees with this file.
+processors=6
 ```
 
-then `wsl --shutdown` from PowerShell and reopen Ubuntu.
+then `wsl --shutdown` from PowerShell and reopen Ubuntu. Confirm it took:
+
+```bash
+free -h        # "total" should be ~11Gi for memory=12GB, not ~7.6Gi
+nproc          # 6
+```
+
+If `free -h` still shows roughly half your machine's RAM, the file wasn't read
+— check it is at `%UserProfile%\.wslconfig` (not in the distro) and that you
+ran `wsl --shutdown`, not just closed the window.
 
 > The deploy manages the `memory` / `swap` / `processors` keys in this same
 > file (step 6) using `ini_file`, which edits only its own keys — your

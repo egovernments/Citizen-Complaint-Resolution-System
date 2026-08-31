@@ -131,3 +131,80 @@ All three pass validation but are visible on screen in a demo.
 * `make-rshared-root.service` mount-propagation self-heal works.
 * The playbook's `ini_file` management preserves hand-added `.wslconfig` keys
   (`vmIdleTimeout` survived a deploy).
+
+---
+
+# Addendum — cold validation on a virgin distro (2026-09-01)
+
+The runs above kept the Docker image cache and an already-installed WSL distro
+by agreement, so Steps 1/3 and the Docker install were **asserted, not tested**.
+This addendum closes that. A second distro (`digit-fresh`) was installed
+alongside the working one and the guide followed verbatim.
+
+## Steps that had never been executed — now verified
+
+| Step | Result on virgin Ubuntu-24.04 |
+|---|---|
+| `wsl --install Ubuntu-24.04 --name digit-fresh --no-launch` | 108 s |
+| `uname -a` contains `microsoft…WSL2` | pass |
+| `systemctl is-system-running` | `running` — and `/etc/wsl.conf` **already ships `[boot] systemd=true`**, so the guide's "if systemd reports offline" fallback is dead code on 24.04 |
+| Step 3 apt tooling | 2 m 14 s, ansible-core 2.16.3 |
+| `git clone` (full, not shallow) | 201 MB, LF endings confirmed |
+| Playbook's Docker Engine install (GPG key + apt repo) | Docker 29.7.2, `active` |
+
+**Latent dependency, now confirmed satisfied.** The playbook needs
+`community.general.ini_file` and `ansible.posix.synchronize`, but `deploy.sh`
+only runs `ansible-galaxy collection install` inside the ansible-lint branch —
+so a user without lint tools never installs them explicitly. Verified that
+Ubuntu's apt `ansible` package bundles both (community.general 8.3.0,
+ansible.posix 1.5.4), so the happy path works. This is load-bearing and
+undocumented; worth stating in the guide.
+
+## Lint gate — tested, safe
+
+The guide now suggests `apt install ansible-lint yamllint`. In `deploy.sh`
+these are a **hard gate** (`exit 1`), not advice, so recommending them blind was
+a risk. Verified against the current playbook:
+`yamllint` → line-length warnings only, `exit 0`;
+`ansible-lint` → `0 failure(s), 0 warning(s)`, `exit 0`.
+
+## The `.wslconfig` fail-fast — reproduced
+
+Never fired in the earlier runs because the caps were already applied. Removing
+them reproduced a virgin machine (VM came up at **7.6 GiB / 12 CPUs**, WSL2's
+uncapped default on a 16 GB host). The deploy then failed in **16 seconds**:
+
+```
+fatal: [mybox]: FAILED! => {"msg": "This WSL VM is running with 7.6 GB but
+.wslconfig now requests 12 GB. ... run `wsl --shutdown`, reopen this distro,
+and re-run ./deploy.sh"}
+PLAY RECAP: ok=10 changed=1 failed=1     EXIT=2
+```
+
+`wsl --shutdown` → re-run → `failed=0`, all validation green (6 m 55 s). The
+documented recovery works exactly as written. Also confirmed `ini_file`
+appended `memory`/`swap`/`processors` under `[wsl2]` while preserving a
+hand-added `[general]` section and all comments.
+
+**Doc flow defect this exposed (fixed):** step 2 (idle timeouts) and the step-6
+fail-fast were two unconnected `wsl --shutdown` cycles. Step 2 now sets the
+memory caps too, so a first-timer reboots once, not twice.
+
+## Correction to the severity claim on the OpenBao bug
+
+Run 1 failed with a **stale July image cache**. The cold run shows why that
+matters: the image is `openbao/openbao:latest` — a **mutable tag**. The
+sequence needs the tag to move *between* `Secrets prep — bring up OpenBao
+first` and `Pull all images`:
+
+* **Truly cold machine** — openbao is pulled at "Secrets prep", so the later
+  `pull` fetches nothing new, `up -d` does not recreate it, and it stays
+  unsealed. A genuine first-timer likely does **not** hit this.
+* **Any later deploy after `openbao:latest` moves upstream** — the pull swaps
+  the image, `up -d` recreates the container, it returns sealed, and the deploy
+  dies on its last task.
+
+So this is a **re-deploy / long-lived-box bug**, not a first-install bug — which
+matches the previous operator's history exactly: ~10 `./deploy.sh karun-slim`
+attempts spread over weeks. The fix and its verification are unchanged; only
+the "who hits it" claim needed correcting.
