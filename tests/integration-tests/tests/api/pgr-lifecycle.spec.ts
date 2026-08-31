@@ -288,8 +288,15 @@ Catches a regression where _update silently rejects payloads missing source/id (
       }),
     });
 
-    expect(resp.ok, `ASSIGN as ${GRO_USER} (GRO) should be authorized`).toBe(true);
-    const data: any = await resp.json();
+    // Read the body BEFORE asserting: pgr's refusal reason (400 DEPARTMENT_NOT_FOUND
+    // vs 403 ABAC scope denial vs workflow error) points at completely different
+    // fixes, and asserting on resp.ok alone throws that evidence away.
+    const raw = await resp.text();
+    expect(
+      resp.ok,
+      `ASSIGN as ${GRO_USER} (GRO) should be authorized — HTTP ${resp.status}: ${raw.slice(0, 400)}`,
+    ).toBe(true);
+    const data: any = JSON.parse(raw);
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGATLME');
     console.log(`${serviceRequestId} → PENDINGATLME`);
   });
@@ -320,8 +327,12 @@ This is the second-to-last step in the lifecycle; the citizen-verify step that f
       }),
     });
 
-    expect(resp.ok, `RESOLVE as ${EMPLOYEE_USER} (PGR_LME) should be authorized`).toBe(true);
-    const data: any = await resp.json();
+    const rawResolve = await resp.text();
+    expect(
+      resp.ok,
+      `RESOLVE as ${EMPLOYEE_USER} (PGR_LME) should be authorized — HTTP ${resp.status}: ${rawResolve.slice(0, 400)}`,
+    ).toBe(true);
+    const data: any = JSON.parse(rawResolve);
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('RESOLVED');
     console.log(`${serviceRequestId} → RESOLVED`);
   });
