@@ -1,0 +1,100 @@
+
+/* OSM's tile server has no light style variant — the `osm` base-map theme
+   (useMapConfig BASE_MAP_THEMES) tags its tiles with this class so the
+   standard colourful style reads as a white basemap without depending on a
+   third-party provider (CARTO). Applied per tile <img>, so markers, ward
+   overlays and popups keep their true colours. */
+.pgr-tiles-light {
+  /* Pastel, not grayscale: land washes toward white while water/parks/roads
+     keep a hint of colour — visually equivalent to CARTO Voyager.
+     (Near-white "Positron" alternative: saturate(0.3) brightness(1.15) contrast(0.9)) */
+  filter: saturate(0.45) brightness(1.1) contrast(0.92);
+}
+
+/* ── Complaint location map chrome (ComplaintLocationMap.js) ─────────────── */
+/* The divIcon wrapper must not paint the default white box. */
+.pgr-map-pin { background: transparent; border: none; }
+
+/* Hover tooltip: compact card, theme tokens, no mid-map billboard. */
+.pgr-loc-tooltip {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #0B0C0C);
+  background: #fff;
+  border: 1px solid var(--color-border, #d6d5d4);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(11, 12, 12, 0.12);
+  padding: 6px 10px;
+  max-width: 260px;
+  white-space: normal;
+}
+
+/* Bottom overlay row: address (grows, ellipsizes) + navigate action. */
+.pgr-map-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 999;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.pgr-map-address {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--color-border, #d6d5d4);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #0B0C0C);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pgr-map-coords {
+  flex: 0 0 auto;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--color-text-secondary, #6B7280);
+  font-variant-numeric: tabular-nums;
+}
+.pgr-map-navigate {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: var(--color-button-primary-bg-default, var(--color-primary-1, #c84c0e));
+  box-shadow: 0 2px 8px rgba(11, 12, 12, 0.18);
+  transition: filter 120ms ease-out, transform 120ms ease-out;
+}
+.pgr-map-navigate:hover { filter: brightness(1.06); }
+.pgr-map-navigate:active { transform: scale(0.98); }
+.pgr-map-navigate:focus-visible {
+  outline: 2px solid var(--color-primary-1, #c84c0e);
+  outline-offset: 2px;
+}
+
+/* Zoom control: match the card language instead of stock Leaflet grey. */
+.leaflet-control-zoom a {
+  border-radius: 8px !important;
+  color: var(--color-text-primary, #0B0C0C) !important;
+}
+
+/* Small screens: stack the bar so the button stays tappable. */
+@media (max-width: 480px) {
+  .pgr-map-bar { flex-direction: column; }
+}

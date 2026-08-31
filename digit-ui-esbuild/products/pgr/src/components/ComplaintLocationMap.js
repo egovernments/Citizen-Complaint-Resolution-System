@@ -8,15 +8,20 @@ import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
+import VectorBaseLayer from "./VectorBaseLayer";
+import MapCamera from "./MapCamera";
+import { brandPin } from "./mapPin";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
-// Fix default icon issue in React builds
+// Fix default icon issue in React builds (still needed by other maps)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-shadow.png",
 });
+
+// Branded pin shared across the PGR maps — see mapPin.js.
 
 // Frosted-glass styling for the address tooltip so it no longer covers the map.
 injectGlassTooltipStyle();
@@ -35,8 +40,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // base tile theme (defaults to the light voyager basemap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
   const {
+    isReady,
     tileUrl,
     tileAttribution,
+    tileClassName,
+    vectorStyleUrl,
     wardHighlightColor: WARD_COLOR,
     minZoom,
     maxZoom,
@@ -45,8 +53,8 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
   // This map always opens on a known complaint, so the starting position is the
   // complaint itself rather than the tenant's configured centre. Only the zoom
-  // is a presentation choice: 15 is street level, clamped to the tenant bounds.
-  const DETAIL_ZOOM = Math.min(Math.max(15, minZoom), maxZoom);
+  // is a presentation choice: 16 frames the street tightly, clamped to tenant bounds.
+  const DETAIL_ZOOM = Math.min(Math.max(16, minZoom), maxZoom);
 
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
@@ -60,6 +68,16 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // no usable geometry (no overlay — never another tenant's static wards).
   const tenantBoundaries = useTenantBoundaries();
 
+  // MapContainer latches centre and zoom at mount. DETAIL_ZOOM only settles
+  // once MapConfig resolves from MDMS, and the complaint's coordinates can
+  // change under a mounted map (react-query refetch, or the details screen
+  // reused for another complaint) — both leave the marker right and the view
+  // wrong. MapCamera re-frames whenever this target actually changes.
+  const cameraTarget = useMemo(
+    () => ({ lat: Number(latitude), lng: Number(longitude), zoom: DETAIL_ZOOM }),
+    [latitude, longitude, DETAIL_ZOOM]
+  );
+
   const matchedWard = useMemo(() => {
     const wardCollection = tenantBoundaries;
     if (!latitude || !longitude || !wardCollection?.features?.length) return null;
@@ -71,9 +89,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
+    // The matched ward reads as an outline with a whisper of fill — the old
+    // 0.35 fill washed the whole basemap orange and buried the street detail.
     return isMatch
-      ? { color: WARD_COLOR, weight: 2,   opacity: 0.9, fillColor: WARD_COLOR, fillOpacity: 0.35 }
-      : { color: WARD_COLOR, weight: 0.8, opacity: 0.4, fillColor: WARD_COLOR, fillOpacity: 0    };
+      ? { color: WARD_COLOR, weight: 2.5, opacity: 0.95, fillColor: WARD_COLOR, fillOpacity: 0.08 }
+      : { color: WARD_COLOR, weight: 0.6, opacity: 0.25, fillColor: WARD_COLOR, fillOpacity: 0    };
   };
 
   // Fetch address details based on lat/lng using reverse geocoding
@@ -147,8 +167,11 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
     fetchAddressFromCoordinates();
   }, [latitude, longitude]);
 
-  // If no coordinates provided, don't render the map
-  if (!latitude || !longitude) {
+  // Nothing to show without coordinates. Also hold until MapConfig resolves:
+  // MapContainer latches zoom/minZoom/maxZoom at mount, so mounting first and
+  // letting MDMS answer later leaves the map on the built-in bounds and
+  // silently ignores the ones the tenant configured.
+  if (!latitude || !longitude || !isReady) {
     return null;
   }
 
@@ -189,7 +212,12 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             doubleClickZoom={true}
             touchZoom={true}
           >
-            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            <MapCamera target={cameraTarget} />
+            {vectorStyleUrl ? (
+              <VectorBaseLayer styleUrl={vectorStyleUrl} attribution={tileAttribution} />
+            ) : (
+              <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} className={tileClassName} />
+            )}
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}
@@ -197,77 +225,29 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
                 style={wardLayerStyle}
               />
             )}
-            <Marker position={[latitude, longitude]}>
+            <Marker position={[latitude, longitude]} icon={brandPin}>
+              {/* Hover-only tooltip; the always-visible address moved to the
+                  bottom bar so it no longer covers the streets around the pin. */}
               {displayAddress && (
-                <Tooltip permanent direction="top" offset={[0, -30]} opacity={1} className="pgr-loc-tooltip">
-                  <div style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#0B0C0C",
-                    padding: "4px 8px",
-                    whiteSpace: "normal",
-                    textAlign: "center",
-                    minWidth: "150px",
-                    maxWidth: "300px"
-                  }}>
-                    {isLoadingAddress ? "Loading address..." : displayAddress}
-                  </div>
+                <Tooltip direction="top" opacity={1} className="pgr-loc-tooltip">
+                  {displayAddress}
                 </Tooltip>
               )}
             </Marker>
           </MapContainer>
 
-          {/* Open in Google Maps Button */}
-          <button
-            onClick={handleOpenInGoogleMaps}
-            style={{
-              position: "absolute",
-              bottom: "20px",
-              right: "20px",
-              zIndex: 999,
-              backgroundColor: "#4285F4",
-              color: "white",
-              padding: "12px 20px",
-              borderRadius: "8px",
-              border: "none",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "14px",
-              fontWeight: "500",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#3367D6";
-              e.currentTarget.style.transform = "scale(1.05)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#4285F4";
-              e.currentTarget.style.transform = "scale(1)";
-            }}
-            title={t("CS_OPEN_IN_GOOGLE_MAPS")}
-          >
-            <NavigationIcon />
-            {t("CS_NAVIGATE")}
-          </button>
-
-          {/* Coordinates Info */}
-          <div style={{
-            position: "absolute",
-            bottom: "20px",
-            left: "20px",
-            zIndex: 999,
-            backgroundColor: "white",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            fontSize: "12px",
-            color: "#505A5F"
-          }}>
-            <div><strong>Lat:</strong> {latitude.toFixed(6)}</div>
-            <div><strong>Lng:</strong> {longitude.toFixed(6)}</div>
+          {/* Bottom overlay: address bar + navigate, one calm row over the map */}
+          <div className="pgr-map-bar">
+            <div className="pgr-map-address" title={displayAddress || ""}>
+              {isLoadingAddress ? t("CS_COMMON_LOADING") : (displayAddress || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`)}
+              {displayAddress && (
+                <span className="pgr-map-coords">{latitude.toFixed(5)}, {longitude.toFixed(5)}</span>
+              )}
+            </div>
+            <button className="pgr-map-navigate" onClick={handleOpenInGoogleMaps} title={t("CS_OPEN_IN_GOOGLE_MAPS")}>
+              <NavigationIcon />
+              {t("CS_NAVIGATE")}
+            </button>
           </div>
         </div>
       </div>

@@ -22,13 +22,34 @@ export const BASE_MAP_THEMES = {
     tileUrl: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     tileAttribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
   },
+  // Vector basemap (MapLibre GL via the Leaflet bridge): crisp labels at any
+  // zoom. styleUrl marks a theme as vector; tileUrl is unused for these.
+  vectorLight: {
+    styleUrl: "https://tiles.openfreemap.org/styles/liberty",
+    tileUrl: "",
+    tileAttribution:
+      '<a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
   osm: {
     tileUrl: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     tileAttribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    // OSM serves only its standard (colourful) style — no light variant exists
+    // server-side. Desaturate/brighten client-side so the osm theme reads as
+    // a white basemap without a third-party provider (see index.css rule).
+    tileClassName: "pgr-tiles-light",
   },
 };
 
-export const DEFAULT_BASE_MAP_THEME = "voyager";
+// Vector by default: OpenFreeMap needs no provider account, and vector tiles
+// stay sharp at every zoom where raster tiles blur between levels. Every raster
+// theme above is still selectable per tenant via MapConfig.baseMapTheme, and a
+// device without WebGL silently falls back to the raster theme below.
+export const DEFAULT_BASE_MAP_THEME = "vectorLight";
+
+// Raster theme used when a vector theme is configured but the device cannot
+// render it. Deliberately the pre-vector default, so those users keep exactly
+// the map they had before.
+const RASTER_FALLBACK_THEME = "voyager";
 
 // Zero Mile Stone, Nagpur — the geographical centre of India, and the legacy
 // last-resort centre from when this was an India-only product. Kept only so a
@@ -41,6 +62,24 @@ export const DEFAULT_MAX_ZOOM = 19;
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const getGlobalConfig = (key) => window?.globalConfigs?.getConfig?.(key);
+
+// MapLibre renders through WebGL; where it is unavailable the vector layer
+// draws nothing at all. Citizens on low-end Android are a primary audience
+// here, so probe once and let those devices fall back to raster rather than
+// shipping them a blank map. Cached — the answer cannot change mid-session,
+// and creating a canvas on every render would be wasteful.
+let webglSupported;
+const hasWebGL = () => {
+  if (webglSupported === undefined) {
+    try {
+      const canvas = document.createElement("canvas");
+      webglSupported = !!(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+    } catch (e) {
+      webglSupported = false;
+    }
+  }
+  return webglSupported;
+};
 
 const inRange = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
 
@@ -160,18 +199,29 @@ const useMapConfig = (tenantIdOverride) => {
         : DEFAULT_WARD_HIGHLIGHT_COLOR;
 
     // Base tile theme. A raw tileUrl always wins; otherwise resolve the named
-    // preset, defaulting to voyager when the value is missing or unknown.
+    // preset, falling back to the default theme when missing or unknown.
     const themeKey =
       typeof cfg?.baseMapTheme === "string" && BASE_MAP_THEMES[cfg.baseMapTheme.trim()]
         ? cfg.baseMapTheme.trim()
         : DEFAULT_BASE_MAP_THEME;
-    const preset = BASE_MAP_THEMES[themeKey];
+    const requested = BASE_MAP_THEMES[themeKey];
 
     const rawUrl = typeof cfg?.tileUrl === "string" ? cfg.tileUrl.trim() : "";
+    // Vector themes carry a MapLibre style URL instead of a raster tile URL;
+    // an MDMS-provided vectorStyleUrl overrides the preset, mirroring tileUrl.
+    const rawStyle = typeof cfg?.vectorStyleUrl === "string" ? cfg.vectorStyleUrl.trim() : "";
+    const wantsVector = rawStyle || (rawUrl ? "" : requested.styleUrl || "");
+    const vectorStyleUrl = wantsVector && hasWebGL() ? wantsVector : "";
+    // A vector theme on a device that cannot render it has no raster URL of its
+    // own, so serve the raster fallback rather than an empty basemap.
+    const preset = wantsVector && !vectorStyleUrl ? BASE_MAP_THEMES[RASTER_FALLBACK_THEME] : requested;
+
     const tileUrl = rawUrl || preset.tileUrl;
     const rawAttr = typeof cfg?.tileAttribution === "string" ? cfg.tileAttribution.trim() : "";
     // Pair a custom attribution with a raw URL; named presets carry their own.
     const tileAttribution = rawUrl ? rawAttr || preset.tileAttribution : preset.tileAttribution;
+    // Optional per-theme CSS class on the tile <img>s (a raw tileUrl gets none).
+    const tileClassName = rawUrl ? "" : preset.tileClassName || "";
 
     const center = asLatLng(cfg?.center) || asLatLng(getGlobalConfig("MAP_CENTER")) || DEFAULT_CENTER;
     const defaultZoom = asZoom(cfg?.defaultZoom) ?? DEFAULT_ZOOM;
@@ -192,6 +242,8 @@ const useMapConfig = (tenantIdOverride) => {
       isReady,
       tileUrl,
       tileAttribution,
+      tileClassName,
+      vectorStyleUrl,
       wardHighlightColor,
       center,
       defaultZoom,

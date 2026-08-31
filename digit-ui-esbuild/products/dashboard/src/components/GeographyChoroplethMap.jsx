@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "@maplibre/maplibre-gl-leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   getGeographyMapLegend,
@@ -523,12 +525,23 @@ const GeographyChoroplethMap = ({
     const map = L.map(elRef.current, {
       scrollWheelZoom: true,
       zoomControl: false,
+      // The map's zoom ceiling used to come from the raster tile layer's
+      // maxZoom. L.maplibreGL is a plain L.Layer with no zoom options, and
+      // Leaflet only registers a layer as a zoom bound when it declares one —
+      // so without this getMaxZoom() is Infinity: the wheel never stops, "+"
+      // never greys out, and past the GL camera's own ceiling the basemap
+      // freezes while the polygons and pins keep growing away from it.
+      maxZoom: 19,
     }).setView(getMapCenter(), 11);
 
     L.control.zoom({ position: "topleft" }).addTo(map);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
+    // Vector basemap (MapLibre GL via the Leaflet bridge) — same style the PGR
+    // maps use (useMapConfig vectorLight); duplicated here because the
+    // dashboard bundle does not import from products/pgr. Keep in sync.
+    L.maplibreGL({
+      style: "https://tiles.openfreemap.org/styles/liberty",
+      attribution:
+        '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     // Dedicated pane for complaint pins, above polygons, below hover tooltips.
@@ -566,6 +579,22 @@ const GeographyChoroplethMap = ({
       if (circle?.isPopupOpen?.()) circle.getPopup()?.update();
     };
 
+    // Leaflet's flyTo fires `zoomstart` up front but fires `zoomend` only if the
+    // animation runs to completion; starting a drag calls map._stop(), which
+    // kills the fly frame silently. The MapLibre bridge latches an internal
+    // flag on zoomstart, clears it only on zoomend, and skips every camera sync
+    // while latched — so dragging during a drill-down fly froze the basemap for
+    // the rest of the session. Re-pair the events ourselves: Leaflet leaves a
+    // stale _flyToFrame id behind, so track the zoom in flight rather than
+    // trying to read it back off the map.
+    let zoomInFlight = false;
+    const onZoomStart = () => { zoomInFlight = true; };
+    const onZoomSettled = () => { zoomInFlight = false; };
+    const unlatchInterruptedFly = () => { if (zoomInFlight) map.fire("zoomend"); };
+    map.on("zoomstart", onZoomStart);
+    map.on("zoomend", onZoomSettled);
+    map.on("dragstart", unlatchInterruptedFly);
+
     map.on("zoomend", sync);
     map.on("moveend", sync);
     map.on("zoom", onZoom);
@@ -574,6 +603,9 @@ const GeographyChoroplethMap = ({
 
     setTimeout(() => map.invalidateSize(), 150);
     return () => {
+      map.off("zoomstart", onZoomStart);
+      map.off("zoomend", onZoomSettled);
+      map.off("dragstart", unlatchInterruptedFly);
       map.off("zoomend", sync);
       map.off("moveend", sync);
       map.off("zoom", onZoom);
