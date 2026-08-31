@@ -866,9 +866,10 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
     ./local-setup/scripts/enable-dashboard.sh
   ```
 
-  The dashboard's nav gate reads `dss.DashboardConfig.allowedRoles` (falling
-  back to `SUPERVISOR`/`PGR_*`/`GRO`/`DGRO`/`SUPERUSER`), so at least one
-  onboarded employee must hold one of those roles to see it.
+  The employee dashboard asks `/pgr-services/v2/analytics/_access`; there is no
+  browser or DashboardConfig role fallback. `dashboard_allowed_roles` controls
+  which fresh-install roles receive navigation action 4557 and capabilities
+  2640–2644 together.
 
   "Today" tiles resolve the calendar day in EAT (`Africa/Nairobi`), fixed in the
   analytics service rather than read from tenant config.

@@ -1,6 +1,6 @@
-# 20 — Dashboard Packs and the Four RBAC Layers
+# 20 — Dashboard Packs and Access-Control Layers
 
-## 1. `dss.DashboardPack` — who gets which default dashboard
+## 1. `dss.DashboardPack` — which capability gets which default dashboard
 
 A **DashboardPack** picks the default tile set + grid layout per audience. Like KpiDefinition it
 lives in MDMS module `dss`, master `DashboardPack`, at the **state-root tenant**.
@@ -15,7 +15,7 @@ lives in MDMS module `dss`, master `DashboardPack`, at the **state-root tenant**
   "data": {
     "id": "supervisor-default",
     "description": "Default supervisor dashboard pack",
-    "roles": ["SUPERVISOR","PGR_SUPERVISOR","GRO","DGRO","PGR_LME","PGR_ADMIN","SUPERUSER"],
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
     "tiles":  ["cl_resolution_rate_count", "rs_breach_total", ...],   // KpiDefinition ids
     "layout": [ { "kpiId": "cl_resolution_rate_count", "x": 0, "y": 0, "w": 2, "h": 2 }, ... ]
   }
@@ -24,16 +24,10 @@ lives in MDMS module `dss`, master `DashboardPack`, at the **state-root tenant**
 
 Semantics (`POST /pgr-services/v2/analytics/packs`):
 
-- **Role match**: the **first** pack (in MDMS record order) whose `roles` overlap the caller's
-  roles wins (`DashboardPack.matchesRoles`, `anyMatch`). There is no specificity scoring — order
-  your packs most-specific-first. **Live example (bomet, 2026-07-09):** two packs exist —
-  `executive-default` (roles `TICKET_REPORT_VIEWER`, `PGR_VIEWER`; 15 tiles) *before*
-  `supervisor-default` (the seven supervisor roles; 11 tiles). `KE_ADMIN` carries `PGR_VIEWER`, so
-  its `/packs` returns the **executive** pack first — even though it also holds
-  `SUPERUSER`/`GRO`/`DGRO` that match `supervisor-default`. A pure supervisor (no `PGR_VIEWER`)
-  correctly lands on `supervisor-default`. See `80-live-bomet-state.md` §3.
+- **Capability match**: the first pack whose `requiredActionUrl` is in the caller's
+  egov-accesscontrol action set wins. The anonymous pack is selected only by `public:true`.
 - **Ceiling filter**: pack `tiles`/`layout` are filtered down to the KPIs the caller can actually
-  see (`rbac.visibleTo` + `status:published`). A pack can never leak a tile past the catalog
+  see (`requiredActionUrl` + `status:published`). A pack can never leak a tile past the catalog
   ceiling.
 - **No matching pack**: the caller gets *all* visible defs as tiles with an empty
   `defaultLayout` — functional but unlaid-out. Give every dashboard-holding role a pack.
@@ -47,27 +41,28 @@ Semantics (`POST /pgr-services/v2/analytics/packs`):
 
 Editing a pack (add/remove/rearrange default tiles for a role) is an MDMS `_update` — no deploy.
 
-## 2. The four RBAC layers
+## 2. The access-control layers
 
 Design series: `docs/dashboard-rbac-design/` (parts A–F + 70-view-management). What is actually
 enforced in `backend/pgr-services/src/main/java/org/egov/pgr/analytics/`:
 
 ### Layer 1 — Row-scope ABAC (what rows a query may aggregate)
 
-Resolved once per request by `PrincipalScopeResolver.resolve` ("the seam") and injected by
-`AnalyticsPlanner.applyScope` as WHERE conjuncts. Never taken from the request body.
+Resolved once per request by `AnalyticsRowScopeResolver`, which delegates to Vinoth's shared
+`SearchAccessPolicyService.resolveScope` for action 2008. The resulting `PgrSearchScope` is the
+same object used by PGR complaint search and is injected by `AnalyticsPlanner.applyScope` as SQL
+WHERE conjuncts. It is never taken from the request body.
 
 | principal | injected scope |
 |---|---|
 | any caller | tenant scope, always: state-root tenant → `tenant_id LIKE 'ke%'`, city tenant → `tenant_id = ?` |
 | pure citizen | `account_id = <own uuid>` (self-scope) |
-| employee | `department_code IN (<active HRMS assignment departments>)` — resolved live via `POST /egov-hrms/employees/_search?codes=<userName>` |
-| employee with a `TENANT_WIDE_ROLES` role | unrestricted within tenant (`PGR_ADMIN`, `SUPERUSER`, `MDMS_ADMIN`, `HRMS_ADMIN`, `STADMIN`, `SUPERVISOR`, `PGR_SUPERVISOR`) |
-| employee whose department cannot be resolved (no HRMS record, no active assignment, HRMS error) | **fail-closed**: sentinel department `__scope_denied__` that matches no row — unless they hold a tenant-wide role |
+| employee | department and jurisdiction axes are resolved from HRMS, then action 2008's `resource.complaint.scope.roleScopes` decides `OWN` versus `ALL` per axis |
+| employee whose required `OWN` value cannot be resolved | **fail-closed** on that axis with sentinel `__scope_denied__`; there is no hard-coded tenant-wide role bypass |
 
-Boundary/jurisdiction scope (`boundary_path LIKE '<prefix>%'`) is wired end-to-end but
-deliberately disabled in the resolver today (`boundaryPrefix = null` with the enabling block
-commented out in `PrincipalScopeResolver.java` — see the inline rationale).
+The canonical policy grants GRO `department:ALL/jurisdiction:OWN`, PGR_LME `OWN/OWN`,
+SUPERVISOR `OWN/ALL`, and defaults other employee roles to `ALL/OWN`. Change the authored action
+policy, not Java role constants, to change those outcomes.
 
 #### Tenant-configurable department scoping — `dss.DashboardConfig.departmentScoping` (#1280)
 
@@ -116,8 +111,8 @@ Operator consequences:
 #### Tenant-configurable calendar zone — `dss.DashboardConfig.timeZone` (#29)
 
 Every analytics request resolves ONE IANA time zone from this OPTIONAL field on the same
-`dss.DashboardConfig` record (composes additively with `departmentScoping`/`numberFormat`/
-`allowedRoles` on that record) and builds exactly one `BusinessCalendar` (a resolved `ZoneId` +
+`dss.DashboardConfig` record (composes additively with `departmentScoping` and `numberFormat`)
+and builds exactly one `BusinessCalendar` (a resolved `ZoneId` +
 a single captured `asOf` instant) that every downstream consumer of the request shares — the
 planner's named windows (`dtd`/`wtd`/`mtd`/`qtd`/`ytd`), the `#1462` pinned-window
 suppression/prior decision, an explicit `dateFrom`/`dateTo` range, the runtime `timeBucket` SQL,
@@ -148,15 +143,12 @@ Seed note: `ansible/nairobi-mdms/mdms/dss/DashboardConfig.json` carries
 `"timeZone": "Africa/Nairobi"` for the canonical `ke` tenant — the explicit value matches what
 absence would already resolve to, kept explicit so the seed is self-documenting.
 
-### Layer 2 — Catalog visibility (`rbac.visibleTo`)
+### Layer 2 — Endpoint and catalog capabilities
 
-Per-KPI role ceiling, evaluated in `KpiDefinition.isVisibleTo`:
-
-- `visibleTo: []` (or absent) → visible to **every authenticated** role. Not to anonymous.
-- `visibleTo: ["ROLE_A","ROLE_B"]` → any listed role.
-- `"PUBLIC"` in the list is an **additive audience marker**, not a ceiling: it opts the tile into
-  anonymous access and is stripped before evaluating the authenticated ceiling (so tagging a tile
-  PUBLIC never narrows who can see it; `["PUBLIC"]` alone = everyone incl. anonymous).
+PGR resolves the caller's visible egov-accesscontrol action URLs once per request. Actions
+2640–2644 gate the route bootstrap, query, packs, catalog and schema endpoints. Each KPI and
+employee pack declares `requiredActionUrl`; absence or a misspelled/ungranted URL is fail-closed.
+Specialized actions 2646–2648 grant officer PII and report catalog slices.
 
 Applies uniformly to `/packs`, `/catalog/_search`, and `kpiId`-by-reference `/_query` calls.
 
@@ -165,24 +157,71 @@ Applies uniformly to `/packs`, `/catalog/_search`, and `kpiId`-by-reference `/_q
 The `kpiId` path is governed by layer 2, but `/_query` also accepts **inline** query bodies. An
 inline query that projects an officer/citizen-identity column as a raw *dimension*
 (`AnalyticsService.PII_DIMENSIONS`: `current_assignee_uuid`, `assignee_uuid`, `actor_uuid`,
-`account_id`) is rejected with `pii_forbidden` unless the caller holds one of
-`OFFICER_PII_ROLES` (`SUPERVISOR`, `PGR_SUPERVISOR`, `PGR_ADMIN`, `SUPERUSER`, `MDMS_ADMIN`,
-`HRMS_ADMIN`). Aggregate `count_distinct` over these columns is *not* gated (never exposes an
+`account_id`) is rejected with `pii_forbidden` unless the caller holds
+the `/pgr-services/v2/analytics/capabilities/officer` capability. Aggregate `count_distinct` over
+these columns is *not* gated (never exposes an
 individual UUID). Additionally, these columns are groupable/distinct-countable but **never
 filterable** (no UUID probing), and the API returns raw UUIDs only — name resolution happens at
 the edge with the caller's own credentials.
 
 ### Layer 4 — Public floor
 
-An unauthenticated / role-less caller degrades to the synthetic `PUBLIC` role
-(`AnalyticsService.extractRoles`), which may:
+An unauthenticated caller uses `AnalyticsCapabilities.publicSurface()`, which may:
 
-- see only tiles whose `visibleTo` explicitly contains `"PUBLIC"` (**10** live `ke` tiles, verified
-  via anonymous `/packs` on bomet 2026-07-09 — `80-live-bomet-state.md` §2);
+- see only tiles whose definition explicitly carries `public:true`;
 - run **only** `kpiId`-by-reference queries — every inline body gets `kpi_forbidden`.
 
 This is a deliberate degrade-to-curated-aggregates, not a lock-out; it closed the old fail-open
-where anonymous callers could read every `visibleTo: []` tile.
+where anonymous callers could reach authenticated catalog entries.
+
+#### The public dashboard page (`/digit-ui/public-dashboard`, #1540 / #1797)
+
+The anonymous page never touches the mixed-auth endpoints above. It uses four Kong-only
+auth-optional aliases under `/v2/analytics/public/*` (`AnalyticsController`), each of which
+**discards `RequestInfo` by construction** and fails closed when
+`dss.DashboardConfig.publicDashboardEnabled` is not `true`:
+
+| alias | returns | feeds |
+|---|---|---|
+| `POST …/public/packs` | the matched `PUBLIC` pack: tiles + default layout (no `recordCount`); `{enabled:false}` when disabled | default page |
+| `POST …/public/catalog/_search` | every published def with `public:true` (safe descriptors) | the **Add KPI** menu |
+| `POST …/public/_options` | ward / complaint-type **codes** that carry complaints (counts stripped); the two distinct queries are server constants, the caller sends only `tenantId` | the filter bar's dropdowns |
+| `POST …/public/_query` | batch of `{kpiId[, params]}` refs | tile data |
+
+`/public/_query` accepts a ref for **any `public:true` def** (not only pack tiles — the pack is
+the enablement gate, the public marker is the disclosure boundary), and its `params` are rebuilt from a
+fixed allow-list — `dateFrom`, `dateTo`, `ward`, `serviceCode`, `complaintPath` — i.e. exactly
+the global filter bar. Each value must be a non-empty scalar ≤ 128 chars; dates must be ISO
+calendar days supplied together. Any other key (`hierLevel`, `compare`, `series`, `window`, …),
+shape or value is a whole-batch `400 invalid_param`. So the anonymous page gets the same Ward /
+Complaint type / date filters as the employee dashboard, but no companion fan-out (no prior-period deltas or
+sparklines), no Group-by level switch and no per-complaint pin source.
+
+Three details of that policy worth knowing when authoring PUBLIC defs:
+
+- **It is enforced in the service, not just the alias.** `AnalyticsService` applies the same
+  allow-list to every PUBLIC-floor caller (`PUBLIC_QUERY_PARAMS`), so an anonymous body that
+  reaches the employee `/_query` while Kong runs in audit mode gets per-entry `invalid_param`
+  for anything outside it — the alias only adds the whole-batch 400 and discards RequestInfo.
+- **A public param never displaces a predicate the def bakes itself.** The composer *replaces*
+  an existing `eq` rather than intersecting with it (that is the employee filter-bar semantics),
+  so for the public floor a `ward` / `serviceCode` / `complaintPath` param whose column the def's
+  own `query.filters` already pins is dropped and reported in `paramsIgnored`. "Water complaints"
+  stays water complaints however the visitor filters.
+- **Date ranges follow employee semantics:** `dateFrom`/`dateTo` replace the def's named
+  `window` (the `params[].allowed` list governs only the `window` param). A public tile can
+  therefore be asked for any historical interval; if a deployment wants a ceiling, that is a
+  product decision (see the open question in PR #1838), not something the catalog expresses today.
+
+All four aliases share one fail-closed gate: `publicDashboardEnabled` **and** a matching PUBLIC
+pack. Enabled-but-no-pack exposes neither descriptors (`catalog/_search`) nor option codes
+(`_options`) — both return `400 public_pack_not_found`, the same as a query would.
+
+**Which knob grants what, publicly:** set a def's `public:true` → it appears in the public Add KPI
+menu and is queryable anonymously; add it to the `public-default` pack → it is on the page by
+default. Untag it → both disappear on the next config-cache refresh. The visitor's own layout and
+filter choices persist only in their browser (`ccrs.dashboard.*.public` keys, disjoint from every
+employee slot).
 
 ## 3. Error codes and what to do about them
 
@@ -192,8 +231,8 @@ single query. Codes are the prefix before `:` in the message (`AnalyticsService.
 | code | meaning | operator action |
 |---|---|---|
 | `scope_incomplete` | the caller's mandatory row-scope (citizen / department / boundary) cannot be **enforced on the target grain** — the grain lacks that scope column, so the server refuses rather than silently widening | Since `V20260629000000__grain_scope_columns.sql` all three grains carry department + citizen axes, so this signals a custom grain/def problem, not a user problem |
-| `kpi_forbidden` | kpiId not found, not `published`, or caller's roles fail `visibleTo`; also any inline/public-floor violation | Check def status + `visibleTo` vs the user's roles; FE renders "No access" |
-| `pii_forbidden` | inline query projected a PII dimension without an officer-PII role | Use a curated KPI def (layer 2) instead of inline, or grant the proper role; FE renders "Restricted" |
+| `kpi_forbidden` | kpiId not found, not `published`, or caller lacks its `requiredActionUrl`; also any inline/public-floor violation | Check def status + action URL/grant; FE renders "No access" |
+| `pii_forbidden` | inline query projected a PII dimension without the officer capability | Use a curated KPI def (layer 2) instead of inline, or grant action 2646; FE renders "Restricted" |
 | `invalid_param` | bad grammar value: unknown window, `window` outside the def's `allowed` list, unparseable `dateFrom/dateTo`, bad percentile/sort/limit | Fix the def or the caller's params |
 | `unknown_column` / `op_not_allowed` / `unknown_grain` / `unknown_agg` | identifier not in the `AnalyticsCatalog` whitelist for that operation | Register the column (developer change — see 50-sla-and-hierarchies.md §extending) |
 | `invalid_kpi` | def misconfiguration (e.g. `query: null` without a valid `viz.compose`) | Fix the def in MDMS |
@@ -208,16 +247,14 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 
 | you want | change | where |
 |---|---|---|
-| role R sees KPI X (picker + by-reference query) | add R to X's `rbac.visibleTo` (or leave `[]` for all-authenticated) | `dss.KpiDefinition` (MDMS) |
-| role R gets a curated default dashboard | add R to a pack's `roles` (and X to its `tiles`/`layout`) | `dss.DashboardPack` (MDMS) |
-| role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
-| role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
-| anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
-| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `dss.DashboardConfig` `allowedRoles` (MDMS; the FE falls back to its built-in `DASHBOARD_ROLES` when the record is absent) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
-| role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
+| role R sees KPI X (picker + by-reference query) | grant R the action named by X's `requiredActionUrl` | access-control actions/roleactions + `dss.KpiDefinition` |
+| role R gets a curated default dashboard | grant R the pack's `requiredActionUrl` (and add X to `tiles`/`layout`) | access-control + `dss.DashboardPack` |
+| role R sees only its own department/jurisdiction | author `OWN` for that role/axis in action 2008 and ensure HRMS carries the value | action 2008 policy + HRMS |
+| role R sees the whole tenant | author `ALL` for both axes in action 2008 | action 2008 policy |
+| anonymous/public page can show KPI X (Add KPI menu + anonymous query) | set `public:true` on X | `dss.KpiDefinition` (MDMS) |
+| anonymous/public page shows KPI X **by default** | also list X in the `public-default` pack's `tiles` + `layout` | `dss.DashboardPack` (MDMS) |
+| role R can open and use the dashboard | grant 2640–2644; add a `Dashboard` `tenant.citymodule` row for the home card | access-control + `30-view-access.md` |
+| role R gets a sidebar entry | also grant navigation action 4557 | `30-view-access.md` §2 |
 
-The last rows are the classic confusion: `visibleTo`/packs govern *what renders inside* the
-dashboard; whether the user can *navigate to* it is a different stack — the FE gate resolved from
-`dss.DashboardConfig` + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
-digit-ui sidebar access-control surface (`30-view-access.md`). Three independent gates; align all
-that apply.
+Navigation and API/catalog access are distinct action IDs but one access-control model. The 0→1
+bootstrap grants 4557 and 2640–2644 together so a visible link cannot bounce into a denied view.

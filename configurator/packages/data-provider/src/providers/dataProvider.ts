@@ -130,6 +130,53 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   } as RaRecord;
 }
 
+interface BoundaryTreeNode extends Record<string, unknown> {
+  code?: string;
+  boundaryType?: string;
+  parent?: string | null;
+  children?: BoundaryTreeNode[];
+}
+
+interface FoundBoundaryRelationship {
+  node: BoundaryTreeNode;
+  parentCode: string | null;
+}
+
+function findBoundaryRelationship(
+  trees: Record<string, unknown>[],
+  code: string,
+): FoundBoundaryRelationship | undefined {
+  const visit = (
+    nodes: BoundaryTreeNode[],
+    inheritedParent: string | null,
+  ): FoundBoundaryRelationship | undefined => {
+    for (const node of nodes) {
+      const parentCode =
+        typeof node.parent === 'string' && node.parent.trim()
+          ? node.parent.trim()
+          : inheritedParent;
+      if (node.code === code) return { node, parentCode };
+      const found = visit(Array.isArray(node.children) ? node.children : [], node.code ?? null);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  for (const tree of trees) {
+    const raw = tree.boundary;
+    const roots = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? [raw] : [];
+    const found = visit(roots as BoundaryTreeNode[], null);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function isDuplicateError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes('duplicate') || normalized.includes('already exists');
+}
+
 // --- Complaint-hierarchy leaf adapter -------------------------------------
 //
 // The 2-master complaint hierarchy stores BOTH interior classification nodes
@@ -1312,12 +1359,78 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       }
       if (config.type === 'boundary') {
         const data = params.data as Record<string, unknown>;
-        const code = String(data.code);
-        const boundaryType = String(data.boundaryType || 'Locality');
-        const hierarchyType = String(data.hierarchyType || 'ADMIN');
-        const parent = data.parent ? String(data.parent) : null;
+        // Tenant ownership is deliberately taken only from the authenticated
+        // data-provider context. BoundaryCreate does not render a tenant field,
+        // and a caller-supplied data.tenantId must never retarget the write.
+        const code = String(data.code ?? '').trim();
+        const boundaryType = String(data.boundaryType ?? '').trim();
+        const hierarchyType = String(data.hierarchyType ?? '').trim();
+        const parent = typeof data.parent === 'string' && data.parent.trim()
+          ? data.parent.trim()
+          : null;
+
+        if (!code) throw new Error('Boundary code is required');
+        if (!hierarchyType) throw new Error('Boundary hierarchy is required');
+        if (!boundaryType) throw new Error('Boundary type is required');
+
+        // Resolve and validate the relationship before creating the entity.
+        // Without this preflight, a deterministic HIERARCHY_ERROR arrives only
+        // after boundary/_create has already published an orphan entity.
+        const hierarchyDefinitions = await client.boundaryHierarchySearch(tenantId, hierarchyType);
+        const hierarchy = hierarchyDefinitions.find(
+          (item) => String(item.hierarchyType ?? '') === hierarchyType,
+        );
+        if (!hierarchy) {
+          throw new Error(`Boundary hierarchy ${hierarchyType} is not defined for tenant ${tenantId}`);
+        }
+        const levels = Array.isArray(hierarchy.boundaryHierarchy)
+          ? (hierarchy.boundaryHierarchy as Record<string, unknown>[]).filter((level) => level.active !== false)
+          : [];
+        const selectedLevel = levels.find(
+          (level) => String(level.boundaryType ?? '') === boundaryType,
+        );
+        if (!selectedLevel) {
+          throw new Error(
+            `Boundary type ${boundaryType} is not part of hierarchy ${hierarchyType} for tenant ${tenantId}`,
+          );
+        }
+        const expectedParentType =
+          typeof selectedLevel.parentBoundaryType === 'string' && selectedLevel.parentBoundaryType.trim()
+            ? selectedLevel.parentBoundaryType.trim()
+            : null;
+
+        if (expectedParentType && !parent) {
+          throw new Error(`Parent boundary of type ${expectedParentType} is required for ${boundaryType}`);
+        }
+        if (!expectedParentType && parent) {
+          throw new Error(`Root boundary type ${boundaryType} must not define a parent`);
+        }
+
+        if (parent && expectedParentType) {
+          const trees = await client.boundaryRelationshipSearch(tenantId, hierarchyType);
+          const parentRelationship = findBoundaryRelationship(trees, parent);
+          if (!parentRelationship) {
+            throw new Error(
+              `Parent boundary ${parent} does not exist in hierarchy ${hierarchyType} for tenant ${tenantId}`,
+            );
+          }
+          if (String(parentRelationship.node.boundaryType ?? '') !== expectedParentType) {
+            throw new Error(
+              `Parent boundary ${parent} must have boundary type ${expectedParentType}`,
+            );
+          }
+        }
+
         // Create the boundary entity (publishes to Kafka for async persistence)
-        await client.boundaryCreate(tenantId, [{ code }]);
+        // and tolerate a verified pre-existing entity so a previous partial
+        // create can be resumed by attaching its missing relationship.
+        try {
+          await client.boundaryCreate(tenantId, [{ code }]);
+        } catch (error) {
+          if (!isDuplicateError(error)) throw error;
+          const existing = await client.boundarySearch(tenantId, [code]);
+          if (!existing.some((item) => String(item.code ?? '') === code)) throw error;
+        }
         // Retry relationship create — entity may not be persisted yet (Kafka async)
         let lastErr: Error | null = null;
         for (let attempt = 0; attempt < 5; attempt++) {
@@ -1327,7 +1440,16 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
             break;
           } catch (err) {
             lastErr = err as Error;
-            if (lastErr.message?.includes('does not exist') && attempt < 4) {
+            if (isDuplicateError(lastErr)) {
+              const trees = await client.boundaryRelationshipSearch(tenantId, hierarchyType);
+              const existing = findBoundaryRelationship(trees, code);
+              const existingType = String(existing?.node.boundaryType ?? '');
+              if (existing && existingType === boundaryType && existing.parentCode === parent) {
+                lastErr = null;
+                break;
+              }
+            }
+            if (lastErr.message?.toLowerCase().includes('does not exist') && attempt < 4) {
               await new Promise((r) => setTimeout(r, 500));
               continue;
             }

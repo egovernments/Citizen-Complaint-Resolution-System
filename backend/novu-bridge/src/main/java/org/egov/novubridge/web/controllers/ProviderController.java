@@ -300,6 +300,10 @@ public class ProviderController {
         if ("WHATSAPP".equals(upperChannel)) {
             String phoneArg = "whatsapp:+" + digitsOnly(phone);
             Map<String, Object> overrides = buildWhatsappOverrides(contentSid, variables);
+            // Same integration-selection override the live dispatch path applies (NovuClient
+            // .identifyThenTrigger) — without it, a test-send would validate against Novu's
+            // primary SMS integration instead of the dedicated WhatsApp one it's meant to test.
+            overrides = novuClient.applyWhatsappIntegrationOverride(overrides, upperChannel);
             String workflow = StringUtils.hasText(workflowId) ? workflowId : WORKFLOW_SMS;
             novuResponse = novuClient.trigger(workflow, subscriberId, phoneArg, payload,
                     transactionId, overrides, null);

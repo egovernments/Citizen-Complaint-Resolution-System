@@ -465,6 +465,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_LANGUAGE",
+    "message": "Language",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Last 7 days",
     "module": "rainmaker-dashboard"
@@ -2081,6 +2086,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_KPIS_AVAILABLE",
     "message": "KPIs disponíveis para a sua função",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_LANGUAGE",
+    "message": "Idioma",
     "module": "rainmaker-dashboard"
   },
   {

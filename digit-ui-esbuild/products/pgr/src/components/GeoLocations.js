@@ -59,6 +59,8 @@ const MapRefSetter = ({ mapRef }) => {
   return null;
 };
 
+const REVERSE_GEOCODE_TIMEOUT_MS = 10000;
+
 // Resolve a pin to a ward polygon. Returns {code, name, parent_subcounty} or null.
 const resolveWard = (lat, lng, wardCollection) => {
   if (!wardCollection?.features?.length) return null;
@@ -155,6 +157,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // responses, preventing a slow response from restoring a location the user
   // has already removed or replaced.
   const locationRequestId = useRef(0);
+  const reverseGeocodeController = useRef(null);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
@@ -205,6 +208,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     }
   }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, OVERVIEW_ZOOM]);
 
+  useEffect(() => () => reverseGeocodeController.current?.abort(), []);
+
   // Sync FROM formData (wizard restore / re-entering the map step).
   //
   // Depend on the field's VALUES, not the formData object. The wizard
@@ -248,10 +253,18 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     lastReverseAttempt.current = `${lat},${lng}`;
     const ward = resolveWard(lat, lng, tenantBoundaries);
     setSelectedWard(ward?.code || null);
+    reverseGeocodeController.current?.abort();
+    const controller = new AbortController();
+    reverseGeocodeController.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), REVERSE_GEOCODE_TIMEOUT_MS);
+    setIsSearching(true);
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1${nominatimCountry}`,
-        { headers: { "Accept-Language": nominatimLang } }
+        {
+          headers: { "Accept-Language": nominatimLang },
+          signal: controller.signal,
+        }
       );
       const data = await response.json();
       if (requestId !== locationRequestId.current) return;
@@ -275,8 +288,18 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
       }
     } catch (error) {
       if (requestId !== locationRequestId.current) return;
+      // Replacements, Clear, unmounts and the timeout all abort deliberately.
+      // The coordinate-only selection was already persisted before this
+      // enrichment request, so an abort must not write it back a second time.
+      if (error?.name === "AbortError") return;
       console.error("Error fetching address:", error);
       onSelect(config.key, { lat, lng, ward });
+    } finally {
+      clearTimeout(timeoutId);
+      if (reverseGeocodeController.current === controller) {
+        reverseGeocodeController.current = null;
+      }
+      if (requestId === locationRequestId.current) setIsSearching(false);
     }
   };
 
@@ -287,12 +310,14 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setCoords({ lat, lng });
     setMarkerPos([lat, lng]);
     setSelectedWard(ward?.code || null);
+    // Close the form-sync race before writing the coordinate-only value. The
+    // write can re-render this component immediately; without this marker the
+    // restore effect starts a second reverse lookup that supersedes this one.
+    lastReverseAttempt.current = `${lat},${lng}`;
     // Persist the explicit user selection before reverse geocoding so a quick
     // Next click cannot lose the pin. Address/pincode enrichment follows.
     onSelect(config.key, { lat, lng, ward });
-    setIsSearching(true);
     await fetchAddress(lat, lng, requestId);
-    if (requestId === locationRequestId.current) setIsSearching(false);
   };
 
   const handleMapClick = (e) => {
@@ -426,6 +451,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
   const clearSearch = () => {
     locationRequestId.current += 1;
+    reverseGeocodeController.current?.abort();
+    reverseGeocodeController.current = null;
     lastReverseAttempt.current = null;
     debouncedFetchSuggestions.cancel();
     Digit.SessionStorage.del("PGR_MAP_LOCATION");
@@ -521,6 +548,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
               bottom: 0,
               backgroundColor: "rgba(255,255,255,0.7)",
               zIndex: 1000,
+              pointerEvents: "none",
               display: "flex",
               justifyContent: "center",
               alignItems: "center"

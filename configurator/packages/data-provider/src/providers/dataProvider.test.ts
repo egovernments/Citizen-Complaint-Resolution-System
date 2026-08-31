@@ -59,6 +59,183 @@ describe('createDigitDataProvider', () => {
     );
   });
 
+  it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async (tenantId: string, hierarchyType?: string) => {
+      assert.equal(tenantId, 'ke');
+      assert.equal(hierarchyType, 'CUSTOM');
+      return [{
+        tenantId,
+        hierarchyType,
+        boundaryHierarchy: [
+          { boundaryType: 'County', parentBoundaryType: null, active: true },
+          { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+        ],
+      }];
+    });
+    mock.method(client, 'boundaryRelationshipSearch', async (tenantId: string, hierarchyType?: string) => {
+      assert.equal(tenantId, 'ke');
+      assert.equal(hierarchyType, 'CUSTOM');
+      return [{
+        tenantId,
+        hierarchyType,
+        boundary: [{ code: 'COUNTY_1', boundaryType: 'County', children: [] }],
+      }];
+    });
+    let entityTenant = '';
+    mock.method(client, 'boundaryCreate', async (tenantId: string) => {
+      entityTenant = tenantId;
+      return [];
+    });
+    let relationshipArgs: unknown[] = [];
+    mock.method(client, 'boundaryRelationshipCreate', async (...args: unknown[]) => {
+      relationshipArgs = args;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: {
+        code: 'WARD_1',
+        hierarchyType: 'CUSTOM',
+        boundaryType: 'Ward',
+        parent: 'COUNTY_1',
+        // Must never override the tenant captured from authentication.
+        tenantId: 'ke.wrong',
+      },
+    });
+
+    assert.equal(entityTenant, 'ke');
+    assert.deepEqual(relationshipArgs, ['ke', 'WARD_1', 'CUSTOM', 'Ward', 'COUNTY_1']);
+  });
+
+  it('rejects a non-root boundary without a parent before creating the entity', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [
+        { boundaryType: 'County', parentBoundaryType: null, active: true },
+        { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+      ],
+    }]);
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: { code: 'WARD_1', hierarchyType: 'CUSTOM', boundaryType: 'Ward' },
+      }),
+      /Parent boundary of type County is required/,
+    );
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('rejects a missing hierarchy instead of silently defaulting to ADMIN', async () => {
+    let hierarchySearchCalls = 0;
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryHierarchySearch', async () => {
+      hierarchySearchCalls += 1;
+      return [];
+    });
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: { code: 'WARD_1', boundaryType: 'Ward', parent: 'COUNTY_1' },
+      }),
+      /Boundary hierarchy is required/,
+    );
+    assert.equal(hierarchySearchCalls, 0);
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('creates a root boundary without a parent', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+    }]);
+    mock.method(client, 'boundaryCreate', async () => []);
+    let relationshipArgs: unknown[] = [];
+    mock.method(client, 'boundaryRelationshipCreate', async (...args: unknown[]) => {
+      relationshipArgs = args;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: { code: 'COUNTY_1', hierarchyType: 'CUSTOM', boundaryType: 'County' },
+    });
+
+    assert.deepEqual(relationshipArgs, ['ke', 'COUNTY_1', 'CUSTOM', 'County', null]);
+  });
+
+  it('rejects a parent from the wrong hierarchy level before creating the entity', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [
+        { boundaryType: 'County', parentBoundaryType: null, active: true },
+        { boundaryType: 'Ward', parentBoundaryType: 'County', active: true },
+      ],
+    }]);
+    mock.method(client, 'boundaryRelationshipSearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundary: [{ code: 'NOT_A_COUNTY', boundaryType: 'Ward', children: [] }],
+    }]);
+    let entityCreateCalls = 0;
+    mock.method(client, 'boundaryCreate', async () => {
+      entityCreateCalls += 1;
+      return [];
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await assert.rejects(
+      () => dp.create('boundaries', {
+        data: {
+          code: 'WARD_1',
+          hierarchyType: 'CUSTOM',
+          boundaryType: 'Ward',
+          parent: 'NOT_A_COUNTY',
+        },
+      }),
+      /must have boundary type County/,
+    );
+    assert.equal(entityCreateCalls, 0);
+  });
+
+  it('resumes relationship creation when the entity already exists from a partial attempt', async () => {
+    mock.method(client, 'boundaryHierarchySearch', async () => [{
+      tenantId: 'ke',
+      hierarchyType: 'CUSTOM',
+      boundaryHierarchy: [{ boundaryType: 'County', parentBoundaryType: null, active: true }],
+    }]);
+    mock.method(client, 'boundaryCreate', async () => {
+      throw new Error('DUPLICATE_RECORD: Boundary already exists');
+    });
+    mock.method(client, 'boundarySearch', async () => [{ tenantId: 'ke', code: 'COUNTY_1' }]);
+    let relationshipCreateCalls = 0;
+    mock.method(client, 'boundaryRelationshipCreate', async () => {
+      relationshipCreateCalls += 1;
+      return {};
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.create('boundaries', {
+      data: { code: 'COUNTY_1', hierarchyType: 'CUSTOM', boundaryType: 'County' },
+    });
+
+    assert.equal(relationshipCreateCalls, 1);
+  });
+
   it('strips id and underscore-prefixed metadata from MDMS create payload', async () => {
     // Same family as the update sanitize fix from PR #40 — a default-
     // record that includes `id` (some forms set id == code on create)

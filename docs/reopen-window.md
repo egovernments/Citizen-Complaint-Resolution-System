@@ -16,14 +16,25 @@ edit here changes every surface at once.
 
 ## The record
 
-One record per tenant. `REOPENSLA` is **milliseconds**, and is the only field —
-the schema is `additionalProperties: false`.
+One record per tenant, keyed on `code`. `REOPENSLA` is **milliseconds**. The
+schema is `additionalProperties: false`, so a future constant becomes another
+property of this same record rather than a record of its own.
 
 ```jsonc
 {
+  "code": "DEFAULT",       // record key — fixed, not an operator setting
   "REOPENSLA": 259200000   // 72 hours
 }
 ```
+
+> **Why `code` exists.** The master originally declared `x-unique: ["REOPENSLA"]`
+> with `REOPENSLA` as its only property, so the record's value was also its
+> primary key — and mdms-v2 refuses to update a field listed in `x-unique`. Every
+> Save came back `400 UNIQUE_KEY_UPDATE_ERR`, which made the window
+> un-editable by any route. `code` gives the record an identity of its own so the
+> value is free to change. Never key a master on a value operators are meant to
+> edit; `RAINMAKER-PGR.MapConfig` had the identical bug (keyed on its ward colour)
+> and the identical fix.
 
 Common values:
 
@@ -62,12 +73,17 @@ applies its own backstop, so nothing is left unbounded.
 
 ## Rollout notes
 
-**Existing tenants keep their current value.** The 72-hour default ships in the
-seed data, so it reaches tenants seeded or bootstrapped after that change. A
-tenant already carrying `432000000` (5 days) stays at 5 days until an operator
-edits it. To move an existing tenant, edit **PGR UI Constants** in the
-configurator — no redeploy, no restart; `pgr-services` caches the value with a
-short TTL and picks the change up on its own.
+**Existing tenants are moved to 72h by the re-key migration.** The 72-hour default
+ships in the seed data, so it reaches tenants seeded or bootstrapped after that
+change. Tenants still carrying the old `432000000` (5 days) are moved by
+`local-setup/docker/db-migrations/sql/egov-mdms/V20260827000000__uiconstants_recode_from_reopensla_key.sql`,
+which also re-keys the record so it can be edited at all. That value is safe to
+rewrite because until the re-key the field could not be edited, so every
+`432000000` in the wild is a leftover seed rather than an operator's choice; any
+other value is left untouched. Thereafter, to change a tenant's window edit
+**PGR UI Constants** in the configurator — no redeploy, no restart;
+`pgr-services` caches the value with a short TTL and picks the change up on its
+own.
 
 **Do not set `time-before-closing-complaint` (`PGR_COMPLAIN_IDLE_TIME`).**
 It used to be the enforced window and is now only a fallback, used when MDMS has
@@ -96,6 +112,16 @@ set in the deployment values — unset it.
 user is actually on (`GET` the master for that `tenantId`, not just the state
 tenant). With no usable record the UI leaves REOPEN visible and the server falls
 back to `pgr.complain.idle.time`, so the configured value appears to be ignored.
+
+**Save fails with `400 UNIQUE_KEY_UPDATE_ERR`.** The tenant is still on the old
+value-keyed schema: `x-unique` is `["REOPENSLA"]` and the data record has no
+`code`. Apply
+`local-setup/docker/db-migrations/sql/egov-mdms/V20260827000000__uiconstants_recode_from_reopensla_key.sql`
+— it is idempotent, and the README next to it has the apply-by-hand command for
+a box whose db-migrations image predates the file. If the first Save afterwards
+is still rejected — as an unknown property rather than `UNIQUE_KEY_UPDATE_ERR` —
+restart `mdms-backend`: whether mdms-v2 caches schema definitions in memory has
+not been verified here, and a cached pre-migration schema would reject `code`.
 
 **REOPEN never appears.** A non-positive `REOPENSLA` is treated as misconfigured
 and ignored (with a warning in the `pgr-services` log) rather than hiding REOPEN

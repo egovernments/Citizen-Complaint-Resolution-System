@@ -100,13 +100,19 @@ plugins:
         -- enforces both the shared set and that intentional exception (Phase 3). See
         -- docs/parity-item5-gateway-rbac-design.md.
         --
-        -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
-        -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
-        -- is a legitimate anonymous call — if it is, add its EXACT path to AUTH_OPTIONAL AND env.yaml).
-        local ENFORCE_UNAUTH = false
-        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. Also ships in
-        -- AUDIT mode (log-only); flip to true to enforce (403 on deny). Independent of ENFORCE_UNAUTH.
-        local ENFORCE_RBAC = false
+        -- ENFORCED (2026-08-21): unauthenticated hits on protected paths now get a real 401.
+        -- Known gap at flip time: /common-persist still has zero
+        -- ACCESSCONTROL-ACTIONS-TEST.actions-test coverage (see docs/parity-item5-gateway-rbac-design.md)
+        -- — accepted as-is for now; persister calls will 403 under ENFORCE_RBAC below until that
+        -- coverage is added. /novu-bridge/* is covered (actiontest + roleactions for
+        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME).
+        local ENFORCE_UNAUTH = true
+        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. ENFORCED
+        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. Known gap: PGR_ADMIN is
+        -- referenced in ACCESSCONTROL-ROLEACTIONS.roleactions but missing from
+        -- ACCESSCONTROL-ROLES.roles, and /common-persist has no actiontest rows at
+        -- all — both will deny until fixed separately.
+        local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
@@ -132,6 +138,10 @@ plugins:
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- Authenticated employees of every functional role may read their own HRMS-backed
+          -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
+          -- appropriate because HRMS employee creation does not guarantee a shared base role.
+          ["/pgr-services/v2/employee/_context"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
           -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
@@ -146,6 +156,11 @@ plugins:
           -- They are exact AUTH_OPTIONAL matches and exact regex routes below.
           ["/pgr-services/v2/analytics/public/packs"]=true,
           ["/pgr-services/v2/analytics/public/_query"]=true,
+          -- #1797: the public page's Add-KPI menu and filter-bar option lists. Same
+          -- contract: RequestInfo discarded server-side, PUBLIC-tagged tiles only,
+          -- the options endpoint takes nothing but tenantId.
+          ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
+          ["/pgr-services/v2/analytics/public/_options"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -600,6 +615,44 @@ services:
   - name: pgr-public-analytics-query-route
     paths:
     - ~/pgr-services/v2/analytics/public/_query$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-catalog-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/catalog/_search$
+    methods:
+    - POST
+    strip_path: false
+    regex_priority: 100
+    plugins:
+    - name: rate-limiting
+      config:
+        minute: 60
+        policy: local
+        limit_by: ip
+        fault_tolerant: true
+        hide_client_headers: false
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 1
+        size_unit: megabytes
+  - name: pgr-public-analytics-options-route
+    paths:
+    - ~/pgr-services/v2/analytics/public/_options$
     methods:
     - POST
     strip_path: false

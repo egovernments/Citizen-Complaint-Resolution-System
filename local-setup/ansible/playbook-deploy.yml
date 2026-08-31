@@ -1308,15 +1308,16 @@
     # Resolve the MCP image ref ONCE, before .env is rendered. When the
     # tenant opts into a local build (`build_mcp: true`) the deploy builds
     # the image itself (mcp-build task below) and points compose at a
-    # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise it
-    # pulls the published public image. An operator can still override
-    # `mcp_image:` explicitly in host_vars.
+    # local-only tag (`digit-mcp:local`) — no registry pull. Otherwise leave
+    # it empty so MCP_IMAGE renders empty in .env and Compose's own
+    # `${MCP_IMAGE:-default}` fallback — the single source of truth for the
+    # pulled tag — takes over. An operator can still override `mcp_image:`
+    # explicitly in host_vars.
     - name: "Resolve MCP image tag"
       ansible.builtin.set_fact:
         mcp_image: >-
           {{ mcp_image
-             | default('digit-mcp:local' if (build_mcp | default(false))
-                       else 'ghcr.io/subhashini-egov/digit-mcp:2.12-draft-20260525-034354') }}
+             | default('digit-mcp:local' if (build_mcp | default(false)) else '') }}
 
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
@@ -1745,22 +1746,55 @@
       when:
         - build_digit_ui | default(false)
 
-    # ---- Grafana admin password BEFORE the first compose-up ----
-    # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
-    # ${GF_ADMIN_PASSWORD:?} — no default, so an unset variable aborts the whole
-    # compose invocation (that is the point: a `:-admin` default would ship
-    # admin/admin to anyone running the file standalone). But the authoritative
-    # value only exists further down, after the OpenBao bootstrap — which itself
-    # needs the stack up. Same ordering trap the KEYCLOAK/novu prep blocks below
-    # solve, and the same fix: put a value in .env before anything runs compose.
+    # ==================== Secrets prep (OpenBao) — BEFORE the first compose-up ====================
+    # Per-tenant secrets backend. Initialized once; subsequent runs auto-unseal
+    # using the keys captured at init. The init JSON lives at
+    # {{ digit_dir }}/.openbao/init.json (0600) — back it up out-of-band because
+    # losing it = losing access to every secret in this tenant's OpenBao until
+    # you re-init (which loses all stored secrets).
     #
-    # It is random per run, not a fixed placeholder, because it IS the password
-    # Grafana seeds its admin row with on a first boot (GF_SECURITY_ADMIN_PASSWORD
-    # is only read when grafana_data is empty). If a deploy dies between here and
-    # the OpenBao block, the box is left with an unguessable admin password
-    # instead of admin/admin. The cost is that Grafana gets recreated once more
-    # per deploy, when the OpenBao value replaces this line further down.
-    - name: "Grafana prep — write a GF_ADMIN_PASSWORD into .env BEFORE compose-up"
+    # This whole block used to run AFTER "Start DIGIT stack": the idea was that
+    # a tenant's first-ever deploy needs the containers' compose-inline defaults
+    # (POSTGRES_PASSWORD=egov123, MCP_DB_PASSWORD=mcp123, GF_ADMIN_PASSWORD
+    # unset, …) before OpenBao can hand out the real values, and a same-run
+    # ALTER ROLE + second `up -d` would sync everything after. That holds up on
+    # a genuinely fresh box, but "Write per-tenant compose .env" above
+    # unconditionally re-templates .env from scratch on EVERY run, with no
+    # memory of what a previous run's OpenBao step appended. So on any redeploy
+    # of an already-provisioned tenant, the first `up -d` starts with a
+    # password-less .env (compose falls back to the egov123/mcp123 defaults,
+    # and GF_ADMIN_PASSWORD is simply unset) while the Postgres/MCP-Postgres
+    # volumes already hold the REAL password a prior run's OpenBao step set via
+    # ALTER ROLE. db-history-normalize (and digit-mcp) then fail authentication,
+    # the whole `up -d` aborts, and the play never reaches the OpenBao section
+    # that would have fixed it — every redeploy fails the same way.
+    #
+    # Reading OpenBao and writing the real secrets into .env HERE, before any
+    # compose-up at all, fixes both cases: a first deploy's initdb now sees the
+    # real password directly (no placeholder round-trip needed), and a redeploy's
+    # .env matches what the volume already has from last time (OpenBao's stored
+    # secret doesn't change between runs). The ALTER-ROLE sync + second `up -d`
+    # further down stay in place as an idempotent safety net (e.g. an operator
+    # rotating a secret in vault out-of-band without also touching the running
+    # DB), but are no longer load-bearing for the common path.
+    #
+    # Bringing OpenBao (+ keycloak-postgres, when enable_keycloak) up here, ahead
+    # of the main stack, is what "Keycloak prep" used to do — gated on
+    # enable_keycloak, because only Keycloak's own converge-abort problem was
+    # recognized. It's unconditional now: every tenant needs its Postgres/MCP
+    # secrets synced this early, not just Keycloak ones.
+    #
+    # docker-compose.egov-digit.yaml resolves GF_SECURITY_ADMIN_PASSWORD from
+    # ${GF_ADMIN_PASSWORD:?} — no default. Compose interpolates the WHOLE file
+    # (every service, not just the ones named on the command line) before
+    # starting anything, so even `up -d openbao` alone needs GF_ADMIN_PASSWORD
+    # present in .env or it refuses to run at all. The real value isn't known
+    # until OpenBao answers a few tasks from now, so seed a random placeholder
+    # here first; "OpenBao — put the stored Grafana admin password into .env"
+    # below overwrites it with the authoritative value before anything but
+    # OpenBao (and optionally keycloak-postgres) has actually started, so
+    # Grafana itself only ever sees the real one.
+    - name: "Secrets prep — write a placeholder GF_ADMIN_PASSWORD into .env (compose needs it to interpolate at all)"
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
         regexp: '^GF_ADMIN_PASSWORD='
@@ -1769,106 +1803,260 @@
         mode: '0600'
       no_log: true
 
-    # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
-    # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
-    # secret is otherwise written to .env only AFTER it (the OpenBao block further
-    # down). So the first compose-up runs keycloak with the compose-default
-    # password, recreates keycloak/keycloak-postgres when .env later changes,
-    # keycloak races its DB / fails the healthcheck inside compose's dependency
-    # wait, and the whole play ABORTS — silently skipping every post-compose-up
-    # task (configurator build, overpass, etc.). Bring up OpenBao +
-    # keycloak-postgres, unseal, write the keycloak secrets to .env, and align the
-    # DB-user password HERE so the compose-up finds keycloak able to start healthy
-    # and the play runs to completion. All gated on enable_keycloak; idempotent.
-    - name: "Keycloak prep — bring up OpenBao + keycloak-postgres first"
-      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d openbao keycloak-postgres
+    - name: "Secrets prep — bring up OpenBao (+ keycloak-postgres when enable_keycloak) first"
+      ansible.builtin.shell: >-
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}
+        up -d openbao{{ ' keycloak-postgres' if (enable_keycloak | default(false)) else '' }}
       args:
         chdir: "{{ digit_dir }}"
       changed_when: true
-      when: enable_keycloak | default(false)
 
-    - name: "Keycloak prep — wait for OpenBao to bind 18200"
+    - name: "OpenBao — directory for init state"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/.openbao"
+        state: directory
+        mode: '0700'
+
+    - name: "OpenBao — wait for container to bind 18200"
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 18200
         timeout: 120
-      when: enable_keycloak | default(false)
 
-    - name: "Keycloak prep — load OpenBao init state"
+    - name: "OpenBao — check init status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/init
+        status_code: [200]
+      register: bao_init_status
+
+    - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
+      when: not bao_init_status.json.initialized
+      block:
+        - name: "OpenBao — operator init"
+          ansible.builtin.uri:
+            url: http://127.0.0.1:18200/v1/sys/init
+            method: POST
+            body_format: json
+            body:
+              secret_shares: 1
+              secret_threshold: 1
+            status_code: [200]
+          register: bao_init_response
+
+        - name: "OpenBao — persist init state"
+          ansible.builtin.copy:
+            dest: "{{ digit_dir }}/.openbao/init.json"
+            content: "{{ bao_init_response.json | to_nice_json }}"
+            mode: '0600'
+          no_log: true
+
+    - name: "OpenBao — load init state"
       ansible.builtin.slurp:
         src: "{{ digit_dir }}/.openbao/init.json"
-      register: kcprep_init
+      register: bao_init_file
       no_log: true
-      when: enable_keycloak | default(false)
 
-    - name: "Keycloak prep — parse OpenBao init state"
+    - name: "OpenBao — parse init state"
       ansible.builtin.set_fact:
-        kcprep_unseal_key: "{{ (kcprep_init.content | b64decode | from_json).keys_base64[0] }}"
-        kcprep_root_token: "{{ (kcprep_init.content | b64decode | from_json).root_token }}"
+        bao_unseal_key: "{{ (bao_init_file.content | b64decode | from_json).keys_base64[0] }}"
+        bao_root_token: "{{ (bao_init_file.content | b64decode | from_json).root_token }}"
       no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - kcprep_init.content is defined
 
-    - name: "Keycloak prep — read OpenBao seal status"
+    - name: "OpenBao — read seal status"
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/seal-status
         status_code: [200]
-      register: kcprep_seal
-      when:
-        - enable_keycloak | default(false)
-        - kcprep_root_token is defined
+      register: bao_seal_status
 
-    - name: "Keycloak prep — unseal OpenBao if sealed"
+    - name: "OpenBao — unseal if sealed"
+      when: bao_seal_status.json.sealed
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/unseal
         method: POST
         body_format: json
         body:
-          key: "{{ kcprep_unseal_key }}"
+          key: "{{ bao_unseal_key }}"
         status_code: [200]
       no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - kcprep_seal.json.sealed | default(false)
 
-    - name: "Keycloak prep — read secrets from OpenBao"
+    - name: "OpenBao — enable kv v2 mount at kv/ (idempotent)"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/mounts/kv
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          type: kv
+          options:
+            version: "2"
+        status_code: [204, 400]   # 400 = already exists (idempotent)
+      register: bao_kv_mount
+      failed_when: bao_kv_mount.status == 400 and 'path is already in use' not in (bao_kv_mount.json.errors | join(' '))
+      no_log: true
+
+    - name: "OpenBao — seed bootstrap secrets from host_vars (only writes missing keys)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body:
+          options:
+            cas: 0   # only write if no version exists yet — won't overwrite later edits
+          data: "{{ bootstrap_secrets | default({}) }}"
+        status_code: [200, 400]   # 400 = cas check failed (already seeded)
+      register: bao_seed
+      failed_when: bao_seed.status == 400 and 'check-and-set' not in (bao_seed.json.errors | join(' '))
+      when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
+      no_log: true
+
+    # ============================================================
+    # Pull live secrets back from OpenBao and write them into
+    # /opt/digit/.env — BEFORE the main stack ever starts. See the
+    # ordering-bug note at the top of this section.
+    # ============================================================
+    - name: "OpenBao — read tenant secrets for compose env"
       ansible.builtin.uri:
         url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
         headers:
-          X-Vault-Token: "{{ kcprep_root_token }}"
+          X-Vault-Token: "{{ bao_root_token }}"
         status_code: [200]
-      register: kcprep_secrets
+      register: bao_secrets
       no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - kcprep_root_token is defined
 
-    - name: "Keycloak prep — write KEYCLOAK SECRETS into .env BEFORE compose-up"
+    # Grafana admin password. Tenants seeded BEFORE this key existed can't get
+    # it from the bootstrap seed above (that write is cas:0 — it only fires when
+    # no version exists yet), so generate one here and persist it. After the
+    # first run the stored value is reused, which keeps the password stable
+    # across deploys. Operators read it back with:
+    #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+    #
+    # `or`, not `ternary`. Jinja evaluates every filter argument before calling
+    # the filter, so `… | ternary(stored, lookup('password', …))` runs the
+    # generator on every deploy and throws the result away whenever OpenBao
+    # already has a value. `or` compiles to Python's `or` and short-circuits, so
+    # the lookup only runs when there is nothing stored — which is also what the
+    # task name claims. (default('', true) turns both "undefined" and "" into the
+    # falsey '' that `or` needs.)
+    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
+      ansible.builtin.set_fact:
+        grafana_admin_pw: >-
+          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      no_log: true
+
+    - name: "OpenBao — persist generated Grafana admin password"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        # The whole body is ONE template expression on purpose: Ansible preserves
+        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
+        # across YAML keys it would render as the string "5" and the CAS check
+        # would depend on server-side weak decoding.
+        #
+        # cas = the version we just read. Without it this is a blind overwrite of
+        # the entire secret: anything written between our read and this write (a
+        # concurrent deploy, an operator running `bao kv put`) is silently lost,
+        # because `data` is built from the snapshot we read. With cas, a racing
+        # write makes OpenBao reject ours (400) and the deploy stops rather than
+        # clobbering. No retry loop: deploys are serialised per tenant, so a
+        # conflict means something genuinely unexpected touched the secret and a
+        # human should look before we overwrite it.
+        #
+        # `data` merges, never replaces — a bare {grafana_admin_password: …}
+        # write would drop every other key in this tenant's secret.
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+        status_code: [200]
+      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      no_log: true
+
+    - name: "OpenBao — write secrets into compose .env (idempotent block)"
       ansible.builtin.blockinfile:
         path: "{{ digit_dir }}/.env"
         block: |
-          KC_ADMIN_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_admin_password | default('') }}
-          KC_DB_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_db_password | default('') }}
-          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ kcprep_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+          # Pulled from OpenBao at deploy time. Edit via:
+          #   bao kv put {{ secrets_path }} <key>=<value>
+          # NOT by editing this file directly (it's regenerated each deploy).
+          POSTGRES_PASSWORD={{ bao_secrets.json.data.data.postgres_password }}
+          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
+          MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
+          MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
+          AWS_KEY={{ bao_secrets.json.data.data.minio_root_user }}
+          AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
+          ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
+          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+        marker: "# {mark} TENANT SECRETS"
+        create: false           # .env was already written by the digit.env.j2 template earlier
+        mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    # No earlier task writes a placeholder GF_ADMIN_PASSWORD= line any more —
+    # this IS the first writer now that Secrets prep runs before any compose-up
+    # — so it has to be able to create the line, not just replace an existing one.
+    - name: "OpenBao — put the stored Grafana admin password into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
+        create: true
+        mode: '0600'
+      no_log: true
+
+    # Keycloak-tier secrets — appended as a separate marked block so the
+    # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
+    # Default-empty strings so a missing key in OpenBao (e.g. first deploy
+    # before the operator filled them in) doesn't fail template rendering;
+    # the keycloak containers fail their healthcheck loudly enough the
+    # operator notices. Without this block the overlay's KC_ADMIN_PASSWORD
+    # defaults to "admin" in compose, which mismatches KC's actual admin
+    # password and breaks user provisioning silently.
+    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
         marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^KC_GOOGLE_CLIENT_SECRET='
+        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
         create: false
         mode: '0600'
       no_log: true
       when:
         - enable_keycloak | default(false)
-        - kcprep_secrets.json is defined
+        - (keycloak_google_client_id | default('')) | length > 0
 
-    - name: "Keycloak prep — align keycloak DB-user password to OpenBao value"
+    # keycloak-postgres is already up (brought up alongside openbao above, when
+    # enable_keycloak), so — unlike the main egov/mcp Postgres ALTERs further
+    # down, which need the main stack running — this can sync right here,
+    # before the main compose-up ever touches keycloak.
+    - name: "Secrets prep — align keycloak DB-user password to OpenBao value"
       ansible.builtin.shell: >-
         docker exec keycloak-postgres psql -U keycloak -d keycloak -c
-        "ALTER USER keycloak WITH PASSWORD '{{ kcprep_secrets.json.data.data.keycloak_db_password }}';"
+        "ALTER USER keycloak WITH PASSWORD '{{ bao_secrets.json.data.data.keycloak_db_password }}';"
       no_log: true
       changed_when: true
       failed_when: false
       when:
         - enable_keycloak | default(false)
-        - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
+        - bao_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
     # Same ordering trap as the KEYCLOAK SECRETS block above, for Novu (CCRS#1551).
     # .env is regenerated earlier in this play WITHOUT a NOVU_API_KEY line, and the
@@ -2495,249 +2683,14 @@
       changed_when: false
       when: enable_mcp | default(false)
 
-    # ==================== OpenBao bootstrap ====================
-    # Per-tenant secrets backend. Initialized once; subsequent runs
-    # auto-unseal using the keys captured at init. The init JSON lives
-    # at /opt/digit/.openbao/init.json (0600) — back it up out-of-band
-    # because losing it = losing access to every secret in this tenant's
-    # OpenBao until you re-init (which loses all stored secrets).
-
-    - name: "OpenBao — directory for init state"
-      ansible.builtin.file:
-        path: "{{ digit_dir }}/.openbao"
-        state: directory
-        mode: '0700'
-
-    - name: "OpenBao — wait for container to bind 18200"
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 18200
-        timeout: 60
-
-    - name: "OpenBao — check init status"
-      ansible.builtin.uri:
-        url: http://127.0.0.1:18200/v1/sys/init
-        status_code: [200]
-      register: bao_init_status
-
-    - name: "OpenBao — initialize if first deploy (writes init.json with 0600)"
-      when: not bao_init_status.json.initialized
-      block:
-        - name: "OpenBao — operator init"
-          ansible.builtin.uri:
-            url: http://127.0.0.1:18200/v1/sys/init
-            method: POST
-            body_format: json
-            body:
-              secret_shares: 1
-              secret_threshold: 1
-            status_code: [200]
-          register: bao_init_response
-
-        - name: "OpenBao — persist init state"
-          ansible.builtin.copy:
-            dest: "{{ digit_dir }}/.openbao/init.json"
-            content: "{{ bao_init_response.json | to_nice_json }}"
-            mode: '0600'
-          no_log: true
-
-    - name: "OpenBao — load init state"
-      ansible.builtin.slurp:
-        src: "{{ digit_dir }}/.openbao/init.json"
-      register: bao_init_file
-      no_log: true
-
-    - name: "OpenBao — parse init state"
-      ansible.builtin.set_fact:
-        bao_unseal_key: "{{ (bao_init_file.content | b64decode | from_json).keys_base64[0] }}"
-        bao_root_token: "{{ (bao_init_file.content | b64decode | from_json).root_token }}"
-      no_log: true
-
-    - name: "OpenBao — read seal status"
-      ansible.builtin.uri:
-        url: http://127.0.0.1:18200/v1/sys/seal-status
-        status_code: [200]
-      register: bao_seal_status
-
-    - name: "OpenBao — unseal if sealed"
-      when: bao_seal_status.json.sealed
-      ansible.builtin.uri:
-        url: http://127.0.0.1:18200/v1/sys/unseal
-        method: POST
-        body_format: json
-        body:
-          key: "{{ bao_unseal_key }}"
-        status_code: [200]
-      no_log: true
-
-    - name: "OpenBao — enable kv v2 mount at kv/ (idempotent)"
-      ansible.builtin.uri:
-        url: http://127.0.0.1:18200/v1/sys/mounts/kv
-        method: POST
-        headers:
-          X-Vault-Token: "{{ bao_root_token }}"
-        body_format: json
-        body:
-          type: kv
-          options:
-            version: "2"
-        status_code: [204, 400]   # 400 = already exists (idempotent)
-      register: bao_kv_mount
-      failed_when: bao_kv_mount.status == 400 and 'path is already in use' not in (bao_kv_mount.json.errors | join(' '))
-      no_log: true
-
-    - name: "OpenBao — seed bootstrap secrets from host_vars (only writes missing keys)"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
-        method: POST
-        headers:
-          X-Vault-Token: "{{ bao_root_token }}"
-        body_format: json
-        body:
-          options:
-            cas: 0   # only write if no version exists yet — won't overwrite later edits
-          data: "{{ bootstrap_secrets | default({}) }}"
-        status_code: [200, 400]   # 400 = cas check failed (already seeded)
-      register: bao_seed
-      failed_when: bao_seed.status == 400 and 'check-and-set' not in (bao_seed.json.errors | join(' '))
-      when: bootstrap_secrets is defined and bootstrap_secrets | length > 0
-      no_log: true
-
-    # ============================================================
-    # Pull live secrets back from OpenBao and write them into
-    # /opt/digit/.env. docker compose auto-loads .env from its
-    # working directory, so the next `up -d` (recreate-on-change)
-    # picks them up — services that reference ${POSTGRES_PASSWORD}
-    # etc. now read from OpenBao instead of compose-inline defaults.
-    # ============================================================
-    - name: "OpenBao — read tenant secrets for compose env"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
-        headers:
-          X-Vault-Token: "{{ bao_root_token }}"
-        status_code: [200]
-      register: bao_secrets
-      no_log: true
-
-    # Grafana admin password. Tenants seeded BEFORE this key existed can't get
-    # it from the bootstrap seed above (that write is cas:0 — it only fires when
-    # no version exists yet), so generate one here and persist it. After the
-    # first run the stored value is reused, which keeps the password stable
-    # across deploys. Operators read it back with:
-    #   bao kv get -field=grafana_admin_password {{ secrets_path }}
-    #
-    # `or`, not `ternary`. Jinja evaluates every filter argument before calling
-    # the filter, so `… | ternary(stored, lookup('password', …))` runs the
-    # generator on every deploy and throws the result away whenever OpenBao
-    # already has a value. `or` compiles to Python's `or` and short-circuits, so
-    # the lookup only runs when there is nothing stored — which is also what the
-    # task name claims. (default('', true) turns both "undefined" and "" into the
-    # falsey '' that `or` needs.)
-    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
-      ansible.builtin.set_fact:
-        grafana_admin_pw: >-
-          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
-             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
-      no_log: true
-
-    - name: "OpenBao — persist generated Grafana admin password"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
-        method: POST
-        headers:
-          X-Vault-Token: "{{ bao_root_token }}"
-        body_format: json
-        # The whole body is ONE template expression on purpose: Ansible preserves
-        # native types that way, so `cas` reaches OpenBao as a JSON number. Split
-        # across YAML keys it would render as the string "5" and the CAS check
-        # would depend on server-side weak decoding.
-        #
-        # cas = the version we just read. Without it this is a blind overwrite of
-        # the entire secret: anything written between our read and this write (a
-        # concurrent deploy, an operator running `bao kv put`) is silently lost,
-        # because `data` is built from the snapshot we read. With cas, a racing
-        # write makes OpenBao reject ours (400) and the deploy stops rather than
-        # clobbering. No retry loop: deploys are serialised per tenant, so a
-        # conflict means something genuinely unexpected touched the secret and a
-        # human should look before we overwrite it.
-        #
-        # `data` merges, never replaces — a bare {grafana_admin_password: …}
-        # write would drop every other key in this tenant's secret.
-        body: >-
-          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
-              'data': bao_secrets.json.data.data
-                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
-        status_code: [200]
-      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
-      no_log: true
-
-    - name: "OpenBao — write secrets into compose .env (idempotent block)"
-      ansible.builtin.blockinfile:
-        path: "{{ digit_dir }}/.env"
-        block: |
-          # Pulled from OpenBao at deploy time. Edit via:
-          #   bao kv put {{ secrets_path }} <key>=<value>
-          # NOT by editing this file directly (it's regenerated each deploy).
-          POSTGRES_PASSWORD={{ bao_secrets.json.data.data.postgres_password }}
-          MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
-          MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
-          MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
-          AWS_KEY={{ bao_secrets.json.data.data.minio_root_user }}
-          AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
-          ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
-          EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
-        marker: "# {mark} TENANT SECRETS"
-        create: false           # .env was already written by the digit.env.j2 template earlier
-        mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
-      no_log: true
-
-    # GF_ADMIN_PASSWORD is the one OpenBao-backed value that is NOT in the block
-    # above: "Grafana prep" already wrote a pre-boot line for it before the stack
-    # came up (the compose file has no default for it), and appending a second
-    # line inside the block would leave two GF_ADMIN_PASSWORD entries in .env
-    # with the winner decided by file order. Replace the existing line in place
-    # instead, so .env always has exactly one — now the authoritative value.
-    - name: "OpenBao — put the stored Grafana admin password into .env"
-      ansible.builtin.lineinfile:
-        path: "{{ digit_dir }}/.env"
-        regexp: '^GF_ADMIN_PASSWORD='
-        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
-        create: false
-        mode: '0600'
-      no_log: true
-
-    # Keycloak-tier secrets — appended as a separate marked block so the
-    # main TENANT SECRETS block stays untouched on Keycloak-free tenants.
-    # Default-empty strings so a missing key in OpenBao (e.g. first deploy
-    # before the operator filled them in) doesn't fail template rendering;
-    # the keycloak containers fail their healthcheck loudly enough the
-    # operator notices. Without this block the overlay's KC_ADMIN_PASSWORD
-    # defaults to "admin" in compose, which mismatches KC's actual admin
-    # password and breaks user provisioning silently.
-    - name: "OpenBao — write Keycloak secrets into compose .env (when enable_keycloak)"
-      ansible.builtin.blockinfile:
-        path: "{{ digit_dir }}/.env"
-        block: |
-          KC_ADMIN_PASSWORD={{ bao_secrets.json.data.data.keycloak_admin_password | default('') }}
-          KC_DB_PASSWORD={{ bao_secrets.json.data.data.keycloak_db_password | default('') }}
-          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ bao_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
-        marker: "# {mark} KEYCLOAK SECRETS"
-        create: false
-        mode: '0600'
-      no_log: true
-      when: enable_keycloak | default(false)
-
-    - name: "OpenBao — append Google IdP secret into compose .env (when configured)"
-      ansible.builtin.lineinfile:
-        path: "{{ digit_dir }}/.env"
-        regexp: '^KC_GOOGLE_CLIENT_SECRET='
-        line: "KC_GOOGLE_CLIENT_SECRET={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}"
-        create: false
-        mode: '0600'
-      no_log: true
-      when:
-        - enable_keycloak | default(false)
-        - (keycloak_google_client_id | default('')) | length > 0
+    # ==================== Post-stack: DB password safety net + observability settle ====================
+    # OpenBao itself, the secret read, and the .env write all now happen in
+    # "Secrets prep" above, BEFORE "Start DIGIT stack" — see the ordering-bug
+    # note there. What's left here needs the main stack actually running:
+    # ALTER ROLE against the live egov/mcp Postgres roles (idempotent no-op in
+    # the common case, since .env already matched before the containers ever
+    # started; a real safety net only for an out-of-band secret rotation), and
+    # settling the stack onto the new env / active observability tiers.
 
     # The first `up -d` started postgres with POSTGRES_PASSWORD=egov123
     # (the default before OpenBao secrets were available). initdb created
@@ -3713,6 +3666,7 @@
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
+          dashboard_roles: "{{ dashboard_allowed_roles }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -3737,6 +3691,7 @@
           mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
+          dashboard_roles: "{{ dashboard_allowed_roles }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -3949,11 +3904,29 @@
     # cached rule and re-POST until the tenant rule is live (200) or the user
     # already exists. Idempotent; non-pg tenants only.
     - name: "post-bootstrap — seed INTERNAL_USER on state_root (retry until tenant UserValidation is live)"
+      # _createnovalidate creates a user (here: SYSTEM/INTERNAL_MICROSERVICE_ROLE) with no
+      # validation and — like every other request — no RequestInfo.authToken here, since this
+      # is the bootstrap call that HAS no token yet. Kong's AUTH_OPTIONAL is a public gateway
+      # exemption (anyone reaching Kong skips auth entirely for that path), so routing this
+      # through Kong would mean adding an unauthenticated arbitrary-user-creation endpoint to
+      # the public gateway — never do that. The k8s reference deploy (devops/deploy-as-code/
+      # charts/core-services/user-onboard/templates/admin-user-job.yaml) calls egov-user
+      # directly over the internal service mesh instead, bypassing the gateway entirely; mirror
+      # that here via egov-user-proxy on the docker network (egovio/curl:latest is already
+      # pulled for this stack — see hrms-prereq-gate/user-seed-container in the compose files).
       ansible.builtin.shell: |
         body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 30); do
-          docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules >/dev/null 2>&1 || true
-          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          # egov-user actually caches this under egov-user:mobile-val:<tenantId>:<countryCode|default>
+          # (confirmed directly against a live box) — "validationRules" (the key this loop used to
+          # DEL) does not exist; that DEL was always a silent no-op, so a stale cached rule from an
+          # earlier deploy could make every attempt below fail against the WRONG regex forever.
+          # Pattern-match on state_root so it clears regardless of which countryCode suffix was cached.
+          stale_keys=$(docker exec {{ redis_container | default('digit-redis') }} redis-cli --scan --pattern "egov-user:mobile-val:{{ state_root }}:*" 2>/dev/null || true)
+          for k in $stale_keys; do
+            docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL "$k" >/dev/null 2>&1 || true
+          done
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ] || printf '%s' "$content" | grep -q DuplicateUserName; then
@@ -3990,10 +3963,14 @@
     # through to the same deterministic candidate — see
     # filter_plugins/mobile.py's `_seeded_digit_order` docstring.
     - name: "post-bootstrap — ensure ADMIN exists on state_root (MCP bootstrap may miss it in the validation window)"
+      # Same reasoning as the INTERNAL_USER seed above: no authToken exists yet for this
+      # bootstrap call, so it must bypass Kong (never add _createnovalidate to Kong's
+      # AUTH_OPTIONAL — that would make arbitrary unauthenticated user/role creation, including
+      # SUPERUSER, public) and hit egov-user directly over the internal docker network instead.
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"},{"code":"ACCOUNT_ADMIN","name":"Account Admin","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 6); do
-          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          resp=$(docker run --rm --network "{{ digit_dir | basename }}_egov-network" egovio/curl:latest curl -s -w '\n%{http_code}' -X POST "http://egov-user-proxy:8107/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
           code=$(printf '%s' "$resp" | tail -n1)
           content=$(printf '%s' "$resp" | sed '$d')
           if [ "$code" = "200" ]; then echo "CHANGED ADMIN created on {{ state_root }} (attempt $i)"; exit 0; fi
@@ -4069,6 +4046,36 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # digit-mcp is a long-lived Node process that has been up since well before this
+    # point — it never gets recreated by "recreate services (except egov-hrms)" above (it
+    # isn't named in that command) or by the egov-hrms restart. It holds its own
+    # connections to egov-user/egov-hrms, which WERE just recreated (new containers, new
+    # IPs), so its connection pool to them is stale. "wait for egov-user via Kong" above
+    # only proves egov-user itself is reachable — not that digit-mcp's OWN pooled
+    # connections to it have recovered. Confirmed directly: replaying the exact
+    # /v1/tenant/bootstrap call below by hand always succeeds; the automated retries here
+    # (even widened to 3 minutes) do not, until digit-mcp is bounced. Recreating it here
+    # forces fresh connections before the call that actually matters.
+    - name: "post-bootstrap — recreate digit-mcp to drop stale connections to just-restarted egov-user/egov-hrms"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate digit-mcp
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when:
+        - state_root != 'pg'
+        - enable_mcp | default(false)
+
+    - name: "post-bootstrap — wait for digit-mcp health after recreate (up to 2 min)"
+      ansible.builtin.shell: curl -sf http://127.0.0.1:13101/healthz -o /dev/null
+      register: mcp_health_post_recreate
+      retries: 12
+      delay: 10
+      until: mcp_health_post_recreate.rc == 0
+      changed_when: false
+      when:
+        - state_root != 'pg'
+        - enable_mcp | default(false)
+
     # egov-user's EncryptionDecryptionUtil.encryptObject() uses stateLevelTenantId
     # (STATE_LEVEL_TENANT_ID env var) as the enc key — not the user's tenantId.
     # Bootstrap runs while STATE_LEVEL=pg → ADMIN@mz stored with pg's enc key.
@@ -4078,64 +4085,75 @@
     # the new ADMIN row is stored with mz's enc key. configurator-i18n login
     # finds this row and succeeds.
     - name: "post-bootstrap — re-provision ADMIN with state_root enc key (user_only)"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
-        method: POST
-        headers:
-          Content-Type: application/json
-        body_format: json
-        body:
-          target_tenant: "{{ state_root }}"
-          source_tenant: "pg"
-          user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
-          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
-          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
-          # defaults) so user_only re-provisions THAT user with THAT password —
-          # env auth used to provision ADMIN/eGov@123 while the custom
-          # bootstrap_user kept a password the operator never set, and the
-          # configurator-i18n token mint right after 400'd until lockout.
-          auth:
-            username: "{{ bootstrap_user | default('ADMIN') }}"
-            password: "{{ bootstrap_password | default('eGov@123') }}"
-            tenant_id: "pg"
-        status_code: [200]
-        timeout: 60
+      # digit-mcp holds its own session/connection to egov-user, established before the
+      # "recreate egov-hrms"/"wait for egov-user via Kong" tasks above restarted it — the FIRST
+      # call right after that restart can land on a stale session and fail even though egov-user
+      # itself is already healthy (confirmed: replaying this exact call by hand moments after a
+      # failure succeeds every time).
+      #
+      # Deliberately a shell curl loop, not ansible.builtin.uri + until/retries: that combo hit a
+      # real ansible-core edge case here — on the boundary (last) attempt the registered result's
+      # OWN data showed status=200 and admin_user_provisioned=true (confirmed by temporarily
+      # disabling no_log and inspecting the raw failure), yet the task still reported
+      # failed_when_result=true and aborted the play. until and failed_when are exact logical
+      # negations of each other over the same fields, so they cannot both fire true against the
+      # same data — something in how the module's retry loop finalizes the registered var on the
+      # last iteration disagreed with failed_when's own read of it. Rather than chase that
+      # ansible-core quirk further, this mirrors the INTERNAL_USER seed task above (a plain shell
+      # retry loop with a bash-side pass/fail check), which has been reliable all session.
+      #
+      # body.auth authenticates as the operator's bootstrap user (not MCP's CRS_* env
+      # defaults) so user_only re-provisions THAT user with THAT password — env auth
+      # used to provision ADMIN/eGov@123 while the custom bootstrap_user kept a
+      # password the operator never set, and the configurator-i18n token mint right
+      # after 400'd until lockout.
+      ansible.builtin.shell: |
+        body='{"target_tenant":"{{ state_root }}","source_tenant":"pg","user_only":true,"mobile_regex":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}","mobile_prefix":"{{ core_mobile_configs.countryCode | default('') }}","auth":{"username":"{{ bootstrap_user | default('ADMIN') }}","password":"{{ bootstrap_password | default('eGov@123') }}","tenant_id":"pg"}}'
+        for i in $(seq 1 18); do
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:13101/v1/tenant/bootstrap" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ] && printf '%s' "$content" | grep -q '"admin_user_provisioned":true'; then
+            echo "CHANGED ADMIN re-provisioned on {{ state_root }} (attempt $i/18, http=$code)"
+            exit 0
+          fi
+          echo "attempt $i/18: http=$code $(printf '%s' "$content" | head -c 200)"
+          sleep 10
+        done
+        echo "ADMIN re-provision on {{ state_root }} failed after 18 attempts" >&2
+        exit 1
+      args:
+        chdir: "{{ digit_dir }}"
       register: mcp_rekey_root
-      failed_when: >-
-        mcp_rekey_root.status != 200 or
-        not (mcp_rekey_root.json.admin_user_provisioned | default(false))
+      changed_when: "'CHANGED' in (mcp_rekey_root.stdout | default(''))"
+      failed_when: mcp_rekey_root.rc != 0
       when: state_root != 'pg'
       no_log: true
 
     - name: "post-bootstrap — re-provision ADMIN with city enc key (user_only)"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
-        method: POST
-        headers:
-          Content-Type: application/json
-        body_format: json
-        body:
-          target_tenant: "{{ tenant_id }}"
-          source_tenant: "pg"
-          user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
-          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
-          # Authenticate as the operator's bootstrap user (not MCP's CRS_* env
-          # defaults) so user_only re-provisions THAT user with THAT password —
-          # env auth used to provision ADMIN/eGov@123 while the custom
-          # bootstrap_user kept a password the operator never set, and the
-          # configurator-i18n token mint right after 400'd until lockout.
-          auth:
-            username: "{{ bootstrap_user | default('ADMIN') }}"
-            password: "{{ bootstrap_password | default('eGov@123') }}"
-            tenant_id: "pg"
-        status_code: [200]
-        timeout: 60
+      # Same stale-session race, and same ansible-core until/failed_when edge case, as the
+      # state_root task above — see its comment. body.auth carries the operator's bootstrap
+      # credentials for the same reason as the state_root task above.
+      ansible.builtin.shell: |
+        body='{"target_tenant":"{{ tenant_id }}","source_tenant":"pg","user_only":true,"mobile_regex":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}","mobile_prefix":"{{ core_mobile_configs.countryCode | default('') }}","auth":{"username":"{{ bootstrap_user | default('ADMIN') }}","password":"{{ bootstrap_password | default('eGov@123') }}","tenant_id":"pg"}}'
+        for i in $(seq 1 18); do
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:13101/v1/tenant/bootstrap" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ] && printf '%s' "$content" | grep -q '"admin_user_provisioned":true'; then
+            echo "CHANGED ADMIN re-provisioned on {{ tenant_id }} (attempt $i/18, http=$code)"
+            exit 0
+          fi
+          echo "attempt $i/18: http=$code $(printf '%s' "$content" | head -c 200)"
+          sleep 10
+        done
+        echo "ADMIN re-provision on {{ tenant_id }} failed after 18 attempts" >&2
+        exit 1
+      args:
+        chdir: "{{ digit_dir }}"
       register: mcp_rekey_city
-      failed_when: >-
-        mcp_rekey_city.status != 200 or
-        not (mcp_rekey_city.json.admin_user_provisioned | default(false))
+      changed_when: "'CHANGED' in (mcp_rekey_city.stdout | default(''))"
+      failed_when: mcp_rekey_city.rc != 0
       when: state_root != 'pg' and tenant_id != state_root
       no_log: true
 

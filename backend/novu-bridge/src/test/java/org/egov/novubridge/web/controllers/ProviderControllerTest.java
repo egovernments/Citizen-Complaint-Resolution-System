@@ -53,6 +53,10 @@ class ProviderControllerTest {
                 new NovuProviderStrategyFactory(List.of(twilio, generic), generic);
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
         controller = new ProviderController(novuClient, factory, dispatchLogRepository, twilioTemplateSyncService);
+        // Default: pass overrides through unchanged, as if no dedicated WhatsApp
+        // integration were configured (NovuClient's own no-op default).
+        when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     private NovuClient.NovuResponse novuResp(int status, Map<String, Object> body) {
@@ -287,6 +291,40 @@ class ProviderControllerTest {
         assertEquals("{\"1\":\"CMP-1\",\"2\":\"ASSIGNED\"}", body.get("contentVariables"));
 
         verify(dispatchLogRepository).upsert(any(DispatchLogEntry.class));
+    }
+
+    @Test
+    void testSend_whatsapp_appliesSameIntegrationOverrideAsLiveDispatch() {
+        // Simulate a configured dedicated WhatsApp integration the way NovuClient's real
+        // applyWhatsappIntegrationOverride would merge it in.
+        when(novuClient.applyWhatsappIntegrationOverride(anyMap(), eq("WHATSAPP")))
+                .thenAnswer(inv -> {
+                    Map<String, Object> merged = new LinkedHashMap<>(inv.getArgument(0, Map.class));
+                    merged.put("sms", Map.of("integrationIdentifier", "twilio-whatsapp"));
+                    return merged;
+                });
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
+                anyString(), nullable(Map.class), nullable(String.class)))
+                .thenReturn(novuResp(201, Map.of("acknowledged", true)));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "WHATSAPP");
+        req.put("to", Map.of("phone", "+14155550123"));
+        req.put("contentSid", "HX1234567890abcdef1234567890abcdef");
+
+        controller.testSend(req);
+
+        ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), anyString(), anyMap(),
+                anyString(), overrides.capture(), isNull());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sms = (Map<String, Object>) overrides.getValue().get("sms");
+        assertEquals("twilio-whatsapp", sms.get("integrationIdentifier"),
+                "test-send must route through the same integration override as live dispatch, "
+                        + "otherwise it validates the wrong Twilio integration");
+        // The Twilio Content SID override built for the test send must still be present alongside it.
+        assertTrue(overrides.getValue().containsKey("providers"), "content template override must survive the merge");
     }
 
     @Test

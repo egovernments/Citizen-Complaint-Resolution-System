@@ -550,6 +550,16 @@
        appearance: none;
 }
 
+/* Language switcher chip (standalone/public header, #1797): match the
+     header buttons' 2rem height so the controls row stays one line. */
+
+.dashboard-header-controls .dashboard-language-chip{
+  height: 2rem;
+  min-height: 2rem;
+  min-width: 0px;
+  flex-shrink: 0;
+}
+
 .dashboard-header-controls .dashboard-header-btn:hover{
   background-color: var(--muted);
 }

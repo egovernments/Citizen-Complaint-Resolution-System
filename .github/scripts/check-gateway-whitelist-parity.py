@@ -38,6 +38,8 @@ _ENTRY = re.compile(r'\["(/[^"]+)"\]\s*=\s*true')
 KONG_ONLY_AUTH_OPTIONAL = {
     "/pgr-services/v2/analytics/public/packs",
     "/pgr-services/v2/analytics/public/_query",
+    "/pgr-services/v2/analytics/public/catalog/_search",
+    "/pgr-services/v2/analytics/public/_options",
 }
 
 

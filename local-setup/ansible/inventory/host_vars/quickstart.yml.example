@@ -151,10 +151,12 @@ core_postal_configs:
 # on a local deployment — file uploads go to the built-in MinIO service.
 asset_s3_bucket: "mycity-egov-assets"
 
-# Footer logos in the citizen and employee UI. Absolute URLs, or empty for
-# none. You can add these later without redeploying anything else.
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 # ────────── What to run ──────────
 

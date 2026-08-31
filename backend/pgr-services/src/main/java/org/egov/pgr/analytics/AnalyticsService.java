@@ -1,12 +1,13 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.egov.pgr.analytics.model.KpiDefinition;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,34 +44,111 @@ public class AnalyticsService {
             "current_assignee_uuid", "assignee_uuid", "actor_uuid", "account_id");
 
     /**
-     * Roles allowed to project officer-PII dimensions on an INLINE analytics query.
-     * Mirrors the officer-PII KPI defs' {@code rbac.visibleTo}
-     * (KpiDefinition.json uses {@code ["PGR_SUPERVISOR","PGR_ADMIN","SUPERUSER"]}; bomet's
-     * live ke seed uses {@code SUPERVISOR}) plus the platform admin roles. Include BOTH
-     * supervisor codes so a legit supervisor is never wrongly denied across tenants. The
-     * kpiId-by-reference path already enforces {@code visibleTo} via
-     * {@link KpiDefinition#isVisibleTo}; this constant gates only the inline path.
-     */
-    static final Set<String> OFFICER_PII_ROLES = Set.of(
-            "SUPERVISOR", "PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN");
-
-    /**
      * Synthetic role for an unauthenticated / no-role caller (the "public floor", 70-view-management
      * §"Public (no login)"). An anonymous request degrades to THIS rather than to unrestricted-admin:
      * it may see only KPIs whose {@code rbac.visibleTo} explicitly lists {@code PUBLIC} (curated,
      * aggregate-only, no PII), and may NOT run inline (non-kpiId) queries. Tenant-aggregate scope is
      * still applied. This is the deliberate "degrade-to-public-floor", not a blanket lock-out.
      */
-    static final String PUBLIC_ROLE = "PUBLIC";
-
     /** Hard request budget: batch entries execute sequentially and each may hit PostgreSQL. */
     static final int MAX_BATCH_QUERIES = 50;
+
+    /**
+     * The only query params a PUBLIC-floor caller may attach to a KPI reference (#1797): the
+     * dashboard's global filter bar. Enforced HERE — on every path that resolves a kpiId for the
+     * public floor, not only the {@code /public/_query} alias — because Kong's audit mode
+     * ({@code ENFORCE_UNAUTH=false}) still lets an anonymous body reach {@code /_query}, where it
+     * degrades to the same PUBLIC floor. Each is a narrowing predicate the composer layers under
+     * the def's own query; none can switch the aggregation level ({@code hierLevel}), fan out
+     * companions ({@code compare}/{@code series}) or override the def's named {@code window}.
+     * Values are scalar strings, length-capped, and dates must be ISO calendar days supplied as a
+     * pair.
+     */
+    static final Set<String> PUBLIC_QUERY_PARAMS =
+            Set.of("dateFrom", "dateTo", "ward", "serviceCode", "complaintPath");
+    static final int PUBLIC_QUERY_PARAM_MAX_LENGTH = 128;
+    private static final java.util.regex.Pattern ISO_DAY =
+            java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+
+    /**
+     * Public narrowing param -> the grain column it binds. A PUBLIC def that already filters that
+     * column (e.g. "water complaints" with a baked {@code service_code} eq) must keep its own
+     * predicate: the composer's {@link KpiQueryComposer} REPLACES an existing eq rather than
+     * intersecting with it, which for an anonymous caller would turn a curated subset tile into
+     * a "count anything" primitive. Such params are dropped and reported as {@code paramsIgnored}.
+     */
+    private static final Map<String,String> PUBLIC_PARAM_COLUMNS = Map.of(
+            "ward", "ward_code",
+            "serviceCode", "service_code",
+            "complaintPath", "complaint_node_path");
+
+    /**
+     * Rebuild a public ref's {@code params} from the allow-list. Returns null for an absent or
+     * empty object (the ref stays bare); throws {@code invalid_param} for any foreign key,
+     * non-scalar or blank value, over-long value, non-ISO-day date, or incomplete date range.
+     */
+    static ObjectNode sanitizePublicParams(JsonNode params) {
+        if (params == null || params.isNull()) return null;
+        if (!params.isObject())
+            throw new IllegalArgumentException("invalid_param: public params must be an object");
+        if (params.isEmpty()) return null;
+        ObjectNode clean = JsonNodeFactory.instance.objectNode();
+        for (Iterator<Map.Entry<String,JsonNode>> it = params.fields(); it.hasNext();) {
+            Map.Entry<String,JsonNode> e = it.next();
+            String name = e.getKey();
+            JsonNode v = e.getValue();
+            if (!PUBLIC_QUERY_PARAMS.contains(name))
+                throw new IllegalArgumentException("invalid_param: public queries accept only "
+                        + new TreeSet<>(PUBLIC_QUERY_PARAMS) + "; got '" + name + "'");
+            if (v == null || !v.isValueNode() || v.isNull() || v.asText().trim().isEmpty())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be a non-empty scalar value");
+            String text = v.asText().trim();
+            if (text.length() > PUBLIC_QUERY_PARAM_MAX_LENGTH)
+                throw new IllegalArgumentException("invalid_param: " + name + " exceeds "
+                        + PUBLIC_QUERY_PARAM_MAX_LENGTH + " characters");
+            if ((name.equals("dateFrom") || name.equals("dateTo")) && !ISO_DAY.matcher(text).matches())
+                throw new IllegalArgumentException("invalid_param: " + name + " must be yyyy-MM-dd");
+            clean.put(name, text);
+        }
+        if (clean.has("dateFrom") != clean.has("dateTo"))
+            throw new IllegalArgumentException(
+                    "invalid_param: dateFrom and dateTo must be supplied together");
+        return clean;
+    }
+
+    /**
+     * Public-floor view of a kpiId reference: {@code kpiId} plus sanitized {@code params} and
+     * nothing else. Inline bodies are rejected by the caller before this runs.
+     */
+    static ObjectNode publicFloorRef(JsonNode queryNode) {
+        ObjectNode ref = JsonNodeFactory.instance.objectNode();
+        ref.set("kpiId", queryNode.get("kpiId"));
+        ObjectNode params = sanitizePublicParams(queryNode.get("params"));
+        if (params != null) ref.set("params", params);
+        return ref;
+    }
+
+    /** Drop public params whose column the def's own query already filters (see PUBLIC_PARAM_COLUMNS). */
+    private static JsonNode withoutBakedNarrowings(KpiDefinition def, JsonNode params, List<String> paramsIgnored) {
+        if (params == null || !params.isObject()) return params;
+        JsonNode filters = def.getQuery() == null ? null : def.getQuery().get("filters");
+        if (filters == null || !filters.isObject()) return params;
+        ObjectNode out = null;
+        for (Map.Entry<String,String> e : PUBLIC_PARAM_COLUMNS.entrySet()) {
+            if (params.has(e.getKey()) && filters.has(e.getValue())) {
+                if (out == null) out = ((ObjectNode) params).deepCopy();
+                out.remove(e.getKey());
+                if (paramsIgnored != null && !paramsIgnored.contains(e.getKey())) paramsIgnored.add(e.getKey());
+            }
+        }
+        return out == null ? params : out;
+    }
 
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
     private final KpiCatalogService kpiCatalogService;
-    private final PrincipalScopeResolver scopeResolver;
+    private final AnalyticsRowScopeResolver scopeResolver;
     private final KpiQueryComposer queryComposer;
     private final AnalyticsMetrics metrics;
     private final PGRConfiguration config;
@@ -79,7 +157,7 @@ public class AnalyticsService {
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
-                            KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
+                            KpiCatalogService kpiCatalogService, AnalyticsRowScopeResolver scopeResolver,
                             KpiQueryComposer queryComposer, AnalyticsMetrics metrics,
                             PGRConfiguration config){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
@@ -88,8 +166,9 @@ public class AnalyticsService {
     }
 
     /** Back-compat entry point (no trace correlation header). */
-    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
-        return query(body, requestInfo, tenantId, stateLevelLen, null);
+    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, AnalyticsCapabilities capabilities,
+                                    String tenantId, int stateLevelLen){
+        return query(body, requestInfo, capabilities, tenantId, stateLevelLen, null);
     }
 
     /**
@@ -101,24 +180,32 @@ public class AnalyticsService {
      * @param headerTraceId the literal {@code x-trace-id} header — correlation FALLBACK only;
      *                      the active span's trace id (javaagent + Kong w3c propagation) wins.
      */
-    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId,
-                                    int stateLevelLen, String headerTraceId){
+    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, AnalyticsCapabilities capabilities,
+                                    String tenantId, int stateLevelLen, String headerTraceId){
         QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
         try {
-            return doQuery(body, requestInfo, tenantId, stateLevelLen, tel);
+            return doQuery(body, requestInfo, capabilities, tenantId, stateLevelLen, tel);
         } finally {
             if (!tel.isEmpty())
                 log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
         }
     }
 
-    private Map<String,Object> doQuery(JsonNode body, RequestInfo requestInfo, String tenantId,
-                                       int stateLevelLen, QueryTelemetry tel){
+    private Map<String,Object> doQuery(JsonNode body, RequestInfo requestInfo, AnalyticsCapabilities capabilities,
+                                       String tenantId, int stateLevelLen, QueryTelemetry tel){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         if (body.has("queries")) validateBatchSize(body.get("queries"));
-        AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
-        Set<String> callerRoles = extractRoles(requestInfo);
-        boolean publicFloor = isPublicFloor(callerRoles);
+        // Action 2008's authored policy, resolved by the ABAC engine — the identical scope
+        // /v2/request/_search runs under, so the two surfaces cannot disagree about a caller.
+        //
+        // The anonymous surface has no identity to resolve, so it never asks. Sending it down the
+        // policy path would fail the request outright: with no roles there is no role-scoped action
+        // lookup to make, and the engine correctly refuses rather than guessing. Its scope is the
+        // tenant aggregate, and what it may SEE is decided by the catalog's own `public` markers.
+        PgrSearchScope scope = capabilities.isPublicSurface()
+                ? AnalyticsRowScopeResolver.publicSurfaceScope(tenantId, isStateLevel(tenantId, stateLevelLen))
+                : scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
+        boolean publicFloor = capabilities.isPublicSurface();
 
         // Data freshness and request time are deliberately separate. factsAsOfMs may be null for an
         // empty materialized view, while named windows must use the current request instant rather
@@ -152,25 +239,28 @@ public class AnalyticsService {
                                 "message", "public access is limited to published PUBLIC KPIs"));
                         continue;
                     }
+                    // ... and only the filter-bar params (#1797) — an out-of-list param is a
+                    // per-entry invalid_param, whichever gateway path the body arrived through.
+                    if (publicFloor) queryNode = publicFloorRef(queryNode);
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
-                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name, calendar);
+                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, capabilities, tel, name, calendar);
                     if (composed != null) { results.put(name, composed); continue; }
 
                     List<String> paramsIgnored = new ArrayList<>();
-                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored, calendar);
+                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, capabilities, paramsIgnored, calendar);
                     if (actualQueryNode == null) {
                         partial = true;
                         results.put(name, Map.of("error", "kpi_forbidden",
-                                "message", "KPI not found or not authorized for role set"));
+                                "message", "KPI not found or not authorized for this caller"));
                         continue;
                     }
                     // INLINE-only PII gate: the kpiId path already enforced visibleTo above; an inline
                     // body (no kpiId) bypasses that, so block inline projection of officer-PII dimensions
                     // unless the caller holds an officer-PII-authorized role.
-                    if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles)) {
+                    if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, capabilities)) {
                         partial = true;
                         results.put(name, Map.of("error", "pii_forbidden",
-                                "message", "inline query projects officer-PII dimension(s); role not authorized"));
+                                "message", "inline query projects officer-PII dimension(s); caller lacks the officer capability"));
                         continue;
                     }
                     Map<String,Object> result = runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode), calendar);
@@ -187,19 +277,114 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
-            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query", calendar);
+            if (publicFloor) queryNode = publicFloorRef(queryNode);
+            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, capabilities, tel, "query", calendar);
             if (composed != null) { out.putAll(composed); return out; }
             List<String> paramsIgnored = new ArrayList<>();
-            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored, calendar);
+            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, capabilities, paramsIgnored, calendar);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
-            if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
-                throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
+            if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, capabilities))
+                throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); caller lacks the officer capability");
             out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode), calendar));
             if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
+        return out;
+    }
+
+    /** Same state-level test the scope resolvers use, for the anonymous tenant-only scope. */
+    private static boolean isStateLevel(String tenantId, int stateLevelLen) {
+        return tenantId != null && tenantId.split("\\.").length == stateLevelLen;
+    }
+
+    /**
+     * The two filter-bar option sources the dashboard derives from ABAC-scoped distincts (the
+     * employee FE posts these verbatim as an inline batch; see useFilterOptions.OPTION_QUERIES).
+     * Fixed server-owned shape so the public arm can serve them without accepting an inline body.
+     */
+    static final String PUBLIC_OPTIONS_WARDS = "wards";
+    static final String PUBLIC_OPTIONS_COMPLAINT_TYPES = "complaintTypes";
+    private static final int PUBLIC_OPTIONS_LIMIT = 300;
+
+    /**
+     * Anonymous filter-bar options (#1797). The public floor forbids inline queries — an inline
+     * body bypasses the catalog's PUBLIC opt-in — so the two distinct-dimension queries the
+     * employee filter bar runs inline are built HERE from constants, with no caller input beyond
+     * the tenant, and executed under the anonymous tenant-aggregate scope. The response mirrors
+     * the batch envelope ({@code results.wards.rows[].ward_code},
+     * {@code results.complaintTypes.rows[].service_code}) so the dashboard's option builder is
+     * shared between the two surfaces, but the per-code counts are dropped: a public caller
+     * learns WHICH codes carry complaints, never how many.
+     */
+    public Map<String,Object> publicFilterOptions(String tenantId, int stateLevelLen, String headerTraceId){
+        if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
+        try {
+            PgrSearchScope scope = AnalyticsRowScopeResolver.publicSurfaceScope(
+                    tenantId, isStateLevel(tenantId, stateLevelLen));
+            BusinessCalendar calendar = BusinessCalendar.of(
+                    kpiCatalogService.resolveTimeZone(tenantId), requestClock.getAsLong());
+            Map<String,Object> results = new LinkedHashMap<>();
+            boolean partial = false;
+            Map<String,String> sources = new LinkedHashMap<>();
+            sources.put(PUBLIC_OPTIONS_WARDS, "ward_code");
+            sources.put(PUBLIC_OPTIONS_COMPLAINT_TYPES, "service_code");
+            for (Map.Entry<String,String> src : sources.entrySet()) {
+                try {
+                    Map<String,Object> r = runOne(distinctDimensionQuery(src.getValue()), scope, tel,
+                            src.getKey(), "public-options", calendar);
+                    results.put(src.getKey(), codesOnly(r, src.getValue()));
+                } catch (Exception ex) {
+                    // Anonymous envelope: the driver/SQL detail belongs only in the server log.
+                    log.warn("public filter options: {} distinct failed", src.getKey(), ex);
+                    partial = true;
+                    results.put(src.getKey(), Map.of("error", "query_failed",
+                            "message", "filter options are unavailable"));
+                }
+            }
+            Map<String,Object> out = new LinkedHashMap<>();
+            out.put("asOf", asOf());
+            out.put("calendar", calendarInfo(calendar));
+            out.put("scope", scopeInfo(scope));
+            out.put("results", results);
+            out.put("partial", partial);
+            return out;
+        } finally {
+            if (!tel.isEmpty())
+                log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
+        }
+    }
+
+    /** {@code SELECT <dimension>, count(*) FROM facts (all time)} — the filter bar's distinct source. */
+    private JsonNode distinctDimensionQuery(String dimension) {
+        ObjectNode q = JsonNodeFactory.instance.objectNode();
+        q.put("grain", "facts");
+        q.putObject("window").put("name", "all");
+        q.putArray("dimensions").add(dimension);
+        q.putArray("measures").addObject().put("name", "n").put("agg", "count");
+        q.put("limit", PUBLIC_OPTIONS_LIMIT);
+        return q;
+    }
+
+    /** Project a distinct result down to its dimension column: no counts, no timing. */
+    @SuppressWarnings("unchecked")
+    private static Map<String,Object> codesOnly(Map<String,Object> result, String dimension) {
+        List<Map<String,Object>> rows = new ArrayList<>();
+        Object rawRows = result.get("rows");
+        if (rawRows instanceof List) {
+            for (Object row : (List<Object>) rawRows) {
+                if (!(row instanceof Map)) continue;
+                Object code = ((Map<String,Object>) row).get(dimension);
+                if (code == null || code.toString().trim().isEmpty()) continue;
+                rows.add(Collections.singletonMap(dimension, code));
+            }
+        }
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("columns", Collections.singletonList(dimension));
+        out.put("rows", rows);
+        out.put("rowCount", rows.size());
         return out;
     }
 
@@ -226,7 +411,7 @@ public class AnalyticsService {
      *                      the path-less daily grain) — surfaced on the result envelope as
      *                      {@code paramsIgnored:[...]}
      */
-    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles,
+    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, AnalyticsCapabilities capabilities,
                                    List<String> paramsIgnored, BusinessCalendar calendar) {
         // Inline path: the suppression marker is composer-internal, so a caller-supplied one is
         // stripped rather than trusted. Replaying a logged effective query (which legitimately
@@ -236,13 +421,25 @@ public class AnalyticsService {
 
         String kpiId = queryNode.get("kpiId").asText();
         Optional<KpiDefinition> def = kpiCatalogService.getDef(kpiId, tenantId);
-        if (def.isEmpty() || !def.get().isPublished() || !def.get().isVisibleTo(callerRoles)) {
-            log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
+        if (def.isEmpty() || !def.get().isPublished() || !capabilities.canSee(def.get())) {
+            log.debug("kpiId '{}' not found or not reachable by capabilities {}", kpiId, capabilities.granted());
             return null;
         }
+        boolean publicFloor = capabilities.isPublicSurface();
+        // Public floor (#1797): a caller param may not displace a predicate the PUBLIC def bakes
+        // itself. Do this before defaults so a rejected caller param is still reported accurately.
+        JsonNode callerParams = publicFloor
+                ? withoutBakedNarrowings(def.get(), queryNode.get("params"), paramsIgnored)
+                : queryNode.get("params");
         // #1026: apply the def's declared params[].default for any param the caller omitted.
         // Precedence: explicit caller param > declared default > the def's baked query.
-        JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
+        JsonNode effectiveParams = withDeclaredDefaults(def.get(), callerParams);
+        // A declared default is server configuration rather than a caller-supplied param, but it
+        // must obey the same PUBLIC invariant: it cannot redefine a KPI whose identity is baked
+        // into its query. Do not report such a default as ignored input because the caller did not
+        // supply it.
+        if (publicFloor)
+            effectiveParams = withoutBakedNarrowings(def.get(), effectiveParams, null);
 
         // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
         // params.allowed allow-list (the def is in scope here). An out-of-list value (window,
@@ -336,8 +533,8 @@ public class AnalyticsService {
      * with the kpiId path). Ports the 4 ops from the FE {@code composeKpi.js}: {@code dailyAvgFromWeekly},
      * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
      */
-    private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
-                                                  String tenantId, Set<String> callerRoles,
+    private Map<String,Object> maybeComposeResult(JsonNode queryNode, PgrSearchScope scope,
+                                                  String tenantId, AnalyticsCapabilities capabilities,
                                                   QueryTelemetry tel, String entryName,
                                                   BusinessCalendar calendar) {
         if (queryNode == null || !queryNode.has("kpiId")) return null;
@@ -346,8 +543,8 @@ public class AnalyticsService {
         if (defOpt.isEmpty() || !isComposeDef(defOpt.get())) return null;   // not a compose ref → normal path
 
         KpiDefinition def = defOpt.get();
-        if (!def.isPublished() || !def.isVisibleTo(callerRoles))
-            return Map.of("error", "kpi_forbidden", "message", "KPI not found or not authorized for role set");
+        if (!def.isPublished() || !capabilities.canSee(def))
+            return Map.of("error", "kpi_forbidden", "message", "KPI not found or not authorized for this caller");
 
         // #1026: apply the compose def's declared params[].default before validation/propagation,
         // so a bare {kpiId} compose ref honours its declared defaults too (explicit caller wins).
@@ -367,7 +564,7 @@ public class AnalyticsService {
         List<String> paramsIgnored = new ArrayList<>();   // deduped in resolveKpiRef/composer
         for (JsonNode srcId : compose.get("sourceKpiIds")) {
             JsonNode srcRef = synthRef(srcId.asText(), params);
-            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles, paramsIgnored, calendar);
+            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, capabilities, paramsIgnored, calendar);
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
             Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText(), calendar);
@@ -516,12 +713,12 @@ public class AnalyticsService {
     /**
      * Inline-query PII gate. Returns true when {@code queryNode} projects (in its
      * {@code dimensions} array) at least one officer-PII column ({@link #PII_DIMENSIONS})
-     * AND the caller holds none of the {@link #OFFICER_PII_ROLES}. Only DIMENSION projection
+     * AND the caller lacks the officer capability. Only DIMENSION projection
      * is gated; aggregate measures ({@code count_distinct} over a PII column) are not, since
      * they never expose individual UUIDs. Caller is responsible for invoking this only on the
      * INLINE path (no {@code kpiId}); the kpiId path enforces {@code visibleTo} separately.
      */
-    boolean projectsForbiddenPii(JsonNode queryNode, Set<String> callerRoles) {
+    boolean projectsForbiddenPii(JsonNode queryNode, AnalyticsCapabilities capabilities) {
         if (queryNode == null || !queryNode.has("dimensions") || !queryNode.get("dimensions").isArray())
             return false;
         boolean projectsPii = false;
@@ -529,8 +726,9 @@ public class AnalyticsService {
             if (d != null && d.isTextual() && PII_DIMENSIONS.contains(d.asText())) { projectsPii = true; break; }
         }
         if (!projectsPii) return false;
-        // authorized iff the caller holds any officer-PII role
-        return callerRoles == null || callerRoles.stream().noneMatch(OFFICER_PII_ROLES::contains);
+        // Authorized iff accesscontrol granted the officer capability — the same grant the
+        // officer KPI definitions are gated on, so the inline and by-reference paths agree.
+        return !capabilities.allowsOfficerPii();
     }
 
     /**
@@ -542,7 +740,7 @@ public class AnalyticsService {
      *                  single arm); compose sources share their composed entry's name
      * @param kpiId     the resolved KPI id, or {@code "inline"} for inline-grammar queries
      */
-    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
+    private Map<String,Object> runOne(JsonNode q, PgrSearchScope scope, QueryTelemetry tel,
                                       String entryName, String kpiId, BusinessCalendar calendar){
         // #1462: a pinned-window def whose interval falls outside the selected date range is
         // unanswerable, not empty-by-filter. Return no rows WITHOUT running SQL, flagged so the tile
@@ -676,13 +874,14 @@ public class AnalyticsService {
         return m;
     }
 
-    private Map<String,Object> scopeInfo(AnalyticsScope s){
+    /** A description of the scope actually applied, for the response envelope. Never the policy. */
+    private Map<String,Object> scopeInfo(PgrSearchScope s){
         Map<String,Object> m = new LinkedHashMap<>();
         m.put("tenantId", s.tenantId);
         m.put("level", s.tenantStateLevel ? "state" : "city");
         if (s.citizenUuid != null) m.put("restrictedTo", "own-records");
-        if (s.boundaryPrefix != null) m.put("boundaryPrefix", s.boundaryPrefix);
-        if (s.departmentCodes != null && !s.departmentCodes.isEmpty()) m.put("departments", s.departmentCodes);
+        if (s.departmentCodes != null) m.put("departments", s.departmentCodes);
+        if (s.jurisdictionCodes != null) m.put("jurisdictions", s.jurisdictionCodes);
         return m;
     }
 
@@ -694,25 +893,4 @@ public class AnalyticsService {
         return m;
     }
 
-    /**
-     * Extract role codes from RequestInfo.userInfo.roles — mirrors AnalyticsScope role extraction.
-     * An anonymous caller (no userInfo, or userInfo with no roles) degrades to the {@link #PUBLIC_ROLE}
-     * floor — NOT to an empty set (which {@link KpiDefinition#isVisibleTo} would have read as "no
-     * ceiling => visible", the old fail-open that let anonymous read every visibleTo:[] tile).
-     */
-    private Set<String> extractRoles(RequestInfo requestInfo) {
-        if (requestInfo == null) return Set.of(PUBLIC_ROLE);
-        User u = requestInfo.getUserInfo();
-        if (u == null || u.getRoles() == null) return Set.of(PUBLIC_ROLE);
-        Set<String> roles = u.getRoles().stream()
-                .filter(r -> r != null && r.getCode() != null)
-                .map(Role::getCode)
-                .collect(Collectors.toSet());
-        return roles.isEmpty() ? Set.of(PUBLIC_ROLE) : roles;
-    }
-
-    /** True when this is the unauthenticated public-floor caller (only PUBLIC-eligible KPIs, no inline). */
-    private boolean isPublicFloor(Set<String> callerRoles) {
-        return callerRoles != null && callerRoles.size() == 1 && callerRoles.contains(PUBLIC_ROLE);
-    }
 }

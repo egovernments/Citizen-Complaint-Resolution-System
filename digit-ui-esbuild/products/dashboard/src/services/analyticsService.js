@@ -105,6 +105,18 @@ export function fetchSchema() {
   return postAnalytics("/_schema", { tenantId: getTenantId() });
 }
 
+/**
+ * POST /v2/analytics/_access — the sole source of dashboard nav/route
+ * authorization. egov-accesscontrol resolves the caller's roles server-side
+ * (via the RequestInfo already attached by postAnalytics) and evaluates them
+ * against the analytics capability action ids; the frontend sends no role
+ * list and applies no allowlist of its own.
+ * Returns { allowed: boolean, capabilities?: string[] }.
+ */
+export function fetchAccess(tenantId) {
+  return postAnalytics("/_access", { tenantId });
+}
+
 export function runBatchQueries(queries) {
   return postAnalytics("/_query", {
     tenantId: getTenantId(),
@@ -148,7 +160,28 @@ export function fetchPublicPack(tenantId) {
   return postPublicAnalytics("/packs", { tenantId });
 }
 
-/** PUBLIC data path. The backend accepts only curated, base kpiId references. */
+/**
+ * POST /v2/analytics/public/catalog/_search — every PUBLIC-tagged published tile
+ * (#1797). Feeds the public Add-KPI menu; same safe tile shape as fetchCatalog.
+ */
+export function fetchPublicCatalog(tenantId) {
+  return postPublicAnalytics("/catalog/_search", { tenantId });
+}
+
+/**
+ * POST /v2/analytics/public/_options — filter-bar option codes (#1797). The
+ * response mirrors the inline-batch envelope useFilterOptions already reads
+ * (results.wards.rows[].ward_code / results.complaintTypes.rows[].service_code)
+ * so one option builder serves both surfaces; counts are stripped server-side.
+ */
+export function fetchPublicFilterOptions(tenantId) {
+  return postPublicAnalytics("/_options", { tenantId });
+}
+
+/**
+ * PUBLIC data path. The backend accepts {kpiId[, params]} references over
+ * PUBLIC-tagged tiles, with params limited to the global filter bar.
+ */
 export function runPublicKpiBatch(refs, tenantId, maxBatchQueries, options = {}) {
   return runChunkedAnalyticsBatch(
     refs,

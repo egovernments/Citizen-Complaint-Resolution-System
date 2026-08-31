@@ -36,6 +36,18 @@ export function storageKeyFor(tenantId, userId) {
   return `${LEGACY_STORAGE_KEY}.${tenantId}.${userId}`;
 }
 
+/**
+ * The anonymous public page has no user identity, yet its visitor still
+ * expects a rearranged page to survive a reload (#1797). Its slot is a fixed
+ * per-tenant key in its own `.public` namespace — disjoint by construction
+ * from every employee slot (those end in a user uuid), so a public visit on a
+ * shared machine can never read or clobber an employee's saved layout.
+ */
+export function publicStorageKeyFor(tenantId) {
+  if (!tenantId) return null;
+  return `${LEGACY_STORAGE_KEY}.${tenantId}.public`;
+}
+
 const CARD_KINDS = new Set([
   "number-tile-delta",
   "number-tile",

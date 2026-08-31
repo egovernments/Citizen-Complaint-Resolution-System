@@ -59,8 +59,13 @@ core_mobile_configs:
   countryCode: "+258"
   mobileNumberRegex: "^8[0-9]{8}$"
 asset_s3_bucket: "maputo-egov-assets"
-footer_logo_url: ""
-footer_bw_logo_url: ""
+
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 digit_ui_mode: container
 # Build digit-ui from source at deploy (files/digit-ui-build.sh) and lay the

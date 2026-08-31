@@ -93,6 +93,16 @@ state_tenant_id: ke.mycity
 boot_tenant: ke.mycity
 tenant_id: ke.mycity
 
+# Optional override for the authenticated employee dashboard's initial access
+# floor. Defaults are SUPERVISOR, GRO, DGRO, and SUPERUSER. These roles receive
+# the current employee route plus its base analytics capabilities. The legacy
+# /dashboard path is outside this bootstrap contract.
+# dashboard_allowed_roles:
+#   - SUPERVISOR
+#   - GRO
+#   - DGRO
+#   - SUPERUSER
+
 # Tenant the admin/citizen SPA lands on. Rendered into globalConfigs as
 # STATE_LEVEL_TENANT_ID (see templates/globalConfigs.js.j2). The configurator
 # login screen also derives its tenant-code placeholder from this, and the
@@ -208,11 +218,12 @@ asset_s3_bucket: "mytenant-egov-assets"
 
 # ────────── Branding ──────────
 
-# Footer logos shown in citizen + employee UI. Use absolute URLs;
-# the playbook copies brand assets to /var/www/brand/ when
-# nginx_features.brand_assets: true.
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 # ────────── digit-ui serving mode ──────────
 
@@ -319,11 +330,12 @@ enable_search_stack: false
 # the configurator/frontend uses for tenant onboarding. Serving that shim
 # through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
 #
-# Image source: the playbook's "Resolve MCP image tag" task defaults to the
-# PUBLIC pin `ghcr.io/subhashini-egov/digit-mcp:<tag>`, and passes it to
-# compose verbatim (no `docker_registry` prefix) — so a public-internet box
-# works out of the box. Set `build_mcp: true` to build from the vendored
-# in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
+# Image source: unless `build_mcp: true` (local build) or `mcp_image:` is set
+# here, the playbook leaves MCP_IMAGE empty and Compose's own
+# `${MCP_IMAGE:-egovio/digit-mcp:<tag>}` fallback in docker-compose.egov-digit.yaml
+# pulls the PUBLIC pin — so a public-internet box works out of the box with no
+# `docker_registry` prefix needed. Set `build_mcp: true` to build from the
+# vendored in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
 # Hetzner VPC registry (10.0.0.4:5000) the target must be VPC-internal:
 # compose validates every image before starting any service, so an
 # unreachable one fails the whole `docker compose up`.
@@ -457,6 +469,16 @@ novu_bridge_channel: "sms"
 # novu_bridge_workflow_id_sms:      "complaints-sms"
 # novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
 # novu_bridge_workflow_id_email:    "complaints-email"
+
+# Novu integration identifier to explicitly target for WHATSAPP triggers. Twilio
+# WhatsApp is modeled in Novu as an "sms"-channel step, so a second, dedicated
+# WhatsApp-registered Twilio integration living alongside the primary (plain
+# SMS) integration is silently ignored unless named here — every WHATSAPP send
+# would otherwise resolve to the primary SMS sender and be rejected by Twilio.
+# Leave unset until that dedicated integration has been created in Novu
+# (Integrations tab) for this tenant; must match its exact identifier.
+# novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
+
 # Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
 # novu_bridge_identify_cache_ttl_ms: 300000
 

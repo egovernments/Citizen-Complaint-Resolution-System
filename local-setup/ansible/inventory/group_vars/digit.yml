@@ -36,6 +36,16 @@ state_tenant_id: ""
 # `pg`'s key (177813) instead of e.g. `ke`'s (74493). See PR description.
 state_root: ""
 
+# Employee roles that can discover and open the current dashboard immediately
+# after a 0→1 install. The bootstrap seeds DashboardConfig, action 4557, base
+# analytics capabilities 2640-2644, and matching grants create-if-absent; records are never
+# overwritten on redeploy. Override per tenant only when its role model differs.
+dashboard_allowed_roles:
+  - SUPERVISOR
+  - GRO
+  - DGRO
+  - SUPERUSER
+
 # digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild
 # in tmux), `static` for the pre-built bundle served by host nginx.
 # Default is static; flip to hmr only on hosts where you actively want
@@ -81,9 +91,11 @@ enable_search_stack: false
 #
 # Footprints are approximate. The caps from #1612 have since landed as
 # `deploy.resources.limits.memory` in docker-compose.egov-digit.yaml:
-# prometheus 512M, loki 512M, tempo 384M, otel-collector 320M,
-# grafana 256M, promtail 128M, gatus 64M. So these are enforced ceilings
-# now, though the figures below are still budget rather than measurement.
+# prometheus 512M, loki 512M, otel-collector 320M, grafana 256M,
+# promtail 128M, gatus 64M, tempo 768M (raised from 384M by #1824 —
+# blocklist replay at startup, not retention, drove the footprint). So
+# these are enforced ceilings now, though the figures below are still
+# budget rather than measurement.
 #
 # This matters because the boxes are small: 29 services declare ~12.8 GB
 # of max heap on machines that are commonly 16 GB and have NO swap, so
@@ -121,10 +133,16 @@ boundary_type: ""
 #   India:  prefix=+91,  pattern=^[6-9][0-9]{9}$, length=10
 core_mobile_configs: {}
 
-# Footer logos. Empty by default; tenants ship branded URLs (typically
-# mirrored under /var/www/brand/ when nginx_features.brand_assets: true).
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# "Powered by DIGIT" footer logos. These default to the copies committed at
+# digit-ui-esbuild/public/brand/, which the esbuild build copies into the
+# docroot — so the attribution renders on a stock install with no external
+# asset host and no per-tenant configuration. The paths are root-relative,
+# so they work on any domain.
+#
+# Leave these alone unless you are deliberately rebranding. Setting either to
+# "" does not fall back to the default — it renders no footer at all.
+footer_logo_url: "/digit-ui/brand/digit-footer.png"
+footer_bw_logo_url: "/digit-ui/brand/digit-footer-bw.png"
 
 # Tenant-restriction lists. Empty = no filtering. Tenants override
 # when they want to surface only their own city or hide modules.
