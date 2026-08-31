@@ -1,0 +1,82 @@
+# Executive Summary
+
+A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **320 concurrent test users with zero failed requests**. No error ceiling was found at any level tested. Load is absorbed as latency rather than as failure.
+
+## Key Numbers
+
+| | Value |
+|-|-------|
+| Highest level tested | **320 VU** |
+| HTTP failures at 240, 280 and 320 VU | **0.000%** |
+| Lifecycle success at 240, 280 and 320 VU | **100.00%** |
+| Error-based ceiling | **Not found** |
+| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU |
+| Response time at 320 VU | 11.5s p95 |
+| Pod restarts, whole campaign | **0** |
+| Records in database | ~193 at start, ~17,700 at end |
+
+## What We Tested
+
+Every test iteration runs one complete PGR complaint lifecycle — **4 API calls** through the full stack:
+
+**CREATE** (file complaint) → **ASSIGN** (route to department) → **RESOLVE** (close it) → **SEARCH** (verify status)
+
+This exercises the gateway, PGR Services, Workflow, Persister, Kafka and PostgreSQL — the entire hot path. Eight concurrency levels were tested — 20, 40, 80, 160, 200, 240, 280 and 320 VUs — each held at a constant VU count for 2 minutes.
+
+**No CPU limits are set on any service in this deployment**, so every level is unthrottled by construction. There is no throttled comparison in this run because there is nothing to throttle.
+
+Throughout this document, **lifecycle success** is the share of lifecycles that completed all four steps and ended in `RESOLVED`, while **request fail** is the share of individual HTTP requests that errored. They have different denominators — roughly four requests per lifecycle — so they do not sum to 100.
+
+## Capacity
+
+| VU | Throughput | API req/s | Daily capacity | Server p95 | Lifecycle success | Request fail |
+|-----|-----------|-----------|---------------|-----------|---------|--------------|
+| 20 | 2.218/s | 9.03 | 191,635/day | 357ms | 100.00% | 0.000% |
+| 40 | 4.532/s | 18.44 | 391,565/day | 164ms | 100.00% | 0.000% |
+| 80 | 8.810/s | 35.85 | 761,184/day | 203ms | 100.00% | 0.000% |
+| **160** | **16.259/s** | **66.33** | **1,404,778/day** | 669ms | 99.57% | 0.268% |
+| 200 | 10.549/s | 43.69 | 911,434/day | 4,667ms | 99.93% | 0.017% |
+| 240 | 9.714/s | 40.63 | 839,290/day | 7,405ms | **100.00%** | **0.000%** |
+| 280 | 8.983/s | 37.97 | 776,131/day | 9,589ms | **100.00%** | **0.000%** |
+| 320 | 7.948/s | 34.00 | 686,707/day | 11,454ms | **100.00%** | **0.000%** |
+
+**The 20-160 group and the 200-320 group are not directly comparable.** They were measured hours apart while the database grew roughly ninety-fold, from 193 records to ~17,700. Within each group the trend holds; across them it does not. See the confound section in [Findings](./findings#the-data-volume-confound).
+
+## Where the Limit Is
+
+**There is no error-based limit below 320 VU.** Across 240, 280 and 320 VU — 15,636 requests — not one returned an error and every lifecycle reached `RESOLVED`.
+
+The limit that does exist is a **throughput limit**, and the deployment passes it somewhere around 160-200 VU. Above that, each additional 40 VUs costs 8-11% of completed work and adds 19-59% to response time. The system is saturated and queueing; it is not failing.
+
+Which limit matters depends on what you are protecting. If the requirement is that requests succeed, this deployment has headroom beyond anything tested. If the requirement is a response-time budget, it is exceeded well before any error appears — 320 VU answers every request, but takes 11.5 seconds at p95 to do it.
+
+## Stability
+
+**Zero pod restarts across twelve load levels and ~17,700 complaints.**
+
+That result depends on a change made for the test. Every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi — roughly a quarter of the memory already allocated to it. The heap was raised to ~58% of each container's limit for this campaign, and `-XX:+ExitOnOutOfMemoryError` added, before any load was applied.
+
+**On the shipped configuration these results would not hold.** The durable fix belongs in the deployment charts — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+
+## The Most Useful Finding
+
+An earlier pass ran the same levels back to back without waiting for the system to drain. At 320 VU it recorded **56.95% request failures and 1.14% lifecycle success**. The gated pass at the identical level recorded **0.000% and 100.00%**.
+
+Every one of those failures was `INVALID ACTION` — the workflow service refusing a `RESOLVE` because the preceding `ASSIGN` had not yet been committed. PGR writes workflow transitions asynchronously, so a `200` on `ASSIGN` means *accepted and queued*, not *committed*. On a deployment already carrying a backlog, that window widens past the client's own pacing and `RESOLVE` overtakes its own `ASSIGN`.
+
+Two conclusions follow. For operators, this is a real defect that any client issuing two rapid workflow transitions can hit on a backlogged deployment. For anyone running these tests, a ladder without a drain gate measures the accumulated state of its earlier levels, and its numbers will not reproduce.
+
+## Test Infrastructure
+
+| Component | Spec |
+|-----------|------|
+| Platform | AWS EKS v1.35.6, 4 × m5a.xlarge |
+| Cluster total | 16 vCPU, 64 GB RAM, shared across all namespaces |
+| Application namespace | `egov`, 36 pods |
+| Replicas, complaint path | 1 per service |
+| CPU limits | **None set** |
+| Database | Amazon RDS PostgreSQL, separate from the application nodes |
+| Message broker | Kafka (KRaft), 3 controllers, all PGR topics single-partition |
+| Load generator | k6, remote control machine, ~24ms RTT |
+
+See [Detailed Findings](./findings) for methodology, the drain gate, and the full degradation curve.
