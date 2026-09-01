@@ -278,7 +278,8 @@ describe('Novu workflow creation deployment contract', () => {
     // route WhatsApp through the plain-SMS sender and Twilio would reject it.
     expect(composeEnv).toContain(
       "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP={{ novu_bridge_integration_id_whatsapp | " +
-        "default('twilio-whatsapp' if (twilio_sms_from | default('')) | length > 0 else '') }}"
+        "default('twilio-whatsapp' if ((twilio_sms_from | default('')) | length > 0 " +
+        "and (twilio_account_sid | default('')) | length > 0) else '') }}"
     );
   });
 });

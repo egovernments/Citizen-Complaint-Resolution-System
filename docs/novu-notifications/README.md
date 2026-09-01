@@ -86,8 +86,14 @@ creation and test-send unauthenticated. Enforcing this is tracked in
 
 ### Bootstrap the provider and workflow
 
-This administers Novu. It does not run the deployment again and does not send a
-message.
+If `twilio_account_sid` was set before the deployment, this is already done. The
+deploy runs the same script, and its defaults produce the same integration and the
+same workflows — only the workflow's display name differs, which nothing keys on.
+Skip to [Verify the WhatsApp provider](#verify-the-whatsapp-provider).
+
+Run it by hand only when the Twilio credentials were added after the first deploy
+and you would rather not re-run `./deploy.sh`. It administers Novu: it does not run
+the deployment again and does not send a message.
 
 ```bash
 # Copy these values from the Twilio Console.
