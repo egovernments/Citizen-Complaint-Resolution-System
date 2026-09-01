@@ -78,6 +78,32 @@ A second campaign capped the DIGIT services with `docker update` to measure smal
 
 **None of these profiles describes a deployable machine.** They constrain CPU only, on a host that still has the full 30 GiB of memory. A real machine of the same nominal size would also have proportionally less memory, and below 32 GiB the stack does not fit at all. The minimum deployment spec is **16 vCPU / 32 GiB**; the profiles below the top one exist to show where CPU becomes the binding constraint, not to offer smaller options.
 
+## Follow-Up Measurements, 1 September 2026
+
+Three method gaps were closed by a follow-up campaign on the same deployment, against a fixed dataset of 2,525 stored complaints restored between every run. Full detail in [Findings](./findings#follow-up-measurements-1-september-2026).
+
+**Every figure in the ladder above came from a single run.** Three repeats at each of two levels give the error bars they lacked:
+
+| Level | Throughput CV | p95 CV |
+|-------|--------------|--------|
+| 40 VU | 1.33% | **0.98%** |
+| 120 VU | 2.24% | **19.19%** |
+
+**Tail latency near saturation is worth roughly ±20%**, so p95 differences below about 40% at those levels cannot be read from a single run. Throughput stays stable. The Kubernetes campaign measured 20.1% p95 variance at its own saturation point on unrelated infrastructure — two different stacks, the same answer.
+
+**The closed-loop design flatters the system.** Re-run with a ramping arrival rate, which holds the offered load independent of server speed:
+
+| | Closed-loop, 120 VU | Open-loop |
+|---|---|---|
+| API req/s | 45.64 | 43.41 |
+| Request failures | **0.000%** | **19.57%** |
+| Lifecycle success | **100.00%** | **50.23%** |
+| Work never started | not measurable | **24%** |
+
+Throughput barely moves; **half of all complaints fail and a quarter of the work never starts.** 1,686 of those failures were `INVALID ACTION` — a `RESOLVE` refused because the preceding `ASSIGN` had not committed — with **zero OutOfMemoryErrors and zero restarts**. That confirms the failure is caused by arrival pressure on an asynchronous write path, not by the heap exhaustion described elsewhere in this run.
+
+**The database is not the constraint.** With slow-query logging enabled for a full load run, only five statements exceeded 100ms and **not one was a PGR write-path query**. The two slowest were periodic dashboard view refreshes at about seven seconds each, unrelated to load. At 2,525 records the limit lies in the application, JVM or queue layer.
+
 ## Test Infrastructure
 
 | Component | Spec |

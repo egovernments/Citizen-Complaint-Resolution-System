@@ -115,7 +115,7 @@ function thinkTime() {
 
 function ensureAuth(env) {
   if (!employeeToken) {
-    const auth = login(env.baseUrl, env.username, env.password, env.tenant, 'EMPLOYEE');
+    const auth = login(env.baseUrl, env.username, env.password, env.authTenant || env.tenant, 'EMPLOYEE');
     if (!auth) return false;
     employeeToken = auth.token;
     employeeUserInfo = auth.userInfo;

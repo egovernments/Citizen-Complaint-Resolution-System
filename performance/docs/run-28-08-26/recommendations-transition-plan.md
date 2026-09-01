@@ -59,6 +59,8 @@ The last two rows are shown for completeness but **should not be used for planni
 
 **Peak with zero errors — 694,138 complaints/day.** Every request succeeded, and response times stayed under half a second. This is the number to quote in a contract or an SLA.
 
+**Under realistic arrival patterns, roughly half of complaints fail.** See [An Important Correction](#an-important-correction-real-traffic-behaves-differently) — the figures in this table were measured with test users who wait their turn, which real people do not.
+
 **The upper limit is unknown, and that is the honest answer.** Above 80 test users the complaints service ran out of its allotted Java memory — a fixed 384 MB allowance, set in configuration, unrelated to the machine's 30 GB. Everything measured above that point describes a software fault rather than the capacity of the hardware, so no maximum can be quoted from this campaign.
 
 **One finding from that fault is worth acting on regardless of scale.** When the service ran out of memory it did not slow down, return errors and recover. It stopped permanently: it kept accepting connections, answered none, and stayed that way for six hours until it was restarted by hand. It could not recover on its own, and nothing restarted it automatically. Any deployment should therefore assume that a memory-related failure needs human intervention, and should be monitored for "accepting requests but not answering" rather than only for crashes.
@@ -241,15 +243,59 @@ Expected daily complaint volume?
 
 ---
 
+## An Important Correction: Real Traffic Behaves Differently
+
+Everything above was measured by holding a **fixed number of test users**, each of whom waits for their own previous complaint to finish before starting the next. That design has a hidden flaw: when the system slows down, the test automatically slows down with it. It can never overwhelm the system, because it politely waits.
+
+Real people do not wait. They arrive when they arrive, regardless of how busy the system is.
+
+We re-ran the same deployment with test traffic that **arrives on a fixed schedule** rather than waiting its turn. At an almost identical request rate, the results are not comparable:
+
+| | Test users waiting their turn | Traffic arriving on schedule |
+|---|---|---|
+| Requests handled per second | 45.6 | 43.4 |
+| Requests that failed | **0%** | **19.6%** |
+| Complaints completed successfully | **100%** | **50.2%** |
+| Work that never got started at all | not visible | **24%** |
+| Response time | 0.9s | 6.6s |
+
+**Half of all complaints failed, and a quarter never started**, on a system that looked flawless minutes earlier at the same request rate.
+
+This does not mean the earlier numbers are wrong. It means they answer a narrower question — *how much work can this system get through* — and not the question that matters for a busy day, which is *what happens when people arrive faster than it can serve them.*
+
+**Practical guidance:** treat the daily capacity figures above as an upper bound reached under ideal, evenly-paced conditions. For a deployment expecting bursts — a public announcement, a flood, a service outage generating complaints — plan on **considerably less**, and treat the response-time budget rather than the error rate as the thing that will break first.
+
+## How Confident Are These Numbers?
+
+Every figure in the main table came from a **single run**. Repeating the same test three times, on an identical database, shows how much a number moves purely by chance:
+
+| Load level | Throughput varies by | Response time varies by |
+|-----------|---------------------|------------------------|
+| Light (40 test users) | ±1.3% | ±1.0% |
+| Heavy (120 test users) | ±2.2% | **±19.2%** |
+
+**Throughput is a reliable number. Response time near the system's limit is not** — it swings about twenty percent between identical runs. So a response-time difference of less than roughly 40% at heavy load should not be treated as real without repeating the test.
+
+The Kubernetes deployment showed the same pattern (±20.1%) on completely different hardware, so this is a property of the software under strain rather than of any one machine.
+
+## Before Buying Hardware, Know What the Limit Isn't
+
+We enabled detailed database logging during a full load test. Across the entire run, **not a single complaint-related database query took longer than a tenth of a second.** The only slow operations were two periodic dashboard refreshes, unrelated to complaint traffic.
+
+The same check on the Kubernetes deployment found processors 5-27% busy and 48 of 402 available database connections in use.
+
+**Neither the database nor the hardware is the limit.** The constraint is inside the application. This matters commercially: **buying a bigger server or a bigger database will not raise these numbers.** The fixes identified elsewhere in this document — the configuration changes and the caching opportunities — are where the capacity is.
+
 ## Key Caveats
 
-1. **16 vCPU / 32 GiB is a floor, not a starting point in a range.** Earlier versions of this document offered 4 vCPU / 8 GB and 8 vCPU / 16 GB options. Those are withdrawn: the stack's resident memory footprint has roughly doubled as the platform has grown, and it no longer fits. Figures for those configurations came from capped CPU profiles rather than real machines of that size, and should not be quoted.
-2. **The tested machine had 30.6 GiB, marginally under the 32 GiB floor**, and no swap. It worked, with 4.5 GB spare at rest. Treat 32 GiB as the number to provision and 30 GiB as the observed minimum that happened to hold.
-3. **Everything above one machine is projection.** Node counts for 1M and 10M/day are arithmetic from measured single-machine throughput. No multi-machine configuration was tested.
-4. **The tests ran against a nearly empty database** — about 2,300 stored complaints. Performance falls substantially as stored data grows, and earlier testing showed throughput dropping roughly six-fold between an empty database and 1M records. **Any deployment above 100,000 complaints/day needs an archiving policy from day one.**
-5. **These numbers are complaints-only.** Running other DIGIT modules on the same machine reduces available capacity proportionally.
-6. **The figures were measured without the three database fixes applied.** With them, earlier testing was 9.4x better at 100K records.
-7. **The upper limit was never measured, because the software failed before the hardware did.** Above 80 test users the complaints service exhausted a fixed 384 MB Java memory allowance and stopped permanently — it kept accepting requests, answered none, and needed a manual restart six hours later. Figures above 80 test users in this document therefore describe that fault, not capacity. Size with headroom, and re-test after the configuration is corrected.
-8. **Access-control filtering was introduced to complaint search between the two test rounds.** The searches in the error-based ladder carry a department and jurisdiction filter that the earlier ramp tests did not, so the two rounds are not identical conditions.
-9. **Cost estimates use AWS on-demand pricing** in Mumbai (ap-south-1). Graviton (ARM) instances are around 42% cheaper than Intel equivalents. The 1M and 10M/day figures are rough order-of-magnitude only and need a proper quote.
-10. **Response times include ~185ms of network round-trip** — the load generator ran over the public internet rather than on the machine itself.
+1. **These figures assume evenly-paced traffic.** Under a realistic arrival pattern the same deployment failed 19.6% of requests and completed only 50.2% of complaints. Treat the daily capacity figures as an upper bound, not a planning target.
+2. **16 vCPU / 32 GiB is a floor, not a starting point in a range.** Earlier versions of this document offered 4 vCPU / 8 GB and 8 vCPU / 16 GB options. Those are withdrawn: the stack's resident memory footprint has roughly doubled as the platform has grown, and it no longer fits. Figures for those configurations came from capped CPU profiles rather than real machines of that size, and should not be quoted.
+3. **The tested machine had 30.6 GiB, marginally under the 32 GiB floor**, and no swap. It worked, with 4.5 GB spare at rest. Treat 32 GiB as the number to provision and 30 GiB as the observed minimum that happened to hold.
+4. **Everything above one machine is projection.** Node counts for 1M and 10M/day are arithmetic from measured single-machine throughput. No multi-machine configuration was tested.
+5. **The tests ran against a nearly empty database** — about 2,300 stored complaints. Performance falls substantially as stored data grows, and earlier testing showed throughput dropping roughly six-fold between an empty database and 1M records. **Any deployment above 100,000 complaints/day needs an archiving policy from day one.**
+6. **These numbers are complaints-only.** Running other DIGIT modules on the same machine reduces available capacity proportionally.
+7. **The figures were measured without the three database fixes applied.** With them, earlier testing was 9.4x better at 100K records.
+8. **The upper limit was never measured, because the software failed before the hardware did.** Above 80 test users the complaints service exhausted a fixed 384 MB Java memory allowance and stopped permanently — it kept accepting requests, answered none, and needed a manual restart six hours later. Figures above 80 test users in this document therefore describe that fault, not capacity. Size with headroom, and re-test after the configuration is corrected.
+9. **Access-control filtering was introduced to complaint search between the two test rounds.** The searches in the error-based ladder carry a department and jurisdiction filter that the earlier ramp tests did not, so the two rounds are not identical conditions.
+10. **Cost estimates use AWS on-demand pricing** in Mumbai (ap-south-1). Graviton (ARM) instances are around 42% cheaper than Intel equivalents. The 1M and 10M/day figures are rough order-of-magnitude only and need a proper quote.
+11. **Response times include ~185ms of network round-trip** — the load generator ran over the public internet rather than on the machine itself.

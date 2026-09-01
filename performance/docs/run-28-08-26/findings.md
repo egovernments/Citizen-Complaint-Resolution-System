@@ -268,6 +268,108 @@ Two defects follow from this, independent of load testing:
 
 Comparing like for like at the same concurrency, the `cpu-16` profile returned 1.331 lifecycles/sec at 15.31s p95 where the unthrottled machine returned 8.034 lifecycles/sec at 0.45s — six times the throughput at a thirty-fourth of the latency. This is the clearest measure of how far a per-service CPU profile sits from the machine it is named after.
 
+## Follow-Up Measurements, 1 September 2026
+
+Three gaps in the 28 August method were closed by a follow-up campaign on the same
+deployment. All figures below come from that campaign, against a **fixed dataset** —
+2,525 stored complaints, restored by a gated cleanup between every run, so no level
+inherits the previous one's writes.
+
+### Run-to-Run Variance
+
+The 28 August ladder ran each level once, so nothing in it carried an error bar.
+Three identical repeats were run at two levels, cleaning the database back to the
+same 2,525 rows between each:
+
+| Level | Lifecycles/s | API req/s | http p95 | Throughput CV | p95 CV |
+|-------|-------------|-----------|----------|--------------|--------|
+| 40 VU | 2.015 / 2.046 / 2.069 | 14.39 / 14.61 / 14.78 | 363 / 359 / 356 ms | **1.33%** | **0.98%** |
+| 120 VU | 10.943 / 11.159 / 11.443 | 44.69 / 45.55 / 46.68 | 1,102 / 881 / 756 ms | **2.24%** | **19.19%** |
+
+Every run: 0.000% request failures, 100.00% lifecycle success.
+
+**Latency variance grows nineteenfold between 40 and 120 VU** — 0.98% to 19.19% —
+while throughput variance barely moves. A single p95 measurement taken near
+saturation is worth roughly plus or minus twenty percent, so latency differences
+below about 40% at those levels cannot be read from one run.
+
+That figure is not specific to this deployment. The Kubernetes campaign measured
+20.1% p95 variance at its own saturation point on entirely different infrastructure,
+against 6.91% on throughput. Two unrelated stacks converge on the same answer:
+**throughput is a stable measurement, tail latency near saturation is not.**
+
+One honest qualifier: both bomet sets are monotonic — throughput rising and latency
+falling across the three repeats in each. That is a warm-up trend, not random
+scatter, so the spread overstates true noise while a single cold run is
+systematically pessimistic. Separating the two needs a discard-the-first-run
+protocol, which was not used here.
+
+### Open-Loop Testing
+
+Every figure in the 28 August run came from a **closed-loop** test: a fixed number
+of virtual users, each waiting for its own previous lifecycle to finish. That design
+cannot overload a system, because the load automatically slows down when the server
+does. Real traffic does not behave that way — people arrive on their own schedule
+regardless of how the server feels.
+
+The same deployment was run again with a **ramping arrival rate**, which holds the
+offered rate independent of server speed, spiking to roughly 140 API requests per
+second with idle valleys between:
+
+| | Closed-loop, 120 VU | Open-loop |
+|---|---|---|
+| API req/s achieved | 45.64 | 43.41 |
+| Request failures | **0.000%** | **19.57%** (5,157 of 26,357) |
+| Lifecycle success | **100.00%** | **50.23%** |
+| Work that never started | not measurable | **1,954 iterations (24%)** |
+| http p95 | 913ms | 6,555ms |
+
+Throughput is almost identical. **Half of all complaints failed, and a quarter of
+the intended work never started at all.** The closed-loop test reported a flawless
+system at the same request rate because it structurally could not ask the question.
+
+**1,686 of the failures were `INVALID ACTION`** — the workflow service refusing a
+`RESOLVE` because the preceding `ASSIGN` had not yet been committed. This occurred
+with **zero OutOfMemoryErrors and zero restarts**, which settles a question the
+28 August run left open: that failure is a property of arrival pressure on an
+asynchronous write path, not a symptom of the heap exhaustion described in
+[When the heap gave out](#when-the-heap-gave-out).
+
+For the open-loop run the JVM heap was temporarily raised to 1 GB with
+`-XX:+ExitOnOutOfMemoryError`, and the container's restart policy set to
+`unless-stopped`. All three were reverted afterwards. That combination matters: a
+wedged JVM does not exit, so a restart policy alone would never have recovered it.
+Under those settings the deployment absorbed a threefold overload without wedging,
+where the shipped configuration collapsed for six hours at lower load on 31 August.
+
+### What the Database Was Doing
+
+The 28 August run attributed nothing — it reported that the stack slowed down
+without identifying what limited it. Postgres slow-query logging
+(`log_min_duration_statement = 100ms`) was enabled for a full load run and reverted
+afterwards.
+
+Across the entire window only five statements exceeded 100ms, and the two slowest
+are unrelated to complaint traffic:
+
+| Statement | Calls | Avg |
+|-----------|-------|-----|
+| `REFRESH MATERIALIZED VIEW CONCURRENTLY complaint_events` | 2 | 7,499ms |
+| `REFRESH MATERIALIZED VIEW CONCURRENTLY complaint_facts` | 2 | 7,131ms |
+
+**Not one PGR write-path query appeared.** No slow inserts, no slow workflow
+lookups. At 2,525 stored complaints the database is not the constraint, and the
+limit lies in the application, JVM or message-queue layer.
+
+This is the opposite of the March 2026 findings, and consistent with them: those
+tests ran at 100K to 1M records, where a missing index and a fuzzy-search default
+dominated. At this deployment's data volume those costs have not yet appeared. The
+Kubernetes campaign reached the same conclusion independently — 5-27% CPU,
+48 of 402 database connections in use, slowest query 3.27ms.
+
+Worth recording separately: those two dashboard view refreshes take about seven
+seconds each and run periodically against a live system.
+
 ## Degradation Points by Profile
 
 | Profile | Peak throughput | Saturation | All thresholds pass at | Errors > 5% | Max HTTP failure rate |

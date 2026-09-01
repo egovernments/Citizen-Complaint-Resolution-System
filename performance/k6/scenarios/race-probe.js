@@ -48,7 +48,7 @@ let userInfo = null;
 
 function auth(env) {
   if (token) return true;
-  const a = login(env.baseUrl, env.username, env.password, env.tenant, 'EMPLOYEE');
+  const a = login(env.baseUrl, env.username, env.password, env.authTenant || env.tenant, 'EMPLOYEE');
   if (!a) return false;
   token = a.token;
   userInfo = a.userInfo;

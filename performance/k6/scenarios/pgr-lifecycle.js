@@ -73,9 +73,13 @@ function thinkTime() {
   sleep(Math.random() * 2 + 1);
 }
 
+// `authTenant` exists because a deployment may authenticate at one tenant and
+// file complaints at another: on the k8s cluster ADMIN logs in at `pg` and
+// files at `pg.chandigarh`, and logging in at the city tenant is rejected.
+// Falls back to `tenant` for deployments where the two are the same.
 function ensureEmployeeAuth(env) {
   if (!employeeToken) {
-    const auth = login(env.baseUrl, env.username, env.password, env.tenant, 'EMPLOYEE');
+    const auth = login(env.baseUrl, env.username, env.password, env.authTenant || env.tenant, 'EMPLOYEE');
     if (!auth) return false;
     employeeToken = auth.token;
     employeeUserInfo = auth.userInfo;
