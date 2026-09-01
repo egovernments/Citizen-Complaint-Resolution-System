@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label';
 
 const HEX_PATTERN = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
+const RA_ERROR_PREFIX = '@@react-admin@@';
+
 // digit-ui-esbuild/src/theme/schema.json accepts ONLY 6-digit hex for every
 // color leaf; applyTheme() runs the whole record through that AJV schema and
 // silently no-ops the ENTIRE theme (not just the offending field) if any
@@ -36,17 +38,21 @@ export function ColorInput({ label, help, validate, ...inputProps }: ColorInputP
   // DigitFormInput's convention).
   const hasError = fieldState.invalid && (fieldState.isDirty || fieldState.isTouched);
   // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
-  // before storing them in react-hook-form state.
+  // before storing them in react-hook-form state. Slice by the prefix's own
+  // length, never a literal: with a hardcoded offset, a future ra-core prefix
+  // change still matches startsWith() but parses from the wrong position and
+  // surfaces a garbled message with no runtime signal.
   const rawError = fieldState.error?.message;
-  const errorMessage = rawError?.startsWith('@@react-admin@@')
+  const errorMessage = rawError?.startsWith(RA_ERROR_PREFIX)
     ? (() => {
+        const encoded = rawError.slice(RA_ERROR_PREFIX.length);
         try {
-          const parsed: unknown = JSON.parse(rawError.slice(15));
+          const parsed: unknown = JSON.parse(encoded);
           if (typeof parsed === 'string') return parsed;
           if (parsed && typeof parsed === 'object' && 'message' in parsed)
             return String((parsed as { message: unknown }).message);
           return String(parsed);
-        } catch { return rawError.slice(15); }
+        } catch { return encoded; }
       })()
     : rawError;
   const value = typeof field.value === 'string' ? field.value : '';

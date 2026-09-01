@@ -53,7 +53,10 @@ BASIC = "Basic ZWdvdi11c2VyLWNsaWVudDo="  # egov-user-client: (empty secret)
 THEME_CODE = "common-masters.ThemeConfig"
 
 
-def _post(path, body, tok=None, headers=None):
+def _post(path, body, headers=None):
+    # No auth argument by design: DIGIT carries the token in the request BODY as
+    # RequestInfo.authToken (see ri()), not in an Authorization header, so every
+    # caller has already embedded it via ri(tok) before getting here.
     data = json.dumps(body).encode()
     h = {"Content-Type": "application/json"}
     if headers:
@@ -78,7 +81,7 @@ def ri(tok):
 def schema_exists(tok, code):
     body = ri(tok); body["SchemaDefCriteria"] = {"tenantId": TENANT, "codes": [code]}
     try:
-        r = json.load(_post("/mdms-v2/schema/v1/_search", body, tok))
+        r = json.load(_post("/mdms-v2/schema/v1/_search", body))
         return bool(r.get("SchemaDefinitions"))
     except urllib.error.HTTPError:
         return False
@@ -95,14 +98,14 @@ def create_schema(tok, sdef):
         defn.pop("x-ref-schema", None)
         sdef["definition"] = defn
     body = ri(tok); body["SchemaDefinition"] = sdef
-    _post("/mdms-v2/schema/v1/_create", body, tok).read()
+    _post("/mdms-v2/schema/v1/_create", body).read()
 
 
 def search_rows(tok, code):
     body = ri(tok)
     body["MdmsCriteria"] = {"tenantId": TENANT, "schemaCode": code, "limit": 200}
     try:
-        r = json.load(_post("/mdms-v2/v2/_search", body, tok))
+        r = json.load(_post("/mdms-v2/v2/_search", body))
         return r.get("mdms", [])
     except urllib.error.HTTPError:
         return []
@@ -119,7 +122,7 @@ def _set_active(tok, code, row, active):
         "auditDetails": row.get("auditDetails"),
     }
     try:
-        _post("/mdms-v2/v2/_update/" + code, body, tok).read()
+        _post("/mdms-v2/v2/_update/" + code, body).read()
         return True
     except urllib.error.HTTPError as e:
         verb = "activate" if active else "deactivate"
@@ -143,7 +146,7 @@ def create_row(tok, code, row_code, data):
     body = ri(tok)
     body["Mdms"] = {"tenantId": TENANT, "schemaCode": code, "data": data, "isActive": True}
     try:
-        _post("/mdms-v2/v2/_create/" + code, body, tok).read()
+        _post("/mdms-v2/v2/_create/" + code, body).read()
         return "created"
     except urllib.error.HTTPError as e:
         blob = e.read().decode()[:160]
@@ -157,7 +160,8 @@ def main():
     print("seed-theme: tenant=%s url=%s" % (TENANT, URL))
     tok = token()
 
-    schemas = {s.get("code"): s for s in json.load(open(SCHEMA_FILE))}
+    with open(SCHEMA_FILE, encoding="utf-8") as f:
+        schemas = {s.get("code"): s for s in json.load(f)}
     if THEME_CODE not in schemas:
         sys.exit("ERROR: schema %s not found in %s" % (THEME_CODE, SCHEMA_FILE))
     if schema_exists(tok, THEME_CODE):
@@ -167,7 +171,8 @@ def main():
         print("  schema CREATED %s" % THEME_CODE)
     time.sleep(3)  # let the schema definition settle before data validates against it
 
-    preset = json.load(open(DATA_FILE))
+    with open(DATA_FILE, encoding="utf-8") as f:
+        preset = json.load(f)
     preset_code = preset.get("code")
     if not preset_code:
         sys.exit("ERROR: preset file %s has no 'code' field" % DATA_FILE)

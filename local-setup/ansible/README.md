@@ -541,11 +541,14 @@ seed_theme_preset: bomet-blue    # or maputo-green — see local-setup/ansible/f
 ```
 
 Seeds the `common-masters.ThemeConfig` MDMS schema (if not already present)
-plus the named preset's data row, at both the state root and the city
-tenant — mirroring how the reference `kenya-green` theme is seeded at both
-`ke` and `ke.nairobi`. Idempotent: re-running, or switching to a different
-`seed_theme_preset`, deactivates whichever theme was previously active for
-that tenant rather than leaving two active side by side.
+plus the named preset's data row, at the state root and — when a city tenant
+is configured via `ui_state_tenant_id` or `city_tenant` — at that city tenant
+too, mirroring how the reference `kenya-green` theme is seeded at both `ke`
+and `ke.nairobi`. With neither var set there is no city tenant to seed, so
+that step is skipped and the run says so rather than guessing at a name.
+Idempotent: re-running, or switching to a different `seed_theme_preset`,
+deactivates whichever theme was previously active for that tenant rather than
+leaving two active side by side.
 
 `seed_theme_preset` stays in `host_vars/<tenant>.yml` after the first
 deploy — it's not a one-shot flag. A marker file on the target

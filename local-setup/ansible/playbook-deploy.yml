@@ -4389,7 +4389,12 @@
       tags: ['themes', 'theme-seed']
       ansible.builtin.set_fact:
         theme_seed_root_tenant: "{{ state_tenant_id | regex_replace('\\..*$', '') }}"
-        theme_seed_city_tenant: "{{ ui_state_tenant_id | default(city_tenant | default(state_tenant_id ~ '.citya')) }}"
+        # No fabricated fallback here. A guessed `<root>.citya` names a tenant
+        # that was never bootstrapped, so the city seed would fail login/MDMS
+        # and — via failed_when — take the whole deploy down on every host that
+        # sets neither var. Empty means "no city tenant configured", and the
+        # city seed step is skipped instead of inventing a target.
+        theme_seed_city_tenant: "{{ ui_state_tenant_id | default('', true) or city_tenant | default('', true) }}"
 
     - name: "theme-seed — seed the ThemeConfig master at the state root (idempotent)"
       when: seed_theme_preset is defined and theme_seed_should_run | bool
@@ -4409,7 +4414,10 @@
       failed_when: "theme_seed_state.rc != 0 or 'DONE' not in (theme_seed_state.stdout | default(''))"
 
     - name: "theme-seed — seed the ThemeConfig master at the city tenant (idempotent)"
-      when: seed_theme_preset is defined and theme_seed_should_run | bool
+      when:
+        - seed_theme_preset is defined
+        - theme_seed_should_run | bool
+        - theme_seed_city_tenant | length > 0
       tags: ['themes', 'theme-seed']
       ansible.builtin.shell: |
         cd {{ digit_dir }}/theme-seed
@@ -4424,6 +4432,18 @@
       register: theme_seed_city
       changed_when: "'created' in (theme_seed_city.stdout | default(''))"
       failed_when: "theme_seed_city.rc != 0 or 'DONE' not in (theme_seed_city.stdout | default(''))"
+
+    - name: "theme-seed — no city tenant configured, seeded the state root only"
+      when:
+        - seed_theme_preset is defined
+        - theme_seed_should_run | bool
+        - theme_seed_city_tenant | length == 0
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.debug:
+        msg: >-
+          theme-seed: neither ui_state_tenant_id nor city_tenant is set, so
+          '{{ seed_theme_preset }}' was seeded at {{ theme_seed_root_tenant }}
+          only. Set one of those vars if a city-scoped ThemeConfig is wanted.
 
     - name: "theme-seed — result"
       when: seed_theme_preset is defined and theme_seed_should_run | bool
