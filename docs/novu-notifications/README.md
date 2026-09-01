@@ -94,6 +94,12 @@ The SMS/WhatsApp integration-selection fix does not provision either provider.
 It assumes ordinary SMS is already primary and only makes WhatsApp select
 `twilio-whatsapp` explicitly at dispatch time.
 
+> **Gateway prerequisite:** deploy and reload the current `local-setup/kong/kong.yml`
+> before using the Configurator to add a provider. Older Kong configurations let
+> the Providers screen load but reject **Add Provider** with
+> `InvalidAccessTokenException` because the Bearer-authenticated provider POSTs
+> are intercepted before they reach `novu-bridge` (fixed by `477b2436`).
+
 Open **Configurator -> Notifications -> Providers** while logged in as an
 employee with an allowed provider-management role. Select **Add Provider** and
 enter:
