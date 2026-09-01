@@ -140,6 +140,10 @@ plugins:
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- Authenticated employees of every functional role may read their own HRMS-backed
+          -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
+          -- appropriate because HRMS employee creation does not guarantee a shared base role.
+          ["/pgr-services/v2/employee/_context"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
           -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH

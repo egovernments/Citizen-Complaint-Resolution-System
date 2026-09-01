@@ -27,6 +27,11 @@
 
     body {
       overflow-x: hidden;
+      /* The employee page inherits a body font from DigitUI's vendor CSS; this
+         page loads none of it, so anything portal-mounted to <body> (menus,
+         previews, tooltips) would fall back to the browser's default serif.
+         Keep in sync with --dashboard-font-family in the dashboard stylesheet. */
+      font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
     }
   </style>
 

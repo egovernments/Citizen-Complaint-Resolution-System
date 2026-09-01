@@ -95,13 +95,9 @@ ALLOW = {
 # mis-path and lists it here in the same breath makes that path `seen`, so
 # neither the new-path check nor the stale check fires.
 #
-# The five `prometheus.*` entries that used to sit here were removed once PR
-# #1659's re-pathing merged into this branch: env.yaml now sets those values
-# under prometheus.prometheusSpec.* (and alertmanager at the top level), the
-# paths the chart actually reads. Keeping them in KNOWN_UNREAD would be a stale
-# baseline re-opening the very hole the guard exists to catch -- the guard goes
-# red on exactly that, which is what flagged this cleanup. Only `ingress-nginx`
-# (#1648) still needs an entry.
+# The five `prometheus.*` paths held here while #1659 was in flight were removed
+# after that fix landed; the stale-baseline check correctly requires this list to
+# shrink with the repaired env.yaml. Only `ingress-nginx` (#1648) remains.
 KNOWN_UNREAD = {
     "ingress-nginx": "#1648 -- vendored chart reads .Values.controller.* at root; the helmfile now re-paths this block deliberately (PR #1679), so the env.yaml keys are read via templating rather than by the chart",
 }

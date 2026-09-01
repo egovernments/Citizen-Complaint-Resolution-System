@@ -1,12 +1,12 @@
 # DIGIT Learnings: What Building CMS Taught Us About the Platform
 
-**Audience:** CTO / leadership · **Companion to:** `[docs/deployment-cms-vs-stock-digit.md](deployment-cms-vs-stock-digit.md)` · **Last updated:** 2026-08-24
+**Audience:** Technical · **Companion to:** `[docs/deployment-cms-vs-stock-digit.md](deployment-cms-vs-stock-digit.md)` · **Last updated:** 2026-08-24
 
 ## TL;DR
 
 DIGIT has strong core services — MDMS, workflow, boundary, indexer, filestore, HRMS, user, idgen — but it ships as a platform, not a product. When we started, going from "DIGIT installed" to "citizen filing a complaint" took months, not weeks. This note lays out where the friction was and what CMS built to close it. It's the "why" behind the componentry table in the companion doc.
 
-## What we walked into
+## Current state of DIGIT 2.9.x
 
 The core DIGIT services and the config model (tenants, MDMS, boundaries, branding) are the right shape. What wasn't there:
 
@@ -18,7 +18,7 @@ The core DIGIT services and the config model (tenants, MDMS, boundaries, brandin
 - Thin observability
 - Component defaults that were expensive to run at pilot scale — JVM-heavy backbone, custom JWTs, env-var secrets, per-channel notification services
 
-## Four themes of friction
+## Four areas of challenges
 
 ### 1. Getting to production — deployment and sizing
 
@@ -54,7 +54,7 @@ The core DIGIT services and the config model (tenants, MDMS, boundaries, brandin
   provisions it end-to-end against the data-provider, validates it against the same registry, and the Configurator uses the same client when
   someone later wants to edit that config by hand.
 
-- **No shipped test suite.** Partners either invested in their own E2E / integration / performance coverage or shipped without it. We built the Playwright + integration + k6 suite and wired it to run against deployed environments through the `integration-tests-runner` systemd service. We've also provided a performance test harness that can be pointed at any deployed instance. This has already been used in Mozambique by our team to stress test the deployment.
+- **No shipped test suite for platform or product.** Partners either invested in their own E2E / integration / performance coverage or shipped without it. We built the Playwright + integration + k6 suite and wired it to run against deployed environments through an `integration-tests-runner` systemd service. We've also provided a performance test harness that can be pointed at any deployed instance. This has already been used in Mozambique by our team to stress test the deployment.
 
 ### 4. Customizing it — extension friction
 

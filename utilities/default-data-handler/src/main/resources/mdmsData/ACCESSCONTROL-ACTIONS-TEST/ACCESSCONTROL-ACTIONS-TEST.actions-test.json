@@ -1,17 +1,5 @@
 [  
   {
-    "id": 2635,
-    "url": "/pgr-services/v2/employee/_context",
-    "code": "null",
-    "name": "Employee Working Context",
-    "path": "",
-    "enabled": false,
-    "displayName": "View own employee working context",
-    "orderNumber": 0,
-    "serviceCode": "pgr-services",
-    "parentModule": ""
-  },
-  {
     "id": 2634,
     "url": "/config-service/config/v1/_search",
     "code": "null",
