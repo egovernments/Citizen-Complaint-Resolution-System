@@ -74,14 +74,12 @@ It takes around 60 minutes, use `tail -f /opt/digit/digit-stack-up.mycity.progre
 
 Use domain name instead of localhost, if used one during configuration.
 
+## Enabling Notifications
 
+1. Open the same Ansible variables file created above: `inventory/host_vars/mycity.yml`.
+2. Add the variables listed under [Set Ansible variables](docs/novu-notifications/README.md#1-set-ansible-variables).
+3. From `local-setup/ansible`, run `./deploy.sh mycity`.
+4. After the deployment finishes, follow [Enable WhatsApp](docs/novu-notifications/README.md#3-enable-whatsapp), [Enable SMS](docs/novu-notifications/README.md#4-enable-sms), or both.
 
-
-
-
-
-
-
-
-
+See the [full notifications guide](docs/novu-notifications/README.md) for the provider details, commands, and verification steps.
 
