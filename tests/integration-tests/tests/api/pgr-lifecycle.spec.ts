@@ -13,7 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
 import { getPrincipal } from '../utils/employee-ui';
-import { resolvePersona } from '../utils/personas';
+import { resolvePersona, resolveSeedPlan } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
@@ -277,19 +277,40 @@ Catches a regression where _update silently rejects payloads missing source/id (
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     const fullService = await fetchComplaint(groToken, groUserInfo, serviceRequestId);
 
+    // The assignee must belong to the COMPLAINT's department, not merely hold
+    // one: pgr rejects a mismatch with 400 INVALID_ASSIGNMENT ("cannot be
+    // assigned to employee of department [X]"). resolveSeedPlan() picks its
+    // assignee from the seed service's own department, so use that uuid; the
+    // env LME principal still drives RESOLVE below, which is role-gated
+    // (PGR_LME), not department-gated.
+    const plan = await resolveSeedPlan();
+    if ('error' in plan) {
+      // No fallback to the env LME: assigning a department-mismatched uuid just
+      // reproduces the INVALID_ASSIGNMENT this step exists to avoid, and the
+      // failure would point at authorization instead of the real cause.
+      throw new Error(`resolveSeedPlan failed — cannot pick a department-matched assignee: ${plan.error}`);
+    }
+    const assigneeUuid = plan.assigneeUuid;
+
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${groToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: { apiId: 'Rainmaker', authToken: groToken, userInfo: groUserInfo },
         service: fullService,
-        // GRO assigns the complaint to the PGR_LME who will resolve it.
-        workflow: { action: 'ASSIGN', assignes: [lmeUserInfo.uuid], comments: 'Assigned by API E2E test' },
+        workflow: { action: 'ASSIGN', assignes: [assigneeUuid], comments: 'Assigned by API E2E test' },
       }),
     });
 
-    expect(resp.ok, `ASSIGN as ${GRO_USER} (GRO) should be authorized`).toBe(true);
-    const data: any = await resp.json();
+    // Read the body BEFORE asserting: pgr's refusal reason (400 DEPARTMENT_NOT_FOUND
+    // vs 403 ABAC scope denial vs workflow error) points at completely different
+    // fixes, and asserting on resp.ok alone throws that evidence away.
+    const raw = await resp.text();
+    expect(
+      resp.ok,
+      `ASSIGN as ${GRO_USER} (GRO) should be authorized — HTTP ${resp.status}: ${raw.slice(0, 400)}`,
+    ).toBe(true);
+    const data: any = JSON.parse(raw);
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGATLME');
     console.log(`${serviceRequestId} → PENDINGATLME`);
   });
@@ -320,8 +341,12 @@ This is the second-to-last step in the lifecycle; the citizen-verify step that f
       }),
     });
 
-    expect(resp.ok, `RESOLVE as ${EMPLOYEE_USER} (PGR_LME) should be authorized`).toBe(true);
-    const data: any = await resp.json();
+    const rawResolve = await resp.text();
+    expect(
+      resp.ok,
+      `RESOLVE as ${EMPLOYEE_USER} (PGR_LME) should be authorized — HTTP ${resp.status}: ${rawResolve.slice(0, 400)}`,
+    ).toBe(true);
+    const data: any = JSON.parse(rawResolve);
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('RESOLVED');
     console.log(`${serviceRequestId} → RESOLVED`);
   });

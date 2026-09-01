@@ -61,6 +61,12 @@ initContainers:
             configMapKeyRef: 
                 name: egov-config
                 key: flyway-locations
+        - name: "FLYWAY_IGNORE_MIGRATION_PATTERNS"
+          value: "*:missing"
+        - name: "FLYWAY_OUT_OF_ORDER"
+          value: "true"
+        - name: "FLYWAY_BASELINE_ON_MIGRATE"
+          value: "true"
         - name: "SCHEMA_NAME"
           value: "public"
 

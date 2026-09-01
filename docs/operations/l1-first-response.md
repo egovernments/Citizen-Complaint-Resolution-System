@@ -281,29 +281,15 @@ window you chose.
 | Reading | What it means |
 |---|---|
 | **0** | Normal. Nothing ran out of memory in that window |
-| **Anything above 0** | **Check the panel below before treating it as a finding** — see the next paragraph |
+| **Anything above 0** | A tracked JVM application or migration job logged an OOM signal. Inspect the panel below and escalate |
 
 If it is above zero, look at the panel directly below it, **"Incidents — OOM / heap-space
 errors"**. That lists the actual error lines and names the service.
 
-![The OOM events panel reading 116 in red — on this deployment every one of them was an echo, not a crash](images/20-oom-events-echo.png)
-
-*The panel above was photographed on a healthy deployment. All 116 were Grafana and Loki
-echoing a search back into the log — there had been no crash at all. Read the next paragraph
-before acting on a number like this.*
-
-> **Check the service name before you escalate — this number has a known blind spot.**
-> Grafana and Loki are the monitoring tools themselves, and they write your *search text*
-> back into the log as an ordinary log line. So whenever anyone searches for the words
-> "OutOfMemoryError", this panel counts that search as though it were a crash. On a
-> deployment where L2 has been investigating, the number can read in the **hundreds** while
-> nothing has actually crashed.
->
-> **How to tell in five seconds:** in the "Incidents" panel below, look at the service each
-> line came from. If every line is from **`grafana`** or **`loki`**, there were **no real
-> out-of-memory events** — record it as `OOM events: 0 (all grafana/loki echo)` and move on.
-> Only lines naming an actual DIGIT service — `pgr-services`, `egov-indexer`,
-> `egov-user` and so on — are real.
+> **Treat a non-zero count as real.** The panel selector is restricted to tracked JVM
+> applications, JVM infrastructure, and Flyway migration jobs; Grafana, Loki, and Promtail
+> cannot contribute their own query text. Use the incident panel to identify the service and
+> timestamp, not to decide whether the count should be ignored.
 
 **What to do about it:**
 

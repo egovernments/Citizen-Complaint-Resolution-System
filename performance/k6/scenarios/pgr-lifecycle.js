@@ -14,9 +14,9 @@ let employeeToken = null;
 let employeeUserInfo = null;
 let employeeUUID = null;
 
-// All 33 PGR leaf complaint codes (RAINMAKER-PGR.ComplaintHierarchy leaf rows) from
-// full-dump.sql — each is a serviceCode stored verbatim on a complaint. Each VU/iteration uses a different one
-const SERVICE_CODES = [
+// All 33 PGR ServiceDefs from full-dump.sql — each VU/iteration uses a different one.
+// Override via env config `serviceCodes` for deployments with fewer ServiceDefs loaded.
+const ALL_SERVICE_CODES = [
   'StreetLightNotWorking',
   'NoStreetlight',
   'GarbageNeedsTobeCleared',
@@ -52,6 +52,20 @@ const SERVICE_CODES = [
   'Others',
 ];
 
+export const SERVICE_CODES = (() => {
+  const env = getEnv();
+  const svc = env.serviceCodes;
+  return (Array.isArray(svc) && svc.length > 0) ? svc : ALL_SERVICE_CODES;
+})();
+
+// Boundary codes to rotate across. Falls back to the stock seed locality only
+// if the env config doesn't supply real ones.
+export const LOCALITIES = (() => {
+  const env = getEnv();
+  const loc = env.localities;
+  return (Array.isArray(loc) && loc.length > 0) ? loc : ['JLC477'];
+})();
+
 // Per-VU iteration counter for rotating service codes
 let iterationCount = 0;
 
@@ -59,9 +73,13 @@ function thinkTime() {
   sleep(Math.random() * 2 + 1);
 }
 
+// `authTenant` exists because a deployment may authenticate at one tenant and
+// file complaints at another: on the k8s cluster ADMIN logs in at `pg` and
+// files at `pg.chandigarh`, and logging in at the city tenant is rejected.
+// Falls back to `tenant` for deployments where the two are the same.
 function ensureEmployeeAuth(env) {
   if (!employeeToken) {
-    const auth = login(env.baseUrl, env.username, env.password, env.tenant, 'EMPLOYEE');
+    const auth = login(env.baseUrl, env.username, env.password, env.authTenant || env.tenant, 'EMPLOYEE');
     if (!auth) return false;
     employeeToken = auth.token;
     employeeUserInfo = auth.userInfo;
@@ -88,15 +106,20 @@ export function pgrLifecycle() {
     const vuId = exec.vu.idInTest;
     const serviceCode = SERVICE_CODES[(vuId + iterationCount++) % SERVICE_CODES.length];
 
-    // Citizen identity — vary by VU so different citizens file complaints
+    // Citizen identity. When the env supplies a pre-existing citizen, file
+    // everything as that user so the run creates no new user records.
     const citizenIndex = (vuId % 100) + 1;
-    const citizenPhone = `9900000${String(citizenIndex).padStart(3, '0')}`;
-    const citizenName = `LoadTestCitizen_${citizenIndex}`;
+    const citizenPhone = env.citizenPhone || `9900000${String(citizenIndex).padStart(3, '0')}`;
+    const citizenName = env.citizenName || `LoadTestCitizen_${citizenIndex}`;
+
+    // Rotate boundary per iteration so writes spread across wards
+    const locality = LOCALITIES[(vuId + iterationCount) % LOCALITIES.length];
+    const city = env.city || 'City A';
 
     // Step 2: Create complaint (with 401 retry)
     let service = createComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      env.tenant, serviceCode, citizenPhone, citizenName
+      env.tenant, serviceCode, citizenPhone, citizenName, locality, city
     );
     if (!service) {
       // Could be 401 — clear auth and retry once
@@ -104,7 +127,7 @@ export function pgrLifecycle() {
       if (!ensureEmployeeAuth(env)) return;
       service = createComplaint(
         env.baseUrl, employeeToken, employeeUserInfo,
-        env.tenant, serviceCode, citizenPhone, citizenName
+        env.tenant, serviceCode, citizenPhone, citizenName, locality, city
       );
       if (!service) return;
     }

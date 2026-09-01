@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useGetList } from 'ra-core';
 import type { Role } from '@/api/types';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 export interface UseRolesLookupResult {
   roles: Role[];
@@ -15,9 +16,15 @@ export function useRolesLookup(): UseRolesLookupResult {
     sort: { field: 'name', order: 'ASC' },
   });
 
+  // Collapsed on `code`: the roles picker submits codes, everything downstream
+  // (RolesEditor's selected-set, buildRole, the workflow/notification
+  // validators) matches on code, and a role listed twice showed up in the
+  // employee form's combobox as a repeated, unpickable entry (#1923).
   const roles = useMemo<Role[]>(() => {
     if (!data) return [];
-    return data.map((record) => {
+    return uniqueBy(data, (record) =>
+      String((record as Record<string, unknown>).code ?? record.id),
+    ).map((record) => {
       const code = String((record as Record<string, unknown>).code ?? record.id);
       const name = String((record as Record<string, unknown>).name ?? code);
       const descriptionRaw = (record as Record<string, unknown>).description;

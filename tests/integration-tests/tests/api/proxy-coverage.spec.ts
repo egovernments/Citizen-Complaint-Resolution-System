@@ -372,16 +372,14 @@ test.describe('Domain Configuration', () => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
     const deploymentDomain = new URL(BASE_URL).origin;
 
-    // Check OIDC discovery to get the client registration info
-    const discovery = await page.evaluate(
-      async ({ kcBase, kcRealm }) => {
-        const resp = await fetch(
-          `${kcBase}/realms/${kcRealm}/.well-known/openid-configuration`,
-        );
-        return resp.json();
-      },
-      { kcBase: KC_BASE, kcRealm: KC_REALM },
-    );
+    // Check OIDC discovery to get the client registration info. Node fetch,
+    // NOT page.evaluate: a browser-context fetch from the test page's origin
+    // is subject to CORS and fails with an opaque "Failed to fetch" that says
+    // nothing about redirect URIs. The dedicated CORS test next door owns the
+    // browser-context angle.
+    const discovery = await (
+      await fetch(`${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`)
+    ).json();
 
     expect(discovery.issuer).toBeTruthy();
     expect(discovery.authorization_endpoint).toBeTruthy();
@@ -393,10 +391,8 @@ test.describe('Domain Configuration', () => {
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('scope', 'openid');
 
-    const authResp = await page.evaluate(async (url) => {
-      const resp = await fetch(url, { redirect: 'manual' });
-      return { status: resp.status, location: resp.headers.get('location') };
-    }, authUrl.toString());
+    const authRaw = await fetch(authUrl.toString(), { redirect: 'manual' });
+    const authResp = { status: authRaw.status, location: authRaw.headers.get('location') };
 
     // Should redirect to login page (302) or return the login page (200)
     // NOT return an error about invalid redirect_uri

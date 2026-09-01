@@ -516,11 +516,8 @@ services:
     depends_on:
       egov-mdms-service:
         condition: service_healthy
-      # Flyway is disabled for this service, so the external db-migrations
-      # container must finish before enc starts — otherwise it races an
-      # unmigrated schema on a cold start (matches egov-user et al.).
-      db-migrations:
-        condition: service_completed_successfully
+      # Flyway is disabled for this service; egov-enc-service-migration in
+      # docker-compose.migrations.yml owns the schema and gates this service.
       otel-collector:
         condition: service_started
     volumes:
@@ -650,8 +647,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -665,7 +660,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       MDMS_HOST: http://egov-mdms-service:8094/
@@ -748,21 +744,6 @@ services:
     networks:
       - egov-network
 
-  # Unified database migrations for all DIGIT services
-  # Runs all Flyway migrations in one container before services start
-  db-migrations:
-    image: egovio/tilt-demo-db-migrations:latest
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres:5432/egov
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-    networks:
-      - egov-network
-    restart: "no"
-
   egov-user:
     # Bumped to the 2.12 core-services merge (87e13fe), which now
     # includes the Digit-Core#1044 fixes (tenant-aware encryption,
@@ -778,8 +759,6 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -790,7 +769,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       FLYWAY_ENABLED: 'false'
       # Kafka config - use property name expected by egov-user
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
@@ -944,8 +924,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -956,7 +934,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
@@ -1424,7 +1403,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      # Flyway disabled - migrations run by egov-otp-migration
+      # (docker-compose.migrations.yml); pgbouncer's transaction mode is
+      # incompatible with in-service Flyway anyway
       SPRING_FLYWAY_ENABLED: "false"
       SERVER_PORT: 8089
       EGOV_OTP_LENGTH: 6
@@ -2339,14 +2320,14 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # 30s was never enough for a Spring Boot cold start and is an outlier among
-      # its peers (egov-hrms 150s, egov-user 120s, boundary-service 120s,
-      # digit-config-service 90s — the last added in this very same commit).
+      # This service is implemented in Go (see backend/digit-user-preferences-service),
+      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
+      # full-stack cold start and was an outlier among its slow-starting peers.
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after
       # "Start DIGIT stack" is silently skipped. That is the mechanism behind
-      # CCRS#1551. Align with the other JVM services.
+      # CCRS#1551. Keep the observed-safe grace period.
       start_period: 120s
     networks:
       - egov-network
