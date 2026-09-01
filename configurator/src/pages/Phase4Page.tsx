@@ -261,9 +261,11 @@ export default function Phase4Page() {
         }
       }
 
-      // Validate DOB (parser guarantees string, but double-check here)
-      if (!emp.dob || !/^\d{4}-\d{2}-\d{2}$/.test(emp.dob)) {
-        errors.push('Date of birth missing or malformed (expected YYYY-MM-DD)');
+      // DOB is optional (egovernments/CCRS#1949) — only a filled-in value has
+      // to be well-formed. The parser already normalizes every supported cell
+      // shape to YYYY-MM-DD, so this stays a defensive double-check.
+      if (emp.dob && !/^\d{4}-\d{2}-\d{2}$/.test(emp.dob)) {
+        errors.push('Date of birth malformed (expected YYYY-MM-DD)');
       }
 
       return {
@@ -344,7 +346,7 @@ export default function Phase4Page() {
             mobileNumber: emp.mobileNumber,
             emailId: emp.emailId,
             gender: emp.gender,
-            dob: new Date(emp.dob).getTime(),
+            dob: emp.dob ? new Date(emp.dob).getTime() : undefined,
             department: emp.department,
             designation: emp.designation,
             roles: empRoles,
@@ -594,9 +596,6 @@ export default function Phase4Page() {
                   : 'mobile number (validated against the tenant rule)'}
               </li>
               <li>
-                • <strong>dob</strong> - Date of birth (YYYY-MM-DD)
-              </li>
-              <li>
                 • <strong>department</strong> - Department code
               </li>
               <li>
@@ -607,6 +606,10 @@ export default function Phase4Page() {
               </li>
               <li>
                 • <strong>jurisdictions</strong> - Comma-separated boundary codes
+              </li>
+              <li>
+                • <strong>dob</strong> - Date of birth (YYYY-MM-DD),{' '}
+                <em>optional</em>
               </li>
             </ul>
 

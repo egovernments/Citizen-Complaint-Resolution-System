@@ -32,3 +32,59 @@ describe('hrmsService.searchEmployees', () => {
     expect(url).toContain('codes=EMP1%2CEMP2');
   });
 });
+
+describe('hrmsService.buildEmployee — dob / dateOfAppointment are optional (egovernments/CCRS#1949)', () => {
+  const base = {
+    tenantId: 'ke.bomet',
+    code: 'EMP_001',
+    name: 'Jane Kamau',
+    userName: 'jane.kamau',
+    mobileNumber: '0712345678',
+    designation: 'DESIG_1004',
+    roles: [{ code: 'PGR_LME', name: 'LME' }],
+    jurisdictions: [],
+  };
+
+  it('omits both fields when the caller supplies neither', () => {
+    const emp = hrmsService.buildEmployee({ ...base, department: 'DEPT_07' });
+
+    expect(emp.user.dob).toBeUndefined();
+    expect(emp.dateOfAppointment).toBeUndefined();
+    // Assignment fromDate is non-nullable in the HRMS DTO, so it still gets a
+    // value even though the appointment date is absent.
+    expect(typeof emp.assignments[0].fromDate).toBe('number');
+    // Nothing invented: an absent DOA must not survive JSON serialization.
+    expect(Object.keys(JSON.parse(JSON.stringify(emp)))).not.toContain('dateOfAppointment');
+  });
+
+  it('keeps a supplied dateOfAppointment as the assignment anchor', () => {
+    const doa = new Date('2020-01-15T00:00:00Z').getTime();
+    const emp = hrmsService.buildEmployee({ ...base, department: 'DEPT_07', dateOfAppointment: doa });
+
+    expect(emp.dateOfAppointment).toBe(doa);
+    expect(emp.assignments[0].fromDate).toBe(doa);
+  });
+
+  it('backdates the anchor behind every historical window for a multi-department employee', () => {
+    const doa = new Date('2020-01-15T00:00:00Z').getTime();
+    const emp = hrmsService.buildEmployee({
+      ...base,
+      department: 'DEPT_07,DEPT_08',
+      dateOfAppointment: doa,
+    });
+
+    expect(emp.assignments).toHaveLength(2);
+    // Every assignment fromDate must be >= dateOfAppointment or egov-hrms
+    // rejects with HRMS_INVALID_ASSIGNMENT_DATES_APPOINTMENT.
+    for (const a of emp.assignments) {
+      expect(a.fromDate).toBeGreaterThanOrEqual(emp.dateOfAppointment!);
+    }
+  });
+
+  it('leaves the anchor absent for a multi-department employee with no DOA', () => {
+    const emp = hrmsService.buildEmployee({ ...base, department: 'DEPT_07,DEPT_08' });
+
+    expect(emp.dateOfAppointment).toBeUndefined();
+    expect(emp.assignments).toHaveLength(2);
+  });
+});
