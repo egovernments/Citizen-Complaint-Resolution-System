@@ -139,6 +139,7 @@ describe('Novu workflow creation deployment contract', () => {
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
+  const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
   const dotenvLoader = path.join(
     REPO_ROOT,
     'backend/novu-bridge/config/load-dotenv.sh'
@@ -195,5 +196,33 @@ describe('Novu workflow creation deployment contract', () => {
       'Complaint {{payload.complaintNo}} status is {{payload.status}}',
       'caller wins',
     ]);
+  });
+
+  test('the bootstrap preserves Handlebars braces in the default SMS body and explicit overrides', () => {
+    const smsBodyDefault = novuBootstrap.match(
+      /if \[\[ -z "\$\{NOVU_SMS_BODY:-\}" \]\]; then\n  NOVU_SMS_BODY='[^'\n]*'\nfi/
+    );
+    expect(smsBodyDefault).not.toBeNull();
+
+    const probe = `${smsBodyDefault![0]}\nprintf '%s\\n' "$NOVU_SMS_BODY"`;
+    const runProbe = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_SMS_BODY;
+      } else {
+        env.NOVU_SMS_BODY = override;
+      }
+      return execFileSync('bash', ['-c', probe], {
+        encoding: 'utf8',
+        env,
+      }).trim();
+    };
+
+    expect(runProbe()).toBe(
+      'Complaint {{payload.complaintNo}} status is {{payload.status}}'
+    );
+    expect(runProbe('Custom {{payload.status}} update')).toBe(
+      'Custom {{payload.status}} update'
+    );
   });
 });
