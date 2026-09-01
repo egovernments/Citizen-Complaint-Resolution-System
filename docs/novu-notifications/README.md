@@ -166,6 +166,7 @@ export NOVU_WORKFLOW_ID=complaints-whatsapp
 export NOVU_WORKFLOW_NAME=complaints-whatsapp
 export NOVU_SMS_WORKFLOW_ID=complaints-sms
 export NOVU_EMAIL_WORKFLOW_ID=complaints-email
+export NOVU_SMS_BODY='Complaint {{payload.complaintNo}} status is {{payload.status}}'
 
 # Current master still contains retired event-workflow bootstrap code. A comma
 # is non-empty (so the script does not restore its defaults) but yields no IDs.
@@ -173,7 +174,7 @@ export NOVU_EVENT_WORKFLOWS=,
 
 bash ./bootstrap-novu-whatsapp.sh
 
-unset NOVU_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM
+unset NOVU_API_KEY NOVU_SMS_BODY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM
 ```
 
 This command only administers Novu integrations and workflows. It does not start or restart DIGIT and does not trigger a message.
@@ -216,6 +217,37 @@ For a non-delivery infrastructure check, stop here.
 ## 6. Complete real WhatsApp delivery
 
 Business-initiated WhatsApp messages require an approved Twilio Content SID. The bridge deliberately skips WhatsApp events without one.
+
+First confirm that the notification masters live at the state root of the tenant
+where the complaint will be filed. For example, a complaint in `pg.citya` resolves
+notification configuration from `pg`. That may differ from the deployment's
+`state_root` on a stock dump-based quickstart.
+
+If the roots differ, re-run the idempotent notification seed for the complaint root
+before continuing:
+
+```bash
+export COMPLAINT_TENANT='pg.citya'
+export NOTIF_TENANT="${COMPLAINT_TENANT%%.*}"
+export DIGIT_URL='http://127.0.0.1:18000'
+export DIGIT_USERNAME='ADMIN'
+export DIGIT_PASSWORD='<from secret manager>'
+export DIGIT_LOGIN_TENANT="$NOTIF_TENANT"
+
+cd /opt/digit/notification-seed
+SCHEMA_FILE=/opt/digit/notification-seed/RAINMAKER-PGR.json \
+DATA_DIR=/opt/digit/notification-seed \
+python3 seed-notifications.py
+
+unset DIGIT_PASSWORD
+```
+
+Wait for `DONE`, then log in to Configurator at that same `NOTIF_TENANT` before
+persisting the provider-template mappings below. Configurator writes notification
+MDMS at the tenant used for the session. If it writes to the deployment root instead,
+PGR finds no routing for the complaint tenant and emits no notification events. The
+automatic fix for this stock-quickstart mismatch is tracked in
+[issue #1943](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1943).
 
 1. In Configurator, open **Notifications -> Providers -> Sync WhatsApp templates**.
 2. Persist mappings from the configured Twilio account into `RAINMAKER-PGR.NotificationProviderTemplate`. Do not use the example SIDs shipped in the seed for another account.
