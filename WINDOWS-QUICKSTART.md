@@ -367,81 +367,6 @@ docker compose -f /opt/digit/docker-compose.egov-digit.yaml \
 | Port 80 already in use | Something on Windows (IIS?) owns it: `netstat -ano \| findstr :80` in PowerShell. |
 | `Conditional result was ...` errors at play start | You're on a playbook predating `1442b194`. Update, or use apt's ansible-core. |
 
-## Step 6 troubleshooting — the OpenBao "sealed" failure (root cause + fix)
-
-This is the defect that made earlier Windows attempts fail repeatedly at step 6.
-
-**Symptom.** Everything deploys, all 38 containers go healthy, and then the
-very last validation task fails:
-
-```
-fatal: [mybox]: FAILED! => {"json": {"initialized": true, "sealed": true, "standby": true},
- "msg": "Status code was 503 and not [200]: HTTP Error 503: Service Unavailable"}
-PLAY RECAP
-mybox : ok=122  changed=39  unreachable=0  failed=1
-```
-
-**Root cause.** Task ordering, not anything Windows-specific — though Windows
-users hit it most because they deploy onto a machine whose cached images are
-weeks old:
-
-1. `Secrets prep — bring up OpenBao first` starts openbao alone.
-2. `OpenBao — unseal if sealed` unseals it. ✅
-3. `OpenBao — write secrets into compose .env` changes `.env`.
-4. `Pull all images` fetches a **newer openbao image**.
-5. `Start DIGIT stack` (`docker compose up -d`) therefore **recreates the
-   openbao container** — and OpenBao always comes back **sealed**.
-6. `validate — OpenBao /v1/sys/health is unsealed` → 503 → deploy fails.
-
-The playbook *had* re-unseal tasks for exactly this, but they were gated
-`when: ansible_system == "Darwin"`, on this stated reasoning:
-
-> *"Darwin only: on Linux the post-OpenBao recreate is a plain up -d that
-> doesn't recreate openbao."*
-
-That is true of the **post-secrets** recreate it sits next to — but that isn't
-the task that recreates openbao on Linux. `Start DIGIT stack` is, because it
-runs after the secrets are written. So **Linux and WSL2 had no re-unseal at
-all**, and every first deploy whose openbao image moved failed on its last task.
-
-**Fix.** Remove the Darwin gate so the re-unseal runs on every platform. It is
-a no-op when openbao is already unsealed:
-
-```diff
--    - name: "OpenBao — wait for API again after converge#2 (Darwin)"
-+    - name: "OpenBao — wait for API again after stack start"
-       ansible.builtin.uri:
-         url: http://127.0.0.1:18200/v1/sys/seal-status
-         status_code: [200]
-       register: bao_seal_status_post
-       retries: 24
-       delay: 5
-       until: bao_seal_status_post.status == 200
--      when: ansible_system == "Darwin"
-
--    - name: "OpenBao — re-unseal after converge#2 if sealed (Darwin)"
-+    - name: "OpenBao — re-unseal after stack start if sealed"
-       when:
--        - ansible_system == "Darwin"
-         - bao_seal_status_post.json.sealed | default(true)
-```
-
-`bao_unseal_key` is set unconditionally by `OpenBao — parse init state`
-earlier in the play, so it is always available here.
-
-**Verification.** Because the bug only reproduces when the openbao image
-happens to change, the fix was verified by fault injection — a temporary task
-that seals OpenBao at exactly the point the recreate would:
-
-| | unpatched (run 1) | patched + injected seal (run 4) |
-|---|---|---|
-| `re-unseal after stack start if sealed` | task didn't exist on Linux | **`ok` — fired** |
-| `validate — OpenBao unsealed` | **`fatal` 503 sealed** | **passed** |
-| PLAY RECAP | `failed=1` | **`failed=0`** |
-
-**Workaround if you're on an unpatched playbook:** run `./deploy.sh mybox` a
-second time. The early `OpenBao — unseal if sealed` task will unseal it, and
-`.env` no longer changes, so openbao isn't recreated.
 
 ## Known limitations / caveats
 
@@ -463,36 +388,6 @@ second time. The early `OpenBao — unseal if sealed` task will unseal it, and
 - **ansible-core version matrix** — apt's 2.16.3 is the recommended path.
   A full deploy on **2.21.3** also completed `failed=0` with zero fatals
   (5 m 58 s), so the old "< 2.19" pin is no longer required.
-
-### Three cosmetic defects you will see in a demo
-
-None break the deploy — all three pass validation — but all three are visible
-on screen, so know about them before you present. **None are Windows-specific**;
-they affect the `localhost-slim` / `localhost-full` profiles on any OS.
-
-1. **Broken logo in the employee UI header.** The header `<img>` resolves to
-   `https://s3.ap-south-1.amazonaws.com/pg-egov-assets/pg.citya/logo.png`,
-   from `asset_s3_bucket: "pg-egov-assets"` in the template. That object is not
-   public/present, so the request fails and the browser renders the `Logo` alt
-   text. It is the only failed request on the page.
-
-2. **Raw localization keys in the header** — `TENANT_TENANTS_PG_CITYA` and
-   `ULBGRADE_MUNICIPAL_CORPORATION` render instead of readable names.
-   Confirmed against the API: `rainmaker-common` returns 730 messages for
-   `pg`/`en_IN` and **neither code is among them**. The dump seeds the
-   `pg.citya` tenant but not its display-name localizations.
-
-3. **Citizen portal shows the wrong country code.** The sign-in screen shows
-   `+254` (Kenya) with a `700000000` placeholder even though the template sets
-   `core_mobile_configs.countryCode: "+91"`. Root cause is not config leakage —
-   `group_vars/digit.yml` has `core_mobile_configs: {}`, and the built bundle
-   contains `+254` hardcoded. `digit-ui-v2/src/pages/CitizenLoginPage.tsx:45`
-   reads `gc?.countryCode ?? '+254'`, and `/var/www/citizen/index.html` never
-   references `globalConfigs.js` — so the SPA has no way to receive the
-   tenant's mobile config and the fallback always wins.
-   (`CitizenLayout.tsx:40` additionally hardcodes `+254` unconditionally.)
-   On a `+91` tenant this means the citizen portal will validate the wrong
-   number format. Worth a separate issue.
 
 ## Not included in the slim profile
 
