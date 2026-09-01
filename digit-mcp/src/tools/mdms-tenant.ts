@@ -2008,7 +2008,16 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         actionsSchema: string,
         floorLabel: string,
       ): Promise<void> {
-        const actions = await fetchAllMdmsV2Raw(target, actionsSchema).catch(() => []);
+        const resultKey = `${actionsSchema}/${EMPLOYEE_CONTEXT_ACTION_ID} (${floorLabel})`;
+
+        let actions: Awaited<ReturnType<typeof fetchAllMdmsV2Raw>>;
+        try {
+          actions = await fetchAllMdmsV2Raw(target, actionsSchema);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          results.data.failed.push(`${resultKey} fetch error: ${msg}`);
+          return;
+        }
         const existing = actions.find((record) =>
           record.tenantId === target
             && record.isActive
@@ -2016,7 +2025,6 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         const reconciliation = reconcileEmployeeContextPolicy(
           existing?.data as Record<string, unknown> | undefined,
         );
-        const resultKey = `${actionsSchema}/${EMPLOYEE_CONTEXT_ACTION_ID} (${floorLabel})`;
 
         try {
           if (reconciliation.kind === 'create') {

@@ -33,7 +33,20 @@ export type EmployeeContextPolicyReconciliation =
   | { kind: 'conflict'; reason: string };
 
 function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (left === right) return true;
+  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) {
+    return false;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) => sameJson(item, right[index]));
+  }
+  const leftEntries = Object.entries(left as Record<string, unknown>);
+  const rightObj = right as Record<string, unknown>;
+  if (leftEntries.length !== Object.keys(rightObj).length) return false;
+  return leftEntries.every(([key, value]) => key in rightObj && sameJson(value, rightObj[key]));
 }
 
 /**

@@ -8,15 +8,60 @@ import {
   reconcileEmployeeContextPolicy,
 } from './src/tools/employee-context-policy-seed.js';
 
+// The first 4 tab-delimited columns are plain scalars; the 5th is a JSON
+// object that can itself contain literal tab characters, so it cannot be
+// carved out with a plain `line.split('\t')` without shifting every column
+// that follows it.
+function splitDumpRow(line: string): { columns: string[]; json: unknown } | null {
+  let start = 0;
+  const columns: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const idx = line.indexOf('\t', start);
+    if (idx === -1) return null;
+    columns.push(line.slice(start, idx));
+    start = idx + 1;
+  }
+  if (line[start] !== '{') return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let end = start;
+  for (; end < line.length; end++) {
+    const ch = line[end];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        end++;
+        break;
+      }
+    }
+  }
+
+  try {
+    return { columns, json: JSON.parse(line.slice(start, end)) };
+  } catch {
+    return null;
+  }
+}
+
 const dumpRows = fs.readFileSync('../local-setup/db/full-dump.sql', 'utf8')
   .split('\n')
-  .map((line) => line.split('\t'))
-  .filter((columns) => columns.length >= 5);
+  .map(splitDumpRow)
+  .filter((row): row is { columns: string[]; json: unknown } => row !== null);
 
 test('the full dump contains exactly one canonical employee-context policy', () => {
   const actions = dumpRows
-    .filter((columns) => columns[3] === 'ACCESSCONTROL-ACTIONS-TEST.actions-test')
-    .map((columns) => JSON.parse(columns[4]) as Record<string, unknown>)
+    .filter((row) => row.columns[3] === 'ACCESSCONTROL-ACTIONS-TEST.actions-test')
+    .map((row) => row.json as Record<string, unknown>)
     .filter((action) => Number(action.id) === EMPLOYEE_CONTEXT_ACTION_ID);
 
   assert.equal(actions.length, 1);
@@ -25,8 +70,8 @@ test('the full dump contains exactly one canonical employee-context policy', () 
 
 test('employee-context policy is role independent', () => {
   const grants = dumpRows
-    .filter((columns) => columns[3] === 'ACCESSCONTROL-ROLEACTIONS.roleactions')
-    .map((columns) => JSON.parse(columns[4]) as { actionid?: number })
+    .filter((row) => row.columns[3] === 'ACCESSCONTROL-ROLEACTIONS.roleactions')
+    .map((row) => row.json as { actionid?: number })
     .filter((grant) => Number(grant.actionid) === EMPLOYEE_CONTEXT_ACTION_ID);
 
   assert.deepEqual(grants, []);
