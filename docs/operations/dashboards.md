@@ -109,7 +109,7 @@ on them is meant to be read.
 
 | Panel | Shape | What it shows and what the reading means |
 |---|---|---|
-| **OOM events (current range)** | Stat | A count of out-of-memory crashes in your time range. **`0` is the healthy answer.** Above `0`, **check the panel below before believing it** — this panel's query does not exclude Grafana and Loki, which log your own search text back into the stream, so searching for "OutOfMemoryError" inflates it. A reading in the hundreds with every incident line naming `grafana` or `loki` means zero real crashes |
+| **OOM events (current range)** | Stat | A count of out-of-memory errors from the allowlisted JVM applications and migration jobs in your time range. **`0` is the healthy answer.** Above `0` is a real matched event: open the incident panel below, record the service and time, and escalate |
 | **Incidents — OOM / heap-space errors (last range)** | Logs | The actual crash messages behind the number above, naming the service. If the stat panel is above zero, copy your evidence from here |
 | **Right-sizing snapshot — heap profile per service (heap, MB)** | Table | One row per service: memory in use now, its peak in the last hour, its ceiling. The **headroom** column is the useful one — the percentage of its allowance still free. Low headroom means the service is close to crashing. A capacity judgement, so L2's to act on |
 | **Heap used (MB) — by service** | Timeseries | Memory in use over time. A healthy line **rises and falls repeatedly** — that is normal. A line that **drops to zero and climbs again from the bottom** is a service that crashed and restarted at that moment |
@@ -119,9 +119,11 @@ on them is meant to be read.
 | **Live threads** | Timeseries | How many pieces of work are in flight. Steady is fine. **Climbing and never coming back down** means work is piling up, usually because something it depends on is slow or dead |
 | **Loaded classes** | Timeseries | How much program code is loaded. Rarely useful in an incident; it flattens shortly after start-up |
 
-> **Coverage.** This dashboard covers the **15 Java services carrying the OpenTelemetry
-> agent** only — see [reference.md](reference.md#metric-and-log-coverage--what-is-and-isnt-watched)
-> for the list and for what covers the rest.
+> **Coverage.** The metric panels cover the Java services carrying the OpenTelemetry agent.
+> The two OOM panels additionally cover the tracked JVM infrastructure and Flyway migration
+> jobs whose only memory-failure signal is in Loki. See
+> [reference.md](reference.md#metric-and-log-coverage--what-is-and-isnt-watched) for the
+> detailed coverage boundaries.
 
 ---
 

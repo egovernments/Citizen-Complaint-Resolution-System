@@ -2320,14 +2320,14 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # 30s was never enough for a Spring Boot cold start and is an outlier among
-      # its peers (egov-hrms 150s, egov-user 120s, boundary-service 120s,
-      # digit-config-service 90s — the last added in this very same commit).
+      # This service is implemented in Go (see backend/digit-user-preferences-service),
+      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
+      # full-stack cold start and was an outlier among its slow-starting peers.
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after
       # "Start DIGIT stack" is silently skipped. That is the mechanism behind
-      # CCRS#1551. Align with the other JVM services.
+      # CCRS#1551. Keep the observed-safe grace period.
       start_period: 120s
     networks:
       - egov-network
