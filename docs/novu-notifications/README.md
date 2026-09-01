@@ -9,9 +9,13 @@ root of the cloned `Citizen-Complaint-Resolution-System` repository.
 1. A deployment created by `./deploy.sh mycity`, or the same variables file before
    its first run. Adding the variables below before the first deployment avoids a
    second 60-minute run.
-2. A Twilio account, with the Account SID, Auth Token, and a sender number.
-3. For WhatsApp, a Twilio WhatsApp sender and approved templates on that same
-   account. Business-initiated WhatsApp messages will not deliver without them.
+2. A Twilio account. The Account SID and Auth Token are account-level and serve
+   both channels; only the sender differs.
+3. For SMS, an SMS-capable Twilio number.
+4. For WhatsApp, a WhatsApp-enabled sender on that same account — the Twilio
+   sandbox number for testing, or a sender registered with WhatsApp Business —
+   plus approved templates. Business-initiated WhatsApp messages will not deliver
+   without them.
 
 Last tested with `egovio/pgr-services:master-0938bdf` and
 `egovio/novu-bridge:master-0469335`. Newer images should work.
@@ -32,11 +36,12 @@ deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
 | `novu_admin_password` | Novu admin password. Generate a unique, strong one. | |
 | `novu_bridge_workflow_id_whatsapp` | Novu workflow the bridge triggers for WhatsApp. Must match the workflow created during [Enable WhatsApp](#enable-whatsapp). | `"complaints-whatsapp"` |
-| `novu_bridge_integration_id_whatsapp` | Novu integration the bridge selects for WhatsApp. Without it, WhatsApp sends fall through to the primary plain-SMS integration. | `"twilio-whatsapp"` |
+| `novu_bridge_integration_id_whatsapp` | Novu integration the bridge selects for WhatsApp. Without it, WhatsApp sends fall through to the primary plain-SMS integration. Defaulted on automatically when `twilio_sms_from` is set. | `"twilio-whatsapp"` |
 | `novu_bridge_workflow_id_sms` | Novu workflow the bridge triggers for ordinary SMS. | `"complaints-sms"` |
 | `twilio_account_sid` | From the Twilio Console. | |
 | `twilio_auth_token` | From the Twilio Console. | |
-| `twilio_whatsapp_from` | Your Twilio WhatsApp sender, with the `whatsapp:` prefix. | `whatsapp:+14155238886` |
+| `twilio_whatsapp_from` | Your Twilio WhatsApp sender, with the `whatsapp:` prefix. Defaults to the Twilio sandbox number if omitted. | `whatsapp:+14155238886` |
+| `twilio_sms_from` | Your ordinary-SMS sender, no prefix. Setting it makes the deployment create the `twilio-sms` integration and make it primary. Leave empty to add the SMS provider by hand instead. | `+14155550123` |
 | `novu_api_key` | Leave unset. Ansible mints a key and wires it into `/opt/digit/.env`. Set it only if the deployment has a pinned key. | |
 
 ## Start Deployment
@@ -106,7 +111,7 @@ The script creates `twilio-whatsapp` when it is absent, but it does not update t
 credentials of an existing integration. On an existing installation, update or
 delete that integration in Novu before running the script.
 
-### Verify
+### Verify the WhatsApp provider
 
 ```bash
 curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
@@ -178,6 +183,13 @@ provider delivered the message.
 
 ## Enable SMS
 
+If you set `twilio_sms_from`, the deployment already did this: it created the
+`twilio-sms` integration with the same Twilio credentials and made it the primary
+integration on Novu's `sms` channel. Skip to [Verify the SMS provider](#verify-the-sms-provider).
+
+The rest of this section is for deployments that left `twilio_sms_from` empty —
+a sender procured after the deploy, or a non-Twilio SMS gateway.
+
 ### Add the provider in Configurator
 
 Open **Configurator -> Notifications -> Providers** while logged in as an employee
@@ -199,7 +211,8 @@ that Novu reports the integration as active.
 
 ### Make it primary
 
-Configurator has no primary-selection action, so use Novu's administration API:
+Configurator has no primary-selection action, so use Novu's administration API.
+The bootstrap does this for you when `twilio_sms_from` is set:
 
 ```bash
 SMS_INTEGRATION_ID="$(
@@ -214,7 +227,7 @@ curl -fsS -X POST \
   >/dev/null
 ```
 
-### Verify
+### Verify the SMS provider
 
 ```bash
 curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
