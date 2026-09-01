@@ -38,7 +38,9 @@ Every level is `constant-vus` held for 2 minutes. Figures are whole-run rates ov
 
 ### The Drain Gate
 
-Levels are separated by a **drain gate**: the next level does not start until the persister's Kafka consumer lag returns to zero and the Elasticsearch indexer's lag falls below 1,000.
+Levels are separated by a **drain gate**: the next level does not start until the persister's Kafka consumer lag returns to zero.
+
+The gate originally also required the Elasticsearch indexer's lag to fall below 1,000. That condition can never be satisfied on this cluster — the indexer throws roughly 5,700 transformation errors every five minutes (`$.MdmsRes.tenant.tenants is not found`, `$.TenantBoundary[0].boundary[0] is not found`) and clears its backlog at about 1.3 messages/sec. It is a pre-existing defect unrelated to load testing, and it sits off the complaint write path. The gate checks the **persister only**, which is the consumer that actually governs workflow-state correctness.
 
 This matters more than it sounds. An earlier ungated pass ran the same levels back to back with a fixed 45-second pause, and its results were not reproducible — levels inherited the previous level's backlog, and the failure counts moved non-monotonically as a result. Every figure in this document comes from the gated pass. The ungated pass is reported separately under [Why the Gate Matters](#why-the-gate-matters), because the difference between the two is itself the most useful finding in this run.
 
@@ -68,7 +70,9 @@ Replicas are **1** on every service in the complaint path (`pgr-services`, `egov
 | Error-based ceiling | **Not found** — no level reached the 5% budget |
 | Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
 | Saturation point | **At or below 120 VU** — the lowest gated level, already on the plateau |
-| Pod restarts across the whole campaign | **0** |
+| Pod restarts, closed-loop levels | **0** |
+| Pod restarts, open-loop on shipped heap | **1** (liveness probe, not OOM) |
+| Run-to-run variance at a fixed level | **6.9%** throughput, **20.1%** p95 |
 | Records in database | 195 at start, 19,433 at end |
 
 **No error ceiling exists below 320 VU on this deployment.** Load is absorbed as latency, not as failure: throughput falls and response times climb, but requests keep succeeding. The run was stopped at 320 VU because the ladder ran out of planned levels, not because anything broke.
@@ -129,18 +133,130 @@ One failed request anywhere in the chain fails the whole lifecycle, so the lifec
 
 Because each level ran against a slightly larger database than the one before it (see [The Data-Volume Confound](#the-data-volume-confound)), levels far apart in time cannot be compared directly. **Adjacent pairs, run within minutes of each other, can.** Every such pair tells the same story:
 
-| Pair | Throughput | http p95 |
-|------|-----------|----------|
-| 120 → 160 VU | **−0.3%** | **+65%** |
-| 200 → 240 VU | −7.0% | +59% |
-| 240 → 280 VU | −6.5% | +29% |
-| 280 → 320 VU | −10.5% | +19% |
+| Pair | Throughput | Inside noise? | http p95 | Exceeds noise? |
+|------|-----------|---------------|----------|----------------|
+| 120 → 160 VU | −0.3% | yes | **+65%** | **yes** |
+| 200 → 240 VU | −7.0% | yes | **+59%** | **yes** |
+| 240 → 280 VU | −6.5% | yes | +29% | no |
+| 280 → 320 VU | −10.5% | yes | +19% | no |
 
-In every case additional concurrency buys latency and no additional work. The 120 → 160 pair is the sharpest: throughput is flat to within 0.3% — 32.67 against 32.56 API req/s — while p95 rises by two-thirds. That is a saturation plateau, and it means **the deployment is already at capacity at 120 VU**, the lowest level in the gated series.
+**The throughput column carries no signal.** Three repeats of an identical level
+(see [Run-to-Run Variance](#run-to-run-variance)) show a 12.1% peak-to-trough
+spread in throughput between runs that differ in nothing at all. Every
+throughput change in the table above is smaller than that. An earlier version of
+this document read the column as a trend and stated that each 40-VU step "costs
+about 8-11% of throughput"; that claim is withdrawn — it was noise.
+
+**The latency column does carry signal, for the two larger steps.** Against a
+36.6% peak-to-trough spread in p95, the +65% and +59% rises are real; the +29%
+and +19% are not distinguishable from noise.
+
+So the saturation conclusion stands, on narrower evidence than before: at
+120 → 160 VU throughput is flat — which the variance data now tells us is the
+*expected* outcome for any two runs, not a finding in itself — while p95 rises
+by two-thirds, which is well outside the noise floor. That combination is a
+saturation plateau, and it means **the deployment is already at capacity at
+120 VU**, the lowest level in the gated series.
 
 **The peak therefore sits below 120 VU and was not measured.** Locating it needs a ladder below 120 with a fixed dataset, which this campaign did not run.
 
 What it does **not** do is fail. Across 240, 280 and 320 VU — 15,636 requests in total — **not one request returned an error**, and every lifecycle reached `RESOLVED`. Whatever the limiting resource is, the stack queues on it rather than shedding load.
+
+## Run-to-Run Variance
+
+Three repeats of an identical level — 120 VU, drained persister, same
+configuration, roughly two minutes apart. This is the measurement neither the
+March 2026 campaign nor the earlier passes here ever made, and without it no
+difference between two runs can be called real.
+
+| Repeat | Lifecycles/s | API req/s | http p95 | Request fail |
+|---|---|---|---|---|
+| 1 | 5.478 | 22.81 | 5,510ms | 0.000% |
+| 2 | 5.496 | 22.87 | 5,257ms | 0.000% |
+| 3 | 4.856 | 20.32 | 7,487ms | 0.000% |
+
+| Metric | Mean | Std dev | Coefficient of variation | Peak-to-trough |
+|---|---|---|---|---|
+| Lifecycles/s | 5.277 | 0.364 | **6.9%** | **12.1%** |
+| API req/s | 22.00 | 1.455 | 6.6% | 11.6% |
+| http p95 | 6,085ms | 1,221ms | **20.1%** | **36.6%** |
+
+**Latency is three times noisier than throughput.** Any claim resting on a p95
+difference smaller than about 37%, or a throughput difference smaller than about
+12%, needs repeats behind it before it means anything.
+
+Two limits on this estimate. **n=3** — enough to show the earlier per-rung
+deltas sit inside the noise, not enough to characterise the distribution. And it
+is **specific to this dataset**: the repeats ran at roughly 27,000 records, where
+the same level measured earlier at 17,337 records returned 7.939 lifecycles/s
+against 5.277 here. That 34% gap is data growth, and it dwarfs the 12% noise
+floor — which is the clearest available statement of how much stored data
+matters relative to measurement error on this deployment.
+
+## Open-Loop Testing
+
+Every figure above comes from a closed-loop test: a fixed number of virtual
+users, each of which cannot begin a new lifecycle until its previous one
+finishes. That design makes the offered load an *output* — the server decides
+how fast requests arrive by deciding how fast it responds — so it can never
+produce more demand than the system is already absorbing.
+
+`variable-throughput.js` uses a `ramping-arrival-rate` executor instead, holding
+the arrival rate independent of server speed: 1 → 15 → 1 → 25 → 2 → 35 → 10 → 0
+lifecycles/sec across ten minutes, with valleys between spikes. It was run twice,
+once on each configuration.
+
+| | Shipped heap | Raised heap |
+|---|---|---|
+| `-Xmx` / probe timeout | 192m / 3s | 448m / 10s |
+| **dropped_iterations** | **3,899** | **4,390** |
+| Iterations completed | 4,124 | 3,561 |
+| Intended | 8,023 | 7,951 |
+| **Intended work never started** | **48.6%** | **55.2%** |
+| API req/s achieved | 26.50 | 23.58 |
+| http p95 | 15.59s | 18.51s |
+| http max | **59.62s** | 31.48s |
+| **Request fail** | **3.79%** (634) | **0.000%** (0 of 14,857) |
+| **Lifecycle success** | **89.71%** | **100.00%** |
+| Pod restarts | **1 — killed by liveness probe** | **0** |
+
+**Roughly half the intended work never started.** `dropped_iterations` is the
+metric a closed-loop ladder cannot produce at all, and it is the honest measure
+of the gap between demand and capacity. Lifecycle duration went from ~10s under
+closed-loop to 44s and 55s here, and VUs piled up from 11 to the 400 ceiling as
+k6 tried and failed to hold the rate.
+
+Note that the closed-loop ladder reported **0.000% failures** at every gated
+level while open-loop on the same cluster produced a 48.6% shortfall. Both are
+accurate. They answer different questions: closed-loop measures what the system
+will accept, open-loop measures what happens when demand does not wait its turn.
+Real traffic does not wait its turn.
+
+### The heap setting decides how overload fails
+
+On the shipped configuration the deployment **failed and was restarted**. On the
+raised configuration it **queued and stayed up**. Same offered load, same
+cluster, same ten minutes.
+
+The shipped run's `pgr-services` was killed by the **liveness probe**, not by
+memory — no `OOMKilled` marker appears anywhere in the pod status:
+
+```
+Liveness probe failed: context deadline exceeded (x6 over 7m17s)
+Container pgr-services failed liveness probe, will be restarted
+lastState.terminated: reason=Error exit=137 (SIGKILL)
+```
+
+The shipped probe timeout is 3 seconds. Under sustained load `/health` exceeded
+it six consecutive times and kubelet restarted a pod that was slow but still
+serving; the 50 connection-refused errors in that run are the restart window,
+and the 59.62s maximum latency is the same event. **On shipped settings,
+sustained load causes Kubernetes to restart healthy-but-loaded pods.**
+
+What the raised heap did *not* do is make the system faster. Successful
+lifecycles were 3,700 shipped against 3,561 raised — a 3.9% difference, which
+the variance data above places firmly inside the noise. The heap does not buy
+throughput. It decides whether overload degrades into slowness or into an outage.
 
 ## Why the Gate Matters
 
@@ -195,7 +311,9 @@ A cleanly comparable ladder needs either a database reset between levels or a da
 
 ## Stability
 
-**Zero pod restarts across the entire campaign** — fourteen load levels across three passes, 19,238 complaints, and not one restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
+**Zero pod restarts across every closed-loop level** — fourteen levels across three passes and not one restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
+
+The one restart in the whole campaign came from **open-loop testing on the shipped configuration**, where the liveness probe killed `pgr-services` (see [Open-Loop Testing](#the-heap-setting-decides-how-overload-fails)). The raised configuration survived the identical test with zero restarts.
 
 That result is only meaningful because the JVM heap was raised for the test. See [Deployment Configuration](#deployment-configuration).
 

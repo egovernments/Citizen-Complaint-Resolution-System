@@ -16,7 +16,11 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **The deployment is saturated at 120 VU**, the lowest level tested with a drain gate: 120 and 160 VU return identical throughput (32.67 vs 32.56 API req/s) while latency rises 65%. Its actual peak sits below 120 VU and was not measured.
 
-**Zero pod restarts** across fourteen load levels and 19,238 complaints.
+**Zero pod restarts** across every closed-loop level. The single restart in the campaign came from open-loop testing on the *shipped* configuration, where the liveness probe killed `pgr-services` — the raised configuration survived the identical test untouched.
+
+**Open-loop testing tells a different story from closed-loop.** Holding the arrival rate independent of server speed, **roughly half the intended work never started** (48.6% and 55.2% dropped across two runs). Closed-loop reported 0.000% failures at every level; both are accurate, and they answer different questions.
+
+**Run-to-run variance is 6.9% on throughput and 20.1% on p95.** Three repeats of an identical level. This is the first such measurement in any DIGIT PGR campaign, and it retires one claim these docs previously made — see [Run-to-Run Variance](./findings#run-to-run-variance).
 
 ## Read This First
 

@@ -13,7 +13,9 @@ A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **320 concurrent test 
 | Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
 | Saturation point | **At or below 120 VU** |
 | Response time at 320 VU | 11.5s p95 |
-| Pod restarts, whole campaign | **0** |
+| Pod restarts, closed-loop levels | **0** |
+| Pod restarts, open-loop on shipped heap | **1** (liveness probe, not OOM) |
+| Run-to-run variance at a fixed level | **6.9%** throughput, **20.1%** p95 |
 | Records in database | 195 at start, 19,433 at end |
 
 ## What We Tested
@@ -60,6 +62,8 @@ The limit that does exist is a **throughput limit**, and the deployment is past 
 
 The 120 → 160 pair is the clearest: throughput flat to within 0.3%, latency up two-thirds. **The deployment is already saturated at 120 VU**, the lowest level tested with the gate, so its peak sits below that and was not measured.
 
+**One correction from the variance data.** Three repeats of an identical level show a 12.1% peak-to-trough spread in throughput. Every throughput figure in the table above is a smaller change than that, so the throughput column carries no signal — an earlier version of this document described those steps as costing "8-11% of throughput" each, and that reading is withdrawn. The saturation conclusion rests on the latency rises of +65% and +59%, which exceed the 36.6% spread in p95; the +29% and +19% do not.
+
 Which limit matters depends on what you are protecting. If the requirement is that requests succeed, this deployment has headroom beyond anything tested. If the requirement is a response-time budget, it is exceeded well before any error appears — 320 VU answers every request, but takes 11.5 seconds at p95 to do it.
 
 ## Stability
@@ -69,6 +73,21 @@ Which limit matters depends on what you are protecting. If the requirement is th
 That result depends on a change made for the test. Every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi — roughly a quarter of the memory already allocated to it. The heap was raised to ~58% of each container's limit for this campaign, and `-XX:+ExitOnOutOfMemoryError` added, before any load was applied.
 
 **On the shipped configuration these results would not hold.** The durable fix belongs in the deployment charts — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+
+## Open-Loop Testing Changes the Picture
+
+Every closed-loop figure above comes from a test where virtual users cannot start new work until their previous work finishes — so the offered load is whatever the server allows. Running the same cluster with a `ramping-arrival-rate` executor, which holds the arrival rate regardless of server speed, gives a very different reading:
+
+| | Shipped heap | Raised heap |
+|---|---|---|
+| **Intended work never started** | **48.6%** (3,899 dropped) | **55.2%** (4,390 dropped) |
+| Request fail | **3.79%** | **0.000%** |
+| Lifecycle success | **89.71%** | **100.00%** |
+| Pod restarts | **1 — liveness probe** | **0** |
+
+**Roughly half the offered work never started.** The closed-loop ladder reported 0.000% failures at every level; both statements are accurate, and they answer different questions. Closed-loop measures what the system will accept. Open-loop measures what happens when demand does not wait its turn — which is how real traffic arrives.
+
+The heap setting did not change throughput (3.9% apart, inside the noise floor). It changed **how overload fails**: on shipped settings the deployment was restarted by its own liveness probe after `/health` exceeded the 3-second timeout six times running; on raised settings it queued and stayed up.
 
 ## The Most Useful Finding
 

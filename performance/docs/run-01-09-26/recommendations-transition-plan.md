@@ -79,6 +79,8 @@ Comparing levels tested close together — the only fair comparison, given the g
 
 The first row is the clearest signal. Going from 120 to 160 users produced **no additional work at all** — throughput was flat to within a third of a percent — while people waited two-thirds longer. That is a system at capacity.
 
+**A caution on the other rows.** We measured how much these numbers move between identical repeat runs: about 12% on work completed. That means the 7% and 10% drops in the middle rows are within normal run-to-run variation and should not be read as a trend. The waiting-time increases in the first two rows are large enough to be real; the last two are not.
+
 **This means the deployment is already saturated at 120 test users**, the lowest level we tested this way, and its best operating point is somewhere below that. We did not measure it.
 
 The practical implication is that **capacity planning here should be driven by an acceptable response time, not by an error budget.** An error budget would never trigger.
@@ -114,5 +116,6 @@ For a live deployment this means: after a sustained traffic spike, the system ne
 3. **Stored data grew ninety-fold during the campaign**, from about 200 complaints to nearly 18,000, which is why levels measured hours apart are not comparable.
 4. **The database was small throughout.** Even 18,000 complaints is a small deployment. Earlier testing on other environments showed throughput falling substantially between an empty database and one million records, so any deployment expecting high volume needs an archiving policy from the start.
 5. **These numbers are complaints-only.** Running other DIGIT modules on the same cluster reduces available capacity.
-6. **The highest level tested was 320 test users, and nothing failed at any level.** The deployment's failure point is unknown because we never reached it. Its *best* operating point is also unknown, for the opposite reason — we never tested below 120 users with the settling step, and it was already saturated there.
-7. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.
+6. **Under realistic arrival patterns, about half the work never started.** All the figures above come from a test where simulated users wait for their previous request before starting the next — so the system effectively sets its own pace. Repeating it with demand arriving on a fixed schedule regardless of system speed, **roughly half the intended complaints never got started at all**, and on the shipped configuration the complaints service was restarted by its own health check. This is the closest we have to real traffic behaviour, and it is considerably less favourable.
+7. **The highest level tested was 320 test users, and nothing failed at any level.** The deployment's failure point is unknown because we never reached it. Its *best* operating point is also unknown, for the opposite reason — we never tested below 120 users with the settling step, and it was already saturated there.
+8. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.
