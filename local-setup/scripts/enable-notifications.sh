@@ -76,16 +76,13 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}"
-# ^ same tag docker-compose.egov-digit.yaml pins, deliberately: v2.12-beta is a
-#   DIFFERENT digest, so diverging here would give you one bridge via compose and
-#   another via this script.
-# ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
-#   template) WhatsApp path needs this PR branch's build, published to public
-#   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.
-WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # bump to the latest published tag after re-publish
-NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-egovio/novu-bridge:$WA_IMAGE_TAG}"   # public Docker Hub, multi-arch — WhatsApp Content-SID bridge (this PR)
-PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"                  # public Docker Hub, multi-arch — WhatsApp Content-SID pgr (this PR)
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-0469335}"
+# ^ same multi-arch tag docker-compose.egov-digit.yaml pins, deliberately. It
+#   includes the WhatsApp integration-selection fix, so SMS/email and WhatsApp
+#   use one bridge image unless NOVU_BRIDGE_IMAGE_WA is explicitly overridden.
+NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-$NOVU_BRIDGE_IMAGE}"
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # PGR Content-SID build tag
+PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"     # public Docker Hub, multi-arch
 
 # Feature toggles that get written into .env.
 CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (compose default is SMS,EMAIL)
@@ -374,11 +371,9 @@ do_step1() {
 do_step2() {
   step step2 "$(step_title step2)"
 
-  # pre: the image we are about to PIN must be pullable or already present. The gate
-  # is on the WhatsApp path when WHATSAPP is enabled — a fresh box may have NO access
-  # to the base preview registry at all, so requiring the base image there is wrong.
-  #   WHATSAPP on  → require ONLY the Content-SID bridge image (public Docker Hub).
-  #   WHATSAPP off → require the base bridge image, as before.
+  # The image we are about to pin must be pullable or already present. The
+  # WhatsApp image defaults to the same PR #1905-capable public image as the base
+  # path, but remains separately overridable for deliberate testing.
   if _wa_enabled; then
     require "WhatsApp Content-SID bridge image available (Docker Hub pull OR already present)" \
       "sudo docker pull '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1"
@@ -388,8 +383,8 @@ do_step2() {
   fi
 
   log "Pinning the bridge image…"
-  # When WHATSAPP is enabled we PULL + PIN the Content-SID bridge and FAIL LOUDLY
-  # if it can't be resolved (never silently keep the base image).
+  # When WHATSAPP is enabled, pull and pin its configured bridge image. Do not
+  # silently ignore an explicit NOVU_BRIDGE_IMAGE_WA override that cannot resolve.
   if _wa_enabled; then
     if [[ "$DRY_RUN" == true ]]; then
       note "WHATSAPP enabled → would pull + pin ${NOVU_BRIDGE_IMAGE_WA}; would BLOCK the run if it can't be resolved"
@@ -398,8 +393,8 @@ do_step2() {
       set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE_WA"
     else
       err "WHATSAPP is enabled but the Content-SID bridge image ${NOVU_BRIDGE_IMAGE_WA} could not be resolved or pulled."
-      err "Publish/pull it (or set NOVU_BRIDGE_IMAGE_WA / WA_IMAGE_TAG), or drop WHATSAPP from CHANNELS_ENABLED."
-      err "Refusing to silently fall back to the base image (no Content-SID WhatsApp path)."
+      err "Publish/pull it (or set NOVU_BRIDGE_IMAGE_WA), or drop WHATSAPP from CHANNELS_ENABLED."
+      err "Refusing to silently fall back from the configured WhatsApp bridge image."
       return 1
     fi
   else
