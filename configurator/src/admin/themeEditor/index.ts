@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ThemeConfigEditor } from './ThemeConfigEditor';
+import { ThemeConfigCreate } from './ThemeConfigCreate';
 import { StateInfoEditor } from './StateInfoEditor';
 import { MapConfigEditor } from './MapConfigEditor';
 
@@ -26,4 +27,14 @@ export const customEditors: Record<string, ComponentType> = {
   'map-config': MapConfigEditor,
 };
 
-export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor };
+/** Create-side counterpart to `customEditors`. Deliberately much smaller —
+ *  most custom-edited schemas are singleton-ish masters an operator edits
+ *  in place rather than creates fresh (StateInfo, MapConfig); ThemeConfig is
+ *  the one where Create is a real, regularly-used path (every new theme
+ *  starts here), so it's the only one wired up so far. MdmsResourceCreate
+ *  falls back to the generic form for any schema not listed here. */
+export const customCreateEditors: Record<string, ComponentType> = {
+  'theme-config': ThemeConfigCreate,
+};
+
+export { ThemeConfigEditor, ThemeConfigCreate, StateInfoEditor, MapConfigEditor };

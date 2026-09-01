@@ -708,5 +708,44 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.ThemeConfig",
+    "description": "Per-tenant UI theme configuration. `colors` leaves are loosely typed on KEY NAMES (so this schema doesn't have to track digit-ui-esbuild/src/theme/schema.json's v1/v2/v3 key taxonomy 1:1), but every leaf VALUE must be a 6-digit hex color, matching that runtime schema's pattern exactly — a 3- or 8-digit hex (or any non-hex string) saves here but fails applyTheme()'s AJV validation and the whole theme silently no-ops at runtime.",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Theme Config",
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "colors": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+              { "type": "object", "additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+              { "type": "array", "items": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
   }
 ]

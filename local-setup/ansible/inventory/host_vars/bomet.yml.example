@@ -137,10 +137,13 @@ requires_nairobi_mdms: false
 pgr_notification_config_driven: true
 novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
 
-# Build a subpath-rebased Novu dashboard image so the SPA serves cleanly
-# under /novu. Not required here (enable_keycloak is false below, so no
-# domain-sharing conflict yet) — matches _example.yml's off-by-default.
-build_novu_dashboard: false
+# ── OOTB theme (issue #1035) ──
+# Bomet Blue formalizes the tenant's real production ThemeConfig colors as a
+# committed preset (local-setup/ansible/files/theme-presets/bomet-blue.json)
+# — ops/deploy data, not part of the frontend app; MDMS is the single source
+# of truth at runtime, this only seeds it. Seeded at both state_root (ke)
+# and ui_state_tenant_id (ke.bomet).
+seed_theme_preset: bomet-blue
 
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the

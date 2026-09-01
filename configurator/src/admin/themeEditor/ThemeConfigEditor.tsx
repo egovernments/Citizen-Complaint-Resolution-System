@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { useEditContext, useResourceContext } from 'ra-core';
+import { useResourceContext } from 'ra-core';
 import { DigitEdit } from '../DigitEdit';
 import { DigitFormInput } from '../DigitFormInput';
 import { ColorInput } from '../widgets/ColorInput';
@@ -29,9 +29,13 @@ function HoveredColorField({ spec }: { spec: FieldSpec }) {
   );
 }
 
-function EditorBody() {
+/** The tabs/fields/live-preview layout, driven purely by the static
+ *  descriptor — no dependency on whether it's mounted inside a Create or
+ *  Edit form. `DigitFormInput`/`ColorInput` read from whatever RaRecord
+ *  form context surrounds them (react-admin's Create and Edit both provide
+ *  one), so the same body works unchanged for both. */
+export function ThemeConfigFormBody() {
   const descriptor = getDescriptor(SCHEMA);
-  const { record, isPending } = useEditContext();
   const hoverValue = useCreateHoverContext();
 
   const tabs = useMemo<FieldGroup[]>(() => {
@@ -45,8 +49,6 @@ function EditorBody() {
     const paths = new Set(identityGroup?.fields ?? []);
     return descriptor.fields.filter((f) => paths.has(f.path));
   }, [descriptor]);
-
-  if (isPending || !record) return null;
 
   return (
     <HoverContext.Provider value={hoverValue}>
@@ -109,8 +111,10 @@ export function ThemeConfigEditor() {
   const resource = useResourceContext() ?? '';
   const label = getResourceLabel(resource);
   return (
+    // DigitEdit itself gates on isPending before mounting children, so the
+    // form body never renders before the record has loaded.
     <DigitEdit title={`Edit ${label}`}>
-      <EditorBody />
+      <ThemeConfigFormBody />
     </DigitEdit>
   );
 }

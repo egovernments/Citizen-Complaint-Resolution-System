@@ -9,6 +9,7 @@ import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { orderFields, formatFieldLabel } from './schemaUtils';
 import { Label } from '@/components/ui/label';
 import { getDescriptor } from './schemaDescriptors';
+import { customCreateEditors } from './themeEditor';
 import type { SchemaDescriptor } from './schemaDescriptors/types';
 import type { SchemaDefinition, SchemaProperty } from './schemaUtils';
 
@@ -111,6 +112,16 @@ export function MdmsResourceCreate() {
     if (!definition) return undefined;
     return buildDefaults(definition);
   }, [definition]);
+
+  // Escape hatch: if the descriptor names a custom editor AND a create-side
+  // counterpart is registered for it, mount that instead of the generic
+  // schema-driven form (mirrors MdmsResourceEdit's dispatch). Checked after
+  // every hook above has already run, so hook call order stays fixed
+  // regardless of which branch returns.
+  if (descriptor?.customEditor) {
+    const Editor = customCreateEditors[descriptor.customEditor];
+    if (Editor) return <Editor />;
+  }
 
   if (!definition) {
     return (
