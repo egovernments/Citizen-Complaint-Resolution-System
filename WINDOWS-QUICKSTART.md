@@ -15,7 +15,7 @@ configurator (DIGIT Studio), Kong, host nginx on port 80, Gatus health board,
 Grafana/Prometheus/Loki/Tempo observability, OpenBao — on the dump-seeded
 `pg` / `pg.citya` tenants. Login works immediately.
 
-Two sizing profiles (see step 5):
+Two sizing profiles (see step 4):
 
 | Template | Fits | Difference |
 |----------|------|------------|
@@ -24,10 +24,8 @@ Two sizing profiles (see step 5):
 
 ## Prerequisites
 
-- **Windows 11.** Step 2's `vmIdleTimeout` fix does not work on Windows 10 —
-  see the note there for the Windows 10 workaround.
-- Hardware virtualization enabled (Intel VT-x / AMD SVM — usually on by
-  default; enable in BIOS if step 1 errors with `0x80370102`).
+- Windows 10/11 with hardware virtualization enabled (Intel VT-x / AMD SVM —
+  usually on by default; enable in BIOS if step 1 errors with `0x80370102`).
 - ≥ 16 GB RAM and ~40 GB free disk. (Measured on a cold build: 54 images,
   **20 GB** on the WSL disk. A distro that has accumulated several image
   versions over time reaches ~38 GB, so leave headroom.)
@@ -62,81 +60,7 @@ systemd=true
 
 then `wsl --shutdown` in PowerShell and relaunch Ubuntu.
 
-## 2. Stop WSL from shutting the stack down  ← do this before deploying
-
-**This is the single most disruptive Windows-only behaviour, and it is not
-obvious.** WSL has **two** independent idle timers, and you must disable both:
-
-| Setting | Section | Default | What it stops |
-|---|---|---|---|
-| `instanceIdleTimeout` | `[general]` | **15000 ms** | the **distro** — systemd runs a full shutdown, taking docker and every container with it. Fires **first**. |
-| `vmIdleTimeout` | `[wsl2]` | **60000 ms** | the **VM**, once all distros have stopped. |
-
-Either one kills the stack, because **45 of the stack's 57 containers are
-declared `restart: no`** — the next start brings back only the 12
-`unless-stopped` ones. The result is a stack that looks alive but 502s on
-every URL, with no error anywhere to explain it.
-
-Both were observed on this machine. First `vmIdleTimeout`, via
-`journalctl --list-boots`:
-
-```
--3  Mon 2026-08-31 08:58:22 UTC  →  Mon 2026-08-31 10:02:41 UTC
--2  Mon 2026-08-31 10:35:02 UTC  →  Mon 2026-08-31 10:36:09 UTC   (67 s)
--1  Mon 2026-08-31 10:38:28 UTC  →  Mon 2026-08-31 10:38:59 UTC   (31 s)
-```
-
-Then, with only `vmIdleTimeout=-1` set, `instanceIdleTimeout` still fired —
-note the **kernel boot ID never changed**, so `--list-boots` shows nothing,
-and only the journal reveals it:
-
-```
-Aug 31 11:20:33 systemd[1]: Stopped target multi-user.target - Multi-User System.
-Aug 31 11:20:33 systemd[1]: Stopping docker.service - Docker Application Container Engine...
-```
-
-That is the trap: the VM is up, `wsl -l -v` says `Running`, `uptime` shows no
-reboot — and the stack is gone anyway.
-
-Put **both** in `%UserProfile%\.wslconfig`. While you're in the file, set the
-memory caps too — the deploy will otherwise write them itself and then stop,
-costing you a second `wsl --shutdown` (step 6 explains that stop). Setting all
-five keys now means **one** shutdown instead of two:
-
-```ini
-[general]
-instanceIdleTimeout=-1
-
-[wsl2]
-vmIdleTimeout=-1
-memory=12GB      # 16 GB machine. On 32 GB use 20GB and set wsl_memory_gb: 20
-swap=16GB        # in your host_vars, so the deploy agrees with this file.
-processors=6
-```
-
-then `wsl --shutdown` from PowerShell and reopen Ubuntu. Confirm it took:
-
-```bash
-free -h        # "total" should be ~11Gi for memory=12GB, not ~7.6Gi
-nproc          # 6
-```
-
-If `free -h` still shows roughly half your machine's RAM, the file wasn't read
-— check it is at `%UserProfile%\.wslconfig` (not in the distro) and that you
-ran `wsl --shutdown`, not just closed the window.
-
-> The deploy manages the `memory` / `swap` / `processors` keys in this same
-> file (step 6) using `ini_file`, which edits only its own keys — your
-> `vmIdleTimeout` line is preserved across deploys. Verified.
-
-> **Windows 10:** `vmIdleTimeout` is Windows-11-only. There, keep an
-> interactive Ubuntu terminal open for as long as you need the stack, and
-> re-run `./deploy.sh <name>` after it closes.
-
-Either way, **`./deploy.sh <name>` is always the recovery command** — it
-brought a fully collapsed stack back green in 5 min 10 s (measured).
-
-## 3. Install the deploy tooling (inside WSL)
+## 2. Install the deploy tooling (inside WSL)
 
 ```bash
 sudo apt update && sudo apt install -y git ansible python3 python3-pip rsync curl
@@ -161,7 +85,7 @@ sudo apt install -y ansible-lint yamllint
 > See the version-matrix note at the bottom for the full-deploy result.
 > The apt package remains the recommended, best-tested path.
 
-## 4. Clone INSIDE the WSL filesystem
+## 3. Clone INSIDE the WSL filesystem
 
 ```bash
 mkdir -p ~/projects && cd ~/projects
@@ -183,7 +107,7 @@ cd Citizen-Complaint-Resolution-System
 > and `$'\r': command not found`. `/mnt/c` bind mounts are also slow. Clone
 > under your Linux home.
 
-## 5. Create your host_vars from a template
+## 4. Create your host_vars from a template
 
 ```bash
 cd local-setup/ansible
@@ -194,7 +118,7 @@ cp inventory/host_vars/localhost-slim.yml.example inventory/host_vars/mybox.yml
 The defaults are validated — nothing needs editing for a local bring-up. The
 filename (`mybox`) is just your tenant handle for `deploy.sh`.
 
-## 6. Deploy (as root)
+## 5. Deploy (as root)
 
 Root is required: the play installs Docker, writes system config, and
 regenerates `inventory/hosts.yml`.
@@ -266,7 +190,7 @@ mybox : ok=133  changed=40  unreachable=0  failed=0  skipped=206
 
 `failed=0` is the thing to check.
 
-## 7. Verify + log in (from your Windows browser)
+## 6. Verify + log in (from your Windows browser)
 
 | What | URL |
 |------|-----|
@@ -356,10 +280,10 @@ docker compose -f /opt/digit/docker-compose.egov-digit.yaml \
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| Every URL 502s, `docker ps` shows ~12 containers instead of 38 | The WSL VM idle-shut-down and only the `restart: unless-stopped` containers came back. Apply step 2, then `./deploy.sh mybox`. |
-| Deploy fails on the **last** task: `OpenBao ... Status code was 503`, `"sealed": true` | Fixed — see "Step 6 troubleshooting" below. If you hit it, you're on a playbook without the fix; `./deploy.sh mybox` a second time works around it. |
-| `cannot execute: required file not found` / `$'\r'` errors | You're in a Windows-side clone. Re-clone inside WSL (step 4). |
-| `Permission denied: inventory/hosts.yml` | Run `deploy.sh` as root (step 6). |
+| Every URL 502s, `docker ps` shows a fraction of the stack | WSL idled the distro or VM down and only the `restart: unless-stopped` containers came back. Set `instanceIdleTimeout=-1` under `[general]` and `vmIdleTimeout=-1` under `[wsl2]` in `%UserProfile%\.wslconfig` (Windows 11), then `wsl --shutdown` and `./deploy.sh mybox`. |
+| Deploy fails on the **last** task: `OpenBao ... Status code was 503`, `"sealed": true` | You're on a playbook predating the re-unseal fix. Update, or re-run `./deploy.sh mybox` to work around it. |
+| `cannot execute: required file not found` / `$'\r'` errors | You're in a Windows-side clone. Re-clone inside WSL (step 3). |
+| `Permission denied: inventory/hosts.yml` | Run `deploy.sh` as root (step 5). |
 | Deploy frozen AND new WSL windows won't open | VM memory starvation — the `.wslconfig` caps aren't applied. `wsl --shutdown` from PowerShell, reopen, re-run. |
 | `x509: certificate has expired` on image pull | `registry.preview.egov.theflywheel.in`'s cert lapsed. The templates ship an `insecure_registries` workaround already. |
 | `path / is mounted on / but it is not a shared or slave mount` | Handled automatically (`make-rshared-root.service`) — seeing it means you're on a branch without the fix. |
@@ -373,10 +297,9 @@ docker compose -f /opt/digit/docker-compose.egov-digit.yaml \
 - **Grafana and OpenBao are not reachable on their raw ports from Windows.**
   Use `/grafana/` through nginx; use `curl` inside WSL for OpenBao's API.
   `networkingMode=mirrored` lifts this if you need it.
-- **The stack does not survive a WSL VM stop.** Step 2 prevents the idle case;
-  a Windows reboot or explicit `wsl --shutdown` still needs a re-run of
-  `./deploy.sh`. Making the JVM services `restart: unless-stopped` in compose
-  would fix this properly and is worth raising separately.
+- **The stack does not survive a WSL VM stop.** Disabling the WSL idle
+  timeouts prevents the idle case; a Windows reboot or explicit
+  `wsl --shutdown` still needs a re-run of `./deploy.sh`.
 - **Slim profile has no Novu notifications** (SMS/WhatsApp delivery). Use
   `localhost-full.yml.example` on a 32 GB machine.
 - **Headroom is tight on 16 GB.** Steady state is ~7.5 GiB used of an 11 GiB
