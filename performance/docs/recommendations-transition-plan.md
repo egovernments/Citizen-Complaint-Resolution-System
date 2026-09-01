@@ -57,7 +57,7 @@ Below 32 GiB the stack does not fit in memory. It would have to swap, and a set 
 
 ### Why 16 vCPU and not more
 
-At the point where the system collapsed in the August 2026 tests, CPU was **64% idle** at a load average of 32.6 — threads blocked on queues and database connections, not short of processor. Adding cores to a single machine does not lift that ceiling. Below 16 vCPU, however, CPU is very much the binding constraint. 16 vCPU is where processor stops being the limit.
+At the point where the system collapsed in the August 2026 tests, CPU was **64% idle** at a load average of 32.6 — threads blocked on queues and database connections, not short of processor. Adding cores to a single machine does not lift that ceiling. That level was later invalidated by a fixed 384 MB Java heap, so read it as an indication rather than a measurement; slow-query logging on the same deployment found no complaint query over 100ms, which points the same way. Below 16 vCPU, however, CPU is very much the binding constraint. 16 vCPU is where processor stops being the limit.
 
 ---
 
@@ -65,10 +65,10 @@ At the point where the system collapsed in the August 2026 tests, CPU was **64% 
 
 | Metric | Limit |
 |--------|-------|
-| Complaints/day, zero errors | **~694,000** (August 2026, live deployment, ~2,300 records) |
-| Complaints/day, absolute maximum | **~1,076,000** at 0.67% errors |
-| Max concurrent test users, no errors | ~80 (~1,600–2,400 real people) |
-| Max concurrent test users before failure | ~160 (~3,200–4,800 real people) |
+| Complaints/day, zero errors | **~966,000** (September 2026, live deployment, ~2,500 records) |
+| Complaints/day, absolute maximum | **not established** — the levels above were invalidated by a fixed 384 MB Java heap, not by the hardware running out |
+| Max concurrent test users, no errors | ~120 (~2,400–3,600 real people) |
+| Max concurrent test users before failure | **not established** |
 | Safe daily volume at 1M records | **~544K complaints/day** (March 2026) |
 | Database record ceiling | **1M+ records** (tested and validated) |
 
@@ -78,7 +78,7 @@ At the point where the system collapsed in the August 2026 tests, CPU was **64% 
 
 ### Above one machine
 
-Scale out by adding machines of the same size, not by growing one machine — the ceiling is queue and connection contention, which extra cores on a single host do not relieve. Roughly 2 nodes cover 1M complaints/day and roughly 15 cover 10M/day, both on Kubernetes with a managed database. These are projections from single-machine measurements; no multi-machine configuration has been tested. See [Run 28-08-26](./run-28-08-26/recommendations-transition-plan) for the detail.
+Scale out by adding machines of the same size, not by growing one machine — the ceiling is queue and connection contention, which extra cores on a single host do not relieve. Roughly 2 nodes cover 1M complaints/day and roughly 11 cover 10M/day, both on Kubernetes with a managed database. These are projections from single-machine measurements; no multi-machine configuration has been tested. See [Run 28-08-26](./run-28-08-26/recommendations-transition-plan) for the detail.
 
 A single 32 vCPU / 64 GiB host remains a reasonable choice when you want headroom for **other DIGIT modules** or a co-located database, but it buys little additional complaint throughput.
 
@@ -97,7 +97,7 @@ Switch to Kubernetes when **any** of these are true:
 |---------|-----|
 | **Database exceeds 1M records** and you can't archive | Throughput drops below 6.3 complaints/sec. Query costs grow with every record. |
 | **Traffic is bursty, not gradual** (at 500K+ records) | Spike tests show 57% error rate at 1M records. The system can't clear its backlog between surges. Docker Compose has no auto-scaling. |
-| **You need >160 concurrent test users** (~4,800 real) | The measured failure point on a 16 vCPU host in August 2026. The database connection pool and queue depth are the hard ceiling on a single machine, regardless of CPU. |
+| **You need >120 concurrent test users** (~3,600 real) | The highest level verified clean on a 16 vCPU host in 2026 testing; nothing above it has been measured cleanly. The database connection pool and queue depth are the hard ceiling on a single machine, regardless of CPU. |
 | **You need high availability / zero-downtime deploys** | Docker Compose is single-machine. A host failure = full outage. Kubernetes gives you redundancy, rolling deploys, and automatic restarts. |
 | **You need to scale PGR/Workflow horizontally** | On Docker Compose, each service runs as a single instance. Kubernetes lets you run multiple copies behind a load balancer. |
 | **You're running multiple modules** (not just PGR) | These tests only cover PGR. Adding Property Tax, Trade License, Water & Sewerage, etc. competes for the same CPU and memory budget on the machine. |
@@ -130,20 +130,20 @@ Expected daily complaint volume?
 │  Every option below starts at the same floor:
 │  16 vCPU / 32 GiB. There is no smaller spec.
 │
-├─ Up to ~694K/day ────────────► 1 × 16 vCPU / 32 GiB
+├─ Up to ~966K/day ────────────► 1 × 16 vCPU / 32 GiB
 │   │                              ~$287/mo (Graviton) · ~$496/mo (Intel)
 │   │                              The same machine serves a pilot
 │   │                              and a large city.
 │   └─ Database past 500K records? → Move the database to its own
 │                                     server, or add memory
 │
-├─ ~694K – 1.4M/day ───────────► Kubernetes, 2 app nodes
+├─ ~966K – 1.9M/day ───────────► Kubernetes, 2 app nodes
 │                                  of 16 vCPU / 32 GiB (~$900–1,400/mo)
 │                                  + managed database + archiving policy
 │
-└─ Beyond 1.4M/day OR bursty traffic at scale
+└─ Beyond 1.9M/day OR bursty traffic at scale
    OR need HA / zero-downtime ─► Kubernetes, sized per volume
-                                  (~15 nodes at 10M/day, plus queue
+                                  (~11 nodes at 10M/day, plus queue
                                    repartitioning and data partitioning)
 ```
 

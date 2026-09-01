@@ -22,7 +22,7 @@ Between each API call, the VU waits 1-3 seconds (random think time) to simulate 
 
 A VU is **not** the same as "users online". A real user might make one complaint every few minutes. A VU makes one every ~10 seconds. So **1 VU ≈ 20-30 real concurrent users** in terms of API load.
 
-When we say "125 VUs", the equivalent real-world concurrency is roughly **2,500-3,750 users online simultaneously**, each occasionally filing or checking complaints.
+When we say "120 VUs", the equivalent real-world concurrency is roughly **2,400-3,600 users online simultaneously**, each occasionally filing or checking complaints.
 
 For a more precise mapping, use TPS as the common unit:
 - Throughput is reported in lifecycles/sec (each lifecycle = 4 API calls)
@@ -38,6 +38,8 @@ For a more precise mapping, use TPS as the common unit:
 | `ramp-50vu` | 12 min | 5 VU warmup (2m), ramp to 50 over 3m, 5 min hold, 2m down | Baseline top level |
 | `ramp-nvu` | 13 min | 5 VU warmup (2m), ramp to N over 3m, 5 min hold, 2m down (N = 75, 100, 125, 150) | Find sustainable ceiling |
 | `burst` | configurable | Instant jump to N VUs, hold (N = 20, 40, 80, 160, 320) | Find VU ceiling by error rate |
+| `burst`, repeated (1 Sep) | 2 min | Instant jump to N VUs, held 2m, run three times with the database restored between runs (N = 40, 120) | Measure run-to-run variance |
+| `variable-throughput` (1 Sep) | 10 min | Open loop. Arrival rate ramped over 8 stages: 1/s warmup (1m), spikes to 15/s, 25/s and 35/s (30s each) separated by idle valleys at 1-2/s (2m each), then 10/s sustained (3m) and a 30s cooldown. Up to 400 VUs allocated to hold the rate. | Measure behaviour when arrivals do not wait for the server |
 
 Only the `main` scenario is measured; warmup is excluded from all thresholds and figures. Throughput is steady-state over the 5-minute hold (samples where `vus >= 0.95 × peak`), not averaged across the run.
 
@@ -47,6 +49,18 @@ Only the `main` scenario is measured; warmup is excluded from all thresholds and
 |---------|-------|------|
 | Live deployment | 16 vCPU, 30 GB RAM (KVM guest) | Full-stack validation, 59 containers, real usage |
 
+Full specification of that machine, as reported on the host:
+
+| Component | Spec |
+|-----------|------|
+| CPU | AMD EPYC-Rome, 16 vCPU |
+| Memory | 30 GiB |
+| Disk | 305 GB SSD (non-rotational) |
+| OS / runtime | Ubuntu 24.04.4 LTS, Docker 29.4.0 |
+| Virtualisation | KVM guest, not bare metal |
+| Services | 59 containers (full DIGIT stack) |
+| Load generator | k6, remote control machine, ~185ms RTT |
+
 Idle baseline before any test load: load average 5.5-6.9, and 26.8 GB of the 30.6 GiB held by the stack at rest leaving 4.5 GB available, with **no swap configured**. All figures sit on top of that existing load.
 
 That resting footprint is the reason the minimum deployment spec is **16 vCPU / 32 GiB**. The stack costs the same to keep running regardless of the volume it serves, and below 32 GiB it does not fit in memory — it would have to swap, and a set of JVM services that swaps thrashes rather than slows, because the garbage collector touches memory the operating system has paged to disk. The machine tested here is marginally under that floor, which makes its figures conservative.
@@ -55,17 +69,20 @@ That resting footprint is the reason the minimum deployment spec is **16 vCPU / 
 
 | Metric | Value |
 |--------|-------|
+| Peak throughput, all runs | 11.182 lifecycles/sec (45.64 API req/s) at 120 VU, 1 Sep repeats |
+| Daily capacity, all runs | **966,091 transactions/day** |
 | Peak throughput, ramp ladder | 10.785 lifecycles/sec (43.15 API req/s) at 125 VU |
 | Daily capacity, ramp ladder | **931,824 transactions/day** |
 | Max sustainable concurrent users, ramp ladder | **125 VU** |
 | Breaking point, ramp ladder | 150 VU (end-to-end p95 16.38s vs 15s budget) |
 | HTTP failures across the ramp ladder | 0.000% |
 | Highest clean level, burst ladder | **80 VU — 8.034 lifecycles/sec, 694,138/day, 0.000% failures** |
-| Records in database | ~2,300 complaints |
+| Same request rate, open loop | 43.41 API req/s at **19.57% request failures, 50.23% lifecycle success** |
+| Records in database | ~2,300 complaints (2,525 in the 1 September follow-up) |
 
-**Two ladders, two numbers — read them as such.** The *ramp* ladder stops on a latency budget and reached 125 VU / 931,824 per day with no HTTP failure at any level. The *burst* ladder, run three days later to find the failure point by error rate instead, is clean only to 80 VU / 694,138 per day; its 160 and 320 VU levels were invalidated by a JVM heap exhaustion and are withdrawn — see [When the heap gave out](#when-the-heap-gave-out). The two ladders used different scenarios, different stopping rules and different access-control conditions, so neither number supersedes the other. **694,138/day is the figure to plan against**, because it is the one measured with zero failures under the stricter test.
+**Three measurements, not one — read them as such.** The *ramp* ladder stops on a latency budget and reached 125 VU / 931,824 per day with no HTTP failure at any level. The *burst* ladder, run three days later to find the failure point by error rate instead, is clean only to 80 VU / 694,138 per day; its 160 and 320 VU levels were invalidated by a JVM heap exhaustion and are withdrawn — see [When the heap gave out](#when-the-heap-gave-out). The 1 September repeats then held 120 VU three times against a fixed dataset and returned 11.182 lifecycles/sec / 966,091 per day at 0.000% request failures and 100.00% lifecycle success. The three used different scenarios, different stopping rules, different measurement windows and different access-control conditions, so none of them supersedes the others outright. **966,091/day is the figure to plan against**, because it is the highest rate measured with no failed request and it was measured three times rather than once.
 
-The deployment exceeds a 10,000 txn/day target by at least 69x. Throughput rises linearly to 125 VU on the ramp ladder and flattens above it; latency is the first budget to give there, and no level of that ladder returned a single HTTP failure.
+The deployment exceeds a 10,000 txn/day target by at least 96x under evenly-paced load. Throughput rises linearly to 125 VU on the ramp ladder and flattens above it; latency is the first budget to give there, and no level of that ladder returned a single HTTP failure. Under a bursty arrival pattern at the same request rate that picture changes completely — see [Open-Loop Testing](#open-loop-testing). The level at which this deployment actually fails under evenly-paced load is still unmeasured.
 
 ## Baseline Performance
 
@@ -231,7 +248,7 @@ This ladder ran three days after the ramp tests, and attribute-based access cont
 
 The 160 and 320 VU rows are **not capacity measurements**. Both were taken while `pgr-services` was running out of Java heap, for reasons unrelated to the size of the machine. This was found on 31 August 2026 while investigating a separate question, and is set out in [When the heap gave out](#when-the-heap-gave-out) below. The rows are kept because the throughput figures are real, but they do not locate the deployment's ceiling.
 
-The highest level that is a clean measurement is **80 VU** — 8.034 lifecycles/sec, 694,138 transactions/day, 0.000% failures, 449ms server p95. Everything at or below it completed before the first heap error.
+The highest level of this ladder that is a clean measurement is **80 VU** — 8.034 lifecycles/sec, 694,138 transactions/day, 0.000% failures, 449ms server p95. Everything at or below it completed before the first heap error. 120 VU was measured clean three times four days later; see [Run-to-Run Variance](#run-to-run-variance).
 
 Up to 80 VU the deployment is bound by client think time, not by the server. Measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly — 2.066 predicted against 2.081 measured at 20 VU, 8.264 against 8.034 at 80 VU — and server p95 rises only from 341ms to 449ms across a fourfold concurrency increase. Host load average reached 12.93 at 40 VU and 24.86 at 80 VU on 16 vCPU.
 
@@ -264,7 +281,7 @@ Two defects follow from this, independent of load testing:
 1. **The heap is capped at 384 MB** on a machine with 30.6 GiB and no container memory limit. Nothing is gained by the cap.
 2. **`CustomKafkaTemplate.send` blocks on an untimed `CompletableFuture.get()`**, which converts any Kafka producer failure into permanent, total, self-sustaining unavailability. The OOM was survivable; the untimed wait is what made it terminal.
 
-**The deployment's actual ceiling above 80 VU is unmeasured.** The software gave out before the hardware did, and the ladder needs re-running with a realistic heap before any figure above 80 VU is quoted.
+**The deployment's actual ceiling is unmeasured.** The software gave out before the hardware did. 120 VU has since been measured clean three times (see [Run-to-Run Variance](#run-to-run-variance)), but nothing between 120 and 320 VU has been, and the ladder needs re-running with a realistic heap before any figure above 120 VU is quoted.
 
 Comparing like for like at the same concurrency, the `cpu-16` profile returned 1.331 lifecycles/sec at 15.31s p95 where the unthrottled machine returned 8.034 lifecycles/sec at 0.45s — six times the throughput at a thirty-fourth of the latency. This is the clearest measure of how far a per-service CPU profile sits from the machine it is named after.
 
@@ -283,13 +300,26 @@ same 2,525 rows between each:
 
 | Level | Lifecycles/s | API req/s | http p95 | Throughput CV | p95 CV |
 |-------|-------------|-----------|----------|--------------|--------|
-| 40 VU | 2.015 / 2.046 / 2.069 | 14.39 / 14.61 / 14.78 | 363 / 359 / 356 ms | **1.33%** | **0.98%** |
-| 120 VU | 10.943 / 11.159 / 11.443 | 44.69 / 45.55 / 46.68 | 1,102 / 881 / 756 ms | **2.24%** | **19.19%** |
+| 40 VU | 2.015 / 2.046 / 2.069 | 14.39 / 14.61 / 14.78 | 363 / 359 / 356 ms | **1.32%** | **1.10%** |
+| 120 VU | 10.943 / 11.159 / 11.443 | 44.69 / 45.55 / 46.68 | 1,102 / 881 / 756 ms | **2.24%** | **19.17%** |
 
-Every run: 0.000% request failures, 100.00% lifecycle success.
+Every run returned 0.000% request failures. All three 120 VU runs also returned
+100.00% lifecycle success, and their 45.64 API req/s mean is the highest rate
+measured anywhere in this campaign with no failed request.
 
-**Latency variance grows nineteenfold between 40 and 120 VU** — 0.98% to 19.19% —
-while throughput variance barely moves. A single p95 measurement taken near
+**The 40 VU repeats did not verify.** All three returned 0.00% lifecycle success:
+every verification SEARCH answered HTTP 200 with an empty result set, so no lifecycle
+could confirm `RESOLVED`. The step retries three times before giving up, which is why
+each 40 VU lifecycle issued seven requests rather than four and why its lifecycles/sec
+is roughly half the 40 VU row of the 28 August burst ladder. The three repeats are
+consistent with each other, so the coefficients of variation below are a real
+measurement of run-to-run spread — but they describe that path, and the 40 VU
+throughput and latency figures are not comparable with any other 40 VU figure on this
+page. Why the search returned empty was not established and the level has not been
+re-run.
+
+**Latency variance grows roughly seventeenfold between 40 and 120 VU** — 1.10% to
+19.17% — while throughput variance barely moves. A single p95 measurement taken near
 saturation is worth roughly plus or minus twenty percent, so latency differences
 below about 40% at those levels cannot be read from one run.
 
@@ -399,7 +429,7 @@ seconds each and run periodically against a live system.
 
 Under `cpu-2` and `cpu-4` the host was never the bottleneck — CPU idle stayed between 60% and 90% while the stack collapsed, so the cgroup caps bind rather than the machine. Host pressure appears only from `cpu-8` up.
 
-In the burst ladder, 320 VU drove load average to 32.6 while CPU idle stayed at 64% — threads blocked on queues rather than burning CPU.
+In the burst ladder, 320 VU drove load average to 32.6 while CPU idle stayed at 64% — threads blocked on queues rather than burning CPU. That level is one of the two invalidated by the heap exhaustion, so it indicates where the limit was not rather than measuring where it is.
 
 Available memory stayed between 800 MB and 4.4 GB of 30.6 GiB across the whole campaign, against a resting footprint of 26.8 GB and no swap. The margin never exceeded about 15% of the machine, which is the practical argument for provisioning 32 GiB rather than 30.
 

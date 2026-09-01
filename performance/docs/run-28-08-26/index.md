@@ -10,9 +10,9 @@ Load test results against a live DIGIT deployment (16 vCPU, 30 GB, full 59-conta
 
 ## Headline
 
-**8.034 lifecycles/s · 694,138 complaints/day at 80 VU with 0.000% failures** — the highest level verified clean on a single 16 vCPU machine, and the figure to plan against.
+**11.182 lifecycles/s · 966,091 complaints/day at 120 VU with 0.000% failures** — the highest level verified clean on a single 16 vCPU machine, measured three times against a fixed dataset in the 1 September follow-up, and the figure to plan against. The 28 August ramp ladder reached 125 VU / 931,824 per day before crossing its end-to-end latency budget at 150 VU, and the 31 August burst ladder is clean to 80 VU / 694,138 per day.
 
-**The ceiling above that is unmeasured.** The 160 and 320 VU levels were measured while `pgr-services` was running out of a 384 MB JVM heap — a fixed cap unrelated to the machine's 30.6 GiB — so the higher figures previously headlined here (1,076,803/day at 160 VU, collapse at 320 VU) record a misconfiguration rather than the capacity of the hardware. See [When the heap gave out](./findings#when-the-heap-gave-out).
+**The ceiling above that is unmeasured.** The 160 and 320 VU levels were measured while `pgr-services` was running out of a 384 MB JVM heap — a fixed cap unrelated to the machine's 30.6 GiB — so the higher figures previously headlined here (1,076,803/day at 160 VU, collapse at 320 VU) record a misconfiguration rather than the capacity of the hardware. See [When the heap gave out](./findings#when-the-heap-gave-out). Nothing between 120 and 320 VU has been measured cleanly.
 
 **Minimum deployment spec: 16 vCPU / 32 GiB.** The stack holds 26.8 GB of memory at rest with no load applied, so nothing smaller can run it. A pilot and a large city are provisioned identically — see [Capacity Planning](./recommendations-transition-plan#the-hardware-floor-16-vcpu-32-gib).
 
