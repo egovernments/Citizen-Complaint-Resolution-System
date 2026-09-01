@@ -2837,12 +2837,21 @@
       changed_when: true
       when: ansible_system == "Darwin"
 
-    # converge#2 above (mac-stack-up down+up) recreated the openbao
-    # container, which comes back SEALED — the earlier unseal ran before
-    # this recreate. Without re-unsealing, the final "OpenBao unsealed"
-    # validation 503s (sealed/standby). Darwin only: on Linux the
-    # post-OpenBao recreate is a plain up -d that doesn't recreate openbao.
-    - name: "OpenBao — wait for API again after converge#2 (Darwin)"
+    # Bringing the stack up recreated the openbao container, which comes back
+    # SEALED — the earlier unseal ran before that recreate. Without
+    # re-unsealing, the final "OpenBao unsealed" validation 503s
+    # (sealed/standby) and the deploy fails on its very last task.
+    #
+    # This was gated `ansible_system == "Darwin"` on the reasoning that "on
+    # Linux the post-OpenBao recreate is a plain up -d that doesn't recreate
+    # openbao". That is true of the post-secrets recreate immediately above —
+    # but it is not the task that recreates openbao on Linux. "Start DIGIT
+    # stack" is, because it runs AFTER "OpenBao — write secrets into compose
+    # .env": compose sees a changed environment for the openbao service and
+    # recreates it. So every first Linux/WSL2 deploy reached validation with a
+    # sealed OpenBao and failed. Run the re-unseal on every platform; it is a
+    # no-op when openbao is already unsealed (the `sealed` guard below).
+    - name: "OpenBao — wait for API again after stack start"
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/seal-status
         status_code: [200]
@@ -2850,11 +2859,9 @@
       retries: 24
       delay: 5
       until: bao_seal_status_post.status == 200
-      when: ansible_system == "Darwin"
 
-    - name: "OpenBao — re-unseal after converge#2 if sealed (Darwin)"
+    - name: "OpenBao — re-unseal after stack start if sealed"
       when:
-        - ansible_system == "Darwin"
         - bao_seal_status_post.json.sealed | default(true)
       ansible.builtin.uri:
         url: http://127.0.0.1:18200/v1/sys/unseal
