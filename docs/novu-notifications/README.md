@@ -180,7 +180,7 @@ export NOVU_EVENT_WORKFLOWS=,
 
 bash ./bootstrap-novu-whatsapp.sh
 
-unset NOVU_API_KEY NOVU_SMS_BODY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM
+unset NOVU_SMS_BODY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM
 ```
 
 This command only administers Novu integrations and workflows. It does not start or restart DIGIT and does not trigger a message.
@@ -209,6 +209,9 @@ curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
   | jq '[.data.workflows[].workflowId]'
 
 unset NOVU_API_KEY NOVU_BASE_URL SMS_INTEGRATION_ID
+unset NOVU_ENV_FILE NOVU_INTEGRATION_NAME NOVU_INTEGRATION_ID
+unset NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME NOVU_SMS_WORKFLOW_ID
+unset NOVU_EMAIL_WORKFLOW_ID NOVU_EVENT_WORKFLOWS
 ```
 
 Confirm:
