@@ -173,9 +173,13 @@ If it writes to the deployment root instead, PGR finds no routing for the compla
 tenant and emits no notification events. The automatic fix is tracked in
 [issue #1943](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1943).
 
+Sync matches approved templates to PGR transitions from the template name and saves
+that Twilio account's Content SID. Each account needs its own approved templates
+with the expected names and ordered variables; the example seed SIDs are not
+portable.
+
 1. Open **Notifications -> Providers -> Sync WhatsApp templates**.
-2. Persist mappings from the configured Twilio account. Do not use the example
-   Content SIDs shipped in the seed for another account.
+2. Review and persist the matched templates.
 3. Open **Notifications -> Configure** and verify the routing and message templates
    for the required PGR transitions.
 4. Trigger a real complaint transition.
