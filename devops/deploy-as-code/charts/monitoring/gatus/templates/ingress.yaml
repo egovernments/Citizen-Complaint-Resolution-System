@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := include "gatus.host" . -}}
+# Gatus under {{ .Values.ingress.path }} on the MAIN domain (not a sub-domain):
+# the request hits the sidecar nginx proxy, which sub_filters the SPA so its
+# absolute asset/API paths work under the prefix (see status-proxy-configmap).
+# Because $host is the domain that already resolves, cert-manager's HTTP-01
+# challenge completes immediately -- no new DNS record needed, unlike a
+# sub-domain. TLS is issued by the ingress-shim from the cluster-issuer
+# annotation, the same mechanism the egov ingresses use.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gatus
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: gatus
+                port:
+                  number: {{ .Values.proxyPort | default 8081 }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ .Values.ingress.tlsSecret | default (printf "%s-gatus-tls" $host) | quote }}
+{{- end }}

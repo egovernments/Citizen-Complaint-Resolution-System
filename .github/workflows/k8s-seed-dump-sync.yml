@@ -1,0 +1,32 @@
+name: DB seed — k8s dump ↔ canonical ansible dump sync
+
+# The ansible/compose tier seeds from local-setup/db/full-dump.sql. The k8s
+# db-seed chart can't reference that file (Helm .Files.Get is chart-scoped), so
+# it bundles a gzipped copy that must be DERIVED from the canonical dump. When
+# the canonical dump was enriched with localizations but the k8s copy wasn't
+# regenerated, k8s silently seeded 108 localization rows vs ansible's 2065 —
+# surfacing days later as raw i18n keys in the UI. This guards against that drift.
+
+on:
+  pull_request:
+    paths:
+      - 'local-setup/db/full-dump.sql'
+      - 'devops/deploy-as-code/charts/backbone-services/db-seed/files/full-dump.sql.gz'
+      - '.github/scripts/check-seed-dump-sync.sh'
+      - '.github/workflows/k8s-seed-dump-sync.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'local-setup/db/full-dump.sql'
+      - 'devops/deploy-as-code/charts/backbone-services/db-seed/files/full-dump.sql.gz'
+
+permissions:
+  contents: read
+
+jobs:
+  seed-dump-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check k8s db-seed dump matches the canonical ansible dump
+        run: bash .github/scripts/check-seed-dump-sync.sh

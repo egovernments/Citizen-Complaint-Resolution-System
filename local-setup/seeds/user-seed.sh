@@ -11,7 +11,7 @@
 set -e
 
 EGOV_USER_HOST="${EGOV_USER_HOST:-http://egov-user:8107}"
-MAX_RETRIES=30
+MAX_RETRIES=120   # ~10min: a fresh deploy egov-user needs Flyway + JVM start + scheduling
 RETRY_INTERVAL=5
 
 # Tenants to seed ADMIN/GRO into. Override via env when adding new cities.
@@ -121,6 +121,8 @@ roles_admin() {
   echo "[
     {\"code\": \"SUPERUSER\",    \"name\": \"Super User\",            \"tenantId\": \"$T\"},
     {\"code\": \"ACCOUNT_ADMIN\",\"name\": \"Account Admin\",         \"tenantId\": \"$T\"},
+    {\"code\": \"LOC_ADMIN\",    \"name\": \"Localisation Admin\",    \"tenantId\": \"$T\"},
+    {\"code\": \"MDMS_ADMIN\",   \"name\": \"MDMS Admin\",            \"tenantId\": \"$T\"},
     {\"code\": \"EMPLOYEE\",     \"name\": \"Employee\",              \"tenantId\": \"$T\"},
     {\"code\": \"CITIZEN\",      \"name\": \"Citizen\",               \"tenantId\": \"$T\"},
     {\"code\": \"CSR\",          \"name\": \"Customer Service Rep\",  \"tenantId\": \"$T\"},

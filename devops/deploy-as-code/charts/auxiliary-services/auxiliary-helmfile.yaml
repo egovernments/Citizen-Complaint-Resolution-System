@@ -63,3 +63,31 @@ releases:
   - name: playground
     installed: true
     <<: *default
+
+  # digit-mcp — DIGIT REST/JSON-RPC admin shim (tenant onboarding tooling).
+  # Uses the standalone chart at repo-root digit-mcp/helm/digit-mcp (single
+  # source of truth), NOT the common-chart pattern, so it declares its own
+  # values instead of <<: *default. Kept internal-only: ClusterIP + no ingress
+  # template exists in the chart, so it is never publicly reachable.
+  - name: digit-mcp
+    installed: true
+    namespace: egov
+    chart: ../../../../digit-mcp/helm/digit-mcp
+    missingFileHandler: Warn
+    values:
+      - image:
+          repository: ghcr.io/subhashini-egov/digit-mcp
+          tag: "2026-06-11"
+        service:
+          type: ClusterIP
+        env:
+          MCP_TRANSPORT: http
+          MCP_PORT: "3000"
+          CRS_ENVIRONMENT: self-hosted
+          CRS_ENV_NAME: CCRS
+          CRS_TENANT_ID: {{ index .Values.configmaps "egov-config" "data" "egov-state-level-tenant-id" | quote }}
+          # In-cluster DIGIT gateway (compose used http://kong:8000)
+          CRS_API_URL: http://gateway.egov:8080
+        secret:
+          CRS_USERNAME: {{ index .Values.secrets "digit-mcp" "username" | quote }}
+          CRS_PASSWORD: {{ index .Values.secrets "digit-mcp" "password" | quote }}
