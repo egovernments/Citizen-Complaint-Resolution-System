@@ -1,22 +1,21 @@
 # Executive Summary
 
-A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **320 concurrent test users with zero failed requests**. No error ceiling was found at any level tested. Load is absorbed as latency rather than as failure.
+A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **200 concurrent test users with zero failed requests**, peaking at **1.12 million complaints per day**. No error ceiling was found. The limit is a throughput plateau, and it is reached with the cluster roughly 70% idle.
 
 ## Key Numbers
 
 | | Value |
 |-|-------|
-| Highest level tested | **320 VU** |
-| HTTP failures at 240, 280 and 320 VU | **0.000%** |
-| Lifecycle success at 240, 280 and 320 VU | **100.00%** |
-| Error-based ceiling | **Not found** |
-| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
-| Saturation point | **At or below 120 VU** |
-| Response time at 320 VU | 11.5s p95 |
-| Pod restarts, closed-loop levels | **0** |
-| Pod restarts, open-loop on shipped heap | **1** (liveness probe, not OOM) |
-| Run-to-run variance at a fixed level | **6.9%** throughput, **20.1%** p95 |
-| Records in database | 195 at start, 19,433 at end |
+| **Peak throughput** | **12.989 lifecycles/sec (53.49 API req/s)** |
+| **Daily capacity at peak** | **1,122,250 complaints/day** |
+| **Saturation point** | **160 VU** |
+| Request failures, every level | **0.000%** |
+| Lifecycle success, every level | **100.00%** |
+| Response time at peak | 1.8s p95 at 160 VU, 3.2s at 200 VU |
+| Pod restarts | **0** across the whole ladder |
+| Run-to-run variance | 6.7% throughput, 51% p95 |
+| Cluster utilisation at peak | 5–27% CPU, 48 of 402 DB connections |
+| Dataset | fixed at 3 complaints for every level |
 
 ## What We Tested
 
@@ -24,9 +23,11 @@ Every test iteration runs one complete PGR complaint lifecycle — **4 API calls
 
 **CREATE** (file complaint) → **ASSIGN** (route to department) → **RESOLVE** (close it) → **SEARCH** (verify status)
 
-This exercises the gateway, PGR Services, Workflow, Persister, Kafka and PostgreSQL — the entire hot path. Eight concurrency levels were tested — 20, 40, 80, 160, 200, 240, 280 and 320 VUs — each held at a constant VU count for 2 minutes.
+This exercises the gateway, PGR Services, Workflow, Persister, Kafka and PostgreSQL — the entire hot path. Five concurrency levels were tested — 40, 80, 120, 160 and 200 VUs — each held at a constant VU count for 2 minutes, on the **shipped configuration**.
 
-**No CPU limits are set on any service in this deployment**, so every level is unthrottled by construction. There is no throttled comparison in this run because there is nothing to throttle.
+**No CPU limits are set on any service in this deployment**, so every level is unthrottled by construction.
+
+**Every level ran against an identical database.** A gated cleanup between levels restored the dataset to exactly 3 complaints, so no level inherited the previous one's rows. This matters: stored data turned out to be the largest single influence on throughput measured anywhere in the campaign.
 
 Throughout this document, **lifecycle success** is the share of lifecycles that completed all four steps and ended in `RESOLVED`, while **request fail** is the share of individual HTTP requests that errored. They have different denominators — roughly four requests per lifecycle — so they do not sum to 100.
 
@@ -34,45 +35,38 @@ Throughout this document, **lifecycle success** is the share of lifecycles that 
 
 | VU | Throughput | API req/s | Daily capacity | Server p95 | Lifecycle success | Request fail |
 |-----|-----------|-----------|---------------|-----------|---------|--------------|
-| 20 | 2.218/s | 9.03 | 191,635/day | 357ms | 100.00% | 0.000% |
-| 40 | 4.532/s | 18.44 | 391,565/day | 164ms | 100.00% | 0.000% |
-| 80 | 8.810/s | 35.85 | 761,184/day | 203ms | 100.00% | 0.000% |
-| **160** | **16.259/s** | **66.33** | **1,404,778/day** | 669ms | 99.57% | 0.268% |
-| 120 | 7.939/s | 32.67 | 685,930/day | 3,188ms | **100.00%** | **0.000%** |
-| 160 | 7.842/s | 32.56 | 677,549/day | 5,254ms | **100.00%** | **0.000%** |
-| 200 | 10.549/s | 43.69 | 911,434/day | 4,667ms | 99.93% | 0.017% |
-| 240 | 9.714/s | 40.63 | 839,290/day | 7,405ms | **100.00%** | **0.000%** |
-| 280 | 8.983/s | 37.97 | 776,131/day | 9,589ms | **100.00%** | **0.000%** |
-| 320 | 7.948/s | 34.00 | 686,707/day | 11,454ms | **100.00%** | **0.000%** |
+| 40 | 4.213/s | 17.16 | 364,003/day | 787ms | 100.00% | 0.000% |
+| 80 | 8.050/s | 32.82 | 695,520/day | 828ms | 100.00% | 0.000% |
+| 120 | 11.777/s | 48.03 | 1,017,533/day | 855ms | 100.00% | 0.000% |
+| **160** | **12.894/s** | **52.79** | **1,114,042/day** | 1,816ms | **100.00%** | **0.000%** |
+| 200 | 12.989/s | 53.49 | 1,122,250/day | 3,170ms | 100.00% | 0.000% |
 
-**No two levels here ran against the same database.** The campaign grew stored records from 195 to 19,433, monotonically in run order — and the 120 and 160 VU levels were run *last*, against 17,337 and 18,381 records respectively. That is why the series is not monotonic in VU order. Only levels run adjacent in time are comparable; the full curve with per-level record counts is in [Findings](./findings#results).
+The 120 VU row is the mean of three repeats.
 
 ## Where the Limit Is
 
-**There is no error-based limit below 320 VU.** Across 240, 280 and 320 VU — 15,636 requests — not one returned an error and every lifecycle reached `RESOLVED`. Adding the 120 and 160 VU levels brings that to 24,300 requests with zero failures.
+**There is no error-based limit.** Not one request failed at any level, and every lifecycle completed.
 
-The limit that does exist is a **throughput limit**, and the deployment is past it at every level in the gated series. Comparing levels run adjacent in time — the only fair comparison available — additional concurrency always costs throughput and adds latency:
+The limit is a **throughput plateau at ~53 API req/s**, reached at 160 VU:
 
-| Pair | Throughput | Response time |
-|------|-----------|---------------|
-| 120 → 160 VU | **−0.3%** | **+65%** |
-| 200 → 240 VU | −7.0% | +59% |
-| 240 → 280 VU | −6.5% | +29% |
-| 280 → 320 VU | −10.5% | +19% |
+| Step | Throughput gain | Verdict |
+|------|----------------|---------|
+| 40 → 80 | +91.3% | near-linear |
+| 80 → 120 | +46.3% | linear |
+| 120 → 160 | +9.9% | bending |
+| **160 → 200** | **+1.3%** | **flat — inside the 6.7% noise floor** |
 
-The 120 → 160 pair is the clearest: throughput flat to within 0.3%, latency up two-thirds. **The deployment is already saturated at 120 VU**, the lowest level tested with the gate, so its peak sits below that and was not measured.
+Past 160 VU the deployment gains nothing from additional users, while latency rises 75%.
 
-**One correction from the variance data.** Three repeats of an identical level show a 12.1% peak-to-trough spread in throughput. Every throughput figure in the table above is a smaller change than that, so the throughput column carries no signal — an earlier version of this document described those steps as costing "8-11% of throughput" each, and that reading is withdrawn. The saturation conclusion rests on the latency rises of +65% and +59%, which exceed the 36.6% spread in p95; the +29% and +19% do not.
-
-Which limit matters depends on what you are protecting. If the requirement is that requests succeed, this deployment has headroom beyond anything tested. If the requirement is a response-time budget, it is exceeded well before any error appears — 320 VU answers every request, but takes 11.5 seconds at p95 to do it.
+**The plateau is not an infrastructure limit.** At peak the cluster was 5–27% CPU utilised, PostgreSQL used 48 of 402 connections, and the slowest query averaged 3.27ms. `pgr-services` CPU stayed flat at ~0.9 of a core across every level on a 4-core node with no limit set — a service that is CPU-bound climbs, and this one does not. The ceiling is a concurrency limit inside the application, not a shortage of hardware.
 
 ## Stability
 
-**Zero pod restarts across fourteen load levels and 19,238 complaints.**
+**Zero pod restarts across the whole ladder, on the shipped configuration.**
 
-That result depends on a change made for the test. Every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi — roughly a quarter of the memory already allocated to it. The heap was raised to ~58% of each container's limit for this campaign, and `-XX:+ExitOnOutOfMemoryError` added, before any load was applied.
+The one restart in the campaign came from open-loop testing, not from this ladder — see below.
 
-**On the shipped configuration these results would not hold.** The durable fix belongs in the deployment charts — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+Separately worth knowing: every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi — roughly a quarter of the memory already allocated to it. That did not limit the closed-loop results, but it decided how the deployment behaved under open-loop overload. See [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
 
 ## Open-Loop Testing Changes the Picture
 
@@ -88,6 +82,18 @@ Every closed-loop figure above comes from a test where virtual users cannot star
 **Roughly half the offered work never started.** The closed-loop ladder reported 0.000% failures at every level; both statements are accurate, and they answer different questions. Closed-loop measures what the system will accept. Open-loop measures what happens when demand does not wait its turn — which is how real traffic arrives.
 
 The heap setting did not change throughput (3.9% apart, inside the noise floor). It changed **how overload fails**: on shipped settings the deployment was restarted by its own liveness probe after `/health` exceeded the 3-second timeout six times running; on raised settings it queued and stayed up.
+
+## Stored Data Is the Biggest Single Factor
+
+Because the ladder holds the dataset fixed, the cost of stored data can be read separately. The same 120 VU level, measured at three database sizes during this campaign:
+
+| Records | Lifecycles/s | Relative |
+|---|---|---|
+| 3 | **11.777** | baseline |
+| 17,337 | 7.939 | **−33%** |
+| ~27,000 | 5.277 | **−55%** |
+
+Twenty-seven thousand complaints is a trivial database by production standards, and it had already more than halved throughput — an effect roughly eight times the 6.7% measurement noise. **The headline capacity figures are for an effectively empty database and should be read as an upper bound.** Any deployment expecting sustained volume needs an archiving policy from the start; it is cheaper than hardware and has a larger effect.
 
 ## The Most Useful Finding
 

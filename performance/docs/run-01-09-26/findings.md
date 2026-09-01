@@ -42,7 +42,9 @@ Levels are separated by a **drain gate**: the next level does not start until th
 
 The gate originally also required the Elasticsearch indexer's lag to fall below 1,000. That condition can never be satisfied on this cluster — the indexer throws roughly 5,700 transformation errors every five minutes (`$.MdmsRes.tenant.tenants is not found`, `$.TenantBoundary[0].boundary[0] is not found`) and clears its backlog at about 1.3 messages/sec. It is a pre-existing defect unrelated to load testing, and it sits off the complaint write path. The gate checks the **persister only**, which is the consumer that actually governs workflow-state correctness.
 
-This matters more than it sounds. An earlier ungated pass ran the same levels back to back with a fixed 45-second pause, and its results were not reproducible — levels inherited the previous level's backlog, and the failure counts moved non-monotonically as a result. Every figure in this document comes from the gated pass. The ungated pass is reported separately under [Why the Gate Matters](#why-the-gate-matters), because the difference between the two is itself the most useful finding in this run.
+Levels are additionally separated by a **dataset reset** — the database is returned to exactly 3 complaints before each level, so no level inherits the previous one's stored data.
+
+Both matter. An earlier ungated pass ran the same levels back to back with a fixed 45-second pause and no reset; its results were not reproducible, because levels inherited both the previous level's Kafka backlog and its rows. That pass is reported separately under [Why the Gate Matters](#why-the-gate-matters), because the difference between the two is itself a useful finding.
 
 ### Test Machine
 
@@ -64,61 +66,50 @@ Replicas are **1** on every service in the complaint path (`pgr-services`, `egov
 
 | Metric | Value |
 |--------|-------|
-| Highest level tested | **320 VU** |
-| HTTP failures at 240, 280 and 320 VU | **0.000%** |
-| Lifecycle success at 240, 280 and 320 VU | **100.00%** |
-| Error-based ceiling | **Not found** — no level reached the 5% budget |
-| Peak throughput observed | 16.259 lifecycles/sec (66.33 API req/s) at 160 VU, against ~7,000 records |
-| Saturation point | **At or below 120 VU** — the lowest gated level, already on the plateau |
+| **Peak throughput** | **12.989 lifecycles/sec · 53.49 API req/s** |
+| **Daily capacity at peak** | **1,122,250 complaints/day** |
+| **Saturation point** | **160 VU** — 200 VU adds 1.3%, inside the noise floor |
+| Request failures, every level | **0.000%** |
+| Lifecycle success, every level | **100.00%** |
+| Error-based ceiling | **Not found** — nothing failed at any level tested |
 | Pod restarts, closed-loop levels | **0** |
 | Pod restarts, open-loop on shipped heap | **1** (liveness probe, not OOM) |
-| Run-to-run variance at a fixed level | **6.9%** throughput, **20.1%** p95 |
-| Records in database | 195 at start, 19,433 at end |
+| Run-to-run variance, fixed dataset | **6.7%** throughput, **51%** p95 |
+| Dataset | **fixed at 3 complaints** for every level |
+| Cluster utilisation at peak | **5–27% CPU**, 48 of 402 DB connections |
 
-**No error ceiling exists below 320 VU on this deployment.** Load is absorbed as latency, not as failure: throughput falls and response times climb, but requests keep succeeding. The run was stopped at 320 VU because the ladder ran out of planned levels, not because anything broke.
+**No error ceiling exists on this deployment within the range tested.** Load is absorbed as latency, not as failure — response times climb while requests keep succeeding. The limit is a throughput plateau at ~53 API req/s reached at 160 VU, and it is reached with the cluster roughly 70% idle.
 
 ## Results
 
-Three passes were run. Only the **gated pass** is a result; the two ungated passes are reported because the difference between them is itself a finding, and because the ungated ladder is the only place levels below 120 VU were measured.
+Every level below ran against an **identical database**: exactly 3 complaints, restored by a gated cleanup between levels. Nothing accumulated, so levels are directly comparable to each other regardless of run order. All figures are whole-run rates over a 2-minute hold on the **shipped configuration** — no heap or probe changes were in place.
 
-Whole-run rates over each 2-minute hold. One lifecycle = 4 API calls. Every level ran against a different database, because the campaign's own writes accumulated — the **Records** column gives the number present when each level started, and is the single most important column for reading the rest.
-
-### Gated pass — the result
-
-Each level waited for the persister's Kafka lag to reach zero and the indexer's to fall below 1,000 before starting.
-
-| # | VU | Records | Lifecycles/s | API req/s | http p95* | http avg* | http max* | Lifecycle success† | Request fail† |
-|---|----|---------|-------------|-----------|----------|----------|----------|---------|-----------|
-| 5 | **120** | 17,337 | 7.939 | **32.67** | 3,188ms | 1,561ms | 5.9s | **100.00%** | **0.000%** |
-| 6 | **160** | 18,381 | 7.842 | **32.56** | 5,254ms | 2,709ms | 8.1s | **100.00%** | **0.000%** |
-| 1 | 200 | 12,233 | 10.549 | 43.69 | 4,667ms | 2,416ms | 7.0s | 99.93% | 0.017% |
-| 2 | 240 | 13,638 | 9.714 | 40.63 | 7,405ms | 3,667ms | 10.7s | **100.00%** | **0.000%** |
-| 3 | 280 | 14,952 | 8.983 | 37.97 | 9,589ms | 5,009ms | 13.9s | **100.00%** | **0.000%** |
-| 4 | 320 | 16,184 | 7.948 | 34.00 | 11,454ms | 6,804ms | 18.8s | **100.00%** | **0.000%** |
-
-Rows are ordered by VU; the **#** column gives run order. Note that 120 and 160 VU ran *last*, against the largest database, which is why they sit below 200 VU on throughput despite being the lighter load. **Read adjacent run numbers, not adjacent VU counts.**
-
-**24,300 requests across six levels, zero failures, zero pod restarts.**
-
-### Ungated passes — superseded
-
-The same scenarios with a fixed 45-second pause instead of a drain gate. Retained because they are the evidence for [Why the Gate Matters](#why-the-gate-matters), and because levels below 120 VU exist only here.
-
-| # | VU | Records | Lifecycles/s | API req/s | http p95* | Lifecycle success† | Request fail† | `INVALID ACTION` |
-|---|----|---------|-------------|-----------|----------|---------|-----------|-----------------|
-| 1 | 20 | 195 | 2.218 | 9.03 | 357ms | 100.00% | 0.000% | 0 |
-| 2 | 40 | 480 | 4.532 | 18.44 | 164ms | 100.00% | 0.000% | 0 |
-| 3 | 80 | 1,061 | 8.810 | 35.85 | 203ms | 100.00% | 0.000% | 0 |
-| 4 | 160 | 2,214 | 16.259 | 66.33 | 669ms | 99.57% | 0.268% | 8 |
-| 5 | 320 | 4,315 | 20.200 | 102.67 | 1,994ms | **1.14%** | **56.952%** | **2,688** |
-| 6 | 200 | 7,118 | 14.516 | 59.47 | 2,594ms | 94.97% | 1.367% | 61 |
-| 7 | 240 | 9,028 | 12.552 | 52.12 | 4,892ms | 95.32% | 0.766% | 14 |
-| 8 | 280 | 10,695 | 11.448 | 48.14 | 7,233ms | 98.24% | 1.191% | 0 |
+| VU | Lifecycles/s | API req/s | Daily capacity | http p95* | http avg* | Lifecycle success† | Request fail† |
+|----|-------------|-----------|---------------|----------|----------|---------|-----------|
+| 40 | 4.213 | 17.16 | 364,003/day | 787ms | 274ms | **100.00%** | **0.000%** |
+| 80 | 8.050 | 32.82 | 695,520/day | 828ms | 375ms | **100.00%** | **0.000%** |
+| 120 | 11.777‡ | 48.03‡ | 1,017,533/day | 855ms‡ | 430ms‡ | **100.00%** | **0.000%** |
+| **160** | **12.894** | **52.79** | **1,114,042/day** | 1,816ms | 910ms | **100.00%** | **0.000%** |
+| 200 | 12.989 | 53.49 | 1,122,250/day | 3,170ms | 1,619ms | **100.00%** | **0.000%** |
 
 \* `http_req_duration` — server response time, including ~24ms network RTT.
 † Different denominators — see [Reading the Two Percentage Columns](#reading-the-two-percentage-columns).
+‡ Mean of three repeats at this level; see [Run-to-Run Variance](#run-to-run-variance).
 
-The 66.33 API req/s at 160 VU is the highest figure the campaign produced, and it is **not a capacity number**: it was measured against 2,214 records, an eighth of what the gated levels faced, on a curve that had not begun to flatten (20→40→80→160 grew 2.04×, 1.94×, 1.85× for each doubling). The 102.67 req/s at 320 VU is higher still and worthless — 57% of those requests were fast failures, and only 1.14% of lifecycles completed.
+**Not one request failed at any level**, and every lifecycle reached `RESOLVED` — 24,000+ requests across seven runs, with zero pod restarts throughout.
+
+### Throughput plateaus at ~53 API req/s
+
+| Step | Throughput gain | VU increase | Verdict |
+|------|----------------|-------------|---------|
+| 40 → 80 | +91.3% | ×2.0 | near-linear |
+| 80 → 120 | +46.3% | ×1.5 | linear |
+| 120 → 160 | +9.9% | ×1.33 | bending |
+| **160 → 200** | **+1.3%** | ×1.25 | **flat** |
+
+The 160 → 200 step is inside the 6.7% run-to-run spread measured at 120 VU, so it is **not distinguishable from noise** — the deployment gains nothing from the extra 40 users. Latency over the same step rises 75% (1,816ms → 3,170ms), well outside its own spread.
+
+**Peak throughput is therefore ~13 lifecycles/sec, ~53 API req/s, ~1.12 million complaints/day**, reached at 160 VU. Above that, load converts entirely into waiting.
 
 ### Reading the Two Percentage Columns
 
@@ -127,71 +118,37 @@ The 66.33 API req/s at 160 VU is the highest figure the campaign produced, and i
 - **Lifecycle success** (`transaction_success`) — the share of *lifecycles* that completed all four steps and ended in `RESOLVED`. Denominator: lifecycles.
 - **Request fail** (`http_req_failed`) — the share of individual *HTTP requests* that returned an error. Denominator: requests, about 4 per lifecycle plus one login per VU.
 
-One failed request anywhere in the chain fails the whole lifecycle, so the lifecycle failure rate runs several times the request failure rate. At 160 VU, 23 failed requests out of 8,571 (0.268%) cost 9 lifecycles out of 2,101 (0.43% — leaving 99.57% success).
-
-### The Deployment Is Saturated Across Every Level Tested
-
-Because each level ran against a slightly larger database than the one before it (see [The Data-Volume Confound](#the-data-volume-confound)), levels far apart in time cannot be compared directly. **Adjacent pairs, run within minutes of each other, can.** Every such pair tells the same story:
-
-| Pair | Throughput | Inside noise? | http p95 | Exceeds noise? |
-|------|-----------|---------------|----------|----------------|
-| 120 → 160 VU | −0.3% | yes | **+65%** | **yes** |
-| 200 → 240 VU | −7.0% | yes | **+59%** | **yes** |
-| 240 → 280 VU | −6.5% | yes | +29% | no |
-| 280 → 320 VU | −10.5% | yes | +19% | no |
-
-**The throughput column carries no signal.** Three repeats of an identical level
-(see [Run-to-Run Variance](#run-to-run-variance)) show a 12.1% peak-to-trough
-spread in throughput between runs that differ in nothing at all. Every
-throughput change in the table above is smaller than that. An earlier version of
-this document read the column as a trend and stated that each 40-VU step "costs
-about 8-11% of throughput"; that claim is withdrawn — it was noise.
-
-**The latency column does carry signal, for the two larger steps.** Against a
-36.6% peak-to-trough spread in p95, the +65% and +59% rises are real; the +29%
-and +19% are not distinguishable from noise.
-
-So the saturation conclusion stands, on narrower evidence than before: at
-120 → 160 VU throughput is flat — which the variance data now tells us is the
-*expected* outcome for any two runs, not a finding in itself — while p95 rises
-by two-thirds, which is well outside the noise floor. That combination is a
-saturation plateau, and it means **the deployment is already at capacity at
-120 VU**, the lowest level in the gated series.
-
-**The peak therefore sits below 120 VU and was not measured.** Locating it needs a ladder below 120 with a fixed dataset, which this campaign did not run.
-
-What it does **not** do is fail. Across 240, 280 and 320 VU — 15,636 requests in total — **not one request returned an error**, and every lifecycle reached `RESOLVED`. Whatever the limiting resource is, the stack queues on it rather than shedding load.
+One failed request anywhere in the chain fails the whole lifecycle, so the lifecycle failure rate runs several times the request failure rate. On this ladder both are zero at every level, so the distinction does not bite — but it matters whenever it is not.
 
 ## Run-to-Run Variance
 
 Three repeats of an identical level — 120 VU, drained persister, same
-configuration, roughly two minutes apart. This is the measurement neither the
-March 2026 campaign nor the earlier passes here ever made, and without it no
-difference between two runs can be called real.
+configuration, **each starting from the same 3-complaint dataset**. Without this
+measurement, no difference between two runs can be called real.
 
 | Repeat | Lifecycles/s | API req/s | http p95 | Request fail |
 |---|---|---|---|---|
-| 1 | 5.478 | 22.81 | 5,510ms | 0.000% |
-| 2 | 5.496 | 22.87 | 5,257ms | 0.000% |
-| 3 | 4.856 | 20.32 | 7,487ms | 0.000% |
+| 1 | 11.280 | 46.04 | 1,121ms | 0.000% |
+| 2 | 12.073 | 49.22 | 760ms | 0.000% |
+| 3 | 11.978 | 48.83 | 685ms | 0.000% |
 
 | Metric | Mean | Std dev | Coefficient of variation | Peak-to-trough |
 |---|---|---|---|---|
-| Lifecycles/s | 5.277 | 0.364 | **6.9%** | **12.1%** |
-| API req/s | 22.00 | 1.455 | 6.6% | 11.6% |
-| http p95 | 6,085ms | 1,221ms | **20.1%** | **36.6%** |
+| Lifecycles/s | 11.777 | 0.433 | **3.7%** | **6.7%** |
+| API req/s | 48.03 | 1.735 | 3.6% | 6.6% |
+| http p95 | 855ms | 233ms | **27.2%** | **51.0%** |
 
-**Latency is three times noisier than throughput.** Any claim resting on a p95
-difference smaller than about 37%, or a throughput difference smaller than about
-12%, needs repeats behind it before it means anything.
+**Latency remains far noisier than throughput** — roughly seven times the
+coefficient of variation. A throughput difference under about 7%, or a p95
+difference under about 50%, needs repeats behind it before it means anything.
 
-Two limits on this estimate. **n=3** — enough to show the earlier per-rung
-deltas sit inside the noise, not enough to characterise the distribution. And it
-is **specific to this dataset**: the repeats ran at roughly 27,000 records, where
-the same level measured earlier at 17,337 records returned 7.939 lifecycles/s
-against 5.277 here. That 34% gap is data growth, and it dwarfs the 12% noise
-floor — which is the clearest available statement of how much stored data
-matters relative to measurement error on this deployment.
+**Fixing the dataset halved the throughput noise.** An earlier set of repeats,
+run while the database was still growing underneath the campaign, measured
+12.1% peak-to-trough. On a fixed dataset the same measurement gives 6.7%. Most
+of what looked like measurement noise was the dataset moving.
+
+One limit remains: **n=3** is enough to size the noise floor, not enough to
+characterise its distribution.
 
 ## Open-Loop Testing
 
@@ -284,38 +241,75 @@ Not a timeout, not a 5xx. The workflow service was correctly refusing a transiti
 
 The practical consequence for load testing is that levels must not inherit each other's backlog. A ladder without a drain gate measures the accumulated state of the previous levels, and its numbers will not reproduce.
 
-## The Data-Volume Confound
+## What Stored Data Costs
 
-The campaign wrote **19,238 complaints** onto a starting database of 195. Every level added to the stored data that later levels then had to query, so each level faced a larger database than the one before it.
+Because the ladder above holds the dataset fixed, the effect of stored data can
+be read off separately. The same 120 VU level was measured three times during
+this campaign at three different database sizes:
 
-This is visible in the numbers. At 200 VU the ungated pass — run against 7,118 records — recorded 59.47 API req/s; the gated pass at the same 200 VU, against 12,233 records, recorded 43.69 req/s. The gate removed the failures but did not cause the 26% slowdown; the database had grown 72% in between.
+| Records in database | Lifecycles/s | Relative |
+|---|---|---|
+| 3 | **11.777** | baseline |
+| 17,337 | 7.939 | **−33%** |
+| ~27,000 | 5.277 | **−55%** |
 
-The consequence is stronger than it first appears: **no two levels in this campaign ran against the same dataset.** Records grew monotonically with every level, in run order:
+**Stored data is the single largest influence on throughput measured anywhere in
+this campaign** — larger than concurrency, and roughly eight times the 6.7%
+run-to-run noise floor. Twenty-seven thousand complaints is a trivial database
+by production standards, and it had already more than halved throughput.
 
-| Level (gated, run order) | Records present at run start |
-|---|---|
-| 200 VU | 12,233 |
-| 240 VU | 13,638 |
-| 280 VU | 14,952 |
-| 320 VU | 16,184 |
-| 120 VU | 17,337 |
-| 160 VU | 18,381 |
+The practical consequences:
 
-Across all three passes the database went from 195 records to **19,433** — the campaign wrote 19,238 complaints, roughly a hundredfold increase on what it started with.
+- Any capacity figure must state the dataset it was measured against. The
+  headline numbers above are for an effectively empty database and are therefore
+  an **upper bound**, not a forecast.
+- A deployment expecting sustained volume needs an archiving policy from the
+  outset. This is cheaper than hardware and has a larger effect.
+- Load tests must reset the dataset between levels. Earlier passes in this
+  campaign did not, and their levels are not comparable to one another — they
+  have been superseded by the fixed-dataset ladder above.
 
-This is why the series is not monotonic in VU order — 200 VU records 43.69 API req/s while 120 VU records 32.67, even though 120 VU is the lighter load. The 120 and 160 levels were run **last**, against the largest database, so their lower throughput reflects data volume rather than concurrency.
+## Where the Limit Is
 
-Two things follow. **Only adjacent levels are comparable**, and those are used for the saturation analysis above. And **the peak throughput figure of 16.259 lifecycles/sec at 160 VU from the early group should be read as "highest observed at ~7,000 records"** — roughly a third of the data the later levels faced — not as a capacity figure.
+At saturation the deployment is **not** short of CPU, database capacity, or
+connections. Peak resource use during the 200 VU level, with metrics-server
+sampling every 15 seconds:
 
-A cleanly comparable ladder needs either a database reset between levels or a dataset large enough that the run's own writes are negligible. Neither was done here, and it is the main thing to fix before running this again.
+| Service | Peak CPU | Behaviour across the ladder |
+|---|---|---|
+| `egov-user` | **2,088m** | scales with load — 706m at 80 VU to 2,088m at 200 VU |
+| `pgr-services` | 908m | **flat** — 803m to 939m regardless of level |
+| `egov-workflow-v2` | 380m | flat |
+| `egov-persister` | 241m | flat |
+
+Cluster nodes are 4 vCPU each, 16 vCPU total, and sat at **5–27% utilisation**.
+PostgreSQL used **48 of 402** available connections. No query was slow: across a
+full level the worst mean execution time was **3.27ms**, and the heaviest
+consumer by total time was an MDMS lookup at 1.15ms mean over 18,427 calls.
+
+Two things follow.
+
+**`pgr-services` CPU is flat while throughput plateaus.** It never exceeds ~0.94
+of a core on a 4-core node with no CPU limit set. A service that is CPU-bound
+climbs; this one does not, so it is waiting rather than computing.
+
+**The constraint is application concurrency, not infrastructure.** With ~70% of
+cluster CPU idle, 88% of database connections free and no slow query, the
+ceiling is a thread-pool, connection-pool or serialisation limit inside the
+services. The single-partition Kafka topics documented in
+[Known Limits Not Reached](#known-limits-not-reached) are one candidate; this
+campaign did not isolate which.
+
+**One optimisation target is visible in the query data.** MDMS lookups account
+for more database time than anything else — 26,156 calls in a two-minute level,
+roughly 13 per complaint. Each is fast; the volume is the cost. That points at
+caching rather than indexing.
 
 ## Stability
 
-**Zero pod restarts across every closed-loop level** — fourteen levels across three passes and not one restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
+**Zero pod restarts across every closed-loop level**, including the entire fixed-dataset ladder on the shipped configuration — no restart on `pgr-services`, `egov-workflow-v2`, `egov-persister` or `egov-user`.
 
-The one restart in the whole campaign came from **open-loop testing on the shipped configuration**, where the liveness probe killed `pgr-services` (see [Open-Loop Testing](#the-heap-setting-decides-how-overload-fails)). The raised configuration survived the identical test with zero restarts.
-
-That result is only meaningful because the JVM heap was raised for the test. See [Deployment Configuration](#deployment-configuration).
+The one restart in the whole campaign came from **open-loop testing**, where the liveness probe killed `pgr-services` while it was slow but still serving (see [Open-Loop Testing](#the-heap-setting-decides-how-overload-fails)). Under the closed-loop ladder the shipped configuration was stable throughout.
 
 ## Deployment Configuration
 
@@ -328,9 +322,9 @@ That result is only meaningful because the JVM heap was raised for the test. See
 | `egov-persister` | `maven-jdk21-9f83afb` |
 | `egov-user` | `2.12-87e13fe` |
 
-### Changes applied for the test
+### Changes applied during the campaign
 
-The figures above were **not** measured on the shipped configuration. Three changes were applied to the four services in the complaint path before testing, and reverted afterwards:
+**The headline ladder was measured on the shipped configuration** — no heap or probe changes were in place for it. Three changes were applied for the open-loop comparison only, and reverted afterwards:
 
 | Change | From | To | Why |
 |--------|------|----|-----|
@@ -338,7 +332,9 @@ The figures above were **not** measured on the shipped configuration. Three chan
 | OOM behaviour | default | `-XX:+ExitOnOutOfMemoryError` | A heap exhaustion otherwise leaves the process alive but permanently stalled — see [issue #1929](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1929). Exiting converts that into a pod restart, which Kubernetes recovers from in seconds and which shows up in restart counts. |
 | Probe timeouts | `timeoutSeconds: 3` | `timeoutSeconds: 10` | At saturation `/health` can legitimately take longer than 3 seconds. Five consecutive failures would restart a healthy-but-busy pod mid-run, which reads as a collapse and is not one. |
 
-**On the shipped `-Xmx192m` configuration these results would not hold.** The heap raise is the reason the campaign recorded zero restarts, and the durable fix belongs in the deployment charts rather than in a hand-applied patch.
+The closed-loop ladder recorded zero restarts on the shipped configuration, so the heap raise is not load-bearing for those figures. It mattered only under open-loop overload, where it decided whether the deployment degraded into slowness or into an outage. The durable fix belongs in the deployment charts rather than in a hand-applied patch — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+
+**Dataset control.** Between every level a gated transaction removed the complaints that level had written, restoring the database to exactly 3 rows. Deletion was scoped by the harness description marker **and** a time bound, never by description alone, with pre-gates that abort if the target count or the survivor count is unexpected. Three pre-existing complaints from May 2026 were preserved throughout.
 
 ### Configuration the harness needs
 

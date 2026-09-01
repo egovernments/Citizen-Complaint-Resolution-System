@@ -7,91 +7,96 @@
 
 ## How to Read This Document
 
-**One "complaint lifecycle"** is a complaint filed, routed to a department, resolved, and then checked by the citizen. It is the unit everything below is measured in. One lifecycle is four calls to the system.
+**One "complaint lifecycle"** is a complaint filed, routed to a department, resolved, and then checked by the citizen. It is the unit everything below is measured in.
 
-**Plan on complaints per day.** It is measured directly, it needs no translation, and it is the number a city can forecast from its own population and service history.
+**Plan on complaints per day.** It is measured directly, needs no translation, and is the number a city can forecast from its own population and service history.
 
-**Concurrent users** means people actively filing or checking complaints at the same moment — not people logged in. Our tests use "test users", each filing complaints back-to-back with barely a pause. Real people spend most of their session reading and navigating. The working conversion:
+**Concurrent users** means people actively filing or checking complaints at the same moment — not people logged in. Our tests use "test users", each working continuously with barely a pause. Real people spend most of their time reading and navigating. The working conversion:
 
 > **1 test user ≈ 20–30 real people online at the same time**
 
 | Test Users | Real People Online | What This Represents |
 |------------|-------------------|---------------------|
-| 20 | 400–600 | Small ULB |
+| 40 | 800–1,200 | Small city |
 | 80 | 1,600–2,400 | Medium city |
-| 160 | 3,200–4,800 | Large city |
-| 320 | 6,400–9,600 | **Highest level tested — still zero failures** |
+| 120 | 2,400–3,600 | Large city |
+| 160 | 3,200–4,800 | **Best performance — the sweet spot** |
+| 200 | 4,000–6,000 | Beyond the sweet spot: no faster, just slower |
 
 ---
 
 ## The Bottom Line
 
-**Nothing failed.** The deployment was pushed to 320 test users — the equivalent of six to nine thousand people using it simultaneously — and answered **every single request successfully**. We did not find its breaking point, because it did not break.
+**This deployment handles roughly 1.1 million complaints a day, and nothing failed at any level we tested.**
 
-What it does instead is slow down. Past roughly 160–200 test users the system is at capacity, and further load turns into waiting rather than more work done. At the highest level tested, every complaint still went through, but responses took around 11 seconds.
+Every single request succeeded — no errors, no crashes, no restarts — across every level from 800 to 6,000 simultaneous users. That is a strong reliability result and it should be stated plainly.
 
-So there are two different limits, and which one matters depends on the promise being made:
+The system does have a limit, but it is a **speed limit, not a breaking point**. Past roughly 3,200–4,800 real users the system stops going faster and simply starts taking longer to answer. It never falls over.
 
-- **If the promise is "it works":** there is headroom beyond anything we tested.
-- **If the promise is "it responds quickly":** that limit arrives much earlier, and long before any error appears.
+**The most important thing in this document is not a capacity number.** It is that the amount of stored data matters more than anything else — see [What Slows It Down Most](#what-slows-it-down-most).
 
 ---
 
 ## What This Deployment Handles
 
-Measured on a 4-machine Kubernetes cluster with one copy of each service running.
+Measured on a 4-machine Kubernetes cluster with one copy of each service running, on the standard shipped settings.
 
-| Load | Complaints/sec | **Complaints/day** | Response time | Failures |
-|------|---------------|-------------------|--------------|----------|
-| 20 test users | 2.218 | 191,635 | 0.36s | **0.000%** |
-| 40 test users | 4.532 | 391,565 | 0.16s | **0.000%** |
-| 80 test users | 8.810 | 761,184 | 0.20s | **0.000%** |
-| **160 test users** | **16.259** | **1,404,778** | **0.67s** | 0.268% |
-| 120 test users | 7.939 | 685,930 | 3.19s | **0.000%** |
-| 160 test users | 7.842 | 677,549 | 5.25s | **0.000%** |
-| 200 test users | 10.549 | 911,434 | 4.67s | 0.017% |
-| 240 test users | 9.714 | 839,290 | 7.41s | **0.000%** |
-| 280 test users | 8.983 | 776,131 | 9.59s | **0.000%** |
-| 320 test users | 7.948 | 686,707 | 11.45s | **0.000%** |
+| Load | Real people (approx.) | **Complaints/day** | Response time | Failures |
+|------|----------------------|-------------------|--------------|----------|
+| 40 test users | 800–1,200 | 364,000 | 0.8s | **none** |
+| 80 test users | 1,600–2,400 | 696,000 | 0.8s | **none** |
+| 120 test users | 2,400–3,600 | 1,018,000 | 0.9s | **none** |
+| **160 test users** | **3,200–4,800** | **1,114,000** | **1.8s** | **none** |
+| 200 test users | 4,000–6,000 | 1,122,000 | 3.2s | **none** |
 
-**An important caveat on this table.** No two rows were measured against the same amount of stored data. The testing itself grew the database from about 200 complaints to roughly 19,400, and stored data is the single biggest influence on speed in every test we have run. The 120 and 160 user rows were measured *last*, against the most data, which is why they look slower than the 200 user row despite being a lighter load. Rows measured close together in time can be compared; rows far apart cannot.
+**Two numbers to carry into a conversation:**
 
-**Two numbers worth carrying into a conversation:**
+**Comfortable operation — about 1 million complaints/day** at 120 test users, with responses under a second and no failures. This is the figure to quote where response time matters.
 
-**Comfortable operation — around 760,000 complaints/day** at 80 test users, with responses under a quarter of a second and no failures. This is the figure to quote where response time matters.
-
-**Everything succeeds, at any level we tested.** At 320 test users the deployment still completed every complaint. That is a strong reliability story and a weak speed story, and it should be presented as both.
+**Maximum — about 1.1 million complaints/day.** Going beyond 160 test users buys almost nothing: the last step added 1% more work while making people wait nearly twice as long.
 
 ---
 
 ## Where the Limit Actually Is
 
-The deployment does not have a failure point in the range we tested. It has a **speed ceiling**, and it is already past that ceiling at every level we measured with the settling step in place.
+The deployment has no failure point in the range we tested. It has a **speed ceiling**, and it reaches it at around 160 test users.
 
-Comparing levels tested close together — the only fair comparison, given the growing database — adding users always costs work and adds waiting:
-
-| Going from | To | Work completed | Response time |
+| Going from | To | Extra work done | Response time |
 |---|---|---|---|
-| 120 users | 160 users | **−0.3%** | **+65%** |
-| 200 users | 240 users | −7.0% | +59% |
-| 240 users | 280 users | −6.5% | +29% |
-| 280 users | 320 users | −10.5% | +19% |
+| 40 users | 80 users | **+91%** | unchanged |
+| 80 users | 120 users | **+46%** | unchanged |
+| 120 users | 160 users | +10% | doubles |
+| **160 users** | **200 users** | **+1%** | **+75%** |
 
-The first row is the clearest signal. Going from 120 to 160 users produced **no additional work at all** — throughput was flat to within a third of a percent — while people waited two-thirds longer. That is a system at capacity.
+Up to about 120 test users the system scales almost perfectly — double the users, nearly double the work. After 160 it stops scaling entirely.
 
-**A caution on the other rows.** We measured how much these numbers move between identical repeat runs: about 12% on work completed. That means the 7% and 10% drops in the middle rows are within normal run-to-run variation and should not be read as a trend. The waiting-time increases in the first two rows are large enough to be real; the last two are not.
+**The ceiling is not a hardware shortage.** At full load the servers were only 5–27% busy, the database was using an eighth of its available connections, and no database query was slow. The limit is inside the application software, not in the machines it runs on — which means **buying bigger servers would not raise it**.
 
-**This means the deployment is already saturated at 120 test users**, the lowest level we tested this way, and its best operating point is somewhere below that. We did not measure it.
+---
 
-The practical implication is that **capacity planning here should be driven by an acceptable response time, not by an error budget.** An error budget would never trigger.
+## What Slows It Down Most
+
+Not the number of users. **The number of complaints already stored.**
+
+We measured the same load against three different database sizes:
+
+| Complaints already stored | Work completed | Change |
+|---|---|---|
+| Effectively empty | 11.8/sec | — |
+| 17,000 | 7.9/sec | **−33%** |
+| 27,000 | 5.3/sec | **−55%** |
+
+Twenty-seven thousand complaints is a very small database — a busy city would pass that in weeks — and it had already **more than halved** throughput.
+
+**This is the single most important planning point in this document.** The capacity figures above were measured on an empty database, so they are a best case. Any deployment expecting real volume needs a policy for archiving old complaints from day one. It costs nothing and does more than any hardware upgrade.
 
 ---
 
 ## Before Adding Hardware: Two Things to Fix
 
-Both cost nothing in infrastructure and both were necessary to get the results above.
+Both cost nothing in infrastructure.
 
-**1. The services are told to use a quarter of the memory they already have.** Every service in the complaint path is configured with a memory allowance of roughly a quarter of what its container reserves. The memory is allocated and paid for regardless. We raised this before testing; without it the results above would not hold. This is a configuration change, not a purchase — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+**1. The services are told to use a quarter of the memory they already have.** Every service in the complaint path is configured with a memory allowance of roughly a quarter of what its container reserves. The memory is allocated and paid for regardless. It did not limit the results above, but it decided how the system behaved when deliberately overloaded — with it raised, the system slowed down; without it, the complaints service was restarted by its own health check. This is a configuration change, not a purchase — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
 
 **2. A memory shortage currently takes a service offline silently.** When one of these services runs out of memory it does not crash and restart — it keeps accepting requests and answers none of them, while health checks continue reporting green. On another deployment this took complaint filing offline for six hours before anyone noticed. A one-line setting converts it into a clean restart that recovers in seconds — see [issue #1929](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1929).
 
@@ -111,11 +116,10 @@ For a live deployment this means: after a sustained traffic spike, the system ne
 
 ## Key Caveats
 
-1. **These figures are not from the shipped configuration.** The memory settings described above were changed before testing and reverted afterwards. On the shipped settings the results would be worse, and a memory shortage would take services offline rather than restarting them.
+1. **The figures were measured on an effectively empty database**, and stored data is the biggest single factor — see [What Slows It Down Most](#what-slows-it-down-most). Treat them as a best case, not a forecast.
 2. **One copy of each service was running.** The cluster has four machines but a single instance of each complaints service, so these numbers describe one instance. Running more copies is the obvious next step and was not tested.
-3. **Stored data grew ninety-fold during the campaign**, from about 200 complaints to nearly 18,000, which is why levels measured hours apart are not comparable.
-4. **The database was small throughout.** Even 18,000 complaints is a small deployment. Earlier testing on other environments showed throughput falling substantially between an empty database and one million records, so any deployment expecting high volume needs an archiving policy from the start.
-5. **These numbers are complaints-only.** Running other DIGIT modules on the same cluster reduces available capacity.
-6. **Under realistic arrival patterns, about half the work never started.** All the figures above come from a test where simulated users wait for their previous request before starting the next — so the system effectively sets its own pace. Repeating it with demand arriving on a fixed schedule regardless of system speed, **roughly half the intended complaints never got started at all**, and on the shipped configuration the complaints service was restarted by its own health check. This is the closest we have to real traffic behaviour, and it is considerably less favourable.
-7. **The highest level tested was 320 test users, and nothing failed at any level.** The deployment's failure point is unknown because we never reached it. Its *best* operating point is also unknown, for the opposite reason — we never tested below 120 users with the settling step, and it was already saturated there.
-8. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.
+3. **These numbers are complaints-only.** Running other DIGIT modules on the same cluster reduces available capacity.
+4. **Under realistic arrival patterns, about half the work never started.** All the figures above come from a test where simulated users wait for their previous request before starting the next — so the system effectively sets its own pace. Repeating it with demand arriving on a fixed schedule regardless of system speed, **roughly half the intended complaints never got started at all**. This is the closest we have to real traffic behaviour, and it is considerably less favourable.
+5. **Nothing failed at any level, so the failure point is unknown.** We never reached it.
+6. **Measurements vary by about 7% between identical runs.** Any difference smaller than that is not meaningful. Response times vary far more — around 50% — so only large latency differences should be trusted.
+7. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.

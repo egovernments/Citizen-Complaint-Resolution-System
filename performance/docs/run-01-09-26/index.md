@@ -10,22 +10,18 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 ## Headline
 
-**320 concurrent test users · 0.000% failed requests · 100.00% lifecycle success.** No error ceiling was found at any level tested.
+**12.989 lifecycles/s · 53.49 API req/s · 1,122,250 complaints/day** — peak throughput, with **0.000% failed requests and 100.00% lifecycle success at every level tested**.
 
-**16.259 lifecycles/s · 66.33 API req/s at 160 VU** — the highest throughput observed, but against ~7,000 stored records, roughly a third of what the later levels faced. It is not a capacity figure.
+**Saturation at 160 VU.** Going to 200 VU adds 1.3% throughput — inside the 6.7% measurement noise — while latency rises 75%. Past that point the deployment gains nothing from more users.
 
-**The deployment is saturated at 120 VU**, the lowest level tested with a drain gate: 120 and 160 VU return identical throughput (32.67 vs 32.56 API req/s) while latency rises 65%. Its actual peak sits below 120 VU and was not measured.
+**The limit is not the hardware.** At peak the cluster ran at 5–27% CPU, PostgreSQL used 48 of 402 connections, and the slowest query averaged 3.27ms. The ceiling is a concurrency limit inside the application.
 
-**Zero pod restarts** across every closed-loop level. The single restart in the campaign came from open-loop testing on the *shipped* configuration, where the liveness probe killed `pgr-services` — the raised configuration survived the identical test untouched.
-
-**Open-loop testing tells a different story from closed-loop.** Holding the arrival rate independent of server speed, **roughly half the intended work never started** (48.6% and 55.2% dropped across two runs). Closed-loop reported 0.000% failures at every level; both are accurate, and they answer different questions.
-
-**Run-to-run variance is 6.9% on throughput and 20.1% on p95.** Three repeats of an identical level. This is the first such measurement in any DIGIT PGR campaign, and it retires one claim these docs previously made — see [Run-to-Run Variance](./findings#run-to-run-variance).
+**Zero pod restarts** across the whole ladder, on the shipped configuration.
 
 ## Read This First
 
-**These figures are not from the shipped configuration.** Every service in the complaint path ships with a JVM heap of `-Xmx192m` inside a container reserving 768Mi. The heap was raised to ~58% of each container's limit before testing, and `-XX:+ExitOnOutOfMemoryError` added. On the shipped setting these results would not hold — see [issue #1934](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1934).
+**Every level ran against an identical database** — exactly 3 complaints, restored by a gated cleanup between levels. That matters more than it sounds: the same 120 VU level returns 11.777 lifecycles/s at 3 records, 7.939 at 17,337, and 5.277 at ~27,000. **Stored data is the single largest influence on throughput measured anywhere in this campaign**, so the headline figures are an upper bound for an effectively empty database, not a forecast.
 
-**The system saturates well before it fails.** Above ~160-200 VU each additional 40 VUs costs 8-11% of completed work and adds 19-59% to response time, without producing a single error. At 320 VU every request succeeds — and takes 11.5 seconds at p95.
+**These figures are from the shipped configuration.** No heap or probe changes were in place for the ladder.
 
-**No two levels ran against the same database.** The campaign grew stored records from 195 to 19,433, monotonically in run order, and the 120 and 160 VU levels ran last against the largest dataset. The series is therefore not monotonic in VU order, and only levels run adjacent in time can be compared. [Findings](./findings#results) carries the full curve with the record count at every level. This is the main thing to fix before repeating the run.
+**Closed-loop testing measures what the system will accept, not what real traffic does.** Under an open-loop test that holds the arrival rate regardless of server speed, roughly half the offered work never started. Both readings are accurate; they answer different questions.
