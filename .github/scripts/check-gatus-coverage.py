@@ -799,6 +799,7 @@ def self_test() -> int:
         ])
         failures.append("ExternalName handling blunted the real cross-workload collision guard")
     except GuardError:
+        # Expected: duplicate real workloads with the same service name must raise GuardError.
         pass
 
     # 4. a dangling check is caught
