@@ -59,15 +59,18 @@ public class PolicyDrivenScopeResolver {
     private final ObjectMapper mapper;
     private final Principals principals;
     private final MDMSUtils mdmsUtils;
+    private final BoundaryHierarchyExpander boundaryHierarchyExpander;
 
     @Autowired
     public PolicyDrivenScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper,
-                                      Principals principals, MDMSUtils mdmsUtils) {
+                                      Principals principals, MDMSUtils mdmsUtils,
+                                      BoundaryHierarchyExpander boundaryHierarchyExpander) {
         this.config = config;
         this.restTemplate = restTemplate;
         this.mapper = mapper;
         this.principals = principals;
         this.mdmsUtils = mdmsUtils;
+        this.boundaryHierarchyExpander = boundaryHierarchyExpander;
     }
 
     /**
@@ -156,7 +159,7 @@ public class PolicyDrivenScopeResolver {
 
             JsonNode emp = employees.get(0);
             Set<String> departments = extractDepartments(emp);
-            Set<String> jurisdictions = extractJurisdictions(emp);
+            Set<String> jurisdictions = extractJurisdictions(emp, requestInfo, tenantId);
             return resolveViaEngine(requestInfo, u, tenantId, stateLevel, scopePolicy, roleCodes, departments, jurisdictions, null);
         } catch (Exception ex) {
             log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
@@ -230,7 +233,14 @@ public class PolicyDrivenScopeResolver {
         return departments;
     }
 
-    private static Set<String> extractJurisdictions(JsonNode emp) {
+    /**
+     * Each active HRMS jurisdiction boundary is unioned in ALONGSIDE every descendant boundary
+     * under it (see {@link BoundaryHierarchyExpander}) — an employee assigned a coarse boundary
+     * (County/SubCounty) must match every complaint anywhere under it, not only complaints
+     * tagged with that exact coarse code, which in practice never happens since complaints are
+     * always addressed at the leaf (Ward) level.
+     */
+    private Set<String> extractJurisdictions(JsonNode emp, RequestInfo requestInfo, String tenantId) {
         Set<String> jurisdictions = new LinkedHashSet<>();
         JsonNode jurisdictionNodes = emp.get("jurisdictions");
         if (jurisdictionNodes != null && jurisdictionNodes.isArray()) {
@@ -241,7 +251,9 @@ public class PolicyDrivenScopeResolver {
                 // the caller's scope forever.
                 boolean active = HrmsScopeSemantics.isActiveJurisdiction(j);
                 String boundary = j.path("boundary").asText(null);
-                if (active && boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
+                String hierarchy = j.path("hierarchy").asText(null);
+                if (active && boundary != null && !boundary.isEmpty())
+                    jurisdictions.addAll(boundaryHierarchyExpander.descendantsOf(requestInfo, tenantId, hierarchy, boundary));
             }
         }
         return jurisdictions;

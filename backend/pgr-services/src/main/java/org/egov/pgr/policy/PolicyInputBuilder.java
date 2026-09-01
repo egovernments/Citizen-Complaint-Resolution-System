@@ -68,9 +68,12 @@ public class PolicyInputBuilder {
 
     /**
      * The complaint's jurisdiction boundary code, matched exact-match against an employee's HRMS
-     * jurisdiction assignments (PgrSearchScope#jurisdictionCodes). Null-safe: a complaint with no
-     * address/locality yields null, which never matches any non-empty jurisdiction list — fails
-     * closed rather than leaking a complaint with unresolvable location data.
+     * jurisdiction assignments (PgrSearchScope#jurisdictionCodes) — which already carries every
+     * DESCENDANT of each assigned boundary (see PolicyDrivenScopeResolver /
+     * BoundaryHierarchyExpander), so a coarse-grained (e.g. County-level) assignment still
+     * matches every complaint under it here, exact-match notwithstanding. Null-safe: a complaint
+     * with no address/locality yields null, which never matches any non-empty jurisdiction list —
+     * fails closed rather than leaking a complaint with unresolvable location data.
      */
     private String extractBoundary(Service service) {
         Address address = service.getAddress();
