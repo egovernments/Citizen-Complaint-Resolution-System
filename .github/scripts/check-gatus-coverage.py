@@ -425,7 +425,7 @@ def k8s_targets_from_docs(docs):
         if alias is not None:
             aliases.append((name, alias[0]))
             continue
-        sel = doc.get("spec", {}).get("selector") or {}
+        sel = spec.get("selector") or {}
         # Namespace is part of the identity: two Services in different namespaces with
         # the same selector front DIFFERENT workloads, and collapsing them would mask
         # one. Everything is in `digit` today, which is exactly when this looks safe.
@@ -845,6 +845,39 @@ def self_test() -> int:
     except GuardError as e:
         if "duplicate" not in str(e).lower() or "different workloads" in str(e).lower():
             failures.append(f"duplicate manifest got the cross-workload message: {e}")
+
+    # 3f. an ExternalName Service is a cross-namespace ALIAS, not a second workload.
+    #     grafana(digit) -> grafana.monitoring.svc must collapse onto the real
+    #     grafana(monitoring) rather than collide by name -- the #1613-alias vs
+    #     #1618-real-Service case. Without this it raised "front different workloads".
+    collapsed = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if collapsed != {"grafana": "grafana"}:
+        failures.append(f"ExternalName alias did not collapse onto its target: {collapsed}")
+    #     ...an alias whose NAME differs from its target still resolves to (covers) it.
+    aliased = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "graf", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if aliased != {"graf": "grafana"}:
+        failures.append(f"ExternalName alias to a distinct target resolved wrong: {aliased}")
+    #     ...and two DIFFERENT real workloads sharing a name (neither an ExternalName)
+    #     must STILL collide -- the fix must not have blunted the cross-workload guard.
+    try:
+        k8s_targets_from_docs([
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-a"},
+             "spec": {"selector": {"app": "a"}}},
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-b"},
+             "spec": {"selector": {"app": "b"}}},
+        ])
+        failures.append("ExternalName handling blunted the real cross-workload collision guard")
+    except GuardError:
+        # Expected: duplicate real workloads with the same service name must raise GuardError.
+        pass
 
     # 4. a dangling check is caught
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:

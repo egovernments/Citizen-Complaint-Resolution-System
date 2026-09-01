@@ -117,6 +117,7 @@ plugins:
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
           ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
+          ["/localization/messages/cache-bust"]=true,
           ["/tenant/v1/tenant/_search"]=true,
           ["/egov-location/boundarys"]=true,
           ["/egov-location/boundarys/boundariesByBndryTypeNameAndHierarchyTypeName"]=true,
@@ -129,6 +130,7 @@ plugins:
           ["/egov-mdms-service/v1/_reload"]=true, ["/egov-mdms-service/v1/_reloadobj"]=true,
           ["/egov-mdms-service-test/v1/_search"]=true,
           ["/mdms-v2/v1/_search"]=true, ["/mdms-v2/v2/_search"]=true, ["/mdms-v2/schema/v1/_search"]=true,
+          ["/egov-workflow-v2/egov-wf/businessservice/_search"]=true,
           ["/boundary-service/boundary-relationships/_search"]=true,
           ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
           ["/boundary-service/boundary/_search"]=true,
@@ -138,6 +140,10 @@ plugins:
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- Authenticated employees of every functional role may read their own HRMS-backed
+          -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
+          -- appropriate because HRMS employee creation does not guarantee a shared base role.
+          ["/pgr-services/v2/employee/_context"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
           -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: user-bootstrap
+description: Post-deploy Job that provisions the ADMIN/GRO/INTERNAL_USER accounts via the egov-user API
+type: application
+version: 0.1.0
+appVersion: "1.0"

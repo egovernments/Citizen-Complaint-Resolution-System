@@ -80,10 +80,15 @@ services:
       retries: 5
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
+    #
+    # 384M OOM-looped on bomet (#1824): the blocklist replay at startup, not
+    # retention, is the driver — ~380 MB to replay 13,364 compacted blocks
+    # from a 6.3 GB store, before any query workload runs. 768M gives
+    # headroom over that rather than sitting right at the edge of it.
     deploy:
       resources:
         limits:
-          memory: 384M   # 24h retention, small blocks
+          memory: 768M
     networks:
       - egov-network
 
@@ -511,11 +516,8 @@ services:
     depends_on:
       egov-mdms-service:
         condition: service_healthy
-      # Flyway is disabled for this service, so the external db-migrations
-      # container must finish before enc starts — otherwise it races an
-      # unmigrated schema on a cold start (matches egov-user et al.).
-      db-migrations:
-        condition: service_completed_successfully
+      # Flyway is disabled for this service; egov-enc-service-migration in
+      # docker-compose.migrations.yml owns the schema and gates this service.
       otel-collector:
         condition: service_started
     volumes:
@@ -645,8 +647,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -660,7 +660,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       MDMS_HOST: http://egov-mdms-service:8094/
@@ -743,21 +744,6 @@ services:
     networks:
       - egov-network
 
-  # Unified database migrations for all DIGIT services
-  # Runs all Flyway migrations in one container before services start
-  db-migrations:
-    image: egovio/tilt-demo-db-migrations:latest
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres:5432/egov
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-    networks:
-      - egov-network
-    restart: "no"
-
   egov-user:
     # Bumped to the 2.12 core-services merge (87e13fe), which now
     # includes the Digit-Core#1044 fixes (tenant-aware encryption,
@@ -773,8 +759,6 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -785,7 +769,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       FLYWAY_ENABLED: 'false'
       # Kafka config - use property name expected by egov-user
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
@@ -939,8 +924,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -951,7 +934,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
@@ -1419,7 +1403,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      # Flyway disabled - migrations run by egov-otp-migration
+      # (docker-compose.migrations.yml); pgbouncer's transaction mode is
+      # incompatible with in-service Flyway anyway
       SPRING_FLYWAY_ENABLED: "false"
       SERVER_PORT: 8089
       EGOV_OTP_LENGTH: 6
@@ -1529,7 +1515,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-beta-96dcf10}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-0938bdf}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1697,7 +1683,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the SPA Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-beta-96dcf10}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-c287d49}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1727,7 +1713,7 @@ services:
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-beta-96dcf10}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-c287d49}
     container_name: configurator
     ports:
       - "18890:80"
@@ -1946,7 +1932,7 @@ services:
     # below pulls a public, pinned build from ghcr.io — no VPC access or
     # insecure-registries trust required. Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-11}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:master-b4f0eeb8d}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2258,7 +2244,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: egovio/digit-config-service:2.12-beta-96dcf10
+    image: egovio/digit-config-service:master-7c91934
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2313,7 +2299,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: egovio/digit-user-preferences-service:2.12-beta-96dcf10
+    image: egovio/digit-user-preferences-service:master-7c91934
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2334,14 +2320,14 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      # 30s was never enough for a Spring Boot cold start and is an outlier among
-      # its peers (egov-hrms 150s, egov-user 120s, boundary-service 120s,
-      # digit-config-service 90s — the last added in this very same commit).
+      # This service is implemented in Go (see backend/digit-user-preferences-service),
+      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
+      # full-stack cold start and was an outlier among its slow-starting peers.
       # novu-bridge is the only service that depends_on this one with
       # condition: service_healthy, so when it flaps the whole `compose up -d`
       # exits non-zero, ansible stops the play, and every task after
       # "Start DIGIT stack" is silently skipped. That is the mechanism behind
-      # CCRS#1551. Align with the other JVM services.
+      # CCRS#1551. Keep the observed-safe grace period.
       start_period: 120s
     networks:
       - egov-network
@@ -2351,7 +2337,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-beta-96dcf10}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-7c91934}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2417,6 +2403,12 @@ services:
       NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
       NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
       NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
+      # Novu integration identifier to explicitly target for WHATSAPP triggers
+      # (a distinct, WhatsApp-registered Twilio integration). Twilio WhatsApp is
+      # an "sms"-channel step in Novu, so without this a WHATSAPP dispatch
+      # silently resolves to the PRIMARY sms integration (the plain SMS sender)
+      # instead. Leave unset until that dedicated integration is onboarded.
+      NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP: ${NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP:-}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate

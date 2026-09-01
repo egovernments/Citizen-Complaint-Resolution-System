@@ -127,9 +127,11 @@ matomo_admin_user: admin
 #
 # Footprints are approximate. The caps from #1612 have since landed as
 # `deploy.resources.limits.memory` in docker-compose.egov-digit.yaml:
-# prometheus 512M, loki 512M, tempo 384M, otel-collector 320M,
-# grafana 256M, promtail 128M, gatus 64M. So these are enforced ceilings
-# now, though the figures below are still budget rather than measurement.
+# prometheus 512M, loki 512M, otel-collector 320M, grafana 256M,
+# promtail 128M, gatus 64M, tempo 768M (raised from 384M by #1824 —
+# blocklist replay at startup, not retention, drove the footprint). So
+# these are enforced ceilings now, though the figures below are still
+# budget rather than measurement.
 #
 # This matters because the boxes are small: 29 services declare ~12.8 GB
 # of max heap on machines that are commonly 16 GB and have NO swap, so
