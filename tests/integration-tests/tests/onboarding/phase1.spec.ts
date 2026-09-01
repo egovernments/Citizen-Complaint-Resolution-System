@@ -24,12 +24,15 @@ import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { toLettersOnlySuffix } from '../utils/onboarding';
 
 // Override the suite-level storageState so this spec starts unauthenticated
 // and walks the login form like a real first-time onboarder.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const SUFFIX = Date.now().toString().slice(-8);
+// Letters-only — the upload parser rejects digits in tenant codes; see
+// toLettersOnlySuffix for the rule and mapping.
+const SUFFIX = toLettersOnlySuffix(Date.now().toString().slice(-8));
 const ROOT = ROOT_TENANT;
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
