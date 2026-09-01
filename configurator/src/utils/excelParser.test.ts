@@ -6,6 +6,7 @@ import {
   parseComplaintTypeExcel,
   parseBoundaryExcel,
   parseTenantExcel,
+  parseEmployeeExcel,
 } from './excelParser';
 
 // LibreOffice / Google Sheets convert TRUE / FALSE cells to JS booleans
@@ -120,5 +121,70 @@ describe('Tenant code validation (egovernments/CCRS#1847)', () => {
     ]);
     const { validation } = parseTenantExcel(wb);
     expect(validation.errors).toEqual([]);
+  });
+});
+
+describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
+  // The Employee EDIT screen has always let an operator clear Date of Birth and
+  // save, and egov-hrms guards every DOB rule with a null check. The bulk /
+  // Phase-4 import paths used to disagree: a blank `dob` cell dropped the whole
+  // row with a REQUIRED_FIELD error.
+  const baseRow = {
+    employeeCode: 'EMP_001',
+    name: 'Jane Kamau',
+    mobileNumber: '712345678',
+    department: 'DEPT_07',
+    designation: 'DESIG_1004',
+    roles: 'PGR_LME',
+    jurisdictions: 'NAIROBI_CITY_VIWANDANI',
+  };
+
+  it('imports a row with no dob column at all', () => {
+    const { data, validation } = parseEmployeeExcel(makeWorkbook('Employee', [baseRow]));
+    expect(validation.errors).toEqual([]);
+    expect(validation.valid).toBe(true);
+    expect(data).toHaveLength(1);
+    expect(data[0].dob).toBeUndefined();
+  });
+
+  it('imports a row whose dob cell is blank or whitespace', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [
+        { ...baseRow, dob: '' },
+        { ...baseRow, employeeCode: 'EMP_002', dob: '   ' },
+      ])
+    );
+    expect(validation.errors).toEqual([]);
+    expect(data.map((e) => e.dob)).toEqual([undefined, undefined]);
+  });
+
+  it('still parses a supplied dob', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: '1990-05-14' }])
+    );
+    expect(validation.errors).toEqual([]);
+    expect(data[0].dob).toBe('1990-05-14');
+  });
+
+  it('still rejects a malformed dob', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: '14/05/1990' }])
+    );
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
+    );
+    expect(data).toHaveLength(0);
+  });
+
+  it('still rejects a dob that leaves the employee under 18', () => {
+    const thisYear = new Date().getFullYear();
+    const { validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: `${thisYear - 5}-05-14` }])
+    );
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
+    );
   });
 });

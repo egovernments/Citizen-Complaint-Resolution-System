@@ -82,10 +82,11 @@ function buildTemplate(
     ['Employee bulk import template'],
     [`Tenant: ${tenant}`],
     [''],
-    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule), dob (YYYY-MM-DD),'],
+    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
-    ['Optional: userName (auto-derives), emailId, gender, roles (comma-separated),'],
-    ['jurisdictions (comma-separated boundary codes), dateOfAppointment (YYYY-MM-DD).'],
+    ['Optional: userName (auto-derives), emailId, gender, dob (YYYY-MM-DD),'],
+    ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
+    ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
     ['Password defaults to eGov@123; employees rotate on first login.'],
   ]);
@@ -223,8 +224,10 @@ export function EmployeeBulkImport() {
           : /^\d{9,10}$/.test(row.mobileNumber);
         if (!ok) errors.push(msg);
       }
-      if (!row.dob || !/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) {
-        errors.push('Date of birth missing or malformed (expected YYYY-MM-DD)');
+      // dob is optional (egovernments/CCRS#1949) — a blank cell is fine, but a
+      // filled one still has to be a real YYYY-MM-DD date.
+      if (row.dob && !/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) {
+        errors.push('Date of birth malformed (expected YYYY-MM-DD)');
       }
       return errors;
     },
@@ -267,7 +270,7 @@ export function EmployeeBulkImport() {
         mobileNumber: row.mobileNumber,
         emailId: row.emailId,
         gender: row.gender,
-        dob: new Date(row.dob).getTime(),
+        dob: row.dob ? new Date(row.dob).getTime() : undefined,
         department: row.department,
         designation: row.designation,
         roles: empRoles,
