@@ -1,5 +1,29 @@
+import Axios from "axios";
 import Urls from "../atoms/urls";
 import { Request } from "../atoms/Utils/Request";
+
+// A client with no interceptors — see employeeContext below for why.
+const bareClient = Axios.create();
+
+const buildRequestInfo = () => {
+  const user = Digit.UserService.getUser();
+  return {
+    apiId: "Rainmaker",
+    ver: ".01",
+    ts: "",
+    action: "",
+    did: "",
+    key: "",
+    msgId: `${new Date().getTime()}|${Digit.StoreData.getCurrentLanguage()}`,
+    authToken: user?.access_token || null,
+    // userInfo is deliberately omitted. EmployeeContextService resolves the
+    // employee from RequestInfo.userInfo.uuid, and Kong overwrites that from
+    // the token — but only where the gateway enriches. Sending our cached copy
+    // would make a caller-controlled body the lookup identity on any path
+    // without that enrichment. Leaving it out makes the backend's
+    // `user == null` branch fail closed instead.
+  };
+};
 
 export const PGRService = {
   search: (tenantId, filters = {}) => {
@@ -40,6 +64,24 @@ export const PGRService = {
       method: "POST",
       params: { tenantId, ...params },
     }),
+
+  // Working context for the *authenticated* employee (CCRS#1833). The backend
+  // resolves the employee from the RequestInfo auth token and returns only
+  // display-safe fields, so the UI must not pass a uuid of its own.
+  //
+  // Deliberately NOT routed through Request(): that shares the default Axios
+  // instance, whose global response interceptor turns a ZuulRuntimeException
+  // into `window.location.href = /employee/user/error?type=notfound` and a 500
+  // into the maintenance page (services/atoms/Utils/Request.js). This call
+  // fires on every employee page, so a gateway with no route for it — every
+  // deployment until #1858 lands — would bounce operators off whatever screen
+  // they were on. A decorative header widget must not be able to navigate the
+  // app. `bareClient` has no interceptors, so failures stay local and the hook
+  // renders its own non-blocking unavailable state.
+  employeeContext: (tenantId) =>
+    bareClient
+      .post(Urls.employee_context, { RequestInfo: buildRequestInfo() }, { params: { tenantId } })
+      .then((res) => res.data),
 
   employeeSearch: (tenantId, roles) => {
     return Request({

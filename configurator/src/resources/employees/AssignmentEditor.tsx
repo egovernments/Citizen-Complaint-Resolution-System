@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
-import { useInput, useGetList, type RaRecord } from 'ra-core';
+import { useInput, useGetList, useRecordContext, type RaRecord } from 'ra-core';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   Select,
@@ -12,7 +12,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import type { EmployeeAssignment } from '@/api/types';
+import type { Employee, EmployeeAssignment } from '@/api/types';
+import { useEmployeeLookup } from '@/admin/hrms/useEmployeeLookup';
+import { ReportingToSelect } from './ReportingToSelect';
 
 export interface AssignmentEditorProps {
   source?: string;
@@ -35,6 +37,7 @@ function toAssignmentRow(entry: unknown): EmployeeAssignment {
     fromDate: typeof r.fromDate === 'number' ? r.fromDate : Date.now(),
     toDate: typeof r.toDate === 'number' ? r.toDate : undefined,
     govtOrderNumber: typeof r.govtOrderNumber === 'string' ? r.govtOrderNumber : undefined,
+    reportingTo: typeof r.reportingTo === 'string' ? r.reportingTo : undefined,
     isCurrentAssignment: typeof r.isCurrentAssignment === 'boolean' ? r.isCurrentAssignment : false,
     isHod: typeof r.isHod === 'boolean' ? r.isHod : undefined,
     auditDetails: r.auditDetails && typeof r.auditDetails === 'object'
@@ -99,6 +102,12 @@ export function AssignmentEditor({
     'designations',
     { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' }, filter: tenantFilter },
   );
+
+  const { employees: managerCandidates, isLoading: managersLoading } = useEmployeeLookup(tenantFilter);
+  // On the edit form this is the employee being edited; on create there's no
+  // record yet, so nothing needs to be excluded from the manager list.
+  const record = useRecordContext<Employee>();
+  const ownUuid = record?.uuid;
 
   const writeRows = (next: EmployeeAssignment[]) => {
     field.onChange(next);
@@ -254,6 +263,20 @@ export function AssignmentEditor({
                       onChange={(e) =>
                         updateRow(index, { toDate: inputDateToEpoch(e.target.value) })
                       }
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <Label className="mb-1.5 block text-xs font-medium text-foreground">
+                      Reporting To
+                    </Label>
+                    <ReportingToSelect
+                      id={`${id}-${index}-reportingTo`}
+                      value={row.reportingTo}
+                      onChange={(uuid) => updateRow(index, { reportingTo: uuid })}
+                      candidates={managerCandidates}
+                      isLoading={managersLoading}
+                      excludeUuid={ownUuid}
                     />
                   </div>
                 </div>

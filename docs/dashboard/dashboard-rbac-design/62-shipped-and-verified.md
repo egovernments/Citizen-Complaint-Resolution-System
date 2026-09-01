@@ -6,8 +6,7 @@ existed ("no code changed; that is by design"). This document closes that loop: 
 **live bomet** probe that proves it. Read it as the answer to "did we actually build what Parts
 A–F specified, and is it enforced in production?"
 
-For the operator-facing view of the same system, see `../dashboard-configuration/` (esp.
-`70-esbuild-embedding.md` for the frontend and `80-live-bomet-state.md` for the live snapshot).
+For the operator-facing view of the same system, see `../dashboard-configuration.md`.
 
 ## 1. Frontend inversion → shipped as a digit-ui product module (PR #1062)
 
@@ -26,7 +25,7 @@ standalone SPA:
 
 The embedding itself (module registry, `App.js` `enabledModules`, the always-on route fallback vs
 the citymodule-gated card, `roles.js`) is fully documented in
-`../dashboard-configuration/70-esbuild-embedding.md`. The relevant RBAC fact: the FE view gate is
+`../dashboard-configuration.md`. The relevant RBAC fact: the FE view gate is
 **`products/dashboard/roles.js` `DASHBOARD_ROLES`** (`SUPERVISOR, PGR_SUPERVISOR, GRO, DGRO,
 PGR_LME, PGR_ADMIN, SUPERUSER`), checked tenant-agnostically via `Digit.UserService.hasAccess`
 (role-code only, because employee roles live at the state root while the working tenant is a city
@@ -72,7 +71,7 @@ record order: `executive-default` (roles `TICKET_REPORT_VIEWER`, `PGR_VIEWER`; 1
 `SUPERUSER`/`GRO`/`DGRO` matching `supervisor-default`. There is no specificity score
 (`DashboardPack.matchesRoles` is a plain `anyMatch`), so **record order is the tie-break** — order
 packs most-specific-first. A pure supervisor (no `PGR_VIEWER`) lands on `supervisor-default` as
-intended. Full probe: `../dashboard-configuration/80-live-bomet-state.md` §3.
+intended. Full probe: `../dashboard-configuration.md` §3.
 
 This is the concrete answer to "how do I align a new role to a dashboard": add the role to a
 pack's `roles` (and place that pack ahead of any broader pack it must beat), ensure its tiles pass
@@ -85,7 +84,7 @@ gate. Three independent gates (`70` §4).
   `kpi_forbidden`→"No access", `scope_forbidden`→"Out of scope", but the backend emits
   **`scope_incomplete`** (`AnalyticsService`), which falls through to the raw code. Still
   unresolved as of this checkout — align the label map or add the alias. (Also tracked in
-  `../dashboard-configuration/20-packs-and-rbac.md` §3.)
+  `../dashboard-configuration.md` §3.)
 - **`_schema` remains unauthenticated** and still lists UUID/`account_id` dimensions
   (`AnalyticsController.schema` → `AnalyticsService.schema`). It is a capabilities descriptor (no
   data), but the design's Part-D note to gate/replace it as a catalog source has not been actioned;

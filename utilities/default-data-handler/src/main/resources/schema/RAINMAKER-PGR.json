@@ -2,21 +2,27 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.UIConstants",
-    "description": "RAINMAKER-PGR.UIConstants",
+    "description": "PGR UI-facing constants for the tenant. One record per tenant, keyed on code (use DEFAULT); every constant is a property of that single record, not a record of its own.",
     "isActive": true,
     "definition": {
       "type": "object",
-      "title": "Generated schema for Root",
+      "title": "PGR UI Constants",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
+        "code",
         "REOPENSLA"
       ],
       "x-unique": [
-        "REOPENSLA"
+        "code"
       ],
       "properties": {
+        "code": {
+          "type": "string",
+          "description": "Record key. The UI surfaces read a single constants record, so use DEFAULT unless you are deliberately keeping several variants."
+        },
         "REOPENSLA": {
-          "type": "number"
+          "type": "number",
+          "description": "Milliseconds a resolved or rejected complaint stays reopenable. Shipped default 259200000 (72 hours)."
         }
       },
       "x-ref-schema": [],

@@ -1,5 +1,6 @@
 import { Hamburger, TopBar as TopBarComponent } from "@egovernments/digit-ui-react-components";
 import { Dropdown } from "@egovernments/digit-ui-components";
+import { EmployeeWorkingContext } from "./EmployeeWorkingContext";
 import React, { Fragment } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 import ChangeCity from "../ChangeCity";
@@ -24,6 +25,9 @@ const TopBar = ({
   logoUrl,
   logoUrlWhite,
   showLanguageChange = true,
+  workingContext,
+  workingContextError,
+  workingContextTenantId,
 }) => {
   const [profilePic, setProfilePic] = React.useState(null);
 
@@ -41,7 +45,12 @@ const TopBar = ({
         setProfilePic(resolved);
       }
     }
-  }, [profilePic !== null, userDetails?.info?.uuid]);
+    // #997 follow-up: depend on the session-cached photo (UserProfile.js
+    // writes it there right after a successful upload) instead of our own
+    // `profilePic` output — otherwise a photo uploaded mid-session never
+    // refetches here and the header keeps showing the pre-upload state
+    // until a hard reload.
+  }, [userDetails?.info?.uuid, Digit.UserService.getUser()?.info?.photo]);
 
   const CitizenHomePageTenantId = Digit.ULBService.getCitizenCurrentTenant(true);
 
@@ -123,75 +132,110 @@ const TopBar = ({
           handleUserDropdownSelection,
           logoUrl,
           showLanguageChange,
+          workingContext,
+          workingContextError,
+          workingContextTenantId,
           loggedin,
         }}
       />
     );
   }
+  // Rendered in both places and switched with CSS rather than the mobileView
+  // prop: that prop is `window.innerWidth <= 640` sampled once in App.js and
+  // never recomputed, and it does not line up with the breakpoint at which the
+  // shared header hides its own action fields. Letting the media query decide
+  // keeps the two in step.
+  const showWorkingContext = !CITIZEN && loggedin && (workingContext || workingContextError);
+
   return (
-    <TopBarComponentMain
-      actionFields={[
-        <ChangeCity dropdown={true} t={t} />,
-        showLanguageChange && <ChangeLanguage dropdown={true} />,
-        userDetails?.access_token && (
-          <Dropdown
-            option={userOptions}
-            optionKey="name"
-            // #997: the Dropdown's `profilePic` prop renders a *string* as
-            // charAt(0) (a text initial) and only renders a picture when handed
-            // a React element. #445 resolved the photo to a URL but passed that
-            // URL string here, so the header showed the first char of the URL
-            // ("h" → "H") instead of the image. Pass an <img> element when a
-            // photo exists; fall back to the name string for the text initial.
-            profilePic={
-              profilePic ? (
-                <ImageComponent
-                  src={profilePic}
-                  alt="Profile"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
-                />
-              ) : (
-                userDetails?.info?.name || userDetails?.info?.userInfo?.name || "Employee"
-              )
-            }
-            select={handleUserDropdownSelection}
-            showArrow={true}
-            menuStyles={{ marginTop: "1rem" }}
-            theme="light"
-          />
-        ),
-      ]}
-      onHamburgerClick={() => {
-        toggleSidebar();
-      }}
-      className="digit-employee-header"
-      img={logoUrl}
-      logoWidth={"64px"}
-      logoHeight={"48px"}
-      logo={(loggedin ? cityDetails?.logoId : stateInfo?.statelogo)||DEFAULT_EGOV_LOGO}
-      onImageClick={() => {}}
-      onLogoClick={() => {}}
-      props={{}}
-      showDeafultImg
-      style={{}}
-      theme="light"
-      ulb={
-        loggedin ? (
-          cityDetails?.city?.ulbGrade ? (
-            <>
-              {t(cityDetails?.i18nKey).toUpperCase()}{" "}
-              {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
-            </>
+    <React.Fragment>
+      <TopBarComponentMain
+        // Header.js wraps every entry in .individual-action-field and the row
+        // has gap:2rem, so a falsy entry leaves an empty 32px hole that vanishes
+        // when the query resolves. Drop them before they reach it.
+        actionFields={[
+          showWorkingContext && (
+            <EmployeeWorkingContext
+              t={t}
+              context={workingContext}
+              isError={workingContextError}
+              cityDetails={cityDetails}
+              tenantId={workingContextTenantId}
+            />
+          ),
+          <ChangeCity dropdown={true} t={t} />,
+          showLanguageChange && <ChangeLanguage dropdown={true} />,
+          userDetails?.access_token && (
+            <Dropdown
+              option={userOptions}
+              optionKey="name"
+              // #997: the Dropdown's `profilePic` prop renders a *string* as
+              // charAt(0) (a text initial) and only renders a picture when handed
+              // a React element. #445 resolved the photo to a URL but passed that
+              // URL string here, so the header showed the first char of the URL
+              // ("h" → "H") instead of the image. Pass an <img> element when a
+              // photo exists; fall back to the name string for the text initial.
+              profilePic={
+                profilePic ? (
+                  <ImageComponent
+                    src={profilePic}
+                    alt="Profile"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                  />
+                ) : (
+                  userDetails?.info?.name || userDetails?.info?.userInfo?.name || "Employee"
+                )
+              }
+              select={handleUserDropdownSelection}
+              showArrow={true}
+              menuStyles={{ marginTop: "1rem" }}
+              theme="light"
+            />
+          ),
+        ].filter(Boolean)}
+        onHamburgerClick={() => {
+          toggleSidebar();
+        }}
+        className="digit-employee-header"
+        img={logoUrl}
+        logoWidth={"64px"}
+        logoHeight={"48px"}
+        logo={(loggedin ? cityDetails?.logoId : stateInfo?.statelogo)||DEFAULT_EGOV_LOGO}
+        onImageClick={() => {}}
+        onLogoClick={() => {}}
+        props={{}}
+        showDeafultImg
+        style={{}}
+        theme="light"
+        ulb={
+          loggedin ? (
+            cityDetails?.city?.ulbGrade ? (
+              <>
+                {t(cityDetails?.i18nKey).toUpperCase()}{" "}
+                {t(`ULBGRADE_${cityDetails?.city?.ulbGrade.toUpperCase().replace(" ", "_").replace(".", "_")}`).toUpperCase()}
+              </>
+            ) : (
+              <ImageComponent className="state" src={logoUrlWhite || stateInfo?.logoUrlWhite} alt="State Logo" />
+            )
           ) : (
-            <ImageComponent className="state" src={logoUrlWhite || stateInfo?.logoUrlWhite} alt="State Logo" />
+            <>
+              {t(`MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`)} {t(`MYCITY_STATECODE_LABEL`)}
+            </>
           )
-        ) : (
-          <>
-            {t(`MYCITY_${stateInfo?.code?.toUpperCase()}_LABEL`)} {t(`MYCITY_STATECODE_LABEL`)}
-          </>
-        )
-      }
-    />
+        }
+      />
+      {showWorkingContext && (
+        <div className="digit-working-context-mobile">
+          <EmployeeWorkingContext
+            t={t}
+            context={workingContext}
+            isError={workingContextError}
+            cityDetails={cityDetails}
+            tenantId={workingContextTenantId}
+          />
+        </div>
+      )}
+    </React.Fragment>
   );
 };
 
