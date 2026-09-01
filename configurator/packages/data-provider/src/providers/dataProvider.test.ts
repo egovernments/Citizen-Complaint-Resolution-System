@@ -885,6 +885,58 @@ describe('createDigitDataProvider', () => {
     assert.equal(result.total, 3);
   });
 
+  it('keeps records whose id extraction failed, under distinct synthetic ids', async () => {
+    // Two records missing the configured idField both normalize to id ''. They
+    // are as broken as a real duplicate — react-admin keys on id — but they are
+    // NOT the same record, so dropping the later one would hide a real row.
+    // Each repeat gets its own id instead.
+    mock.method(client, 'accessRolesSearch', async () => [
+      { name: 'No code at all', tenantId: 'ke' },
+      { name: 'Also no code', tenantId: 'ke' },
+      { code: 'MDMS_ADMIN', name: 'MDMS ADMIN', tenantId: 'ke' },
+    ]);
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('access-roles', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.data.length, 3, 'no row may be dropped for lacking an id');
+    const ids = result.data.map((r) => String(r.id));
+    assert.equal(new Set(ids).size, 3, 'react-admin needs one id per record');
+    // The names survive intact — only the id was synthesized.
+    assert.deepEqual(
+      result.data.map((r) => r.name).sort(),
+      ['Also no code', 'MDMS ADMIN', 'No code at all'],
+    );
+  });
+
+  it('does not let a synthetic blank id swallow a real record that collides with it', async () => {
+    // A real record whose code happens to equal the synthetic id must survive,
+    // even though it is listed AFTER the blank-id records that generate one.
+    mock.method(client, 'accessRolesSearch', async () => [
+      { name: 'No code at all', tenantId: 'ke' },
+      { name: 'Also no code', tenantId: 'ke' },
+      { code: '#blank-1', name: 'Real role oddly named', tenantId: 'ke' },
+    ]);
+
+    const dp = createDigitDataProvider(client, 'ke');
+    const result = await dp.getList('access-roles', {
+      pagination: { page: 1, perPage: 100 },
+      sort: { field: 'name', order: 'ASC' },
+      filter: {},
+    });
+
+    assert.equal(result.data.length, 3);
+    assert.equal(new Set(result.data.map((r) => String(r.id))).size, 3);
+    assert.ok(
+      result.data.some((r) => r.name === 'Real role oddly named'),
+      'the real record must not be mistaken for a duplicate of a synthetic id',
+    );
+  });
+
   it('does NOT collapse distinct records that merely share a display name', () => {
     // The dedupe key is the id, never the label — two boundaries called
     // "Central" in different counties are two real choices.

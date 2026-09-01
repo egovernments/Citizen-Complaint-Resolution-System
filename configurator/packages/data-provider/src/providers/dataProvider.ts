@@ -123,22 +123,43 @@ function normalizeRecord(raw: Record<string, unknown>, config: ResourceConfig): 
  *
  * Keep-first is deliberate: every aggregating fetcher lists the SESSION tenant's
  * records before the sub-tenants', so the survivor is the definition the
- * operator is actually working in. Records with a blank id are passed through
- * untouched — they are already handled by `ensureId` where it matters, and
- * collapsing them all onto "" would hide real rows.
+ * operator is actually working in.
+ *
+ * Blank ids are a different failure and get a different remedy. A record whose
+ * `idField` was missing normalizes to `id: ''`, and N such records are exactly
+ * as broken as N sharing a real id. Dropping all but the first would hide rows
+ * that are genuinely distinct — they collide only because id extraction failed,
+ * not because they are the same record. So each repeat is given its own
+ * synthetic id instead, which satisfies react-admin's one-record-per-id
+ * contract without losing anything. This mirrors what the custom-rows fetcher
+ * already does when two Novu integrations synthesize the same id.
  */
 function dedupeById(records: RaRecord[]): RaRecord[] {
   const seen = new Set<string>();
   const out: RaRecord[] = [];
+  // Every id in the input, checked up front so a synthetic id can never collide
+  // with a real one that appears LATER in the list — which would otherwise make
+  // that real record look like a duplicate and drop it.
+  const taken = new Set(records.map((record) => String(record.id ?? '')));
+  let blanks = 0;
   for (const record of records) {
     const id = String(record.id ?? '');
-    if (id === '') {
+    if (!seen.has(id)) {
+      seen.add(id);
       out.push(record);
       continue;
     }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(record);
+    // A repeated real id is a genuine cross-tenant duplicate: keep the first.
+    if (id !== '') continue;
+    // A repeated blank id is a distinct record that lost its id — keep it, under
+    // an id nothing else is using.
+    let synthetic: string;
+    do {
+      blanks += 1;
+      synthetic = `#blank-${blanks}`;
+    } while (taken.has(synthetic) || seen.has(synthetic));
+    seen.add(synthetic);
+    out.push({ ...record, id: synthetic } as RaRecord);
   }
   return out;
 }
