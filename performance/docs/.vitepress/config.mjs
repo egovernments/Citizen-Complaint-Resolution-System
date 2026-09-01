@@ -30,6 +30,13 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Kubernetes Run (1 Sep 2026)',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/run-01-09-26/' },
+          { text: 'Executive Summary', link: '/run-01-09-26/executive-summary' },
+          { text: 'Findings', link: '/run-01-09-26/findings' },
+          { text: 'Capacity Planning', link: '/run-01-09-26/recommendations-transition-plan' },
         text: 'Bomet Run (28 Aug 2026)',
         collapsed: false,
         items: [
