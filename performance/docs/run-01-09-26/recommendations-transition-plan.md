@@ -70,7 +70,7 @@ The deployment has no failure point in the range we tested. It has a **speed cei
 
 Up to about 120 test users the system scales almost perfectly — double the users, nearly double the work. After 160 it stops scaling entirely.
 
-**The ceiling is not a hardware shortage.** At full load the servers were only 5–27% busy, the database was using an eighth of its available connections, and no database query was slow. The limit is inside the application software, not in the machines it runs on — which means **buying bigger servers would not raise it**.
+**The ceiling is not a hardware shortage.** The service doing the work used less than one of its four available processor cores at every level, and stopped going faster anyway. The limit is inside the application software, not in the machines it runs on — which means **buying bigger servers would not raise it**.
 
 ---
 

@@ -1,6 +1,6 @@
 # Executive Summary
 
-A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **200 concurrent test users with zero failed requests**, peaking at **1.12 million complaints per day**. No error ceiling was found. The limit is a throughput plateau, and it is reached with the cluster roughly 70% idle.
+A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **200 concurrent test users with zero failed requests**, peaking at **1.12 million complaints per day**. No error ceiling was found. The limit is a throughput plateau, and it is reached while the service doing the work stays well below one of its four available cores.
 
 ## Key Numbers
 
@@ -15,7 +15,7 @@ A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **200 concurrent test 
 | Response time at peak | 1.8s p95 at 160 VU, 3.2s at 200 VU |
 | Pod restarts | **0** across the whole ladder |
 | Run-to-run variance | 6.7% throughput, 51% p95 |
-| Cluster utilisation at peak | 5–27% CPU, 48 of 402 DB connections |
+| Peak CPU, five sampled services | 3,383m of 16,000m (~3.4 of 16 cores) |
 | Dataset | fixed at 3 complaints for every level |
 
 The 0.000% failure rate is a closed-loop result. Under an open-loop test that holds the arrival rate regardless of server speed, **48.6% of the offered work could not be started** — see [Open-Loop Testing Changes the Picture](#open-loop-testing-changes-the-picture). That is the figure to use for capacity planning.
@@ -61,7 +61,7 @@ The limit is a **throughput plateau at ~53 API req/s**, reached at 160 VU:
 
 Past 160 VU the deployment gains nothing from additional users, while latency rises 75%.
 
-**The plateau is not an infrastructure limit.** At peak the cluster was 5–27% CPU utilised, PostgreSQL used 48 of 402 connections, and the slowest query averaged 3.27ms. `pgr-services` CPU stayed flat at ~0.9 of a core across every level on a 4-core node with no limit set — a service that is CPU-bound climbs, and this one does not. The ceiling is a concurrency limit inside the application, not a shortage of hardware.
+**The plateau is not an infrastructure limit.** `pgr-services` CPU stayed flat at ~0.9 of a core across every level on a 4-core node with no limit set — a service that is CPU-bound climbs, and this one does not. The ceiling is a concurrency limit inside the application, not a shortage of hardware.
 
 ## Stability
 

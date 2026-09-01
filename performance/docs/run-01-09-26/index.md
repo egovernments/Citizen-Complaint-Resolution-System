@@ -14,7 +14,7 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 **Saturation at 160 VU.** Going to 200 VU adds 1.3% throughput — inside the 6.7% measurement noise — while latency rises 75%. Past that point the deployment gains nothing from more users.
 
-**The limit is not the hardware.** At peak the cluster ran at 5–27% CPU, PostgreSQL used 48 of 402 connections, and the slowest query averaged 3.27ms. The ceiling is a concurrency limit inside the application.
+**The limit is not the hardware.** `pgr-services` CPU stays flat at ~0.9 of a core across every level, on a 4-core node with no CPU limit set, while throughput stops climbing. The ceiling is a concurrency limit inside the application.
 
 **Zero pod restarts** across the whole ladder, on the shipped configuration.
 

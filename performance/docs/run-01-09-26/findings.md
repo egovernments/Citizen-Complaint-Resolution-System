@@ -78,9 +78,9 @@ Replicas are **1** on every service in the complaint path (`pgr-services`, `egov
 | Pod restarts, open-loop on shipped heap | **1** (liveness probe, not OOM) |
 | Run-to-run variance, fixed dataset | **6.7%** throughput, **51%** p95 |
 | Dataset | **fixed at 3 complaints** for every level |
-| Cluster utilisation at peak | **5–27% CPU**, 48 of 402 DB connections |
+| Peak CPU, five sampled services | **3,383m of 16,000m** (~3.4 of 16 cores) |
 
-**No error ceiling exists on this deployment within the range tested.** Load is absorbed as latency, not as failure — response times climb while requests keep succeeding. The limit is a throughput plateau at ~53 API req/s reached at 160 VU, and it is reached with the cluster roughly 70% idle.
+**No error ceiling exists on this deployment within the range tested.** Load is absorbed as latency, not as failure — response times climb while requests keep succeeding. The limit is a throughput plateau at ~53 API req/s reached at 160 VU, and it is reached while `pgr-services` CPU stays flat.
 
 ## Results
 
@@ -307,10 +307,13 @@ sampling every 15 seconds:
 | `egov-workflow-v2` | 380m | flat |
 | `egov-persister` | 241m | flat |
 
-Cluster nodes are 4 vCPU each, 16 vCPU total, and sat at **5–27% utilisation**.
-PostgreSQL used **48 of 402** available connections. No query was slow: across a
-full level the worst mean execution time was **3.27ms**, and the heaviest
-consumer by total time was an MDMS lookup at 1.15ms mean over 18,427 calls.
+Cluster nodes are 4 vCPU each, 16 vCPU total. Summed across the five sampled
+services, peak draw was **3,383m — roughly 3.4 of 16 cores** — at the 200 VU
+level.
+
+Database connection counts and per-query statistics were sampled at each level
+as well, but that capture wrote empty files and the results were lost. They are
+not reported here, so the database is not ruled out by direct measurement.
 
 Two things follow.
 
@@ -318,17 +321,13 @@ Two things follow.
 of a core on a 4-core node with no CPU limit set. A service that is CPU-bound
 climbs; this one does not, so it is waiting rather than computing.
 
-**The constraint is application concurrency, not infrastructure.** With ~70% of
-cluster CPU idle, 88% of database connections free and no slow query, the
-ceiling is a thread-pool, connection-pool or serialisation limit inside the
-services. The single-partition Kafka topics documented in
+**The constraint is application concurrency, not infrastructure.** The evidence
+is the flat CPU profile above rather than a full resource sweep: throughput
+stops climbing while the service that does the work stays at roughly nine tenths
+of one core out of four, with no CPU limit set. That points at a thread-pool,
+connection-pool or serialisation limit inside the services. The single-partition Kafka topics documented in
 [Known Limits Not Reached](#known-limits-not-reached) are one candidate; this
 campaign did not isolate which.
-
-**One optimisation target is visible in the query data.** MDMS lookups account
-for more database time than anything else — 26,156 calls in a two-minute level,
-roughly 13 per complaint. Each is fast; the volume is the cost. That points at
-caching rather than indexing.
 
 ## Stability
 
@@ -380,6 +379,6 @@ Two constraints are present in this deployment but were not the binding limit at
 
 **Every PGR Kafka topic runs a single partition** (`PartitionCount: 1, ReplicationFactor: 1`), including `save-pgr-request`, `update-pgr-request` and `save-wf-transitions`. One consumer processes each topic in sequence regardless of how many application replicas exist. This is the mechanism behind the `INVALID ACTION` behaviour described above, and it is a hard ceiling that adding application capacity cannot lift.
 
-**The Elasticsearch indexer runs behind under load** and drains at roughly 17 messages/second afterwards. It sits off the complaint write path — it feeds search and inbox views — so it did not affect any figure here, but it took 10 minutes to clear after a single 2-minute level at 320 VU.
+**The Elasticsearch indexer runs behind under load** and drains at roughly 1.3 messages/second afterwards, the rate recorded under [Testing Methodology](#testing-methodology). It sits off the complaint write path — it feeds search and inbox views — so it did not affect any figure here, but at that rate its standing backlog does not clear within a test session.
 
 **No error ceiling was found because the ladder ran out of planned levels, not because anything failed.** The fixed-dataset ladder stopped at 200 VU; the earlier gated pass reached 320 VU without a failed request, on a database that was still growing underneath it — see [Why the Gate Matters](#why-the-gate-matters). Establishing whether an error ceiling exists above the throughput plateau, and whether the single-partition topology described above is what creates it, needs a gated fixed-dataset ladder carried past 320 VU. That run was not made, so both questions remain open.
