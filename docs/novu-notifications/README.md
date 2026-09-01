@@ -106,6 +106,13 @@ It assumes ordinary SMS is already primary and only makes WhatsApp select
 > `InvalidAccessTokenException` because the Bearer-authenticated provider POSTs
 > are intercepted before they reach `novu-bridge` (fixed by `477b2436`).
 
+> **Keep bridge authentication enabled:** those Kong exceptions delegate
+> authentication to `novu-bridge`. Do not set
+> `NOVU_BRIDGE_PROXY_AUTH_ENABLED=false` on a reachable deployment; doing so also
+> makes provider creation and test-send unauthenticated. Enforcing this invariant
+> automatically is tracked in
+> [issue #1942](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1942).
+
 Open **Configurator -> Notifications -> Providers** while logged in as an
 employee with an allowed provider-management role. Select **Add Provider** and
 enter:
