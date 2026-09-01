@@ -7,6 +7,7 @@ import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.policy.AccessPolicyRegistry;
 import org.egov.pgr.policy.PgrSearchScope;
+import org.egov.pgr.policy.BoundaryHierarchyExpander;
 import org.egov.pgr.policy.PolicyDrivenScopeResolver;
 import org.egov.pgr.policy.ScopePolicy;
 import org.egov.pgr.policy.ScopePolicyEngine;
@@ -59,16 +60,17 @@ class DashboardSearchScopeParityTest {
     private static final Map<String, Object> ACTION_2008_SCOPE = Map.of(
             "axes", List.of("department", "jurisdiction"),
             "roleScopes", Map.of(
-                    "GRO", Map.of("department", "ALL", "jurisdiction", "OWN"),
+                    "GRO", Map.of("department", "OWN", "jurisdiction", "OWN"),
                     "PGR_LME", Map.of("department", "OWN", "jurisdiction", "OWN"),
                     "SUPERVISOR", Map.of("department", "OWN", "jurisdiction", "ALL")),
-            "default", Map.of("department", "ALL", "jurisdiction", "OWN"));
+            "default", Map.of("department", "OWN", "jurisdiction", "OWN"));
 
     @Mock private PGRConfiguration config;
     @Mock private RestTemplate restTemplate;
     @Mock private AccessPolicyRegistry registry;
     @Mock private MDMSUtils mdmsUtils;
     @Mock private KpiCatalogService catalog;
+    @Mock private BoundaryHierarchyExpander boundaryHierarchyExpander;
 
     private SearchAccessPolicyService searchScope;
     private AnalyticsRowScopeResolver dashboardScope;
@@ -82,9 +84,13 @@ class DashboardSearchScopeParityTest {
         when(registry.resolveScopeState(eq(AccessPolicyRegistry.PGR_REQUEST_SEARCH_URL), any(), anyString(), eq("complaint")))
                 .thenReturn(new AccessPolicyRegistry.ScopeResolution(ScopePolicy.parse(ACTION_2008_SCOPE), false));
         when(catalog.isDepartmentScopingDisabled(anyString())).thenReturn(false);
+        // No-op passthrough — this test is about search/dashboard PARITY, not descendant
+        // expansion, which BoundaryHierarchyExpander(Test) already covers on its own.
+        when(boundaryHierarchyExpander.descendantsOf(any(), any(), any(), any()))
+                .thenAnswer(inv -> java.util.Set.of(inv.getArgument(3, String.class)));
 
         PolicyDrivenScopeResolver policyResolver = new PolicyDrivenScopeResolver(
-                config, restTemplate, new ObjectMapper(), new Principals(), mdmsUtils);
+                config, restTemplate, new ObjectMapper(), new Principals(), mdmsUtils, boundaryHierarchyExpander);
         searchScope = new SearchAccessPolicyService(policyResolver, registry, null, null, config);
         dashboardScope = new AnalyticsRowScopeResolver(searchScope, catalog);
     }
@@ -138,7 +144,8 @@ class DashboardSearchScopeParityTest {
         PgrSearchScope scope = dashboardScope.resolve(employee("emp-1", "GRO"), TENANT, STATE_LEVEL_LEN);
 
         assertEquals(List.of("WARD_001"), scope.jurisdictionCodes);
-        assertNull(scope.departmentCodes, "GRO is department-ALL under action 2008");
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes,
+                "GRO is department-OWN under action 2008");
     }
 
     @Test

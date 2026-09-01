@@ -1825,7 +1825,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -1838,7 +1838,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -5820,7 +5820,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -5833,7 +5833,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -9815,7 +9815,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -9828,7 +9828,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -13810,7 +13810,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -13823,7 +13823,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -17805,7 +17805,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -17818,7 +17818,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -20187,7 +20187,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -20200,7 +20200,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
@@ -24702,7 +24702,7 @@
             ],
             "roleScopes": {
               "GRO": {
-                "department": "ALL",
+                "department": "OWN",
                 "jurisdiction": "OWN"
               },
               "PGR_LME": {
@@ -24715,7 +24715,7 @@
               }
             },
             "default": {
-              "department": "ALL",
+              "department": "OWN",
               "jurisdiction": "OWN"
             }
           },
