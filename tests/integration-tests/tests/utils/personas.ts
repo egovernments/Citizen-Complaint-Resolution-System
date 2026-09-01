@@ -648,9 +648,19 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   // state's action roles minus CITIZEN, which no employee carries meaningfully.
   const assigneeRoles = assign.assigneeRoles.filter((r) => r !== 'CITIZEN');
   const employees = (await employeesAtTenant(tenantsOf(profile))).slice().sort((a, b) => a.code.localeCompare(b.code));
-  const eligible = employees.filter(
+  const allEligible = employees.filter(
     (e) => e.departments.length > 0 && e.roles.some((r) => assigneeRoles.includes(r)),
   );
+  // ADMIN is a management identity, not a workable assignee: the escalation
+  // hierarchy builder explicitly excludes it from its candidate pool, and on
+  // deployments where ADMIN carries multi-department oversight assignments
+  // (department=OWN policies make that the sanctioned way to see everything)
+  // it would otherwise win EVERY department by code sort order — and the
+  // chain then skips on "picked assignee ADMIN but it wasn't found
+  // re-searching". Prefer real employees; fall back to ADMIN only when nobody
+  // else is eligible at all.
+  const nonAdmin = allEligible.filter((e) => e.code !== 'ADMIN');
+  const eligible = nonAdmin.length ? nonAdmin : allEligible;
   if (!eligible.length) {
     // An empty employee list has two very different causes, and saying "no
     // employee can be an assignee" for the second one sends the reader off to
