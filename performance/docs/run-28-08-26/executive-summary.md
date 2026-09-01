@@ -83,16 +83,15 @@ A second campaign capped the DIGIT services with `docker update` to measure smal
 
 Three method gaps were closed by a follow-up campaign on the same deployment, against a fixed dataset of 2,525 stored complaints restored between every run. Full detail in [Findings](./findings#follow-up-measurements-1-september-2026).
 
-**Every figure in the ladder above came from a single run.** Three repeats at each of two levels give the error bars they lacked:
+**Every figure in the ladder above came from a single run.** Three repeats at 120 VU give the error bars they lacked:
 
 | Level | Throughput CV | p95 CV |
 |-------|--------------|--------|
-| 40 VU | 1.32% | **1.10%** |
 | 120 VU | 2.24% | **19.17%** |
 
-**Tail latency near saturation is worth roughly ±20%**, so p95 differences below about 40% at those levels cannot be read from a single run. Throughput stays stable. The Kubernetes campaign measured 20.1% p95 variance at its own saturation point on unrelated infrastructure — two different stacks, the same answer.
+**Tail latency near saturation is worth roughly ±20%**, so p95 differences below about 40% at that level cannot be read from a single run. Throughput stays stable. The Kubernetes campaign measured 20.1% p95 variance at its own saturation point on unrelated infrastructure — two different stacks, the same answer.
 
-The three 120 VU repeats returned 0.000% request failures and 100.00% lifecycle success, and are the source of the headline figure above. The three 40 VU repeats returned 0.000% request failures but **0.00% lifecycle success** — every verification SEARCH answered HTTP 200 with an empty result set — so their throughput and latency are not comparable with the 40 VU row of the burst ladder. See [Run-to-Run Variance](./findings#run-to-run-variance).
+All three 120 VU repeats returned 0.000% request failures and 100.00% lifecycle success, and are the source of the headline figure above. Repeats at 40 VU were also run but returned 0.00% lifecycle success and are excluded; run-to-run spread is therefore measured at one level only. See [Run-to-Run Variance](./findings#run-to-run-variance).
 
 **The closed-loop design flatters the system.** Re-run with a ramping arrival rate, which holds the offered load independent of server speed:
 

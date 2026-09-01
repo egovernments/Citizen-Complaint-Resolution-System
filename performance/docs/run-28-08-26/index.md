@@ -22,6 +22,6 @@ Three method gaps were closed on the same deployment — see [Findings](./findin
 
 **Under a realistic arrival pattern this deployment fails half of all complaints.** Every figure above comes from a closed-loop test, which cannot overload a system because the load slows down when the server does. Re-run with a ramping arrival rate at a near-identical request rate: **19.57% of requests failed, 50.23% of lifecycles completed, and 24% of the intended work never started** — against 0.000% and 100.00% closed-loop.
 
-**Tail latency near saturation carries ±20% run-to-run variance**, so single-run p95 differences below about 40% at those levels are not readable. Throughput is stable at ~2%.
+**Tail latency near saturation carries ±20% run-to-run variance**, so single-run p95 differences below about 40% at that level are not readable. Throughput is stable at ~2%.
 
 **The database is not the limit.** Slow-query logging during a full load run surfaced no PGR write-path query over 100ms; the only slow statements were periodic dashboard view refreshes.

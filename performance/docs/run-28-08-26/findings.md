@@ -295,33 +295,29 @@ inherits the previous one's writes.
 ### Run-to-Run Variance
 
 The 28 August ladder ran each level once, so nothing in it carried an error bar.
-Three identical repeats were run at two levels, cleaning the database back to the
+Three identical repeats were run at 120 VU, cleaning the database back to the
 same 2,525 rows between each:
 
 | Level | Lifecycles/s | API req/s | http p95 | Throughput CV | p95 CV |
 |-------|-------------|-----------|----------|--------------|--------|
-| 40 VU | 2.015 / 2.046 / 2.069 | 14.39 / 14.61 / 14.78 | 363 / 359 / 356 ms | **1.32%** | **1.10%** |
 | 120 VU | 10.943 / 11.159 / 11.443 | 44.69 / 45.55 / 46.68 | 1,102 / 881 / 756 ms | **2.24%** | **19.17%** |
 
-Every run returned 0.000% request failures. All three 120 VU runs also returned
-100.00% lifecycle success, and their 45.64 API req/s mean is the highest rate
-measured anywhere in this campaign with no failed request.
+All three returned 0.000% request failures and 100.00% lifecycle success, and their
+45.64 API req/s mean is the highest rate measured anywhere in this campaign with no
+failed request.
 
-**The 40 VU repeats did not verify.** All three returned 0.00% lifecycle success:
-every verification SEARCH answered HTTP 200 with an empty result set, so no lifecycle
-could confirm `RESOLVED`. The step retries three times before giving up, which is why
-each 40 VU lifecycle issued seven requests rather than four and why its lifecycles/sec
-is roughly half the 40 VU row of the 28 August burst ladder. The three repeats are
-consistent with each other, so the coefficients of variation below are a real
-measurement of run-to-run spread — but they describe that path, and the 40 VU
-throughput and latency figures are not comparable with any other 40 VU figure on this
-page. Why the search returned empty was not established and the level has not been
-re-run.
+Repeats were also run at 40 VU and are excluded from this page. All three returned
+0.00% lifecycle success: every verification SEARCH answered HTTP 200 with an empty
+result set, so no lifecycle could confirm `RESOLVED`, and the retry path put seven
+requests through each lifecycle instead of four. Why the search returned empty was
+not established and the level has not been re-run, so run-to-run spread is measured
+at one level only.
 
-**Latency variance grows roughly seventeenfold between 40 and 120 VU** — 1.10% to
-19.17% — while throughput variance barely moves. A single p95 measurement taken near
-saturation is worth roughly plus or minus twenty percent, so latency differences
-below about 40% at those levels cannot be read from one run.
+**Tail latency near saturation is unstable.** Across the three 120 VU repeats p95
+ranged from 756ms to 1,102ms — a 19.17% coefficient of variation — while throughput
+varied by 2.24%. A single p95 measurement taken near saturation is worth roughly plus
+or minus twenty percent, so latency differences below about 40% at that level cannot
+be read from one run.
 
 That figure is not specific to this deployment. The Kubernetes campaign measured
 20.1% p95 variance at its own saturation point on entirely different infrastructure,
