@@ -35,17 +35,13 @@ import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
 import { ROOT_TENANT as ROOT, ADMIN_USER, ADMIN_PASS, BASE_URL } from '../utils/env';
+import { toLettersOnlySuffix } from '../utils/onboarding';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-// Letters-only: egov-user validates tenantId against `^[a-zA-Z. ]*$` (no
-// digits), and the configurator's upload parser now mirrors that rule — a
-// numeric suffix is rejected at Step 1.1 before "File loaded:" ever renders.
-// Same digit->letter map (0->a .. 9->j) as utils/onboarding.freshOnboardingIds.
-const SUFFIX = Date.now()
-  .toString()
-  .slice(-8)
-  .replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
+// Letters-only — the upload parser rejects digits in tenant codes; see
+// toLettersOnlySuffix for the rule and mapping.
+const SUFFIX = toLettersOnlySuffix(Date.now().toString().slice(-8));
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
 const HIERARCHY_TYPE = `PWHIER${SUFFIX}`;

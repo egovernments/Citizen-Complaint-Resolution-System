@@ -68,8 +68,12 @@ async function searchEmployees(token: string, tenantId: string): Promise<any[]> 
   // staffing history (bomet holds 345 employee records), and the seed plan's
   // assignee then "doesn't exist" purely because it sits past page one.
   const PAGE = 100;
+  // Ceiling is a tripwire, not a quiet cap — silently stopping would recreate
+  // the very truncation bug this replaces, just further out. Largest known
+  // pool: bomet ke at 345 records.
+  const HARD_CEILING = 2000;
   const out: any[] = [];
-  for (let offset = 0; offset < 2000; offset += PAGE) {
+  for (let offset = 0; ; offset += PAGE) {
     const resp = await fetch(
       `${BASE_URL}/egov-hrms/employees/_search?tenantId=${tenantId}&offset=${offset}&limit=${PAGE}`,
       {
@@ -81,6 +85,11 @@ async function searchEmployees(token: string, tenantId: string): Promise<any[]> 
     const batch: any[] = ((await resp.json()) as any).Employees || [];
     out.push(...batch);
     if (batch.length < PAGE) break;
+    if (out.length >= HARD_CEILING) {
+      throw new Error(
+        `searchEmployees: hit the ${HARD_CEILING}-record ceiling on ${tenantId} with a full page still coming — raise HARD_CEILING`,
+      );
+    }
   }
   return out;
 }

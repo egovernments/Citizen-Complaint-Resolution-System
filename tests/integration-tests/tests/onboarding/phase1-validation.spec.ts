@@ -12,7 +12,7 @@
  * mirror the configurator's source code:
  *   - "Tenant code is required" — empty `tenantCode` cell.
  *   - "Tenant code must contain only letters, dots, and spaces
- *     numbers, and dots" — regex `^[A-Za-z][A-Za-z0-9.]*$`.
+ *     dots, and spaces (numbers are not supported)" — regex `^[a-zA-Z. ]*$`.
  *   - "Excel sheet is empty" — sheet has headers but no data rows.
  *
  * No teardown — these tests never reach the create step, so no records
@@ -24,17 +24,13 @@ import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { toLettersOnlySuffix } from '../utils/onboarding';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-// Letters-only: egov-user validates tenantId against `^[a-zA-Z. ]*$` (no
-// digits), and the configurator's upload parser now mirrors that rule — a
-// numeric suffix is rejected at Step 1.1 before "File loaded:" ever renders.
-// Same digit->letter map (0->a .. 9->j) as utils/onboarding.freshOnboardingIds.
-const SUFFIX = Date.now()
-  .toString()
-  .slice(-8)
-  .replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
+// Letters-only — the upload parser rejects digits in tenant codes; see
+// toLettersOnlySuffix for the rule and mapping.
+const SUFFIX = toLettersOnlySuffix(Date.now().toString().slice(-8));
 const ROOT = ROOT_TENANT;
 
 const FIX_INVALID_CODE = path.join(os.tmpdir(), `tenant-invalid-code-${SUFFIX}.xlsx`);

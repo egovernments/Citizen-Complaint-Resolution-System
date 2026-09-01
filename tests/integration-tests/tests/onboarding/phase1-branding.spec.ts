@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
 import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { toLettersOnlySuffix } from '../utils/onboarding';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -38,11 +39,11 @@ const createdTenants: string[] = [];
 const tempFiles: string[] = [];
 
 function freshIds() {
-  // Letters-only — the upload parser rejects digits in tenant codes (mirrors
-  // egov-user's `^[a-zA-Z. ]*$`); see utils/onboarding.freshOnboardingIds.
-  const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, '0')}`.replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
+  // Letters-only — the upload parser rejects digits in tenant codes; see
+  // toLettersOnlySuffix for the rule and mapping.
+  const SUFFIX = toLettersOnlySuffix(
+    `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+  );
   return {
     SUFFIX,
     TENANT_CODE: `${ROOT}.pwt${SUFFIX}`,

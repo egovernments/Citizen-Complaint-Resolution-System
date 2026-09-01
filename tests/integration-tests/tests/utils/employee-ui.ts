@@ -9,7 +9,7 @@
  * credentials — EMP001 on maputo authenticates at the CITY tenant
  * (mz.maputo), ADMIN at the ROOT tenant (mz).
  */
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi, type TokenResponse } from './auth';
 import { BASE_URL, TENANT, ROOT_TENANT } from './env';
 
@@ -165,7 +165,10 @@ export async function showAllInboxRows(page: Page): Promise<void> {
           .catch(() => null),
         allTab.click(),
       ]);
-      await page.waitForTimeout(800);
+      // State expectation, not a sleep: the switch is done when the tab reports
+      // itself selected. Row presence is NOT the condition — an empty result on
+      // the widened tab is a legitimate outcome the caller may be asserting.
+      await expect(allTab).toHaveAttribute('aria-selected', 'true', { timeout: 10_000 });
     }
   }
   const sel = page.locator('select').last();

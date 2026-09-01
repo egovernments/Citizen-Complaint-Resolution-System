@@ -1111,7 +1111,9 @@ Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and 
           String(svc?.applicationStatus ?? ''),
           `_search must return ONLY ${QUEUE_STATUS} complaints`,
         ).toBe(QUEUE_STATUS);
-        seenSrids.add(String(svc?.serviceRequestId ?? ''));
+        const srid = String(svc?.serviceRequestId ?? '');
+        expect(srid, 'every returned record must carry a serviceRequestId').toBeTruthy();
+        seenSrids.add(srid);
       }
       if (page.length < QUEUE_PAGE) break;
     }

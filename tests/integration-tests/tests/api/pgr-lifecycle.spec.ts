@@ -284,7 +284,13 @@ Catches a regression where _update silently rejects payloads missing source/id (
     // env LME principal still drives RESOLVE below, which is role-gated
     // (PGR_LME), not department-gated.
     const plan = await resolveSeedPlan();
-    const assigneeUuid = 'error' in plan ? (lmeUserInfo.uuid as string) : plan.assigneeUuid;
+    if ('error' in plan) {
+      // No fallback to the env LME: assigning a department-mismatched uuid just
+      // reproduces the INVALID_ASSIGNMENT this step exists to avoid, and the
+      // failure would point at authorization instead of the real cause.
+      throw new Error(`resolveSeedPlan failed — cannot pick a department-matched assignee: ${plan.error}`);
+    }
+    const assigneeUuid = plan.assigneeUuid;
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
