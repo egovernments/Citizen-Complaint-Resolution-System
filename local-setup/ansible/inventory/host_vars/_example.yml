@@ -428,6 +428,19 @@ twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
+# Ordinary SMS sender. OPTIONAL and off by default: leaving it empty keeps the
+# pre-existing behaviour where only the WhatsApp integration is provisioned and
+# an ordinary-SMS provider is added by hand in the Configurator.
+#
+# Set it to an SMS-capable Twilio number (no "whatsapp:" prefix) and the
+# bootstrap also creates the DISTINCT twilio-sms integration and makes it the
+# primary integration on Novu's sms channel — the one operation the Configurator
+# cannot perform. Same account SID/token as above; only the sender differs.
+#
+# The bootstrap creates but never updates: changing this later does NOT
+# re-credential an existing twilio-sms integration. Edit it in Novu instead.
+twilio_sms_from: ""
+
 # ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
 # The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
 # (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per

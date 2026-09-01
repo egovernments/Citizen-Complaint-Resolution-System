@@ -4320,6 +4320,7 @@
         TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
         TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
         TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
+        TWILIO_SMS_FROM='{{ twilio_sms_from | default("") }}' \
         bash bootstrap-novu-whatsapp.sh
       register: novu_bootstrap_result
       when:
