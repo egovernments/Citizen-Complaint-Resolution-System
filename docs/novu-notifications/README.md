@@ -45,7 +45,13 @@ twilio_whatsapp_from: "whatsapp:+<approved sender>"
 
 `twilio_*` configures the WhatsApp integration. A separate ordinary-SMS provider is added in step 3. Leave `novu_api_key` unset unless the deployment already has a pinned key; Ansible mints and wires one.
 
-Use PGR and `novu-bridge` images built from current master. If inventory overrides either image, verify the PGR image contains the config-driven notification path and the bridge image contains PR #1905.
+Use a PGR image containing the config-driven notification path. For the bridge,
+the stock launchers pin the published multi-architecture image
+`egovio/novu-bridge:master-0469335`, which contains PR #1905's explicit WhatsApp
+integration selection. Do not substitute the older `master-7c91934` image: it sends
+WhatsApp through the primary SMS integration and Twilio rejects the channel-mismatched
+sender. If inventory overrides `novu_bridge_image`, verify that its build contains
+PR #1905 before deploying.
 
 For production, replace the repository fallback Novu Mongo, JWT, storage-encryption, application-secret, and admin credentials through the deployment secret manager. The current Ansible template does not expose every one of those settings yet.
 
