@@ -132,9 +132,17 @@ describe('image pin immutability', () => {
   // rename plus one genuine retirement, not a relaxation. (Note the pre-rename
   // names still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml},
   // which this test does not read: it scans the base compose only.)
+  //
+  // Six -> five: `egovio/tilt-demo-db-migrations:latest` is retired. It was the
+  // clearest case this list exists to catch — a mutable tag with no rebuild
+  // pipeline behind it, so the image froze at 2026-03-06 while migrate-all.sh
+  // moved on to the canonical Flyway history names. The stale copy then failed
+  // on every box (`relation "egov_user_schema_version_pk" already exists`), and
+  // four services hard-gated on it completing, so it took every login down with
+  // it. The container now lives in docker-compose.migrations.yml and is BUILT
+  // from ./docker/db-migrations, so the pin is gone rather than moved.
   const FROZEN_LATEST_DEBT: Record<string, number> = {
     'egovio/pgbouncer:latest': 1,
-    'egovio/tilt-demo-db-migrations:latest': 1,
     'egovio/curl:latest': 2, // two gate containers
     'egovio/gatus:latest': 1,
     'openbao/openbao:latest': 1,

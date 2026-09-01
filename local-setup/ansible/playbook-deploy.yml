@@ -1299,7 +1299,13 @@
         - "{{ digit_dir }}/ci-tests/jupyter"
 
     # docker/ contains build contexts (db-migrations, pgr-services).
-    # Even though we use pre-built images, compose may validate volume mount paths.
+    #
+    # LOAD-BEARING, not cosmetic. docker-compose.migrations.yml BUILDS
+    # db-migrations from `./docker/db-migrations`; it used to pull
+    # egovio/tilt-demo-db-migrations:latest, a mutable tag with no rebuild
+    # pipeline behind it, which froze while migrate-all.sh moved on and then
+    # failed on every box. Drop this sync and `docker compose up` cannot resolve
+    # that build context, so the MDMS data migrations stop reaching the host.
     - name: Synchronize docker build context dirs
       synchronize:
         src: "../docker/"
