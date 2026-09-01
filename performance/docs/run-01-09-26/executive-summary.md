@@ -11,11 +11,14 @@ A Kubernetes deployment of DIGIT PGR on AWS EKS sustained **200 concurrent test 
 | **Saturation point** | **160 VU** |
 | Request failures, every level | **0.000%** |
 | Lifecycle success, every level | **100.00%** |
+| **Intended work never started, open-loop** | **48.6%** |
 | Response time at peak | 1.8s p95 at 160 VU, 3.2s at 200 VU |
 | Pod restarts | **0** across the whole ladder |
 | Run-to-run variance | 6.7% throughput, 51% p95 |
 | Cluster utilisation at peak | 5–27% CPU, 48 of 402 DB connections |
 | Dataset | fixed at 3 complaints for every level |
+
+The 0.000% failure rate is a closed-loop result. Under an open-loop test that holds the arrival rate regardless of server speed, **48.6% of the offered work could not be started** — see [Open-Loop Testing Changes the Picture](#open-loop-testing-changes-the-picture). That is the figure to use for capacity planning.
 
 ## What We Tested
 

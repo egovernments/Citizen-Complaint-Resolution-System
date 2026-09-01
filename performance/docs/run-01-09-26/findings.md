@@ -36,6 +36,8 @@ For a more precise mapping, use TPS as the common unit:
 
 Every level is `constant-vus` held for 2 minutes. Figures are whole-run rates over that hold.
 
+**A 2-minute hold is short for a steady-state measurement, and it is the main methodological limit of this run.** It is long enough to separate the 40 → 80 → 120 steps, which sit far outside the noise floor, but not long enough to settle the saturation boundary: the 160 → 200 step falls inside that floor — see [Run-to-Run Variance](#run-to-run-variance). A follow-up run should hold the saturating levels considerably longer before the plateau is treated as established.
+
 ### The Drain Gate
 
 Levels are separated by a **drain gate**: the next level does not start until the persister's Kafka consumer lag returns to zero.
@@ -258,6 +260,29 @@ this campaign** — larger than concurrency, and roughly eight times the 6.7%
 run-to-run noise floor. Twenty-seven thousand complaints is a trivial database
 by production standards, and it had already more than halved throughput.
 
+**The mechanism was not isolated.** No `EXPLAIN` was captured against a
+populated dataset, so this campaign can state the size of the effect but not its
+cause. Four facts are readable from the source tree and narrow where to look:
+
+- The PGR search query contains **no `LIKE '%…%'` predicate**. Its only `LIKE`
+  is a prefix match on the tenant (`ser.tenantid LIKE 'pg%'`), applied when the
+  requested tenant is state-level.
+- `eg_pgr_service_v2` is indexed on `id`, `accountid`, `applicationstatus`,
+  `servicecode` and `(tenantid, servicerequestid)`, but **not on `createdtime`**
+  — which is the column the search orders by when no `sortBy` is given
+  (`ORDER BY ser_createdtime DESC`, applied before `OFFSET`/`LIMIT`).
+- The search joins `eg_pgr_address_v2` on `parentid`. That table is indexed on
+  `locality` only; PostgreSQL does not index a foreign-key column
+  automatically, so **the join column carries no index**.
+- The count query wraps the entire filtered join in
+  `select count(*) from (…)`, so a count reflects the full scoped result set
+  rather than one page of it.
+
+Settling this needs `EXPLAIN (ANALYZE, BUFFERS)` on the real query shapes
+against a populated dataset. **Indexing and archiving are not substitutes for
+each other**: if a plan-level fix exists it is larger and more durable than
+archiving, and archiving still helps either way.
+
 The practical consequences:
 
 - Any capacity figure must state the dataset it was measured against. The
@@ -356,3 +381,5 @@ Two constraints are present in this deployment but were not the binding limit at
 **Every PGR Kafka topic runs a single partition** (`PartitionCount: 1, ReplicationFactor: 1`), including `save-pgr-request`, `update-pgr-request` and `save-wf-transitions`. One consumer processes each topic in sequence regardless of how many application replicas exist. This is the mechanism behind the `INVALID ACTION` behaviour described above, and it is a hard ceiling that adding application capacity cannot lift.
 
 **The Elasticsearch indexer runs behind under load** and drains at roughly 17 messages/second afterwards. It sits off the complaint write path — it feeds search and inbox views — so it did not affect any figure here, but it took 10 minutes to clear after a single 2-minute level at 320 VU.
+
+**No error ceiling was found because the ladder ran out of planned levels, not because anything failed.** The fixed-dataset ladder stopped at 200 VU; the earlier gated pass reached 320 VU without a failed request, on a database that was still growing underneath it — see [Why the Gate Matters](#why-the-gate-matters). Establishing whether an error ceiling exists above the throughput plateau, and whether the single-partition topology described above is what creates it, needs a gated fixed-dataset ladder carried past 320 VU. That run was not made, so both questions remain open.

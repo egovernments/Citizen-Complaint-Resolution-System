@@ -29,7 +29,7 @@
 
 **This deployment handles roughly 1.1 million complaints a day, and nothing failed at any level we tested.**
 
-Every single request succeeded — no errors, no crashes, no restarts — across every level from 800 to 6,000 simultaneous users. That is a strong reliability result and it should be stated plainly.
+Every single request succeeded — no errors, no crashes, no restarts — across every level from 800 to 6,000 simultaneous users. That is a strong reliability result and it should be stated plainly. It comes from tests where users pace themselves; under demand arriving on a fixed schedule the picture changes, and that belongs in the same conversation — see [What This Looks Like Under Real Traffic](#what-this-looks-like-under-real-traffic).
 
 The system does have a limit, but it is a **speed limit, not a breaking point**. Past roughly 3,200–4,800 real users the system stops going faster and simply starts taking longer to answer. It never falls over.
 
@@ -114,12 +114,32 @@ For a live deployment this means: after a sustained traffic spike, the system ne
 
 ---
 
+## What This Looks Like Under Real Traffic
+
+Every figure above comes from a test where each simulated user waits for their previous request to come back before starting the next one. The system therefore sets its own pace: it is never asked for more than it is already managing.
+
+Real traffic does not work that way. People arrive when they arrive. We repeated the test with demand arriving on a fixed schedule regardless of how fast the system was answering, and the picture is considerably less comfortable:
+
+| | Users wait their turn | Demand arrives on a schedule |
+|---|---|---|
+| Intended complaints that never got started | none | **48.6%** |
+| Requests that failed | none | 3.8% |
+| Complaints that completed successfully | 100% | 89.7% |
+| Response time | 1.8 seconds (at 160 test users) | 15.6 seconds |
+| Services restarted | none | 1 — restarted by its own health check |
+
+**Roughly half the intended complaints never got started at all.**
+
+Both readings are accurate and they answer different questions. The first measures what the system will accept when it is allowed to set the pace. The second measures what happens when it is not. For sizing a real deployment the second is the more honest number, and the capacity figures above should be read alongside it rather than on their own.
+
+---
+
 ## Key Caveats
 
 1. **The figures were measured on an effectively empty database**, and stored data is the biggest single factor — see [What Slows It Down Most](#what-slows-it-down-most). Treat them as a best case, not a forecast.
 2. **One copy of each service was running.** The cluster has four machines but a single instance of each complaints service, so these numbers describe one instance. Running more copies is the obvious next step and was not tested.
 3. **These numbers are complaints-only.** Running other DIGIT modules on the same cluster reduces available capacity.
-4. **Under realistic arrival patterns, about half the work never started.** All the figures above come from a test where simulated users wait for their previous request before starting the next — so the system effectively sets its own pace. Repeating it with demand arriving on a fixed schedule regardless of system speed, **roughly half the intended complaints never got started at all**. This is the closest we have to real traffic behaviour, and it is considerably less favourable.
+4. **Under realistic arrival patterns, about half the work never started** — see [What This Looks Like Under Real Traffic](#what-this-looks-like-under-real-traffic). The capacity table is a closed-loop result and should not be quoted without it.
 5. **Nothing failed at any level, so the failure point is unknown.** We never reached it.
 6. **Measurements vary by about 7% between identical runs.** Any difference smaller than that is not meaningful. Response times vary far more — around 50% — so only large latency differences should be trusted.
 7. **Response times include about 24 milliseconds of network round-trip.** The load generator ran in the same region as the cluster.
