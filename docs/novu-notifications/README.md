@@ -20,19 +20,20 @@ novu_bridge_channels_enabled: "SMS,WHATSAPP"
 novu_bridge_channel: "sms"
 novu_bridge_proxy_allowed_roles: "SUPERUSER,MDMS_ADMIN"
 
-novu_admin_email: "<from secret manager>"
-novu_admin_password: "<from secret manager>"
+novu_admin_email: "notifications-admin@example.com"
+novu_admin_password: "<randomly generated strong password>"
 ```
 
-Add these WhatsApp variables:
+Use an email address you control for the Novu admin account and generate a unique,
+strong password. Copy the following WhatsApp values from the Twilio Console:
 
 ```yaml
 novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
 novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
 
-twilio_account_sid: "<from secret manager>"
-twilio_auth_token: "<from secret manager>"
-twilio_whatsapp_from: "whatsapp:+<approved sender>"
+twilio_account_sid: "<Twilio Account SID>"
+twilio_auth_token: "<Twilio Auth Token>"
+twilio_whatsapp_from: "whatsapp:+<Twilio WhatsApp sender>"
 ```
 
 Add the SMS workflow variable:
@@ -47,11 +48,6 @@ mints and wires one.
 The last tested images for this guide are
 `egovio/pgr-services:master-0938bdf` and
 `egovio/novu-bridge:master-0469335`. Newer images should work.
-
-For production, replace the repository fallback Novu Mongo, JWT,
-storage-encryption, application-secret, and admin credentials through the deployment
-secret manager. The current Ansible template does not expose every one of these
-settings yet.
 
 ## 2. Deploy once
 
@@ -103,10 +99,10 @@ bootstrap script with the explicit WhatsApp contract below. This administers Nov
 it does not run the deployment again or trigger a message.
 
 ```bash
-# Inject provider credentials through the operator's secret mechanism.
-export TWILIO_ACCOUNT_SID='<from secret manager>'
-export TWILIO_AUTH_TOKEN='<from secret manager>'
-export TWILIO_WHATSAPP_FROM='whatsapp:+<approved sender>'
+# Copy these values from the Twilio Console.
+export TWILIO_ACCOUNT_SID='<Twilio Account SID>'
+export TWILIO_AUTH_TOKEN='<Twilio Auth Token>'
+export TWILIO_WHATSAPP_FROM='whatsapp:+<Twilio WhatsApp sender>'
 
 export NOVU_ENV_FILE=/dev/null
 export NOVU_INTEGRATION_NAME=twilio-whatsapp
@@ -160,7 +156,7 @@ export COMPLAINT_TENANT='pg.citya'
 export NOTIF_TENANT="${COMPLAINT_TENANT%%.*}"
 export DIGIT_URL='http://127.0.0.1:18000'
 export DIGIT_USERNAME='ADMIN'
-export DIGIT_PASSWORD='<from secret manager>'
+export DIGIT_PASSWORD='<bootstrap_password from the Ansible variables>'
 export DIGIT_LOGIN_TENANT="$NOTIF_TENANT"
 
 cd /opt/digit/notification-seed
@@ -201,9 +197,9 @@ Channel:      SMS
 Provider ID:  twilio
 Name:         Twilio SMS
 Identifier:   twilio-sms
-Account SID:  <secret>
-Auth Token:   <secret>
-From:         +<sms sender>
+Account SID:  <Twilio Account SID>
+Auth Token:   <Twilio Auth Token>
+From:         +<Twilio SMS sender>
 ```
 
 Configurator creates an active integration, but it cannot make it primary, edit it,
