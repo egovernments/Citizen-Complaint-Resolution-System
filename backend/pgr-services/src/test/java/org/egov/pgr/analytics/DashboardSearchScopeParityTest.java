@@ -144,7 +144,8 @@ class DashboardSearchScopeParityTest {
         PgrSearchScope scope = dashboardScope.resolve(employee("emp-1", "GRO"), TENANT, STATE_LEVEL_LEN);
 
         assertEquals(List.of("WARD_001"), scope.jurisdictionCodes);
-        assertNull(scope.departmentCodes, "GRO is department-ALL under action 2008");
+        assertEquals(List.of("DEPT_1"), scope.departmentCodes,
+                "GRO is department-OWN under action 2008");
     }
 
     @Test

@@ -6,10 +6,9 @@ import org.egov.pgr.config.PGRConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -17,7 +16,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,7 +32,6 @@ import static org.mockito.Mockito.when;
  * outage handling).
  */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class BoundaryHierarchyExpanderTest {
 
     @Mock
@@ -69,6 +66,20 @@ class BoundaryHierarchyExpanderTest {
     }
 
     @Test
+    void sendsTheExpectedBoundaryRelationshipSearchUrl() {
+        when(restTemplate.postForObject(anyString(), any(), eq(Map.class))).thenReturn(nestedBoundaryResponse());
+
+        expander.descendantsOf(new RequestInfo(), "ke.bomet", "ADMIN", "BOMET");
+
+        ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
+        verify(restTemplate).postForObject(url.capture(), any(), eq(Map.class));
+        assertEquals(
+                "http://localhost:8081/boundary-service/boundary-relationships/_search"
+                        + "?tenantId=ke.bomet&hierarchyType=ADMIN&codes=BOMET&includeChildren=true",
+                url.getValue());
+    }
+
+    @Test
     void cachesASuccessfulResolutionAndDoesNotRefetch() {
         when(restTemplate.postForObject(anyString(), any(), eq(Map.class))).thenReturn(nestedBoundaryResponse());
 
@@ -97,7 +108,30 @@ class BoundaryHierarchyExpanderTest {
         Set<String> second = expander.descendantsOf(new RequestInfo(), "ke", "ADMIN", "BOMET");
 
         assertEquals(Set.of("BOMET"), first);
-        assertTrue(second.contains("BOMET_BOMET_CENTRAL_CHESOEN"), "a later successful lookup should not be shadowed by the earlier failure");
+        assertEquals(
+                Set.of("BOMET", "BOMET_BOMET_CENTRAL", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_CENTRAL_MUTARAKWA"),
+                second,
+                "a later successful lookup should not be shadowed by the earlier failure");
+    }
+
+    @Test
+    void aMismatchedResponseCannotWidenScopeAndIsNotCached() {
+        Map<String, Object> wrongRoot = Map.of("code", "OTHER_COUNTY", "children", List.of());
+        Map<String, Object> mismatched = Map.of(
+                "TenantBoundary", List.of(Map.of("boundary", List.of(wrongRoot))));
+        when(restTemplate.postForObject(anyString(), any(), eq(Map.class)))
+                .thenReturn(mismatched)
+                .thenReturn(nestedBoundaryResponse());
+
+        Set<String> first = expander.descendantsOf(new RequestInfo(), "ke", "ADMIN", "BOMET");
+        Set<String> second = expander.descendantsOf(new RequestInfo(), "ke", "ADMIN", "BOMET");
+
+        assertEquals(Set.of("BOMET"), first, "a mismatched tree must never widen the ABAC allow-list");
+        assertEquals(
+                Set.of("BOMET", "BOMET_BOMET_CENTRAL", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_CENTRAL_MUTARAKWA"),
+                second,
+                "a later valid response should not be shadowed by the rejected response");
+        verify(restTemplate, times(2)).postForObject(anyString(), any(), eq(Map.class));
     }
 
     @Test

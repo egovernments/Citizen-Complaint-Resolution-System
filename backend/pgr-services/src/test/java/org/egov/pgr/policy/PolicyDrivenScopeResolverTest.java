@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -151,8 +152,9 @@ class PolicyDrivenScopeResolverTest {
         // A County-level HRMS assignment must resolve to that County code PLUS every Ward under
         // it, not just the bare County code — complaints are always addressed at the Ward level,
         // so an unexpanded exact match against the County code alone would never match anything.
-        when(boundaryHierarchyExpander.descendantsOf(any(), eq("pg.city"), eq("ADMIN"), eq("BOMET")))
-                .thenReturn(java.util.Set.of("BOMET", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_EAST_KEMBU"));
+        doReturn(java.util.Set.of("BOMET", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_EAST_KEMBU"))
+                .when(boundaryHierarchyExpander)
+                .descendantsOf(any(), eq("pg.city"), eq("ADMIN"), eq("BOMET"));
         ScopePolicy policy = ScopePolicy.of(List.of("jurisdiction"), Map.of("jurisdiction", ScopeLevel.OWN));
         stubHrms(List.of(), List.of(Map.of("boundary", "BOMET", "hierarchy", "ADMIN", "isActive", true)));
 
@@ -161,6 +163,17 @@ class PolicyDrivenScopeResolverTest {
         assertTrue(scope.jurisdictionCodes.containsAll(
                 List.of("BOMET", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_EAST_KEMBU")));
         assertEquals(3, scope.jurisdictionCodes.size());
+    }
+
+    @Test
+    void jurisdictionWithoutHierarchyKeepsTheRawBoundaryCode() {
+        ScopePolicy policy = ScopePolicy.of(List.of("jurisdiction"), Map.of("jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of(Map.of("boundary", "WARD_LEGACY", "isActive", true)));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("WARD_LEGACY"), scope.jurisdictionCodes);
+        verifyNoInteractions(boundaryHierarchyExpander);
     }
 
     @Test

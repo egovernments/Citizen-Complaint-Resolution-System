@@ -252,8 +252,12 @@ public class PolicyDrivenScopeResolver {
                 boolean active = HrmsScopeSemantics.isActiveJurisdiction(j);
                 String boundary = j.path("boundary").asText(null);
                 String hierarchy = j.path("hierarchy").asText(null);
-                if (active && boundary != null && !boundary.isEmpty())
-                    jurisdictions.addAll(boundaryHierarchyExpander.descendantsOf(requestInfo, tenantId, hierarchy, boundary));
+                if (active && boundary != null && !boundary.isEmpty()) {
+                    if (hierarchy == null || hierarchy.isBlank())
+                        jurisdictions.add(boundary);
+                    else
+                        jurisdictions.addAll(boundaryHierarchyExpander.descendantsOf(requestInfo, tenantId, hierarchy, boundary));
+                }
             }
         }
         return jurisdictions;

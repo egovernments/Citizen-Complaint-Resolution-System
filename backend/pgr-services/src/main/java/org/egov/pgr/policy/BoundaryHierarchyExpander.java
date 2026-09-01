@@ -2,6 +2,8 @@ package org.egov.pgr.policy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.pgr.config.PGRConfiguration;
@@ -14,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -53,7 +54,9 @@ public class BoundaryHierarchyExpander {
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
 
-    private final Map<String, CachedEntry> cache = new ConcurrentHashMap<>();
+    private final Cache<String, Set<String>> cache = Caffeine.newBuilder()
+            .expireAfterWrite(CACHE_TTL_MILLIS, TimeUnit.MILLISECONDS)
+            .build();
 
     @Autowired
     public BoundaryHierarchyExpander(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper) {
@@ -62,32 +65,34 @@ public class BoundaryHierarchyExpander {
         this.mapper = mapper;
     }
 
-    /** {@code code} plus every descendant boundary code under it, per {@code hierarchyType}. */
+    /**
+     * Returns {@code code} plus every descendant boundary code under it, per {@code hierarchyType}.
+     * Returns an empty set, not a singleton of {@code code}, when any key parameter is null or the
+     * code is blank. Callers that need a safe fallback when hierarchy information is absent must
+     * add the raw code themselves.
+     */
     public Set<String> descendantsOf(RequestInfo requestInfo, String tenantId, String hierarchyType, String code) {
         if (tenantId == null || hierarchyType == null || code == null || code.isBlank())
             return Set.of();
         String cacheKey = tenantId + "|" + hierarchyType + "|" + code;
-        CachedEntry cached = cache.get(cacheKey);
-        if (cached != null && !cached.isExpired())
-            return cached.codes;
-
-        Set<String> resolved;
         try {
-            resolved = fetch(requestInfo, tenantId, hierarchyType, code);
-            if (resolved.isEmpty())
-                resolved = Set.of(code);
+            return cache.get(cacheKey, ignored -> {
+                Set<String> resolved = fetch(requestInfo, tenantId, hierarchyType, code);
+                if (!resolved.isEmpty() && !resolved.contains(code))
+                    throw new IllegalStateException("boundary response did not contain requested root code");
+                return resolved.isEmpty() ? Set.of(code) : Set.copyOf(resolved);
+            });
         } catch (Exception e) {
             log.warn("BoundaryHierarchyExpander: descendant lookup failed for tenantId='{}' hierarchyType='{}' code='{}' — falling back to the single unexpanded code: {}",
                     tenantId, hierarchyType, code, e.toString());
             return Set.of(code);
         }
-        cache.put(cacheKey, new CachedEntry(resolved));
-        return resolved;
     }
 
     @SuppressWarnings("unchecked")
     private Set<String> fetch(RequestInfo requestInfo, String tenantId, String hierarchyType, String code) {
-        String url = UriComponentsBuilder.fromHttpUrl(config.getBoundaryHost() + config.getBoundaryRelationshipSearchEndpoint())
+        String url = UriComponentsBuilder.fromHttpUrl(joinUrl(
+                        config.getBoundaryHost(), config.getBoundaryRelationshipSearchEndpoint()))
                 .queryParam("tenantId", tenantId)
                 .queryParam("hierarchyType", hierarchyType)
                 .queryParam("codes", code)
@@ -113,6 +118,14 @@ public class BoundaryHierarchyExpander {
         return codes;
     }
 
+    private static String joinUrl(String host, String endpoint) {
+        if (host.endsWith("/") && endpoint.startsWith("/"))
+            return host + endpoint.substring(1);
+        if (!host.endsWith("/") && !endpoint.startsWith("/"))
+            return host + "/" + endpoint;
+        return host + endpoint;
+    }
+
     private void collect(JsonNode node, Set<String> out) {
         String code = node.path("code").asText(null);
         if (code != null && !code.isEmpty())
@@ -121,19 +134,5 @@ public class BoundaryHierarchyExpander {
         if (children != null && children.isArray())
             for (JsonNode c : children)
                 collect(c, out);
-    }
-
-    private static final class CachedEntry {
-        final Set<String> codes;
-        final long expiresAtMillis;
-
-        CachedEntry(Set<String> codes) {
-            this.codes = codes;
-            this.expiresAtMillis = System.currentTimeMillis() + CACHE_TTL_MILLIS;
-        }
-
-        boolean isExpired() {
-            return System.currentTimeMillis() > expiresAtMillis;
-        }
     }
 }
