@@ -97,10 +97,6 @@ export NOVU_WORKFLOW_ID=complaints-whatsapp
 export NOVU_WORKFLOW_NAME=complaints-whatsapp
 export NOVU_SMS_BODY='Complaint {{payload.complaintNo}} status is {{payload.status}}'
 
-# A single comma, not an empty value. This suppresses the retired event-specific
-# workflows; an empty value falls back to the script's default and creates them.
-export NOVU_EVENT_WORKFLOWS=,
-
 bash backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
 
 unset TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_WHATSAPP_FROM NOVU_SMS_BODY
@@ -242,7 +238,7 @@ Remove the setup values from the current shell:
 ```bash
 unset NOVU_API_KEY NOVU_BASE_URL SMS_INTEGRATION_ID
 unset NOVU_ENV_FILE NOVU_INTEGRATION_NAME NOVU_INTEGRATION_ID
-unset NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME NOVU_EVENT_WORKFLOWS
+unset NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME
 ```
 
 ## What Configurator Can and Cannot Do

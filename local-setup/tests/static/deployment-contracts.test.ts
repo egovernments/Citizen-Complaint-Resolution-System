@@ -225,4 +225,35 @@ describe('Novu workflow creation deployment contract', () => {
       'Custom {{payload.status}} update'
     );
   });
+
+  // Nothing triggers the legacy COMPLAINTS.WORKFLOW.* workflows: the bridge resolves
+  // its Novu workflow from the channel (NovuBridgeConfiguration.getNovuWorkflowId),
+  // never from the event name. The playbook runs this script with only the Twilio
+  // vars set, so a non-empty default here silently creates them on every deploy.
+  test('the bootstrap creates no event-convention workflows unless asked', () => {
+    expect(novuBootstrap).toContain('NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"');
+
+    const probe = [
+      'NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"',
+      'IFS="," read -r -a IDS <<< "$NOVU_EVENT_WORKFLOWS"',
+      'n=0',
+      'for i in "${IDS[@]}"; do i="$(echo "$i" | xargs)"; [[ -z "$i" ]] && continue; n=$((n+1)); done',
+      'printf "%s\\n" "$n"',
+    ].join('\n');
+
+    const countCreated = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_EVENT_WORKFLOWS;
+      } else {
+        env.NOVU_EVENT_WORKFLOWS = override;
+      }
+      return execFileSync('bash', ['-c', probe], { encoding: 'utf8', env }).trim();
+    };
+
+    expect(countCreated()).toBe('0');
+    // The comma idiom older runbooks used must keep working.
+    expect(countCreated(',')).toBe('0');
+    expect(countCreated('A.B,C.D')).toBe('2');
+  });
 });

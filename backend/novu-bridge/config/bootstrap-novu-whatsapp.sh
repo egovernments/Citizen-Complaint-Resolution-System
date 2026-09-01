@@ -27,7 +27,10 @@ set -euo pipefail
 #   NOVU_INTEGRATION_NAME  (default: twilio-whatsapp)
 #   NOVU_INTEGRATION_ID    (default: twilio-whatsapp)
 #   NOVU_SMS_BODY          (default: Complaint {{payload.complaintNo}} status is {{payload.status}})
-#   NOVU_EVENT_WORKFLOWS   (default: COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN)
+#   NOVU_EVENT_WORKFLOWS   (default: none. Legacy event-name workflows from the pre-
+#                          fixed-workflow convention. Nothing triggers them: the bridge
+#                          resolves its workflow from the channel via getNovuWorkflowId.
+#                          Set a comma-separated list only to recreate them deliberately.)
 #   NOVU_SMS_WORKFLOW_ID   (default: complaints-sms   — must match novu.bridge.workflow.id.sms)
 #   NOVU_EMAIL_WORKFLOW_ID (default: complaints-email — must match novu.bridge.workflow.id.email)
 
@@ -79,7 +82,7 @@ NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
 if [[ -z "${NOVU_SMS_BODY:-}" ]]; then
   NOVU_SMS_BODY='Complaint {{payload.complaintNo}} status is {{payload.status}}'
 fi
-NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN}"
+NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"
 NOVU_SMS_WORKFLOW_ID="${NOVU_SMS_WORKFLOW_ID:-complaints-sms}"
 NOVU_EMAIL_WORKFLOW_ID="${NOVU_EMAIL_WORKFLOW_ID:-complaints-email}"
 
@@ -366,7 +369,7 @@ EMAIL_STEPS='[
 ensure_channel_workflow "$NOVU_SMS_WORKFLOW_ID" "$NOVU_SMS_WORKFLOW_ID" "$SMS_STEPS"
 ensure_channel_workflow "$NOVU_EMAIL_WORKFLOW_ID" "$NOVU_EMAIL_WORKFLOW_ID" "$EMAIL_STEPS"
 
-echo "==> Checking/creating event-convention workflows: ${NOVU_EVENT_WORKFLOWS}"
+echo "==> Checking/creating event-convention workflows: ${NOVU_EVENT_WORKFLOWS:-(none)}"
 IFS=',' read -r -a EVENT_WF_IDS <<< "$NOVU_EVENT_WORKFLOWS"
 for EVENT_WF_ID in "${EVENT_WF_IDS[@]}"; do
   EVENT_WF_ID="$(echo "$EVENT_WF_ID" | xargs)"
@@ -462,7 +465,7 @@ echo "Environment: $NOVU_ENV_NAME ($ENV_ID)"
 echo "Integration: $NOVU_INTEGRATION_ID ($INTEGRATION_ID)"
 echo "Workflow: $NOVU_WORKFLOW_ID"
 echo "Bridge Channel Workflows: $NOVU_SMS_WORKFLOW_ID, $NOVU_EMAIL_WORKFLOW_ID"
-echo "Event Workflows: $NOVU_EVENT_WORKFLOWS"
+echo "Event Workflows: ${NOVU_EVENT_WORKFLOWS:-(none)}"
 echo
 echo "Trigger example (WhatsApp):"
 cat <<'EOT'
