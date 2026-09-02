@@ -150,6 +150,41 @@ disabled schedulers. These deviations are warnings in `bomet-parity.json`; every
 a hard failure. Set `DASHBOARD_BOMET_REQUIRE_HOST_MATCH=no` only for a separately labelled
 hardware experiment, never for a result compared numerically with Dhruv's Bomet run.
 
+## Bomet snapshot run
+
+`run-bomet-snapshot.sh` implements a reversible cycle on the exact Bomet host/stack
+without overwriting the live
+database:
+
+1. Take a transactionally consistent `pg_dump` of Bomet's `egov`
+   database and restore it into a run-scoped `dashboard_perf_*` database.
+2. Remove existing PGR rows from the clone and install a DB guard that rejects every
+   non-fixture PGR insert/update.
+3. Recreate only `pgr-services` against that guarded clone with MV refresh and escalation
+   disabled, create the exact fixture, run Playwright, and
+   tear the fixture down.
+4. Recreate PGR from the original Compose configuration, verify its configuration/image
+   fingerprint and original row count, then drop the clone and dump.
+
+```bash
+export BOMET_SNAPSHOT_ALLOW_MUTATION=yes
+export BOMET_MAINTENANCE_CONFIRMED=yes # only after real PGR submissions are blocked
+export DASHBOARD_FIXTURE_ALLOW_MUTATION=yes
+export DASHBOARD_SCHEDULED_REFRESH_DISABLED=yes
+export DASHBOARD_ESCALATION_DISABLED=yes
+export DASHBOARD_TARGET_SHA='<candidate-sha>'
+export DIGIT_USERNAME='...'
+export DIGIT_PASSWORD='...'
+
+performance/dashboard/run-bomet-snapshot.sh \
+  --run-id issue1109-bomet-3k --tier 3k --suite all
+```
+
+The maintenance assertion is mandatory. While PGR points at the disposable clone, the DB guard
+rejects real complaint submissions so they cannot be silently discarded, but users would still
+receive an error. The wrapper must not run until the maintenance window is approved. The original
+database is never restored over and is not mutated by the fixture.
+
 ## Manual lifecycle
 
 ```bash

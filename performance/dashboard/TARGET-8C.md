@@ -16,12 +16,22 @@ Use this matrix:
 | `bomet-clone` | exact 3K/50K/100K fixture | primary dashboard scale curve | Yes, only after full parity gate and same host shape |
 | `8c` | disposable exact fixture | engineering diagnostic / lower hardware experiment | No; label separately |
 | `nairobi-live` | existing Nairobi corpus, read-only | portability smoke | No |
+| `bomet-snapshot` | DB clone plus exact fixture | Exact-tier benchmark on the Bomet host/stack | Yes; record the temporary PGR DB/scheduler override |
 
 Never seed live Bomet. Restore its deployment/tenant shape to a disposable host, scrub identities,
 then let the fixture create and remove only tagged PGR rows. The runtime gate compares every
 Compose service, immutable Docker image ID, hashed configuration, CPU and memory against a manifest
 captured from Bomet. Candidate PGR/UI images and PGR's disabled benchmark schedulers are the only
 default allowed differences.
+
+## Bomet snapshot finding
+
+Bomet's database is 8.9 GB. After clearing a 71.8 GB unrotated Novu Mongo container log, the host
+has about 86 GB free. That is sufficient for a full logical dump, restored clone, 100K fixture,
+WAL and MV-refresh workspace. Use `run-bomet-snapshot.sh`; it snapshots into a separate database,
+points only PGR at the clone, seeds/runs/tears down there, restores PGR's original runtime
+fingerprint, and drops the clone. Do not overwrite the original DB. A maintenance window remains
+mandatory because PGR writes made while it points at the clone would otherwise be discarded.
 
 ## Standalone 8C / 24 GB diagnostic
 

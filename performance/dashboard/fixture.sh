@@ -121,7 +121,18 @@ fi
 
 PSQL_CMD=()
 PSQL_USES_STDIN=false
-if [[ -n "${DASHBOARD_DB_CONTAINER:-}" ]]; then
+if [[ -n "${DASHBOARD_DB_SSH:-}" ]]; then
+  [[ -n "${DASHBOARD_DB_CONTAINER:-}" ]] || die 'DASHBOARD_DB_SSH requires DASHBOARD_DB_CONTAINER'
+  [[ "${DASHBOARD_DB_CONTAINER}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die 'invalid DASHBOARD_DB_CONTAINER'
+  [[ "${DASHBOARD_DB_NAME:-egov}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die 'invalid DASHBOARD_DB_NAME'
+  [[ "${DASHBOARD_DB_USER:-egov}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die 'invalid DASHBOARD_DB_USER'
+  [[ -z "${DASHBOARD_DB_PASSWORD:-}" ]] || die 'DASHBOARD_DB_PASSWORD is not supported with DASHBOARD_DB_SSH; use target-local PostgreSQL authentication'
+  PSQL_CMD=(ssh "${DASHBOARD_DB_SSH}")
+  if [[ "${DASHBOARD_DB_SSH_DOCKER_SUDO:-}" == '1' ]]; then PSQL_CMD+=(sudo -n); fi
+  PSQL_CMD+=(docker exec -i "${DASHBOARD_DB_CONTAINER}" psql -X -q
+    -U "${DASHBOARD_DB_USER:-egov}" -d "${DASHBOARD_DB_NAME:-egov}")
+  PSQL_USES_STDIN=true
+elif [[ -n "${DASHBOARD_DB_CONTAINER:-}" ]]; then
   command -v docker >/dev/null 2>&1 || die 'docker is required for DASHBOARD_DB_CONTAINER'
   PSQL_CMD=(docker exec -i)
   if [[ -n "${DASHBOARD_DB_PASSWORD:-}" ]]; then

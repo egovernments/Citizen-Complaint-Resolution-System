@@ -8,7 +8,7 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  run-playwright.sh --target bomet-live|bomet-clone|8c|nairobi-live [options]
+  run-playwright.sh --target bomet-live|bomet-snapshot|bomet-clone|8c|nairobi-live [options]
 
 Options:
   --suite functional|benchmark|all  Select browser coverage (live default:
@@ -95,6 +95,11 @@ case "${TARGET}" in
     DEFAULT_TENANT='ke.nairobi'
     PROTECTED_TARGET=true
     ;;
+  bomet-snapshot)
+    DEFAULT_BASE_URL='https://bometfeedbackhub.digit.org'
+    DEFAULT_TENANT='ke'
+    PROTECTED_TARGET=false
+    ;;
   bomet-clone)
     DEFAULT_BASE_URL="${DASHBOARD_BOMET_CLONE_BASE_URL:-}"
     DEFAULT_TENANT="${DASHBOARD_BOMET_CLONE_TENANT:-}"
@@ -105,7 +110,7 @@ case "${TARGET}" in
     DEFAULT_TENANT="${DASHBOARD_8C_TENANT:-}"
     PROTECTED_TARGET=false
     ;;
-  *) die '--target must be bomet-live, bomet-clone, 8c, or nairobi-live' ;;
+  *) die '--target must be bomet-live, bomet-snapshot, bomet-clone, 8c, or nairobi-live' ;;
 esac
 
 if [[ "${SUITE}" == 'auto' ]]; then
@@ -147,6 +152,11 @@ if [[ "${SUITE}" != 'functional' && "${PROTECTED_TARGET}" == false && -z "${DASH
 fi
 if [[ "${TARGET}" == 'bomet-clone' && -z "${DASHBOARD_REFERENCE_ENVIRONMENT:-}" ]]; then
   die 'bomet-clone requires DASHBOARD_REFERENCE_ENVIRONMENT captured from bomet-live'
+fi
+if [[ "${TARGET}" == 'bomet-snapshot' ]]; then
+  [[ "${BOMET_SNAPSHOT_ACTIVE:-}" == 'yes' ]] || die 'bomet-snapshot must be invoked through run-bomet-snapshot.sh'
+  [[ -n "${DASHBOARD_DB_SSH:-}" ]] || die 'bomet-snapshot requires DASHBOARD_DB_SSH'
+  [[ "${DASHBOARD_DB_NAME:-}" =~ ^dashboard_perf_[A-Za-z0-9_]+$ ]] || die 'bomet-snapshot requires a disposable dashboard_perf_* database'
 fi
 if [[ "${FIXTURE}" == 'on' && "${DASHBOARD_SCHEDULED_REFRESH_DISABLED:-}" != 'yes' ]]; then
   die 'benchmark fixture requires DASHBOARD_SCHEDULED_REFRESH_DISABLED=yes after disabling the scheduled MV refresh'
