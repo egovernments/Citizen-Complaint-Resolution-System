@@ -6311,3 +6311,54 @@ header.digit-header .digit-dropdown-master {
   max-width: 160px !important;
   object-fit: contain !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Error / maintenance / not-found screen layout.
+
+   The upstream digit-ui-css rules are unusable inside our shells:
+     width: 100vw   — the citizen and employee shells render this INSIDE a
+                      ~260px sidebar, so centring against the whole VIEWPORT
+                      pushed the content visibly right of its own column.
+     height: 100vh  — full-height centring put the message so far down that a
+                      phone showed an empty grey screen until the user scrolled.
+     width: 400px   — fixed, so it overflowed a 360px phone.
+     button 153px   — fixed, so a longer label ("Voltar ao início") clipped.
+
+   Overridden here rather than in packages/css/src/index.scss: that SCSS is NOT
+   what ships. scripts/vendor-digit-ui-css.js fetches the PUBLISHED
+   @egovernments/digit-ui-css from unpkg, so editing the local source has no
+   effect on the served page. overrides.css is hand-maintained and loaded after
+   the vendored files, so it is the only place a fix actually applies.
+--------------------------------------------------------------------------- */
+.error-boundary {
+  width: 100%;
+  min-height: 60vh;
+  height: auto;
+  padding: 32px 16px;
+}
+
+.error-boundary .error-container {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  gap: 16px;
+}
+
+.error-boundary .error-container img {
+  max-width: 96px;
+  height: auto;
+}
+
+/* pt_MZ runs 20-35% longer than English; without wrapping a long heading
+   clipped at both edges instead of breaking onto a second line. */
+.error-boundary .error-container h1 {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.error-boundary .error-container button {
+  width: auto;
+  min-width: 153px;
+  max-width: 100%;
+  border-radius: 4px;
+}
