@@ -365,12 +365,22 @@ WHERE e.action IN ('ASSIGN', 'REASSIGN') AND e.has_multiple_assignees;
 
 COMMIT;
 
+\echo Updating planner statistics for the seeded base tables
+ANALYZE eg_pgr_service_v2;
+ANALYZE eg_pgr_address_v2;
+ANALYZE eg_wf_processinstance_v2;
+ANALYZE eg_wf_assignee_v2;
+
 \echo Refreshing complaint_events, then complaint_facts
 \if :refresh_concurrently
 REFRESH MATERIALIZED VIEW CONCURRENTLY complaint_events;
-REFRESH MATERIALIZED VIEW CONCURRENTLY complaint_facts;
 \else
 REFRESH MATERIALIZED VIEW complaint_events;
+\endif
+ANALYZE complaint_events;
+\if :refresh_concurrently
+REFRESH MATERIALIZED VIEW CONCURRENTLY complaint_facts;
+\else
 REFRESH MATERIALIZED VIEW complaint_facts;
 \endif
 
