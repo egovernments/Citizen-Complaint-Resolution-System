@@ -67,22 +67,27 @@ function readRun(directory, name) {
   const raw = readK6Csv(resolve(directory, 'metrics.csv'));
   const dashboard = trendStats(raw, 'dashboard_load_duration');
   const http = trendStats(raw, 'http_req_duration');
-  const loadsPerSecond = metric(metrics, 'iterations{phase:main}', 'rate');
+  const mainWindowSeconds = readHoldSeconds(resolve(directory, 'run-manifest.env'));
   const iterationCount = metric(metrics, 'iterations{phase:main}', 'count');
-  const measuredSeconds = Number.isFinite(loadsPerSecond) && loadsPerSecond > 0 && Number.isFinite(iterationCount)
-    ? iterationCount / loadsPerSecond
-    : null;
-  const httpRequests = counter(raw, 'http_reqs');
+  const loadsPerSecond = Number.isFinite(mainWindowSeconds) && mainWindowSeconds > 0 && Number.isFinite(iterationCount)
+    ? iterationCount / mainWindowSeconds
+    : metric(metrics, 'iterations{phase:main}', 'rate');
+  const httpRequests = firstFinite(counter(raw, 'http_reqs'), metric(metrics, 'http_reqs{phase:main}', 'count'));
   const httpRps = firstFinite(
-    metric(metrics, 'http_reqs{phase:main}', 'rate'),
-    Number.isFinite(httpRequests) && Number.isFinite(measuredSeconds) && measuredSeconds > 0
-      ? httpRequests / measuredSeconds
+    Number.isFinite(httpRequests) && Number.isFinite(mainWindowSeconds) && mainWindowSeconds > 0
+      ? httpRequests / mainWindowSeconds
       : null,
+    metric(metrics, 'http_reqs{phase:main}', 'rate'),
   );
+  const queryCount = metric(metrics, 'dashboard_queries{phase:main}', 'count');
+  const queryRate = Number.isFinite(queryCount) && Number.isFinite(mainWindowSeconds) && mainWindowSeconds > 0
+    ? queryCount / mainWindowSeconds
+    : metric(metrics, 'dashboard_queries{phase:main}', 'rate');
   const runtime = readRuntime(resolve(directory, 'runtime.ndjson'));
   return {
     tier: match[1],
     vus: Number(match[2]),
+    mainWindowSeconds,
     loadsPerSecond,
     httpRps,
     httpRequests,
@@ -101,10 +106,19 @@ function readRun(directory, name) {
     httpP99Ms: firstFinite(http.p99, metric(metrics, 'http_req_duration{phase:main}', 'p(99)')),
     httpMaxMs: firstFinite(http.max, metric(metrics, 'http_req_duration{phase:main}', 'max')),
     httpFailureRate: metric(metrics, 'http_req_failed{phase:main}', 'value'),
-    queryRate: metric(metrics, 'dashboard_queries{phase:main}', 'rate'),
+    queryRate,
     ...runtime,
     resultDirectory: directory,
   };
+}
+
+function readHoldSeconds(path) {
+  if (!existsSync(path)) return null;
+  const match = readFileSync(path, 'utf8').match(/^HOLD_DURATION=([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)$/m);
+  if (!match) return null;
+  const value = Number(match[1]);
+  const factors = { ms: 0.001, s: 1, m: 60, h: 3600 };
+  return value * factors[match[2]];
 }
 
 function readRuntime(path) {
