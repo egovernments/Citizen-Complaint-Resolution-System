@@ -127,7 +127,9 @@ test('cold-context dashboard hard-navigation sample', async ({ page, context }, 
     },
     catalog: {
       packId: pack.packId == null ? null : String(pack.packId),
-      reportedRecordCount: Number.isFinite(Number(pack.recordCount)) ? Number(pack.recordCount) : null,
+      reportedRecordCount: pack.recordCount != null && Number.isFinite(Number(pack.recordCount))
+        ? Number(pack.recordCount)
+        : null,
       persona: pack.persona == null ? null : String(pack.persona),
       scopes,
     },

@@ -205,6 +205,7 @@ mkdir -p "${RESULTS_DIR}"
   printf 'TIER=%q\n' "${TIER}"
   printf 'SUITE=%q\n' "${SUITE}"
   printf 'FIXTURE=%q\n' "${FIXTURE}"
+  printf 'EXTERNAL_FIXTURE=%q\n' "${DASHBOARD_EXTERNAL_FIXTURE:-no}"
   printf 'TARGET_SHA=%q\n' "${DASHBOARD_TARGET_SHA}"
   printf 'REFERENCE_ENVIRONMENT=%q\n' "${DASHBOARD_REFERENCE_ENVIRONMENT:-none}"
   printf 'BOMET_REQUIRE_HOST_MATCH=%q\n' "${DASHBOARD_BOMET_REQUIRE_HOST_MATCH:-yes}"
@@ -265,7 +266,7 @@ if [[ "${TARGET}" == 'bomet-clone' ]]; then
     die 'bomet-clone does not match the Bomet reference manifest'
 fi
 
-if [[ "${FIXTURE}" == 'on' ]]; then
+if [[ "${FIXTURE}" == 'on' || "${TARGET}" == 'bomet-snapshot' ]]; then
   jq -e '
     any(.containers[];
       .service == "pgr-services" and
@@ -273,7 +274,7 @@ if [[ "${FIXTURE}" == 'on' ]]; then
       (.benchmarkSettings | index("PGR_ESCALATION_ENABLED=false")) != null
     )
   ' "${RESULTS_DIR}/environment.json" >/dev/null || \
-    die 'target pgr-services must explicitly set PGR_DASHBOARD_REFRESH_ENABLED=false and PGR_ESCALATION_ENABLED=false'
+    die 'fixture target pgr-services must explicitly set PGR_DASHBOARD_REFRESH_ENABLED=false and PGR_ESCALATION_ENABLED=false'
 fi
 
 CHILD=("${SCRIPT_DIR}/run-playwright-child.sh")

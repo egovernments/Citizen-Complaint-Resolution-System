@@ -158,13 +158,18 @@ database:
 
 1. Take a transactionally consistent `pg_dump` of Bomet's `egov`
    database and restore it into a run-scoped `dashboard_perf_*` database.
-2. Remove existing PGR rows from the clone and install a DB guard that rejects every
-   non-fixture PGR insert/update.
-3. Recreate only `pgr-services` against that guarded clone with MV refresh and escalation
-   disabled, create the exact fixture, run Playwright, and
-   tear the fixture down.
-4. Recreate PGR from the original Compose configuration, verify its configuration/image
-   fingerprint and original row count, then drop the clone and dump.
+2. Add one exact temporary PgBouncer route for the clone, reload PgBouncer without a
+   restart, remove existing PGR rows from the clone, and install a DB guard that rejects
+   every non-fixture PGR insert/update.
+3. Create the exact fixture while PGR remains on the original database. Recreate only
+   `pgr-services` against the seeded clone with MV refresh and escalation disabled, wait
+   for real container health, and require one authenticated pack request plus one KPI query
+   to pass before Playwright starts.
+4. Tear down the fixture, recreate PGR from the original Compose configuration, restore
+   PgBouncer's original configuration byte-for-byte, verify PGR's immutable image and
+   critical datasource/scheduler settings, then drop the clone and dump. Changes to the
+   live complaint count during snapshot preparation are reported rather than mistaken for
+   fixture leakage; the fixture never connects to the original database.
 
 ```bash
 export BOMET_SNAPSHOT_ALLOW_MUTATION=yes
@@ -178,6 +183,15 @@ export DIGIT_PASSWORD='...'
 
 performance/dashboard/run-bomet-snapshot.sh \
   --run-id issue1109-bomet-3k --tier 3k --suite all
+```
+
+Use `--probe-only` for a guarded readiness smoke. It performs the same snapshot, exact
+fixture, PgBouncer mapping, switch, two-request analytics gate, and full teardown, but does
+not start a browser:
+
+```bash
+performance/dashboard/run-bomet-snapshot.sh \
+  --run-id issue1109-bomet-3k-probe --tier 3k --probe-only
 ```
 
 The maintenance assertion is mandatory. While PGR points at the disposable clone, the DB guard
