@@ -202,7 +202,9 @@ performance/dashboard/run-bomet-dashboard-matrix.sh \
 
 Every load level captures two-second host, container, PGR-health, and PostgreSQL samples. The
 runner refuses the next level after a PGR restart/OOM/unhealthy state or when PostgreSQL reaches
-90% of `max_connections`. Summarize completed cells with:
+90% of `max_connections`. Cleanup also retains at most the latest 5,000 PGR and Kong log lines so
+diagnostic capture cannot delay datasource restoration; override that bound with the positive
+integer `BOMET_DIAGNOSTIC_LOG_LINES` when needed. Summarize completed cells with:
 
 ```bash
 node performance/dashboard/summarize-matrix.mjs \

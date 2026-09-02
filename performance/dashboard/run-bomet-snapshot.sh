@@ -12,6 +12,7 @@ RUNNER_ARGS=()
 DRY_RUN=false
 PROBE_ONLY=false
 LOAD_VUS_LIST=''
+DIAGNOSTIC_LOG_LINES="${BOMET_DIAGNOSTIC_LOG_LINES:-5000}"
 
 die() { echo "bomet snapshot runner: $*" >&2; exit 2; }
 
@@ -43,6 +44,7 @@ done
 [[ "${DASHBOARD_FIXTURE_ALLOW_MUTATION:-}" == 'yes' ]] || die 'set DASHBOARD_FIXTURE_ALLOW_MUTATION=yes'
 [[ "${DASHBOARD_SCHEDULED_REFRESH_DISABLED:-}" == 'yes' ]] || die 'set DASHBOARD_SCHEDULED_REFRESH_DISABLED=yes'
 [[ "${DASHBOARD_ESCALATION_DISABLED:-}" == 'yes' ]] || die 'set DASHBOARD_ESCALATION_DISABLED=yes'
+[[ "${DIAGNOSTIC_LOG_LINES}" =~ ^[1-9][0-9]*$ ]] || die 'BOMET_DIAGNOSTIC_LOG_LINES must be a positive integer'
 
 case "${TIER}" in
   3k) EXPECTED_ROWS=3000 ;;
@@ -85,9 +87,9 @@ cleanup_snapshot() {
   if [[ "${snapshot_started}" == true ]]; then
     ssh "${SSH_TARGET}" 'bash -s -- diagnose '"${RUN_ID}"' '"${CLONE_DB}" \
       < "${SCRIPT_DIR}/bomet-snapshot-remote.sh" > "${LIFECYCLE_DIR}/pre-cleanup-diagnostics.json" || true
-    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m digit-pgr-services-1 \
+    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m --tail "${DIAGNOSTIC_LOG_LINES}" digit-pgr-services-1 \
       > "${LIFECYCLE_DIR}/pre-cleanup-pgr.log" 2>&1 || true
-    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m kong-gateway \
+    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m --tail "${DIAGNOSTIC_LOG_LINES}" kong-gateway \
       > "${LIFECYCLE_DIR}/pre-cleanup-kong.log" 2>&1 || true
   fi
   if [[ "${fixture_active}" == true ]]; then
