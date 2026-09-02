@@ -30,6 +30,7 @@ ANCHOR_TIME="${DASHBOARD_FIXTURE_ANCHOR_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 SERVICE_CODE="${DASHBOARD_FIXTURE_SERVICE_CODE:-}"
 LOCALITY_CODE="${DASHBOARD_FIXTURE_LOCALITY:-}"
 REFRESH_MODE="${DASHBOARD_FIXTURE_REFRESH_MODE:-blocking}"
+ALLOW_EXISTING_CORPUS="${DASHBOARD_FIXTURE_ALLOW_EXISTING_CORPUS:-false}"
 COMMAND=()
 
 while [[ "$#" -gt 0 ]]; do
@@ -69,6 +70,10 @@ while [[ "$#" -gt 0 ]]; do
       REFRESH_MODE="$2"
       shift 2
       ;;
+    --allow-existing-corpus)
+      ALLOW_EXISTING_CORPUS=true
+      shift
+      ;;
     --)
       shift
       COMMAND=("$@")
@@ -99,6 +104,11 @@ case "${REFRESH_MODE}" in
   blocking) REFRESH_CONCURRENTLY=false ;;
   concurrent) REFRESH_CONCURRENTLY=true ;;
   *) die '--refresh-mode must be blocking or concurrent' ;;
+esac
+
+case "${ALLOW_EXISTING_CORPUS}" in
+  true|false) ;;
+  *) die 'DASHBOARD_FIXTURE_ALLOW_EXISTING_CORPUS must be true or false' ;;
 esac
 
 if [[ "${ACTION}" == 'setup' || "${ACTION}" == 'with-fixture' ]]; then
@@ -138,6 +148,7 @@ run_sql() {
     -v service_code="${SERVICE_CODE}"
     -v locality_code="${LOCALITY_CODE}"
     -v refresh_concurrently="${REFRESH_CONCURRENTLY}"
+    -v allow_existing_corpus="${ALLOW_EXISTING_CORPUS}"
   )
   if [[ "${PSQL_USES_STDIN}" == true ]]; then
     "${PSQL_CMD[@]}" "${psql_args[@]}" < "${sql_file}"

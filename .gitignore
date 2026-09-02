@@ -136,6 +136,7 @@ performance/results/*/metrics.csv.gz
 performance/results/*/k6-output.json
 performance/results/*/run-manifest.env
 performance/results/dashboard-fixtures/
+performance/results/dashboard-runs/
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
 docker-compose.override.yml

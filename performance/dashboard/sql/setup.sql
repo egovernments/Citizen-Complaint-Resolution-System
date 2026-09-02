@@ -13,7 +13,8 @@ SELECT :'run_id'::text            AS run_id,
        :'row_count'::integer      AS row_count,
        :'anchor_time'::timestamptz AS anchor_time,
        :'service_code'::text      AS service_code,
-       :'locality_code'::text     AS locality_code;
+       :'locality_code'::text     AS locality_code,
+       :'allow_existing_corpus'::boolean AS allow_existing_corpus;
 
 DO $$
 DECLARE
@@ -49,6 +50,13 @@ BEGIN
       AND s.additionaldetails->>'performanceRunId' = config.run_id
   ) THEN
     RAISE EXCEPTION 'fixture run % already exists; teardown it before setup', config.run_id;
+  END IF;
+  IF NOT config.allow_existing_corpus AND EXISTS (
+    SELECT 1
+    FROM eg_pgr_service_v2 s
+    WHERE s.tenantid = config.tenant_id
+  ) THEN
+    RAISE EXCEPTION 'tenant % already contains complaints; use a clean dedicated tenant for the exact scale curve (or --allow-existing-corpus for a separately labelled diagnostic)', config.tenant_id;
   END IF;
 END $$;
 
