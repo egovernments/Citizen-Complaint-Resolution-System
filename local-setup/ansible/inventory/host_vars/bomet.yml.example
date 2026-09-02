@@ -149,10 +149,6 @@ novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"
-# Ordinary SMS sender (SMS-capable Twilio number, no "whatsapp:" prefix).
-# Optional: set it and the bootstrap also creates the twilio-sms integration
-# and makes it primary on the sms channel. Empty = WhatsApp only, unchanged.
-twilio_sms_from: ""
 
 # ── Optional services (opt-in via flags; all off, matching _example.yml) ──
 # Real OTP stack (egov-otp/user-otp/egov-notification-sms). Off keeps the

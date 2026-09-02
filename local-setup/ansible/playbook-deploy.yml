@@ -4333,7 +4333,6 @@
         TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
         TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
         TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
-        TWILIO_SMS_FROM='{{ twilio_sms_from | default("") }}' \
         bash bootstrap-novu-whatsapp.sh
       register: novu_bootstrap_result
       when:
@@ -4389,15 +4388,9 @@
             • Self-service: Configurator → Notifications → Notification Providers →
               Add provider (Twilio SMS/WhatsApp or SMTP), then Verify + Test-send.
             • Or ansible-bootstrapped: set twilio_account_sid / twilio_auth_token /
-              twilio_whatsapp_from (and twilio_sms_from for ordinary SMS) in
-              host_vars/{{ inventory_hostname }}.yml and re-run
-              ./deploy.sh {{ inventory_hostname }} (creates the Twilio
-              integrations + complaints-* workflows for you).
-          {% if (twilio_sms_from | default('')) | length > 0 %}
-          NOTE: twilio_sms_from is set but twilio_account_sid is empty, so the
-          bootstrap was SKIPPED entirely and no SMS integration was created.
-          Both are required.
-          {% endif %}
+              twilio_whatsapp_from in host_vars/{{ inventory_hostname }}.yml and
+              re-run ./deploy.sh {{ inventory_hostname }} (creates the Twilio
+              integration + complaints-* workflows for you).
       when:
         - enable_novu | default(false)
         - (twilio_account_sid | default('')) | length == 0

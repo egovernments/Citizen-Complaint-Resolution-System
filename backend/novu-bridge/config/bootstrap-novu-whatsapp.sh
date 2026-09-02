@@ -17,12 +17,6 @@ set -euo pipefail
 #   TWILIO_AUTH_TOKEN
 #   TWILIO_WHATSAPP_FROM   (example: whatsapp:+14155238886)
 #
-# Optional ordinary-SMS provisioning:
-#   TWILIO_SMS_FROM        (example: +14155550123). When set, also creates the
-#                          DISTINCT plain-SMS integration and makes it the primary
-#                          integration on Novu's "sms" channel. Unset = untouched,
-#                          which is the pre-existing behaviour.
-#
 # Optional env vars:
 #   NOVU_BASE_URL          (default: http://localhost:1336)
 #   NOVU_ENV_FILE          (default: <script-dir>/.env.novu)
@@ -32,8 +26,6 @@ set -euo pipefail
 #   NOVU_WORKFLOW_NAME     (default: Complaints WhatsApp Workflow)
 #   NOVU_INTEGRATION_NAME  (default: twilio-whatsapp)
 #   NOVU_INTEGRATION_ID    (default: twilio-whatsapp)
-#   NOVU_SMS_INTEGRATION_NAME (default: Twilio SMS)
-#   NOVU_SMS_INTEGRATION_ID   (default: twilio-sms — only used when TWILIO_SMS_FROM is set)
 #   NOVU_SMS_BODY          (default: Complaint {{payload.complaintNo}} status is {{payload.status}})
 #   NOVU_EVENT_WORKFLOWS   (default: none. Legacy event-name workflows from the pre-
 #                          fixed-workflow convention. Nothing triggers them: the bridge
@@ -87,9 +79,6 @@ NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp}"
 NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-Complaints WhatsApp Workflow}"
 NOVU_INTEGRATION_NAME="${NOVU_INTEGRATION_NAME:-twilio-whatsapp}"
 NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
-NOVU_SMS_INTEGRATION_NAME="${NOVU_SMS_INTEGRATION_NAME:-Twilio SMS}"
-NOVU_SMS_INTEGRATION_ID="${NOVU_SMS_INTEGRATION_ID:-twilio-sms}"
-TWILIO_SMS_FROM="${TWILIO_SMS_FROM:-}"
 if [[ -z "${NOVU_SMS_BODY:-}" ]]; then
   NOVU_SMS_BODY='Complaint {{payload.complaintNo}} status is {{payload.status}}'
 fi
@@ -285,41 +274,6 @@ ensure_integration() {
 ensure_integration "$NOVU_INTEGRATION_ID" "$NOVU_INTEGRATION_NAME" "$TWILIO_WHATSAPP_FROM"
 INTEGRATION_ID="$ENSURED_INTEGRATION_ID"
 
-# ---- Ordinary SMS provider (opt-in via TWILIO_SMS_FROM) --------------------
-# WhatsApp and plain SMS are BOTH "sms"-channel integrations in Novu, and Novu
-# delivers through the channel's PRIMARY integration unless the trigger names one
-# explicitly. novu-bridge names the WhatsApp one explicitly (see
-# NovuClient.applyWhatsappIntegrationOverride), so the primary slot is where the
-# ordinary-SMS integration belongs.
-SMS_INTEGRATION_ID=""
-if [[ -n "$TWILIO_SMS_FROM" ]]; then
-  echo "==> Checking/creating Twilio SMS integration: ${NOVU_SMS_INTEGRATION_ID}"
-  ensure_integration "$NOVU_SMS_INTEGRATION_ID" "$NOVU_SMS_INTEGRATION_NAME" "$TWILIO_SMS_FROM"
-  SMS_INTEGRATION_ID="$ENSURED_INTEGRATION_ID"
-
-  # Re-read so the primary flag reflects anything just created.
-  INTEGRATIONS_JSON="$(api_get "/v1/integrations")"
-  SMS_IS_PRIMARY="$(echo "$INTEGRATIONS_JSON" | jq -r --arg id "$SMS_INTEGRATION_ID" '
-    [ (.. | arrays | .[]? | select(type=="object"))
-      | select((._id // .id // "") == $id)
-      | (.primary // false) ] | first // false
-  ')"
-
-  if [[ "$SMS_IS_PRIMARY" == "true" ]]; then
-    echo "    Already primary on the sms channel; leaving as-is."
-  else
-    echo "    Promoting ${NOVU_SMS_INTEGRATION_ID} to primary on the sms channel"
-    api_post "/v1/integrations/${SMS_INTEGRATION_ID}/set-primary" '{}' >/dev/null
-  fi
-
-  # With two sms-channel integrations present, an unset override sends WhatsApp
-  # through the plain-SMS integration and Twilio rejects it for a from/to channel
-  # mismatch.
-  echo "    NOTE: novu-bridge must run with"
-  echo "          NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP=${NOVU_INTEGRATION_ID}"
-  echo "          now that a second sms-channel integration exists."
-fi
-
 # Idempotent create of a Novu v2 workflow: skip when the workflowId already
 # exists in WORKFLOWS_JSON, otherwise POST /v2/workflows with the given steps.
 # Args: <workflowId> <workflowName> <steps-json-array>
@@ -506,9 +460,6 @@ echo
 echo "Bootstrap complete."
 echo "Environment: $NOVU_ENV_NAME ($ENV_ID)"
 echo "Integration: $NOVU_INTEGRATION_ID ($INTEGRATION_ID)"
-if [[ -n "$SMS_INTEGRATION_ID" ]]; then
-  echo "SMS Integration: $NOVU_SMS_INTEGRATION_ID ($SMS_INTEGRATION_ID, primary)"
-fi
 echo "Workflow: $NOVU_WORKFLOW_ID"
 echo "Bridge Channel Workflows: $NOVU_SMS_WORKFLOW_ID, $NOVU_EMAIL_WORKFLOW_ID"
 echo "Event Workflows: ${NOVU_EVENT_WORKFLOWS:-(none)}"

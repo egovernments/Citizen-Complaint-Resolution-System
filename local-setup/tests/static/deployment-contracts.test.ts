@@ -140,7 +140,6 @@ describe('Novu workflow creation deployment contract', () => {
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
   const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
-  const playbook = read('local-setup/ansible/playbook-deploy.yml');
   const dotenvLoader = path.join(
     REPO_ROOT,
     'backend/novu-bridge/config/load-dotenv.sh'
@@ -258,28 +257,16 @@ describe('Novu workflow creation deployment contract', () => {
     expect(countCreated('A.B,C.D')).toBe('2');
   });
 
-  test('ordinary-SMS provisioning stays opt-in and is wired end to end', () => {
-    // Unset TWILIO_SMS_FROM must leave a deployment exactly as it was before:
-    // WhatsApp integration only, no primary flipped underneath anyone.
-    expect(novuBootstrap).toContain('TWILIO_SMS_FROM="${TWILIO_SMS_FROM:-}"');
-    expect(novuBootstrap).toContain('if [[ -n "$TWILIO_SMS_FROM" ]]; then');
-    expect(novuBootstrap).toContain(
-      'api_post "/v1/integrations/${SMS_INTEGRATION_ID}/set-primary"'
-    );
-    expect(playbook).toContain(
-      'TWILIO_SMS_FROM=\'{{ twilio_sms_from | default("") }}\' \\'
-    );
-  });
-
-  test('a second sms-channel integration turns the WhatsApp override on by default', () => {
-    // Both Twilio WhatsApp and plain SMS are "sms"-channel integrations in Novu,
-    // and Novu delivers through the channel's PRIMARY unless the trigger names
-    // one. Once twilio_sms_from makes twilio-sms primary, an unset override would
-    // route WhatsApp through the plain-SMS sender and Twilio would reject it.
+  // SMSCountry's legacy API is form-encoded with a plain-text reply, which no Novu
+  // provider can express, so that gateway is driven directly and needs no Novu
+  // integration. This pins the selector so the Novu-routed path is not restored.
+  test('the SMSCountry gateway is selected by config and driven directly', () => {
     expect(composeEnv).toContain(
-      "NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP={{ novu_bridge_integration_id_whatsapp | " +
-        "default('twilio-whatsapp' if ((twilio_sms_from | default('')) | length > 0 " +
-        "and (twilio_account_sid | default('')) | length > 0) else '') }}"
+      "NOVU_BRIDGE_SMS_PROVIDER={{ novu_bridge_sms_provider | default('') }}"
     );
+    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_USER=');
+    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_PASSWORD=');
+    // No generic-sms integration identifier: nothing routes SMSCountry through Novu.
+    expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 });

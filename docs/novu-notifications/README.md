@@ -7,18 +7,19 @@ root of the cloned `Citizen-Complaint-Resolution-System` repository.
 ## Prerequisites
 
 1. A deployment created by `./deploy.sh mycity`, or the same variables file before
-   its first run. Adding the variables below before the first deployment avoids a
-   second 60-minute run.
-2. A Twilio account. The Account SID and Auth Token are account-level and serve
-   both channels; only the sender differs.
-3. For SMS, an SMS-capable Twilio number.
-4. For WhatsApp, a WhatsApp-enabled sender on that same account — the Twilio
-   sandbox number for testing, or a sender registered with WhatsApp Business —
-   plus approved templates. Business-initiated WhatsApp messages will not deliver
-   without them.
+   its first run. Adding these variables before the first deploy avoids a second run.
+2. For WhatsApp, a Twilio account with a WhatsApp-enabled sender and approved
+   message templates. Without approved templates nothing is delivered.
+3. For SMS, an SMSCountry account on the legacy bulk API, its panel login, and a
+   registered sender id. For Indian destinations you also need DLT-registered
+   templates — see [Registering templates](#registering-templates-india-dlt).
+
+The two are independent. SMS through SMSCountry does not touch Novu or Twilio, so
+an SMS-only deployment needs no Twilio account and a WhatsApp-only one needs no
+SMSCountry account.
 
 Last tested with `egovio/pgr-services:master-0938bdf` and
-`egovio/novu-bridge:master-0469335`. Newer images should work.
+`egovio/novu-bridge:master-0469335`.
 
 ## Configure Notification Variables
 
@@ -36,12 +37,11 @@ deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
 | `novu_admin_password` | Novu admin password. Generate a unique, strong one. | |
 | `novu_bridge_workflow_id_whatsapp` | Novu workflow the bridge triggers for WhatsApp. Must match the workflow created during [Enable WhatsApp](#enable-whatsapp). | `"complaints-whatsapp"` |
-| `novu_bridge_integration_id_whatsapp` | Novu integration the bridge selects for WhatsApp. Without it, WhatsApp sends fall through to the primary plain-SMS integration. Defaulted on automatically when `twilio_sms_from` is set. | `"twilio-whatsapp"` |
+| `novu_bridge_integration_id_whatsapp` | Novu integration the bridge selects for WhatsApp. Leave blank unless a second integration exists on Novu's `sms` channel. | |
 | `novu_bridge_workflow_id_sms` | Novu workflow the bridge triggers for ordinary SMS. | `"complaints-sms"` |
 | `twilio_account_sid` | From the Twilio Console. | |
 | `twilio_auth_token` | From the Twilio Console. | |
 | `twilio_whatsapp_from` | Your Twilio WhatsApp sender, with the `whatsapp:` prefix. Defaults to the Twilio sandbox number if omitted. | `whatsapp:+14155238886` |
-| `twilio_sms_from` | Your ordinary-SMS sender, no prefix. Setting it makes the deployment create the `twilio-sms` integration and make it primary. Leave empty to add the SMS provider by hand instead. | `+14155550123` |
 | `novu_api_key` | Leave unset. Ansible mints a key and wires it into `/opt/digit/.env`. Set it only if the deployment has a pinned key. | |
 
 ## Start Deployment
@@ -189,73 +189,67 @@ provider delivered the message.
 
 ## Enable SMS
 
-If you set `twilio_sms_from`, the deployment already did this: it created the
-`twilio-sms` integration with the same Twilio credentials and made it the primary
-integration on Novu's `sms` channel. Skip to [Verify the SMS provider](#verify-the-sms-provider).
+SMS goes through SMSCountry's **legacy bulk API** — the one eGov accounts are
+provisioned on. It authenticates with your SMSCountry panel login rather than an
+API key, and `novu-bridge` posts to it directly, so this needs no Novu integration
+and no Novu workflow.
 
-The rest of this section is for deployments that left `twilio_sms_from` empty —
-a sender procured after the deploy, or a non-Twilio SMS gateway.
+If your SMSCountry panel shows an AuthKey/AuthToken pair you are on their newer
+REST v0.1 API, which is not supported.
 
-### Add the provider in Configurator
+Set these and re-run `./deploy.sh mycity`:
 
-Open **Configurator -> Notifications -> Providers** while logged in as an employee
-with an allowed provider-management role. Select **Add Provider** and enter:
+| Setting | What it is | Example |
+|---|---|---|
+| `novu_bridge_sms_provider` | Selects the SMS gateway. | `smscountry` |
+| `novu_bridge_sms_sender_id` | Your registered sender id. | `EGOVFS` |
+| `novu_bridge_smscountry_user` | SMSCountry panel username. | |
+| `novu_bridge_smscountry_password` | SMSCountry panel password. | |
 
-| Field | Value |
-|---|---|
-| Channel | `SMS` |
-| Provider ID | `twilio` |
-| Name | `Twilio SMS` |
-| Identifier | `twilio-sms` |
-| Account SID | Your Twilio Account SID |
-| Auth Token | Your Twilio Auth Token |
-| From | `+<Twilio SMS sender>` |
+Then trigger a complaint transition and check the **delivery report in the
+SMSCountry panel** — not the bridge log. The gateway returns a job id for messages
+it later drops, so `nb_dispatch_log` only tells you the message was queued. A
+delivered message is billed; a blocked one shows as rejected at zero cost.
 
-Configurator creates an active integration, but it cannot make it primary, edit it,
-delete it, or validate the Twilio credentials. Its **Verify** action confirms only
-that Novu reports the integration as active.
+### Registering templates (India, DLT)
 
-### Make it primary
+Skip this unless you send to Indian numbers. India's DLT regime requires every
+message to match a template registered against your sender id. The gateway accepts
+unregistered messages and the operator drops them, so **a successful send response
+does not mean delivered** — a rejected message still gets a job id. Judge only by
+the delivery report, where a blocked message shows as rejected and costs nothing.
 
-Configurator has no primary-selection action, so use Novu's administration API.
-The bootstrap does this for you when `twilio_sms_from` is set:
+Matching is on message content; no template id is sent. Punctuation and blank-line
+differences are tolerated, a reworded sentence is not.
 
-```bash
-SMS_INTEGRATION_ID="$(
-  curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
-    "$NOVU_BASE_URL/v1/integrations" \
-  | jq -er '.data[] | select(.identifier == "twilio-sms") | ._id'
-)"
+Register one template per row below, per language you send. Take the exact text
+from **Configurator -> Notifications -> Configure**, replacing each `{variable}`
+with DLT's `{#var#}` marker and leaving the rest character for character.
 
-curl -fsS -X POST \
-  -H "Authorization: ApiKey $NOVU_API_KEY" \
-  "$NOVU_BASE_URL/v1/integrations/$SMS_INTEGRATION_ID/set-primary" \
-  >/dev/null
-```
+| Audience | Transition | Variables |
+|---|---|---|
+| Citizen | complaint submitted | complaint type, id, date |
+| Citizen | assigned | complaint type, id, date, employee name, designation, department |
+| Citizen | re-assigned | complaint type, id, date, employee name, designation, department |
+| Citizen | rejected | complaint type, id, date, rejection reason |
+| Citizen | resolved | complaint type, id, date, employee name |
+| Citizen | re-opened | complaint type, id, date |
+| Employee | assigned to you | employee name, complaint type, id, designation, city |
+| Employee | feedback received | employee name, complaint type, id, rating |
 
-### Verify the SMS provider
+Two things that bite:
 
-```bash
-curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
-  "$NOVU_BASE_URL/v1/integrations" \
-| jq '[.data[] | select(.identifier == "twilio-sms") |
-       {identifier,providerId,channel,active,primary}]'
-
-curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
-  "$NOVU_BASE_URL/v2/workflows?limit=100&page=0" \
-| jq '[.data.workflows[] | select(.workflowId == "complaints-sms") |
-       .workflowId]'
-```
-
-Confirm that `twilio-sms` is `active` and `primary`, and that `complaints-sms`
-exists.
+- The rejection reason is free text an employee types, and DLT caps a variable at
+  about 30 characters. Reword that template to drop the variable if your provider
+  enforces the limit.
+- Hindi and other non-Latin templates register separately from the English ones.
 
 ## Clean Up
 
 Remove the setup values from the current shell:
 
 ```bash
-unset NOVU_API_KEY NOVU_BASE_URL SMS_INTEGRATION_ID
+unset NOVU_API_KEY NOVU_BASE_URL
 unset NOVU_ENV_FILE NOVU_INTEGRATION_NAME NOVU_INTEGRATION_ID
 unset NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME
 ```
