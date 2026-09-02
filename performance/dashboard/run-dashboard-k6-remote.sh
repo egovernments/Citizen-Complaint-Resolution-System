@@ -113,6 +113,10 @@ while true; do
   sleep 5
 done
 k6_exit="${state##* }"
+run_complete=no
+case "${k6_exit}" in
+  0|99) run_complete=yes ;;
+esac
 
 ssh_retry "${LOAD_SSH}" "sudo -n docker logs '${CONTAINER_NAME}'" > "${RESULTS_DIR}/console.log" 2>&1 || true
 for artifact in metrics.csv k6-output.json summary.json; do
@@ -135,6 +139,8 @@ trap - EXIT INT TERM
   printf 'HARNESS_SHA=%q\n' "$(git -C "${REPO_DIR}" rev-parse HEAD)"
   printf 'LOAD_GENERATOR_SSH=%q\n' "${LOAD_SSH}"
   printf 'K6_IMAGE=%q\n' "${K6_IMAGE}"
+  printf 'K6_EXIT_CODE=%q\n' "${k6_exit}"
+  printf 'RUN_COMPLETE=%q\n' "${run_complete}"
 } > "${RESULTS_DIR}/run-manifest.env"
 
 ssh_retry "${LOAD_SSH}" "sudo -n docker rm '${CONTAINER_NAME}' >/dev/null && rm -rf -- '${REMOTE_DIR}'" || \

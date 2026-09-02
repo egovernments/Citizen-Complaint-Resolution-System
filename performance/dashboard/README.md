@@ -217,6 +217,10 @@ runner refuses the next level after a PGR restart/OOM/unhealthy state or when Po
 diagnostic capture cannot delay datasource restoration; override that bound with the positive
 integer `BOMET_DIAGNOSTIC_LOG_LINES` when needed. Summarize completed cells with:
 
+The run manifest records the k6 exit code and whether the full stage completed. The matrix
+summarizer excludes a stage marked `RUN_COMPLETE=no`, while retaining its raw diagnostics for
+incident analysis. A completed threshold failure (k6 exit 99) remains a valid measured cell.
+
 Set `DASHBOARD_LOAD_SSH` to drive each k6 stage from a separate Linux Docker host. The stage
 container and the Bomet resource monitor run detached, so a control-laptop sleep or network
 change cannot interrupt traffic or telemetry. The next VU level is still gated by the local

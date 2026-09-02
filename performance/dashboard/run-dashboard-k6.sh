@@ -96,5 +96,14 @@ set -e
 stop_monitor
 trap - EXIT INT TERM
 
+run_complete=no
+case "${k6_exit}" in
+  0|99) run_complete=yes ;;
+esac
+{
+  printf 'K6_EXIT_CODE=%q\n' "${k6_exit}"
+  printf 'RUN_COMPLETE=%q\n' "${run_complete}"
+} >> "${RESULTS_DIR}/run-manifest.env"
+
 echo "Dashboard k6 results: ${RESULTS_DIR}"
 exit "${k6_exit}"

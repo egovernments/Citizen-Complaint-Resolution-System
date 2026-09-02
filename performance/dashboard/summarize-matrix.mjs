@@ -62,6 +62,7 @@ console.log(JSON.stringify(output, null, 2));
 function readRun(directory, name) {
   const match = name.match(/-bomet-snapshot-(3k|20k|50k|100k|500k)-full-(\d+)vu-k6$/);
   if (!match || !existsSync(resolve(directory, 'summary.json'))) return null;
+  if (readManifestValue(resolve(directory, 'run-manifest.env'), 'RUN_COMPLETE') === 'no') return null;
   const summary = JSON.parse(readFileSync(resolve(directory, 'summary.json'), 'utf8'));
   const metrics = summary.metrics || {};
   const raw = readK6Csv(resolve(directory, 'metrics.csv'));
@@ -110,6 +111,12 @@ function readRun(directory, name) {
     ...runtime,
     resultDirectory: directory,
   };
+}
+
+function readManifestValue(path, key) {
+  if (!existsSync(path)) return null;
+  const match = readFileSync(path, 'utf8').match(new RegExp(`^${key}=([^\\n]+)$`, 'm'));
+  return match?.[1] ?? null;
 }
 
 function readHoldSeconds(path) {

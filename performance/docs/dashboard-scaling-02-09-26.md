@@ -126,6 +126,31 @@ Spot sampling during the 500K run showed periodic `DataFileRead`,
 advisory-lock queue. This is consistent with database I/O/buffer contention.
 The service and host stayed available throughout the matrix.
 
+## 500K saturation extension
+
+A follow-up run (`issue1109-scale12-20260903-500k-high`) extended only the 500K
+fixture beyond 150 VUs. It located the throughput plateau without taking PGR
+down:
+
+| VUs | Offered loads/s | Realized loads/s | HTTP RPS | Dashboard p50 | p95 | p99 | Success/failures |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 150 | 15.0 | 15.00 | 46.125 | 8.213s | 10.837s | 16.037s | 100% / 0% |
+| 175 | 17.5 | 16.42 | 50.567 | 10.164s | 14.378s | 17.959s | 100% / 0% |
+| 200 | 20.0 | 16.09 | 49.775 | 12.468s | 17.562s | 22.376s | 100% / 0% |
+
+At 175 VUs the closed-loop generator falls 6.2% below the pacing target. At
+200 VUs it falls 19.5% below target and produces 1.6% less HTTP throughput than
+175 VUs despite 14.3% more concurrency. This is the observed saturation point:
+the service remains functionally successful, but extra concurrency adds queue
+time and reduces throughput. The 200-VU cell also fails the harness interactive
+latency threshold of dashboard p95 below 15 seconds.
+
+At 175/200 VUs, peak host load1 was 31.30/30.22, PostgreSQL reached all 18
+observed connections with up to 15/13 waiting, and lowest available memory was
+8,138/7,861 MiB. PGR remained healthy with zero restarts and no OOM. A 225-VU
+stage was stopped early once the plateau was established; its partial artifacts
+are retained but explicitly excluded from the matrix.
+
 ## Cleanup verification
 
 The 100K and 500K teardown passes removed exactly their seeded complaint counts
@@ -143,6 +168,8 @@ free, and PGR was healthy with zero restarts/OOM. Bomet had about 80 GiB free.
   not a recommended capacity target.
 - At 500K and 150 VUs the system remains functional, but 10.84-second p95 and
   16.04-second p99 are too slow for an interactive dashboard SLO.
+- The 500K throughput ceiling in this configuration is approximately 50 HTTP
+  RPS (16.1–16.4 dashboard loads/s); 200 VUs adds latency without capacity.
 
 Each cell is one two-minute main window. Repeat the intended operating point at
 least three times, then run a 30-minute soak before publishing a production
