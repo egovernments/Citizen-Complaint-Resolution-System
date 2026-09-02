@@ -51,7 +51,8 @@ case "${TIER}" in
   20k) EXPECTED_ROWS=20000 ;;
   50k) EXPECTED_ROWS=50000 ;;
   100k) EXPECTED_ROWS=100000 ;;
-  *) die '--tier must be 3k, 20k, 50k, or 100k' ;;
+  500k) EXPECTED_ROWS=500000 ;;
+  *) die '--tier must be 3k, 20k, 50k, 100k, or 500k' ;;
 esac
 
 LOAD_VUS=()

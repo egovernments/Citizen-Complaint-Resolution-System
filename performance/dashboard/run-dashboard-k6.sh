@@ -22,7 +22,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 [[ "${RUN_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$ ]] || die 'invalid --run-id'
-case "${TIER}" in 3k|20k|50k|100k) ;; *) die 'invalid --tier' ;; esac
+case "${TIER}" in 3k|20k|50k|100k|500k) ;; *) die 'invalid --tier' ;; esac
 [[ "${VUS}" =~ ^[1-9][0-9]*$ ]] || die '--vus must be a positive integer'
 [[ "${EXPECTED_ROWS}" =~ ^[1-9][0-9]*$ ]] || die '--expected-rows must be a positive integer'
 for name in BASE_URL DIGIT_TENANT DIGIT_USERNAME DIGIT_PASSWORD; do
@@ -69,6 +69,7 @@ fi
 
 set +e
 k6 run --no-usage-report \
+  --summary-trend-stats 'avg,min,med,p(80),p(90),p(95),p(99),max' \
   --env BASE_URL="${BASE_URL}" \
   --env DIGIT_TENANT="${DIGIT_TENANT}" \
   --env DIGIT_USERNAME="${DIGIT_USERNAME}" \

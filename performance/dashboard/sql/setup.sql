@@ -26,8 +26,8 @@ BEGIN
   IF config.run_id !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$' THEN
     RAISE EXCEPTION 'run_id must match ^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$';
   END IF;
-  IF config.row_count NOT IN (3000, 20000, 50000, 100000) THEN
-    RAISE EXCEPTION 'row_count must be exactly 3000, 20000, 50000, or 100000';
+  IF config.row_count NOT IN (3000, 20000, 50000, 100000, 500000) THEN
+    RAISE EXCEPTION 'row_count must be exactly 3000, 20000, 50000, 100000, or 500000';
   END IF;
 
   FOREACH relation_name IN ARRAY ARRAY[

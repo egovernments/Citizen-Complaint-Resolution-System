@@ -86,7 +86,7 @@ performance/dashboard/run-playwright.sh \
   --target bomet-live --suite benchmark --fixture off --tier existing
 ```
 
-Use a disposable, restored Bomet clone for the exact 3K/20K/50K/100K curve:
+Use a disposable, restored Bomet clone for the exact 3K/20K/50K/100K/500K curve:
 
 ```bash
 performance/dashboard/run-playwright.sh \
@@ -194,6 +194,9 @@ run the dashboard API ladder against the same immutable fixture. The default mat
 levels plus his fixed-dataset 120-VU repeatability point. Each k6 VU performs the real
 `/packs` + `/catalog/_search` bootstrap and all pack KPI queries, paced to one dashboard visit
 per ten seconds. A one-VU Playwright run at each tier retains the user-visible page-ready metric.
+Both paths retain their raw samples. Generated summaries report
+`p50`/`p80`/`p90`/`p95`/`p99`/`max`; the API matrix also separates main-window HTTP RPS,
+dashboard visits per second, and KPI-query rate from warm-up traffic.
 
 ```bash
 performance/dashboard/run-bomet-dashboard-matrix.sh \
@@ -245,9 +248,9 @@ Optional controls:
   MVs.
 - `--anchor-time ISO-8601`: fixes all dates relative to one recorded instant.
 - `--allow-existing-corpus`: escape hatch for a separately labelled diagnostic;
-  never use it for the primary 3K/50K/100K curve.
+  never use it for the primary exact-tier curve.
 
-The allowed tiers are exactly `3k`, `20k`, `50k`, and `100k`.
+The allowed tiers are exactly `3k`, `20k`, `50k`, `100k`, and `500k`.
 
 ## Deterministic distributions
 

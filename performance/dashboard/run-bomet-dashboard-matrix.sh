@@ -25,7 +25,7 @@ done
 
 IFS=',' read -r -a TIER_LIST <<< "${TIERS}"
 for tier in "${TIER_LIST[@]}"; do
-  case "${tier}" in 3k|20k|50k|100k) ;; *) die "invalid tier: ${tier}" ;; esac
+  case "${tier}" in 3k|20k|50k|100k|500k) ;; *) die "invalid tier: ${tier}" ;; esac
 done
 
 for tier in "${TIER_LIST[@]}"; do

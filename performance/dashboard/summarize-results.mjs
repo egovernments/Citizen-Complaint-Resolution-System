@@ -38,15 +38,19 @@ function stats(path) {
   return {
     count: values.length,
     min: values.length ? Math.min(...values) : null,
+    p50: percentile(values, 50),
     median: percentile(values, 50),
+    p80: percentile(values, 80),
+    p90: percentile(values, 90),
     p95: percentile(values, 95),
+    p99: percentile(values, 99),
     max: values.length ? Math.max(...values) : null,
   };
 }
 
 const first = samples[0] || {};
 const summary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   runId: first.runId || null,
   target: first.target || null,

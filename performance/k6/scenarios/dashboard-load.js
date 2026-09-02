@@ -45,6 +45,7 @@ export const options = {
     'dashboard_load_duration{phase:main}': ['p(95)<15000'],
     'http_req_failed{phase:main}': ['rate<0.01'],
     'http_req_duration{phase:main}': ['p(95)>=0'],
+    'http_reqs{phase:main}': ['rate>=0'],
     'iterations{phase:main}': ['rate>=0'],
     'dashboard_queries{phase:main}': ['count>=0'],
   },

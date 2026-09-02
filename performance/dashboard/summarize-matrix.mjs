@@ -41,13 +41,16 @@ for (const vus of vusLevels) {
   }
 }
 
-const output = { schemaVersion: 1, generatedAt: new Date().toISOString(), prefix, rows, comparisons };
+const output = { schemaVersion: 2, generatedAt: new Date().toISOString(), prefix, rows, comparisons };
 const outputBase = resolve(root, `${prefix || 'dashboard'}-matrix`);
 writeFileSync(`${outputBase}.json`, `${JSON.stringify(output, null, 2)}\n`);
 
 const headers = [
-  'tier', 'vus', 'loads_per_second', 'dashboard_p50_ms', 'dashboard_p95_ms', 'dashboard_max_ms',
-  'success_rate', 'partial_rate', 'http_p95_ms', 'http_failure_rate', 'query_rate',
+  'tier', 'vus', 'loads_per_second', 'http_rps', 'http_requests',
+  'dashboard_p50_ms', 'dashboard_p80_ms', 'dashboard_p90_ms', 'dashboard_p95_ms',
+  'dashboard_p99_ms', 'dashboard_max_ms', 'success_rate', 'partial_rate',
+  'http_p50_ms', 'http_p80_ms', 'http_p90_ms', 'http_p95_ms', 'http_p99_ms',
+  'http_max_ms', 'http_failure_rate', 'query_rate',
   'host_max_load1', 'host_min_available_mib', 'db_max_connections', 'db_max_active',
   'db_max_waiting', 'pgr_max_cpu_percent', 'pgr_max_memory_percent', 'pgr_restarts', 'pgr_oom',
 ];
@@ -57,21 +60,46 @@ writeFileSync(`${outputBase}.csv`, `${csv.join('\n')}\n`);
 console.log(JSON.stringify(output, null, 2));
 
 function readRun(directory, name) {
-  const match = name.match(/-bomet-snapshot-(3k|20k|50k|100k)-full-(\d+)vu-k6$/);
+  const match = name.match(/-bomet-snapshot-(3k|20k|50k|100k|500k)-full-(\d+)vu-k6$/);
   if (!match || !existsSync(resolve(directory, 'summary.json'))) return null;
   const summary = JSON.parse(readFileSync(resolve(directory, 'summary.json'), 'utf8'));
   const metrics = summary.metrics || {};
+  const raw = readK6Csv(resolve(directory, 'metrics.csv'));
+  const dashboard = trendStats(raw, 'dashboard_load_duration');
+  const http = trendStats(raw, 'http_req_duration');
+  const loadsPerSecond = metric(metrics, 'iterations{phase:main}', 'rate');
+  const iterationCount = metric(metrics, 'iterations{phase:main}', 'count');
+  const measuredSeconds = Number.isFinite(loadsPerSecond) && loadsPerSecond > 0 && Number.isFinite(iterationCount)
+    ? iterationCount / loadsPerSecond
+    : null;
+  const httpRequests = counter(raw, 'http_reqs');
+  const httpRps = firstFinite(
+    metric(metrics, 'http_reqs{phase:main}', 'rate'),
+    Number.isFinite(httpRequests) && Number.isFinite(measuredSeconds) && measuredSeconds > 0
+      ? httpRequests / measuredSeconds
+      : null,
+  );
   const runtime = readRuntime(resolve(directory, 'runtime.ndjson'));
   return {
     tier: match[1],
     vus: Number(match[2]),
-    loadsPerSecond: metric(metrics, 'iterations{phase:main}', 'rate'),
-    dashboardP50Ms: metric(metrics, 'dashboard_load_duration{phase:main}', 'med'),
-    dashboardP95Ms: metric(metrics, 'dashboard_load_duration{phase:main}', 'p(95)'),
-    dashboardMaxMs: metric(metrics, 'dashboard_load_duration{phase:main}', 'max'),
+    loadsPerSecond,
+    httpRps,
+    httpRequests,
+    dashboardP50Ms: firstFinite(dashboard.p50, metric(metrics, 'dashboard_load_duration{phase:main}', 'med')),
+    dashboardP80Ms: firstFinite(dashboard.p80, metric(metrics, 'dashboard_load_duration{phase:main}', 'p(80)')),
+    dashboardP90Ms: firstFinite(dashboard.p90, metric(metrics, 'dashboard_load_duration{phase:main}', 'p(90)')),
+    dashboardP95Ms: firstFinite(dashboard.p95, metric(metrics, 'dashboard_load_duration{phase:main}', 'p(95)')),
+    dashboardP99Ms: firstFinite(dashboard.p99, metric(metrics, 'dashboard_load_duration{phase:main}', 'p(99)')),
+    dashboardMaxMs: firstFinite(dashboard.max, metric(metrics, 'dashboard_load_duration{phase:main}', 'max')),
     successRate: metric(metrics, 'dashboard_success{phase:main}', 'value'),
     partialRate: metric(metrics, 'dashboard_partial{phase:main}', 'value'),
-    httpP95Ms: metric(metrics, 'http_req_duration{phase:main}', 'p(95)'),
+    httpP50Ms: firstFinite(http.p50, metric(metrics, 'http_req_duration{phase:main}', 'med')),
+    httpP80Ms: firstFinite(http.p80, metric(metrics, 'http_req_duration{phase:main}', 'p(80)')),
+    httpP90Ms: firstFinite(http.p90, metric(metrics, 'http_req_duration{phase:main}', 'p(90)')),
+    httpP95Ms: firstFinite(http.p95, metric(metrics, 'http_req_duration{phase:main}', 'p(95)')),
+    httpP99Ms: firstFinite(http.p99, metric(metrics, 'http_req_duration{phase:main}', 'p(99)')),
+    httpMaxMs: firstFinite(http.max, metric(metrics, 'http_req_duration{phase:main}', 'max')),
     httpFailureRate: metric(metrics, 'http_req_failed{phase:main}', 'value'),
     queryRate: metric(metrics, 'dashboard_queries{phase:main}', 'rate'),
     ...runtime,
@@ -108,11 +136,66 @@ function metric(metrics, name, field) {
   const value = metrics[name]?.[field];
   return Number.isFinite(value) ? value : null;
 }
+function readK6Csv(path) {
+  if (!existsSync(path)) return [];
+  const lines = readFileSync(path, 'utf8').split('\n');
+  const headers = parseCsvLine(lines.shift() || '');
+  const indexes = Object.fromEntries(headers.map((name, index) => [name, index]));
+  const wanted = new Set(['dashboard_load_duration', 'http_req_duration', 'http_reqs']);
+  const samples = [];
+  for (const line of lines) {
+    if (!line) continue;
+    const firstComma = line.indexOf(',');
+    if (firstComma < 0 || !wanted.has(line.slice(0, firstComma))) continue;
+    const fields = parseCsvLine(line);
+    if (fields[indexes.scenario] !== 'main') continue;
+    const value = Number(fields[indexes.metric_value]);
+    if (!Number.isFinite(value)) continue;
+    samples.push({ name: fields[indexes.metric_name], value });
+  }
+  return samples;
+}
+function parseCsvLine(line) {
+  const fields = [];
+  let field = '';
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === ',' && !quoted) {
+      fields.push(field); field = '';
+    } else field += character;
+  }
+  fields.push(field);
+  return fields;
+}
+function trendStats(samples, name) {
+  const values = samples.filter((sample) => sample.name === name).map((sample) => sample.value).sort((a, b) => a - b);
+  return {
+    p50: percentile(values, 50), p80: percentile(values, 80), p90: percentile(values, 90),
+    p95: percentile(values, 95), p99: percentile(values, 99),
+    max: values.length ? values[values.length - 1] : null,
+  };
+}
+function percentile(values, requested) {
+  if (!values.length) return null;
+  const position = (values.length - 1) * (requested / 100);
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  return values[lower] + (values[upper] - values[lower]) * (position - lower);
+}
+function counter(samples, name) {
+  const values = samples.filter((sample) => sample.name === name).map((sample) => sample.value);
+  return values.length ? values.reduce((total, value) => total + value, 0) : null;
+}
+function firstFinite(...values) { return values.find(Number.isFinite) ?? null; }
 function percent(value) { const number = Number(String(value || '').replace('%', '')); return Number.isFinite(number) ? number : null; }
 function maximum(values) { const valid = values.filter(Number.isFinite); return valid.length ? Math.max(...valid) : null; }
 function minimum(values) { const valid = values.filter(Number.isFinite); return valid.length ? Math.min(...valid) : null; }
 function ratio(value, baseline) { return Number.isFinite(value) && Number.isFinite(baseline) && baseline !== 0 ? value / baseline : null; }
-function tierRows(tier) { return ({ '3k': 3000, '20k': 20000, '50k': 50000, '100k': 100000 })[tier] || Infinity; }
+function tierRows(tier) { return ({ '3k': 3000, '20k': 20000, '50k': 50000, '100k': 100000, '500k': 500000 })[tier] || Infinity; }
 function camel(value) { return value.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()); }
 function csvValue(value) {
   if (value == null) return '';

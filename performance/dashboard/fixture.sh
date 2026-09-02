@@ -98,7 +98,8 @@ case "${TIER_NORMALIZED}" in
   20k|20000) ROW_COUNT=20000; TIER=20k ;;
   50k|50000) ROW_COUNT=50000; TIER=50k ;;
   100k|100000) ROW_COUNT=100000; TIER=100k ;;
-  *) die '--tier must be 3k, 20k, 50k, or 100k' ;;
+  500k|500000) ROW_COUNT=500000; TIER=500k ;;
+  *) die '--tier must be 3k, 20k, 50k, 100k, or 500k' ;;
 esac
 
 case "${REFRESH_MODE}" in
