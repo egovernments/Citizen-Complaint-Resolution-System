@@ -6311,3 +6311,79 @@ header.digit-header .digit-dropdown-master {
   max-width: 160px !important;
   object-fit: contain !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Error / maintenance / not-found screen layout.
+
+   The upstream digit-ui-css rules are unusable inside our shells:
+     width: 100vw   — the citizen and employee shells render this INSIDE a
+                      ~260px sidebar, so centring against the whole VIEWPORT
+                      pushed the content visibly right of its own column.
+     height: 100vh  — full-height centring put the message so far down that a
+                      phone showed an empty grey screen until the user scrolled.
+     width: 400px   — fixed, so it overflowed a 360px phone.
+     button 153px   — fixed, so a longer label ("Voltar ao início") clipped.
+
+   Overridden here rather than in packages/css/src/index.scss: that SCSS is NOT
+   what ships. scripts/vendor-digit-ui-css.js fetches the PUBLISHED
+   @egovernments/digit-ui-css from unpkg, so editing the local source has no
+   effect on the served page. overrides.css is hand-maintained and loaded after
+   the vendored files, so it is the only place a fix actually applies.
+--------------------------------------------------------------------------- */
+.error-boundary {
+  width: 100%;
+  padding: 32px 16px;
+
+  /* The shell renders this as a flex ITEM of .main.center-container
+     (align-items:flex-start), so with the default flex-grow:0 the block took
+     only its own height. Grow to fill the row so the horizontal centring works.
+
+     Height is deliberately modest rather than 60vh+: growing to the full
+     viewport pushed the content to ~370px down AND overflowed the page by
+     ~98px, so a short message got a scrollbar and sat below the fold. A smaller
+     min-height keeps it comfortably in the upper-middle with no scroll. */
+  /* Deliberately NOT flex:1 / align-self:stretch. Growing to fill the row made
+     the block 1080px tall inside a 986px-min parent, which cascaded up and gave
+     the page a ~98px scrollbar for a short message. Sizing to content and
+     offsetting from the top keeps it high, centred, and scroll-free. */
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-height: 0;
+  height: auto;
+  margin-top: 10vh;
+}
+
+.error-boundary .error-container {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  gap: 16px;
+}
+
+.error-boundary .error-container img {
+  max-width: 96px;
+  height: auto;
+}
+
+/* pt_MZ runs 20-35% longer than English; without wrapping a long heading
+   clipped at both edges instead of breaking onto a second line. */
+.error-boundary .error-container h1 {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.error-boundary .error-container button {
+  width: auto;
+  min-width: 153px;
+  max-width: 100%;
+  border-radius: 4px;
+
+  /* Two !important rules earlier in this same file match this button —
+     `button:not([class])...{margin-right:24px!important}` and
+     `.digit-card-component > button...{align-self:flex-end!important}` — which
+     pushed it ~97px right of the image and heading (both correctly centred).
+     !important beats specificity, so these must be !important to win. */
+  align-self: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
