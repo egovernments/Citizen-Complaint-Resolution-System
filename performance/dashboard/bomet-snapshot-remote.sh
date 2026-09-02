@@ -222,6 +222,12 @@ activate_snapshot() {
   note 'switching only pgr-services to the guarded disposable clone'
   compose_command -f "${STATE_DIR}/pgr-override.yml" up -d --no-deps --force-recreate pgr-services >&2
   wait_for_pgr "${CLONE_DB}"
+  # Docker Compose recreation changes the container IP. Kong's DNS cache can
+  # continue selecting the old/unready address briefly even after the direct
+  # container health check passes, yielding a transient public 502. Let that
+  # cache expire before the authenticated public readiness gate runs.
+  note 'waiting for the gateway upstream cache to converge'
+  sleep 30
   sudo -n touch "${STATE_DIR}/activated"
   jq -n --arg runId "${RUN_ID}" --arg cloneDatabase "${CLONE_DB}" --argjson fixtureRows "${clone_rows}" \
     '{phase:"activate",runId:$runId,cloneDatabase:$cloneDatabase,fixtureRows:$fixtureRows,pgrDatasource:"clone",externalPgrWritesBlocked:true,pgrHealth:"healthy"}'
@@ -259,6 +265,8 @@ restore_snapshot() {
     note 'restoring pgr-services to the original database configuration'
     compose_command up -d --no-deps --force-recreate pgr-services >&2
     wait_for_pgr egov
+    note 'waiting for the restored gateway upstream cache to converge'
+    sleep 30
   else
     note 'pgr-services is already on the original database'
   fi

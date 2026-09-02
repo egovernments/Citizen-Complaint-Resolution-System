@@ -82,6 +82,14 @@ fixture_active=false
 
 cleanup_snapshot() {
   local cleanup_exit=0
+  if [[ "${snapshot_started}" == true ]]; then
+    ssh "${SSH_TARGET}" 'bash -s -- diagnose '"${RUN_ID}"' '"${CLONE_DB}" \
+      < "${SCRIPT_DIR}/bomet-snapshot-remote.sh" > "${LIFECYCLE_DIR}/pre-cleanup-diagnostics.json" || true
+    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m digit-pgr-services-1 \
+      > "${LIFECYCLE_DIR}/pre-cleanup-pgr.log" 2>&1 || true
+    ssh "${SSH_TARGET}" sudo -n docker logs --since 15m kong-gateway \
+      > "${LIFECYCLE_DIR}/pre-cleanup-kong.log" 2>&1 || true
+  fi
   if [[ "${fixture_active}" == true ]]; then
     fixture_active=false
     if ! "${SCRIPT_DIR}/fixture.sh" teardown --run-id "${RUN_ID}" --tier "${TIER}" --tenant ke; then
