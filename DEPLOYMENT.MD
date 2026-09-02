@@ -1,5 +1,10 @@
 # Deployment Process
 
+**📹 Prefer to follow along?** A walkthrough of the single-machine setup (example
+onboarding sheets are in [`docs/onboarding-example/`](docs/onboarding-example/)):
+
+<video src="https://github.com/egovernments/Citizen-Complaint-Resolution-System/raw/fix/master-k8s-deploy-convergence/docs/onboarding-example/ansible-setup-walkthrough.mp4" controls width="720"></video>
+
 ## Hardware Requirements
 
 1. CPU - 8vCPU+
@@ -77,3 +82,193 @@ Use domain name instead of localhost, if used one during configuration.
 ## Enabling Notifications
 
 See [this](docs/novu-notifications/README.md) to enable notifications.
+
+---
+
+# Kubernetes Deployment (AWS)
+
+The steps above run everything on a single machine — great for a demo or a small
+city. For a bigger, always-on deployment that can grow with demand, DIGIT can run
+on Amazon's managed Kubernetes (EKS). This path sets up the cloud infrastructure
+for you and then installs DIGIT onto it.
+
+It's more involved than the single-machine path, so it assumes you're comfortable
+with an AWS account and a terminal.
+
+## What you'll need
+
+- An AWS account, and permission to create things in it. There's a ready-made
+  permissions file at
+  `devops/infra-as-code/terraform/sample-aws/deploy-iam-policy.json` — hand it to
+  your AWS admin to attach to your user once, and it covers everything from
+  creating the setup to tearing it down.
+- A few command-line tools installed: `terraform`, the `aws` CLI, `kubectl`,
+  `helm`, and `helmfile`.
+
+> **One thing to watch: tool versions.** Use **Helm 3** and **Helmfile 0.x**. The
+> newest Helm (4) and Helmfile (1.x) changed things these charts depend on and
+> will fail. If you hit a strange error right at the start, this is almost always
+> why.
+
+## Step 1 — Create the cloud infrastructure
+
+This sets up the whole environment: the network, the Kubernetes cluster, a
+Postgres database, and the file storage. It's two quick parts.
+
+**First, give Terraform a place to keep its notes.** Terraform records what it
+builds (its "state") in an S3 bucket, with a small table alongside it so two
+people can't run it at the same time. A helper creates both — you just pick a name:
+
+```bash
+cd devops/infra-as-code/terraform/sample-aws/remote-state
+terraform init
+terraform apply -var="bucket_name=mycity-tfstate-4821"   # must be globally unique
+cd ..
+```
+
+Then open `main.tf` and, near the top, replace the two
+`<terraform_state_bucket_name>` markers with that same name **in quotes**:
+
+```hcl
+    bucket         = "mycity-tfstate-4821"
+    dynamodb_table = "mycity-tfstate-4821"
+```
+
+> **About the `<...>` markers.** Throughout these files, anything in angle
+> brackets is a "fill this in" placeholder. Always replace it with a real value
+> **in quotes** — leaving the brackets, or dropping the quotes, is the most
+> common cause of a confusing error at this first step.
+
+**Now create everything.** Copy the example settings file and fill it in:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Open `terraform.tfvars` and set:
+
+| Setting | What it is | Example |
+|---|---|---|
+| `cluster_name` | A name for your Kubernetes cluster. | `"mycity"` |
+| `db_name` | A name for the database (no hyphens). | `"ccrsdb"` |
+| `db_username` | The database's admin username. | `"ccrs"` |
+| `db_password` | A strong database password. **Avoid `/`, `@`, `"`, and spaces** — RDS rejects those. This file stays out of git, so it's safe to put here. | |
+
+Everything else has sensible defaults (region, Kubernetes version, database size,
+number of servers) in `variables.tf` — leave them unless you have a reason to
+change them. Then:
+
+```bash
+terraform init
+terraform plan      # shows what it will create
+terraform apply     # creates it (takes ~20-30 minutes)
+```
+
+When it finishes, connect your terminal to the new cluster:
+
+```bash
+aws eks update-kubeconfig --name <your-cluster-name> --region <your-region>
+```
+
+> **If `terraform init` / `apply` errors:**
+> - `S3 bucket "..." does not exist` — you skipped the state-backend step. Create
+>   it first (`cd remote-state && terraform apply -var="bucket_name=..."`), using
+>   the **same name** you put in `main.tf`, then re-run `terraform init`.
+> - `MasterUserPassword is not a valid password` — your `db_password` has a
+>   character RDS rejects (`/`, `@`, `"`, or a space). Pick one without those.
+> - `dynamodb_table is deprecated` — harmless warning on newer Terraform; ignore it.
+
+## Step 2 — Fill in your deployment details
+
+Two files under `devops/deploy-as-code/charts/environments/` hold your settings.
+
+In **`env.yaml`**, replace the placeholders:
+
+| Setting | What it is | Example |
+|---|---|---|
+| `domain` | The web address people will use to reach the apps. | `cms.mydomain.com` |
+| `db-host` | The address of the database you just created (Terraform prints it at the end). | `mycity-db.xxxx.rds.amazonaws.com` |
+| `fixed-bucketname` | The storage bucket for uploaded files (photos on complaints, etc.). | `mycity-filestore` |
+| `assets_s3_bucket` | The storage bucket that serves the app's front-end files. | `mycity-assets` |
+| `tenant_id` | Your tenant's short name. The bundled sample data uses `pg`; keep that unless you know you need your own. | `pg` |
+
+In **`env-secrets.yaml`**, set your database username and password.
+
+> **A note on secrets.** This file lives in the public code, so it must **not**
+> contain real passwords for anything sensitive. For the notification service
+> (novu), you create its keys yourself and keep them in the cluster only. Create
+> novu's namespace first (the deploy reuses it), then the secret, before deploying:
+>
+> ```bash
+> kubectl create namespace novu
+> kubectl -n novu create secret generic novu-secrets \
+>   --from-literal=jwt-secret=$(openssl rand -hex 24) \
+>   --from-literal=store-encryption-key=$(openssl rand -hex 16) \
+>   --from-literal=novu-secret-key=$(openssl rand -hex 24)
+> ```
+
+## Step 3 — Install DIGIT
+
+DIGIT starts with a ready-made set of sample data (roles, labels, a default
+tenant). To load it, open
+`charts/backbone-services/backboneservices-helmfile.yaml` and set the `db-seed`
+entry to `installed: true`. Then install everything:
+
+```bash
+cd devops/deploy-as-code
+helmfile -f digit-helmfile.yaml -e env apply
+```
+
+The first run takes a while — the services set up their databases and start up
+one by one. Watch progress with `kubectl get pods -A`; you're waiting for
+everything to reach `Running`. The admin account is created for you in the
+background once the user service is ready.
+
+**Want the dashboards too?** Monitoring (Grafana) and the health page (Gatus) are
+off by default. To turn them on, un-comment the monitoring line in
+`digit-helmfile.yaml`, switch the `monitoring` toggles on in `env.yaml` (including
+`gatus`), create the `grafana-admin` secret in the **`monitoring`** namespace, and
+run the install command again:
+
+```bash
+kubectl create namespace monitoring
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password=<a-password>
+```
+
+## Step 4 — Add your city
+
+Open the **Configurator** at `https://<your-domain>/configurator/` and sign in
+with the admin user (`ADMIN` / `eGov@123` unless you changed it) and your tenant
+name. From there you upload your city and boundary sheets to get it running —
+exactly like the single-machine setup. See
+[`docs/onboarding-example/`](docs/onboarding-example/) for sample sheets
+(boundaries, masters, complaint hierarchy, employees) you can copy and adapt.
+
+> Setting up a whole new **country/state** (rather than a city under the sample
+> one) needs a few extra setup steps behind the scenes — ask the DIGIT team if
+> that's what you need.
+
+## Accessing Services
+
+| What | URL | Login Details |
+|---|---|---|
+| Employee app | `https://<your-domain>/digit-ui/` | Admin Username, Admin Password |
+| Citizen app | `https://<your-domain>/citizen` | Mobile Number with OTP |
+| Configurator | `https://<your-domain>/configurator/` | Admin Username, Admin Password, Tenant name |
+| Health dashboard | `https://<your-domain>/status/` | |
+| Dashboards (Grafana) | `https://<your-domain>/monitoring` | Username `admin`, password from the `grafana-admin` secret |
+
+## Taking it down
+
+When you want to remove everything, there's **one important step first**: delete
+the load balancers Kubernetes created, *before* tearing down the infrastructure.
+If you skip this, a leftover load balancer keeps the network alive and the
+teardown gets stuck.
+
+```bash
+kubectl delete svc -A --field-selector spec.type=LoadBalancer
+cd devops/infra-as-code/terraform/sample-aws
+terraform destroy
+```

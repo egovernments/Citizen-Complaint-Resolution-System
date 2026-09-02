@@ -1,5 +1,7 @@
 // Copy to environments.js and fill in values
-// k6/config/environments.js is gitignored
+// k6/config/environments.js is gitignored — never commit real credentials.
+// Pass secrets in at run time instead:
+//   k6 run --env TARGET=deployment --env DIGIT_PASSWORD=... scenarios/burst.js
 
 export const ENVS = {
   dev: {
@@ -8,6 +10,14 @@ export const ENVS = {
     stateTenant: 'statea',
     username: __ENV.DIGIT_USERNAME || 'ADMIN',
     password: __ENV.DIGIT_PASSWORD || 'eGov@123',
+    // Optional: override PGR complaint codes used in load tests.
+    // Omit to use all 33 default codes (requires full-dump.sql data).
+    // For minimal deployments carrying only default-data-handler bootstrap
+    // data, only the ComplaintHierarchy leaf codes exist:
+    // serviceCodes: [
+    //   'StreetLightNotWorking', 'NoStreetlight', 'GarbageNeedsTobeCleared',
+    //   'BurningOfGarbage', 'DamagedGarbageBin', 'NonSweepingOfRoad',
+    // ],
   },
   prod: {
     baseUrl: 'http://<PROD_IP>:18000',
@@ -16,6 +26,56 @@ export const ENVS = {
     username: __ENV.DIGIT_USERNAME || 'ADMIN',
     password: __ENV.DIGIT_PASSWORD || 'eGov@123',
   },
+
+  // A real deployment behind an ingress rather than the docker-compose
+  // gateway port. This is the shape used for the August 2026 runs.
+  //
+  // deployment: {
+  //   baseUrl: 'https://<HOST>',        // no :18000 behind an ingress
+  //   tenant: '<state>',
+  //   stateTenant: '<state>',
+  //   username: __ENV.DIGIT_USERNAME || '<EMPLOYEE_USERNAME>',
+  //   password: __ENV.DIGIT_PASSWORD,   // never a literal
+  //
+  //   // ROLES: the employee must hold a role for every workflow transition
+  //   // the lifecycle drives. On stock PGR, ASSIGN needs GRO or PGR_VIEWER
+  //   // and RESOLVE needs PGR_LME or PGR_VIEWER — PGR_VIEWER covers both.
+  //   // Filing additionally needs CSR.
+  //
+  //   // COMPLAINT CODES: PGR validates serviceCode against
+  //   // RAINMAKER-PGR.ComplaintHierarchy (matching `code`), NOT against
+  //   // ServiceDefs. The two masters can disagree — a deployment may
+  //   // advertise far more types in ServiceDefs than are actually
+  //   // fileable. Take these codes from ComplaintHierarchy, and restrict
+  //   // to departments that have active employees, or ASSIGN auto-routing
+  //   // has nobody to route to.
+  //   serviceCodes: ['<code>', ...],
+  //
+  //   // BOUNDARIES: real codes for the deployment. The stock 'JLC477'
+  //   // exists only in full-dump.sql seed data; PGR validates locality
+  //   // against the boundary service. Read the hierarchy definition first
+  //   // — the boundary type may be Ward, Locality or something else, and
+  //   // complaints may have to be filed against the CITY tenant while
+  //   // authentication happens at the STATE tenant. Rotating spreads
+  //   // writes across wards.
+  //   localities: ['<BOUNDARY_CODE>', ...],
+  //   city: '<City Name>',
+  //
+  //   // ACCESS CONTROL: newer PGR builds scope complaint search by the
+  //   // caller's HRMS departments and jurisdictions. If the employee's
+  //   // departments do not match the departments owning `serviceCodes`,
+  //   // and its jurisdictions do not cover `localities`, SEARCH returns
+  //   // zero rows with HTTP 200 — the lifecycle then fails on the search
+  //   // step while reporting no HTTP errors at all, and retry backoff
+  //   // silently inflates iteration time and corrupts throughput figures.
+  //   // Verify a plain search returns rows before trusting any run.
+  //
+  //   // Optional: file every complaint as one pre-existing citizen instead
+  //   // of fabricating 100 new users. Preferred on shared or live
+  //   // environments where junk user records are undesirable.
+  //   citizenPhone: '<10-digit>',
+  //   citizenName: '<name>',
+  // },
 };
 
 export function getEnv() {

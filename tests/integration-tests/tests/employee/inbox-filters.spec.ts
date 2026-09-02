@@ -190,6 +190,12 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
   test('status filter → only rows in the chosen workflow state @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     await openInbox(page);
+    // Widen to "All Complaints" BEFORE touching filters — switching tabs
+    // re-issues the search with the tab's own default query, silently dropping
+    // an already-applied status filter (observed: REJECTED applied on the MY
+    // tab, then the ALL switch refetched unfiltered/empty and the assertion
+    // read 0 rows). The sibling filter tests already widen first.
+    await showAllInboxRows(page);
 
     // Default view = OPEN states only; none should be REJECTED.
     const defaultRows = await readInboxRows(page);

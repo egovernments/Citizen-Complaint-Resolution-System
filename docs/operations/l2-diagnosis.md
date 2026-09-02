@@ -141,10 +141,12 @@ Then narrow:
 {compose_project="digit"} |= `PGR-2026-01-000123`
 ```
 
-> **Two false-positive traps.** Grafana logs your search text back into the log stream, so a
-> search for "OutOfMemoryError" matches Grafana's own line — ignore hits where
-> `compose_service` is `grafana` or `loki`. Elasticsearch also uses the phrase "out of
-> memory" in routine circuit-breaker messages.
+> **Two false-positive traps for these ad-hoc searches.** A broad manual search can match
+> Grafana or Loki logging the query text, so ignore those services in manually constructed
+> searches. The **DIGIT JVM Services** OOM panels already use a JVM-only stream allowlist and
+> do not have that echo. Elasticsearch also uses the generic phrase "out of memory" in
+> routine circuit-breaker messages; confirm the panel's specific JVM OOM signature before
+> calling it a crash.
 
 ---
 

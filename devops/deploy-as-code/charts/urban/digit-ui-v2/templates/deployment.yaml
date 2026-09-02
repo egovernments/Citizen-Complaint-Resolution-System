@@ -1,0 +1,61 @@
+{{- if .Values.distUrl }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: digit-ui-v2
+  namespace: {{ .Values.namespace | default "egov" }}
+  labels:
+    app: digit-ui-v2
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: digit-ui-v2
+  template:
+    metadata:
+      labels:
+        app: digit-ui-v2
+      annotations:
+        # Roll the pods when the dist changes (same URL, new artifact).
+        checksum/dist-url: {{ .Values.distUrl | sha256sum | trunc 16 }}
+    spec:
+      initContainers:
+        # Pull the pre-built, tenant-baked dist and lay it down under basePath.
+        - name: fetch-dist
+          image: {{ .Values.image.fetch }}
+          command:
+            - sh
+            - -c
+            - >-
+              curl -sfL "{{ .Values.distUrl }}" -o /tmp/dist.tgz
+              && mkdir -p /html{{ .Values.basePath }}
+              && tar xzf /tmp/dist.tgz -C /html{{ .Values.basePath }}
+              && test -f /html{{ .Values.basePath }}index.html
+          volumeMounts:
+            - name: html
+              mountPath: /html
+      containers:
+        - name: nginx
+          image: {{ .Values.image.nginx }}
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.basePath }}
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: html
+          emptyDir: {}
+        - name: conf
+          configMap:
+            name: digit-ui-v2
+{{- end }}

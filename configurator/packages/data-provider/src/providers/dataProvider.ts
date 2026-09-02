@@ -105,6 +105,65 @@ function normalizeRecord(raw: Record<string, unknown>, config: ResourceConfig): 
   return { ...raw, id: extractId(raw, config) } as RaRecord;
 }
 
+/**
+ * Collapse records that share a react-admin `id`, keeping the first occurrence.
+ *
+ * react-admin's contract is one record per id: its query cache, Datagrid row
+ * keys and every `<SelectItem value={id}>` built from a list all key on it. Two
+ * records with the same id therefore render as N visually identical rows/options
+ * that ALL resolve to the same record — and in a Radix `Select`, N items sharing
+ * a `value` all show as checked while `<SelectValue>` concatenates every one of
+ * their labels ("ADMINADMINADMIN…"). That is CCRS #1923.
+ *
+ * Duplicates are not hypothetical: the aggregating fetchers below concatenate
+ * results across the state tenant and its city tenants, and DIGIT does NOT
+ * enforce uniqueness of a `hierarchyType` or a boundary `code` across tenants.
+ * On bomet (`ke`) that yields 7 hierarchies called ADMIN, 3 called KE-ADMIN, and
+ * `CITY_001`/`WARD_001` defined under two different city tenants.
+ *
+ * Keep-first is deliberate: every aggregating fetcher lists the SESSION tenant's
+ * records before the sub-tenants', so the survivor is the definition the
+ * operator is actually working in.
+ *
+ * Blank ids are a different failure and get a different remedy. A record whose
+ * `idField` was missing normalizes to `id: ''`, and N such records are exactly
+ * as broken as N sharing a real id. Dropping all but the first would hide rows
+ * that are genuinely distinct — they collide only because id extraction failed,
+ * not because they are the same record. So each repeat is given its own
+ * synthetic id instead, which satisfies react-admin's one-record-per-id
+ * contract without losing anything. This mirrors what the custom-rows fetcher
+ * already does when two Novu integrations synthesize the same id.
+ */
+function dedupeById(records: RaRecord[]): RaRecord[] {
+  const seen = new Set<string>();
+  const out: RaRecord[] = [];
+  // Every id in the input, checked up front so a synthetic id can never collide
+  // with a real one that appears LATER in the list — which would otherwise make
+  // that real record look like a duplicate and drop it.
+  const taken = new Set(records.map((record) => String(record.id ?? '')));
+  let blanks = 0;
+  for (const record of records) {
+    const id = String(record.id ?? '');
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push(record);
+      continue;
+    }
+    // A repeated real id is a genuine cross-tenant duplicate: keep the first.
+    if (id !== '') continue;
+    // A repeated blank id is a distinct record that lost its id — keep it, under
+    // an id nothing else is using.
+    let synthetic: string;
+    do {
+      blanks += 1;
+      synthetic = `#blank-${blanks}`;
+    } while (taken.has(synthetic) || seen.has(synthetic));
+    seen.add(synthetic);
+    out.push({ ...record, id: synthetic } as RaRecord);
+  }
+  return out;
+}
+
 function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord {
   let data = mdms.data || {};
   // Legacy ThemeConfig records (v1 nested / v2 semantic shapes) don't carry the
@@ -980,7 +1039,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     return config;
   }
 
+  // Every list-shaped read funnels through here (getList's generic path,
+  // getMany, getManyReference), so this is the one place that can guarantee the
+  // "unique id per record" invariant react-admin depends on — see dedupeById.
   async function fetchAll(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+    return dedupeById(await fetchAllRaw(resource, filter));
+  }
+
+  async function fetchAllRaw(resource: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
     const config = resolveConfig(resource);
     switch (config.type) {
       case 'mdms': return mdmsGetList(client, config, tenantId, filter);
@@ -1133,7 +1199,14 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           const all = await mdmsSearchAll(client, tenant, config.schema!, { isActive: true });
           // Defensive fallback for any MDMS build that ignores the isActive criterion —
           // degrades to filtering client-side, never worse than the pre-push-down behavior.
-          const active = all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          // dedupeById mirrors what fetchAll does for the filtered path below, so
+          // both routes into an MDMS list obey the same one-record-per-id rule.
+          // A no-op for records carrying an MDMS uniqueIdentifier (always unique);
+          // it only bites on legacy rows that fall back to data[idField], which
+          // normalizeMdmsRecord already notes collapse onto one record anyway.
+          const active = dedupeById(
+            all.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config)),
+          );
           const sorted = clientSort(active, field, order);
           const data = clientPaginate(sorted, page, perPage);
           return { data, total: active.length };

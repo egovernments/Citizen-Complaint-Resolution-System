@@ -822,71 +822,73 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
       return;
     }
 
-    if (dobRaw === undefined || dobRaw === null || dobRaw === '') {
-      errors.push({
-        row: index + 2,
-        field: 'dob',
-        message: 'Date of birth is required (YYYY-MM-DD)',
-        code: 'REQUIRED_FIELD',
-      });
-      return;
-    }
+    // Date of birth is OPTIONAL (egovernments/CCRS#1949). A blank cell parses
+    // to `undefined` and the row is still imported — egov-hrms guards every DOB
+    // rule with a null check, and the Employee edit screen has always allowed
+    // clearing it. A cell that IS filled keeps every format and range check
+    // below, and a malformed one still skips the row.
+    let dob: string | undefined;
+    // A cell holding only whitespace is a blank cell, not a bad date.
+    const dobIsBlank =
+      dobRaw === undefined || dobRaw === null || (!(dobRaw instanceof Date) && String(dobRaw).trim() === '');
 
-    let dobYear: number;
-    let dobMonth: number;
-    let dobDay: number;
+    if (!dobIsBlank) {
+      let dobYear: number;
+      let dobMonth: number;
+      let dobDay: number;
 
-    if (dobRaw instanceof Date) {
-      dobYear = dobRaw.getUTCFullYear();
-      dobMonth = dobRaw.getUTCMonth() + 1;
-      dobDay = dobRaw.getUTCDate();
-    } else if (typeof dobRaw === 'number') {
-      // Excel epoch adjustment to JS epoch ms: (serial - 25569) * 86400 * 1000.
-      const jsDate = new Date((dobRaw - 25569) * 86400 * 1000);
-      if (Number.isNaN(jsDate.getTime())) {
+      if (dobRaw instanceof Date) {
+        dobYear = dobRaw.getUTCFullYear();
+        dobMonth = dobRaw.getUTCMonth() + 1;
+        dobDay = dobRaw.getUTCDate();
+      } else if (typeof dobRaw === 'number') {
+        // Excel epoch adjustment to JS epoch ms: (serial - 25569) * 86400 * 1000.
+        const jsDate = new Date((dobRaw - 25569) * 86400 * 1000);
+        if (Number.isNaN(jsDate.getTime())) {
+          errors.push({
+            row: index + 2,
+            field: 'dob',
+            value: String(dobRaw),
+            message: 'Date of birth is not a valid Excel date serial',
+            code: 'INVALID_FORMAT',
+          });
+          return;
+        }
+        dobYear = jsDate.getUTCFullYear();
+        dobMonth = jsDate.getUTCMonth() + 1;
+        dobDay = jsDate.getUTCDate();
+      } else {
+        const dobStr = String(dobRaw).trim();
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dobStr);
+        if (!match) {
+          errors.push({
+            row: index + 2,
+            field: 'dob',
+            value: dobStr,
+            message: 'Date of birth must be ISO format YYYY-MM-DD',
+            code: 'INVALID_FORMAT',
+          });
+          return;
+        }
+        dobYear = Number(match[1]);
+        dobMonth = Number(match[2]);
+        dobDay = Number(match[3]);
+      }
+
+      const maxYear = new Date().getFullYear() - 18;
+      if (dobYear < 1920 || dobYear > maxYear) {
         errors.push({
           row: index + 2,
           field: 'dob',
-          value: String(dobRaw),
-          message: 'Date of birth is not a valid Excel date serial',
+          value: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
+          message: `Date of birth year must be between 1920 and ${maxYear} (employee must be at least 18)`,
           code: 'INVALID_FORMAT',
         });
         return;
       }
-      dobYear = jsDate.getUTCFullYear();
-      dobMonth = jsDate.getUTCMonth() + 1;
-      dobDay = jsDate.getUTCDate();
-    } else {
-      const dobStr = String(dobRaw).trim();
-      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dobStr);
-      if (!match) {
-        errors.push({
-          row: index + 2,
-          field: 'dob',
-          value: dobStr,
-          message: 'Date of birth must be ISO format YYYY-MM-DD',
-          code: 'INVALID_FORMAT',
-        });
-        return;
-      }
-      dobYear = Number(match[1]);
-      dobMonth = Number(match[2]);
-      dobDay = Number(match[3]);
-    }
 
-    const maxYear = new Date().getFullYear() - 18;
-    if (dobYear < 1920 || dobYear > maxYear) {
-      errors.push({
-        row: index + 2,
-        field: 'dob',
-        value: `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`,
-        message: `Date of birth year must be between 1920 and ${maxYear} (employee must be at least 18)`,
-        code: 'INVALID_FORMAT',
-      });
-      return;
+      dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
     }
-
-    const dob = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
 
     if (!jurisdictions) {
       warnings.push({

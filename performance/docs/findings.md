@@ -58,8 +58,13 @@ CPU limits are applied to running containers via `docker update` (no restart nee
 
 | Machine | Specs | Role |
 |---------|-------|------|
-| Dev | 8 vCPU, 16 GB RAM (AWS EC2) | Constrained-resource testing |
+| Dev | 8 vCPU, 16 GB RAM (AWS EC2) | Constrained-resource testing (March 2026) |
 | Prod | 16 vCPU, 32 GB RAM (AWS EC2) | Full-scale testing, 1M record DB |
+| Bomet | 16 vCPU, 30 GB RAM (KVM guest) | Live deployment validation, Aug 2026 |
+
+**Minimum deployment spec.** These are the machines used for testing, not a sizing recommendation. A DIGIT Complaints Management deployment requires a minimum of **16 vCPU / 32 GiB** — the stack holds roughly 26.8 GB of memory at rest and does not fit in anything smaller. See [Capacity Planning](./recommendations-transition-plan#the-hardware-floor-16-vcpu-32-gib).
+
+The March 2026 stack was roughly 30 containers and fitted into 16 GB. The August 2026 stack is 57–59 containers holding 26.8 GB at rest, so the 8 vCPU / 16 GB machine above is a historical test rig and no longer a viable deployment target. Its figures are retained for the constrained-resource analysis, not as a sizing option.
 
 ## Executive Summary
 
@@ -68,7 +73,7 @@ CPU limits are applied to running containers via `docker update` (no restart nee
 | Peak throughput (empty DB) | 37 lifecycles/sec |
 | Throughput at 1M records | 6.3 lifecycles/sec |
 | Daily capacity at 1M | **544,320 transactions/day** |
-| VU ceiling (dev, 8 vCPU) | ~250 concurrent users |
+| VU ceiling (dev, 8 vCPU, March 2026 stack) | ~250 concurrent users |
 | VU ceiling (prod, 16 vCPU) | ~300 concurrent users |
 | Performance issues identified | **3** |
 | Throughput recovery after fixes | **9.4x** |
@@ -104,6 +109,28 @@ At low record counts, dev and prod perform nearly identically — the workload i
 | 400 | - | failures start |
 
 **VU ceilings:** Dev ~250, Prod ~300. Failures at the ceiling are caused by connection exhaustion and PgBouncer timeouts, not CPU.
+
+## Live Deployment Validation (August 2026)
+
+The results above were produced on dedicated test machines against a synthetic `statea.citya`
+dataset. In August 2026 the same harness was run against a live deployment — 16 vCPU / 30 GB
+KVM guest running the full 59-container DIGIT stack with ~2,300 existing complaints — as an
+unthrottled concurrency ladder (2 to 150 VUs) plus a constrained CPU-profile matrix and a
+burst ladder, with a September follow-up covering run-to-run variance, open-loop arrival and
+database attribution.
+
+Highest level verified clean: **120 VUs**, **11.182 lifecycles/sec**, **45.64 API req/s**,
+**966,091 transactions/day**, 100.00% lifecycle success and **0.000% HTTP failures** across
+three repeats on a fixed dataset. The concurrency ladder reached **125 VUs** at 43.15 API
+req/s before crossing its end-to-end latency budget at 150 VUs.
+
+Those are closed-loop figures, which cannot overload a server because the offered load slows
+down with it. Re-run open loop at a near-identical request rate — 43.41 API req/s — the same
+deployment failed **19.57%** of requests, completed **50.23%** of lifecycles, and never
+started 24% of the intended work. The level at which this deployment fails under evenly-paced
+load is still unmeasured.
+
+**→ [Executive Summary](./run-28-08-26/executive-summary) · [Findings](./run-28-08-26/findings) · [Capacity Planning](./run-28-08-26/recommendations-transition-plan)**
 
 ## Resource Profile Performance Over Time
 
