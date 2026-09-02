@@ -86,7 +86,7 @@ performance/dashboard/run-playwright.sh \
   --target bomet-live --suite benchmark --fixture off --tier existing
 ```
 
-Use a disposable, restored Bomet clone for the exact 3K/50K/100K curve:
+Use a disposable, restored Bomet clone for the exact 3K/20K/50K/100K curve:
 
 ```bash
 performance/dashboard/run-playwright.sh \
@@ -141,6 +141,9 @@ The benchmark defaults to two discarded warmups and twenty measured repetitions.
 uses a new browser context (cold browser cache) while preserving warmed server/JIT/DB caches.
 Raw per-sample JSON, CSV, the aggregate summary, traces-on-failure, fixture status and the
 credential-free environment/run manifests land under `performance/results/dashboard-runs/`.
+`--vus N` runs those browser samples with `N` Playwright workers; use this only for small
+browser-concurrency diagnostics. High-concurrency capacity tests use the k6 dashboard workload
+described below so Chromium resource use on the control machine does not become the result.
 
 `bomet-clone` compares every Compose service, immutable image ID, and hashed runtime
 configuration with the captured live reference before seeding. It requires the same host CPU
@@ -185,6 +188,27 @@ performance/dashboard/run-bomet-snapshot.sh \
   --run-id issue1109-bomet-3k --tier 3k --suite all
 ```
 
+For a two-dimensional dataset-size/concurrency campaign, take one snapshot per dataset tier and
+run the dashboard API ladder against the same immutable fixture. The default matrix is 20K and
+50K complaints at 2, 10, 50, 75, 100, 120, 125, and 150 VUs. These are Dhruv's Bomet ramp
+levels plus his fixed-dataset 120-VU repeatability point. Each k6 VU performs the real
+`/packs` + `/catalog/_search` bootstrap and all pack KPI queries, paced to one dashboard visit
+per ten seconds. A one-VU Playwright run at each tier retains the user-visible page-ready metric.
+
+```bash
+performance/dashboard/run-bomet-dashboard-matrix.sh \
+  --run-prefix issue1109-dashboard-scale
+```
+
+Every load level captures two-second host, container, PGR-health, and PostgreSQL samples. The
+runner refuses the next level after a PGR restart/OOM/unhealthy state or when PostgreSQL reaches
+90% of `max_connections`. Summarize completed cells with:
+
+```bash
+node performance/dashboard/summarize-matrix.mjs \
+  performance/results/dashboard-runs issue1109-dashboard-scale
+```
+
 Use `--probe-only` for a guarded readiness smoke. It performs the same snapshot, exact
 fixture, PgBouncer mapping, switch, two-request analytics gate, and full teardown, but does
 not start a browser:
@@ -221,7 +245,7 @@ Optional controls:
 - `--allow-existing-corpus`: escape hatch for a separately labelled diagnostic;
   never use it for the primary 3K/50K/100K curve.
 
-The allowed tiers are exactly `3k`, `50k`, and `100k`.
+The allowed tiers are exactly `3k`, `20k`, `50k`, and `100k`.
 
 ## Deterministic distributions
 

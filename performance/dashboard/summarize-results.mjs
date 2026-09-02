@@ -19,6 +19,12 @@ const samples = existsSync(sampleDir)
 const measured = samples.filter((sample) => !sample.discardedWarmup);
 const successful = measured.filter((sample) => sample.success);
 
+const loadStarts = measured.map((sample) => Date.parse(sample.loadStartedAt)).filter(Number.isFinite);
+const loadFinishes = measured.map((sample) => Date.parse(sample.loadFinishedAt)).filter(Number.isFinite);
+const measuredWindowSeconds = loadStarts.length && loadFinishes.length
+  ? (Math.max(...loadFinishes) - Math.min(...loadStarts)) / 1000
+  : null;
+
 function percentile(values, p) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) return null;
@@ -47,11 +53,14 @@ const summary = {
   targetSha: first.targetSha || null,
   tier: first.tier || null,
   principal: first.principal || null,
+  vus: first.vus || 1,
   warmups: samples.filter((sample) => sample.discardedWarmup).length,
   measuredSamples: measured.length,
   successfulSamples: successful.length,
   failedSamples: measured.length - successful.length,
   failureRate: measured.length ? (measured.length - successful.length) / measured.length : null,
+  measuredWindowSeconds,
+  successfulLoadsPerSecond: measuredWindowSeconds > 0 ? successful.length / measuredWindowSeconds : null,
   timingsMs: {
     strictReady: stats('timings.strictReadyMs'),
     ttfb: stats('timings.ttfbMs'),
@@ -73,7 +82,8 @@ mkdirSync(resultDir, { recursive: true });
 writeFileSync(resolve(resultDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
 
 const headers = [
-  'run_id', 'target', 'sha', 'tier', 'principal', 'repeat_index', 'warmup', 'success',
+  'run_id', 'target', 'sha', 'tier', 'principal', 'vus', 'virtual_user', 'iteration',
+  'repeat_index', 'warmup', 'success', 'load_started_at', 'load_finished_at',
   'strict_ready_ms', 'ttfb_ms', 'first_widget_ms', 'production_ready_ms',
   'dashboard_requests', 'analytics_round_trips', 'transfer_bytes', 'js_heap_used_bytes',
   'errored_widgets', 'trace_id', 'failure',
@@ -83,7 +93,9 @@ const csv = [headers.join(',')];
 for (const sample of samples) {
   const row = [
     sample.runId, sample.target, sample.targetSha, sample.tier, sample.principal,
+    sample.vus || 1, sample.virtualUserIndex ?? 0, sample.iterationIndex ?? sample.repeatIndex,
     sample.repeatIndex, sample.discardedWarmup, sample.success,
+    sample.loadStartedAt, sample.loadFinishedAt,
     sample.timings?.strictReadyMs, sample.timings?.ttfbMs,
     sample.timings?.firstWidgetVisibleMs, sample.timings?.productionAllWidgetsReadyMs,
     sample.network?.dashboardRequestCount, sample.network?.analyticsRoundTrips,

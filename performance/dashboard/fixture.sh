@@ -95,9 +95,10 @@ done
 TIER_NORMALIZED="$(printf '%s' "${TIER}" | tr '[:upper:]' '[:lower:]')"
 case "${TIER_NORMALIZED}" in
   3k|3000) ROW_COUNT=3000; TIER=3k ;;
+  20k|20000) ROW_COUNT=20000; TIER=20k ;;
   50k|50000) ROW_COUNT=50000; TIER=50k ;;
   100k|100000) ROW_COUNT=100000; TIER=100k ;;
-  *) die '--tier must be 3k, 50k, or 100k' ;;
+  *) die '--tier must be 3k, 20k, 50k, or 100k' ;;
 esac
 
 case "${REFRESH_MODE}" in

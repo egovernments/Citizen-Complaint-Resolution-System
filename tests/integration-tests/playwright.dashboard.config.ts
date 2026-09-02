@@ -9,6 +9,7 @@ const resultsDir = process.env.DASHBOARD_RESULTS_DIR
   : resolve('../../performance/results/dashboard-runs/manual');
 const warmups = Number(process.env.DASHBOARD_WARMUPS || 2);
 const samples = Number(process.env.DASHBOARD_SAMPLES || 20);
+const vus = Number(process.env.DASHBOARD_VUS || 1);
 
 if (!Number.isInteger(warmups) || warmups < 0) {
   throw new Error('DASHBOARD_WARMUPS must be a non-negative integer');
@@ -16,11 +17,14 @@ if (!Number.isInteger(warmups) || warmups < 0) {
 if (!Number.isInteger(samples) || samples < 1) {
   throw new Error('DASHBOARD_SAMPLES must be a positive integer');
 }
+if (!Number.isInteger(vus) || vus < 1) {
+  throw new Error('DASHBOARD_VUS must be a positive integer');
+}
 
 export default defineConfig({
   testDir: 'tests/dashboard-performance',
   fullyParallel: false,
-  workers: 1,
+  workers: vus,
   retries: 0,
   timeout: 120_000,
   expect: { timeout: 20_000 },
@@ -48,7 +52,8 @@ export default defineConfig({
     {
       name: 'dashboard-benchmark',
       testMatch: '**/*.benchmark.spec.ts',
-      repeatEach: warmups + samples,
+      fullyParallel: true,
+      repeatEach: (warmups + samples) * vus,
     },
   ],
 });

@@ -21,9 +21,14 @@ export interface DashboardSample {
   targetSha: string;
   tier: string;
   principal: Principal;
+  vus: number;
+  virtualUserIndex: number;
+  iterationIndex: number;
   repeatIndex: number;
   discardedWarmup: boolean;
   startedAt: string;
+  loadStartedAt: string | null;
+  loadFinishedAt: string | null;
   success: boolean;
   failure: string | null;
   timings: {

@@ -11,6 +11,7 @@ PRINCIPAL='full'
 RUNNER_ARGS=()
 DRY_RUN=false
 PROBE_ONLY=false
+LOAD_VUS_LIST=''
 
 die() { echo "bomet snapshot runner: $*" >&2; exit 2; }
 
@@ -29,6 +30,9 @@ while [[ "$#" -gt 0 ]]; do
       die "$1 is controlled by the Bomet snapshot wrapper" ;;
     --dry-run) DRY_RUN=true; RUNNER_ARGS+=("$1"); shift ;;
     --probe-only) PROBE_ONLY=true; shift ;;
+    --load-vus)
+      [[ "$#" -ge 2 ]] || die '--load-vus requires a comma-separated list'
+      LOAD_VUS_LIST="$2"; shift 2 ;;
     *) RUNNER_ARGS+=("$1"); shift ;;
   esac
 done
@@ -42,10 +46,21 @@ done
 
 case "${TIER}" in
   3k) EXPECTED_ROWS=3000 ;;
+  20k) EXPECTED_ROWS=20000 ;;
   50k) EXPECTED_ROWS=50000 ;;
   100k) EXPECTED_ROWS=100000 ;;
-  *) die '--tier must be 3k, 50k, or 100k' ;;
+  *) die '--tier must be 3k, 20k, 50k, or 100k' ;;
 esac
+
+LOAD_VUS=()
+if [[ -n "${LOAD_VUS_LIST}" ]]; then
+  IFS=',' read -r -a LOAD_VUS <<< "${LOAD_VUS_LIST}"
+  [[ "${#LOAD_VUS[@]}" -gt 0 ]] || die '--load-vus cannot be empty'
+  for vus in "${LOAD_VUS[@]}"; do
+    [[ "${vus}" =~ ^[1-9][0-9]*$ ]] || die "invalid VU level: ${vus}"
+  done
+  command -v k6 >/dev/null 2>&1 || die 'k6 is required for --load-vus'
+fi
 
 DB_SUFFIX="$(printf '%s' "${RUN_ID}" | tr '-' '_' | tr '[:upper:]' '[:lower:]')"
 CLONE_DB="dashboard_perf_${DB_SUFFIX}"
@@ -124,6 +139,10 @@ ssh "${SSH_TARGET}" 'bash -s -- activate '"${RUN_ID}"' '"${CLONE_DB}"' '"${EXPEC
 
 node "${SCRIPT_DIR}/probe-analytics.mjs" "${EXPECTED_ROWS}" > "${LIFECYCLE_DIR}/analytics-probe.json"
 
+ssh "${SSH_TARGET}" 'bash -s -- diagnose '"${RUN_ID}"' '"${CLONE_DB}" \
+  < "${SCRIPT_DIR}/bomet-snapshot-remote.sh" > "${LIFECYCLE_DIR}/pre-load-diagnostics.json"
+baseline_restart_count="$(jq -r '.container.restartCount' "${LIFECYCLE_DIR}/pre-load-diagnostics.json")"
+
 run_exit=0
 if [[ "${PROBE_ONLY}" == false ]]; then
   export DASHBOARD_DATASET_VERIFIED=yes
@@ -132,6 +151,31 @@ if [[ "${PROBE_ONLY}" == false ]]; then
     "${RUNNER_ARGS[@]}"
   run_exit=$?
   set -e
+
+  for vus in "${LOAD_VUS[@]}"; do
+    echo "Running dashboard API load at ${TIER} / ${vus} VUs"
+    set +e
+    "${SCRIPT_DIR}/run-dashboard-k6.sh" \
+      --run-id "${RUN_ID}" --tier "${TIER}" --vus "${vus}" --expected-rows "${EXPECTED_ROWS}"
+    level_exit=$?
+    set -e
+    if [[ "${level_exit}" -ne 0 && "${run_exit}" -eq 0 ]]; then run_exit="${level_exit}"; fi
+
+    diagnostic_path="${LIFECYCLE_DIR}/post-${vus}vu-diagnostics.json"
+    ssh "${SSH_TARGET}" 'bash -s -- diagnose '"${RUN_ID}"' '"${CLONE_DB}" \
+      < "${SCRIPT_DIR}/bomet-snapshot-remote.sh" > "${diagnostic_path}"
+    if ! jq -e --argjson baselineRestarts "${baseline_restart_count}" '
+      .container.running == true and
+      .container.health == "healthy" and
+      .container.oomKilled == false and
+      .container.restartCount == $baselineRestarts and
+      (.postgres.totalSessions < (.postgres.maxConnections * 0.9))
+    ' "${diagnostic_path}" >/dev/null; then
+      echo "bomet snapshot runner: health gate failed after ${vus} VUs; refusing higher load" >&2
+      run_exit=1
+      break
+    fi
+  done
 fi
 
 restore_exit=0

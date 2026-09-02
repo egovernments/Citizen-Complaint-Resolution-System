@@ -13,9 +13,12 @@ import {
 
 test('cold-context dashboard hard-navigation sample', async ({ page, context }, testInfo) => {
   const warmups = Number(process.env.DASHBOARD_WARMUPS || 2);
+  const vus = Number(process.env.DASHBOARD_VUS || 1);
   const principal = (process.env.DASHBOARD_PRINCIPAL || 'full') as Principal;
   const recorder = new NetworkRecorder(page);
   const startedAt = new Date().toISOString();
+  let loadStartedAt: string | null = null;
+  let loadFinishedAt: string | null = null;
   let strictReadyMs: number | null = null;
   let ttfbMs: number | null = null;
   let firstWidgetVisibleMs: number | null = null;
@@ -33,6 +36,7 @@ test('cold-context dashboard hard-navigation sample', async ({ page, context }, 
   await recorder.start();
 
   try {
+    loadStartedAt = new Date().toISOString();
     const response = await page.goto(dashboardUrl(process.env.BASE_URL!, principal), {
       waitUntil: 'domcontentloaded',
       timeout: 60_000,
@@ -42,6 +46,7 @@ test('cold-context dashboard hard-navigation sample', async ({ page, context }, 
     }
 
     strictReadyMs = await waitForStrictReady(page, recorder);
+    loadFinishedAt = new Date().toISOString();
     callsAtReady = recorder.dashboardCalls().map((call) => ({ ...call }));
     requestCountAtReady = recorder.calls.length;
     transferBytesAtReady = recorder.encodedTransferBytes();
@@ -93,9 +98,14 @@ test('cold-context dashboard hard-navigation sample', async ({ page, context }, 
     targetSha: process.env.DASHBOARD_TARGET_SHA || 'unknown',
     tier: process.env.DATASET_TIER || 'unknown',
     principal,
+    vus,
+    virtualUserIndex: testInfo.parallelIndex % vus,
+    iterationIndex: Math.floor(testInfo.repeatEachIndex / vus),
     repeatIndex: testInfo.repeatEachIndex,
-    discardedWarmup: testInfo.repeatEachIndex < warmups,
+    discardedWarmup: testInfo.repeatEachIndex < warmups * vus,
     startedAt,
+    loadStartedAt,
+    loadFinishedAt,
     success,
     failure,
     timings: {
