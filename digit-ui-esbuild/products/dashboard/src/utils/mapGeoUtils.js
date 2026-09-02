@@ -7,8 +7,15 @@ import { dimensionLabel } from "../i18n/dimensionLabel";
 
 const TEAL_SCALE = ["#ccfbf1", "#5eead4", "#14b8a6", "#0d9488", "#115e59"];
 
+// Opening frame for the geography map, before any boundary data arrives.
+// MAP_CENTER is the key the globalConfigs templates actually serve (and the one
+// the PGR maps read); MAP_CENTER_LAT_LNG stays first for any deployment that
+// happens to set it. Without the fallback every tenant opened on the Kenyan
+// default below — Maputo users watched a map of Bomet until the boundaries
+// loaded, and stayed there for good if that fetch failed.
 export function getMapCenter() {
-  const configured = window?.globalConfigs?.getConfig("MAP_CENTER_LAT_LNG");
+  const cfg = window?.globalConfigs;
+  const configured = cfg?.getConfig("MAP_CENTER_LAT_LNG") || cfg?.getConfig("MAP_CENTER");
   if (configured?.lat != null && configured?.lng != null) {
     return [Number(configured.lat), Number(configured.lng)];
   }

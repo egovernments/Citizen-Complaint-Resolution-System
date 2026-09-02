@@ -10,6 +10,9 @@ import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
+import VectorBaseLayer from "./VectorBaseLayer";
+import MapCamera, { MapZoomBounds } from "./MapCamera";
+import { brandPin } from "./mapPin";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
@@ -108,6 +111,8 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
     isReady,
     tileUrl,
     tileAttribution,
+    tileClassName,
+    vectorStyleUrl,
     wardHighlightColor: wardColor,
     center,
     defaultZoom,
@@ -141,6 +146,10 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
   const OVERVIEW_ZOOM = Math.max(minZoom, Math.min(5, maxZoom));
   const [coords, setCoords] = useState(DEFAULT_CENTER);
   const [markerPos, setMarkerPos] = useState([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+  // One-shot initial framing, applied by MapCamera once the map instance
+  // exists (see that component for why a mapRef.setView from the init
+  // effect can fire before the map does).
+  const [cameraTarget, setCameraTarget] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -202,6 +211,16 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
     if (!isReady || hasInitialized.current) return;
     if (formData?.[config.key]) {
       hasInitialized.current = true;
+      // Reopening the step with a saved location: the formData effect below
+      // restores the pin, but the camera still needs one-time framing here
+      // (same mount-only center/zoom limitation as the session restore).
+      // Guarded by hasInitialized so later formData echoes from fetchAddress
+      // don't yank the camera away from wherever the citizen panned.
+      const lat = Number(formData[config.key]?.lat);
+      const lng = Number(formData[config.key]?.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setCameraTarget({ lat, lng, zoom: DEFAULT_ZOOM });
+      }
     } else {
       const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
       if (savedLocation) {
@@ -211,12 +230,17 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
         setMarkerPos([lat, lng]);
         setAddress(savedAddress);
         setSearchQuery(savedAddress);
+        // Frame the camera on the restored pin. MapContainer's center/zoom are
+        // mount-only in react-leaflet v3, so the state updates above move the
+        // MARKER but leave the CAMERA at the mount frame — the pin came back
+        // off-screen or continent-small.
+        setCameraTarget({ lat, lng, zoom: DEFAULT_ZOOM });
         onSelect(config.key, savedLocation);
       } else {
         hasInitialized.current = true;
         setCoords(DEFAULT_CENTER);
         setMarkerPos([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
-        mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], DEFAULT_ZOOM);
+        setCameraTarget({ lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng, zoom: DEFAULT_ZOOM });
         // Seed lat/lng immediately so a quick Next click still captures something.
         onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
         fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
@@ -306,6 +330,28 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
     setIsSearching(false);
   };
 
+  // Glide the camera onto a freshly-placed pin. Placing a pin only sets
+  // marker STATE — MapContainer ignores center/zoom updates after mount — so
+  // without this a click from the wide overview frame (e.g. right after
+  // Clear) left the pin correct but the camera at continent level.
+  //
+  // Deliberately only re-frames when the citizen is zoomed OUT past the
+  // working zoom, which is the case that is actually broken. At or above it
+  // the pin is already well framed on the spot they picked, and moving the
+  // map under them would both disorient and cost them their next tap:
+  // Leaflet drops a click that lands mid-animation, so animating on every
+  // click makes nudging the pin twice in a row silently fail.
+  //
+  // setView rather than flyTo: flyTo drives a requestAnimationFrame loop that
+  // a drag cancels without ever firing `zoomend`, and the MapLibre basemap
+  // layer stops syncing its camera until it sees one — an interrupted fly
+  // leaves the citizen dragging a frozen basemap.
+  const focusPin = (lat, lng) => {
+    const map = mapRef.current;
+    if (!map || map.getZoom() >= DEFAULT_ZOOM) return;
+    map.setView([lat, lng], DEFAULT_ZOOM);
+  };
+
   const handleMapClick = (e) => {
     const { lat, lng } = e.latlng;
 
@@ -313,6 +359,7 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
       setPolygonPoints([...polygonPoints, [lat, lng]]);
     } else {
       updateLocation(lat, lng);
+      focusPin(lat, lng);
       setSuggestions([]); // Clear suggestions on map click
     }
   };
@@ -500,8 +547,14 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
             zoomControl={false}
           >
             <MapRefSetter mapRef={mapRef} />
+            <MapCamera target={cameraTarget} />
+            <MapZoomBounds minZoom={minZoom} maxZoom={maxZoom} />
             <MapClickHandler onClick={handleMapClick} />
-            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
+            {vectorStyleUrl ? (
+              <VectorBaseLayer styleUrl={vectorStyleUrl} attribution={tileAttribution} />
+            ) : (
+              <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} className={tileClassName} />
+            )}
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}-${i18n.language}`}
@@ -511,7 +564,7 @@ const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
               />
             )}
             {!isPolygonMode && markerPos && (
-              <Marker position={markerPos}>
+              <Marker position={markerPos} icon={brandPin}>
                 {address && (
                   <Tooltip permanent direction="top" offset={[0, -30]} opacity={1} className="custom-leaflet-tooltip">
                     <div style={{
