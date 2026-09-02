@@ -11,6 +11,7 @@ PRINCIPAL='full'
 RUNNER_ARGS=()
 DRY_RUN=false
 PROBE_ONLY=false
+SKIP_PLAYWRIGHT=false
 LOAD_VUS_LIST=''
 DIAGNOSTIC_LOG_LINES="${BOMET_DIAGNOSTIC_LOG_LINES:-5000}"
 
@@ -31,6 +32,7 @@ while [[ "$#" -gt 0 ]]; do
       die "$1 is controlled by the Bomet snapshot wrapper" ;;
     --dry-run) DRY_RUN=true; RUNNER_ARGS+=("$1"); shift ;;
     --probe-only) PROBE_ONLY=true; shift ;;
+    --skip-playwright) SKIP_PLAYWRIGHT=true; shift ;;
     --load-vus)
       [[ "$#" -ge 2 ]] || die '--load-vus requires a comma-separated list'
       LOAD_VUS_LIST="$2"; shift 2 ;;
@@ -63,6 +65,9 @@ if [[ -n "${LOAD_VUS_LIST}" ]]; then
     [[ "${vus}" =~ ^[1-9][0-9]*$ ]] || die "invalid VU level: ${vus}"
   done
   command -v k6 >/dev/null 2>&1 || die 'k6 is required for --load-vus'
+fi
+if [[ "${SKIP_PLAYWRIGHT}" == true && "${#LOAD_VUS[@]}" -eq 0 ]]; then
+  die '--skip-playwright requires --load-vus'
 fi
 
 DB_SUFFIX="$(printf '%s' "${RUN_ID}" | tr '-' '_' | tr '[:upper:]' '[:lower:]')"
@@ -156,12 +161,14 @@ baseline_restart_count="$(jq -r '.container.restartCount' "${LIFECYCLE_DIR}/pre-
 
 run_exit=0
 if [[ "${PROBE_ONLY}" == false ]]; then
-  export DASHBOARD_DATASET_VERIFIED=yes
-  set +e
-  "${SCRIPT_DIR}/run-playwright.sh" --target bomet-snapshot --fixture off \
-    "${RUNNER_ARGS[@]}"
-  run_exit=$?
-  set -e
+  if [[ "${SKIP_PLAYWRIGHT}" == false ]]; then
+    export DASHBOARD_DATASET_VERIFIED=yes
+    set +e
+    "${SCRIPT_DIR}/run-playwright.sh" --target bomet-snapshot --fixture off \
+      "${RUNNER_ARGS[@]}"
+    run_exit=$?
+    set -e
+  fi
 
   for vus in "${LOAD_VUS[@]}"; do
     echo "Running dashboard API load at ${TIER} / ${vus} VUs"

@@ -198,6 +198,11 @@ Both paths retain their raw samples. Generated summaries report
 `p50`/`p80`/`p90`/`p95`/`p99`/`max`; the API matrix also separates main-window HTTP RPS,
 dashboard visits per second, and KPI-query rate from warm-up traffic.
 
+If a valid browser sample set for a deterministic tier is already retained, pass
+`--skip-playwright` together with `--load-vus` to continue only its API ladder. The
+wrapper still creates, validates, activates, tears down, and drops a fresh disposable
+snapshot clone.
+
 ```bash
 performance/dashboard/run-bomet-dashboard-matrix.sh \
   --run-prefix issue1109-dashboard-scale
