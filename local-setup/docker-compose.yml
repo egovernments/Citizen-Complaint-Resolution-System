@@ -948,7 +948,7 @@ services:
       - egov-network
 
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-0938bdf}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-3c3d9fa}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1019,7 +1019,7 @@ services:
       - egov-network
 
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-c287d49}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-3c3d9fa}
     container_name: digit-ui
     restart: on-failure
     ports:
