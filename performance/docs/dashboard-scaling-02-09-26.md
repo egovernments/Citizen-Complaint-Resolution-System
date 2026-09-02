@@ -2,101 +2,149 @@
 
 ## Result
 
-The dashboard read path completed the full 20K and 50K fixture matrix through
-150 virtual users without an HTTP failure, partial analytics response, PGR
-restart, or OOM. Throughput remained pacing-limited at approximately one
-dashboard visit per VU per 10 seconds. There is no observed saturation knee in
-the measured range.
+The dashboard read path completed the 20K, 50K, 100K, and 500K complaint
+matrices through 150 virtual users without an HTTP failure, partial analytics
+response, PGR restart, or OOM. At every level the harness offered one dashboard
+visit per VU per 10 seconds. A visit makes a pack request, a catalog request,
+and one batched analytics request, so 150 VUs produced 15 dashboard visits/s
+and 46.125 HTTP requests/s.
 
-Increasing the fixture from 20K to 50K complaints did not produce a consistent
-latency penalty. At matching concurrency, the 50K dashboard p95 ranged from 14%
-lower to 14% higher than 20K; at 120, 125, and 150 VUs the differences were
--2.8%, +3.9%, and +3.0%. This spread is small enough to treat as run-to-run
-variation until the high-concurrency cells are repeated.
+There is no throughput failure cliff through 150 VUs, but 500K complaints
+produce a clear latency and database-contention knee. Its dashboard p95 grows
+from 1.20 s at 10 VUs to 4.48 s at 50, 7.15 s at 100, and 10.84 s at 150.
+At 150 VUs its p99 is 16.04 s. PostgreSQL reaches all 18 observed connections
+and records waiting sessions from 10 VUs onward. The 100K fixture remains below
+5.1 s at p95 through 150 VUs.
 
 ## Test shape
 
-- Target: the unthrottled Bomet deployment used for Dhruv's baseline (16 vCPU,
-  30 GiB RAM).
-- PGR image: `sha256:6af21d546f53258a0d92adb41e7094c08a24bfe89c3dddec0036d6c887503bb3`.
-- Data: deterministic complaint lifecycle distributions at 20,000 and 50,000
-  complaint facts, activated through an isolated database snapshot clone.
-- Browser baseline: one VU, two warm-ups, then 20 measured cold-context
-  dashboard navigations.
+- Target: the existing Bomet deployment used for Dhruv's baseline: 16 vCPU,
+  30.6 GiB RAM, with the rest of the stack running.
+- Load generator: separate `ovh-8c24g` host: 8 vCPU and 24 GiB RAM, using the
+  pinned k6 image digest recorded by the harness.
+- PGR image under test:
+  `sha256:6af21d546f53258a0d92adb41e7094c08a24bfe89c3dddec0036d6c887503bb3`.
+- Data: deterministic complaint lifecycle distributions activated through a
+  disposable database snapshot clone. The 500K fixture contained 500,000
+  complaints, 1,355,000 workflow events, 500,000 materialized facts, and
+  175,000 daily snapshot rows.
 - API load: 30-second warm-up and two-minute main window at 2, 10, 50, 75, 100,
-  120, 125, and 150 VUs. Each VU performs a pack read, catalog read, and one
-  batched query containing every KPI in the selected nine-tile pack, then paces
-  the visit to 10 seconds.
-- Valid run IDs: `issue1109-scale3-20260902` (20K) and
-  `issue1109-scale5-20260902-50k` (50K).
+  120, 125, and 150 VUs. Each VU reads the pack, catalog, and all nine selected
+  KPI results, then paces the visit to 10 seconds.
+- Valid run IDs: `issue1109-scale3-20260902` (20K),
+  `issue1109-scale5-20260902-50k` (50K),
+  `issue1109-scale10-20260902-100k-api` (100K), and
+  `issue1109-scale11-20260902-500k-api` (500K).
 
-The VU levels deliberately match Dhruv's 2/10/50/75/100/125/150 ramp, with 120
-added because that was his repeated fixed-dataset checkpoint. This dashboard
-scenario is read-only and must not be compared as transaction throughput with
-Dhruv's complaint-creation lifecycle scenario.
+The VU levels match Dhruv's clean Bomet 2/10/50/75/100/125/150 ladder, with
+120 added because it was his repeated fixed-dataset checkpoint. Dhruv's test
+performed complaint create/assign/resolve/search writes and used think time;
+this dashboard scenario is read-only, so transaction latency is not directly
+comparable. Offered HTTP throughput is comparable context: this test reaches
+46.125 HTTP RPS at 150 VUs versus approximately 43.37 RPS in Dhruv's clean
+150-VU Bomet run.
 
 ## API matrix
 
-| Rows | VUs | Visits/s | Dashboard p50 | Dashboard p95 | HTTP p95 | Success | HTTP failures |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 20K | 2 | 0.160 | 0.864s | 2.463s | 0.490s | 100% | 0% |
-| 20K | 10 | 0.800 | 1.073s | 2.664s | 1.843s | 100% | 0% |
-| 20K | 50 | 3.999 | 1.923s | 3.529s | 2.288s | 100% | 0% |
-| 20K | 75 | 5.735 | 2.332s | 4.475s | 2.825s | 100% | 0% |
-| 20K | 100 | 7.579 | 2.691s | 4.371s | 3.415s | 100% | 0% |
-| 20K | 120 | 9.597 | 3.186s | 4.812s | 3.776s | 100% | 0% |
-| 20K | 125 | 9.997 | 2.970s | 4.694s | 3.696s | 100% | 0% |
-| 20K | 150 | 11.771 | 3.643s | 5.527s | 4.359s | 100% | 0% |
-| 50K | 2 | 0.160 | 0.895s | 1.815s | 0.897s | 100% | 0% |
-| 50K | 10 | 0.800 | 1.012s | 3.046s | 1.905s | 100% | 0% |
-| 50K | 50 | 3.999 | 1.859s | 3.731s | 2.233s | 100% | 0% |
-| 50K | 75 | 5.999 | 2.140s | 3.845s | 2.609s | 100% | 0% |
-| 50K | 100 | 7.998 | 2.762s | 4.197s | 3.322s | 100% | 0% |
-| 50K | 120 | 9.597 | 3.006s | 4.677s | 3.658s | 100% | 0% |
-| 50K | 125 | 9.998 | 3.346s | 4.879s | 3.846s | 100% | 0% |
-| 50K | 150 | 11.996 | 3.671s | 5.692s | 4.458s | 100% | 0% |
+`Loads/s` and `HTTP RPS` below cover only the two-minute main window. An earlier
+summary divided by the full 150-second scenario, including warm-up, and
+underreported 20K/50K throughput by 20%; these are the corrected values.
 
-All nine KPI results were present in every successful visit. The 20K run's
-slightly lower realized throughput at 75, 100, and 150 VUs came from slow tail
-iterations at the end of the fixed window, not failed requests.
+| Complaints | VUs | Loads/s | HTTP RPS | Dashboard p50 | p80 | p90 | p95 | p99 | Success | HTTP failures |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20K | 2 | 0.2 | 0.608 | 0.864s | 0.942s | 1.422s | 2.463s | 2.622s | 100% | 0% |
+| 20K | 10 | 1.0 | 3.075 | 1.073s | 1.840s | 2.161s | 2.664s | 2.893s | 100% | 0% |
+| 20K | 50 | 5.0 | 15.375 | 1.923s | 2.577s | 3.137s | 3.529s | 4.779s | 100% | 0% |
+| 20K | 75 | 7.5 | 23.067 | 2.332s | 3.166s | 3.681s | 4.475s | 6.356s | 100% | 0% |
+| 20K | 100 | 10.0 | 30.750 | 2.691s | 3.676s | 4.011s | 4.371s | 7.156s | 100% | 0% |
+| 20K | 120 | 12.0 | 36.900 | 3.186s | 4.101s | 4.443s | 4.812s | 5.489s | 100% | 0% |
+| 20K | 125 | 12.5 | 38.442 | 2.970s | 3.878s | 4.291s | 4.694s | 5.429s | 100% | 0% |
+| 20K | 150 | 15.0 | 46.125 | 3.643s | 4.645s | 5.039s | 5.527s | 6.621s | 100% | 0% |
+| 50K | 2 | 0.2 | 0.608 | 0.895s | 1.023s | 1.356s | 1.815s | 1.953s | 100% | 0% |
+| 50K | 10 | 1.0 | 3.075 | 1.012s | 1.882s | 2.544s | 3.046s | 5.041s | 100% | 0% |
+| 50K | 50 | 5.0 | 15.375 | 1.859s | 2.490s | 3.176s | 3.731s | 4.982s | 100% | 0% |
+| 50K | 75 | 7.5 | 23.067 | 2.140s | 2.915s | 3.268s | 3.845s | 4.821s | 100% | 0% |
+| 50K | 100 | 10.0 | 30.750 | 2.762s | 3.608s | 3.978s | 4.197s | 4.865s | 100% | 0% |
+| 50K | 120 | 12.0 | 36.900 | 3.006s | 3.912s | 4.286s | 4.678s | 5.508s | 100% | 0% |
+| 50K | 125 | 12.5 | 38.442 | 3.346s | 4.175s | 4.524s | 4.879s | 5.483s | 100% | 0% |
+| 50K | 150 | 15.0 | 46.125 | 3.671s | 4.767s | 5.233s | 5.692s | 6.571s | 100% | 0% |
+| 100K | 2 | 0.2 | 0.608 | 0.442s | 0.461s | 0.489s | 0.490s | 0.696s | 100% | 0% |
+| 100K | 10 | 1.0 | 3.075 | 0.477s | 0.529s | 0.590s | 0.683s | 0.769s | 100% | 0% |
+| 100K | 50 | 5.0 | 15.375 | 1.414s | 1.485s | 1.519s | 1.894s | 1.981s | 100% | 0% |
+| 100K | 75 | 7.5 | 23.067 | 2.028s | 2.105s | 2.147s | 2.598s | 2.667s | 100% | 0% |
+| 100K | 100 | 10.0 | 30.750 | 2.431s | 2.617s | 2.695s | 2.934s | 3.021s | 100% | 0% |
+| 100K | 120 | 12.0 | 36.900 | 2.842s | 3.054s | 3.162s | 3.751s | 3.894s | 100% | 0% |
+| 100K | 125 | 12.5 | 38.442 | 3.038s | 3.196s | 3.389s | 3.862s | 3.971s | 100% | 0% |
+| 100K | 150 | 15.0 | 46.125 | 3.744s | 3.931s | 4.896s | 5.041s | 5.156s | 100% | 0% |
+| 500K | 2 | 0.2 | 0.608 | 0.490s | 0.502s | 0.518s | 0.522s | 0.671s | 100% | 0% |
+| 500K | 10 | 1.0 | 3.075 | 0.849s | 0.932s | 0.973s | 1.199s | 1.233s | 100% | 0% |
+| 500K | 50 | 5.0 | 15.375 | 3.063s | 3.512s | 4.102s | 4.484s | 4.586s | 100% | 0% |
+| 500K | 75 | 7.5 | 23.067 | 4.559s | 4.804s | 4.989s | 5.146s | 5.216s | 100% | 0% |
+| 500K | 100 | 10.0 | 30.750 | 6.053s | 6.784s | 7.081s | 7.152s | 7.209s | 100% | 0% |
+| 500K | 120 | 12.0 | 36.900 | 7.150s | 7.752s | 8.118s | 8.835s | 9.000s | 100% | 0% |
+| 500K | 125 | 12.5 | 38.442 | 7.450s | 8.276s | 8.665s | 9.936s | 10.042s | 100% | 0% |
+| 500K | 150 | 15.0 | 46.125 | 8.213s | 9.376s | 9.766s | 10.837s | 16.037s | 100% | 0% |
 
-## One-VU browser baseline
+All nine KPI results were present in every successful visit. Throughput remains
+pacing-limited at all four data sizes; the 500K result is a latency limit before
+it is an error-rate or throughput limit.
 
-| Rows | Samples | Strict-ready median | Strict-ready p95 | TTFB p95 | All-widgets p95 | Failures |
-|---:|---:|---:|---:|---:|---:|---:|
-| 20K | 20 | 35.836s | 39.997s | 0.815s | 39.428s | 0 |
-| 50K | 20 | 33.266s | 42.656s | 0.723s | 40.871s | 0 |
+The 100K run was made after the setup began running `ANALYZE` on the seeded base
+tables and materialized views. Its unexpectedly lower latency than the older
+20K/50K cells should not be interpreted as data making queries faster; repeat
+those smaller tiers with the same setup before using cross-tier deltas as a
+formal comparison. The 100K-to-500K comparison does use the same setup.
 
-The browser metric is dominated by client-side cold-context loading and render
-work: both tiers transferred about 15.66 MB, used two analytics round trips, and
-had a median JS heap of about 47.4 MB. The API matrix is the more direct measure
-of backend scaling.
+## Browser baseline
+
+| Complaints | Valid samples | Strict-ready p50 | p80 | p90 | p95/p99 | TTFB p95 | Transfer | Failures |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20K | 20 | 35.836s | — | — | 39.997s | 0.815s | ~15.66 MB | 0 |
+| 50K | 20 | 33.266s | — | — | 42.656s | 0.723s | ~15.66 MB | 0 |
+| 100K | 17 | 35.332s | 40.026s | 41.913s | 42.908s | 0.798s | ~15.66 MB | 0 valid-sample failures |
+
+The 100K browser cycle obtained 17 of the intended 20 measured samples before
+the load-controller network changed. The three later authentication/DNS
+attempts are excluded because they never reached Bomet. No 500K browser cycle
+was run; the complete 500K result here is the backend/API matrix.
+
+Browser strict-ready time is dominated by client-side cold-context loading and
+rendering. The near-constant transfer size and sub-second TTFB reinforce that
+the API matrix is the direct backend-scaling measurement.
 
 ## Runtime observations
 
-| Fixture | Peak host load1 | Lowest available memory | Peak DB sessions | Peak active DB sessions | Peak PGR CPU | Peak PGR memory | Restarts/OOM |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 20K | 13.96 | 8,310 MiB | 11 | 5 | 275.62% | 1.98% | 0 / no |
-| 50K | 17.19 | 8,405 MiB | 11 | 10 | 162.88% | 2.07% | 0 / no |
+| Fixture | Peak host load1 | Lowest available memory | Peak DB sessions | Peak active | Peak waiting | Peak PGR CPU | Peak PGR memory | Restarts/OOM |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20K | 13.96 | 8,310 MiB | 11 | 5 | 1 | 275.62% | 1.98% | 0 / no |
+| 50K | 17.19 | 8,405 MiB | 11 | 10 | 1 | 162.88% | 2.07% | 0 / no |
+| 100K | 23.63 | 7,802 MiB | 11 | 11 | 1 | 275.41% | 2.17% | 0 / no |
+| 500K | 38.10 | 8,058 MiB | 18 | 18 | 17 | 253.25% | 2.26% | 0 / no |
 
-Postgres recorded at most one waiting session in either run. PGR remained
-healthy with restart count zero at every health gate. The 50K diagnostic log
-contained no Java heap/OOM, fatal, or panic signal.
+Spot sampling during the 500K run showed periodic `DataFileRead`,
+`BufferMapping`, and `SpinDelay` waits rather than a blocking transaction or
+advisory-lock queue. This is consistent with database I/O/buffer contention.
+The service and host stayed available throughout the matrix.
 
 ## Cleanup verification
 
-The 50K teardown removed exactly 50,000 seeded complaints with zero fixture rows
-remaining, restored PGR to `jdbc:postgresql://postgres:5432/egov`, matched the
-original configuration fingerprint, and dropped the clone. The post-run check
-found no `dashboard_perf_*` databases, a free snapshot advisory lock, a healthy
-PGR container, and about 83 GiB free disk. One real complaint arrived while the
-isolated run was active, so the original database row count naturally changed
-from 2,940 to 2,941; fixture data never touched it.
+The 100K and 500K teardown passes removed exactly their seeded complaint counts
+with zero fixture rows remaining. After the final run, PGR was restored to
+`jdbc:postgresql://postgres:5432/egov`, the disposable database was dropped,
+the original database still contained 2,945 complaints, the advisory lock was
+free, and PGR was healthy with zero restarts/OOM. Bomet had about 80 GiB free.
 
-## Limits and next measurement
+## Capacity interpretation and next measurement
 
-Each API cell is a single two-minute main window. The result supports the shape
-of the curve and rules out an obvious failure knee through 150 VUs, but it does
-not establish long-duration stability or tight error bars. Repeat 120 and 150
-VUs three times per tier, then run a 30-minute soak at the selected operating
-point before publishing a production capacity number.
+- Through 100K complaints, 150 VUs / 15 dashboard loads/s stays near a 5-second
+  dashboard p95 with no errors.
+- At 500K, 10 VUs is still near 1.2 seconds p95, but 50 VUs reaches 4.5 seconds
+  and database waits appear. Treat 50 VUs as the start of the degradation band,
+  not a recommended capacity target.
+- At 500K and 150 VUs the system remains functional, but 10.84-second p95 and
+  16.04-second p99 are too slow for an interactive dashboard SLO.
+
+Each cell is one two-minute main window. Repeat the intended operating point at
+least three times, then run a 30-minute soak before publishing a production
+capacity number. Add a 500K Playwright baseline only if client-render behavior
+at that data size is required; it is not needed to locate the backend knee.
