@@ -28,6 +28,10 @@ case "${TIER}" in 3k|20k|50k|100k|500k) ;; *) die 'invalid --tier' ;; esac
 for name in BASE_URL DIGIT_TENANT DIGIT_USERNAME DIGIT_PASSWORD; do
   [[ -n "${!name:-}" ]] || die "${name} is required"
 done
+if [[ -n "${DASHBOARD_LOAD_SSH:-}" ]]; then
+  exec "${SCRIPT_DIR}/run-dashboard-k6-remote.sh" \
+    --run-id "${RUN_ID}" --tier "${TIER}" --vus "${VUS}" --expected-rows "${EXPECTED_ROWS}"
+fi
 command -v k6 >/dev/null 2>&1 || die 'k6 is required'
 
 RESULTS_DIR="${REPO_DIR}/performance/results/dashboard-runs/${RUN_ID}-bomet-snapshot-${TIER}-full-${VUS}vu-k6"

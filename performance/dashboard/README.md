@@ -214,6 +214,12 @@ runner refuses the next level after a PGR restart/OOM/unhealthy state or when Po
 diagnostic capture cannot delay datasource restoration; override that bound with the positive
 integer `BOMET_DIAGNOSTIC_LOG_LINES` when needed. Summarize completed cells with:
 
+Set `DASHBOARD_LOAD_SSH` to drive each k6 stage from a separate Linux Docker host. The stage
+container and the Bomet resource monitor run detached, so a control-laptop sleep or network
+change cannot interrupt traffic or telemetry. The next VU level is still gated by the local
+wrapper's post-stage Bomet health check. The default image is pinned by digest; each result
+retains its load-generator manifest and image ID.
+
 ```bash
 node performance/dashboard/summarize-matrix.mjs \
   performance/results/dashboard-runs issue1109-dashboard-scale
