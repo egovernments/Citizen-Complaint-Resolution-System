@@ -47,7 +47,7 @@ datasource_url() {
 compose_command() {
   local compose_files_file="${STATE_DIR}/compose-files"
   local args=(sudo -n docker compose -p digit)
-  while IFS= read -r compose_file; do
+  while IFS= read -r compose_file || [[ -n "${compose_file}" ]]; do
     [[ -n "${compose_file}" ]] && args+=(-f "${compose_file}")
   done < "${compose_files_file}"
   "${args[@]}" "$@"
@@ -165,7 +165,7 @@ setup_snapshot() {
   original_critical_settings="$(critical_settings "${PGR_CONTAINER}")"
   compose_files="$(sudo -n docker inspect "${PGR_CONTAINER}" --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}')"
   [[ -n "${compose_files}" ]] || die 'PGR Compose file labels are missing'
-  printf '%s' "${compose_files}" | tr ',' '\n' | sudo -n tee "${STATE_DIR}/compose-files" >/dev/null
+  printf '%s\n' "${compose_files}" | tr ',' '\n' | sudo -n tee "${STATE_DIR}/compose-files" >/dev/null
   sudo -n sh -c "printf '%s\n' '${original_config}' > '${STATE_DIR}/original-config-fingerprint'"
   sudo -n sh -c "printf '%s\n' '${original_image}' > '${STATE_DIR}/original-image-id'"
   printf '%s\n' "${original_critical_settings}" | sudo -n tee "${STATE_DIR}/original-critical-settings" >/dev/null
