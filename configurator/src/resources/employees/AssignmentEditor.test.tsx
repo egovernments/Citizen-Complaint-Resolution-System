@@ -5,7 +5,7 @@
 //
 // The department half of that bug. egov-hrms treats assignments as append-only
 // and gives them no isActive flag, so EmployeeValidator boxes a client in from
-// three sides at once:
+// several sides at once:
 //
 //   validateConsistencyAssignment  every previously stored assignment id must
 //                                  come back, or the whole update fails with
@@ -13,18 +13,21 @@
 //   validateAssignments            exactly ONE assignment may be current, and
 //                                  every non-current one must carry a toDate
 //                                  (ERR_HRMS_INVALID_ASSIGNMENT_NON_CURRENT_TO_DATE)
-//   validateAssignments            a non-current assignment must have ENDED by
-//                                  the time the current one starts
-//                                  (ERR_HRMS_OVERLAPPING_ASSGN_CURRENT), which
-//                                  in effect means the current assignment is
-//                                  always the latest one
+//                                  that is not before its own fromDate
+//                                  (ERR_HRMS_INVALID_ASSIGNMENT_PERIOD)
+//   validateAssignments            EVERY non-current assignment must have ended
+//                                  by the time the current one starts
+//                                  (ERR_HRMS_OVERLAPPING_ASSGN_CURRENT) — which
+//                                  HRMS also enforces on create, so the current
+//                                  assignment is always the latest one on record
 //
 // The editor used to splice the row out of the form value (tripping the first
 // rule) and to hand `current` over without closing the row it demoted (tripping
 // the second), so on bomet an admin could not take a department away from
-// HR_CSR by any route. Revoking now ENDS the assignment instead: the row stays
-// on record, and pgr-services' PolicyDrivenScopeResolver — which counts only
-// current assignments — stops putting that department in the employee's scope.
+// HR_CSR by any route. Revoking now goes through the "Current assignment"
+// radio, which ends the outgoing row: it stays on record, and pgr-services'
+// PolicyDrivenScopeResolver — which counts only current assignments — stops
+// putting that department in the employee's scope.
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -33,7 +36,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { AssignmentEditor } from './AssignmentEditor';
 
 const DEPARTMENTS = [
-  { id: 'DEPT_9', code: 'DEPT_9', name: 'Department 9' },
+  { id: 'DEPT_1', code: 'DEPT_1', name: 'Department 1' },
+  { id: 'DEPT_2', code: 'DEPT_2', name: 'Department 2' },
+  { id: 'DEPT_3', code: 'DEPT_3', name: 'Department 3' },
   { id: 'ADMIN_PUBLIC_SVC', code: 'ADMIN_PUBLIC_SVC', name: 'Administration & Public Service' },
 ];
 
@@ -42,10 +47,12 @@ const DESIGNATIONS = [
   { id: 'DESIG_58', code: 'DESIG_58', name: 'Designation 58' },
 ];
 
+const DAY = 86_400_000;
+
 /** HR_CSR as bomet actually stores it: one closed historical row + the current one. */
 const HISTORICAL = {
   id: 'asg-dept9',
-  department: 'DEPT_9',
+  department: 'DEPT_1',
   designation: 'chief_officer',
   fromDate: 1788048000000,
   toDate: 1788048000000,
@@ -111,7 +118,10 @@ function submitted(onSubmit: ReturnType<typeof vi.fn>): SubmittedAssignment[] {
   return values.assignments ?? [];
 }
 
-/** Everything validateAssignments insists on, asserted in one place. */
+/**
+ * Everything validateAssignments insists on, asserted in one place, and applied
+ * to EVERY non-current row because that is how HRMS applies it.
+ */
 function expectHrmsAccepts(sent: SubmittedAssignment[]) {
   const current = sent.filter((a) => a.isCurrentAssignment);
   expect(current).toHaveLength(1);
@@ -119,9 +129,14 @@ function expectHrmsAccepts(sent: SubmittedAssignment[]) {
   for (const a of sent) {
     if (a.isCurrentAssignment) continue;
     expect(typeof a.toDate).toBe('number');
-    // Own period, then the "current assignment is the latest one" rule.
     expect(a.toDate!).toBeGreaterThanOrEqual(a.fromDate);
     expect(a.toDate!).toBeLessThanOrEqual(current[0].fromDate);
+  }
+  // No two windows may overlap once sorted by fromDate.
+  const sorted = [...sent].sort((x, y) => x.fromDate - y.fromDate);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i].toDate == null) continue;
+    expect(sorted[i].toDate!).toBeLessThanOrEqual(sorted[i + 1].fromDate);
   }
 }
 
@@ -178,43 +193,93 @@ describe('AssignmentEditor — #1957 revoking an assigned department', () => {
     expect(sent[0].fromDate).toBeGreaterThanOrEqual(sent[1].toDate!);
   });
 
-  it('ends a saved department instead of dropping it from the payload', async () => {
-    // An open non-current row (no toDate) is the one case the row button can
-    // close on its own — and the id must still be in the payload afterwards.
-    const onSubmit = vi.fn();
-    const open = { ...HISTORICAL, toDate: undefined };
-    renderEditor([open, CURRENT], onSubmit);
+  it('closes a freshly added row that is left behind by the promotion', async () => {
+    // The reachable multi-row defect. setCurrent used to close only the row it
+    // demoted and skip every other non-current row, so a department the
+    // operator had just added — non-current, no toDate yet — travelled to HRMS
+    // with a null toDate and the save 400d on
+    // ERR_HRMS_INVALID_ASSIGNMENT_NOT_CURRENT_TO_DATE. Verified against a live
+    // egov-hrms: this exact payload is rejected before the fix, accepted after.
+    const base = 1735689600000; // 2025-01-01
+    const currentFrom = base + 300 * DAY;
+    const rows = [
+      { id: 'a1', department: 'DEPT_1', designation: 'DESIG_58', fromDate: base, toDate: base + 30 * DAY, isCurrentAssignment: false },
+      { id: 'a2', department: 'DEPT_2', designation: 'DESIG_58', fromDate: currentFrom, isCurrentAssignment: true },
+      // No id: what addRow plus the two pickers leaves in the form.
+      { department: 'DEPT_3', designation: 'DESIG_58', fromDate: currentFrom + 10 * DAY, isCurrentAssignment: false },
+    ];
 
-    fireEvent.click(await screen.findByRole('button', { name: 'End assignment 1' }));
+    const onSubmit = vi.fn();
+    renderEditor(rows, onSubmit);
+
+    fireEvent.click((await screen.findAllByRole('radio'))[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     const sent = submitted(onSubmit);
-    expect(sent.map((a) => a.id)).toEqual(['asg-dept9', 'asg-admin']);
-    expect(sent[0].isCurrentAssignment).toBe(false);
+    expect(sent).toHaveLength(3);
+    expect(sent[0].isCurrentAssignment).toBe(true);
+    // The added row is the one that used to slip through unclosed.
+    expect(typeof sent[2].toDate).toBe('number');
     expectHrmsAccepts(sent);
   });
 
-  it('will not end the last current assignment, because HRMS demands exactly one', async () => {
-    renderEditor([HISTORICAL, CURRENT]);
+  it('clamps a stale toDate hiding on the row it demotes', async () => {
+    // Defensive rather than a live bug: HRMS itself rejects a current
+    // assignment carrying a toDate (ERR_HRMS_INVALID_ASSIGNMENT_CURRENT_TO_DATE,
+    // checked against a real instance), so this shape can only arrive through a
+    // bulk import or a direct DB write. If it does, the To Date input is blanked
+    // and disabled while the row is current, so the operator cannot see or fix
+    // the value — and passing it through unclamped would submit
+    // toDate < fromDate and 400 on ERR_HRMS_INVALID_ASSIGNMENT_PERIOD.
+    const onSubmit = vi.fn();
+    const staleCurrent = { ...CURRENT, toDate: CURRENT.fromDate - 400 * DAY };
+    renderEditor([HISTORICAL, staleCurrent], onSubmit);
 
-    const button = await screen.findByRole('button', { name: 'End assignment 2' });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Mark another assignment as current first');
+    fireEvent.click((await screen.findAllByRole('radio'))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const sent = submitted(onSubmit);
+    expect(sent[1].toDate!).toBeGreaterThanOrEqual(sent[1].fromDate);
+    expectHrmsAccepts(sent);
   });
 
-  it('says so plainly when a saved assignment has already ended', async () => {
-    // The reporter's DEPT_9 row. HRMS cannot delete it, so the button explains
-    // itself rather than pretending the click did something.
+  it('offers no remove control on a saved row, because none could ever fire', async () => {
+    // HRMS forbids a second current assignment and forbids a non-current row
+    // with a null toDate, so every row it can actually store is either the sole
+    // current one (nothing to hand off to) or already ended (nothing to end).
+    // A disabled icon in both cases was just noise; the radio is the revoke.
     renderEditor([HISTORICAL, CURRENT]);
 
-    const button = await screen.findByRole('button', { name: 'End assignment 1' });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute(
-      'title',
-      'Already ended — HRMS keeps assignment history and cannot delete a row',
+    await waitFor(() => expect(screen.getAllByRole('radio')).toHaveLength(2));
+    expect(screen.queryByRole('button', { name: /assignment 1$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /assignment 2$/ })).not.toBeInTheDocument();
+    // The mechanism is explained once, under the list.
+    expect(screen.getByText(/mark another one as the/i)).toBeInTheDocument();
+  });
+
+  it('marks a saved closed row as retained history', async () => {
+    renderEditor([HISTORICAL, CURRENT]);
+    expect(await screen.findByText(/retained as history/)).toBeInTheDocument();
+  });
+
+  it('does not call an unsaved row "retained as history"', async () => {
+    // setCurrent stamps a toDate on whatever row it demotes. When that row is
+    // one the operator just added and is about to delete, claiming HRMS retains
+    // it as history is simply untrue.
+    renderEditor([CURRENT]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add assignment' }));
+    // Make the new row current, then hand `current` back to the saved one.
+    const radios = await screen.findAllByRole('radio');
+    fireEvent.click(radios[1]);
+    fireEvent.click((await screen.findAllByRole('radio'))[0]);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove assignment 2' })).toBeInTheDocument(),
     );
-    expect(screen.getByText(/retained as history/)).toBeInTheDocument();
+    expect(screen.queryByText(/retained as history/)).not.toBeInTheDocument();
   });
 
   it('a row the operator added but never saved is removed outright', async () => {
