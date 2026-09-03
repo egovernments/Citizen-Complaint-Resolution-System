@@ -644,7 +644,7 @@ reading, rotating and unsealing.
 | Login fails for `ADMIN` on your root tenant | that root was never created — see the tenant note in Step 3 | check the deploy output for the line naming the fallback to `pg` |
 
 Deeper diagnosis, including reading logs and metrics, is in the
-[operations handbook](../docs/operations/README.md).
+[operations handbook](../docs/2.12/operations/README.md).
 
 ### Next: onboard a tenant
 
@@ -672,7 +672,7 @@ walkthrough.
 | Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#troubleshooting) |
 | Repository layout | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#project-structure) |
 | Everything the Ansible playbook does | [ansible/README.md](ansible/README.md) |
-| Running the stack in production | [operations handbook](../docs/operations/README.md) |
+| Running the stack in production | [operations handbook](../docs/2.12/operations/README.md) |
 
 ### Other guides in `docs/`
 

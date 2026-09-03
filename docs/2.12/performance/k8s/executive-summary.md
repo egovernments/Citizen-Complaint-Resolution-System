@@ -119,4 +119,4 @@ Two conclusions follow. For operators, this is a real defect that any client iss
 | Message broker | Kafka (KRaft), 3 controllers, all PGR topics single-partition |
 | Load generator | k6, remote control machine, ~24ms RTT |
 
-See [Detailed Findings](./findings) for methodology, the drain gate, and the full degradation curve.
+See [Detailed Findings](./findings.md) for methodology, the drain gate, and the full degradation curve.

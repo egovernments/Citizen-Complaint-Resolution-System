@@ -4,9 +4,9 @@ Load test results against a DIGIT PGR deployment on AWS EKS (4 × m5a.xlarge, 36
 
 | Document | Contents |
 |---|---|
-| [Executive Summary](./executive-summary) | Key numbers, capacity curve, where the limit is, stability |
-| [Findings](./findings) | Methodology, the drain gate, degradation curve, deployment configuration, known limits |
-| [Capacity Planning](./recommendations-transition-plan) | Business sizing — complaints/day, test users vs real people, what to fix first |
+| [Executive Summary](./executive-summary.md) | Key numbers, capacity curve, where the limit is, stability |
+| [Findings](./findings.md) | Methodology, the drain gate, degradation curve, deployment configuration, known limits |
+| [Capacity Planning](./recommendations-transition-plan.md) | Business sizing — complaints/day, test users vs real people, what to fix first |
 
 ## Headline
 

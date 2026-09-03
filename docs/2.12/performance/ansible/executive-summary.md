@@ -24,7 +24,7 @@ Every test iteration runs one complete PGR complaint lifecycle — **4 API calls
 
 **CREATE** (file complaint) → **ASSIGN** (route to department) → **RESOLVE** (close it) → **SEARCH** (verify status)
 
-Throughout this document, **lifecycle success** is the share of lifecycles that completed all four steps and ended in `RESOLVED`, while **request fail** is the share of individual HTTP requests that errored. They have different denominators — roughly four requests per lifecycle — so they do not sum to 100. See [Reading the two percentage columns](./findings#reading-the-two-percentage-columns).
+Throughout this document, **lifecycle success** is the share of lifecycles that completed all four steps and ended in `RESOLVED`, while **request fail** is the share of individual HTTP requests that errored. They have different denominators — roughly four requests per lifecycle — so they do not sum to 100. See [Reading the two percentage columns](./findings.md#reading-the-two-percentage-columns).
 
 This exercises Kong, PGR Services, Workflow, Persister, Kafka, and Postgres — the entire hot path. Seven concurrency levels were tested — 2, 10, 50, 75, 100, 125 and 150 VUs — each held at peak for 5 minutes, with no CPU limits applied. A burst ladder at 20, 40, 80, 160 and 320 VUs, also unthrottled, was run separately to locate the failure point by error rate rather than by latency.
 
@@ -60,7 +60,7 @@ The ramp tests above stop on a latency budget and record 0.000% HTTP failures at
 
 Up to 80 VU the deployment is bound by client think time rather than by the server: measured throughput tracks the theoretical `VU ÷ 9.68s` almost exactly and server p95 moves only 108ms across a fourfold concurrency increase. Those levels return 0.000% failures and are clean measurements.
 
-**The 160 and 320 VU rows do not locate a ceiling.** Both were measured while `pgr-services` was exhausting a 384 MB JVM heap — a fixed cap unrelated to the machine's 30.6 GiB. The first `OutOfMemoryError` fired during the 160 VU level and killed the Kafka producer's sender thread; because `CustomKafkaTemplate.send` waits on an untimed `CompletableFuture.get()`, every later create and update parked forever and the service never recovered. The 320 VU level therefore ran against an already-broken service, and its 41% failure rate measures that rather than saturation. See [When the heap gave out](./findings#when-the-heap-gave-out).
+**The 160 and 320 VU rows do not locate a ceiling.** Both were measured while `pgr-services` was exhausting a 384 MB JVM heap — a fixed cap unrelated to the machine's 30.6 GiB. The first `OutOfMemoryError` fired during the 160 VU level and killed the Kafka producer's sender thread; because `CustomKafkaTemplate.send` waits on an untimed `CompletableFuture.get()`, every later create and update parked forever and the service never recovered. The 320 VU level therefore ran against an already-broken service, and its 41% failure rate measures that rather than saturation. See [When the heap gave out](./findings.md#when-the-heap-gave-out).
 
 **The deployment's ceiling is unmeasured.** 120 VU was measured clean three times four days later — see [Follow-Up Measurements](#follow-up-measurements-1-september-2026) — but nothing between 120 and 320 VU has been, and the ladder needs re-running with a realistic heap before any higher figure is quoted.
 
@@ -75,13 +75,13 @@ A second campaign capped the DIGIT services with `docker update` to measure smal
 | cpu-8 | 50 VU | 0.693/s | 2.80 | 59,875/day | 100% |
 | cpu-16 | 50 VU | 2.204/s | 8.80 | 190,426/day | 100% |
 
-`cpu-16` divides a 16 vCPU budget across 31 services rather than giving the stack 16 vCPU; `pgr-services` itself is pinned to **0.80 of a core**. Because a request chain is sequential, no service can borrow another's idle time, and CFS quota stops a container outright once its slice is spent — so latency suffers far more than throughput. Measured head to head on the same host 29 minutes apart with the same `ramp-50vu` scenario, on whole-run figures for both arms, `cpu-16` returned 1.798 lifecycles/sec at 6,621ms server p95 against the unthrottled machine's 3.367 lifecycles/sec at 360ms — 1.9x the throughput at one-eighteenth of the latency. (Those are whole-run numbers, so they differ from the steady-state figures tabulated above.) See [Why cpu-16 is not a 16 vCPU machine](./findings#why-cpu-16-is-not-a-16-vcpu-machine). Treat the profile figures as conservative floors, not as vCPU-equivalent machine sizes.
+`cpu-16` divides a 16 vCPU budget across 31 services rather than giving the stack 16 vCPU; `pgr-services` itself is pinned to **0.80 of a core**. Because a request chain is sequential, no service can borrow another's idle time, and CFS quota stops a container outright once its slice is spent — so latency suffers far more than throughput. Measured head to head on the same host 29 minutes apart with the same `ramp-50vu` scenario, on whole-run figures for both arms, `cpu-16` returned 1.798 lifecycles/sec at 6,621ms server p95 against the unthrottled machine's 3.367 lifecycles/sec at 360ms — 1.9x the throughput at one-eighteenth of the latency. (Those are whole-run numbers, so they differ from the steady-state figures tabulated above.) See [Why cpu-16 is not a 16 vCPU machine](./findings.md#why-cpu-16-is-not-a-16-vcpu-machine). Treat the profile figures as conservative floors, not as vCPU-equivalent machine sizes.
 
 **None of these profiles describes a deployable machine.** They constrain CPU only, on a host that still has the full 30 GiB of memory. A real machine of the same nominal size would also have proportionally less memory, and below 32 GiB the stack does not fit at all. The minimum deployment spec is **16 vCPU / 32 GiB**; the profiles below the top one exist to show where CPU becomes the binding constraint, not to offer smaller options.
 
 ## Follow-Up Measurements, 1 September 2026
 
-Three method gaps were closed by a follow-up campaign on the same deployment, against a fixed dataset of 2,525 stored complaints restored between every run. Full detail in [Findings](./findings#follow-up-measurements-1-september-2026).
+Three method gaps were closed by a follow-up campaign on the same deployment, against a fixed dataset of 2,525 stored complaints restored between every run. Full detail in [Findings](./findings.md#follow-up-measurements-1-september-2026).
 
 **Every figure in the ladder above came from a single run.** Three repeats at 120 VU give the error bars they lacked:
 
@@ -91,7 +91,7 @@ Three method gaps were closed by a follow-up campaign on the same deployment, ag
 
 **Tail latency near saturation is worth roughly ±20%**, so p95 differences below about 40% at that level cannot be read from a single run. Throughput stays stable. The Kubernetes campaign measured 20.1% p95 variance at its own saturation point on unrelated infrastructure — two different stacks, the same answer.
 
-All three 120 VU repeats returned 0.000% request failures and 100.00% lifecycle success, and are the source of the headline figure above. Repeats at 40 VU were also run but returned 0.00% lifecycle success and are excluded; run-to-run spread is therefore measured at one level only. See [Run-to-Run Variance](./findings#run-to-run-variance).
+All three 120 VU repeats returned 0.000% request failures and 100.00% lifecycle success, and are the source of the headline figure above. Repeats at 40 VU were also run but returned 0.00% lifecycle success and are excluded; run-to-run spread is therefore measured at one level only. See [Run-to-Run Variance](./findings.md#run-to-run-variance).
 
 **The closed-loop design flatters the system.** Re-run with a ramping arrival rate, which holds the offered load independent of server speed:
 
