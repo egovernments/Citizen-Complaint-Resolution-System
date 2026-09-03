@@ -2337,7 +2337,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-7c91934}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-0469335}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
