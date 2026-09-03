@@ -4,7 +4,7 @@ import { useApp } from '@/App';
 import { getConfiguredRootTenant } from '@/api';
 import { mdmsService } from '@/api/services/mdms';
 import { buildPublicDashboardUrl, DEFAULT_DASHBOARD_TIME_ZONE } from '@/api/publicDashboardConfig';
-import { DASHBOARD_TIME_ZONES } from '@/lib/timezones';
+import { listTimeZones } from '@/lib/timezones';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,13 @@ export default function PublicDashboardConfigure() {
   const [enabled, setEnabled] = useState(false);
   const [timeZone, setTimeZone] = useState(DEFAULT_DASHBOARD_TIME_ZONE);
   const [savingTimeZone, setSavingTimeZone] = useState(false);
+  // The saved value is always kept in the option list even if the runtime's IANA
+  // database doesn't recognize it (older browser, deprecated zone) — otherwise the
+  // <select> would silently show blank instead of the actual configured value.
+  const timeZoneOptions = useMemo(() => {
+    const known = listTimeZones();
+    return known.includes(timeZone) ? known : [timeZone, ...known];
+  }, [timeZone]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -197,7 +204,7 @@ export default function PublicDashboardConfigure() {
             </div>
             <Button
               variant={enabled ? 'destructive' : 'default'}
-              disabled={saving}
+              disabled={saving || savingTimeZone}
               onClick={() => void setPublicAccess(!enabled)}
               className="shrink-0"
             >
@@ -228,11 +235,11 @@ export default function PublicDashboardConfigure() {
           <select
             aria-label="Dashboard time zone"
             value={timeZone}
-            disabled={savingTimeZone}
+            disabled={savingTimeZone || saving}
             onChange={(e) => void setDashboardTimeZone(e.target.value)}
             className="flex h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {DASHBOARD_TIME_ZONES.map((tz) => (
+            {timeZoneOptions.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>
             ))}
           </select>
