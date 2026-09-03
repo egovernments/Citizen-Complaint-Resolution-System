@@ -15,7 +15,7 @@
 // The same holds one level down: boundary codes are unique per tenant, not
 // globally (`ke.mycitynew` and `ke.hajbvfg` both seed CITY_001 / WARD_001).
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CoreAdminContext, Form, TestMemoryRouter, type DataProvider } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
@@ -66,19 +66,29 @@ function makeDataProvider(): DataProvider {
   } as unknown as DataProvider;
 }
 
-function renderEditor(record: Record<string, unknown>) {
+function renderEditor(
+  record: Record<string, unknown>,
+  onSubmit: (values: unknown) => void = () => {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
   });
   return render(
     <TestMemoryRouter>
       <CoreAdminContext dataProvider={makeDataProvider()} queryClient={queryClient}>
-        <Form record={record} onSubmit={() => {}}>
+        <Form record={record} onSubmit={onSubmit}>
           <JurisdictionEditor tenantId="ke" />
+          <button type="submit">Save</button>
         </Form>
       </CoreAdminContext>
     </TestMemoryRouter>,
   );
+}
+
+/** The jurisdictions array as the form would hand it to egov-hrms/_update. */
+function submittedJurisdictions(onSubmit: ReturnType<typeof vi.fn>) {
+  const values = onSubmit.mock.calls[0][0] as { jurisdictions?: Record<string, unknown>[] };
+  return values.jurisdictions ?? [];
 }
 
 /** The row renders its selects in a fixed order — Hierarchy, then one per
@@ -157,5 +167,119 @@ describe('JurisdictionEditor — #1923 duplicate dropdown options', () => {
     await waitFor(() => expect(screen.getAllByRole('combobox')).toHaveLength(3));
     expect(screen.getByText('County')).toBeInTheDocument();
     expect(screen.getByText('Ward')).toBeInTheDocument();
+  });
+});
+
+// Regression coverage for CCRS #1957 — "User is unable to revoke the access of
+// a particular jurisdiction/department that was already assigned to user".
+//
+// egov-hrms treats jurisdictions as append-only: EmployeeValidator's
+// validateConsistencyJurisdiction fails the WHOLE update with
+// ERR_HRMS_UPDATE_JURISDICTION_INCOSISTENT ("Jurisdiction data in an update
+// request should contain all previously entered data.") unless every id it has
+// already stored comes back in the payload. This editor used to splice the row
+// straight out of the form value, so on bomet an admin trying to take Bomet
+// Central away from HR_CSR could not save the employee at all.
+//
+// The supported revoke is the isActive flag: the row stays in the payload
+// switched off, egov-hrms's EmployeeRowMapper stops returning it from _search,
+// and pgr-services' PolicyDrivenScopeResolver stops unioning its boundary into
+// the employee's scope.
+const SAVED_JURISDICTIONS = [
+  {
+    id: 'jur-bomet',
+    hierarchyType: 'ADMIN',
+    boundaryType: 'County',
+    boundary: 'BOMET',
+    isActive: true,
+    tenantId: 'ke',
+  },
+  {
+    id: 'jur-city-one',
+    hierarchyType: 'ADMIN',
+    boundaryType: 'County',
+    boundary: 'CITY_001',
+    isActive: true,
+    tenantId: 'ke.mycitynew',
+  },
+];
+
+describe('JurisdictionEditor — #1957 revoking an assigned jurisdiction', () => {
+  it('keeps a saved jurisdiction in the payload as isActive:false rather than dropping it', async () => {
+    const onSubmit = vi.fn();
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS }, onSubmit);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const sent = submittedJurisdictions(onSubmit);
+    // Both ids still travel — that is what keeps HRMS's consistency check happy.
+    expect(sent.map((j) => j.id)).toEqual(['jur-bomet', 'jur-city-one']);
+    expect(sent.find((j) => j.id === 'jur-bomet')?.isActive).toBe(true);
+    expect(sent.find((j) => j.id === 'jur-city-one')?.isActive).toBe(false);
+  });
+
+  it('drops the revoked row from the editor and offers it back under "Revoked on save"', async () => {
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 2' }));
+
+    // One live row left, and the revoked one is listed as pending with an undo.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove jurisdiction 2' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Remove jurisdiction 1' })).toBeInTheDocument();
+    expect(screen.getByText('Revoked on save')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Restore/ })).toBeInTheDocument();
+  });
+
+  it('Restore puts the row back before the save goes out', async () => {
+    const onSubmit = vi.fn();
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS }, onSubmit);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 2' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Restore/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(submittedJurisdictions(onSubmit).every((j) => j.isActive === true)).toBe(true);
+    expect(screen.queryByText('Revoked on save')).not.toBeInTheDocument();
+  });
+
+  it('editing another row does not silently re-grant a revoked one', async () => {
+    // writeRows used to stamp `isActive: true` onto every row it wrote back, so
+    // any later keystroke resurrected the jurisdiction the operator had just
+    // revoked — the revoke looked applied but never reached HRMS.
+    const onSubmit = vi.fn();
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS }, onSubmit);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 2' }));
+    await openSelect(FIRST_LEVEL_SELECT);
+    fireEvent.click(await screen.findByRole('option', { name: /City One/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(submittedJurisdictions(onSubmit).find((j) => j.id === 'jur-city-one')?.isActive).toBe(
+      false,
+    );
+  });
+
+  it('a row the operator added but never saved is removed outright', async () => {
+    // No id means HRMS has never seen it, so there is nothing for the
+    // consistency check to miss and no reason to keep a dead row around.
+    const onSubmit = vi.fn();
+    renderEditor({ jurisdictions: [SAVED_JURISDICTIONS[0]] }, onSubmit);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add jurisdiction' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove jurisdiction 2' })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove jurisdiction 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(submittedJurisdictions(onSubmit)).toHaveLength(1);
+    expect(screen.queryByText('Revoked on save')).not.toBeInTheDocument();
   });
 });
