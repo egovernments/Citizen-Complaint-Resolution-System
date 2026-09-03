@@ -130,7 +130,7 @@ deployment failed **19.57%** of requests, completed **50.23%** of lifecycles, an
 started 24% of the intended work. The level at which this deployment fails under evenly-paced
 load is still unmeasured.
 
-**→ [Executive Summary](./run-28-08-26/executive-summary) · [Findings](./run-28-08-26/findings) · [Capacity Planning](./run-28-08-26/recommendations-transition-plan)**
+**→ [Executive Summary](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/2.12/performance/ansible/executive-summary.md) · [Findings](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/2.12/performance/ansible/findings.md) · [Capacity Planning](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/2.12/performance/ansible/recommendations-transition-plan.md)**
 
 ## Resource Profile Performance Over Time
 
