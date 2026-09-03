@@ -115,7 +115,7 @@ command guarantees run-scoped teardown after the browser benchmark exits.
 | [Setup](docs/setup.md) | Machine provisioning, k6 configuration, database indexes, SSH tunnels |
 | [Running Tests](docs/running-tests.md) | How to run each scenario, interpret results, troubleshoot failures |
 | [Findings](docs/findings.md) | Performance results, database bugs, SQL fixes, capacity planning |
-| [Dashboard run — 2 Sep 2026](docs/run-02-09-26/) | 20K–500K dashboard read scaling, saturation boundary, database evidence, and recommendations |
+| [Dashboard scaling — 2 Sep 2026](docs/dashboard-scaling-02-09-26.md) | 20K–500K dashboard read scaling, saturation boundary, database evidence, and recommendations |
 
 ## Test Scenarios
 

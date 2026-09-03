@@ -91,7 +91,8 @@ A single 32 vCPU / 64 GiB host remains a reasonable choice when you want headroo
 The 2–3 September dashboard campaign adds a measured read-path boundary at
 exactly 500,000 complaints. It ran on Bomet's full 16 vCPU / 30.6 GiB stack,
 using a separate load generator and a guarded disposable snapshot clone. The
-complete method and percentiles are in the [dashboard run report](./run-02-09-26/).
+complete method and percentiles are in the
+[dashboard scaling report](./dashboard-scaling-02-09-26).
 
 | Dashboard VUs | Offered loads/s | Realized loads/s | HTTP RPS | Dashboard p95 | Result |
 |---:|---:|---:|---:|---:|---|

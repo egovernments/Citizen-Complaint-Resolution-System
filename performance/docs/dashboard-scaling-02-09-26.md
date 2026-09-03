@@ -85,6 +85,36 @@ underreported 20K/50K throughput by 20%; these are the corrected values.
 | 500K | 125 | 12.5 | 38.442 | 7.450s | 8.276s | 8.665s | 9.936s | 10.042s | 100% | 0% |
 | 500K | 150 | 15.0 | 46.125 | 8.213s | 9.376s | 9.766s | 10.837s | 16.037s | 100% | 0% |
 
+### p50 by concurrency and stored complaints
+
+| VUs | 20K | 50K | 100K | 500K |
+|---:|---:|---:|---:|---:|
+| 2 | 0.864s | 0.895s | 0.442s | 0.490s |
+| 10 | 1.073s | 1.012s | 0.477s | 0.849s |
+| 50 | 1.923s | 1.859s | 1.414s | 3.063s |
+| 75 | 2.332s | 2.140s | 2.028s | 4.559s |
+| 100 | 2.691s | 2.762s | 2.431s | 6.053s |
+| 120 | 3.186s | 3.006s | 2.842s | 7.150s |
+| 125 | 2.970s | 3.346s | 3.038s | 7.450s |
+| 150 | 3.643s | 3.671s | 3.744s | 8.213s |
+| 175 | — | — | — | 10.164s |
+| 200 | — | — | — | 12.468s |
+
+### p90 by concurrency and stored complaints
+
+| VUs | 20K | 50K | 100K | 500K |
+|---:|---:|---:|---:|---:|
+| 2 | 1.422s | 1.356s | 0.489s | 0.518s |
+| 10 | 2.161s | 2.544s | 0.590s | 0.973s |
+| 50 | 3.137s | 3.176s | 1.519s | 4.102s |
+| 75 | 3.681s | 3.268s | 2.147s | 4.989s |
+| 100 | 4.011s | 3.978s | 2.695s | 7.081s |
+| 120 | 4.443s | 4.286s | 3.162s | 8.118s |
+| 125 | 4.291s | 4.524s | 3.389s | 8.665s |
+| 150 | 5.039s | 5.233s | 4.896s | 9.766s |
+| 175 | — | — | — | 13.280s |
+| 200 | — | — | — | 15.868s |
+
 All nine KPI results were present in every successful visit. Throughput remains
 pacing-limited at all four data sizes; the 500K result is a latency limit before
 it is an error-rate or throughput limit.
