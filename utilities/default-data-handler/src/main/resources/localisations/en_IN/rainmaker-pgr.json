@@ -1164,6 +1164,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pending at Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT",
         "message": "Pending for assignment",
         "module": "rainmaker-pgr",
@@ -1184,6 +1190,12 @@
     {
         "code": "CS_COMMON_PGR_STATE_RESOLVED",
         "message": "Resolved",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolved by Supervisor",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

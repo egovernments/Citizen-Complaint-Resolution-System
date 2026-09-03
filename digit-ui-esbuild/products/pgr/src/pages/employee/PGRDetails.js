@@ -221,8 +221,12 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // Mandatory: a hand-up with no recipient lands in a state that is
+              // not in pgr.visibility.unassigned.states, so under server-side
+              // inbox visibility no supervisor sees it in either tab and only
+              // an exact complaint-number lookup can find it again.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -299,8 +303,12 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // Mandatory: a hand-up with no recipient lands in a state that is
+              // not in pgr.visibility.unassigned.states, so under server-side
+              // inbox visibility no supervisor sees it in either tab and only
+              // an exact complaint-number lookup can find it again.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",

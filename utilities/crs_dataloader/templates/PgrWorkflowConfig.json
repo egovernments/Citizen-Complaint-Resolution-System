@@ -361,11 +361,21 @@
           "actions": [
             {
               "tenantId": "{tenantid}",
-              "currentState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "currentState": "PENDINGATSUPERVISOR",
               "action": "RESOLVEBYSUPERVISOR",
               "nextState": "RESOLVED",
               "roles": [
                 "SUPERVISOR"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "COMMENT",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "CITIZEN"
               ],
               "active": true
             }

@@ -146,10 +146,10 @@ class PgrWorkflowConfigSplitterTest {
     void emittedRoutingRows_matchGoldenUids_andRowShape() {
         serviceWithRealConfig().createPgrWorkflowConfig(TARGET_TENANT);
 
-        List<MdmsRequest> emitted = captureMdmsCreates(22);
+        List<MdmsRequest> emitted = captureMdmsCreates(34);
         List<Mdms> routing = filterBySchema(emitted, ROUTING_SCHEMA);
 
-        assertEquals(11, routing.size(), "expected exactly 11 NotificationRouting rows");
+        assertEquals(17, routing.size(), "expected exactly 17 NotificationRouting rows");
         assertEquals(goldenSet("/notification/golden-routing-uids.json"),
                 uidSet(routing), "routing uniqueIdentifier set must match golden");
 
@@ -170,10 +170,10 @@ class PgrWorkflowConfigSplitterTest {
     void emittedTemplateRows_matchGoldenUids_andCarryBodies() {
         serviceWithRealConfig().createPgrWorkflowConfig(TARGET_TENANT);
 
-        List<MdmsRequest> emitted = captureMdmsCreates(22);
+        List<MdmsRequest> emitted = captureMdmsCreates(34);
         List<Mdms> templates = filterBySchema(emitted, TEMPLATE_SCHEMA);
 
-        assertEquals(11, templates.size(), "expected exactly 11 NotificationTemplate rows");
+        assertEquals(17, templates.size(), "expected exactly 17 NotificationTemplate rows");
         assertEquals(goldenSet("/notification/golden-template-uids.json"),
                 uidSet(templates), "template uniqueIdentifier set must match golden");
 
@@ -198,9 +198,9 @@ class PgrWorkflowConfigSplitterTest {
             service.createPgrWorkflowConfig(TARGET_TENANT);
         });
 
-        List<MdmsRequest> emitted = captureMdmsCreates(44);
-        List<String> firstPass = keyStrings(emitted.subList(0, 22));
-        List<String> secondPass = keyStrings(emitted.subList(22, 44));
+        List<MdmsRequest> emitted = captureMdmsCreates(68);
+        List<String> firstPass = keyStrings(emitted.subList(0, 34));
+        List<String> secondPass = keyStrings(emitted.subList(34, 68));
 
         // Multiset equality of (schemaCode, uniqueIdentifier) across the two passes.
         assertEquals(sorted(firstPass), sorted(secondPass),
@@ -212,7 +212,7 @@ class PgrWorkflowConfigSplitterTest {
         serviceWithRealConfig().createPgrWorkflowConfig(TARGET_TENANT);
 
         // Documented ordering: strip+POST workflow first, THEN emit MDMS rows.
-        // atLeastOnce() asserts the ordering relationship without pinning the (22) emission count.
+        // atLeastOnce() asserts the ordering relationship without pinning the (34) emission count.
         InOrder inOrder = org.mockito.Mockito.inOrder(workflowUtil, mdmsV2Util);
         inOrder.verify(workflowUtil).createWfConfig(any(BusinessServiceRequest.class));
         inOrder.verify(mdmsV2Util, org.mockito.Mockito.atLeastOnce()).createMdmsData(any(MdmsRequest.class));
