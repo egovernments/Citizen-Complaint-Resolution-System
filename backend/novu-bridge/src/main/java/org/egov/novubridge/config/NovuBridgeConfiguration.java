@@ -119,6 +119,48 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.integration.id.whatsapp:}")
     private String whatsappIntegrationId;
 
+    // ---- Ordinary SMS through a non-Twilio gateway -------------------------
+    // Twilio is not usable everywhere: some deployments cannot clear the SMS
+    // compliance registration it requires, even where WhatsApp is fine. Novu has
+    // no built-in provider for most regional gateways either — setting an
+    // integration's providerId to the gateway's own name fails at trigger time
+    // ("Sms handler for provider <name> is not found"). The supported route is
+    // Novu's built-in "generic-sms" provider plus a _passthrough body shaped for
+    // that gateway's API, which is what SmsCountryClient does.
+    //
+    // Blank (the default) = no overrides are sent and SMS delivers through
+    // whatever is primary on Novu's sms channel, i.e. today's behaviour.
+    // "ozeki" or "smscountry" = attach that gateway's envelope to SMS-channel
+    // triggers only.
+    // WhatsApp is unaffected: it is keyed to a different integration and returns
+    // before this is ever consulted.
+    @Value("${novu.bridge.sms.provider:}")
+    private String smsProvider;
+
+
+    // Registered sender id / header the gateway sends from.
+    @Value("${novu.bridge.sms.sender.id:}")
+    private String smsSenderId;
+
+    // ---- SMSCountry legacy bulk API (direct, not via Novu) ----
+    // Its form-encoded request and plain-text response cannot ride Novu's
+    // generic-sms provider, which injects a JSON _passthrough body, so
+    // SmsCountryClient talks to the gateway directly. Credentials are the
+    // SMSCountry panel login; that account type issues no API key.
+    @Value("${novu.bridge.smscountry.url:http://api.smscountry.com/SMSCwebservice_bulk.aspx}")
+    private String smsCountryUrl;
+
+    @Value("${novu.bridge.smscountry.user:}")
+    private String smsCountryUser;
+
+    @Value("${novu.bridge.smscountry.password:}")
+    private String smsCountryPassword;
+
+    /** True when the SMS leg should bypass Novu and go straight to SMSCountry. */
+    public boolean isSmsCountryDirect() {
+        return "smscountry".equalsIgnoreCase(smsProvider == null ? "" : smsProvider.trim());
+    }
+
     // ---- Subscriber identify (upsert) TTL cache ----
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;

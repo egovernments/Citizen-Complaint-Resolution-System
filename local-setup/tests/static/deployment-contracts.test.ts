@@ -139,6 +139,7 @@ describe('Novu workflow creation deployment contract', () => {
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
+  const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
   const dotenvLoader = path.join(
     REPO_ROOT,
     'backend/novu-bridge/config/load-dotenv.sh'
@@ -195,5 +196,77 @@ describe('Novu workflow creation deployment contract', () => {
       'Complaint {{payload.complaintNo}} status is {{payload.status}}',
       'caller wins',
     ]);
+  });
+
+  test('the bootstrap preserves Handlebars braces in the default SMS body and explicit overrides', () => {
+    const smsBodyDefault = novuBootstrap.match(
+      /if \[\[ -z "\$\{NOVU_SMS_BODY:-\}" \]\]; then\n  NOVU_SMS_BODY='[^'\n]*'\nfi/
+    );
+    expect(smsBodyDefault).not.toBeNull();
+
+    const probe = `${smsBodyDefault![0]}\nprintf '%s\\n' "$NOVU_SMS_BODY"`;
+    const runProbe = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_SMS_BODY;
+      } else {
+        env.NOVU_SMS_BODY = override;
+      }
+      return execFileSync('bash', ['-c', probe], {
+        encoding: 'utf8',
+        env,
+      }).trim();
+    };
+
+    expect(runProbe()).toBe(
+      'Complaint {{payload.complaintNo}} status is {{payload.status}}'
+    );
+    expect(runProbe('Custom {{payload.status}} update')).toBe(
+      'Custom {{payload.status}} update'
+    );
+  });
+
+  // Nothing triggers the legacy COMPLAINTS.WORKFLOW.* workflows: the bridge resolves
+  // its Novu workflow from the channel (NovuBridgeConfiguration.getNovuWorkflowId),
+  // never from the event name. The playbook runs this script with only the Twilio
+  // vars set, so a non-empty default here silently creates them on every deploy.
+  test('the bootstrap creates no event-convention workflows unless asked', () => {
+    expect(novuBootstrap).toContain('NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"');
+
+    const probe = [
+      'NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"',
+      'IFS="," read -r -a IDS <<< "$NOVU_EVENT_WORKFLOWS"',
+      'n=0',
+      'for i in "${IDS[@]}"; do i="$(echo "$i" | xargs)"; [[ -z "$i" ]] && continue; n=$((n+1)); done',
+      'printf "%s\\n" "$n"',
+    ].join('\n');
+
+    const countCreated = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_EVENT_WORKFLOWS;
+      } else {
+        env.NOVU_EVENT_WORKFLOWS = override;
+      }
+      return execFileSync('bash', ['-c', probe], { encoding: 'utf8', env }).trim();
+    };
+
+    expect(countCreated()).toBe('0');
+    // The comma idiom older runbooks used must keep working.
+    expect(countCreated(',')).toBe('0');
+    expect(countCreated('A.B,C.D')).toBe('2');
+  });
+
+  // SMSCountry's legacy API is form-encoded with a plain-text reply, which no Novu
+  // provider can express, so that gateway is driven directly and needs no Novu
+  // integration. This pins the selector so the Novu-routed path is not restored.
+  test('the SMSCountry gateway is selected by config and driven directly', () => {
+    expect(composeEnv).toContain(
+      "NOVU_BRIDGE_SMS_PROVIDER={{ novu_bridge_sms_provider | default('') }}"
+    );
+    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_USER=');
+    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_PASSWORD=');
+    // No generic-sms integration identifier: nothing routes SMSCountry through Novu.
+    expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 });
