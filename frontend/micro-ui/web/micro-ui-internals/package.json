@@ -60,7 +60,7 @@
     "@egovernments/digit-ui-react-components": "1.9.3",
     "@egovernments/digit-ui-module-hrms": "1.9.10",
     "ajv": "8.12.0",
-    "lodash": "4.17.21",
+    "lodash": "4.18.1",
     "microbundle-crl": "0.13.11",
     "react": "17.0.2",
     "react-dom": "17.0.2",
