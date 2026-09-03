@@ -82,6 +82,6 @@ A partner picking up stock DIGIT today hits every friction above. CMS delivers a
 
 - `[docs/deployment-cms-vs-stock-digit.md](deployment-cms-vs-stock-digit.md)` — the componentry table (friction → response mapping)
 - `[docs/rapid-release-approach.md](rapid-release-approach.md)` — the release-engineering baseline we built
-- `[docs/operations/known-issues.md](operations/known-issues.md)` — operational patterns catalogued
+- `[docs/2.12/operations/known-issues.md](2.12/operations/known-issues.md)` — operational patterns catalogued
 - `[docs/design/](design/)` — the ABAC framework design docs
 - `[docs/plans/2026-07-06-provider-template-mapping-design.md](plans/2026-07-06-provider-template-mapping-design.md)` — the notifications redesign
