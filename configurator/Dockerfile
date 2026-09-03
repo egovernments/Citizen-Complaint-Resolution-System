@@ -8,8 +8,16 @@
 #   - `vite build` DIRECTLY (not the package.json `tsc -b && vite build`): the
 #     root tsc -b has blocking app-level type errors upstream, but vite/esbuild
 #     emits a working SPA without type-checking.
-# Tenant-neutral by default. The only optional product switch below retains the
-# old PGR dashboard as a rollback aid; nightly/reference images leave it off.
+# Tenant-neutral — but by construction, not by accident. The app DOES read four
+# deployment values (state tenant, Overpass/Turbopass endpoints, boundary search
+# limit); they are resolved at RUNTIME from `<base>/config.js`
+# (window.__CONFIGURATOR_CONFIG__), which the deploy renders per-tenant and drops
+# next to the bundle — the same pattern as digit-ui's globalConfigs.js. A neutral
+# public/config.js ships in the image so an unconfigured run falls through to the
+# in-code defaults. Do NOT reintroduce VITE_* build args: baking them here is what
+# made a pre-built image silently deployment-specific (empty tenant on the login
+# form, public rate-limited Overpass). See configurator/src/api/runtimeConfig.ts.
+# amd64 deploy target.
 ARG NODE_IMAGE=node:20-bookworm-slim
 ARG BASE_PATH=/configurator/
 
@@ -55,12 +63,23 @@ COPY --from=build /app/configurator/dist /usr/share/nginx/html${BASE_PATH}
 # path, $uri maps straight to disk and the SPA fallback is the base index.html —
 # avoids the well-known alias+try_files path-doubling footgun and serves
 # deep-link refreshes correctly.
+# config.js MUST NOT be cached. It is the runtime deployment config, so it has a
+# STABLE name and MUTABLE content — the opposite of the hashed assets/ bundle,
+# which is content-addressed and safe to cache forever. Without an explicit
+# Cache-Control, nginx sends only ETag/Last-Modified and browsers apply
+# heuristic freshness: an operator changes a tenant value, redeploys, and users
+# keep serving the old config until a hard refresh. That is precisely the silent
+# staleness this runtime-config mechanism exists to remove.
 RUN printf 'server {\n\
   listen 80;\n\
   root /usr/share/nginx/html;\n\
   location = / { return 302 %s; }\n\
+  location = %sconfig.js {\n\
+    add_header Cache-Control "no-store, must-revalidate" always;\n\
+    try_files $uri =404;\n\
+  }\n\
   location %s {\n\
     try_files $uri $uri/ %sindex.html;\n\
   }\n\
-}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
+}\n' "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" "${BASE_PATH}" > /etc/nginx/conf.d/default.conf
 EXPOSE 80

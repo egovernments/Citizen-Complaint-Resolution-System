@@ -1715,6 +1715,22 @@ services:
   configurator:
     image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-3c3d9fa}
     container_name: configurator
+    # Per-tenant runtime config, rendered by the ansible deploy from host_vars
+    # (templates/configurator-config.js.j2) and mounted over the neutral
+    # placeholder baked into the image. This is what lets ONE published image
+    # serve every tenant: the deployment values the SPA needs are read at boot
+    # from this file instead of being compiled in by `vite build`.
+    # The source is a CHECKED-IN placeholder (local-setup/configurator-runtime/
+    # config.js) so a plain `docker compose up -d` on a fresh checkout works:
+    # Docker auto-creates a missing bind-mount source as a DIRECTORY, which
+    # would shadow the image's own config.js and leave a root-owned dir in the
+    # working tree. The ansible deploy overwrites it per tenant before `up -d`.
+    #
+    # Deliberately NOT `./configurator/` — on macOS `configurator_www_dir`
+    # resolves to `{{ digit_dir }}/configurator`, so that name would alias the
+    # host-served dist and the dist rsync would clobber the tenant render.
+    volumes:
+      - ./configurator-runtime/config.js:/usr/share/nginx/html/configurator/config.js:ro
     ports:
       - "18890:80"
     healthcheck:
