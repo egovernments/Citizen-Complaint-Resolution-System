@@ -492,6 +492,16 @@
                 "CITIZEN"
               ],
               "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "SUPERVISOR"
+              ],
+              "active": true
             }
           ]
         },

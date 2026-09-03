@@ -3672,6 +3672,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_CITIZEN_RESOLVEBYSUPERVISOR_RESOLVED_SMS_MESSAGE",
+        "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been reviewed and resolved by the supervisor. If you are not satisfied with the service you can RE-OPEN the complaint through the web portal or by calling your nearest municipal office.\n\nEGOVS",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE",
         "message": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
         "module": "rainmaker-pgr",

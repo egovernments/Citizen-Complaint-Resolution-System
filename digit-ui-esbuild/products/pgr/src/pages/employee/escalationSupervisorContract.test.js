@@ -323,3 +323,48 @@ test("both status-label prefixes are seeded for every reachable state", () => {
     assert.deepEqual(missing, [], `${path.basename(path.dirname(file))}/${path.basename(file)} missing: ${missing.join(", ")}`);
   }
 });
+
+test("an escalation can be undone, and the way back cannot ping-pong", () => {
+  // Review finding: PENDINGATSUPERVISOR was one-way, so a mis-escalation could only
+  // be closed, never undone. The target matters as much as the action: it must be a
+  // state the escalation scheduler does NOT scan, or a de-escalated complaint is
+  // immediately re-escalated and the loop only ends at maxDepth.
+  const SCANNED = ["PENDINGATLME", "PENDINGFORASSIGNMENT"];        // EscalationScheduler:75
+  const TEAM_VISIBLE = ["PENDINGFORASSIGNMENT", "PENDINGFORREASSIGNMENT"]; // pgr.visibility.unassigned.states
+  for (const file of WORKFLOW_TEMPLATES) {
+    const sup = read(file).BusinessServices[0].states.find((s) => s.state === "PENDINGATSUPERVISOR");
+    const back = (sup.actions || []).find((a) => a.action === "REASSIGN");
+    assert.ok(back, `${path.basename(path.dirname(file))}: no way back out of PENDINGATSUPERVISOR`);
+    assert.deepEqual(back.roles, ["SUPERVISOR"]);
+    assert.ok(!SCANNED.includes(back.nextState),
+      `de-escalating to ${back.nextState} would be re-escalated on the next scan`);
+    assert.ok(TEAM_VISIBLE.includes(back.nextState),
+      `${back.nextState} is not in pgr.visibility.unassigned.states, so a de-escalated ` +
+      `complaint with no assignee would be invisible — the bug this PR fixed for ESCALATE`);
+  }
+});
+
+test("a supervisor's close notifies the citizen on the LEGACY path too", () => {
+  // The config-driven rows are inert while pgr.notification.config.driven=false (the
+  // default), so the legacy notifier is what actually runs. It gates on
+  // "<action>_<applicationStatus>" being in NOTIFICATION_ENABLE_FOR_STATUS, and builds
+  // its message key as PGR_<ROLE>_<ACTION>_<STATUS>_SMS_MESSAGE — a missing key makes
+  // getCustomizedMsg return null and the notifier send nothing.
+  const constants = source(path.join(REPO, "backend/pgr-services/src/main/java/org/egov/pgr/util/PGRConstants.java"));
+  const enableList = constants.match(/NOTIFICATION_ENABLE_FOR_STATUS[\s\S]*?\)\);/);
+  assert.ok(enableList, "could not locate NOTIFICATION_ENABLE_FOR_STATUS");
+  assert.match(enableList[0], /RESOLVEBYSUPERVISOR_RESOLVED/,
+    "the supervisor's close is not registered, so the notifier early-returns");
+
+  const notifier = source(path.join(REPO, "backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java"));
+  assert.doesNotMatch(notifier, /getAction\(\)\.equals\("RESOLVE"\)/,
+    "the Rate/Reopen action links are still gated on the RESOLVE literal");
+  assert.match(notifier, /closesComplaintForCitizen/,
+    "the citizen-close gates should share one predicate covering both resolving actions");
+
+  for (const file of LOCALISATIONS) {
+    const codes = new Set(read(file).map((m) => m.code));
+    assert.ok(codes.has("PGR_CITIZEN_RESOLVEBYSUPERVISOR_RESOLVED_SMS_MESSAGE"),
+      `${path.basename(path.dirname(file))}: legacy message key missing, so the fix sends nothing`);
+  }
+});
