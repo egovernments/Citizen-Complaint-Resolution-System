@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, ExternalLink, Globe2, Loader2, ShieldCheck } from 'lucide-react';
+import { Check, Clock, Copy, ExternalLink, Globe2, Loader2, ShieldCheck } from 'lucide-react';
 import { useApp } from '@/App';
 import { getConfiguredRootTenant } from '@/api';
 import { mdmsService } from '@/api/services/mdms';
-import { buildPublicDashboardUrl } from '@/api/publicDashboardConfig';
+import { buildPublicDashboardUrl, DEFAULT_DASHBOARD_TIME_ZONE } from '@/api/publicDashboardConfig';
+import { DASHBOARD_TIME_ZONES } from '@/lib/timezones';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,8 @@ export default function PublicDashboardConfigure() {
     [state.environment],
   );
   const [enabled, setEnabled] = useState(false);
+  const [timeZone, setTimeZone] = useState(DEFAULT_DASHBOARD_TIME_ZONE);
+  const [savingTimeZone, setSavingTimeZone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -29,7 +32,11 @@ export default function PublicDashboardConfigure() {
     let cancelled = false;
     mdmsService.getDashboardConfig(tenantId)
       .then((record) => {
-        if (!cancelled) setEnabled(record?.data.publicDashboardEnabled === true);
+        if (!cancelled) {
+          setEnabled(record?.data.publicDashboardEnabled === true);
+          const tz = record?.data.timeZone;
+          setTimeZone(typeof tz === 'string' && tz.trim() ? tz : DEFAULT_DASHBOARD_TIME_ZONE);
+        }
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -41,6 +48,31 @@ export default function PublicDashboardConfigure() {
       });
     return () => { cancelled = true; };
   }, [tenantId]);
+
+  const setDashboardTimeZone = async (nextTimeZone: string) => {
+    if (nextTimeZone === timeZone) return;
+    const previous = timeZone;
+    setSavingTimeZone(true);
+    setError(null);
+    setWarning(null);
+    setSavedMessage(null);
+    setTimeZone(nextTimeZone);
+    try {
+      await mdmsService.upsertDashboardConfig(tenantId, { timeZone: nextTimeZone });
+      try {
+        await mdmsService.refreshDashboardConfig(tenantId);
+        setSavedMessage(`Dashboard time zone set to ${nextTimeZone}.`);
+      } catch (refreshCause: unknown) {
+        const detail = refreshCause instanceof Error ? refreshCause.message : 'cache refresh failed';
+        setWarning(`Time zone was saved, but immediate refresh failed (${detail}). The change will apply within the normal five-minute cache window.`);
+      }
+    } catch (cause: unknown) {
+      setTimeZone(previous);
+      setError(cause instanceof Error ? cause.message : 'Could not update the dashboard time zone.');
+    } finally {
+      setSavingTimeZone(false);
+    }
+  };
 
   const setPublicAccess = async (nextEnabled: boolean) => {
     setSaving(true);
@@ -177,6 +209,36 @@ export default function PublicDashboardConfigure() {
           <p className="text-xs leading-5 text-muted-foreground">
             Saving refreshes pgr-services immediately; the normal cache TTL is only a fallback.
             Missing or invalid configuration never enables anonymous data access.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <CardTitle>Dashboard time zone</CardTitle>
+          </div>
+          <CardDescription className="mt-2">
+            The calendar day windowed queries (today/this week/this month/etc.) resolve against.
+            Defaults to {DEFAULT_DASHBOARD_TIME_ZONE} if unset.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <select
+            aria-label="Dashboard time zone"
+            value={timeZone}
+            disabled={savingTimeZone}
+            onChange={(e) => void setDashboardTimeZone(e.target.value)}
+            className="flex h-10 w-full max-w-sm rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {DASHBOARD_TIME_ZONES.map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </select>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Applies going forward only — a change never rewrites the calendar-day bucket of data
+            already captured under the previous zone.
           </p>
         </CardContent>
       </Card>

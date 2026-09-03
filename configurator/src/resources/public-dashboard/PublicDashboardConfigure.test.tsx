@@ -50,4 +50,39 @@ describe('PublicDashboardConfigure', () => {
       .toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Disable public dashboard' })).toBeEnabled();
   });
+
+  it('loads the saved time zone, defaulting to Africa/Nairobi when unset', async () => {
+    render(<PublicDashboardConfigure />);
+    const select = await screen.findByLabelText('Dashboard time zone');
+    expect(select).toHaveValue('Africa/Nairobi');
+  });
+
+  it('shows a tenant-configured time zone instead of the default', async () => {
+    getConfig.mockResolvedValue({ data: { id: 'default', timeZone: 'Asia/Kolkata' } });
+    render(<PublicDashboardConfigure />);
+    const select = await screen.findByLabelText('Dashboard time zone');
+    expect(select).toHaveValue('Asia/Kolkata');
+  });
+
+  it('persists and refreshes on time zone change', async () => {
+    render(<PublicDashboardConfigure />);
+    const select = await screen.findByLabelText('Dashboard time zone');
+    fireEvent.change(select, { target: { value: 'Asia/Kolkata' } });
+
+    await waitFor(() => {
+      expect(upsertConfig).toHaveBeenCalledWith('ke', { timeZone: 'Asia/Kolkata' });
+      expect(refreshConfig).toHaveBeenCalledWith('ke');
+    });
+    expect(await screen.findByText('Dashboard time zone set to Asia/Kolkata.')).toBeInTheDocument();
+  });
+
+  it('reverts the selection and surfaces an error when the save fails', async () => {
+    upsertConfig.mockRejectedValue(new Error('mdms-v2 unreachable'));
+    render(<PublicDashboardConfigure />);
+    const select = await screen.findByLabelText('Dashboard time zone');
+    fireEvent.change(select, { target: { value: 'Asia/Kolkata' } });
+
+    expect(await screen.findByText('mdms-v2 unreachable')).toBeInTheDocument();
+    expect(select).toHaveValue('Africa/Nairobi');
+  });
 });
