@@ -269,3 +269,25 @@ export const selectServiceDefsFromComplaintHierarchy = (raw) =>
   mapComplaintHierarchyToServiceDefs(raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy);
 
 export default {};
+
+// PII masking for complaint timelines (egovernments/CCRS#1970). Shared by the
+// employee timeline (TimeLineWrapper) and the citizen timeline (TimeLine) so
+// both render the same shapes from one definition.
+//
+// Fixed-shape on purpose — the mask must not leak the real value's length:
+// names keep the first letter of each word ("Roberta Manhica" -> "R*** M***"),
+// numbers keep the last 4 digits ("******0011") so a caller can still confirm
+// a number read to them out-of-band without it being readable off the screen.
+export const maskName = (name) => {
+  if (!name || name.length < 2) return name;
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0) + "***")
+    .join(" ");
+};
+
+export const maskPhone = (phone) => {
+  if (!phone || String(phone).length < 4) return phone;
+  return "******" + String(phone).slice(-4);
+};

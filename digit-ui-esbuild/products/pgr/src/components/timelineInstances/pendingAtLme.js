@@ -2,7 +2,7 @@ import { TelePhone, CheckPoint } from "@egovernments/digit-ui-react-components";
 import React from "react";
 import { useTranslation } from "react-i18next";
 
-const PendingAtLME = ({ name, isCompleted, mobile, text, customChild }) => {
+const PendingAtLME = ({ name, isCompleted, mobile, text, customChild, masked = false }) => {
   let { t } = useTranslation();
   // `text` is an optional prefix (kept for backward compatibility); when
   // the caller already renders the status label outside (TimeLine.js does),
@@ -11,7 +11,14 @@ const PendingAtLME = ({ name, isCompleted, mobile, text, customChild }) => {
   const displayText = text ? `${text} ${name}` : name;
   return <CheckPoint label={t("CS_COMMON_PENDINGATLME")} isCompleted={isCompleted} customChild={
           <div>
-            {name && mobile ? <TelePhone mobile={mobile} text={displayText}/> : null }
+            {name && mobile
+              ? masked
+                // #1970: the number is masked, so a tel: link would dial
+                // nothing. Render the same two lines as static text instead of
+                // offering a dead click-to-call affordance.
+                ? <div>{displayText}<div>{mobile}</div></div>
+                : <TelePhone mobile={mobile} text={displayText}/>
+              : null }
             {customChild}
           </div>
         } />
