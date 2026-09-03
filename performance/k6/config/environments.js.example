@@ -2,6 +2,14 @@
 // k6/config/environments.js is gitignored — never commit real credentials.
 // Pass secrets in at run time instead:
 //   k6 run --env TARGET=deployment --env DIGIT_PASSWORD=... scenarios/burst.js
+//
+// Workload selection is independent of the deployment target:
+//   WORKLOAD_PROFILE=pgr-lifecycle  create -> assign -> resolve -> search
+//   WORKLOAD_PROFILE=pgr-write      create -> assign -> resolve
+//   WORKLOAD_PROFILE=pgr-create     create only
+//   WORKLOAD_PROFILE=pgr-create-read create -> search
+// PGR_STEPS is an advanced ordered override. RUN_ID, PRINCIPAL, and
+// DATASET_TIER are attached to every request as k6 tags.
 
 export const ENVS = {
   dev: {

@@ -83,6 +83,30 @@ digit-load-tests/
 
 See [docs/setup.md](docs/setup.md) for full setup instructions including machine provisioning, database preparation, and SSH tunnels.
 
+### Select the workload explicitly
+
+Ramp and smoke scenarios accept named workload profiles. Every PGR request is
+tagged with the resolved run, profile, step, principal, and dataset tier.
+
+```bash
+RUN_ID=api-read-01 \
+WORKLOAD_PROFILE=pgr-create-read \
+PRINCIPAL=full-scope \
+DATASET_TIER=50k \
+./scripts/run-test.sh dev baseline smoke
+```
+
+Use `PGR_STEPS` only for an ordered advanced override. Invalid or impossible
+combinations fail before load is generated. Each `run-test.sh` invocation
+writes `run-manifest.env` beside its result files.
+
+### Dashboard datasets
+
+The API seeding scenarios are not dashboard fixtures. For exact, temporary
+3K/50K/100K dashboard corpora with materialized-view setup and teardown, use
+[`dashboard/fixture.sh`](dashboard/README.md). The preferred `with-fixture`
+command guarantees run-scoped teardown after the browser benchmark exits.
+
 ## Documentation
 
 | Document | Description |
@@ -91,6 +115,7 @@ See [docs/setup.md](docs/setup.md) for full setup instructions including machine
 | [Setup](docs/setup.md) | Machine provisioning, k6 configuration, database indexes, SSH tunnels |
 | [Running Tests](docs/running-tests.md) | How to run each scenario, interpret results, troubleshoot failures |
 | [Findings](docs/findings.md) | Performance results, database bugs, SQL fixes, capacity planning |
+| [Dashboard scaling — 2 Sep 2026](docs/dashboard-scaling-02-09-26.md) | 20K–500K dashboard read scaling, saturation boundary, database evidence, and recommendations |
 
 ## Test Scenarios
 
