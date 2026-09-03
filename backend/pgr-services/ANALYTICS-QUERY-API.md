@@ -189,7 +189,7 @@ ignored) and every declared param with an `allowed` list is enforced server-side
 
 Params can only narrow/re-group: the server-injected RBAC row-scope is layered on top by the
 planner and is never widened. Full semantics + catalog cookbook:
-`docs/2.12/dashboard-configuration.md`.
+`docs/2.12/dashboard/dashboard-configuration.md`.
 
 ---
 

@@ -914,7 +914,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   References:
   [`../../docs/migration/tenant-department-migration-guide.md`](../../docs/migration/tenant-department-migration-guide.md)
   (department preflight and back-fill) and
-  [`../../docs/2.12/dashboard-configuration.md`](../../docs/2.12/dashboard-configuration.md)
+  [`../../docs/2.12/dashboard/dashboard-configuration.md`](../../docs/2.12/dashboard/dashboard-configuration.md)
   (KPI catalog, packs & RBAC, operations).
 
 New state roots bootstrapped via `tenant_bootstrap` get the dashboard catalog
