@@ -86,6 +86,72 @@ A single 32 vCPU / 64 GiB host remains a reasonable choice when you want headroo
 
 32 GiB covers the application stack, not a growing co-located database. Once stored complaints pass roughly 500,000, either move the database to its own server (strongly preferred) or add memory in step with the data.
 
+### Dashboard read capacity at 500K stored complaints
+
+The 2–3 September dashboard campaign adds a measured read-path boundary at
+exactly 500,000 complaints. It ran on Bomet's full 16 vCPU / 30.6 GiB stack,
+using a separate load generator and a guarded disposable snapshot clone. The
+complete method and percentiles are in the [dashboard run report](./run-02-09-26/).
+
+| Dashboard VUs | Offered loads/s | Realized loads/s | HTTP RPS | Dashboard p95 | Result |
+|---:|---:|---:|---:|---:|---|
+| 50 | 5.0 | 5.000 | 15.375 | 4.484s | Below a five-second p95 |
+| 100 | 10.0 | 10.000 | 30.750 | 7.152s | Recommended interim operating point |
+| 125 | 12.5 | 12.500 | 38.442 | 9.936s | Near a ten-second p95 budget |
+| 150 | 15.0 | 15.000 | 46.125 | 10.837s | Functional, limited tail headroom |
+| 175 | 17.5 | 16.417 | 50.567 | 14.378s | First offered-load shortfall |
+| 200 | 20.0 | 16.092 | 49.775 | 17.562s | Throughput falls; saturated |
+
+The read-path ceiling is approximately **16.1–16.4 dashboard loads/s or 50 HTTP
+RPS**. It is a latency/queueing ceiling, not a crash: every completed stage had
+100% dashboard success, no HTTP failure or partial response, and no PGR
+restart/OOM. At 200 VUs more concurrency completed less work than at 175 while
+p95 increased by 22%.
+
+PostgreSQL reached all 18 observed connections with waiting sessions, and spot
+samples showed `DataFileRead`, `BufferMapping`, and `SpinDelay` waits. This is
+the first direct evidence behind the 500K recommendation above: **separate and
+measure the database before assuming that more application CPU or replicas will
+help.** Kubernetes application replicas alone can increase pressure on the same
+database.
+
+#### Dashboard users are not complaint-lifecycle users
+
+Do not apply the complaint-lifecycle estimate of one test VU to 20–30 real
+people to this workload. A dashboard VU performs a complete load every 10
+seconds. Translate it using the expected interval between real dashboard loads:
+
+| Average interval per active dashboard user | Users at 10 loads/s | Users at the 16.1 loads/s ceiling |
+|---:|---:|---:|
+| 10 seconds | 100 | ~161 |
+| 30 seconds | 300 | ~483 |
+| 60 seconds | 600 | ~966 |
+| 5 minutes | 3,000 | ~4,830 |
+
+These represent actively refreshing/filtering users, not total accounts or
+logged-in sessions. Replace the assumed interval with production telemetry when
+available.
+
+#### Recommendation at 500K
+
+- Until three repeats and a soak are available, plan around **10 dashboard
+  loads/s / 30.75 HTTP RPS**, which leaves about 38% throughput headroom. Use
+  the 5-load/s point if product requires dashboard p95 below five seconds.
+- Benchmark a dedicated PostgreSQL host against the co-located baseline. Tune
+  PgBouncer and JDBC pool sizes as a single connection budget rather than
+  independently.
+- Profile every shipped KPI at 500K and 1M with `pg_stat_statements`, wait
+  events, and `EXPLAIN (ANALYZE, BUFFERS)`; test materialized-view refresh
+  interference separately.
+- Add an open-loop arrival/burst scenario and a 30-minute soak before publishing
+  a production concurrency number.
+- Use Kubernetes for high availability and horizontal application scaling, but
+  pair it with a dedicated database, bounded pools, query/index work, and data
+  retention. Kubernetes by itself is not a remedy for a database queue.
+
+The dedicated PostgreSQL measurement and Ansible deployment work is tracked in
+[#1971](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/1971).
+
 ---
 
 

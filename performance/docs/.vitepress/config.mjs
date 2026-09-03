@@ -40,6 +40,15 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Dashboard Run (2 Sep 2026)',
+        collapsed: false,
+        items: [
+          { text: 'Overview', link: '/run-02-09-26/' },
+          { text: 'Measurements', link: '/dashboard-scaling-02-09-26' },
+          { text: 'Capacity Guidance', link: '/recommendations-transition-plan#dashboard-read-capacity-at-500k-stored-complaints' },
+        ]
+      },
+      {
         text: 'Developer Guide',
         items: [
           { text: 'Architecture', link: '/architecture' },
