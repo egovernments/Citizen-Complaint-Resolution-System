@@ -221,8 +221,94 @@ const ACTION_CONFIGS = [
         {
           body: [
             {
+              // Mandatory: a hand-up with no recipient lands in a state that is
+              // not in pgr.visibility.unassigned.states, so under server-side
+              // inbox visibility no supervisor sees it in either tab and only
+              // an exact complaint-number lookup can find it again.
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
+              component: "PGRAssigneeComponent",
+              key: "SelectedAssignee",
+              label: "CS_COMMON_EMPLOYEE_NAME",
+              populators: { name: "SelectedAssignee" },
+            },
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The action a SUPERVISOR takes on an escalated complaint: the only
+    // transition out of PENDINGATSUPERVISOR (-> RESOLVED). It was missing here,
+    // so getUpdatedConfig() returned null, PGRWorkflowModal short-circuited on
+    // `if (!config) return null` and "Take action > RESOLVEBYSUPERVISOR" was a
+    // dead button for everyone holding the role — the supervisor had no way to
+    // close an escalated complaint at all (issue #1956). Same failure mode as
+    // ESCALATE in #521. Mirrors RESOLVE: this is a terminal close, so there is
+    // no assignee to pick, only a mandatory closing comment.
+    actionType: "RESOLVEBYSUPERVISOR",
+    formConfig: {
+      label: {
+        heading: "PGR_ACTION_RESOLVEBYSUPERVISOR",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              type: "textarea",
+              isMandatory: true,
+              key: "SelectedComments",
+              label: "CS_COMMON_EMPLOYEE_COMMENTS",
+              populators: {
+                name: "SelectedComments",
+                maxLength: 1000,
+                validation: { required: true },
+                error: "CORE_COMMON_REQUIRED_ERRMSG",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // PENDINGATLME -> PENDINGATSUPERVISOR. Declared on the BusinessService for
+    // AUTO_ESCALATE (the scheduler) and for GRO, who can hand a stalled
+    // last-mile complaint up to a supervisor by hand. The GRO-facing half had
+    // no config here, so it rendered the same dead button as
+    // RESOLVEBYSUPERVISOR above. Mirrors ESCALATE — pick the receiving
+    // supervisor + mandatory comments.
+    actionType: "FORWARD",
+    formConfig: {
+      label: {
+        heading: "PGR_ACTION_FORWARD",
+        cancel: "CS_COMMON_CANCEL",
+        submit: "CS_COMMON_SUBMIT",
+      },
+      form: [
+        {
+          body: [
+            {
+              // Mandatory: a hand-up with no recipient lands in a state that is
+              // not in pgr.visibility.unassigned.states, so under server-side
+              // inbox visibility no supervisor sees it in either tab and only
+              // an exact complaint-number lookup can find it again.
+              type: "component",
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -576,6 +662,14 @@ const PGRDetails = () => {
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
     return matchingState.actions
       ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
+        // An action with no ACTION_CONFIGS entry cannot be completed: the modal
+        // renders nothing (`if (!config) return null`) and the click is a no-op.
+        // Offering it is worse than not offering it — the operator believes they
+        // acted. This is how RESOLVEBYSUPERVISOR (issue #1956) and ESCALATE
+        // (#521) both surfaced; both configs now exist, and this keeps the next
+        // workflow action added server-side from silently becoming a dead
+        // button before its form lands here.
+        .filter((action) => ACTION_CONFIGS.some((config) => config.actionType === action.action))
         .map((action) => ({
           action: action.action,
           roles: action.roles,
@@ -586,23 +680,17 @@ const PGRDetails = () => {
       : [];
   };
 
-  // Show the action toolbar if the user holds *any* role declared on
-  // the current state's actions. The previous gate required both
-  // PGR_VIEWER *and* another matching role, which silently hid every
-  // action from real LME / GRO field users on naipepea (most of whom
-  // are seeded with PGR_LME or GRO but no PGR_VIEWER). PGR_VIEWER is
-  // a viewer credential, not a prerequisite to act.
-  const shouldShowActionButton = () => {
-    const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
-    const currentState = workflowData?.ProcessInstances?.[0]?.state;
-    if (!currentState?.actions) return false;
-    const allActionRoles = new Set();
-    currentState.actions.forEach((action) => (action.roles || []).forEach((r) => allActionRoles.add(r)));
-    return userRoles.some((r) => allActionRoles.has(r));
-  };
+  // Display loader until required data loads. businessServiceData is included
+  // because the action list is derived from it — without it the toolbar first
+  // painted with zero (disabled) options and only then filled in.
+  if (isLoading || isMDMSLoading || isWorkflowLoading || isBusinessServiceLoading) return <Loader />;
 
-  // Display loader until required data loads
-  if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
+  // The toolbar is shown when the user has at least one action they can
+  // actually complete in the current state. The previous gate answered a
+  // different question — "does the user hold any role named on this state?" —
+  // so a GRO viewing an escalated complaint got a "Take action" button whose
+  // only option was one it had no form for (issue #1956).
+  const nextActionOptions = getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]);
 
   // Full hierarchy breakdown for the selected complaint type (null => flat).
   const complaintServiceCode = pgrData?.ServiceWrappers?.[0]?.service?.serviceCode;
@@ -786,7 +874,7 @@ const PGRDetails = () => {
       </div>
 
       {/* Footer Action Bar */}
-      {shouldShowActionButton() && (
+      {nextActionOptions.length > 0 && (
         <Footer
           actionFields={[
             <Button
@@ -796,7 +884,6 @@ const PGRDetails = () => {
               menuStyles={{
                 bottom: "40px",
               }}
-              isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
               key="action-button"
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
@@ -815,7 +902,7 @@ const PGRDetails = () => {
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}
-              options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
+              options={nextActionOptions}
               optionsKey="action"
               type="actionButton"
             />,
