@@ -265,6 +265,44 @@ describe('JurisdictionEditor — #1957 revoking an assigned jurisdiction', () =>
     );
   });
 
+  it('numbers the remove buttons by VISIBLE position, not payload index', async () => {
+    // The revoked row stays in the form value, so labelling by its index left
+    // the lone surviving row called "Remove jurisdiction 2" with no "…1" on
+    // screen — misleading for screen readers, and it breaks label-based
+    // locators (tests/integration-tests/.../employee-create-tenant-459.spec.ts
+    // pins /^Remove jurisdiction 1$/).
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS });
+
+    // Revoke the FIRST row; the second one must renumber to 1.
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 1' }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^Remove jurisdiction/ })).toHaveLength(1),
+    );
+    expect(screen.getByRole('button', { name: 'Remove jurisdiction 1' })).toBeInTheDocument();
+    expect(screen.getByText('Revoked on save')).toBeInTheDocument();
+  });
+
+  it('renumbering still addresses the right payload row', async () => {
+    // The guard that matters: `position` drives the label, `index` drives the
+    // mutation. Revoking the row now labelled "1" must switch off the SECOND
+    // stored jurisdiction, not re-revoke the first.
+    const onSubmit = vi.fn();
+    renderEditor({ jurisdictions: SAVED_JURISDICTIONS }, onSubmit);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove jurisdiction 1' }));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^Remove jurisdiction/ })).toHaveLength(1),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove jurisdiction 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const sent = submittedJurisdictions(onSubmit);
+    expect(sent.map((j) => j.id)).toEqual(['jur-bomet', 'jur-city-one']);
+    expect(sent.every((j) => j.isActive === false)).toBe(true);
+  });
+
   it('a row the operator added but never saved is removed outright', async () => {
     // No id means HRMS has never seen it, so there is nothing for the
     // consistency check to miss and no reason to keep a dead row around.

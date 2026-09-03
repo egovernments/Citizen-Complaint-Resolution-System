@@ -300,7 +300,7 @@ export function JurisdictionEditor({
         </div>
       ) : (
         <div className="space-y-2">
-          {visibleRows.map(({ row, index }) => {
+          {visibleRows.map(({ row, index }, position) => {
             const storedHier = row.hierarchyType ?? '';
             // Old jurisdictions (bulk import) often store a stale hierarchy name
             // like "ADMIN" that doesn't match the tenant's real boundary
@@ -327,7 +327,7 @@ export function JurisdictionEditor({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  aria-label={`Remove jurisdiction ${index + 1}`}
+                  aria-label={`Remove jurisdiction ${position + 1}`}
                   className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Trash2 className="h-4 w-4" />
