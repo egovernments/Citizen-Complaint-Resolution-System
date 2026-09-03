@@ -1,6 +1,6 @@
 # MDMS schema reference
 
-The exact JSON shape of every MDMS record `docs/dashboard-configuration.md` describes updating.
+The exact JSON shape of every MDMS record `docs/2.12/dashboard-configuration.md` describes updating.
 Field docs are copied from each schema's own `description`/`x-unique`/`x-ref-schema` — the schema
 files are the source of truth; this page just puts them next to a real example so you don't have to
 find and read all six files to write one update payload.
@@ -159,7 +159,7 @@ Defines one navigable/callable action. `x-unique: [id]`.
 }
 ```
 
-**Capability actions** (2640–2648 — see `docs/dashboard-configuration.md` for which role holds which):
+**Capability actions** (2640–2648 — see `docs/2.12/dashboard-configuration.md` for which role holds which):
 
 ```json
 { "id": 2646, "url": "/pgr-services/v2/analytics/capabilities/officer", "name": "MDMS", "displayName": "...", "enabled": false, "serviceCode": "MDMS" }
@@ -198,5 +198,5 @@ referencing it will resolve. `x-unique: [code]`, `additionalProperties: false`.
 
 ---
 
-Back to [`../dashboard-configuration.md`](../dashboard-configuration.md#updating-it--apis) for how
+Back to [`../../2.12/dashboard-configuration.md`](../../2.12/dashboard-configuration.md#updating-it--apis) for how
 these get written to (the `mdms-v2 _create`/`_update` calls) rather than just their shape.

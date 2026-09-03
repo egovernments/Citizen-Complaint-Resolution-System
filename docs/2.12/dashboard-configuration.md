@@ -44,23 +44,23 @@ against `tenant.citymodule` (`POST /mdms-v2/v2/_create/tenant.citymodule`) if yo
 
 All of the above is live MDMS data. Change it with the standard `mdms-v2` record APIs — no rebuild,
 no redeploy, no restart. Exact JSON shape (every field, with a real example) for each record type
-below is in [`dashboard-rbac-design/95-mdms-schema-reference.md`](dashboard-rbac-design/95-mdms-schema-reference.md):
+below is in [`dashboard-rbac-design/95-mdms-schema-reference.md`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md):
 
 - **Add or edit a KPI**: `POST /mdms-v2/v2/_create/dss.KpiDefinition` (new) or
   `POST /mdms-v2/v2/_update/dss.KpiDefinition` (existing — include the record's `id`). Shape:
-  [§ `dss.KpiDefinition`](dashboard-rbac-design/95-mdms-schema-reference.md#dsskpidefinition).
+  [§ `dss.KpiDefinition`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#dsskpidefinition).
 - **Change a pack's tile set or layout**: same, against `dss.DashboardPack`. Shape:
-  [§ `dss.DashboardPack`](dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardpack).
+  [§ `dss.DashboardPack`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardpack).
 - **Change number formatting**: same, against `dss.DashboardConfig`. Shape:
-  [§ `dss.DashboardConfig`](dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardconfig).
+  [§ `dss.DashboardConfig`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#dssdashboardconfig).
 - **Change which roles hold a capability tier**: `POST /mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions`
   to grant (there's no meaningful `_update` target — the unique key is the `{rolecode, actionid}`
   pair, not a separate id) — deactivate to revoke. Shape:
-  [§ `ACCESSCONTROL-ROLEACTIONS.roleactions`](dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-roleactionsroleactions).
+  [§ `ACCESSCONTROL-ROLEACTIONS.roleactions`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-roleactionsroleactions).
 - **Add a new capability tier**: create a new action under `ACCESSCONTROL-ACTIONS-TEST.actions-test`
   with a `/pgr-services/v2/analytics/capabilities/<name>` URL, grant it to whichever roles via
   `ACCESSCONTROL-ROLEACTIONS.roleactions`, then point the relevant KPI/pack's `requiredActionUrl`
-  at it. Shape: [§ `ACCESSCONTROL-ACTIONS-TEST.actions-test`](dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-actions-testactions-test).
+  at it. Shape: [§ `ACCESSCONTROL-ACTIONS-TEST.actions-test`](../dashboard/dashboard-rbac-design/95-mdms-schema-reference.md#accesscontrol-actions-testactions-test).
 - **Change labels**: `_upsert` the message key against the tenant's localization module, then
   `POST /localization/messages/cache-bust`.
 

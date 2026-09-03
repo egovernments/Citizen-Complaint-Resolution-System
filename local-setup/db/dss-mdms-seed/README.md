@@ -13,7 +13,7 @@ The **KPI catalog data is deliberately not here.** It lives at
 `ansible/nairobi-mdms/mdms/dss/{KpiDefinition,DashboardPack,DashboardConfig}.json`
 and the script reads it from there. Two copies of the catalog in one repo is
 how "works on bomet, empty on the repro box" happens — see
-`docs/dashboard/dashboard-configuration.md`.
+`docs/2.12/dashboard-configuration.md`.
 
 ## Quick start
 
@@ -74,7 +74,7 @@ deployment offers in `common-masters.StateInfo.languages`.
 
 - **`enable-dashboard.sh --help`** — usage and flags. The full runbook (prerequisites, the seven
   steps, the role-remap decision, and a symptom→cause table for every known blocker) is the
-  enablement-PR comment that graduates into `docs/dashboard/dashboard-configuration.md` on merge
+  enablement-PR comment that graduates into `docs/2.12/dashboard-configuration.md` on merge
 - Runbook (issue #631): the original, with the manual form of each step
-- `docs/dashboard/dashboard-configuration.md` — the reference doc this seeds against
+- `docs/2.12/dashboard-configuration.md` — the reference doc this seeds against
 - `local-setup/db/notif-mdms-seed/` — the same pattern for notification masters
