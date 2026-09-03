@@ -244,8 +244,9 @@ export default function PublicDashboardConfigure() {
             ))}
           </select>
           <p className="text-xs leading-5 text-muted-foreground">
-            Applies going forward only — a change never rewrites the calendar-day bucket of data
-            already captured under the previous zone.
+            Most tiles pick up the new zone on their next scheduled refresh (every few minutes),
+            not instantly. The daily backlog trend is the one exception — it's an append-only
+            snapshot, so days already recorded keep the zone they were captured under.
           </p>
         </CardContent>
       </Card>
