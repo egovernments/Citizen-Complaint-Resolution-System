@@ -153,6 +153,18 @@
             {
               "tenantId": "{tenantid}",
               "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ESCALATE",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER",
+                "AUTO_ESCALATE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
               "action": "REJECT",
               "nextState": "REJECTED",
               "roles": [
@@ -275,7 +287,8 @@
               "action": "FORWARD",
               "nextState": "PENDINGATSUPERVISOR",
               "roles": [
-                "AUTO_ESCALATE"
+                "AUTO_ESCALATE",
+                "GRO"
               ],
               "active": true
             },

@@ -444,6 +444,12 @@
         "locale": "default"
     },
     {
+        "code": "CS_ACTION_ESCALATE",
+        "message": "Escalate Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "CS_ACTION_FILEUPLOADED",
         "message": "File Uploaded",
         "module": "rainmaker-pgr",
@@ -2988,6 +2994,12 @@
         "locale": "default"
     },
     {
+        "code": "ESCALATE",
+        "message": "Escalate",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "ES_ALL_COMPLAINTS_ASSIGNED_TAB_LABEL",
         "message": "ASSIGNED",
         "module": "rainmaker-pgr",
@@ -3492,6 +3504,12 @@
         "locale": "default"
     },
     {
+        "code": "FORWARD",
+        "message": "Forward to Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "HR_COMMON_TABLE_COL_DEPT",
         "message": "Department",
         "module": "rainmaker-pgr",
@@ -3540,6 +3558,18 @@
         "locale": "default"
     },
     {
+        "code": "PGR_ACTION_ESCALATE",
+        "message": "Escalate Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_ACTION_FORWARD",
+        "message": "Forward Complaint to Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "PGR_ACTION_REASSIGN",
         "message": "Re-Assign Complaint",
         "module": "rainmaker-pgr",
@@ -3560,6 +3590,12 @@
     {
         "code": "PGR_ACTION_RESOLVE",
         "message": "Resolve Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_ACTION_RESOLVEBYSUPERVISOR",
+        "message": "Resolve Complaint as Supervisor",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -3824,6 +3860,12 @@
     {
         "code": "RESOLVE",
         "message": "Resolve",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "RESOLVEBYSUPERVISOR",
+        "message": "Resolve as Supervisor",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -5046,6 +5088,18 @@
         "locale": "default"
     },
     {
+        "code": "WF_PGR_ESCALATE",
+        "message": "Escalated",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "WF_PGR_FORWARD",
+        "message": "Forwarded to Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "WF_PGR_RATE",
         "message": "Closed after rating",
         "module": "rainmaker-pgr",
@@ -5072,6 +5126,12 @@
     {
         "code": "WF_PGR_RESOLVE",
         "message": "Resolved",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "WF_PGR_RESOLVEBYSUPERVISOR",
+        "message": "Resolved by Supervisor",
         "module": "rainmaker-pgr",
         "locale": "default"
     },

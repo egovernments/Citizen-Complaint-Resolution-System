@@ -3101,6 +3101,125 @@
     "id": 1838
   },
   {
+    "rolecode": "SUPERVISOR",
+    "actionid": 604,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1844
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1556,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1845
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1729,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1846
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1730,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1847
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1743,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1848
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1752,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1849
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 1775,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1850
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2009,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1851
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2317,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1852
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2553,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1853
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2556,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1854
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2557,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1855
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2560,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1856
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2562,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1857
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2564,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1858
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2567,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1859
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2568,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1860
+  },
+  {
     "rolecode": "PGR_VIEWER",
     "actionid": 2647,
     "actioncode": "",
