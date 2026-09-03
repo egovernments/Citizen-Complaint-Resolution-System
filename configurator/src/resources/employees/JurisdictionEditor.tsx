@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useInput, useGetList, type RaRecord } from 'ra-core';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
   Select,
   SelectTrigger,
@@ -153,7 +153,10 @@ export function JurisdictionEditor({
           // HRMS's DTO validates `hierarchy` (NotNull). Stamp both field names.
           hierarchy: r.hierarchyType ?? '',
           hierarchyType: r.hierarchyType ?? '',
-          isActive: true,
+          // Carry the row's own flag through. `false` is how a jurisdiction is
+          // revoked (see removeRow); hard-coding `true` here re-granted it on
+          // the very next edit to any other row.
+          isActive: r.isActive !== false,
           tenantId: resolvedTenant,
         };
       }),
@@ -178,11 +181,42 @@ export function JurisdictionEditor({
     ]);
   };
 
+  // HRMS will not accept an update payload that drops a jurisdiction it has
+  // already stored: EmployeeValidator.validateConsistencyJurisdiction fails the
+  // whole request with ERR_HRMS_UPDATE_JURISDICTION_INCOSISTENT unless every
+  // previously persisted id comes back, so splicing the row out made every
+  // revoke 400 (#1957). HRMS's own revoke mechanism is the isActive flag, so
+  // keep the row in the payload and switch it off: egov-hrms's
+  // EmployeeRowMapper then drops it from _search, and pgr-services'
+  // PolicyDrivenScopeResolver stops unioning its boundary into the employee's
+  // scope. A row the operator added but never saved has no id for HRMS to miss,
+  // so that one really is just removed.
   const removeRow = (index: number) => {
+    if (rows[index]?.id) {
+      updateRow(index, { isActive: false });
+      return;
+    }
     const next = rows.slice();
     next.splice(index, 1);
     writeRows(next);
   };
+
+  const restoreRow = (index: number) => {
+    updateRow(index, { isActive: true });
+  };
+
+  // A revoked row still has to travel in the form value (HRMS needs the id
+  // back) but must not keep rendering a live editor, so split the two views.
+  // Indices are the ones into the full `rows` array — every mutation below
+  // addresses the payload, not the visible list.
+  const visibleRows = useMemo(
+    () => rows.map((row, index) => ({ row, index })).filter(({ row }) => row.isActive !== false),
+    [rows],
+  );
+  const revokedRows = useMemo(
+    () => rows.map((row, index) => ({ row, index })).filter(({ row }) => row.isActive === false),
+    [rows],
+  );
 
   const boundaryByCode = useMemo(() => {
     const m = new Map<string, BoundaryRecord>();
@@ -256,7 +290,7 @@ export function JurisdictionEditor({
         </Label>
       )}
 
-      {rows.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-dashed p-3">
           <p className="text-sm text-muted-foreground">No jurisdictions added yet</p>
           <Button type="button" variant="outline" size="sm" onClick={addRow}>
@@ -266,7 +300,7 @@ export function JurisdictionEditor({
         </div>
       ) : (
         <div className="space-y-2">
-          {rows.map((row, index) => {
+          {visibleRows.map(({ row, index }, position) => {
             const storedHier = row.hierarchyType ?? '';
             // Old jurisdictions (bulk import) often store a stale hierarchy name
             // like "ADMIN" that doesn't match the tenant's real boundary
@@ -289,11 +323,11 @@ export function JurisdictionEditor({
             const path = reconstructPath(row.boundary ?? '');
 
             return (
-              <div key={index} className="relative border rounded p-3 pr-10 bg-muted/30">
+              <div key={row.id ?? `new-${index}`} className="relative border rounded p-3 pr-10 bg-muted/30">
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  aria-label={`Remove jurisdiction ${index + 1}`}
+                  aria-label={`Remove jurisdiction ${position + 1}`}
                   className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -395,6 +429,39 @@ export function JurisdictionEditor({
               Add jurisdiction
             </Button>
           </div>
+        </div>
+      )}
+
+      {revokedRows.length > 0 && (
+        <div className="mt-2 rounded-md border border-dashed p-3">
+          <p className="text-xs font-medium text-foreground">Revoked on save</p>
+          <ul className="mt-1.5 space-y-1">
+            {revokedRows.map(({ row, index }) => (
+              <li
+                key={row.id}
+                className="flex items-center justify-between gap-3 text-xs text-muted-foreground"
+              >
+                <span>
+                  {boundaryByCode.get(row.boundary ?? '')?.name ?? row.boundary}
+                  {row.boundaryType ? ` · ${row.boundaryType}` : ''}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => restoreRow(index)}
+                  className="h-6 gap-1 px-2"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Restore
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            HRMS keeps the record and marks it inactive — the employee loses access to these
+            boundaries.
+          </p>
         </div>
       )}
 

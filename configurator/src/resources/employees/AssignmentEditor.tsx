@@ -61,6 +61,30 @@ function inputDateToEpoch(value: string): number | undefined {
   return Number.isNaN(ms) ? undefined : ms;
 }
 
+/**
+ * A toDate for an assignment that has none, closing it today unless a later
+ * assignment already occupies that window. egov-hrms's
+ * EmployeeValidator.validateAssignments needs the value to be:
+ *   - non-null                          (ERR_HRMS_INVALID_ASSIGNMENT_NON_CURRENT_TO_DATE)
+ *   - >= the assignment's own fromDate   (ERR_HRMS_INVALID_ASSIGNMENT_PERIOD)
+ *   - <= the fromDate of whichever assignment follows it in fromDate order
+ *                                        (ERR_HRMS_OVERLAPPING_ASSGN)
+ * so take the tightest ceiling and clamp it back up to fromDate. The remaining
+ * rule — every non-current row must have ended by the current one's fromDate
+ * (ERR_HRMS_OVERLAPPING_ASSGN_CURRENT) — is enforced in setCurrent instead,
+ * because it constrains the row being promoted rather than the rows being
+ * closed.
+ */
+function closeDateFor(all: EmployeeAssignment[], index: number): number {
+  const row = all[index];
+  const ceilings = [Date.now()];
+  for (let i = 0; i < all.length; i++) {
+    if (i === index) continue;
+    if (all[i].fromDate > row.fromDate) ceilings.push(all[i].fromDate);
+  }
+  return Math.max(row.fromDate, Math.min(...ceilings));
+}
+
 export function AssignmentEditor({
   source = 'assignments',
   label = 'Assignments',
@@ -132,13 +156,41 @@ export function AssignmentEditor({
     writeRows(next);
   };
 
+  // Handing `current` to another row is the only way to revoke the department an
+  // employee is actively working in, and it used to be unsavable — the other
+  // half of #1957. HRMS requires every row that ends up non-current to carry a
+  // toDate (ERR_HRMS_INVALID_ASSIGNMENT_NON_CURRENT_TO_DATE) that has passed by
+  // the time the current assignment starts (ERR_HRMS_OVERLAPPING_ASSGN_CURRENT).
+  // That second rule covers EVERY non-current row, not just the one being
+  // demoted, so the promoted row's fromDate has to clear the latest close date
+  // on the whole record — an employee carrying several closed rows, which is how
+  // hrmsService.buildEmployee represents extra departments, is otherwise still
+  // rejected with the very error this fix is about.
   const setCurrent = (index: number) => {
-    const next = rows.map((r, i) => ({
-      ...r,
-      isCurrentAssignment: i === index,
-      ...(i === index ? { toDate: undefined } : {}),
-    }));
-    writeRows(next);
+    const target = rows[index];
+    if (!target) return;
+    // Close date for every row that will end up non-current. An existing toDate
+    // is kept, but clamped: the To Date input is blanked and disabled while a
+    // row is current, so a stored current row can carry a stale value the
+    // operator cannot see, and sending toDate < fromDate 400s on
+    // ERR_HRMS_INVALID_ASSIGNMENT_PERIOD for a field they never touched.
+    const closedDates = new Map<number, number>();
+    for (let i = 0; i < rows.length; i++) {
+      if (i === index) continue;
+      const stored = rows[i].toDate;
+      closedDates.set(
+        i,
+        stored == null ? closeDateFor(rows, i) : Math.max(rows[i].fromDate, stored),
+      );
+    }
+    const promotedFrom = Math.max(target.fromDate, ...closedDates.values());
+    writeRows(
+      rows.map((r, i) =>
+        i === index
+          ? { ...r, isCurrentAssignment: true, toDate: undefined, fromDate: promotedFrom }
+          : { ...r, isCurrentAssignment: false, toDate: closedDates.get(i) },
+      ),
+    );
   };
 
   const addRow = () => {
@@ -153,13 +205,25 @@ export function AssignmentEditor({
     ]);
   };
 
+  // Only rows the operator has not saved yet can be dropped. A saved assignment
+  // cannot leave the update payload at all —
+  // EmployeeValidator.validateConsistencyAssignment fails the whole request with
+  // ERR_HRMS_UPDATE_ASSIGNEMENT_INCOSISTENT unless every previously persisted id
+  // comes back, and Assignment (unlike Jurisdiction) has no isActive flag to
+  // switch off (#1957). Revoking a saved department goes through setCurrent,
+  // which ends it; there is nothing a per-row control could do on its own, since
+  // HRMS insists on exactly one current assignment and already requires every
+  // other saved row to carry a toDate.
   const removeRow = (index: number) => {
+    const row = rows[index];
+    if (!row || row.id) return;
     const next = rows.slice();
     next.splice(index, 1);
     writeRows(next);
   };
 
   const currentCount = rows.filter((r) => r.isCurrentAssignment).length;
+  const hasPersistedRow = rows.some((r) => !!r.id);
 
   return (
     <div>
@@ -181,7 +245,14 @@ export function AssignmentEditor({
         <div className="space-y-2">
           {rows.map((row, index) => {
             const isCurrent = !!row.isCurrentAssignment;
-            // Block removal of the sole current row until another is marked current.
+            // Saved rows get no remove control at all (see removeRow): only they
+            // can be "ended", and only setCurrent can do it.
+            const isPersisted = !!row.id;
+            // Gated on isPersisted: setCurrent stamps a toDate on whatever row
+            // it demotes, including a throwaway row the operator added and is
+            // about to delete — which has no history to be retained in.
+            const isEnded = isPersisted && !isCurrent && row.toDate != null;
+            // Dropping the only current row would leave HRMS without one.
             const blockRemove = isCurrent && currentCount <= 1 && rows.length > 1;
             const fromValue = epochToInputDate(row.fromDate);
             const toValue = epochToInputDate(row.toDate);
@@ -189,16 +260,18 @@ export function AssignmentEditor({
 
             return (
               <div key={index} className="relative border rounded p-3 pr-10 bg-muted/30">
-                <button
-                  type="button"
-                  onClick={() => removeRow(index)}
-                  disabled={blockRemove}
-                  aria-label={`Remove assignment ${index + 1}`}
-                  title={blockRemove ? 'Mark another assignment as current first' : undefined}
-                  className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {!isPersisted && (
+                  <button
+                    type="button"
+                    onClick={() => removeRow(index)}
+                    disabled={blockRemove}
+                    aria-label={`Remove assignment ${index + 1}`}
+                    title={blockRemove ? 'Mark another assignment as current first' : undefined}
+                    className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label className="mb-1.5 block text-xs font-medium text-foreground">
@@ -307,9 +380,14 @@ export function AssignmentEditor({
                       Current assignment
                     </span>
                   </label>
+                  {isEnded && (
+                    <span className="text-xs text-muted-foreground">
+                      Ended {toValue} · retained as history
+                    </span>
+                  )}
                   {blockRemove && (
                     <span className="text-xs text-muted-foreground">
-                      Mark another current first to remove this row
+                      Mark another assignment as current first
                     </span>
                   )}
                 </div>
@@ -324,6 +402,14 @@ export function AssignmentEditor({
             </Button>
           </div>
         </div>
+      )}
+
+      {hasPersistedRow && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          HRMS never deletes a saved assignment. To revoke a department, mark another one as the
+          current assignment — that closes this one with a To Date and takes its department out of
+          the employee’s active scope, while the row stays on record.
+        </p>
       )}
 
       {fieldState.error?.message && (
