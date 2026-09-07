@@ -16,6 +16,7 @@ import {
 import { updateComplaints } from "../../../redux/actions/index";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
 import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
+import { EV, trackE, trackApiError } from "../../../utils/analytics";
 
 // i18n fallback — when a translation key is unavailable, surface the
 // English copy instead of leaving a raw constant on screen.
@@ -241,8 +242,12 @@ const SelectRating = ({ parentRoute }) => {
         queryClient.invalidateQueries(["complaintDetails", tenantId, id]),
         queryClient.invalidateQueries("complaintsList"),
       ]);
+      // Analytics: the star value is the outcome leadership actually reads —
+      // a 1–5 number, no complaint id, no citizen identity.
+      trackE(EV.COMPLAINT_RATED, "", rating);
       history.push(`${parentRoute}/response`);
     } catch (err) {
+      trackApiError("PgrRate", err);
       setSubmitError(true);
       setSubmitting(false);
     }

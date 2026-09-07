@@ -10,6 +10,22 @@ import SelectOtp from "./SelectOtp";
 const TYPE_REGISTER = { type: "register" };
 const TYPE_LOGIN = { type: "login" };
 const DEFAULT_USER = "digit-user";
+
+// Behaviour analytics (Authentication funnel). The shim (public/analytics.js)
+// is loaded by index.html and may be absent — never assume it exists, never
+// let tracking break the login. Names carry NO identity: no mobile number,
+// no user name, no token — just the flow ("Citizen") or a failure reason.
+const trackAuth = (action, name) => {
+  try {
+    window?.DigitAnalytics?.trackEvent?.(`Authentication.${action}`, {
+      category: "Authentication",
+      action,
+      label: name || "",
+    });
+  } catch (e) {
+    /* analytics must never break login */
+  }
+};
 let DEFAULT_REDIRECT_URL = `/${window?.contextPath || window?.globalConfigs?.getConfig("CONTEXT_PATH")}/citizen`;
 
 /* set citizen details to enable backward compatiable */
@@ -118,6 +134,7 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
     }
     Digit.SessionStorage.set("citizen.userRequestObject", user);
     Digit.UserService.setUser(user);
+    trackAuth("Succeeded", "Citizen");
     setCitizenDetail(user?.info, user?.access_token, stateCode);
     const redirectPath = location.state?.from || DEFAULT_REDIRECT_URL;
     if (!Digit.ULBService.getCitizenCurrentTenant()) {
@@ -176,6 +193,7 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
       // LOGIN FLOW: Send OTP
       const [res, err] = await sendOtp({ otp: { ...data, ...TYPE_LOGIN } });
       if (!err) {
+        trackAuth("Started", "Citizen");
         setCanSubmitNo(true);
         history.replace(`${path}/otp`, {
           from: getFromLocation(location.state, searchParams),
@@ -208,6 +226,7 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
         // OLD FLOW: Send OTP first
         const [res, err] = await sendOtp({ otp: { ...data, ...TYPE_REGISTER } });
         if (!err) {
+          trackAuth("Started", "CitizenRegister");
           setCanSubmitNo(true);
           history.replace(`${path}/otp`, {
             from: getFromLocation(location.state, searchParams)
@@ -366,6 +385,7 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
       setCanSubmitOtp(true);
       setIsOtpValid(false);
       setError(t("INVALID_OTP") || "Invalid OTP");
+      trackAuth("Failed", "InvalidOtp");
     }
   };
 

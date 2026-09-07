@@ -10,6 +10,7 @@ import { updateComplaints } from "../../../redux/actions/index";
 import { LOCALIZATION_KEY } from "../../../constants/Localization";
 import { mergeAdditionalDetail } from "../../../utils/additionalDetail";
 import { findLatestAssigneeUuidByRole } from "../../../utils/workflowAssignee";
+import { EV, trackE } from "../../../utils/analytics";
 
 const AddtionalDetails = (props) => {
   const history = useHistory();
@@ -47,6 +48,9 @@ const AddtionalDetails = (props) => {
       // both so they refetch — active views update live, others on next mount.
       queryClient.invalidateQueries(["complaintDetails"]);
       queryClient.invalidateQueries(["complaintsList"]);
+      // Analytics: submission only — the /response page reports the settled
+      // outcome (reopened vs failed) as its own virtual pageview.
+      trackE(EV.COMPLAINT_REOPENED);
       history.push(`${props.match.path}/response/${id}`);
     },
     [dispatch, queryClient]

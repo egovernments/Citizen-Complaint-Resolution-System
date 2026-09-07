@@ -121,6 +121,22 @@ const Response = () => {
   const action = wrapper?.workflow?.action;
   const complaintId = wrapper?.service?.serviceRequestId;
 
+  // /response is ONE route serving four different outcomes — canonicalise the
+  // URL to /response/{created|reopened|rated|failed} (history.replace, once)
+  // so the outcome is an ordinary tracked pageview and a real location. A
+  // virtual pageview here double-counted the page (outcome + bare /response
+  // in the visits log); the replace coalesces to one. The flows await the
+  // update before navigating here, so the first render's redux slice is
+  // already the settled outcome. No id, no complaint data in the URL.
+  const outcome = !success ? "failed" : action === "REOPEN" ? "reopened" : action === "RATE" ? "rated" : "created";
+  React.useEffect(() => {
+    const base = `/${window?.contextPath}/citizen/pgr/response`;
+    if (history.location?.pathname === base || history.location?.pathname === `${base}/`) {
+      history.replace(`${base}/${outcome}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const headlineKey = success
     ? getActionMessageKey(action)
     : "CS_COMMON_COMPLAINT_NOT_SUBMITTED";
