@@ -1837,6 +1837,17 @@ const CreatePGRFlowV2: React.FC = () => {
       return;
     }
     if (isLast) {
+      // The whole form runs on auth-optional endpoints, so a session that
+      // expired while the citizen typed goes unnoticed until this submit —
+      // previously surfacing as a hung create and a dead end. Check first:
+      // the draft (answers + step) is already persisted, so after re-login
+      // the citizen returns here and continues. Only a KNOWN-expired session
+      // redirects; sessions without expiry info submit as before.
+      if (Digit.UserService.isSessionExpired?.()) {
+        const from = encodeURIComponent(window.location.pathname + window.location.search);
+        history.push(`/${window?.contextPath || "digit-ui"}/citizen/login?from=${from}`);
+        return;
+      }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
       const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user, evidenceDocType);

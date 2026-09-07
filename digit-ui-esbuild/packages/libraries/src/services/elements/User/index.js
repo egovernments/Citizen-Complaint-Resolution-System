@@ -3,6 +3,7 @@ import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
 import { isKeycloakAuth } from "../../auth/authSurface";
+import { rememberSessionExpiry, isSessionExpired } from "../../atoms/Utils/authSession";
 
 export const UserService = {
   authenticate: async (details) => {
@@ -104,8 +105,15 @@ export const UserService = {
       params: { tenantId: stateCode },
     }),
   setUser: (data) => {
+    // Record when this session's token dies (oauth expires_in was previously
+    // discarded), so long flows can check BEFORE an expensive submit instead
+    // of discovering the expiry via a failed call.
+    rememberSessionExpiry(data);
     return Digit.SessionStorage.set("User", data);
   },
+  // false when unknown (pre-existing sessions / responses without expires_in) —
+  // callers must treat "expired" as certain and "not expired" as best-effort.
+  isSessionExpired: () => isSessionExpired(),
   setExtraRoleDetails: (data) => {
     const userDetails = Digit.SessionStorage.get("User");
     return Digit.SessionStorage.set("User", { ...userDetails, extraRoleInfo: data });
