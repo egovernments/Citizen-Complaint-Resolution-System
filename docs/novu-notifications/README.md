@@ -13,6 +13,8 @@ root of the cloned `Citizen-Complaint-Resolution-System` repository.
 3. For SMS, an SMSCountry account on the legacy bulk API, its panel login, and a
    registered sender id. For Indian destinations you also need DLT-registered
    templates — see [Registering templates](#registering-templates-india-dlt).
+4. For email, an SMTP account. On Gmail and Microsoft 365 that means an **app
+   password**, not the account password — see [Enable Email](#enable-email).
 
 The two are independent. SMS through SMSCountry does not touch Novu or Twilio, so
 an SMS-only deployment needs no Twilio account and a WhatsApp-only one needs no
@@ -246,6 +248,66 @@ Two things that bite:
   about 30 characters. Reword that template to drop the variable if your provider
   enforces the limit.
 - Hindi and other non-Latin templates register separately from the English ones.
+
+## Enable Email
+
+Email goes through Novu, unlike SMS. The deploy creates the `complaints-email`
+workflow; you add the SMTP provider yourself.
+
+1. Open **Configurator -> Notifications -> Providers**, select **Add Provider**:
+
+| Field | Value |
+|---|---|
+| Channel | `EMAIL` |
+| Provider ID | `nodemailer` |
+| Name | anything, e.g. `Org SMTP` |
+| Identifier | anything you will recognise, e.g. `org-smtp` |
+| SMTP Host | `smtp.gmail.com`, `smtp.office365.com`, … |
+| SMTP Port | `587` |
+| SMTP User | the mailbox address |
+| SMTP Password | an **app password** — see below |
+| From | usually must equal the SMTP User |
+| Use TLS (secure) | **unchecked** for port 587 — see below |
+
+2. Add `EMAIL` to `novu_bridge_channels_enabled` and re-run `./deploy.sh mycity`.
+3. Trigger a complaint transition and check **Notifications -> Logs**, then the
+   mailbox.
+
+Two things account for most failures:
+
+- **Use an app password, not your account password.** Gmail and Microsoft 365
+  reject the account password for SMTP once 2FA is on, with
+  `535-5.7.8 Username and Password not accepted` — which reads like a typo and
+  sends people round in circles. Generate a 16-character app password instead.
+- **"Use TLS (secure)" does not mean "use TLS".** It means TLS from the first
+  byte, which is port **465**. Port **587** starts in plaintext and upgrades via
+  STARTTLS, so it needs this **unchecked**. Checking it with 587 hangs or fails
+  the handshake.
+
+| Port | Use TLS (secure) |
+|---|---|
+| 587 | unchecked |
+| 465 | checked |
+
+### Test without mailing anyone
+
+[Ethereal](https://ethereal.email) issues throwaway SMTP credentials that accept
+and capture mail instead of delivering it. Enough to prove the wiring — the
+provider fields, the workflow, the bridge — without touching a real mailbox.
+
+```bash
+curl -sS -X POST https://api.nodemailer.com/user \
+  -H 'Content-Type: application/json' \
+  -d '{"requestor":"ccrs","version":"1.0.0"}'
+```
+
+That returns `host`, `port`, `secure`, `user` and `pass`. Put them in the
+provider form above, trigger a transition, then read the captured mail by
+signing in at [ethereal.email](https://ethereal.email) with the same
+credentials, or over IMAP at `imap.ethereal.email:993`.
+
+It proves configuration, not deliverability: SPF, DKIM and whether a real
+recipient's provider accepts the mail still need a live SMTP account.
 
 ## Clean Up
 
