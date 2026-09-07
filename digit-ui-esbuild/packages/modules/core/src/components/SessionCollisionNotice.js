@@ -105,6 +105,9 @@ const SessionCollisionNotice = () => {
       heading={tx("CORE_SESSION_COLLISION_HEADING", "Another account signed in")}
       onClose={() => setOther(null)}
       onOverlayClick={() => setOther(null)}
+      // Align the link with the button on a shared centre line; the platform
+      // stacks these full-width on mobile, where the gap keeps them apart.
+      footerStyles={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "1rem", flexWrap: "wrap" }}
       children={[
         <div key="body" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "0.25rem 0" }}>
           {/* Group 1 — the situation: lead sentence tied tightly to the two
@@ -156,7 +159,7 @@ const SessionCollisionNotice = () => {
           type="button"
           size="large"
           variation="link"
-          label={`${tx("CORE_SESSION_COLLISION_SWITCH", "Switch to")} ${other.name}`}
+          label={tx("CORE_SESSION_COLLISION_SWITCH", "Switch to the other account")}
           onClick={() => window.location.reload()}
         />,
         <Button
