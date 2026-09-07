@@ -1,5 +1,6 @@
 import Axios from "axios";
 import { isKeycloakAuth } from "../../auth/authSurface";
+import { isAuthFailure, redirectToLogin } from "./authSession";
 
 function getTokenExchangeUrl() {
   return window?.globalConfigs?.getConfig("TOKEN_EXCHANGE_URL") || "";
@@ -19,31 +20,36 @@ function getKeycloakToken() {
 Axios.interceptors.response.use(
   (res) => res,
   (err) => {
-    const isEmployee = window.location.pathname.split("/").includes("employee");
-    if (err?.response?.data?.Errors) {
-      for (const error of err.response.data.Errors) {
-        if (error.message.includes("InvalidAccessTokenException")) {
-          localStorage.clear();
-          sessionStorage.clear();
-          const loginPath = isKeycloakAuth()
-            ? `/${window?.contextPath}/user/login`
-            : (isEmployee ? `/${window?.contextPath}/employee/user/login` : `/${window?.contextPath}/citizen/login`);
-          window.location.href = loginPath +
-            `?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-        } else if (
-          error?.message?.toLowerCase()?.includes("internal server error") ||
-          error?.message?.toLowerCase()?.includes("some error occured")
-        ) {
-          window.location.href =
-          (isEmployee ? `/${window?.contextPath}/employee/user/error` : `/${window?.contextPath}/citizen/error`) +
-                      `?type=maintenance&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-        } else if (error.message.includes("ZuulRuntimeException")) {
-          window.location.href =
-          (isEmployee ? `/${window?.contextPath}/employee/user/error` : `/${window?.contextPath}/citizen/error`) +
-                      `?type=notfound&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-        }
-      }
+    // Auth failures are classified by HTTP status + platform error CODE, never
+    // by human-readable message text (messages vary by service and locale, and
+    // string-matching them sent real session expiries to the maintenance page).
+    // A dead session goes to the correct login with the auth keys cleared and
+    // everything else — caches, drafts, language — preserved (authSession.js).
+    if (isAuthFailure(err)) {
+      redirectToLogin();
+      // Navigation is under way: park the promise so callers' error handlers
+      // don't flash inline failures over a page that is already leaving.
+      return new Promise(() => {});
     }
+
+    // Route-level "no such service" from the gateway still gets the dedicated
+    // not-found screen — a broken route can't be retried by the current page.
+    const isEmployee = window.location.pathname.split("/").includes("employee");
+    const errors = err?.response?.data?.Errors;
+    if (Array.isArray(errors) && errors.some((e) => String(e?.message || "").includes("ZuulRuntimeException"))) {
+      window.location.href =
+        (isEmployee ? `/${window?.contextPath}/employee/user/error` : `/${window?.contextPath}/citizen/error`) +
+        `?type=notfound&from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      return new Promise(() => {});
+    }
+
+    // Everything else — 5xx, gateway timeouts, network failures — rejects to
+    // the CALLER. Screens keep their state and decide locally (inline error,
+    // retry, toast). The old blanket redirect to the maintenance page turned
+    // any transient background failure into a full-page dead end, abandoning
+    // in-flight work like a pending complaint submit. Deliberately NO request
+    // timeout is imposed here: deployments run on very slow links where large
+    // responses (inbox, MDMS, localization) legitimately take a long time.
     throw err;
   }
 );
