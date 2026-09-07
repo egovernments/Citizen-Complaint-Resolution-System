@@ -1832,6 +1832,10 @@ const CreatePGRFlowV2: React.FC = () => {
 
 
   function handleContinue() {
+    // Guard the handler as well as the button: a fast double-tap can fire
+    // twice before React re-renders the disabled state, and Enter on the
+    // form would bypass the button entirely.
+    if (submitting) return;
     if (!stepIsValid) {
       setError(t("CORE_COMMON_REQUIRED_ERRMSG"));
       return;
@@ -1947,7 +1951,9 @@ const CreatePGRFlowV2: React.FC = () => {
           variant="primary"
           onClick={handleContinue}
           loading={submitting}
-          disabled={!stepIsValid}
+          // Also disabled while the create is in flight: a second tap on a
+          // slow connection would file a duplicate complaint.
+          disabled={!stepIsValid || submitting}
           type="button"
         >
           {isLast ? (

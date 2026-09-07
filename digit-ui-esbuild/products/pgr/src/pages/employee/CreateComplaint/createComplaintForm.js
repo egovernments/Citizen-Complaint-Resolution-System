@@ -456,6 +456,9 @@ const CreateComplaintForm = ({
   // doesn't auto-disable submit on its own — earlier the button was
   // active even on a completely blank form.
   const [submitDisabled, setSubmitDisabled] = useState(true);
+  // True from the moment a create is fired until it settles, so the
+  // submit button cannot file the same complaint twice.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const requiredFieldKeys = useMemo(() => {
     const keys = [];
     (updatedConfig?.form ?? []).forEach((section) => {
@@ -632,6 +635,10 @@ const CreateComplaintForm = ({
   const submittedRef = useRef(false);
 
   const onFormSubmit = (_data) => {
+    // A second submit while the first is still in flight would create a
+    // duplicate complaint — common on slow connections where the button
+    // stays visible for several seconds.
+    if (isSubmitting) return;
     if (!isBoundaryLeaf(_data?.SelectedBoundary)) {
       setToast({
         show: true,
@@ -661,14 +668,19 @@ const CreateComplaintForm = ({
     const dropDraft = () => {
       clearSessionFormData();
     };
+    setIsSubmitting(true);
     await CreateComplaintMutation(payload, {
       onError: async () => {
         dropDraft();
+        // Re-enable: the operator must be able to correct and resubmit.
+        setIsSubmitting(false);
         setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
       },
       onSuccess: async (responseData) => {
         if (responseData?.ResponseInfo?.Errors) {
           dropDraft();
+          // Re-enable: the operator must be able to correct and resubmit.
+          setIsSubmitting(false);
           setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
         } else {
           // Clear both the sessionStorage cache and the in-memory form
@@ -720,7 +732,7 @@ const CreateComplaintForm = ({
         config={updatedConfig?.form}
         className="custom-form"
         onFormValueChange={onFormValueChange}
-        isDisabled={submitDisabled}
+        isDisabled={submitDisabled || isSubmitting}
         label={t("CS_COMMON_SUBMIT")}
       />
 
