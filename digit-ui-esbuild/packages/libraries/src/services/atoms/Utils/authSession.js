@@ -46,8 +46,21 @@ const AUTH_LOCAL_KEYS = [
 
 export const clearAuthSession = () => {
   try {
+    // This tab's own session: always ours to remove.
+    const myToken = window.Digit?.UserService?.getUser?.()?.access_token;
     AUTH_SESSION_KEYS.forEach((key) => window.sessionStorage.removeItem(key));
-    AUTH_LOCAL_KEYS.forEach((key) => window.localStorage.removeItem(key));
+
+    // The localStorage keys are SHARED by every tab. Another tab signed in as a
+    // different user owns them once it logs in, so removing them blindly would
+    // log that tab out on its next reload for a failure that was not its own.
+    // Remove only what belongs to this tab's dead session — or, when ownership
+    // cannot be established (no token to compare), remove it anyway rather than
+    // leave a stale credential behind.
+    AUTH_LOCAL_KEYS.forEach((key) => {
+      const value = window.localStorage.getItem(key);
+      if (!value) return;
+      if (!myToken || value.includes(myToken)) window.localStorage.removeItem(key);
+    });
   } catch (e) {
     // A blocked store must not stop the redirect to login.
   }
