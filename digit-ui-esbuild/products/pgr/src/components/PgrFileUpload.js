@@ -1,5 +1,6 @@
 import React from "react";
 import { parseFilestoreEntry } from "../utils/attachmentKind";
+import { EV, trackE, failureName, sizeBucket } from "../utils/analytics";
 
 // Shared PGR file uploader — the SAME component/UX as the citizen create
 // wizard's Step-4 uploader (CreatePGRFlowV2 PgrFileUpload): dashed drop-zone
@@ -247,6 +248,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
     for (const f of files.slice(0, room)) {
       if (f.size > MAX_BYTES) {
         setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 5 MB)."));
+        trackE(EV.ATTACHMENT_FAILED, "TooLarge");
         continue;
       }
       accepted.push(f);
@@ -280,6 +282,8 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
             name: file.name,
             size: file.size,
           });
+          // Kind + coarse size bucket only — never the filename or contents.
+          trackE(EV.ATTACHMENT_ADDED, `${previewKind}:${sizeBucket(file.size)}`);
         }
       } catch (err) {
         const apiMessage =
@@ -287,6 +291,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
           err?.response?.data?.message ||
           err?.message;
         setError(apiMessage || tr(t, "CS_FILE_UPLOAD_FAILED", "File upload failed."));
+        trackE(EV.ATTACHMENT_FAILED, failureName(err));
       }
     }
     setBusy(false);
@@ -307,6 +312,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
   const removeAt = (id) => {
     const gone = items.find((i) => i.id === id);
     if (gone?.url?.startsWith("blob:")) URL.revokeObjectURL(gone.url);
+    trackE(EV.ATTACHMENT_REMOVED, gone?.kind || "");
     emit(items.filter((i) => i.id !== id));
   };
   const openPicker = () => inputRef.current && inputRef.current.click();

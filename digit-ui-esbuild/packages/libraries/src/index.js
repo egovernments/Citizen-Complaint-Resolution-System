@@ -94,3 +94,5 @@ const initLibraries = () => {
 export * from "./constants/mobileValidation";
 
 export { initLibraries, Enums, Hooks, subFormRegistry, Request, MdmsService, getAuthAdapter, initAuthAdapter, AuthAdapter };
+// Cross-tab session-collision detection — see services/atoms/Utils/sessionCollision.js
+export { detectSessionCollision, onSessionCollision } from "./services/atoms/Utils/sessionCollision";

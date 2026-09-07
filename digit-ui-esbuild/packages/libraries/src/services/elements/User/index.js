@@ -3,6 +3,7 @@ import { Request, ServiceRequest } from "../../atoms/Utils/Request";
 import { Storage } from "../../atoms/Utils/Storage";
 import { getAuthAdapter } from "../../auth/index";
 import { isKeycloakAuth } from "../../auth/authSurface";
+import { rememberSessionExpiry, isSessionExpired } from "../../atoms/Utils/authSession";
 
 export const UserService = {
   authenticate: async (details) => {
@@ -63,6 +64,18 @@ export const UserService = {
     return Digit.SessionStorage.get("User");
   },
   logout: async () => {
+    // Behaviour analytics: ONE central point for every logout button in the
+    // app. The shim (public/analytics.js) is loaded by index.html and may be
+    // absent — never assume it exists, never block logout on it.
+    try {
+      window?.DigitAnalytics?.trackEvent?.("Authentication.LoggedOut", {
+        category: "Authentication",
+        action: "LoggedOut",
+        label: UserService.getType() || "",
+      });
+    } catch (e) {
+      /* analytics must never break logout */
+    }
     if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       return adapter.logout();
@@ -104,8 +117,15 @@ export const UserService = {
       params: { tenantId: stateCode },
     }),
   setUser: (data) => {
+    // Record when this session's token dies (oauth expires_in was previously
+    // discarded), so long flows can check BEFORE an expensive submit instead
+    // of discovering the expiry via a failed call.
+    rememberSessionExpiry(data);
     return Digit.SessionStorage.set("User", data);
   },
+  // false when unknown (pre-existing sessions / responses without expires_in) —
+  // callers must treat "expired" as certain and "not expired" as best-effort.
+  isSessionExpired: () => isSessionExpired(),
   setExtraRoleDetails: (data) => {
     const userDetails = Digit.SessionStorage.get("User");
     return Digit.SessionStorage.set("User", { ...userDetails, extraRoleInfo: data });
