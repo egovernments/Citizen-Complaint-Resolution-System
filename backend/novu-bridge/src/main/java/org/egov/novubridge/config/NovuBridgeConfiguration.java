@@ -170,7 +170,12 @@ public class NovuBridgeConfiguration {
     // (e.g. WHATSAPP until a legitimate provider is onboarded as a Novu
     // integration) is persisted as SKIPPED / NB_NO_PROVIDER — an honest,
     // debuggable outcome, never a fallback to another channel.
-    @Value("#{'${novu.bridge.channels.enabled:SMS,EMAIL}'.split(',')}")
+    // No default channel. An empty list matches nothing in isChannelEnabled, so
+    // every event is SKIPPED/NB_NO_PROVIDER until an operator names the channels
+    // they have actually configured a provider for. Defaulting to SMS,EMAIL meant
+    // a deployment that never set this attempted email dispatch with no SMTP
+    // provider onboarded, and failed silently on every complaint.
+    @Value("#{'${novu.bridge.channels.enabled:}'.split(',')}")
     private java.util.List<String> channelsEnabled;
 
     public boolean isChannelEnabled(String channel) {

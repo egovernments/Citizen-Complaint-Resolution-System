@@ -18,6 +18,9 @@ The two are independent. SMS through SMSCountry does not touch Novu or Twilio, s
 an SMS-only deployment needs no Twilio account and a WhatsApp-only one needs no
 SMSCountry account.
 
+Nothing is dispatched on any channel until you name it in
+`novu_bridge_channels_enabled`. There is no default.
+
 Last tested with `egovio/pgr-services:master-0938bdf` and
 `egovio/novu-bridge:master-0469335`.
 
@@ -31,7 +34,7 @@ deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
 | `enable_novu` | Starts Novu and the notification stack. Nothing below works without it. | `true` |
 | `pgr_notification_config_driven` | Makes PGR read routing and templates from configuration instead of code. | `true` |
 | `seed_notifications` | Seeds the three PGR notification MDMS masters on deploy. Idempotent. | `true` |
-| `novu_bridge_channels_enabled` | Channels the bridge will dispatch. | `"SMS,WHATSAPP"` |
+| `novu_bridge_channels_enabled` | **Required.** Channels to dispatch — `SMS`, `WHATSAPP`, `EMAIL`, comma-separated. There is no default: leave it unset and nothing is sent. Name only channels you have onboarded a provider for. | `"SMS,WHATSAPP"` |
 | `novu_bridge_channel` | Novu channel the bridge triggers on. Twilio WhatsApp is an `sms` integration in Novu, so this stays `sms` for both channels. | `"sms"` |
 | `novu_bridge_proxy_allowed_roles` | Roles allowed to manage providers from Configurator. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |

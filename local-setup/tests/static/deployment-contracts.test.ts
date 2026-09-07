@@ -275,6 +275,17 @@ describe('Novu workflow creation deployment contract', () => {
   // made it exit 1 on a fresh box before creating anything — silently, because the
   // run task is failed_when:false. Existing boxes hid it: workflows already in the
   // Novu mongo volume survive redeploys.
+  // Defaulting the channel list to SMS,EMAIL meant a deployment that never set it
+  // attempted email dispatch with no SMTP provider onboarded, failing silently on
+  // every complaint. Nothing is dispatched now until an operator names a channel.
+  test('no channel is dispatched by default', () => {
+    expect(composeFile).toContain('NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}');
+    expect(composeEnv).toContain(
+      "NOVU_BRIDGE_CHANNELS_ENABLED={{ novu_bridge_channels_enabled | default('') }}"
+    );
+    expect(composeFile).not.toContain('NOVU_BRIDGE_CHANNELS_ENABLED:-SMS');
+  });
+
   test('the bootstrap ships with the helper it sources', () => {
     const sourced = novuBootstrap.match(/source "\$\{SCRIPT_DIR\}\/([a-z-]+\.sh)"/);
     expect(sourced).not.toBeNull();

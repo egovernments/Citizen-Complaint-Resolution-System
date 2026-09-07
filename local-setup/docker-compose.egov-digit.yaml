@@ -2425,7 +2425,7 @@ services:
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
-      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
       # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
       # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
       # configurator's own provider/template screens are not 403'd.

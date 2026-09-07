@@ -85,7 +85,7 @@ WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # PGR Cont
 PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"     # public Docker Hub, multi-arch
 
 # Feature toggles that get written into .env.
-CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (compose default is SMS,EMAIL)
+CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (no compose default: unset = nothing dispatched)
 PROXY_ALLOWED_ROLES="${PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}"
 # ^ NOVU_BRIDGE_PROXY_ALLOWED_ROLES. MDMS_ADMIN is the config-admin; it is
 #   EXCLUDED by the compose default, which 403s the configurator's own screens.
