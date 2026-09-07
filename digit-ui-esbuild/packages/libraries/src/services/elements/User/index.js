@@ -64,6 +64,18 @@ export const UserService = {
     return Digit.SessionStorage.get("User");
   },
   logout: async () => {
+    // Behaviour analytics: ONE central point for every logout button in the
+    // app. The shim (public/analytics.js) is loaded by index.html and may be
+    // absent — never assume it exists, never block logout on it.
+    try {
+      window?.DigitAnalytics?.trackEvent?.("Authentication.LoggedOut", {
+        category: "Authentication",
+        action: "LoggedOut",
+        label: UserService.getType() || "",
+      });
+    } catch (e) {
+      /* analytics must never break logout */
+    }
     if (isKeycloakAuth()) {
       const adapter = getAuthAdapter();
       return adapter.logout();

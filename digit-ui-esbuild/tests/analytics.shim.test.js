@@ -89,7 +89,7 @@ function loadShim(opts) {
     },
     documentElement: { appendChild(el) { scripts.push(el); } },
     createElement: makeEl,
-    addEventListener() {},
+    addEventListener(type, fn) { if (type === "click") this._clickListener = fn; },
     referrer: "",
   };
   // The real bundle captures the history OBJECT, so the shim's later patch still
@@ -783,4 +783,183 @@ test("endpointUrl is host-allowlisted, not just scriptUrl (CWE-201)", () => {
   // PostHog with no endpointUrl falls back to the vendor default and is fine.
   v = i.validate({ code: "p", type: "POSTHOG", enabled: true, apiKey: "k" });
   assert.equal(v.ok, true);
+});
+
+/* ───────── virtual pageviews, landing surface, raw-path dedup ───────── */
+
+test("the public landing page activates providers and reports its pageview", () => {
+  // /digit-ui/landing carries no /citizen|/employee segment; "unknown" used to
+  // defer every record forever there, making the whole public landing page
+  // invisible to every provider. It is citizen-facing: it counts as citizen.
+  const t = loadShim({
+    pathname: "/digit-ui/landing",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  assert.equal(t.internal.providers(), 1, "landing must activate providers");
+  const urls = t.sandbox._paq.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.ok(urls.indexOf("/landing") !== -1, "the landing pageview must be reported");
+});
+
+test("a record scoped to employee stays inert on the landing page", () => {
+  const t = loadShim({
+    pathname: "/digit-ui/landing",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", Object.assign({}, MATOMO_OK, { surfaces: "employee" }))] : []),
+  });
+  assert.equal(t.internal.providers(), 0);
+  assert.equal(t.scripts.length, 0);
+});
+
+test("trackPageView emits a virtual pageview with a derived title", () => {
+  const t = loadShim({
+    pathname: "/digit-ui/citizen/pgr/create-complaint",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const before = t.sandbox._paq.length;
+  t.api.trackPageView("/citizen/pgr/create-complaint/step/where");
+  const after = t.sandbox._paq.slice(before);
+  const url = after.filter((c) => c[0] === "setCustomUrl")[0];
+  assert.ok(url, "a virtual pageview must set the custom url");
+  assert.equal(url[1], "/citizen/pgr/create-complaint/step/where");
+  assert.ok(after.some((c) => c[0] === "trackPageView"));
+  const title = after.filter((c) => c[0] === "setDocumentTitle")[0];
+  assert.ok(title && /Complaints/.test(title[1]), "derivation must apply to virtual paths too");
+});
+
+test("trackPageView scrubs identity, drops the query, honours a scrubbed title override", () => {
+  const t = loadShim({
+    pathname: "/digit-ui/citizen/pgr/create-complaint",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  let before = t.sandbox._paq.length;
+  t.api.trackPageView("/citizen/pgr/complaints/PRD-2026-000023?mobileNumber=841234567");
+  const url = t.sandbox._paq.slice(before).filter((c) => c[0] === "setCustomUrl")[0];
+  assert.equal(url[1], "/citizen/pgr/complaints/:id", "id parameterised, query dropped");
+
+  before = t.sandbox._paq.length;
+  t.api.trackPageView("/citizen/pgr/create-complaint/step/details", "Details step 841234567");
+  const title = t.sandbox._paq.slice(before).filter((c) => c[0] === "setDocumentTitle")[0];
+  assert.equal(title[1], "Details step :num", "a title override is scrubbed too");
+});
+
+test("trackPageView refuses everything that is not a same-app path", () => {
+  const t = loadShim({
+    pathname: "/digit-ui/citizen/pgr/create-complaint",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const count = t.sandbox._paq.length;
+  t.api.trackPageView("https://evil.example.com/x");
+  t.api.trackPageView("//evil.example.com/x");
+  t.api.trackPageView("relative/path");
+  t.api.trackPageView("/ok\\evil");
+  t.api.trackPageView("");
+  t.api.trackPageView(null);
+  t.api.trackPageView(42);
+  assert.equal(t.sandbox._paq.length, count, "junk input must emit nothing");
+});
+
+test("trackPageView is a no-op when nothing is configured", () => {
+  const t = loadShim({ respond: () => [] });
+  assert.doesNotThrow(() => t.api.trackPageView("/citizen/pgr/create-complaint/step/where"));
+});
+
+test("consecutive parameterised pages both emit (dedup compares the raw path)", () => {
+  // details A -> details B both scrub to "/employee/pgr/complaint-details/:id";
+  // deduping on the SCRUBBED page silently dropped every second complaint view.
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  t.sandbox.history.pushState({}, "", "/digit-ui/employee/pgr/complaint-details/PRD-2026-000023");
+  t.flush();
+  t.sandbox.history.pushState({}, "", "/digit-ui/employee/pgr/complaint-details/PRD-2026-000024");
+  t.flush();
+  const views = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
+  assert.equal(views, 3, "boot + two distinct complaint-detail views");
+  const urls = t.sandbox._paq.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.ok(urls.every((u) => u.indexOf("PRD-") === -1), "the raw id must never be emitted");
+});
+
+test("a post-load _paq TrackerProxy (non-array) keeps receiving pushes", () => {
+  // matomo.js REPLACES window._paq with a proxy OBJECT whose push() applies
+  // commands immediately. Reproduced live on the local box: the old isArray
+  // guard clobbered that proxy with a dead array, so every SPA route change,
+  // virtual pageview and event after script load was silently dropped — only
+  // the first pageview of each HARD page load ever reached Matomo.
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const applied = [];
+  t.sandbox._paq = { push: (args) => applied.push(args) };
+
+  t.sandbox.history.pushState({}, "", "/digit-ui/employee/pgr/complaint-details/PRD-2026-000023");
+  t.flush();
+  let urls = applied.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.ok(urls.indexOf("/employee/pgr/complaint-details/:id") !== -1, "route pageview must reach the proxy");
+  assert.ok(applied.some((c) => c[0] === "trackPageView"));
+
+  t.api.trackPageView("/employee/pgr/virtual");
+  urls = applied.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.ok(urls.indexOf("/employee/pgr/virtual") !== -1, "virtual pageview must reach the proxy");
+
+  t.api.trackEvent("save_clicked", { category: "pgr" });
+  assert.ok(applied.some((c) => c[0] === "trackEvent"), "events must reach the proxy");
+
+  assert.ok(!Array.isArray(t.sandbox._paq), "the proxy must never be clobbered back to an array");
+});
+
+/* ───────── custom dimensions + goal mapping (behaviour analytics) ───────── */
+
+test("settings.customDimensions maps allowlisted ctx fields to setCustomDimension", () => {
+  const rec = Object.assign({}, MATOMO_OK, {
+    settings: { customDimensions: { "1": "tenant", "2": "locale", "3": "surface", "4": "notAField", "x": "tenant" } },
+  });
+  const t = loadShim({
+    pathname: "/digit-ui/employee/pgr/inbox",
+    session: { "Digit.Employee.tenantId": JSON.stringify({ value: "mz.ige" }) },
+    respond: (tenant) => (tenant === "mz" ? [row("mz", rec)] : tenant === "mz.ige" ? [] : []),
+  });
+  const dims = t.sandbox._paq.filter((c) => c[0] === "setCustomDimension");
+  assert.ok(dims.some((c) => c[1] === 1 && c[2] === "mz.ige"), "tenant dimension");
+  assert.ok(dims.some((c) => c[1] === 3 && c[2] === "employee"), "surface dimension");
+  assert.ok(!dims.some((c) => c[1] === 4), "an unknown field name must be ignored");
+  assert.ok(dims.every((c) => typeof c[1] === "number" && c[1] >= 1), "ids are sane numbers");
+});
+
+test("settings.goals converts exactly the mapped Category.Action and nothing else", () => {
+  const rec = Object.assign({}, MATOMO_OK, { settings: { goals: { "Complaint.Created": 7 } } });
+  const t = loadShim({
+    pathname: "/digit-ui/citizen/pgr/create-complaint",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", rec)] : []),
+  });
+  t.api.trackEvent("Complaint.Created", { category: "Complaint", action: "Created", label: "TYPE1" });
+  let goals = t.sandbox._paq.filter((c) => c[0] === "trackGoal");
+  assert.equal(goals.length, 1, "mapped event must convert");
+  assert.equal(goals[0][1], 7);
+
+  t.api.trackEvent("Complaint.Failed", { category: "Complaint", action: "Failed", label: "Api:500" });
+  goals = t.sandbox._paq.filter((c) => c[0] === "trackGoal");
+  assert.equal(goals.length, 1, "an unmapped event must NOT convert");
+});
+
+test("declared clicks emit catalogue-shaped Navigation/Clicked events", () => {
+  const rec = Object.assign({}, MATOMO_OK, { trackClicks: true });
+  const t = loadShim({
+    pathname: "/digit-ui/landing",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", rec)] : []),
+  });
+  // the shim registered a delegated click listener on document — invoke it
+  const listener = t.sandbox.document._clickListener;
+  assert.ok(typeof listener === "function", "click listener installed");
+  listener({
+    target: {
+      getAttribute: (k) => (k === "data-analytics-event" ? "landing_link" : k === "data-analytics-label" ? "/citizen/login" : null),
+      parentNode: null,
+    },
+  });
+  const ev = t.sandbox._paq.filter((c) => c[0] === "trackEvent").slice(-1)[0];
+  assert.ok(ev, "click must emit an event");
+  assert.equal(ev[1], "Navigation");
+  assert.equal(ev[2], "Clicked");
+  assert.equal(ev[3], "landing_link:/citizen/login");
 });

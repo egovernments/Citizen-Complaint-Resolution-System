@@ -368,11 +368,23 @@
     return scrub(path) + q;
   }
 
+  /* Shell-free public pages mounted directly under the context path (the PGR
+   * landing and its privacy policy — see core App.js / PGRLandingEntry). They
+   * carry no /citizen|/employee segment, but "unknown" would keep every
+   * provider deferred forever there, making the public landing invisible.
+   * They are citizen-facing, so they count as the citizen surface. */
+  var PUBLIC_CITIZEN_SEGMENTS = ["landing", "privacy-policy"];
+
   function currentSurface() {
     var p = "";
     try { p = window.location.pathname || ""; } catch (e) {}
     if (p.indexOf("/citizen") !== -1) return "citizen";
     if (p.indexOf("/employee") !== -1) return "employee";
+    var cp = contextPath();
+    var rest = p;
+    if (cp && rest.indexOf("/" + cp) === 0) rest = rest.substring(cp.length + 1);
+    var m = /^\/([^\/?#]+)/.exec(rest);
+    if (m && indexOf(PUBLIC_CITIZEN_SEGMENTS, m[1]) !== -1) return "citizen";
     return "unknown";
   }
 
@@ -773,11 +785,62 @@
    * total; the caller wraps every call and self-mutes after MAX_THROWS.  *
    * ------------------------------------------------------------------ */
 
+  /* THE ARRAY CHECK MUST ACCEPT NON-ARRAYS. Once matomo.js loads it REPLACES
+   * window._paq with a TrackerProxy OBJECT whose push() applies commands
+   * immediately. The old `isArray -> window[name] = []` test destroyed that
+   * proxy on the first post-load call, so only the initial queued pageview of
+   * each HARD page load ever reached Matomo — every SPA route change, virtual
+   * pageview and event after script load was silently dropped (the live
+   * "success pages are missing" bug). Anything with a callable push is a
+   * valid sink; only a missing/broken global is re-initialised. */
   function pushTo(name, args) {
     try {
-      if (!isArray(window[name])) window[name] = [];
-      window[name].push(args);
+      var q = window[name];
+      if (q && typeof q.push === "function") { q.push(args); return; }
+      window[name] = [args];
     } catch (e) {}
+  }
+
+  /* Custom dimensions (Matomo): dimension IDS are PER-INSTANCE (created in
+   * the Matomo UI/API), so the id->field mapping rides in the record:
+   *   settings.customDimensions = { "1": "tenant", "2": "locale", ... }
+   * Values come ONLY from this allowlist of ctx fields — a mapping cannot
+   * name anything else, so a misconfigured row can never widen what leaves
+   * the page beyond these already-PII-free values. */
+  var DIMENSION_FIELDS = {
+    tenant: function (ctx) { return ctx.cityTenant || ctx.stateTenant; },
+    stateTenant: function (ctx) { return ctx.stateTenant; },
+    locale: function (ctx) { return ctx.locale; },
+    surface: function (ctx) { return ctx.surface; },
+    entrance: function (ctx) { return ctx.entrance; },
+    module: function (ctx) { return ctx.module; }
+  };
+
+  function matomoSetDimensions(rec, ctx) {
+    var map = rec.settings && rec.settings.customDimensions;
+    if (!map || typeof map !== "object") return;
+    for (var id in map) {
+      if (!map.hasOwnProperty(id)) continue;
+      var idx = parseInt(id, 10);
+      var fieldFn = DIMENSION_FIELDS[map[id]];
+      if (!idx || idx < 1 || !fieldFn) continue;
+      var v = "";
+      try { v = fieldFn(ctx); } catch (e) {}
+      if (isStr(v) && v) pushTo("_paq", ["setCustomDimension", idx, v]);
+    }
+  }
+
+  /* Goals: settings.goals maps "Category.Action" of an event to the id of a
+   * MANUALLY-TRIGGERED Matomo goal. Conversion is exact — no fuzzy event-
+   * attribute matching — and which events convert is env configuration, not
+   * code. Example: { "Complaint.Created": 1 }. */
+  function matomoMaybeGoal(rec, e) {
+    var goals = rec.settings && rec.settings.goals;
+    if (!goals || typeof goals !== "object") return;
+    var key = (e.category || "") + "." + (e.action || "");
+    var gid = goals[key];
+    if (typeof gid === "string") gid = parseInt(gid, 10);
+    if (typeof gid === "number" && gid > 0) pushTo("_paq", ["trackGoal", gid]);
   }
 
   /* The collector. A same-origin endpoint is fine and is what a self-hosted
@@ -827,14 +890,21 @@
         if (!endpoint) return;
         pushTo("_paq", ["setTrackerUrl", endpoint]);
         pushTo("_paq", ["setSiteId", String(rec.siteId)]);
+        matomoSetDimensions(rec, ctx);
         pushTo("_paq", ["setCustomUrl", ctx.page]);
         pushTo("_paq", ["setDocumentTitle", ctx.title || ctx.module || ctx.surface]);
         /* Matomo's own param exclusion, belt to the scrubber's braces. */
         pushTo("_paq", ["setExcludedQueryParams", ["mobileNumber", "mobileNo", "otp", "token", "authToken", "access_token", "uuid", "id", "individualId"]]);
         pushTo("_paq", ["enableLinkTracking", false]);
+        /* Accurate time-on-page for an SPA: without the heartbeat Matomo
+         * credits 0s to the last (often the only) page of a visit. 15s ping,
+         * sent only while the tab is actually visible — no PII, no new hosts. */
+        pushTo("_paq", ["enableHeartBeatTimer", 15]);
         loadScript(rec.scriptUrl);
       },
       pageView: function (rec, ctx) {
+        /* Re-set on every view: locale and city can change mid-session. */
+        matomoSetDimensions(rec, ctx);
         pushTo("_paq", ["setCustomUrl", ctx.page]);
         if (ctx.title) pushTo("_paq", ["setDocumentTitle", ctx.title]);
         pushTo("_paq", ["trackPageView"]);
@@ -842,6 +912,7 @@
       event: function (rec, ctx) {
         var e = ctx.event || {};
         pushTo("_paq", ["trackEvent", e.category || "ui", e.action || e.name || "event", e.label || "", typeof e.value === "number" ? e.value : undefined]);
+        matomoMaybeGoal(rec, e);
       },
       captureError: function (rec, ctx) {
         var er = ctx.error || {};
@@ -994,8 +1065,11 @@
 
   function gtag() {
     try {
-      if (!isArray(window.dataLayer)) window.dataLayer = [];
-      window.dataLayer.push(arguments);
+      /* Same push-capable rule as pushTo (gtag.js keeps dataLayer an array,
+       * but never clobber a working sink on a type technicality). */
+      var q = window.dataLayer;
+      if (q && typeof q.push === "function") { q.push(arguments); return; }
+      window.dataLayer = [arguments];
     } catch (e) {}
   }
 
@@ -1259,9 +1333,17 @@
     return Math.random() >= rec.sampleRate;
   }
 
-  function emitPageView() {
+  /* overridePage/overrideTitle: a VIRTUAL pageview (a wizard step, a modal, a
+   * success state) — screens that exist for the user without a URL change.
+   * Both are already scrubbed by the caller (trackPageView); everything else
+   * (DNT, disablePageViews, sampling, per-record title derivation) applies to
+   * virtual views exactly as to real ones. */
+  function emitPageView(overridePage, overrideTitle) {
     var ctx = buildCtx(null);
     if (ctx.dnt) return;
+    if (isStr(overridePage) && overridePage) {
+      ctx = extendCtx(ctx, { page: overridePage, title: isStr(overrideTitle) ? overrideTitle : "" });
+    }
     for (var i = 0; i < live.length; i++) {
       if (live[i].record.disablePageViews === true) continue;
       if (sampledOut(live[i].record)) continue;
@@ -1317,11 +1399,20 @@
    * without adding a 4th timer — index.html already runs three intervals. */
   var pending = null;
   var lastPage = null;
+
+  /* Dedup key: the RAW location, never the scrubbed page. Scrubbing collapses
+   * complaint A and complaint B to the same "/complaint-details/:id", which
+   * silently dropped the pageview when an employee moved directly between two
+   * complaints. The raw value is compared locally and never emitted. */
+  function rawPage() {
+    try { return (window.location.pathname || "") + (window.location.search || ""); } catch (e) { return ""; }
+  }
+
   function schedule(fn) {
     if (pending) return;
     pending = window.setTimeout(function () {
       pending = null;
-      var p = currentPage();
+      var p = rawPage();
       if (p === lastPage) return;
       lastPage = p;
       fn();
@@ -1343,11 +1434,17 @@
            * localised and complaint pages interpolate ids into them. */
           for (var hops = 0; el && hops < 5; hops++) {
             if (el.getAttribute && el.getAttribute("data-analytics-event")) {
+              /* Catalogue naming (Category/Action/Name). The Name combines the
+               * declared event id with its label ("landing_link:/citizen/login")
+               * so Matomo's single Name column keeps both what was clicked and
+               * where it pointed. */
+              var evId = scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60);
+              var evLabel = scrub(String(el.getAttribute("data-analytics-label") || "")).substring(0, 80);
               emitEvent({
-                name: scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60),
-                category: "click",
-                action: "click",
-                label: scrub(String(el.getAttribute("data-analytics-label") || "")).substring(0, 60)
+                name: evId,
+                category: "Navigation",
+                action: "Clicked",
+                label: evId + (evLabel ? ":" + evLabel : "")
               });
               return;
             }
@@ -1407,7 +1504,7 @@
 
     tryActivate();
     if (live.length) {
-      lastPage = currentPage();
+      lastPage = rawPage();
       emitPageView();
     }
   }
@@ -1537,6 +1634,25 @@
           label: scrub(String(props.label || "")).substring(0, 200),
           value: typeof props.value === "number" ? props.value : undefined
         });
+      } catch (e) {}
+    },
+    /* Virtual pageview, for screens the router never sees: wizard steps, modal
+     * flows, success/failure states rendered at an unchanged URL. Path must be
+     * a same-app absolute path ("/citizen/pgr/create-complaint/step/where");
+     * query strings and fragments are dropped, and both arguments pass through
+     * scrub() so a careless caller cannot leak an id or a phone number. The
+     * optional title overrides the derived one for every provider. */
+    trackPageView: function (virtualPath, title) {
+      try {
+        if (!live.length) return;
+        if (!isStr(virtualPath)) return;
+        var p = trim(virtualPath);
+        if (!p || p.charAt(0) !== "/" || p.charAt(1) === "/") return;
+        if (p.indexOf("://") !== -1 || p.indexOf("\\") !== -1) return;
+        p = scrub(p.split("#")[0].split("?")[0]).substring(0, 200);
+        if (!p) return;
+        var ti = isStr(title) ? scrub(title).substring(0, 120) : "";
+        emitPageView(p, ti);
       } catch (e) {}
     },
     /* For tests and for the Configurator's "what will actually run" preview. */
