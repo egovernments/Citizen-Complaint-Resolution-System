@@ -45,3 +45,11 @@ scrape_configs:
     pipeline_stages:
       # Docker JSON log driver wraps each line in {"log":"...","stream":"...","time":"..."}
       - docker: {}
+      # Scrub credentials before they reach Loki (any logged-in Viewer can read
+      # the logs dashboard); egov-user-proxy logs carry access_token= from Kong.
+      - replace:
+          expression: 'access_token=[^&\s"]+'
+          replace: 'access_token=REDACTED'
+      - replace:
+          expression: '(?i)authorization:\s*bearer\s+[A-Za-z0-9._\-]+'
+          replace: 'Authorization: Bearer REDACTED'

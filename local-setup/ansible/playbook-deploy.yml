@@ -100,6 +100,10 @@
       args:
         chdir: "{{ digit_dir }}"
         executable: /bin/bash
+      # compose interpolates ${GF_ADMIN_PASSWORD:?} even for `down`; placeholder
+      # so a teardown never blocks on a missing secret.
+      environment:
+        GF_ADMIN_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -1259,6 +1263,17 @@
         dest: "{{ digit_dir }}/.env"
         mode: '0644'
 
+    # compose needs GF_ADMIN_PASSWORD (${...:?}) to interpolate before the first
+    # up; seed a placeholder now, the OpenBao value overwrites it below.
+    - name: "Grafana — seed placeholder GF_ADMIN_PASSWORD into .env (compose needs it to interpolate)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+        create: true
+        mode: '0600'
+      no_log: true
+
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
     # inventory (host_vars overrides group_vars). Add new keys to the
@@ -2343,6 +2358,43 @@
           X-Vault-Token: "{{ bao_root_token }}"
         status_code: [200]
       register: bao_secrets
+      no_log: true
+
+    # Reuse the stored password if present, else generate (short-circuit `or` so
+    # the generator only runs when nothing is stored). Read back with:
+    #   bao kv get -field=grafana_admin_password {{ '{{' }} secrets_path {{ '}}' }}
+    - name: "OpenBao — resolve Grafana admin password (generate if absent)"
+      ansible.builtin.set_fact:
+        grafana_admin_pw: >-
+          {{ bao_secrets.json.data.data.grafana_admin_password | default('', true)
+             or lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      no_log: true
+
+    # cas guards against a racing write; data is merged so other secret keys are
+    # kept. Only fires when nothing is stored yet.
+    - name: "OpenBao — persist generated Grafana admin password"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_root_token }}"
+        body_format: json
+        body: >-
+          {{ {'options': {'cas': bao_secrets.json.data.metadata.version | int},
+              'data': bao_secrets.json.data.data
+                      | combine({'grafana_admin_password': grafana_admin_pw})} }}
+        status_code: [200]
+      when: (bao_secrets.json.data.data.grafana_admin_password | default('', true)) | length == 0
+      no_log: true
+
+    # Replace the placeholder with the authoritative value before Grafana starts.
+    - name: "OpenBao — put the stored Grafana admin password into .env"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: '^GF_ADMIN_PASSWORD='
+        line: "GF_ADMIN_PASSWORD={{ grafana_admin_pw }}"
+        create: true
+        mode: '0600'
       no_log: true
 
     - name: "OpenBao — write secrets into compose .env (idempotent block)"
@@ -4217,6 +4269,40 @@
     - name: Show Loki health status
       debug:
         msg: "Loki: {{ 'HEALTHY' if loki_health.rc == 0 else 'UNHEALTHY (non-critical)' }}"
+
+    # ==================== Grafana admin password ====================
+    - name: Wait for Grafana health (up to 2 min)
+      shell: curl -sf http://127.0.0.1:13000/api/health -o /dev/null
+      register: grafana_health
+      retries: 12
+      delay: 10
+      until: grafana_health.rc == 0
+      changed_when: false
+      ignore_errors: yes
+
+    # GF_SECURITY_ADMIN_PASSWORD is ignored on an existing volume, so reset it
+    # here. --password-from-stdin keeps it out of ps; --config targets the running
+    # DB. reset exits 0 even if the admin is missing, so also gate on the success line.
+    - name: "Grafana — align admin password with OpenBao (idempotent)"
+      ansible.builtin.command: >-
+        docker exec -i digit-grafana
+        grafana cli --config /etc/grafana/grafana.ini admin reset-admin-password --password-from-stdin
+      args:
+        stdin: "{{ grafana_admin_pw }}"
+      register: grafana_pw_reset
+      changed_when: false
+      failed_when: >-
+        grafana_pw_reset.rc != 0
+        or 'Admin password changed successfully' not in grafana_pw_reset.stdout
+      no_log: true
+      when: grafana_health.rc == 0
+
+    - name: Show Grafana status
+      debug:
+        msg: >-
+          Grafana: {{ 'admin password aligned with OpenBao'
+                      if grafana_health.rc == 0
+                      else 'UNHEALTHY — admin password NOT applied; rerun the deploy once it is up' }}
 
     # ==================== Claude Code Setup (opt-in) ====================
     # Installs Claude Code CLI on the target and syncs the controller's

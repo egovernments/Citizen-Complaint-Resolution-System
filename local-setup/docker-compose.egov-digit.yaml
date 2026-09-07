@@ -43,9 +43,14 @@ services:
     container_name: digit-grafana
     restart: unless-stopped
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Login required, no anonymous. Roles: Viewer=view, Editor=+Explore,
+      # Admin=admin. Keep anonymous off (do not set grafana_anonymous_enabled).
+      GF_AUTH_ANONYMOUS_ENABLED: ${GF_ANONYMOUS_ENABLED:-false}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      # Fail-closed: no default password; seeded from OpenBao by the playbook.
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?seeded into .env by the playbook}
       # Domain + root URL templated per tenant via /opt/digit/.env
       # (Ansible writes GF_SERVER_DOMAIN there from inventory `domain`).
       GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-api.egov.theflywheel.in}
@@ -55,7 +60,8 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "13000:3000"
+      # loopback only; nginx fronts /grafana/ -> 127.0.0.1:13000
+      - "127.0.0.1:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
