@@ -73,5 +73,14 @@ Each runner sets `export SECSCAN_TOKEN='<that value>'` before running. **Never c
 
 - The Apps Script **creates/updates only** under `security_scan/` — it never deletes.
 - Concurrent runs updating `manifest.json` retry on GitHub 409 conflicts.
+- **Audit workbook sharing.** The dashboard's *Export audit* button links to the Excel file on
+  Drive, so the script shares each new `.xlsx` as **domain-with-link → viewer** (`doPost`) — anyone
+  signed in with an `egovernments.org` account and the link can open it, keeping the full audit
+  internal even though the dashboard itself is public. Two caveats: (1) it requires the Drive owner
+  to be on the `egovernments.org` Workspace; if a Workspace admin blocks domain link-sharing,
+  `setSharing` is skipped and the link stays private — share manually or relax the setting; (2) to
+  fix workbooks uploaded before this change, run the one-off **`shareExistingPublic`** function once
+  from the editor. (Note: the findings *JSON* under `security_scan/data/` is public on gh-pages —
+  only the downloadable workbook is domain-restricted.)
 - To pin the runner command to an immutable version later, cut a tag (e.g. `security-scan-v1`)
   and change `README.md`'s URL + `run.sh`'s `REF` (or `SECSCAN_REF=<tag>`).

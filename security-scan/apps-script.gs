@@ -51,6 +51,10 @@ function doPost(e) {
     if (b.xlsxBase64) {
       var xf = folder.createFile(Utilities.newBlob(Utilities.base64Decode(b.xlsxBase64),
                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b.base + ".xlsx"));
+      // The dashboard's "Export audit" link points here. Share the workbook with anyone in the
+      // egovernments.org domain who has the link (view-only) — the full audit stays internal even
+      // though the dashboard is public. Wrapped in try in case Workspace policy blocks it (see SETUP.md).
+      try { xf.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
       xlsxUrl = xf.getUrl();
     }
 
@@ -139,4 +143,25 @@ function _folderPath(parts) {
     cur = it.hasNext() ? it.next() : cur.createFolder(parts[i]);
   }
   return cur;
+}
+
+// -------- one-off: make every already-uploaded .xlsx openable via its link --------
+// Run this once from the editor to fix workbooks uploaded before the setSharing change.
+// New runs are shared automatically by doPost.
+function shareExistingPublic() {
+  var root = _folderPath([DRIVE_ROOT]);
+  var n = 0, failed = 0;
+  (function walk(folder) {
+    var files = folder.getFiles();
+    while (files.hasNext()) {
+      var f = files.next();
+      if (f.getName().slice(-5).toLowerCase() !== ".xlsx") continue;
+      try { f.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); n++; }
+      catch (e) { failed++; Logger.log("could not share: " + f.getName() + " — " + e); }
+    }
+    var subs = folder.getFolders();
+    while (subs.hasNext()) walk(subs.next());
+  })(root);
+  Logger.log("shared " + n + " workbook(s) as anyone-with-link viewer; " + failed + " failed");
+  return { shared: n, failed: failed };
 }
