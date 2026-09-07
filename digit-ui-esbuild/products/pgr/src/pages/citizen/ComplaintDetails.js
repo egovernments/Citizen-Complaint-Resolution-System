@@ -24,6 +24,7 @@ import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import { buildExtendedAttributeRows, useExtendedAttributeOrder } from "../../components/PgrExtendedAttributesView";
 import StarRated from "../../components/timelineInstances/StarRated";
+import DownloadReceiptButton from "../../components/DownloadReceiptButton";
 
 // Terminal (non-active) states across standard PGR *and* the mz.igsae CMS workflow.
 // CANCELLED / CLOSEDAFTER* are CMS terminals; without them CANCELLED wrongly showed
@@ -330,6 +331,13 @@ const ComplaintDetailsPage = () => {
 
   const status = complaintDetails?.service?.applicationStatus;
 
+  // Shared by the Additional Details card and the receipt, so the printed
+  // document and the screen can never list different rows.
+  const extAttrRows = React.useMemo(
+    () => buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t, extAttrOrder),
+    [complaintDetails?.service?.extendedAttributes, t, extAttrOrder]
+  );
+
   return (
     <div
       className="v2-scope"
@@ -363,6 +371,11 @@ const ComplaintDetailsPage = () => {
           {tr(`${LOCALIZATION_KEY.CS_HEADER}_COMPLAINT_SUMMARY`, "Complaint Summary")}
         </h1>
         {status ? <StatusPill status={status} t={t} /> : null}
+        {!isLoading && complaintDetails?.service ? (
+          <div style={{ marginLeft: "auto" }}>
+            <DownloadReceiptButton complaintDetails={complaintDetails} />
+          </div>
+        ) : null}
       </header>
       <div
         style={{
@@ -467,7 +480,6 @@ const ComplaintDetailsPage = () => {
             {(() => {
               // Read-only "Additional Details" — just fetch service.extendedAttributes
               // and show it; the backend already returns masked ("****") values.
-              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t, extAttrOrder);
               return extAttrRows.length > 0 ? (
                 <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
                   <SectionTitle>{tr("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", "Additional Details")}</SectionTitle>

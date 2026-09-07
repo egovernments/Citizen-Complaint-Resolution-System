@@ -145,9 +145,16 @@ const fetchComplaintDetails = async (tenantId, id) => {
   }
 };
 
-const useComplaintDetails = ({ tenantId, id }) => {
+// `enabled` is opt-in and defaults to true, so every existing caller keeps its
+// current behaviour exactly — including reporting isLoading while a tenantId is
+// still resolving. It is deliberately NOT combined with a !!tenantId/!!id check:
+// react-query treats a disabled query as idle (isLoading false, data undefined),
+// which callers that gate their spinner on isLoading would render as an error.
+const useComplaintDetails = ({ tenantId, id, enabled = true }) => {
   const queryClient = useQueryClient();
-  const { isLoading, error, data } = useQuery(["complaintDetails", tenantId, id], () => fetchComplaintDetails(tenantId, id));
+  const { isLoading, error, data } = useQuery(["complaintDetails", tenantId, id], () => fetchComplaintDetails(tenantId, id), {
+    enabled,
+  });
   return { isLoading, error, complaintDetails: data, revalidate: () => queryClient.invalidateQueries(["complaintDetails", tenantId, id]) };
 };
 
