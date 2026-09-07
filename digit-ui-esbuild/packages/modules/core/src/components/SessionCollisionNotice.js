@@ -9,15 +9,13 @@ import { detectSessionCollision, onSessionCollision } from "@egovernments/digit-
 // older tab can silently adopt the newer identity after a reload. Saying so is
 // far better than letting a complaint be filed under the wrong officer.
 //
-// Deliberately NOTIFY-ONLY: nothing here signs anybody out or reloads the
-// page, so an in-progress complaint is never destroyed. The user decides.
-// Never appears for employee+citizen (different keys) or for the same person
-// in two tabs (same uuid) — see detectSessionCollision.
+// NOTIFY-FIRST by design: dismissing changes nothing, so an in-progress
+// complaint is never destroyed. Switching to the other account is offered as a
+// deliberate secondary action for the user who actually wants it — it reloads,
+// which is why it is not the default.
 //
-// Presented as INFORMATION, not an alert: the user has done nothing wrong and
-// nothing is broken. The two accounts are shown side by side because the whole
-// point is telling them apart; the theme's info blue carries that, leaving the
-// brand orange for actions and red for genuine errors.
+// Never appears for employee+citizen (different key prefixes) or for the same
+// person in two tabs (same uuid) — see detectSessionCollision.
 
 // Theme variables with literal fallbacks: this notice must render correctly
 // even before a tenant theme has been applied.
@@ -27,33 +25,34 @@ const C = {
   border: "var(--color-border, #D6D5D4)",
   surfaceAlt: "var(--color-grey-light, #FAFAFA)",
   info: "var(--color-digitv2-alert-info, #3498DB)",
-  infoBg: "var(--color-digitv2-alert-info-bg, #C7E0F1)",
   success: "var(--color-success, #00703C)",
 };
 
 const InfoIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: "0.125rem" }}>
     <circle cx="12" cy="12" r="10" fill={C.info} />
     <path d="M12 11v6M12 7.5v.01" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
   </svg>
 );
 
 // One account row. `current` marks the session this tab is actually using.
+// Names wrap rather than truncate: identifying the account is the whole point,
+// and pt_MZ names run long.
 const AccountRow = ({ name, label, current }) => (
   <div
     style={{
       display: "flex",
       alignItems: "center",
       gap: "0.75rem",
-      padding: "0.875rem 1rem",
+      padding: "0.75rem 1rem",
       background: current ? C.surfaceAlt : "transparent",
       borderLeft: `3px solid ${current ? C.success : "transparent"}`,
     }}
   >
     <div
       style={{
-        width: "2.25rem",
-        height: "2.25rem",
+        width: "2rem",
+        height: "2rem",
         borderRadius: "50%",
         flexShrink: 0,
         display: "flex",
@@ -61,15 +60,15 @@ const AccountRow = ({ name, label, current }) => (
         justifyContent: "center",
         background: current ? C.success : C.info,
         color: "#fff",
-        fontSize: "0.9375rem",
+        fontSize: "0.875rem",
         fontWeight: 700,
       }}
     >
       {String(name || "?").trim().charAt(0).toUpperCase()}
     </div>
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: "0.9375rem", fontWeight: 600, color: C.text, overflowWrap: "anywhere" }}>{name}</div>
-      <div style={{ fontSize: "0.8125rem", color: C.muted, marginTop: "0.125rem" }}>{label}</div>
+      <div style={{ fontSize: "0.9375rem", fontWeight: 600, color: C.text, overflowWrap: "anywhere", lineHeight: 1.35 }}>{name}</div>
+      <div style={{ fontSize: "0.8125rem", color: C.muted, marginTop: "0.0625rem" }}>{label}</div>
     </div>
   </div>
 );
@@ -101,42 +100,45 @@ const SessionCollisionNotice = () => {
   return (
     <PopUp
       className="digit-session-collision-popup"
-      style={{ maxWidth: "40rem", width: "min(40rem, 92vw)" }}
+      style={{ maxWidth: "38rem", width: "min(38rem, 94vw)" }}
       showIcon={false}
       heading={tx("CORE_SESSION_COLLISION_HEADING", "Another account signed in")}
       onClose={() => setOther(null)}
       onOverlayClick={() => setOther(null)}
       children={[
-        <div key="body" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", padding: "0.5rem 0 0.25rem" }}>
-          {/* Lead: what happened, in one sentence, with an informational tone. */}
-          <div style={{ display: "flex", gap: "0.875rem", alignItems: "flex-start" }}>
-            <InfoIcon />
-            <div style={{ fontSize: "0.9375rem", lineHeight: 1.55, color: C.text }}>
-              {tx(
-                "CORE_SESSION_COLLISION_LEAD",
-                "Two accounts are open in this browser. Your work here is safe — but this browser now remembers the other account."
-              )}
+        <div key="body" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "0.25rem 0" }}>
+          {/* Group 1 — the situation: lead sentence tied tightly to the two
+              identities it is about (0.75rem), so they read as one idea. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+              <InfoIcon />
+              <div style={{ fontSize: "0.9375rem", lineHeight: 1.55, color: C.text }}>
+                {tx(
+                  "CORE_SESSION_COLLISION_LEAD",
+                  "Two accounts are open in this browser. Your work here is safe — but this browser now remembers the other account."
+                )}
+              </div>
+            </div>
+
+            <div style={{ border: `1px solid ${C.border}`, borderRadius: "0.25rem", overflow: "hidden" }}>
+              <AccountRow name={myName} label={tx("CORE_SESSION_COLLISION_THIS_TAB", "This tab — your current work")} current />
+              <div style={{ height: "1px", background: C.border }} />
+              <AccountRow name={other.name} label={tx("CORE_SESSION_COLLISION_OTHER_TAB", "Signed in from another tab")} />
             </div>
           </div>
 
-          {/* The two identities, side by side: this is the information that
-              actually resolves the user's confusion. */}
-          <div style={{ border: `1px solid ${C.border}`, borderRadius: "0.25rem", overflow: "hidden" }}>
-            <AccountRow name={myName} label={tx("CORE_SESSION_COLLISION_THIS_TAB", "This tab — your current work")} current />
-            <div style={{ height: "1px", background: C.border }} />
-            <AccountRow name={other.name} label={tx("CORE_SESSION_COLLISION_OTHER_TAB", "Signed in from another tab")} />
-          </div>
-
-          {/* What to do, in priority order. */}
-          <div style={{ background: C.infoBg, borderRadius: "0.25rem", padding: "0.875rem 1rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: C.text, marginBottom: "0.5rem" }}>
+          {/* Group 2 — the guidance. A rule instead of a filled panel: three
+              short lines do not need a coloured block competing with the
+              account card above. */}
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: "1rem" }}>
+            <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: "0.5rem" }}>
               {tx("CORE_SESSION_COLLISION_WHAT_TO_DO", "What to do")}
             </div>
             <ul style={{ margin: 0, paddingLeft: "1.125rem", listStyle: "disc outside", fontSize: "0.875rem", lineHeight: 1.6, color: C.text }}>
-              <li style={{ marginBottom: "0.375rem" }}>
+              <li style={{ marginBottom: "0.25rem" }}>
                 {tx("CORE_SESSION_COLLISION_TIP_FINISH", "Finish and submit what you are working on in this tab.")}
               </li>
-              <li style={{ marginBottom: "0.375rem" }}>
+              <li style={{ marginBottom: "0.25rem" }}>
                 {tx("CORE_SESSION_COLLISION_TIP_REFRESH", "Avoid refreshing this tab — it may switch to the other account.")}
               </li>
               <li>
@@ -147,6 +149,16 @@ const SessionCollisionNotice = () => {
         </div>,
       ]}
       footerChildren={[
+        // Secondary, and deliberately not the default: switching reloads the
+        // page, which would discard anything unsaved in this tab.
+        <Button
+          key="switch"
+          type="button"
+          size="large"
+          variation="link"
+          label={`${tx("CORE_SESSION_COLLISION_SWITCH", "Switch to")} ${other.name}`}
+          onClick={() => window.location.reload()}
+        />,
         <Button
           key="ack"
           type="button"
