@@ -27,9 +27,34 @@ Repo → Settings → Pages → Source = **Deploy from a branch**, Branch = **gh
    ```
    **or** leave the `PASTE_…` placeholders and add them in Project Settings → **Script properties**
    (keys `SHARED_TOKEN`, `GH_TOKEN`). The script uses the in-code value if set, else the property.
-3. **Deploy → New deployment → Web app**: Execute as **Me**, Who has access **Anyone** → Deploy,
-   and **Authorize** (grant Drive + external requests).
-4. Copy the `/exec` URL and paste it into `scan.py` → `WEBAPP_URL` (it's public/safe to commit).
+3. **Deploy → New deployment → Web app**: Execute as **Me**, Who has access **Anyone** → Deploy.
+4. **Authorize the scopes.** When prompted, grant **both** Google Drive **and** "Connect to an
+   external service" — the latter (`.../auth/script.external_request`) is what lets the script write
+   to GitHub. If it is missing, scans upload to Drive but the dashboard step fails with
+   *"You do not have permission to call UrlFetchApp.fetch"* — fix it via **Re-authorizing** below.
+5. Copy the `/exec` URL and paste it into `scan.py` → `WEBAPP_URL` (it's public/safe to commit).
+
+### Re-authorizing (external-requests permission)
+
+If a scan reports `✓ uploaded to Drive` but the gh-pages step returns
+`You do not have permission to call UrlFetchApp.fetch … auth/script.external_request`, the
+deployment was authorized before it had the GitHub-publishing code. Re-authorize with the external
+scope and redeploy:
+
+1. Open the Apps Script project → **Project Settings** → tick **Show "appsscript.json" manifest file in editor**.
+2. Open `appsscript.json` and declare the scopes explicitly so they are always requested:
+   ```json
+   "oauthScopes": [
+     "https://www.googleapis.com/auth/script.external_request",
+     "https://www.googleapis.com/auth/drive"
+   ]
+   ```
+3. In the editor pick any function and **Run** once; approve the consent screen — it now includes
+   **"Connect to an external service"**.
+4. **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy.** The `/exec` URL
+   is preserved (a Web App runs with the scopes authorized at deploy time, so a new version is
+   required for the added scope to take effect).
+5. Re-run a scan; the dashboard should publish.
 
 ## 4. Give runners the token
 

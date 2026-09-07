@@ -54,6 +54,7 @@ GitHub `409` conflicts (up to 4 attempts). No action needed.
 | `missing required tool: claude` | install Claude CLI + `claude` login (org account) |
 | `unauthorized` on upload | `SECSCAN_TOKEN` missing/wrong; must equal the Apps Script's `SHARED_TOKEN` |
 | gh-pages not updating | PAT lacks Contents:write on the repo, or `GH_TOKEN` unset; check Apps Script exec logs |
+| `uploaded to Drive` but gh-pages error `permission to call UrlFetchApp.fetch` | Apps Script missing the `script.external_request` scope (authorized before the gh-pages code). Re-authorize + deploy a new version — see SETUP.md → **Re-authorizing** |
 | dashboard blank | first run hasn't published, or `manifest.json` empty; check `security_scan/` on gh-pages |
 | `CERTIFICATE_VERIFY_FAILED` | handled via `certifi`; if it persists, `pip install --user certifi` |
 | arrow keys dead | run in a real terminal; `run.sh` already reattaches `</dev/tty` |
