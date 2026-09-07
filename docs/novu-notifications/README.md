@@ -1,8 +1,11 @@
 # Enabling Notifications
 
-This enables SMS and WhatsApp notifications on a deployment created with
+This enables SMS, WhatsApp and email notifications on a deployment created with
 [DEPLOYMENT.MD](../../DEPLOYMENT.MD). Run the repository commands below from the
 root of the cloned `Citizen-Complaint-Resolution-System` repository.
+
+Each channel is independent — enable one, two or all three. Each has its own
+section below listing what it needs.
 
 ## Prerequisites
 
@@ -16,20 +19,23 @@ root of the cloned `Citizen-Complaint-Resolution-System` repository.
 4. For email, an SMTP account. On Gmail and Microsoft 365 that means an **app
    password**, not the account password — see [Enable Email](#enable-email).
 
-The two are independent. SMS through SMSCountry does not touch Novu or Twilio, so
-an SMS-only deployment needs no Twilio account and a WhatsApp-only one needs no
-SMSCountry account.
+No channel depends on another: an SMS-only deployment needs no Twilio account, a
+WhatsApp-only one needs no SMSCountry account.
 
-Nothing is dispatched on any channel until you name it in
-`novu_bridge_channels_enabled`. There is no default.
+Nothing is dispatched until you name a channel in `novu_bridge_channels_enabled`.
+There is no default.
+
+Each channel section has its own settings table. Collect the ones you need before
+the first deploy and you can do this in a single run.
 
 Last tested with `egovio/pgr-services:master-0938bdf` and
 `egovio/novu-bridge:master-0469335`.
 
 ## Configure Notification Variables
 
-Add the variables below to the same Ansible variables file used for the
-deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
+These apply to every channel. Add them to the same Ansible variables file used
+for the deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
+Per-channel settings live in each channel's section.
 
 | Setting | What it is | Example |
 |---|---|---|
@@ -37,16 +43,9 @@ deployment: `local-setup/ansible/inventory/host_vars/mycity.yml`.
 | `pgr_notification_config_driven` | Makes PGR read routing and templates from configuration instead of code. | `true` |
 | `seed_notifications` | Seeds the three PGR notification MDMS masters on deploy. Idempotent. | `true` |
 | `novu_bridge_channels_enabled` | **Required.** Channels to dispatch — `SMS`, `WHATSAPP`, `EMAIL`, comma-separated. There is no default: leave it unset and nothing is sent. Name only channels you have onboarded a provider for. | `"SMS,WHATSAPP"` |
-| `novu_bridge_channel` | Novu channel the bridge triggers on. Twilio WhatsApp is an `sms` integration in Novu, so this stays `sms` for both channels. | `"sms"` |
 | `novu_bridge_proxy_allowed_roles` | Roles allowed to manage providers from Configurator. | `"SUPERUSER,MDMS_ADMIN"` |
 | `novu_admin_email` | Novu admin account. Use an address you control. | `notifications-admin@example.com` |
 | `novu_admin_password` | Novu admin password. Generate a unique, strong one. | |
-| `novu_bridge_workflow_id_whatsapp` | Novu workflow the bridge triggers for WhatsApp. Must match the workflow created during [Enable WhatsApp](#enable-whatsapp). | `"complaints-whatsapp"` |
-| `novu_bridge_integration_id_whatsapp` | Novu integration the bridge selects for WhatsApp. Leave blank unless a second integration exists on Novu's `sms` channel. | |
-| `novu_bridge_workflow_id_sms` | Novu workflow the bridge triggers for ordinary SMS. | `"complaints-sms"` |
-| `twilio_account_sid` | From the Twilio Console. | |
-| `twilio_auth_token` | From the Twilio Console. | |
-| `twilio_whatsapp_from` | Your Twilio WhatsApp sender, with the `whatsapp:` prefix. Defaults to the Twilio sandbox number if omitted. | `whatsapp:+14155238886` |
 | `novu_api_key` | Leave unset. Ansible mints a key and wires it into `/opt/digit/.env`. Set it only if the deployment has a pinned key. | |
 
 ## Start Deployment
@@ -89,12 +88,26 @@ creation and test-send unauthenticated. Enforcing this is tracked in
 
 ## Enable WhatsApp
 
+WhatsApp goes through Twilio. Set these and re-run `./deploy.sh mycity`:
+
+| Setting | What it is | Example |
+|---|---|---|
+| `twilio_account_sid` | From the Twilio Console. | |
+| `twilio_auth_token` | From the Twilio Console. | |
+| `twilio_whatsapp_from` | Your WhatsApp sender, with the `whatsapp:` prefix. Defaults to Twilio's sandbox number if omitted. | `whatsapp:+14155238886` |
+| `novu_bridge_workflow_id_whatsapp` | Leave at the default unless you renamed the workflow. | `"complaints-whatsapp"` |
+| `novu_bridge_integration_id_whatsapp` | Leave blank. Only needed if a second Twilio integration exists alongside the WhatsApp one. | |
+
+The deploy registers the Twilio account with Novu and creates the message route
+WhatsApp uses. The rest of this section is verification and the extra steps real
+WhatsApp delivery needs.
+
 ### Bootstrap the provider and workflow
 
 If `twilio_account_sid` was set before the deployment, this is already done. The
 deploy runs the same script, and its defaults produce the same integration and the
 same workflows — only the workflow's display name differs, which nothing keys on.
-Skip to [Verify the WhatsApp provider](#verify-the-whatsapp-provider).
+Skip to [Verify WhatsApp](#verify-whatsapp).
 
 Run it by hand only when the Twilio credentials were added after the first deploy
 and you would rather not re-run `./deploy.sh`. It administers Novu: it does not run
@@ -122,7 +135,7 @@ The script creates `twilio-whatsapp` when it is absent, but it does not update t
 credentials of an existing integration. On an existing installation, update or
 delete that integration in Novu before running the script.
 
-### Verify the WhatsApp provider
+### Verify WhatsApp
 
 ```bash
 curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
@@ -138,10 +151,9 @@ curl -fsS -H "Authorization: ApiKey $NOVU_API_KEY" \
 
 Confirm that `twilio-whatsapp` is `active` and that `complaints-whatsapp` exists.
 
-If you are also enabling ordinary SMS, `twilio-whatsapp` must end up **not**
-primary: [Enable SMS](#enable-sms) makes `twilio-sms` the primary integration on
-that channel, and the bridge selects the WhatsApp one explicitly by identifier. On
-a WhatsApp-only deployment, `twilio-whatsapp` may remain primary.
+`twilio-whatsapp` being `primary` is expected and fine — it is the only Twilio
+integration this guide creates. SMS does not add another: SMSCountry is called
+directly and registers nothing in Novu.
 
 ### Send a real WhatsApp message
 
@@ -211,9 +223,13 @@ Set these and re-run `./deploy.sh mycity`:
 | `novu_bridge_smscountry_user` | SMSCountry panel username. | |
 | `novu_bridge_smscountry_password` | SMSCountry panel password. | |
 
-Then trigger a complaint transition and check the **delivery report in the
-SMSCountry panel** — not the bridge log. The gateway returns a job id for messages
-it later drops, so `nb_dispatch_log` only tells you the message was queued. A
+### Verify SMS
+
+Trigger a complaint transition, then open the **delivery report in the SMSCountry
+panel** — not the bridge log.
+
+SMSCountry returns a job id even for messages it later drops, so the bridge can
+only tell you the message was accepted, never that it arrived. In the report a
 delivered message is billed; a blocked one shows as rejected at zero cost.
 
 ### Registering templates (India, DLT)
@@ -270,8 +286,6 @@ workflow; you add the SMTP provider yourself.
 | Use TLS (secure) | **unchecked** for port 587 — see below |
 
 2. Add `EMAIL` to `novu_bridge_channels_enabled` and re-run `./deploy.sh mycity`.
-3. Trigger a complaint transition and check **Notifications -> Logs**, then the
-   mailbox.
 
 Two things account for most failures:
 
@@ -288,6 +302,13 @@ Two things account for most failures:
 |---|---|
 | 587 | unchecked |
 | 465 | checked |
+
+### Verify email
+
+Trigger a complaint transition and check the mailbox. If nothing arrives, look at
+**Notifications -> Logs** first: it will tell you whether the message was handed
+to your SMTP server at all, which separates a configuration problem from a
+delivery one.
 
 ### Test without mailing anyone
 
