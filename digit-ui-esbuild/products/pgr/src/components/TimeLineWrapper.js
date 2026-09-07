@@ -17,6 +17,24 @@ import { parseFilestoreEntry } from '../utils/attachmentKind';
 const MASKED = "******";
 const maskName = (name) => (name ? MASKED : name);
 const maskPhone = (phone) => (phone ? MASKED : phone);
+// Workflow steps whose comment/attachments are addressed TO THE CITIZEN and
+// may therefore be shown on the citizen's timeline:
+//   RESOLVE / REJECT   the decision — this is the reply to the complaint
+//   AWAITINGINFORMATION a question put to the citizen, who must be able to read it
+//   APPLY / REOPEN / RATE / COMMENT-by-a-citizen  the citizen's own words
+// Every other step (ASSIGN, REASSIGN, ESCALATE, REFERRED, INVESTIGATION and
+// staff COMMENT) is internal handling between officers. Its text can name
+// departments, budgets, suspects or case strategy, so it must never reach the
+// complainant — see `hideInternalNotes`.
+//
+// The classification is by ACTION because a workflow comment is a plain string
+// with no audience field: nothing in the payload distinguishes a note to a
+// colleague from a reply to the citizen. Keying on the action is the safe
+// approximation — an internal note can never surface, because internal actions
+// are never rendered. A real per-comment visibility flag is the durable fix and
+// needs a backend change.
+const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "AWAITINGINFORMATION", "APPLY", "REOPEN", "RATE"]);
+
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
 
@@ -26,7 +44,7 @@ const isCitizenActor = (person) =>
 // QA #19 part 1 (sheet v4): hideEmployeeContacts — set by the CITIZEN details
 // page — OMITS employee name and contact lines entirely (the citizen must not
 // see who handled the complaint). Citizen actors' own entries stay visible.
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false, hideEmployeeContacts = false }) => {
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false, hideEmployeeContacts = false, hideInternalNotes = false }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -226,6 +244,12 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 // (maskConfidential is kept as a prop for compatibility but the
                 // citizen actor no longer depends on it.)
                 const isEmployeeActor = personRecord && !isCitizenActor(personRecord);
+                // On the citizen's timeline, only citizen-facing steps (and the
+                // citizen's own actions) keep their comment and attachments.
+                const showInternalContent =
+                  !hideInternalNotes ||
+                  CITIZEN_FACING_ACTIONS.has(instance?.action) ||
+                  isCitizenActor(personRecord);
                 const maskThis =
                   isCitizenActor(personRecord) ||
                   (maskEmployeeContacts && isEmployeeActor);
@@ -256,13 +280,16 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                         convertEpochFormateToDate(instance?.auditDetails?.lastModifiedTime),
                         personLine,
                         contactLine,
-                        formatComment(instance?.comment),
+                        // Internal handling steps carry no citizen-facing text:
+                        // drop the comment entirely rather than showing a
+                        // header with nothing under it.
+                        showInternalContent ? formatComment(instance?.comment) : null,
                     ].filter(Boolean),
                     // CCSD-1965: the attachments uploaded AT this workflow step
                     // (verificationDocuments persist per transition). Rendered
                     // per-step below so the timeline keeps the FULL history, not
                     // just the latest upload — same on citizen + employee UIs.
-                    documents: Array.isArray(instance?.documents) ? instance.documents : [],
+                    documents: showInternalContent && Array.isArray(instance?.documents) ? instance.documents : [],
                     documentTenantId: instance?.tenantId || tenantId,
                     showConnector: true,
                 };
