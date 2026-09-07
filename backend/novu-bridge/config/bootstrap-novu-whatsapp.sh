@@ -13,6 +13,10 @@ set -euo pipefail
 #
 # Required env vars:
 #   NOVU_API_KEY
+#
+# Optional, all three together — supply them to register the Twilio provider
+# integration. Omitted, the script still creates the channel workflows, which
+# every deployment needs regardless of which gateway sends:
 #   TWILIO_ACCOUNT_SID
 #   TWILIO_AUTH_TOKEN
 #   TWILIO_WHATSAPP_FROM   (example: whatsapp:+14155238886)
@@ -68,9 +72,22 @@ if [[ -f "$NOVU_ENV_FILE" ]]; then
 fi
 
 require_var NOVU_API_KEY
-require_var TWILIO_ACCOUNT_SID
-require_var TWILIO_AUTH_TOKEN
-require_var TWILIO_WHATSAPP_FROM
+
+# Twilio is needed only to register the PROVIDER integration. The channel
+# workflows this script also creates (complaints-sms/-whatsapp/-email) are
+# provider-agnostic plumbing that every deployment needs — including one whose
+# SMS goes to a non-Twilio gateway and therefore has no Twilio account at all.
+# Requiring Twilio up front used to skip both jobs together, leaving such a
+# deployment with zero workflows and Novu answering workflow_not_found.
+# Supply all three or none; a partial set is a configuration mistake worth
+# failing on.
+TWILIO_CONFIGURED=0
+if [[ -n "${TWILIO_ACCOUNT_SID:-}${TWILIO_AUTH_TOKEN:-}${TWILIO_WHATSAPP_FROM:-}" ]]; then
+  require_var TWILIO_ACCOUNT_SID
+  require_var TWILIO_AUTH_TOKEN
+  require_var TWILIO_WHATSAPP_FROM
+  TWILIO_CONFIGURED=1
+fi
 
 NOVU_BASE_URL="${NOVU_BASE_URL:-http://localhost:1336}"
 NOVU_ENV_NAME="${NOVU_ENV_NAME:-digit-dev}"
@@ -204,8 +221,6 @@ else
   fi
 fi
 
-echo "==> Checking/creating Twilio integration: ${NOVU_INTEGRATION_ID}"
-INTEGRATIONS_JSON="$(api_get "/v1/integrations")"
 
 # Idempotent create of a Novu Twilio integration on the "sms" channel. Novu models
 # Twilio WhatsApp as an "sms"-channel integration too, so the WhatsApp provider and
@@ -271,8 +286,18 @@ ensure_integration() {
   echo "    Created integration id: $ENSURED_INTEGRATION_ID"
 }
 
-ensure_integration "$NOVU_INTEGRATION_ID" "$NOVU_INTEGRATION_NAME" "$TWILIO_WHATSAPP_FROM"
-INTEGRATION_ID="$ENSURED_INTEGRATION_ID"
+INTEGRATION_ID=""
+if [[ "$TWILIO_CONFIGURED" == "1" ]]; then
+  echo "==> Checking/creating Twilio integration: ${NOVU_INTEGRATION_ID}"
+  INTEGRATIONS_JSON="$(api_get "/v1/integrations")"
+  ensure_integration "$NOVU_INTEGRATION_ID" "$NOVU_INTEGRATION_NAME" "$TWILIO_WHATSAPP_FROM"
+  INTEGRATION_ID="$ENSURED_INTEGRATION_ID"
+else
+  echo "==> No Twilio credentials supplied — skipping the provider integration."
+  echo "    Channel workflows are still created. Add a provider in Configurator"
+  echo "    (Notifications -> Providers), or set novu_bridge_sms_provider for a"
+  echo "    gateway novu-bridge drives directly."
+fi
 
 # Idempotent create of a Novu v2 workflow: skip when the workflowId already
 # exists in WORKFLOWS_JSON, otherwise POST /v2/workflows with the given steps.
@@ -459,7 +484,11 @@ done
 echo
 echo "Bootstrap complete."
 echo "Environment: $NOVU_ENV_NAME ($ENV_ID)"
-echo "Integration: $NOVU_INTEGRATION_ID ($INTEGRATION_ID)"
+if [[ -n "$INTEGRATION_ID" ]]; then
+  echo "Integration: $NOVU_INTEGRATION_ID ($INTEGRATION_ID)"
+else
+  echo "Integration: (none — no Twilio credentials supplied)"
+fi
 echo "Workflow: $NOVU_WORKFLOW_ID"
 echo "Bridge Channel Workflows: $NOVU_SMS_WORKFLOW_ID, $NOVU_EMAIL_WORKFLOW_ID"
 echo "Event Workflows: ${NOVU_EVENT_WORKFLOWS:-(none)}"

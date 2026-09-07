@@ -141,6 +141,7 @@ describe('Novu workflow creation deployment contract', () => {
   // proves only that a value is written down, never that a container gets it.
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
   const composeFile = read('local-setup/docker-compose.egov-digit.yaml');
+  const playbookFile = read('local-setup/ansible/playbook-deploy.yml');
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
   const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
@@ -266,6 +267,26 @@ describe('Novu workflow creation deployment contract', () => {
   // not declare never reaches the container. That gap shipped once — the bridge
   // silently fell back to the Novu path and SMS never reached SMSCountry — because
   // the test only checked the template. Assert both halves of the handover.
+  // bootstrap-novu-whatsapp.sh does two unrelated jobs: register the Twilio
+  // PROVIDER, and create the per-channel WORKFLOWS every deployment needs
+  // whichever gateway sends. Gating the whole task on twilio_account_sid left a
+  // non-Twilio tenant with zero workflows and Novu answering workflow_not_found.
+  test('channel-workflow creation is not gated on Twilio', () => {
+    const task = playbookFile.slice(
+      playbookFile.indexOf('novu-bootstrap — copy bootstrap script'),
+      playbookFile.indexOf('changed_when: "\'created\' in')
+    );
+    expect(task.length).toBeGreaterThan(0);
+    expect(task).not.toMatch(/when:[\s\S]*?\(twilio_account_sid \| default\(''\)\) \| length > 0/);
+
+    // The sandbox default must not leak in when no SID is set: the script reads
+    // any Twilio value as "Twilio configured" and then demands all three, which
+    // would fail the run and reopen the gap.
+    expect(task).toContain(
+      'if (twilio_account_sid | default("")) | length > 0 else ""'
+    );
+  });
+
   test('the SMSCountry settings are rendered AND handed to the container', () => {
     const vars = [
       'NOVU_BRIDGE_SMS_PROVIDER',
