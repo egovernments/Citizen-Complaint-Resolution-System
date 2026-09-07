@@ -93,7 +93,12 @@ NOVU_BASE_URL="${NOVU_BASE_URL:-http://localhost:1336}"
 NOVU_ENV_NAME="${NOVU_ENV_NAME:-digit-dev}"
 NOVU_ENV_COLOR="${NOVU_ENV_COLOR:-#4F46E5}"
 NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp}"
-NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-Complaints WhatsApp Workflow}"
+# Novu derives the stored workflowId from the NAME, ignoring the workflowId in
+# the create payload: the friendly default "Complaints WhatsApp Workflow"
+# produced complaints-whats-app-workflow while novu-bridge triggers
+# complaints-whatsapp, so every WhatsApp dispatch 404d. Default the name to
+# the id, which is what the SMS and EMAIL calls already do.
+NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-$NOVU_WORKFLOW_ID}"
 NOVU_INTEGRATION_NAME="${NOVU_INTEGRATION_NAME:-twilio-whatsapp}"
 NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
 if [[ -z "${NOVU_SMS_BODY:-}" ]]; then

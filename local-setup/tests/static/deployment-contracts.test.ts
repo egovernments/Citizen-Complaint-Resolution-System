@@ -271,6 +271,25 @@ describe('Novu workflow creation deployment contract', () => {
   // PROVIDER, and create the per-channel WORKFLOWS every deployment needs
   // whichever gateway sends. Gating the whole task on twilio_account_sid left a
   // non-Twilio tenant with zero workflows and Novu answering workflow_not_found.
+  // The bootstrap sources ${SCRIPT_DIR}/load-dotenv.sh. Copying only the script
+  // made it exit 1 on a fresh box before creating anything — silently, because the
+  // run task is failed_when:false. Existing boxes hid it: workflows already in the
+  // Novu mongo volume survive redeploys.
+  test('the bootstrap ships with the helper it sources', () => {
+    const sourced = novuBootstrap.match(/source "\$\{SCRIPT_DIR\}\/([a-z-]+\.sh)"/);
+    expect(sourced).not.toBeNull();
+    expect(playbookFile).toContain(`backend/novu-bridge/config/${sourced![1]}`);
+  });
+
+  // Novu derives the stored workflowId from the NAME and ignores the workflowId in
+  // the payload, so a friendly name yields an id novu-bridge never triggers.
+  test('the WhatsApp workflow name defaults to its id', () => {
+    expect(novuBootstrap).toContain(
+      'NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-$NOVU_WORKFLOW_ID}"'
+    );
+    expect(novuBootstrap).not.toContain('Complaints WhatsApp Workflow}"');
+  });
+
   test('channel-workflow creation is not gated on Twilio', () => {
     const task = playbookFile.slice(
       playbookFile.indexOf('novu-bootstrap — copy bootstrap script'),

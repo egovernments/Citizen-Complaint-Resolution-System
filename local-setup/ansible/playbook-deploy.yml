@@ -4315,11 +4315,17 @@
       when:
         - enable_novu | default(false)
 
-    - name: "novu-bootstrap — copy bootstrap script to target"
+    # BOTH files: the script sources ${SCRIPT_DIR}/load-dotenv.sh, so shipping it
+    # alone makes the bootstrap exit 1 on line 62 of a fresh box — silently, since
+    # the run task is failed_when:false — and no workflows are ever created.
+    - name: "novu-bootstrap — copy bootstrap script + dotenv helper to target"
       ansible.builtin.copy:
-        src: ../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
-        dest: "{{ digit_dir }}/bootstrap-novu-whatsapp.sh"
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/"
         mode: '0755'
+      loop:
+        - ../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
+        - ../../backend/novu-bridge/config/load-dotenv.sh
       when:
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
