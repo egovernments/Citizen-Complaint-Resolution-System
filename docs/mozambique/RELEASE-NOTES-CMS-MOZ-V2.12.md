@@ -33,6 +33,7 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 - **Portuguese by default** — including city-specific wording; OTP login with a m:ss resend countdown
 
 ### For municipal/authority staff
+- **Configurable complaint categories (N levels)** — the classification tree is data, not code: any depth, labels in Portuguese/English, each complaint type mappable to one **or many** departments — and complaints flow correctly even when a type has no department
 - **Multi-tier CMS workflow** — Reception Officer → Screening Officer → Supervisor → Case Manager, fully configuration-driven; action screens adapt to whatever workflow a tenant defines
 - **Visibility scoping** — staff can be limited to their own department and/or geographic jurisdiction (including everything under their boundary); reception staff see the complaints they filed, with an "only my complaints" toggle
 - **Admin cross-department search** — one screen (SUPERUSER/CMS_ADMIN) to search all complaints, filter, and export to Excel
@@ -44,6 +45,7 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 - **Visual Landing Page Builder** — edit the public homepage by drag-and-drop with live preview, no code release
 - **Configurable analytics (off by default)** — point the portal at Matomo/GA4/PostHog or a custom destination from the admin screens; one-command self-hosted Matomo provisioning; strict safety rails (host allowlist, PII scrubbing, kill switch)
 - **Admin console improvements** — role-actions editable from the UI, sensitive masters gated by role, translations propagate immediately on save, console boots in the environment's language, testing-tenant flag with guard rails
+- **Hierarchy management & migration** — the complaint classification tree is managed in the admin console (searchable tree view), including a guided migration that upgrades an existing 2-level tenant to the N-level model
 - **Operator tooling** — `ccrs-migrate.cjs` one-command idempotent tenant migration (schemas, hierarchy, localization, CMS roles/workflow, banner, gzip, Matomo); escalation enablement script + runbook; password-gated `/digit-ui-test` entrance (default off); HTTPS/Let's Encrypt guide; CI security scanning with a findings dashboard
 - **Notifications for Mozambique's infrastructure** — SMS via the Ozeki gateway; a direct-delivery mode that runs without the Novu stack on small servers; a dedicated OTP delivery pipeline; deep-link placeholders (`{website}`, `{rate_link}`, `{reopen_link}`)
 
@@ -63,6 +65,7 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 | **Backend (novu-bridge)** | Ozeki SMS (complaints + OTP) · direct SMS/Email delivery without Novu · OTP pipeline |
 | **Frontend (citizen)** | Public landing/privacy/tutorial · 3-step wizard with dynamic fields · reopen/rate routing + data-loss fix · attachments & media playback · Portuguese-first with city wording overlays |
 | **Frontend (employee)** | Workflow-driven action modals · reception inbox scoping · confidential masking · admin search screen · channel chips · Fala Cidadão branding with MDMS-driven theme colours |
+| **Complaint classification** | Fixed 2-level model → N-level hierarchy defined as data · one-to-many department mapping · full operation without a department · routed department preserved across reopen/rate · localized category labels |
 | **Workflow** | CMS multi-tier BusinessService (11 states/18 actions) selected per deployment · escalation runbook + enablement script |
 | **Configuration / MDMS** | New masters: complaint dispatcher & templates, extended-attribute schemas (IGE/IGSAE), landing page, analytics providers, privacy policy, tenant banner · all new backend settings opt-in with safe defaults |
 | **Roles** | 13 new roles (CMS officer chain, scope roles, permission roles) + ~2,180 grant lines |
@@ -121,12 +124,14 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 
 ## Documentation
 
-- `docs/mozambique-customizations.md` — customization record
-- `docs/migration/README.md` — migration runner guide
-- `docs/analytics-guide/` — analytics setup & self-hosted Matomo
-- `docs/pgr-escalation/RUNBOOK.md` — escalation enablement
-- `docs/enabling-https-with-letsencrypt.md` — HTTPS setup
-- `docs/superpowers/specs/mozambique-prd/` — PRD / solution design
+- [Mozambique customization record](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique-customizations.md)
+- [Release audit / evidence document](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique/RELEASE-PREVIEW-CMS-MOZ-V2.12.md) — full product-baseline comparison behind these notes
+- [Migration runner guide](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/README.md) — `ccrs-migrate.cjs`
+- [Analytics setup & self-hosted Matomo](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/analytics-guide)
+- [Escalation enablement runbook](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/pgr-escalation/RUNBOOK.md)
+- [HTTPS with Let's Encrypt](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/enabling-https-with-letsencrypt.md)
+- [PRD / solution design](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/superpowers/specs/mozambique-prd)
+- [Mobile app configuration](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/mobile/assets/config/app_config.json) — portal URL, branding
 
 <!-- ============================================================
 END OF RELEASE BODY
