@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, createContext, useContext, useEffect, useCallback } from 'react';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
@@ -523,6 +524,9 @@ function App() {
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Self-serve onboarding (CCRS#1999). Public: the whole point is that
+              nobody has an account yet, so it sits outside the auth gate. */}
+          <Route path="/signup" element={<SignupPage />} />
 
           {/* Onboarding Mode Routes */}
           <Route path="/" element={
