@@ -224,6 +224,10 @@ function WorkflowComponent({ complaintDetails, id }) {
       // QA #19 part 1 (sheet v4): the citizen must not see which employee
       // handled the complaint — employee name + contact lines are omitted.
       hideEmployeeContacts
+      // Comments and attachments exchanged BETWEEN officers (assignment,
+      // escalation, internal notes) stay internal; the citizen sees the
+      // decision, any question put to them, and their own submissions.
+      hideInternalNotes
     />
   );
 }
