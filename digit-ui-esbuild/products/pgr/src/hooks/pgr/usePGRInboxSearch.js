@@ -1,6 +1,19 @@
 import { useQuery, useQueryClient } from "react-query";
 import { useMemo } from "react";
 import { Request } from "@egovernments/digit-ui-libraries";
+import { EV, trackE } from "../../utils/analytics";
+
+// ── Behaviour analytics for the inbox search ──
+// Only a USER-FILTERED search counts (never the default inbox load, never
+// pagination). We track the filter KEY NAMES, never the typed values — a
+// mobile number or complaint id is PII. Module-scoped dedupe signatures so
+// react-query refetches of the same criteria (focus, remount) emit nothing.
+const SEARCH_FILTER_KEYS = [
+  "serviceRequestId", "complaintNumber", "mobileNumber", "fromDate", "toDate",
+  "serviceCode", "locality", "applicationStatus", "createdBy",
+];
+let lastSearchSig = null;
+let lastNoResultsSig = null;
 
 /**
  * usePGRInboxSearch — Custom hook for InboxSearchComposer.
@@ -15,6 +28,16 @@ const usePGRInboxSearch = (reqCriteria) => {
   const stableParams = useMemo(() => JSON.stringify(params), [params]);
 
   const fetchData = async () => {
+    const activeFilters = SEARCH_FILTER_KEYS.filter((k) => {
+      const v = params[k];
+      return v !== undefined && v !== null && String(v).length > 0;
+    });
+    const searchSig = activeFilters.map((k) => `${k}=${JSON.stringify(params[k])}`).join("&");
+    if (activeFilters.length && searchSig !== lastSearchSig) {
+      lastSearchSig = searchSig;
+      trackE(EV.SEARCH_STARTED, `PgrInbox:${activeFilters.join("+")}`);
+    }
+
     // Build count URL from search URL
     const countUrl = url.replace("_search", "_count");
 
@@ -46,6 +69,10 @@ const usePGRInboxSearch = (reqCriteria) => {
     ]);
     const wrappers = pgrResponse?.ServiceWrappers || [];
     const totalCount = countResponse?.count ?? wrappers.length;
+    if (activeFilters.length && totalCount === 0 && searchSig !== lastNoResultsSig) {
+      lastNoResultsSig = searchSig;
+      trackE(EV.SEARCH_NO_RESULTS, "PgrInbox");
+    }
     const tenantId = params.tenantId || Digit.ULBService.getCurrentTenantId();
 
     // Build a statusMap from the PGR workflow business service so the inbox's

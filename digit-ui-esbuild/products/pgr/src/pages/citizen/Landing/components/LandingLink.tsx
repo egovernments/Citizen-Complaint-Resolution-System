@@ -82,6 +82,12 @@ export const LandingLink = React.forwardRef<HTMLAnchorElement, LandingLinkProps>
         target={target}
         rel={safeRel}
         className={className}
+        // Opt-in hook for the analytics shim's delegated click listener
+        // (public/analytics.js): captured only when a provider record sets
+        // trackClicks. The label is the destination path/scheme — a bounded
+        // vocabulary from routes.ts, and the shim scrubs it again anyway.
+        data-analytics-event="landing_link"
+        data-analytics-label={to}
         {...rest}
       >
         {children}
