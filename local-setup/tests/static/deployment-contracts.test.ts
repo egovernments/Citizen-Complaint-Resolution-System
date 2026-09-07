@@ -136,7 +136,11 @@ describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));
   const novuIngress = read('devops/deploy-as-code/charts/backbone-services/novu/templates/ingress.yaml');
+  // NB: composeEnv is the ANSIBLE TEMPLATE that writes /opt/digit/.env, not the
+  // compose file. composeFile is the compose file. Asserting the first alone
+  // proves only that a value is written down, never that a container gets it.
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
+  const composeFile = read('local-setup/docker-compose.egov-digit.yaml');
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
   const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
@@ -257,16 +261,38 @@ describe('Novu workflow creation deployment contract', () => {
     expect(countCreated('A.B,C.D')).toBe('2');
   });
 
-  // SMSCountry's legacy API is form-encoded with a plain-text reply, which no Novu
-  // provider can express, so that gateway is driven directly and needs no Novu
-  // integration. This pins the selector so the Novu-routed path is not restored.
-  test('the SMSCountry gateway is selected by config and driven directly', () => {
-    expect(composeEnv).toContain(
-      "NOVU_BRIDGE_SMS_PROVIDER={{ novu_bridge_sms_provider | default('') }}"
-    );
-    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_USER=');
-    expect(composeEnv).toContain('NOVU_BRIDGE_SMSCOUNTRY_PASSWORD=');
-    // No generic-sms integration identifier: nothing routes SMSCountry through Novu.
+  // Ansible rendering a variable into /opt/digit/.env is NOT enough: Compose reads
+  // .env for ${...} interpolation only, so a variable the novu-bridge service does
+  // not declare never reaches the container. That gap shipped once — the bridge
+  // silently fell back to the Novu path and SMS never reached SMSCountry — because
+  // the test only checked the template. Assert both halves of the handover.
+  test('the SMSCountry settings are rendered AND handed to the container', () => {
+    const vars = [
+      'NOVU_BRIDGE_SMS_PROVIDER',
+      'NOVU_BRIDGE_SMS_SENDER_ID',
+      'NOVU_BRIDGE_SMSCOUNTRY_URL',
+      'NOVU_BRIDGE_SMSCOUNTRY_USER',
+      'NOVU_BRIDGE_SMSCOUNTRY_PASSWORD',
+    ];
+
+    // half 1: ansible writes them into the env file
+    for (const v of vars) {
+      expect(composeEnv).toContain(`${v}=`);
+    }
+
+    // half 2: the novu-bridge service declares them, so they reach the process
+    // from the novu-bridge key to the next service key at the same indent
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    expect(start).toBeGreaterThan(-1);
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    expect(bridgeBlock).toContain('novu-bridge:');
+    for (const v of vars) {
+      expect(bridgeBlock).toContain(`${v}: \${${v}`);
+    }
+
+    // nothing routes SMSCountry through Novu — it is a direct client
     expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 });
