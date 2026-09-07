@@ -25,6 +25,11 @@ var PAGES_DIR  = "security_scan";                 // gh-pages path that serves t
 var GH_BRANCH  = "gh-pages";
 var INDEX_RAW  = "https://raw.githubusercontent.com/%REPO%/master/security-scan/dashboard-index.html";
 
+// Domains allowed to open the exported audit workbook (with the link, view-only). The owner's
+// own domain is shared via DriveApp; any EXTRA domains are added via the Drive API and require
+// the owner's Workspace admin to trust/allowlist them for external sharing (see SETUP.md).
+var EXTRA_SHARE_DOMAINS = ["egov.global"];
+
 function _props(){ return PropertiesService.getScriptProperties(); }
 function _cfg(codeVal, propKey){
   var v = (codeVal || "").trim();
@@ -51,10 +56,10 @@ function doPost(e) {
     if (b.xlsxBase64) {
       var xf = folder.createFile(Utilities.newBlob(Utilities.base64Decode(b.xlsxBase64),
                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b.base + ".xlsx"));
-      // The dashboard's "Export audit" link points here. Share the workbook with anyone in the
-      // egovernments.org domain who has the link (view-only) — the full audit stays internal even
-      // though the dashboard is public. Wrapped in try in case Workspace policy blocks it (see SETUP.md).
-      try { xf.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+      // The dashboard's "Export audit" link points here. Share it with the owner's domain plus
+      // EXTRA_SHARE_DOMAINS (view-only, with the link) so the full audit stays internal to the
+      // trusted orgs even though the dashboard is public.
+      _shareAudit(xf);
       xlsxUrl = xf.getUrl();
     }
 
@@ -135,6 +140,28 @@ function _ghPut(repo, path, tok, contentB64, message, sha, mute) {
 }
 function _enc(path){ return path.split("/").map(encodeURIComponent).join("/"); }
 
+// -------- share a workbook with the owner's domain + EXTRA_SHARE_DOMAINS (view, with link) --------
+function _shareAudit(f) {
+  // owner's own Workspace domain (simple, always allowed)
+  try { f.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  // extra domains via the Drive REST API (needs the domain to be trusted by the Workspace admin)
+  var id = f.getId();
+  for (var i = 0; i < EXTRA_SHARE_DOMAINS.length; i++) {
+    var d = EXTRA_SHARE_DOMAINS[i];
+    try {
+      var r = UrlFetchApp.fetch(
+        "https://www.googleapis.com/drive/v3/files/" + id +
+        "/permissions?sendNotificationEmail=false&supportsAllDrives=true",
+        { method:"post", contentType:"application/json",
+          headers:{ Authorization:"Bearer " + ScriptApp.getOAuthToken() },
+          payload: JSON.stringify({ type:"domain", role:"reader", domain:d, allowFileDiscovery:false }),
+          muteHttpExceptions:true });
+      if (r.getResponseCode() >= 300)
+        Logger.log("share " + d + " -> " + r.getResponseCode() + " " + r.getContentText().slice(0,200));
+    } catch (e) { Logger.log("share " + d + " failed: " + e); }
+  }
+}
+
 // -------- Drive folder helper (create-only) --------
 function _folderPath(parts) {
   var cur = DriveApp.getRootFolder();
@@ -156,7 +183,7 @@ function shareExistingPublic() {
     while (files.hasNext()) {
       var f = files.next();
       if (f.getName().slice(-5).toLowerCase() !== ".xlsx") continue;
-      try { f.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); n++; }
+      try { _shareAudit(f); n++; }
       catch (e) { failed++; Logger.log("could not share: " + f.getName() + " — " + e); }
     }
     var subs = folder.getFolders();
