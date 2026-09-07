@@ -34,9 +34,10 @@ const surfaceOf = (user, pathname = window.location.pathname) => {
 };
 
 /**
- * @returns {{name: string} | null} the OTHER user now owning the shared keys,
- * or null when there is no collision (no session, no shared keys, same user,
- * or a different surface).
+ * @returns {{uuid: string, name: string} | null} the OTHER user now owning the
+ * shared keys, or null when there is no collision (no session, no shared keys,
+ * same user, or a different surface). The uuid lets callers remember that this
+ * particular collision was already acknowledged.
  */
 export const detectSessionCollision = () => {
   try {
@@ -53,7 +54,10 @@ export const detectSessionCollision = () => {
     // treated as no collision: better silent than a popup we cannot justify.
     if (!sharedUuid || sharedUuid === myUuid) return null;
 
-    return { name: sharedInfo?.name || sharedInfo?.userName || sharedInfo?.mobileNumber || "another user" };
+    return {
+      uuid: sharedUuid,
+      name: sharedInfo?.name || sharedInfo?.userName || sharedInfo?.mobileNumber || "another user",
+    };
   } catch (e) {
     return null; // detection must never break the app
   }

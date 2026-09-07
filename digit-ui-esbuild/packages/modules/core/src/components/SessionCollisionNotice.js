@@ -73,6 +73,24 @@ const AccountRow = ({ name, label, current }) => (
   </div>
 );
 
+// Remembers, for THIS TAB only, which other-account the user has already
+// acknowledged. sessionStorage (not localStorage) on purpose: the
+// acknowledgement belongs to this tab's session and disappears when the tab
+// closes, and it must never silence a different tab.
+const ACK_KEY = "Digit.SessionCollisionAck";
+const isAcknowledged = (uuid) => {
+  try {
+    return !!uuid && window.sessionStorage.getItem(ACK_KEY) === uuid;
+  } catch (e) {
+    return false;
+  }
+};
+const acknowledge = (uuid) => {
+  try {
+    if (uuid) window.sessionStorage.setItem(ACK_KEY, uuid);
+  } catch (e) {}
+};
+
 const SessionCollisionNotice = () => {
   const { t } = useTranslation();
   const [other, setOther] = useState(null);
@@ -80,6 +98,9 @@ const SessionCollisionNotice = () => {
 
   useEffect(() => {
     const capture = (detected) => {
+      // Already acknowledged in this tab: stay silent across reloads. A
+      // DIFFERENT account signing in later is new information and shows again.
+      if (isAcknowledged(detected?.uuid)) return;
       setMe(window?.Digit?.UserService?.getUser?.()?.info || null);
       setOther(detected);
     };
@@ -92,6 +113,11 @@ const SessionCollisionNotice = () => {
 
   if (!other) return null;
 
+  const dismiss = () => {
+    acknowledge(other?.uuid);
+    setOther(null);
+  };
+
   // Localisation keys with built-in English fallbacks: the notice must read
   // correctly on an environment where these keys have not been seeded.
   const tx = (key, fallback) => (t(key) === key ? fallback : t(key));
@@ -103,8 +129,8 @@ const SessionCollisionNotice = () => {
       style={{ maxWidth: "38rem", width: "min(38rem, 94vw)" }}
       showIcon={false}
       heading={tx("CORE_SESSION_COLLISION_HEADING", "Another account signed in")}
-      onClose={() => setOther(null)}
-      onOverlayClick={() => setOther(null)}
+      onClose={() => dismiss()}
+      onOverlayClick={() => dismiss()}
       // Align the link with the button on a shared centre line; the platform
       // stacks these full-width on mobile, where the gap keeps them apart.
       footerStyles={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "1rem", flexWrap: "wrap" }}
@@ -168,7 +194,7 @@ const SessionCollisionNotice = () => {
           size="large"
           variation="primary"
           label={tx("CORE_SESSION_COLLISION_ACK", "Continue working")}
-          onClick={() => setOther(null)}
+          onClick={() => dismiss()}
         />,
       ]}
     />
