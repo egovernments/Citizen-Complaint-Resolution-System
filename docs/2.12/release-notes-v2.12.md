@@ -24,7 +24,16 @@ DIGIT CMS v2.12 is the most significant release of the Complaints Management Sys
 
 Most new capabilities are **switched off until an account chooses to turn them on**. An upgraded installation behaves like v2.11 until each feature is enabled (see [Turning Features On](#turning-features-on--configuration)). A small number of changes require action from the operations team before upgrading; they are summarised in [Changes That Need Attention Before Upgrading](#changes-that-need-attention-before-upgrading) and covered step-by-step in the migration guide.
 
-### At a glance
+* **Organize complaints in line with the structure in citizen charters.** Complaint categories are no longer fixed at two levels; governments can configure categories to the level of detail required, without being restricted to a fixed two-level hierarchy.
+* **Monitor performance through a personalised dashboard.** Last-mile resolvers and supervisors see information relevant to their own area, including preset indicators on complaint volumes, resolution times, status and geographic distribution.
+* **Share performance publicly.** A new, curated Public Dashboard lets a city publish selected statistics for citizens and the public, no login required.
+* **Keep citizens informed using a powerful notification engine.** Automatic, timely updates through SMS, WhatsApp and Email at key stages of a complaint, configurable without code changes.
+* **Make sure nothing slips through.** Overdue complaints escalate automatically, and a tamper-evident audit trail records every action and status change.
+* **Deploy across countries with built-in internationalisation** — country-specific formats and validation rules for phone numbers, postal codes, names and emails.
+* **Decide precisely who can see what.** A new access-control policy governs who can see which dashboard, analytics, and search results, by jurisdiction (geography) and department — replacing a handful of hardcoded role exemptions with a configurable, per-city policy. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this works for search and the employee inbox specifically.
+* **Get up and running much faster and consistently with Ansible-based setup.** One settings file per local government, one command, built-in pre-flight checks — supported on **Ubuntu** and **macOS**, with a validated quickstart for **Windows via WSL2** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet explicitly supported.
+* **One place for every image.** Every service build now comes from a single public source instead of a mix of internal and public locations; the Configurator and citizen/employee UI builds are now produced for both common processor architectures.
+* **A working-context switcher** for employees holding more than one department/role, so they can see and switch which one they're currently acting as.
 
 * **Upgrade path:** v2.11 → v2.12.
 * **New services:** a handful of new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
@@ -35,7 +44,6 @@ Most new capabilities are **switched off until an account chooses to turn them o
 **For citizens**
 
 - Journey-wide notifications through SMS, WhatsApp and email for filing, assignment, resolution, rating and escalation.
-- Two-way WhatsApp support for filing, tracking and responding to complaints (sandbox pilot).
 - A simpler complaint form with map-based location capture, improved category selection, country-specific validation and local-language error messages.
 - Auditable, automated escalation when complaints exceed their resolution time.
 - Public Dashboard — a curated, no-login view of selected complaint statistics.
@@ -83,21 +91,21 @@ These require action from the operations team on existing installations — full
 
 ## New Services <a href="#new-services" id="new-services"></a>
 
-<details>
-<summary>New backend components in this release (click to expand)</summary>
+Everything below is new compared to v2.11 — it didn't exist in this project at all before this release.
 
-| Service | What it does | How it's switched on |
-|---|---|---|
-| Novu bridge-endpoint & Novu admin dashboard | Renders self-hosted notification templates and provides Novu's own admin UI | `enable_novu` |
-| Real OTP delivery (otp-publisher) | Generates and delivers genuine one-time passwords for login, replacing the built-in test stub | `enable_otp_services` |
-| WhatsApp chatbot (xstate-chatbot) | Lets citizens file and track complaints on WhatsApp | Kubernetes deployment only (pilot) |
-| Location search (turbopass) | Address/place auto-complete when setting up city boundaries | `enable_turbopass` (off by default) |
-| Audit service | Keeps the tamper-evident record of complaint and workflow changes | Always on |
-| Host monitoring (node-exporter) | Server CPU/memory/disk metrics for the monitoring dashboards | Always on |
-| City-onboarding automation toolkit (digit-mcp) | Automation tools for setting up a new city, vendored into this repository this release | `enable_mcp` (on by default in the example settings) |
-| Web analytics (Matomo) *(landed after 2026-08-25)* | Citizen-traffic analytics | Kubernetes/Helm chart only — **not yet available on the Docker Compose deployment path** |
-
-> 💡 `novu-bridge` itself (the core notification-dispatch service), the config service, and the user-preferences service that support notifications already existed before v2.11 and were substantially reworked for this release rather than newly introduced — see [Changed](#changed) for what changed in them.
+| New in v2.12 | What it is |
+|---|---|
+| **Admin Console** (Configurator, also called "DIGIT Studio") | The web app a city admin uses to set up and configure a city — boundaries, complaint categories, staff, dashboards, notifications. Replaces manual/scripted city setup. |
+| **digit-ui-esbuild** | The rebuilt citizen and employee web app. |
+| **digit-mcp** | An automation toolkit that speeds up onboarding a new city. On by default. |
+| **Real OTP delivery** (otp-publisher) | Sends genuine one-time passwords for login, instead of the earlier test stub. Switched on with `enable_otp_services`. |
+| **Notification admin dashboard** (novu-dashboard) + **novu-bridge-endpoint** | Lets a city manage its own notification (SMS/WhatsApp/Email) templates. Switched on with `enable_novu`. |
+| **Location search** (turbopass) | Address/place auto-complete when setting up city boundaries. Off by default (`enable_turbopass`). |
+| **Audit service** | Keeps a tamper-evident record of every complaint and workflow change. Always on. |
+| **Host monitoring** (node-exporter) | Server CPU/memory/disk metrics for the monitoring dashboards. Always on. |
+| **Single-VM installer** (local-setup, Ansible-driven) | Stands up a full deployment from one settings file and one command, with built-in pre-flight checks. |
+| **Performance testing framework** (`performance/`) | k6-based load tests used to validate this release at scale (up to 1M complaints / 500K+ daily transactions). |
+| **Web analytics** (Matomo) | Citizen-traffic analytics. Kubernetes/Helm only — not yet available on the Docker Compose path. |
 
 </details>
 
@@ -310,7 +318,58 @@ Per-service database-migration init containers close the Compose/Kubernetes pari
 
 ### Known Issues <a href="#known-issues" id="known-issues"></a>
 
-Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/docs/v2.12-release_note_revamp/docs/2.12/known_issues_2.12.md
+Limitations to be aware of before adopting this release:
+
+- **Windows support is WSL2-only.** Native Windows and Red Hat Linux are not yet supported.
+- **The one-click installer does not currently work on AWS.** The Ansible-driven one-command install path fails when the target host is on AWS — use Docker Compose directly on an AWS host until this is fixed, or run the installer against a non-AWS host.
+- **No automated ServiceDefs → ComplaintHierarchy migration for hand-converting a tenant.** The old `ServiceDefs` complaint-category master is removed; a validated migration *tool* now exists (see [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md)) and is the recommended path, but there is still no automatic, zero-touch conversion — someone must run it per tenant.
+- **The new jurisdiction/department access control for dashboards and analytics needs care before enabling for admin roles.** An independent review found that tenant-wide admin/supervisor roles can lose unrestricted dashboard access and see it go empty, a cross-tenant config-refresh authorization gap, and a case where the "department scoping disabled" override doesn't actually apply. If your city relies on admin roles seeing the full dashboard, verify this specifically before rollout.
+- **The search/inbox filter panel isn't scoped, even though search results are.** The dropdown lists of jurisdictions and departments to filter by show every value in the tenant, not just the ones the logged-in employee is scoped to — a confirmed, currently open UI defect (#1984). The scoping itself still works correctly; only the filter picker's contents are wrong. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for the full picture.
+- **There's no way to revoke a jurisdiction/department once it's been granted to an employee.** The Configurator can add a jurisdiction or department assignment, but has no corresponding "remove" path today — confirmed open (#1957).
+- **Migrating multiple cities that share common category codes can show one city's department on another's dashboard tiles**, because the reporting views resolve a category's department by comparing across the whole deployment rather than each city's own. See the migration tool's documentation for a query that checks your exposure.
+- **A complaint whose category hasn't been migrated will fail to send notifications** on its next workflow action (assign/resolve/escalate), even though it still opens and displays fine.
+- **The Department Grievance Routing Officer (DGRO) role gets the Dashboard sidebar link but not the underlying permission to use it.** DGRO's seeded role-actions include the nav-link action but none of the analytics capability actions, so a DGRO employee sees the Dashboard menu entry but every dashboard request is denied. Confirmed against the current seed data — grant DGRO the same capability actions as other supervisor-level roles if you need this role to actually use the dashboard.
+- **Escalation can misfire after it triggers.** Once a complaint auto-escalates, completing the workflow from the escalated assignee's side doesn't always work correctly — confirmed open (#1956, highest priority in the sign-off list below).
+- **Employee-timeline PII masking isn't wired up yet.** The visibility grants described under [New City Data & Settings](#new-features) (`DataSecurity.DecryptionABAC`) aren't actually applied on the employee timeline — confirmed open (#1970), consistent with the seed-data gap called out earlier in this document.
+- **GRO↔LME assignment can offer the wrong people.** The assignee dropdown doesn't always filter correctly by role when assigning a complaint from GRO to LME (or back) — confirmed open (#1968).
+- **LME can occasionally get stuck unable to mark a complaint resolved** — root-caused to a specific caching issue rather than a broader workflow defect (#1967).
+- **Several Supervisor Dashboard KPIs are wrong or unavailable**: SLA Non-Compliance Rate, Employees with Most Open Complaints, Employee Performance, and Complaints at Risk were the specific ones confirmed failing at sign-off (#1983).
+- **Dashboard CSV export shows raw numbers instead of percentages** for percentage-based statistics (#1977).
+- **WhatsApp/SMS can silently stop sending, with no error surfaced in the Configurator,** if the notification provider's (Twilio) token has expired (#1975) — check the provider console before assuming a configuration problem.
+
+**Confirmed at CMS 2.12 sign-off** (QA pass completed 2026-09-03), each tracked individually on GitHub — the authoritative, current list behind the bullets above:
+
+| Issue | Title | Priority | Status | Assignee |
+|---|---|---|---|---|
+| #1956 | Employee: after escalation the workflow doesn't proceed correctly | P0 | In progress | Lokendra-egov |
+| #1957 | Configurator UI: no way to revoke a jurisdiction/department already granted to an employee | P1 | In progress | Lokendra-egov |
+| #1983 | Dashboard: several KPIs incorrect or unavailable | P1 | Todo | KDwevedi |
+| #1967 | Employee: LME sometimes can't mark a complaint resolved (caching issue) | P2 | Todo | KDwevedi |
+| #1968 | Employee: GRO↔LME assign dropdown doesn't filter correctly by role | P2 | Todo | KDwevedi |
+| #1970 | Employee UI: timeline PII masking not implemented | P2 | In progress | vinothrallapalli-eGov |
+| #1975 | SMS/WhatsApp silently fails once the Twilio token expires | P2 | Todo | KDwevedi |
+| #1977 | Dashboard CSV export shows raw numbers, not percentages | P2 | Todo | KDwevedi |
+| #1984 | Search/inbox filter panel lists all jurisdictions/departments, not just the employee's own | P2 | Todo | vinothrallapalli-eGov |
+
+Other open items tracked against this release, lower priority or longer-tail (verified open on GitHub as of this writing — several items from an earlier draft of this list have since been closed and were removed):
+
+| Area | Issue |
+|---|---|
+| Notifications | Error while creating the workflow in Novu (#1517) |
+| Notifications | Sync WhatsApp templates from Twilio fails for some messages (#1516) |
+| Notifications | Configure Notifications: Delete and Recreate features not working as expected (#1501) |
+| Notifications | Employees are not yet notified on complaint assignment across email, SMS and WhatsApp (#904) |
+| Notifications | Notification setup documentation for implementation teams still to be published (#1032) |
+| Supervisor Dashboard | Use Dashboard in Portuguese (#1169) |
+| Supervisor Dashboard | Production load-time benchmark at 3K / 50K / 100K records (#1109) |
+| Supervisor Dashboard | Data dictionary asset creation for the CMS dashboard (#1575) |
+| Complaint lifecycle | Validate complaint types against the tenant master, dropping the state-level fallback (#902) |
+| Configuration | Resolve the department master per tenant with state-level fallback (#901) |
+| Deployment / operations | Observability dashboards for operations & maintenance (#541) |
+| Deployment / operations | Citizen login on the Docker Compose setup (#453) |
+| Deployment / operations | Developer environment setup within an hour (#191) |
+| Platform | Rate-limiter configuration (#1253) |
+| Quality & security | Vulnerability testing (#1482) |
 
 ## Related Documents <a href="#document-resources-and-links" id="document-resources-and-links"></a>
 
@@ -419,12 +478,6 @@ Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/
 - `ComplaintHierarchy` and multi-department support added to all MCP tools.
 - System-state snapshot and diff capability added to `digit-mcp`.
 - `city_setup_from_xlsx` emits a GeoJSON sidecar for boundary polygons.
-
-**Chatbot (WhatsApp / xstate)**
-
-- xstate PGR chatbot flow aligned with `ComplaintHierarchy` for complaint-type/category labels.
-- Multi-tenant support added for the sandbox WhatsApp chatbot.
-- Complaint lifecycle REASSIGN and RATE events wired into the chatbot notification flow.
 
 **Observability**
 
@@ -609,12 +662,6 @@ Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/
 - Tilt onboarding path repaired; `digit-ui` build no longer floats to a stale image (#1288).
 - Mobile-number validation schema updated and the DB dump cleaned up to match (#1022).
 - *(Landed after the beta cutoff)* The sample database dump used for fresh local installs no longer ships the removed `ServiceDefs` category data (found during migration validation; a leftover schema definition and its sample rows have been dropped).
-
-**Chatbot**
-
-- Correct tenant ID used for complaint tracking in sandbox mode.
-- User `mobileNumber` preserved in session state to fix Twilio messaging.
-- Complaint tracking flow and location resolution fixed.
 
 **Analytics**
 
