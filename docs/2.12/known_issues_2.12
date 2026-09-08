@@ -1,1 +1,75 @@
+## Known Limitations
 
+The limitations below are known and tracked for this release. Each is logged individually in the project issue tracker — check there for current status before starting an implementation.
+
+### Platform support
+
+Ansible-based setup is supported on **Ubuntu** and **macOS**. Windows is supported through **WSL2 only** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet supported.
+
+### Migrating complaint categories from the previous version
+
+The earlier two-level complaint-category master has been replaced by the new multi-level complaint hierarchy. A validated [migration tool](../migration/servicedefs-to-complainthierarchy-migration.md) is available and is the recommended path, but conversion is **not automatic** — it must be run once per city and the result confirmed.
+
+Two things to watch during migration:
+
+- Complaints whose category has not been migrated will still open and display correctly, but will **fail to send notifications** on their next workflow action (assignment, resolution or escalation).
+- If you are migrating several cities that share common category codes, dashboard tiles can attribute a category to the wrong city's department. The migration documentation includes a query to check whether your deployment is affected.
+
+### Jurisdiction and department access control
+
+This is a new capability. We recommend verifying it against your own role setup before enabling it in production — particularly if your city relies on tenant-wide admin or supervisor roles seeing complete data.
+
+- Tenant-wide admin and supervisor roles can lose unrestricted dashboard access and see an empty dashboard.
+- The **Department Grievance Routing Officer (DGRO)** role receives the Dashboard navigation link but not the permission to use it, so requests are denied. Grant DGRO the same analytics permissions as other supervisor-level roles if this role needs dashboard access.
+- Filter dropdowns in complaint search and the employee inbox list every jurisdiction and department in the city, not only those the signed-in employee is scoped to. Scoping of the **results** is correct; only the picker's contents are wrong.
+- A jurisdiction or department can be granted to an employee through the Configurator, but there is no corresponding way to remove one.
+- Masking of personal information on the employee complaint timeline is not yet applied, even where visibility settings suggest otherwise.
+
+See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this feature works in detail.
+
+### Supervisor Dashboard
+
+- Some indicators are not yet available or return incorrect values, including SLA non-compliance rate, employees with most open complaints, employee performance, and complaints at risk.
+- CSV export writes raw numbers in place of percentages for percentage-based indicators.
+- The dashboard is not yet localised into Portuguese, and load behaviour at higher record volumes has not yet been benchmarked.
+
+### Complaint workflow
+
+- After a complaint escalates automatically, completing the workflow from the escalated assignee's side does not always work correctly.
+- When assigning a complaint between grievance routing officers and last-mile resolvers, the assignee list does not always filter correctly by role.
+- Last-mile resolvers can occasionally be unable to mark a complaint resolved. This is a caching issue rather than a workflow defect.
+
+### Notifications
+
+- If the notification provider's access token expires, SMS and WhatsApp messages **stop sending with no error surfaced in the Configurator**. Check the provider console before treating this as a configuration problem.
+- Employees are not yet notified when a complaint is assigned to them, on any channel.
+- Some template synchronisation and notification-configuration actions do not yet behave as expected.
+- Setup documentation for implementation teams is still being published.
+
+### Two-way WhatsApp engagement
+
+Available as a **multi-city sandbox pilot**, not as a generally available feature.
+
+### Other areas in progress
+
+Observability dashboards for operations and maintenance, rate-limiter configuration and vulnerability testing remain open for this release. Citizen login on the Docker Compose setup, tenant-level validation of complaint types and department masters, and a dashboard data dictionary are also in progress.
+
+---
+
+## Related Documents
+
+| Document | Description |
+|---|---|
+| [Complaints Management roadmap](https://docs.digit.org/complaints-management/community/roadmap) | Product roadmap |
+| [Full engineering changelog](#full-engineering-changelog-keep-a-changelog) | Complete Added / Changed / Fixed / Deprecated / Removed / Security log |
+| [release-config-changelog-v2.12.md](release-config-changelog-v2.12.md) | Configuration and infrastructure changelog |
+| [migration-guide-v2.11-to-v2.12.md](migration-guide-v2.11-to-v2.12.md) | Operator upgrade procedure, v2.11 → v2.12 |
+| [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md) | Complaint-category migration procedure |
+| [jurisdiction-access-control.md](../jurisdiction-access-control.md) | Jurisdiction and department access control explained |
+| [WINDOWS-QUICKSTART.md](../../WINDOWS-QUICKSTART.md) | Windows setup path, via WSL2 |
+| [ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding and add-ons catalogue |
+| [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design |
+| [dashboard-configuration.md](dashboard/dashboard-configuration.md) | Supervisor Dashboard configuration reference |
+| [notifications-guide/](../notifications-guide/01-mdms-masters.md) | Notifications setup guide |
+| [observability/](../observability/enabling-monitoring.md) | Monitoring stack and dashboard telemetry |
+| [01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store operations runbook |
