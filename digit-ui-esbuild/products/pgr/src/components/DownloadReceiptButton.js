@@ -7,7 +7,7 @@
 // tenant logo, which is fetched with a short timeout and simply omitted on
 // failure rather than blocking or failing the download.
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 import { Button } from "@egovernments/digit-ui-components-v2";
@@ -44,6 +44,20 @@ const getLogo = async (url) => {
  *    which is what the success screen needs — it holds just the created
  *    ServiceWrapper, and printing that alone produced a near-empty receipt.
  */
+/**
+ * Outer shell: resolves the complaint record (fetching it when only an id was
+ * given), and mounts the real button ONLY once the record exists.
+ *
+ * That mount gate is load-bearing, not cosmetic: useComplaintReceiptModel's
+ * MDMS read switches useCustomMDMS between its v1/v2 branches depending on
+ * whether the complaint's tenant is known. Those branches call different
+ * hooks, so letting the tenant arrive MID-MOUNT (as it did on the success
+ * screen, where only the id is available at mount) changes the hook order
+ * between renders and crashes React ("Cannot read properties of undefined
+ * (reading 'length')" from useMemo) the moment the fetch resolves. Splitting
+ * the component guarantees every hook inside the inner button sees the tenant
+ * from its very first render.
+ */
 const DownloadReceiptButton = ({
   complaintDetails: providedDetails,
   complaintId,
@@ -52,17 +66,56 @@ const DownloadReceiptButton = ({
   onError,
 }) => {
   const { t } = useTranslation();
-  const [busy, setBusy] = useState(false);
 
   // Fetch only when the caller did not already supply the record — the same
   // hook, and therefore the same shape, the detail page renders from.
   const shouldFetch = !providedDetails && !!complaintId;
-  const { complaintDetails: fetchedDetails } = Digit.Hooks.pgr.useComplaintDetails({
+  const { complaintDetails: fetchedDetails, revalidate } = Digit.Hooks.pgr.useComplaintDetails({
     tenantId: tenantId || Digit.ULBService.getCurrentTenantId(),
     id: complaintId,
     enabled: shouldFetch,
   });
   const complaintDetails = providedDetails || fetchedDetails || null;
+
+  // Right after a create, the complaint is not yet searchable (persistence is
+  // asynchronous), so the first fetch legitimately resolves to an EMPTY record
+  // and react-query caches it as a success — no retry will ever fire. Re-poll
+  // a few times with backoff until the record appears; give up quietly after
+  // that (the button just stays disabled).
+  const attemptsRef = useRef(0);
+  // `revalidate` is a fresh closure every render; go through a ref so the
+  // effect's deps stay stable and a re-render can't re-arm (and burn) attempts.
+  const revalidateRef = useRef(revalidate);
+  revalidateRef.current = revalidate;
+  useEffect(() => {
+    if (!shouldFetch || complaintDetails?.service) return undefined;
+    // Only poll once a fetch has actually resolved empty; each refetch yields a
+    // new object identity, which is what re-fires this effect for the next try.
+    if (!fetchedDetails || attemptsRef.current >= 5) return undefined;
+    const attempt = (attemptsRef.current += 1);
+    const timer = setTimeout(() => revalidateRef.current(), 1200 * attempt);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldFetch, fetchedDetails, complaintDetails?.service]);
+
+  if (!complaintDetails?.service) {
+    // Same visual as the ready button, disabled while the record loads.
+    const label = t("PGR_RECEIPT_DOWNLOAD");
+    return (
+      <Button variant={variant} type="button" disabled leading={<Download className="h-4 w-4" />}>
+        {label === "PGR_RECEIPT_DOWNLOAD" ? RECEIPT_FALLBACKS.downloadLabel : label}
+      </Button>
+    );
+  }
+
+  return <ReceiptButtonReady complaintDetails={complaintDetails} variant={variant} onError={onError} />;
+};
+
+// Inner button: every render of this component has the full record, so the
+// hooks below run with a stable configuration for the component's lifetime.
+const ReceiptButtonReady = ({ complaintDetails, variant, onError }) => {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
 
   const { service, details, classification, extendedRows } = useComplaintReceiptModel(complaintDetails);
 
@@ -75,7 +128,7 @@ const DownloadReceiptButton = ({
   );
 
   const handleClick = useCallback(async () => {
-    if (busy || !service) return;
+    if (busy) return;
     setBusy(true);
     try {
       const initData = Digit.SessionStorage.get("initData") || {};
@@ -132,7 +185,6 @@ const DownloadReceiptButton = ({
       type="button"
       onClick={handleClick}
       loading={busy}
-      disabled={!service}
       leading={<Download className="h-4 w-4" />}
     >
       {tr("PGR_RECEIPT_DOWNLOAD", RECEIPT_FALLBACKS.downloadLabel)}
