@@ -6,30 +6,23 @@
 >
 > Some technical components, service names and configuration keys, such as `RAINMAKER-PGR.*` and `pgr.*`, continue to use the earlier PGR terminology for backward compatibility. These references relate only to the underlying implementation and should not be used as the product or feature name.
 
-## Release Summary <a href="#release-summary" id="release-summary"></a>
+## About This Release
 
-DIGIT CMS v2.12 turns complaint categories into a flexible, city-shaped tree, adds a personalised Supervisor Dashboard and a curated public-facing dashboard, brings automatic multi-channel notifications and escalation, introduces jurisdiction- and department-based access control for search and dashboards, and simplifies deployment down to one settings file and one command. Most of this is **switched off until a city chooses to turn it on** — an upgraded installation behaves like v2.11 until a feature is explicitly enabled.
+DIGIT CMS v2.12 is the most significant release of the Complaints Management System since the repository was consolidated. It expands the product from a conventional grievance-redressal system into a configurable platform that can support multiple complaint, service-request and case-management use cases. In practical terms, this allows a local government to:
 
-### At a glance
+- **Organize complaints in line with the structure in citizen charters.** Complaint categories are no longer fixed at two levels — complaint type and subtype. Governments can configure categories to the level of detail required and assign them to the appropriate responsible units, without being restricted to a fixed two-level hierarchy.
+- **Monitor performance through a personalised dashboard.** Last-mile resolvers and their supervisors see information relevant to their own area of responsibility, including preset indicators on complaint volumes, resolution times, status and geographic distribution, with clear explanations of what each indicator represents.
+- **Share performance publicly.** A new, curated Public Dashboard lets a city publish selected statistics for citizens and the public — no login required.
+- **Keep citizens informed using a powerful notification engine.** Governments can automatically send timely updates through **SMS**, **WhatsApp** and **Email** at key stages of a complaint, including registration, assignment, resolution and reopening. Notification rules, channels and message templates are configurable without code changes.
+- **Make sure nothing slips through.** Overdue complaints can be escalated either for action by the next responsible level or for visibility by supervisory authorities. A tamper-evident audit trail records every action and status change, supporting clear accountability and review.
+- **Enable two-way engagement through WhatsApp.** Citizens can receive complaint updates and respond through the same channel, allowing governments to collect additional information, support follow-up actions and keep communication connected to the complaint lifecycle. _Available as a multi-city sandbox pilot._
+- **Deploy across countries with built-in internationalisation.** Governments can configure country-specific formats and validation rules for phone numbers, postal codes, names and email addresses, rather than relying on requirements hardcoded for a single geography. Configurators can also fetch geography information directly when setting up boundaries.
+- **Decide precisely who can see what.** A new access-control policy governs who can see which dashboards, analytics and search results, by jurisdiction (geography) and department — replacing a handful of hardcoded role exemptions with a configurable, per-city policy. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this works for employee search and the inbox specifically.
+- **Switch working context in a click.** Employees holding more than one department or role can see which one they are currently acting as, and switch between them.
+- **Get up and running much faster and more consistently with Ansible-based setup.** The earlier Jupyter Notebook-led installation has evolved into a streamlined, automated deployment workflow: one settings file per local government, one command, and built-in pre-flight checks that surface common configuration issues before deployment begins. Supported on **Ubuntu** and **macOS**, with a validated quickstart for **Windows via WSL2** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet explicitly supported.
+- **One place for every image.** Every service build now comes from a single public source instead of a mix of internal and public locations, and the Configurator and citizen/employee UI builds are produced for both common processor architectures.
 
-* **Upgrade path:** v2.11 → v2.12. (2.12-beta, 2026-08-03, was a milestone along this path, not a separate release — this document covers the full v2.11 → v2.12 scope.)
-* **New services:** a handful of genuinely new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
-* **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
-
-### What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
-
-These require action from the operations team on existing installations — full procedure in the [Migration Guide](migration-guide-v2.11-to-v2.12.md):
-
-1. **Complaint categories replaced** — the old `ServiceDefs` list is removed; convert it to the new category tree (`ComplaintHierarchyDefinition` + `ComplaintHierarchy`) reusing the same codes, ideally using the validated [migration tool](../migration/servicedefs-to-complainthierarchy-migration.md) rather than by hand (migration guide Section 2.1).
-2. **Phone/form validation replaced** — the old `UserValidation` record is removed; create `MobileNumberValidation` (mark one record as default) and the new `FormValidations` rows, and update the User Service to its 2.12 build (Section 2.2).
-3. **Notification defaults changed** — the default channel is now SMS, and WhatsApp must be explicitly re-enabled; several old settings were removed (Section 2.3).
-4. **Boundary-service address default changed** to the in-cluster service name — set it explicitly if you relied on the old default (Section 2.4).
-5. **New role and data-privacy rules need loading, on every city — not just existing ones.** As of validation, the actual seed data used for a fresh local install doesn't include the Screening Officer role or the new personal-data visibility rules either — confirm your own seed pipeline actually loads them for any city, new or existing (Section 2.5).
-6. **Dashboard shows nothing for employees without a department** — check department assignments in HR data before rollout (see the migration guide's post-upgrade verification notes).
-7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
-8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
-
-## Highlights <a href="#highlights" id="highlights"></a>
+Most new capabilities are **switched off until an account chooses to turn them on**. An upgraded installation behaves like v2.11 until each feature is enabled (see [Turning Features On](#turning-features-on--configuration)). A small number of changes require action from the operations team before upgrading; they are summarised in [Changes That Need Attention Before Upgrading](#changes-that-need-attention-before-upgrading) and covered step-by-step in the migration guide.
 
 * **Organize complaints in line with the structure in citizen charters.** Complaint categories are no longer fixed at two levels; governments can configure categories to the level of detail required, without being restricted to a fixed two-level hierarchy.
 * **Monitor performance through a personalised dashboard.** Last-mile resolvers and supervisors see information relevant to their own area, including preset indicators on complaint volumes, resolution times, status and geographic distribution.
@@ -42,17 +35,21 @@ These require action from the operations team on existing installations — full
 * **One place for every image.** Every service build now comes from a single public source instead of a mix of internal and public locations; the Configurator and citizen/employee UI builds are now produced for both common processor architectures.
 * **A working-context switcher** for employees holding more than one department/role, so they can see and switch which one they're currently acting as.
 
-<details>
+* **Upgrade path:** v2.11 → v2.12.
+* **New services:** a handful of new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
+* **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
-<summary>What's new, by audience (click to expand)</summary>
+### What's new for you
 
 **For citizens**
+
 - Journey-wide notifications through SMS, WhatsApp and email for filing, assignment, resolution, rating and escalation.
 - A simpler complaint form with map-based location capture, improved category selection, country-specific validation and local-language error messages.
 - Auditable, automated escalation when complaints exceed their resolution time.
 - Public Dashboard — a curated, no-login view of selected complaint statistics.
 
 **For employees and supervisors**
+
 - Complaint hierarchies of any depth, aligned with the local government's service structure or citizen charter.
 - Improved employee inbox with assignee filters, SLA visibility, reliable sorting and pagination, and optional My Complaints/All Complaints views.
 - An evolved Grievance Routing Officer role to review incoming complaints and route them to the right department.
@@ -61,6 +58,7 @@ These require action from the operations team on existing installations — full
 - A working-context switcher in the top bar for employees holding more than one department/role.
 
 **For city administrators (Admin Console / DIGIT Configurator)**
+
 - One-click geography setup through OpenStreetMap, alongside Excel upload and map-based verification.
 - Manage the new multi-level complaint categories, view the staff organisation chart, edit all languages side-by-side, and sync WhatsApp message templates with the provider.
 - Configurable reopening period for resolved complaints (default 72 hours).
@@ -69,6 +67,7 @@ These require action from the operations team on existing installations — full
 - Expanded configuration tools for complaint hierarchies, staff structures, multilingual content and WhatsApp templates.
 
 **For the IT / operations team**
+
 - Local government deployment using one settings file, with pre-flight checks before installation.
 - Automated test suites for the employee and citizen experiences.
 - Built-in system health monitoring — service logs, metrics, request traces, ready-made dashboards.
@@ -77,7 +76,18 @@ These require action from the operations team on existing installations — full
 - A validated deployment path for Windows, via WSL2.
 - Platform version upgraded to 2.9.3.
 
-</details>
+### Migration Actions: What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
+
+These require action from the operations team on existing installations — full procedure in the [Migration Guide](migration-guide-v2.11-to-v2.12.md):
+
+1. **Complaint categories replaced** — the old `ServiceDefs` list is removed; convert it to the new category tree (`ComplaintHierarchyDefinition` + `ComplaintHierarchy`) reusing the same codes, ideally using the validated [migration tool](../migration/servicedefs-to-complainthierarchy-migration.md) rather than by hand (migration guide Section 2.1).
+2. **Phone/form validation replaced** — the old `UserValidation` record is removed; create `MobileNumberValidation` (mark one record as default) and the new `FormValidations` rows, and update the User Service to its 2.12 build (Section 2.2).
+3. **Notification defaults changed** — the default channel is now SMS, and WhatsApp must be explicitly re-enabled; several old settings were removed (Section 2.3).
+4. **Boundary-service address default changed** to the in-cluster service name — set it explicitly if you relied on the old default (Section 2.4).
+5. **New role and data-privacy rules need loading, on every city — not just existing ones.** As of validation, the actual seed data used for a fresh local install doesn't include the Screening Officer role or the new personal-data visibility rules either — confirm your own seed pipeline actually loads them for any city, new or existing (Section 2.5).
+6. **Dashboard shows nothing for employees without a department** — check department assignments in HR data before rollout (see the migration guide's post-upgrade verification notes).
+7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
+8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
 
 ## New Services <a href="#new-services" id="new-services"></a>
 
@@ -97,11 +107,11 @@ Everything below is new compared to v2.11 — it didn't exist in this project at
 | **Performance testing framework** (`performance/`) | k6-based load tests used to validate this release at scale (up to 1M complaints / 500K+ daily transactions). |
 | **Web analytics** (Matomo) | Citizen-traffic analytics. Kubernetes/Helm only — not yet available on the Docker Compose path. |
 
+</details>
+
 ## New Features <a href="#new-features" id="new-features"></a>
 
-This section is the map of **what's new** and **how to turn each one on**. Settings live in three places: **deployment settings** (one file per city, `local-setup/ansible/inventory/host_vars/<city>.yml`), **complaints-service settings** (`application.properties`, overridable via `PGR_*` env vars), and **city master data** (MDMS, editable in the Admin Console — fresh installs get sensible defaults automatically, **already-running cities must add new records themselves**).
-
-### 1. Multi-Level Complaint Categories — *always on*
+### 1. Multi-Level Complaint Categories
 
 Complaints are now classified using a category tree the city defines — for example *Sanitation → Garbage → Missed collection* — instead of a fixed two-level list. Already-filed complaints keep working as long as the same category codes are reused.
 
@@ -113,7 +123,7 @@ Complaints are now classified using a category tree the city defines — for exa
 | Related | Migration `V20260731000000__repoint_grain_mvs_to_complainthierarchy.sql` (and, found during later validation, `V20260810000000__tenant_business_calendar_grains.sql`, which fixes report time-groupings to use each city's own time zone) repoint the reporting views to the new categories — run automatically. |
 | Watch out for | Two gaps found during real-world validation of this migration: a complaint whose category hasn't been migrated yet will fail to send notifications on its next workflow action even though it still opens and displays fine; and the reporting views resolve a category's department by comparing across every city in the deployment rather than each city's own, so two cities sharing a default category code with different departments can end up showing one city's department on the other's dashboard tiles. See the migration tool's documentation for exposure-check queries. |
 
-### 2. Supervisor Dashboard *(feature, not a separate service — runs inside the complaints service and Admin Console)*
+### 2. Supervisor Dashboard
 
 Live counts, resolution times, charts, and a complaint map. Each supervisor sees only their own area and department; access is role-based. Answers to "how many complaints, where, how fast resolved" are computed by a reporting/analytics engine that ships as part of the complaints service (refresh on by default) — not a separate deployable component.
 
@@ -127,7 +137,7 @@ Live counts, resolution times, charts, and a complaint map. Each supervisor sees
 | Performance telemetry | The dashboard reports its own loading speed by default, which adds two public gateway routes (`/otel/v1/metrics`, `/otel/v1/logs`). `dashboard_metrics_enabled: false` stops the dashboard from *sending* this telemetry, but the two routes themselves stay in place — they are not removed by this setting. |
 | An older dashboard | The pre-catalog dashboard that predates this KPI-catalog-driven Supervisor Dashboard is now hidden by default, kept only as a rollback aid. |
 
-### 3. Public Dashboard *(feature, not a separate service)*
+### 3. Public Dashboard
 
 A curated, no-login view of selected Supervisor Dashboard statistics, for citizens and the public.
 
@@ -137,7 +147,7 @@ A curated, no-login view of selected Supervisor Dashboard statistics, for citize
 | Access | Served without a login session, at its own web address. Deliberately excludes the schema-introspection endpoint (`_schema`) from its gateway whitelist, so a public caller can't discover column/data structure — only `/packs`, `/catalog/_search`, and `/_query` are exposed. |
 | Isolation | A public caller cannot escape the curated set of indicators the city admin selected — verified by dedicated isolation tests. |
 
-### 4. Jurisdiction- and Department-Based Access Control (Dashboards, Analytics & Search) *(feature, not a separate service)*
+### 4. Jurisdiction- and Department-Based Access Control (Dashboards, Analytics & Search)
 
 Decides which rows of dashboard, analytics, and complaint-search/inbox data a given role/employee can see, based on their assigned area (jurisdiction) and department — replacing a set of hardcoded role exemptions with a configurable policy. **A plain-language explainer covering exactly how this works for complaint search and the employee inbox is at [jurisdiction-access-control.md](../jurisdiction-access-control.md)** — read that first if you're configuring this for the first time.
 
@@ -160,7 +170,7 @@ Automatic messages to citizens (and staff) at each step of a complaint — filed
 | Split-domain setups | Notification-dashboard URLs default to the city's own domain; if TLS terminates on a different public hostname set `novu_public_base_url` (per-URL overrides exist for rare cases). |
 | Old messages | The previous fixed SMS wording (localisation keys) still works for cities that don't opt in — it is now deprecated. |
 
-### 6. Automatic Escalation of Overdue Complaints — *on by default*
+### 6. Automatic Escalation of Overdue Complaints
 
 A complaint that stays unresolved past its allowed time moves up automatically — for example from the field worker to their supervisor — up to a configurable number of levels.
 
@@ -171,7 +181,7 @@ A complaint that stays unresolved past its allowed time moves up automatically �
 | Service settings | `pgr.escalation.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — **this messaging topic must exist** while escalation is on. |
 | Prerequisite | `Workflow.BusinessServiceMasterConfig` must contain a `PGR` row (`active:true, isStatelevel:true`). |
 
-### 7. Employee Inbox — "My Complaints / All Complaints" — *off by default*
+### 7. Employee Inbox — "My Complaints / All Complaints"
 
 Adds two tabs to the employee inbox: complaints assigned to me (and my team), and all complaints I'm allowed to see, based on the HR reporting hierarchy. This is a **separate, additional** feature from the jurisdiction/department access control in Section 4 above — a complaint has to pass both to appear in a tab.
 
@@ -203,7 +213,7 @@ How long a citizen has to reopen a resolved complaint is now a real, editable ci
 | Enforcement | The deadline is also enforced on the server from the same `REOPENSLA` master, based on the stored complaint (not what the request claims). Deployments must unset `time-before-closing-complaint`, which used to override it. |
 | Fixed after 2026-08-25 | `REOPENSLA` originally couldn't be edited via the Admin Console/API at all — the master was keyed on the value itself, so any change was rejected outright. A database migration now re-keys it onto a stable identifier the first time a deployment upgrades; no action needed beyond letting that migration run. |
 
-### 10. Tamper-Evident Audit Trail — *always on*
+### 10. Complaint Audit Trail
 
 Every create/update of a complaint and every workflow step is recorded in a dedicated, signed audit log — who changed what, and when.
 
@@ -212,7 +222,7 @@ Every create/update of a complaint and every workflow step is recorded in a dedi
 | What | Complaint and workflow changes flow through the persister → audit-service into the `eg_audit_logs` table. |
 | Config | Persister mappings carry `isAuditEnabled` + module (`CMS` / `Workflow`); the audit service reads the local persister configs (`EGOV_PERSIST_YML_REPO_PATH`) to decide what to audit, and binds `PERSISTER_AUDIT_KAFKA_TOPIC=audit-create`. Wired by default; no flag. |
 
-### 11. Employee Working-Context Switcher *(landed after 2026-08-25)*
+### 11. Employee Working-Context
 
 Lets an employee holding more than one department/role see and switch which one they're currently acting as, from the top bar.
 
@@ -383,9 +393,10 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 
 ---
 
-## Full Engineering Changelog (Keep a Changelog) <a href="#full-engineering-changelog-keep-a-changelog" id="full-engineering-changelog-keep-a-changelog"></a>
+## Full Engineering Changelog <a href="#full-engineering-changelog-keep-a-changelog" id="full-engineering-changelog-keep-a-changelog"></a>
 
-*Kept in full as the complete historical record behind the summaries above — every item that shipped, grouped Added / Changed / Fixed / Deprecated / Removed / Security, in the order it was originally recorded.*
+<details>
+<summary>Complete Engineering change log (click to expand)</summary>
 
 ### [2.12] - 2026-08-03
 
@@ -394,11 +405,13 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 #### Added
 
 **Complaint Hierarchy (N-Level)**
+
 - Configurable N-level complaint classification hierarchy, replacing the prior fixed 2-level ServiceDefs model. Complaints can now be organized across any number of sub-categories and departments via the new `ComplaintHierarchy` MDMS schema.
 - Complaint details pages now display the full hierarchy path (category → sub-category → type).
 - *(Landed after the beta cutoff)* A validated, repeatable migration tool for converting a tenant's `ServiceDefs` rows to the new model, with a preflight check and a documented validation run against a live deployment.
 
 **Dashboard & Analytics**
+
 - New supervisor dashboard with live analytics: KPI cards, drag-and-drop widget inventory, and configurable layouts.
 - Supervisor dashboard wired to the real analytics query API; global time-window filter and per-complaint-type SLA metrics available.
 - New V2 analytics grains (materialized views) and a dynamic JSON→SQL query API for ad-hoc KPI reporting.
@@ -415,6 +428,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* **Jurisdiction/department access-control policy** for dashboard, analytics, and search visibility, replacing hardcoded role exemptions with a per-tenant seed policy (see Known Issues for gaps found in review).
 
 **Configurator**
+
 - Phase 2 supports dual path: one-click OSM boundary fetch alongside the existing Excel upload.
 - Boundary maps added to the Management view.
 - N-level complaint hierarchy management UI; `COMPLAINT_HIERARCHY` localization seeding introduced.
@@ -425,6 +439,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - All locales can now be edited side-by-side in the localization list (#1004).
 
 **PGR / Complaints**
+
 - Employees can now filter the inbox by assignee when searching service requests.
 - Geo-location map field added to the employee create-complaint form.
 - Employee complaint type dropdowns scoped to the user's own department(s).
@@ -437,6 +452,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the 2026-08-25 pass)* A working-context switcher in the employee top bar, for employees holding more than one department/role, so they can see and switch which one they're currently acting as.
 
 **Form & Mobile Number Validation**
+
 - New `common-masters.FormValidations` MDMS master: one row per `fieldType` (`postalCode`, `name`, `email`) with a regex; MDMS-first over the host_vars/globalConfigs fallback across DIGIT Studio and all PGR create-complaint flows (CCSD-1989/1990). Default rows seeded by default-data-handler and `full-dump.sql` — the two seed paths currently disagree on 5 vs. 6 digits for the postal-code pattern; reconcile before relying on one consistent format across fresh installs.
 - Postal-code validation consolidated onto a single shared validator with real-time feedback and dynamically derived, localized error messages (#722, #1315); reopen window driven from MDMS `RAINMAKER-PGR.UIConstants.REOPENSLA` (default 72 hours) and enforced server-side from the same master (#925, #1252).
 - `common-masters.MobileNumberValidation` is now the single authoritative source across all surfaces (frontend, Configurator, MCP, employee profile, complaint forms).
@@ -445,9 +461,11 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - Country-specific defaults supported across multiple regions.
 
 **Authentication**
+
 - `digit-ui-v2` SPA published with platform-admin login, dashboard, and bootstrap wizard.
 
 **Notifications (Novu / WhatsApp)**
+
 - Full Novu notification stack added behind a `notifications` Docker Compose profile.
 - PGR complaint lifecycle events (create, assign, reassign, resolve, rate, escalate) wired to WhatsApp delivery via Twilio Content SIDs.
 - OTP services enabled by default; `novu-bridge` endpoint added for channel-aware SMS and WhatsApp dispatch.
@@ -456,16 +474,19 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - Novu dashboard image rebased onto a subpath so it survives redeploys (#926).
 
 **MCP Tools**
+
 - `ComplaintHierarchy` and multi-department support added to all MCP tools.
 - System-state snapshot and diff capability added to `digit-mcp`.
 - `city_setup_from_xlsx` emits a GeoJSON sidecar for boundary polygons.
 
 **Observability**
+
 - Full observability stack added: JVM metrics, logs, and distributed traces via OpenTelemetry + Promtail. Grafana root URL exposed per tenant.
 - node-exporter added for host-level metrics; Prometheus config reloaded automatically after deploy (#1335).
 - Signed audit logging enabled for PGR complaint create/update and workflow transitions via the persister → audit-service → `eg_audit_logs` chain (audit-service now parses the local persister configs to decide what to audit).
 
 **Deployment / Infrastructure**
+
 - macOS deployment path added with Darwin-specific OpenBao re-unseal.
 - `digit-configurator`, `digit-mcp`, and `digit-ui-esbuild` vendored into the CCRS monorepo.
 - Per-service Flyway init containers close the DB-migration parity gap between Compose and K8s, extended to every schema-owning service (#1142, #1273); audit-service kept on k8s and added to compose (#1157).
@@ -479,18 +500,21 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the 2026-08-25 pass)* Web-analytics (Matomo) support, as a new Kubernetes/Helm chart — not yet available on the Docker Compose deployment path.
 
 **Testing**
+
 - Integration suite made deployment-agnostic; stale specs audited and repaired (#1145).
 - One-time deployment-profile discovery (tenant data, personas, seed plan, capability details) persisted for reuse across the suite, with expectations manifests and capability-based gating so only relevant assertions run per environment (#1304).
 
 #### Changed
 
 **Localization / i18n**
+
 - Configurator UI fully internationalized: list column headers, page titles, resource labels, and all UI chrome translated (en/hi/fr/pt).
 - Complaint status display uses a centralized localization service with consistent prefix across all surfaces.
 - Complaint-type labels use the `COMPLAINT_HIERARCHY` localization prefix uniformly.
 - MDMS cache moved to IndexedDB to prevent `localStorage QuotaExceededError` on large datasets.
 
 **PGR / Complaints**
+
 - `additionalDetail` persisted correctly from DB reads; 600-character constraint removed.
 - Inbox pagination enabled via `totalCountJsonPath`; inbox sort column headers made clickable.
 - Assignment allowed for unmapped/NA-department complaint types.
@@ -500,16 +524,19 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - Employees can now create complaints for any department regardless of their own assignment.
 
 **Configurator**
+
 - Bulk-employee validation no longer false-negatives due to partial MDMS master fetch.
 - Legacy (v1/v2) ThemeConfig records can now be shown and edited.
 - Boundary picker restricted to LEAF boundary types only.
 
 **Mobile Number Validation**
+
 - Validation consistency and i18n error messaging aligned across Configurator and PGR (#1152).
 - `INTERNAL_USER`/`ADMIN` seed mobile numbers now derive from each tenant's `mobileNumberRegex` instead of a fixed default (#1125); `egov-user` mobile-validation defaults rewritten per tenant (#1264).
 - A non-compiling MDMS mobile regex now warns instead of silently failing (#1154).
 
 **Dashboard**
+
 - Analytics global date range applied consistently to all event-grain queries.
 - Chart hover tooltips and cursor positioning unified across all viz types.
 - Centralized viz style registry introduced; shared chart components extracted.
@@ -519,6 +546,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* Report time-groupings (day/week/month/hour/day-of-week/weekend/business-hour) now resolve from each city's own configured time zone instead of one hardcoded zone.
 
 **Deploy / Infrastructure**
+
 - Compose/K8s dual-deploy parity gaps closed across charts and the test harness (#1292).
 - Gatus health dashboard expanded: missing services added, Postgres unmasked, optional stacks gated (#1297); the k3s tier unbroken and four false-green holes closed in the coverage guard (#1303).
 - `audit_service_schema` registered in the flyway-history-map, fixing `develop` CI (#1221).
@@ -530,10 +558,12 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* The `default-data-handler` background helper was removed as a running service; its seed data is now read directly by a couple of setup scripts instead of served by a container.
 
 **Authentication / Profile**
+
 - Citizen sidebar avatar refreshed after Edit Profile save.
 - Profile photo `fileStoreId` resolved before avatar render with fallback for thumbnails.
 
 **Tests**
+
 - All Playwright/e2e specs parameterized via env helpers (no hardcoded tenant IDs).
 - Lifecycle setup seeds two PGR complaints; downstream specs consume shared fixtures.
 - `ServiceRequestValidatorTest` (10 tests) added for boundary and MDMS validation scenarios.
@@ -541,6 +571,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 #### Fixed
 
 **PGR / Complaints**
+
 - Location dropdown now appears correctly on the employee create-complaint form.
 - Citizen location toast auto-dismissed; close button added.
 - Complaint Type/Sub-Type dropdowns no longer blank out on employee complaint create.
@@ -563,6 +594,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* PGR search now stays fully backward-compatible for a tenant that never authored a dashboard access-scope configuration, instead of silently defaulting to an overly restrictive scope.
 
 **Configurator**
+
 - Phase 2 boundaries written at the city tenant, not the state root.
 - Boundary multi-hierarchy fetch retrieves all hierarchy types, not just ADMIN.
 - Employee mobile rule now sourced from MDMS, dropping the erroneous 10-digit HRMS clamp.
@@ -576,6 +608,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* Truncated/duplicated access-control seed rows that incorrectly blocked legitimate users from editing MDMS roles/actions are fixed.
 
 **Core / UI**
+
 - Button styling resolves correctly: design tokens loaded before Tailwind in digit-ui-v2.
 - JPEG extension/MIME normalized on profile image upload.
 - `.jsx` files now resolved and transpiled in the production webpack build.
@@ -587,6 +620,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - Deployment-agnostic fixes surfaced by running the full suite against a different-locale deployment: tenant de-hardcoding, onboarding logoId, boundary-leaf handling, citizen pages, data-provider (#1143).
 
 **Dashboard**
+
 - Bar chart x-axis labels hidden when cramped; yellow in-progress SLA pill hidden.
 - Bar view chart size measured correctly when mounted after toggle.
 - Saved dashboard layouts no longer reflow on page refresh; legacy storage keys migrated.
@@ -599,6 +633,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the 2026-08-25 pass)* Public Dashboard filter-bar visual-parity fixes (fonts, dropdown control types).
 
 **Auth / Identity**
+
 - ADMIN user re-provisioned with the correct encryption key post-bootstrap (#1042).
 - HRMS always sets `reActivateEmployee`, avoiding a `NullPointerException` on `_update` (#1056).
 - `egov-user-event` service-host namespace corrected (`.staging` → `.egov`) (#1099).
@@ -612,11 +647,13 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the 2026-08-25 pass)* Profile image visibility fixed; a duplicate-options bug in a dropdown fixed; employee date-of-birth/date-of-appointment made optional where they shouldn't have been required.
 
 **Notifications**
+
 - `novu-bridge` no longer persists a dispatch-log row on a missing-`subscriberId` rejection (#1137).
 - Novu dashboard `/env/` deep links now route to the dashboard SPA instead of 404ing (#1120).
 - *(Landed after the 2026-08-25 pass)* A WhatsApp integration/provider-selection bug fixed.
 
 **Deploy / Infrastructure**
+
 - HRMS post-bootstrap restart removed to eliminate HRMS bootstrap race condition.
 - A hardcoded regional pincode allowlist is no longer seeded onto new tenants outside that region.
 - Dataloader correctly creates city-level PGR workflow when only the parent tenant exists.
@@ -627,6 +664,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - *(Landed after the beta cutoff)* The sample database dump used for fresh local installs no longer ships the removed `ServiceDefs` category data (found during migration validation; a leftover schema definition and its sample rows have been dropped).
 
 **Analytics**
+
 - Global date range applied to events grain via `complaint_created_at`.
 - `account_id` made groupable on facts for top-complainants query.
 - Grain materialized views repointed from the removed `ServiceDefs` master to `ComplaintHierarchy` (#1494).
@@ -656,3 +694,5 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - **Signed audit logging** enabled for PGR complaint writes and workflow transitions (persister → audit-service → `eg_audit_logs`).
 - `novu-bridge` `/dispatch` diagnostics gated behind `ProxyAuthFilter`; EMAIL notification bodies HTML-escape user-supplied values.
 - *(Landed after the beta cutoff)* **Jurisdiction/department access-control policy** introduced for dashboard/analytics/search — see Known Issues above for gaps an independent review found for admin-level roles; these are flagged for follow-up and not yet resolved as of this document.
+
+</details>
