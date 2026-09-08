@@ -9,7 +9,7 @@ The limitations below are known and tracked for this release. Each is logged ind
 **Supported Operating Systems:**
 - ✅ **Ubuntu** (Ansible-based setup)
 - ✅ **macOS** (Ansible-based setup)
-- ✅ **Windows** (WSL2 only — see [Windows quickstart guide](../../WINDOWS-QUICKSTART.md))
+- 🟠 **Windows** WSL2 support functional as notified by partners(see [Windows quickstart guide](../../WINDOWS-QUICKSTART.md))
 - ❌ Windows (native)
 - ❌ Red Hat
 
@@ -46,25 +46,13 @@ This is a **new capability**. We recommend verifying it against your own role se
 
 ---
 
-## Supervisor Dashboard
 
-### Current Limitations
-
-- ⚠️ **Incomplete indicators:** SLA non-compliance rate, employees with most open complaints, employee performance, and complaints at risk return incorrect or unavailable values.
-- ⚠️ **CSV export formatting:** Exports raw numbers instead of percentages for percentage-based indicators.
-- ⚠️ **Language support:** Not yet localized into Portuguese.
-- ⚠️ **Performance:** Load behavior at higher record volumes has not been benchmarked.
-
-**See also:** [Dashboard Configuration Reference](dashboard/dashboard-configuration.md)
-
----
 
 ## Complaint Workflow
 
 | Issue | Symptom | Workaround |
 |-------|---------|-----------|
 | Post-escalation assignment | After a complaint escalates automatically, completing the workflow from the escalated assignee's side does not always work correctly. | Manually re-assign if workflow appears stuck. |
-| Grievance Officer → Resolver reassignment | When assigning between grievance routing officers and last-mile resolvers, the assignee list does not always filter correctly by role. | Manually verify assignee eligibility. |
 | Resolution blocking (caching) | Last-mile resolvers can occasionally be unable to mark a complaint resolved. | Clear application cache; this is a caching issue, not a workflow defect. |
 
 ---
@@ -75,17 +63,17 @@ This is a **new capability**. We recommend verifying it against your own role se
 
 | Issue | Symptom | Mitigation |
 |-------|---------|-----------|
-| **Token expiration (silent failure)** | If the notification provider's access token expires, SMS and WhatsApp messages **stop sending with no error in the Configurator**. | Monitor provider console proactively; set up alerts for token expiration. |
+| **Token expiration ** | If the notification provider's access token expires, SMS and WhatsApp messages **stop sending with no error in the Configurator**. | Monitor provider console proactively; set up alerts for token expiration. |
 | **Missing employee assignment notifications** | Employees are not yet notified when a complaint is assigned to them (SMS, WhatsApp, Email, in-app). | Implement custom notification workflow or workaround. |
-| **Template & config sync issues** | Some template synchronization and notification-configuration actions do not behave as expected. | Verify configs manually in MDMS; restart notification service if needed. |
-| **Documentation gap** | Setup documentation for implementation teams is still being published. | Track [documentation roadmap](https://docs.digit.org/complaints-management); reach out to support. |
+| **Template & config sync issues** | Partners have reported that some template synchronization and notification-configuration actions do not behave as expected. | Verify configs manually in MDMS; restart notification service if needed. |
+| **Documentation gap** | Setup documentation for implementation teams is evolving and will be published in the next release. | Track [documentation roadmap](https://docs.digit.org/complaints-management); reach out to support. |
 
 ---
 
 ## Two-Way WhatsApp Engagement
 
 - **Status:** Available as a **multi-city sandbox pilot** only
-- **Production Use:** Not recommended; feature is under active development
+- **Production Use:** Assess the code before pulling this feature into production.
 - **Timeline:** Will be marked as generally available (GA) in a future release
 
 ---
@@ -94,11 +82,8 @@ This is a **new capability**. We recommend verifying it against your own role se
 
 The following remain open for this release and are candidates for future patch or minor releases:
 
-- Observability dashboards for operations and maintenance
-- Rate-limiter configuration
-- Vulnerability testing & security hardening
-- Citizen login on Docker Compose setup
-- Tenant-level analytics
+- Observability and security enhancements are expected in the following path release.
+
 
 ---
 
