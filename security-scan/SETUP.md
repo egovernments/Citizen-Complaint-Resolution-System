@@ -13,10 +13,10 @@ Create a **fine-grained PAT**: GitHub → Settings → Developer settings → Fi
 Copy the token.
 
 > **Multi-org note.** A fine-grained PAT is tied to **one** resource owner. If the same Apps Script
-> deployment also publishes to repos in another org (e.g. `eGov-Global/CMS-*`), one fine-grained PAT
-> cannot cover both — either use a **classic** PAT with `repo` scope (spans every org you can access)
-> as `GH_TOKEN`, or run a separate Apps Script deployment per org. For CCRS-only, the fine-grained PAT
-> above is sufficient.
+> deployment also publishes to repos in another org, one fine-grained PAT cannot cover both — either
+> use a **classic** PAT with `repo` scope (spans every org you can access) as `GH_TOKEN`, or run a
+> separate Apps Script deployment per org. For CCRS on its own, the fine-grained PAT above is
+> sufficient.
 
 ## 2. Enable GitHub Pages (per repo)
 
