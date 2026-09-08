@@ -30,8 +30,7 @@ Most new capabilities are **switched off until an account chooses to turn them o
 * **New services:** a handful of new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
-<details>
-<summary><strong>What's new, by audience</strong> (click to expand)</summary>
+### What's new for you by audience
 
 **For citizens**
 
@@ -68,8 +67,6 @@ Most new capabilities are **switched off until an account chooses to turn them o
 - Every service build from one public source instead of a mix of locations; Configurator and citizen/employee UI now built for two processor architectures.
 - A validated deployment path for Windows, via WSL2.
 - Platform version upgraded to 2.9.3.
-
-</details>
 
 ### Migration Actions: What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
 
