@@ -43,19 +43,6 @@ Most new capabilities are **switched off until an account chooses to turn them o
 * **New services:** a handful of genuinely new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
-### What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
-
-These require action from the operations team on existing installations — full procedure in the [Migration Guide](migration-guide-v2.11-to-v2.12.md):
-
-1. **Complaint categories replaced** — the old `ServiceDefs` list is removed; convert it to the new category tree (`ComplaintHierarchyDefinition` + `ComplaintHierarchy`) reusing the same codes, ideally using the validated [migration tool](../migration/servicedefs-to-complainthierarchy-migration.md) rather than by hand (migration guide Section 2.1).
-2. **Phone/form validation replaced** — the old `UserValidation` record is removed; create `MobileNumberValidation` (mark one record as default) and the new `FormValidations` rows, and update the User Service to its 2.12 build (Section 2.2).
-3. **Notification defaults changed** — the default channel is now SMS, and WhatsApp must be explicitly re-enabled; several old settings were removed (Section 2.3).
-4. **Boundary-service address default changed** to the in-cluster service name — set it explicitly if you relied on the old default (Section 2.4).
-5. **New role and data-privacy rules need loading, on every city — not just existing ones.** As of validation, the actual seed data used for a fresh local install doesn't include the Screening Officer role or the new personal-data visibility rules either — confirm your own seed pipeline actually loads them for any city, new or existing (Section 2.5).
-6. **Dashboard shows nothing for employees without a department** — check department assignments in HR data before rollout (see the migration guide's post-upgrade verification notes).
-7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
-8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
-
 <details>
 
 <summary>What's new, by audience (click to expand)</summary>
@@ -93,6 +80,19 @@ These require action from the operations team on existing installations — full
 - Platform version upgraded to 2.9.3.
 
 </details>
+
+### Migration Actions: What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
+
+These require action from the operations team on existing installations — full procedure in the [Migration Guide](migration-guide-v2.11-to-v2.12.md):
+
+1. **Complaint categories replaced** — the old `ServiceDefs` list is removed; convert it to the new category tree (`ComplaintHierarchyDefinition` + `ComplaintHierarchy`) reusing the same codes, ideally using the validated [migration tool](../migration/servicedefs-to-complainthierarchy-migration.md) rather than by hand (migration guide Section 2.1).
+2. **Phone/form validation replaced** — the old `UserValidation` record is removed; create `MobileNumberValidation` (mark one record as default) and the new `FormValidations` rows, and update the User Service to its 2.12 build (Section 2.2).
+3. **Notification defaults changed** — the default channel is now SMS, and WhatsApp must be explicitly re-enabled; several old settings were removed (Section 2.3).
+4. **Boundary-service address default changed** to the in-cluster service name — set it explicitly if you relied on the old default (Section 2.4).
+5. **New role and data-privacy rules need loading, on every city — not just existing ones.** As of validation, the actual seed data used for a fresh local install doesn't include the Screening Officer role or the new personal-data visibility rules either — confirm your own seed pipeline actually loads them for any city, new or existing (Section 2.5).
+6. **Dashboard shows nothing for employees without a department** — check department assignments in HR data before rollout (see the migration guide's post-upgrade verification notes).
+7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
+8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
 
 ## New Services <a href="#new-services" id="new-services"></a>
 
