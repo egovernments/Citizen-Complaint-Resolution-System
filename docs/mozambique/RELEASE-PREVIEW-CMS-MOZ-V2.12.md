@@ -58,7 +58,7 @@ The eleven changes that most define this product versus stock DIGIT:
 8. **Portuguese product** — pt_PT as the default language, full translation packs seeded per tenant, city-level wording overlays, Fala Cidadão branding with configuration-driven theme colours ([`21a6f1f2`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/21a6f1f2), [`f42ad659`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/f42ad659), [`954e134d`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/954e134d), [`9597f0ab`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/9597f0ab))
 9. **Notifications for Mozambique's infrastructure** — SMS via the Ozeki gateway, a direct-delivery mode that runs without the Novu stack, an OTP delivery pipeline, deep-link placeholders ([`a95f8df2`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/a95f8df2), [`91aded4c`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/91aded4c), [`a3be88e5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/a3be88e5), [`15ec1db5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/15ec1db5))
 10. **Analytics, off by default** — analytics destinations (Matomo/GA4/PostHog/custom) configured as data, with strict safety rails; one-command self-hosted Matomo ([`e9a0f0e4`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/e9a0f0e4), [`1fd0711e`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/1fd0711e), [`1abef50f`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/1abef50f))
-11. **Operator tooling** — one-command tenant migration, escalation enablement, testing entrance, CI security scanning ([`16b91133`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/16b91133), [`718d65b1`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/718d65b1), [`06ee871e`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/06ee871e), [`bc0ecdac`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/bc0ecdac))
+11. **Operator tooling** — one-command tenant migration, escalation enablement, testing entrance, and a repo-embedded deep security scanner with a public findings dashboard ([`16b91133`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/16b91133), [`718d65b1`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/718d65b1), [`06ee871e`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/06ee871e), [`866a0b69`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/866a0b69))
 
 ---
 
@@ -173,6 +173,28 @@ The hierarchy + department redesign ripples through the rest of the system, whic
 - **Terminal transitions** accept an assignee where the workflow engine allows it ([`f05c52d5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/f05c52d5)); where the engine still rejects one (rating a closed complaint), the frontend retries without it so the citizen is never blocked ([`43d4c8ac`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/43d4c8ac))
 - **Attachments per action** — allowed on every workflow action, mandatory only where the target state demands it ([`6bf0084a`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/6bf0084a), [`7dfa7eb8`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/7dfa7eb8))
 
+### The CMS workflow as deployed in production
+
+The live `mz` BusinessService (read back from the production workflow service; last updated in production on **2026-08-21**):
+
+| State (status shown) | Who acts | Actions → next state |
+|---|---|---|
+| *(start — complaint filed)* | Citizen, Reception Officer | `APPLY` → PENDINGFORASSIGNMENT |
+| PENDINGFORASSIGNMENT | Screening Officer, CMS_VIEWER | `ASSIGN` → REFERRED · `REJECT` → REJECTED |
+| REFERRED | Supervisor, CMS_VIEWER | `ASSIGN` → INVESTIGATION · `REASSIGN` → PENDINGFORREASSIGNMENT · `REJECT` → REJECTED |
+| INVESTIGATION | Case Manager, CMS_VIEWER | `RESOLVE` → RESOLVED · `AWAITINGINFORMATION` → INFOFROMCITIZEN · `REJECT` → REJECTED |
+| INFOFROMCITIZEN *(shown as AWAITINGINFORMATION)* | Case Manager, Reception Officer | `COMMENT` → INVESTIGATION — the citizen's answer is recorded on their behalf |
+| PENDINGFORREASSIGNMENT *(status literal: `REASSIGND`)* | Screening Officer, CMS_VIEWER | `ASSIGN` → REFERRED · `REJECT` → REJECTED |
+| REJECTED *(terminal)* | Citizen, Reception Officer, CMS_VIEWER | `REOPEN` → REFERRED · `RATE` → CLOSEDAFTERREJECTION · `COMMENT` (citizen, stays) |
+| RESOLVED *(terminal)* | Citizen, Reception Officer, CMS_VIEWER | `RATE` → CLOSEDAFTERRESOLUTION · `REOPEN` → REFERRED · `COMMENT` (citizen, stays) |
+| CLOSEDAFTERREJECTION / CLOSEDAFTERRESOLUTION / CANCELLED | — | terminal, no actions |
+
+Notes:
+
+- **Production update (2026-08-21):** reopening a **RESOLVED** complaint now routes to **REFERRED** — the Supervisor's queue, the same as reopening a rejected one — matching the frontend's history-derived routing. The seeded [`CmsPgrWorkflowConfig.json`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/utilities/default-data-handler/src/main/resources/CmsPgrWorkflowConfig.json) still carries the original `RESOLVED → REOPEN → PENDINGFORASSIGNMENT` transition, so a **new deployment seeded from the file differs from production on this one transition** until the seed is aligned. Every other state, action and role assignment matches the seed.
+- The `REASSIGND` status literal on PENDINGFORREASSIGNMENT is a historical spelling kept as-is — live complaints carry it, and status filters must use the literal string.
+- The migration runner creates the workflow **only when absent** and never patches an existing one; after any workflow create or change, restart `egov-workflow-v2` (definitions are cached).
+
 ---
 
 ## 7. Configuration & Master Data (MDMS)
@@ -190,7 +212,41 @@ The hierarchy + department redesign ripples through the rest of the system, whic
 - Boots in the environment's **default language** ([`833f759d`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/833f759d)); translation edits **propagate immediately** on save ([`3d6fc082`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/3d6fc082))
 - New JSON and object-table form widgets; seven new schema descriptors
 
-**Operator tooling:** [`ccrs-migrate.cjs`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/ccrs-migrate.cjs) — one idempotent, continue-on-error migration runner covering schemas, hierarchy, localization, CMS roles/workflow, banner, gzip and Matomo ([`16b91133`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/16b91133), [`1abef50f`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/1abef50f)); [`fix-citymodule.sh`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/fix-citymodule.sh) repair script; Ansible tenant template; localhost-bound Matomo compose profile; password-gated testing entrance (default off).
+### The migration runner in detail — `ccrs-migrate.cjs`
+
+[`ccrs-migrate.cjs`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/ccrs-migrate.cjs) is **the** post-deploy entry point for bringing a tenant up to this release's configuration ([`16b91133`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/16b91133), [`1abef50f`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/1abef50f)). A single ~1,800-line Node script with **zero npm dependencies** (Node ≥ 14; the Matomo phase needs ≥ 18), run from a repo checkout because its seed files resolve relative to the script:
+
+```bash
+node docs/migration/ccrs-migrate.cjs --host <BASE_URL> --tenant mz[,mz.ige,...] [flags]
+```
+
+**Phases** (each runs in isolation; a failure records an error code and the run continues):
+
+| # | Phase | Default | What it does |
+|---|---|---|---|
+| 1 | `auth` | on | Password-grant login (or `--token`); without it every phase needing auth is skipped — only `gzip` is auth-free |
+| 2 | `schemas` | on | Registers all `RAINMAKER-PGR.*`, landing and `AnalyticsProvider` MDMS v2 schemas; skips ones already registered; re-verifies after 6 s because schema creates persist asynchronously on some stacks |
+| 3 | `hierarchy` | on | The 2-level → N-level complaint-classification migration (preserve or derive mode); writes definition + tree nodes + leaf rows to the managing tenant **and** the state root; seeds `COMPLAINT_HIERARCHY.*` localization keys and busts the localization cache; skips itself once already migrated |
+| 4 | `pgr-masters` | on | Seeds `ComplaintRelatedToMap`, `ComplaintTemplateType`, `ComplaintExtendedAttributeSchema` — strictly add-if-missing; drift against the seed is *reported*, and only synced with `--update-masters` |
+| 5 | `landing` | on | Landing sections + page config + `PGR_LANDING_*` keys; existing localization messages are **never** overwritten, so operator edits made in the Builder survive re-runs |
+| 6 | `cms` | **opt-in `--cms`** | City-scoped (repeats per city on a multi-tenant list). Registers the **five workflow roles** (`CMS_RECEPTION_OFFICER`, `CMS_SCREENING_OFFICER`, `CMS_SUPERVISOR`, `CMS_CASE_MANAGER`, `CMS_VIEWER`) at both state root and city, the missing CMS actions + role-action grants at state, and creates the CMS `PGR` BusinessService at the city tenant **only when absent** |
+| 7 | `analytics` | on | Makes the analytics registry *usable without turning it on* — access-control grants + two Configurator labels; **creates no destination rows** (a fresh environment stays dark) |
+| 8 | `matomo` | **opt-in `--matomo`** | Full self-hosted Matomo on the serving box: compose profile, unattended install (refuses to run without an explicit `--matomo-admin-pass`), same-origin nginx tracking endpoints, MDMS destination row created **disabled**; `--matomo-enable` flips it on only after the public tracker probe passes |
+| 9 | `banner` | on | `tenant.citymodule` schema/rows + `PGR.bannerImage` — fills empty values only; overwriting an operator-chosen banner requires `--banner-url` **and** `--update-masters` |
+| 10 | `gzip` | **opt-in `--gzip`** | Probes whether `/digit-ui/index.js` is compressed; if not (and running on the box) inserts the gzip + no-cache nginx block with backup, `nginx -t` and auto-rollback, then re-probes |
+| 11 | `verify` | on | Consolidated read-back through the **v1 path the runtime actually uses** — hierarchy/master/landing counts, analytics schema present with zero destination rows |
+
+**Key flags:** `--only <phases>` runs exactly those phases (implying their opt-in flags — `--only gzip` needs no credentials); `--phases` replaces the default list; `--dry-run` prints every plan and writes nothing; `--update-masters` opts into syncing drifted master rows; `--locale`, `--banner-url`, `--report <file>` (JSON run report), `--nginx-conf` / `--nginx-container` for containerised nginx. Credentials via `--user/--pass/--basic` or a pre-supplied `--token`.
+
+**Semantics worth relying on:**
+
+- **Idempotent by construction** — every write path checks existence first (rows by unique identifier, roles/actions/grants diffed against live MDMS, nginx blocks by exact match, Matomo install by config presence). Re-running is always safe; completed work is detected and skipped. Existing localization and operator-customized values are never reset to seed defaults.
+- **Continue-on-error** — each phase records `OK / SKIPPED / PARTIAL / FAILED` with a stable error code and a remediation hint; the summary table prints all of them, and the exit code counts FAILED **and** PARTIAL phases.
+- **Cache-busting built in** — after localization writes it evicts the localization cache itself (a service restart does *not*).
+
+**What it deliberately does not do:** it cannot update an **existing** MDMS schema (the platform has no schema-update API — drift such as a missing `bannerImage` property is reported with the exact SQL fix, and the `citymodule` case has an on-box auto-repair via [`fix-citymodule.sh`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/fix-citymodule.sh)); it never patches an **existing** workflow BusinessService (differences are reported, not fatal); and it registers only the five workflow roles — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER` and `CONFIDENTIAL_COMPLAINT_VIEWER` remain the documented manual post-deploy step (already done on the production environment). After a workflow create, restart `egov-workflow-v2`.
+
+**Other operator tooling:** Ansible tenant template; localhost-bound Matomo compose profile; password-gated testing entrance (default off).
 
 **Deployment ordering note:** the default-data-handler service was retired from the compose stack and its seed data moved to the database dump ([`6e72eed5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/6e72eed5), [`f4d37bbd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/f4d37bbd)). Environments provisioned from older images must run the migration runner to receive the analytics schema and CMS grants.
 
@@ -207,20 +263,44 @@ The hierarchy + department redesign ripples through the rest of the system, whic
 
 ## 9. Roles & Permissions
 
-**13 new roles seeded** ([`e79f0847`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/e79f0847), [`8e8c16dd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/8e8c16dd), [`bffdce15`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/bffdce15)), in three families:
+**13 new roles seeded** ([`e79f0847`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/e79f0847), [`8e8c16dd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/8e8c16dd), [`bffdce15`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/bffdce15)), accompanied by ~2,180 lines of role-to-permission grants. (`CMS_SCREENING_OFFICER` already existed in the upstream product and is included below because the CMS workflow depends on it.)
 
-| Family | Roles |
-|---|---|
-| Job roles | CMS_RECEPTION_OFFICER, CMS_SUPERVISOR, CMS_CASE_MANAGER, CMS_VIEWER, CMS_ADMIN, CMS_DASHBOARD_VIEWER, DGRO |
-| Scope roles | CENTRAL_USER (cross-tenant read), DEPARTMENT_USER (own department) |
-| Permission roles | COMPLAINTS_VIEWER, COMPLAINTS_EDITOR, COMPLAINTS_CREATOR, CONFIDENTIAL_COMPLAINT_VIEWER (unmasked confidential data) |
+The roles follow the four-dimension model from the [solution design](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/superpowers/specs/mozambique-prd) §3.2: every employee combines a **base** role (EMPLOYEE), a **job** role (what they do), optionally a **scope** role (what slice of data they see) and **permission** roles (what operations they may perform). Example: a central screening officer is `EMPLOYEE + CMS_SCREENING_OFFICER + CENTRAL_USER + COMPLAINTS_VIEWER + COMPLAINTS_EDITOR`.
 
-Approximately 2,180 lines of role-to-permission grants accompany them. (`CMS_SCREENING_OFFICER` already existed in the upstream product.)
+### Job roles — the officer chain
+
+| Role | Purpose | What it does in the product | Workflow actions (live CMS workflow) |
+|---|---|---|---|
+| `CMS_RECEPTION_OFFICER` | Intake officer — registers complaints on behalf of citizens arriving by counter, Linha Verde or letter | Only employee role with the **Create Complaint** screen; their inbox is scoped by default to complaints **they filed**, with an "only my complaints" toggle to widen it; can act on the citizen's behalf after closure | `APPLY` (file); `COMMENT` at INFOFROMCITIZEN (records the citizen's answer); `REOPEN` / `RATE` at REJECTED and RESOLVED |
+| `CMS_SCREENING_OFFICER` | First triage — screens new complaints and routes them to the right department | Its assignee picker deliberately spans **every department** (routing is its job); also handles complaints a Supervisor sends back | `ASSIGN` / `REJECT` at PENDINGFORASSIGNMENT and at PENDINGFORREASSIGNMENT |
+| `CMS_SUPERVISOR` | Department supervisor — accepts, rejects or re-routes referred complaints | Receives routed complaints; the queue a reopened complaint returns to | `ASSIGN` / `REJECT` / `REASSIGN` at REFERRED |
+| `CMS_CASE_MANAGER` | Investigator — works the case and produces the decision | Resolves or rejects after investigation; can put a question to the citizen; the officer a citizen's rating is routed to | `RESOLVE` / `REJECT` / `AWAITINGINFORMATION` at INVESTIGATION; `COMMENT` at INFOFROMCITIZEN |
+| `CMS_VIEWER` | Oversight — may **act** at any step of the workflow | ⚠ Viewer-*named* but holds the full operational grant set (create, update, workflow transition, localization writes) and is named on nearly **every** employee workflow action — it can single-handedly drive a complaint from filing to resolution. Deliberately excluded from assignee dropdowns | `ASSIGN`/`REJECT` (both pending states), `ASSIGN`/`REJECT`/`REASSIGN` (REFERRED), `RESOLVE`/`REJECT`/`AWAITINGINFORMATION` (INVESTIGATION), `REOPEN` (both terminals) |
+| `CMS_ADMIN` | System administrator — master data, categories, configuration | Gates the **cross-department admin search** (with SUPERUSER); complaint grants are read-only (search/count) — it administers the system, not cases | none |
+| `CMS_DASHBOARD_VIEWER` | Leadership / reporting — read-only complaint search, counts and status reports | Read-only grant set for dashboard consumers. Must **also** be listed in the environment's `dss.DashboardConfig.allowedRoles` (MDMS) or its holders see no dashboard card | none |
+| `DGRO` | Legacy upstream-DIGIT department grievance-routing role | Kept for compatibility with upstream dashboards and UI gates; carries no grants in the CMS seed and no CMS workflow actions | none |
+
+### Scope roles — how much a user sees
+
+| Role | Purpose | How it takes effect |
+|---|---|---|
+| `CENTRAL_USER` | Marks a central-unit (IGE/IGSAE headquarters) user who reads complaints across the whole tenant | Read-only grant set. The *presence of the role* is the discriminator (never a user flag or department column) |
+| `DEPARTMENT_USER` | Marks a department-bound user who should see only their own department's complaints | Read-only grant set. Department/jurisdiction scoping is activated per deployment through `pgr.department.scope.roles` / `pgr.jurisdiction.scope.roles` (both empty by default); once enabled, scoping **fails closed** when the employee has no HRMS department |
+
+### Permission roles — what operations are allowed
+
+| Role | Purpose | Grant set |
+|---|---|---|
+| `COMPLAINTS_VIEWER` | Read complaints — search, count, status | Read-only complaint + inbox + workflow-search endpoints |
+| `COMPLAINTS_EDITOR` | Work existing complaints — update and perform workflow transitions | Complaint update + workflow transition + reports; meant to be **combined** with a job role |
+| `COMPLAINTS_CREATOR` | Register new complaints | Complaint create + the Create Complaint navigation; the citizen and reception personas |
+| `CONFIDENTIAL_COMPLAINT_VIEWER` | See confidential complaints **unmasked** | Smallest grant set of all — its real power is the API gate: on a confidential complaint, `service.extendedAttributes` decrypts in plain **only** for the complainant or a holder of a role listed in `ComplaintTemplateType.allowedViewerRoles` (default: this role); every other caller receives `****` with decryption skipped entirely. The `allowedViewerRoles` list is itself a security control — review any change to it |
 
 **Points for administrators:**
-- `CMS_VIEWER` is viewer-*named* but holds full write grants — do not treat it as read-only
+- `CMS_VIEWER` is viewer-*named* but holds full write grants — do not treat it as read-only; granting it "for read access" is a privilege escalation
 - `CENTRAL_USER` and `CONFIDENTIAL_COMPLAINT_VIEWER` are high-privilege; assign deliberately
-- Three roles (`CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER`) are **not** auto-registered by the migration runner and need a manual post-deploy step
+- The scope roles are inert until the deployment sets `pgr.department.scope.roles` / `pgr.jurisdiction.scope.roles` — with those settings empty (the default), a `DEPARTMENT_USER` reads tenant-wide
+- Three roles (`CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER`) are **not** auto-registered by the migration runner (it registers exactly the five workflow roles) and need a manual post-deploy step — **already done on the production environment**
 - The admin console's write-gating is a usability layer; server-side access control remains the real authority
 
 ---
@@ -250,6 +330,11 @@ Approximately 2,180 lines of role-to-permission grants accompany them. (`CMS_SCR
 - Notification recipient and department-name resolution hardened ([`f05c52d5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/f05c52d5), [`4fa8964c`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/4fa8964c))
 - Master-data caching moved to IndexedDB — fixes browser storage-quota failures; reference data no longer re-downloads on every page ([`ba8a7c27`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/ba8a7c27))
 - UI bundle served with gzip and sensible cache headers ([`874ec205`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/874ec205))
+
+### Security & operations — added on `master` after the initial documentation
+
+- **Self-contained security scanner** ([`866a0b69`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/866a0b69), PR #69) — the legacy CI security pipeline (Checkov + KICS + AI triage + optional Strix) was **replaced** by a repo-embedded deep scanner under [`security-scan/`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/security-scan). A runner executes one `curl | bash` line; the scanner clones the chosen branch, analyses only the files the Ansible deployment actually uses (ansible, the six compose stacks, mounted config trees), evaluates a fixed 36-item checklist with pinned severity/priority per item (reproducible scoring), and uploads results to a Google Drive audit trail plus the public findings dashboard at [egov-global.github.io/CMS-MOZAMBIQUE/security_scan](https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan/). Report-only — it changes nothing. Setup and operations: [`security-scan/SETUP.md`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/security-scan/SETUP.md), [`security-scan/README.md`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/security-scan/README.md). Follow-ups: dashboard template sync ([`9494e8cd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/9494e8cd)), `curl | bash` stdin fix ([`960c6574`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/960c6574)), upload-endpoint authorization docs ([`7333bc9d`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/7333bc9d)), audit-workbook sharing to both eGov domains ([`858cdaca`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/858cdaca), [`9542a1c7`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/9542a1c7))
+- **Grafana hardened** ([`d6e5e1e1`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/d6e5e1e1), PR #75) — anonymous access disabled; login required with the standard Grafana role model
 
 ---
 
@@ -326,7 +411,7 @@ Approximately 2,180 lines of role-to-permission grants accompany them. (`CMS_SCR
 | 43 | Deployment | Single UI entrance | Password-gated testing entrance (default off) | ansible templates | [`06ee871e`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/06ee871e) |
 | 44 | Deployment | Seeder container in the stack | Seeder retired; data moved into the database dump | compose files | [`6e72eed5`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/6e72eed5), [`f4d37bbd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/f4d37bbd) |
 | 45 | Deployment | — | Escalation script + runbook; pilot deploy script; HTTPS guide | `enable-escalation.sh`, `deploy-pilot-fe.sh` | [`718d65b1`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/718d65b1), [`b0d99e14`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/b0d99e14), [`938623bd`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/938623bd) |
-| 46 | CI | Product CI only | Security scanning (Checkov/KICS/Strix + AI triage + dashboard); manual trigger, report-only | `.github/` (15 files) | [`bc0ecdac`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/bc0ecdac), [`57e28906`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/57e28906) |
+| 46 | CI | Product CI only | Self-contained deep security scanner (repo-embedded, manual trigger, report-only) — replaced the earlier Checkov/KICS/Strix CI pipeline | `security-scan/` | [`866a0b69`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/866a0b69), [`bc0ecdac`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/bc0ecdac) |
 | 47 | Docs | Product docs | PRD/design, migration guides, runbooks, analytics guide | `docs/` (32 files) | [`ab8c3a2c`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/ab8c3a2c), [`48e4bc08`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/48e4bc08) |
 | 48 | Tests | Postal-code test specs | Retired with the feature; 19 test files touched repo-wide (8 added, 10 modified, 1 deleted) | `tests/`, per-module tests | [`4aa5aa3b`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/4aa5aa3b), [`ac4ce48a`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/ac4ce48a) |
 | 49 | Classification | Fixed 2-level type/subtype | N-level hierarchy as data (core product, built under the Mozambique programme) + routed-department stamping, localized labels, tenant-correct fetch | `ComplaintHierarchy*` masters, `ComplaintHierarchyComponent.js` | [`0c1123c8`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/0c1123c8), [`3289ac3f`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/commit/3289ac3f) |
@@ -380,8 +465,8 @@ Changing the bootstrap secrets away from the defaults causes deployment failures
 **Known limitations:**
 
 1. The three technical issues in [section 14](#14-known-technical-issues-under-product-review)
-2. Confidential-complaint masking is a display control; API-level masking gated on `CONFIDENTIAL_COMPLAINT_VIEWER` is not yet wired end-to-end
-3. Three roles need manual registration after deploy (see [Roles & Permissions](#9-roles--permissions))
+2. Confidential-complaint **field masking is enforced at the API**: every complaint read path (`_search`, `inbox/_search`, `_plainsearch`, `_admin/_search`) and the `_update` response mask `service.extendedAttributes` to `****` server-side unless the caller is the complainant or holds a role listed in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); fields declared `x-no-mask` (e.g. institution name) stay visible by configuration. The complainant identity block (`service.citizen` name/mobile/typed address) is masked on employee screens as a display control — masking it at the API is the remaining gap
+3. Three roles need manual registration after deploy (see [Roles & Permissions](#9-roles--permissions)) — already registered on the production environment
 4. No dashboard geography drill-down in this release
 5. Notification templates for the CMS workflow's new states may be incomplete — transitions through those states can send nothing
 6. Automated test coverage is thin outside analytics/scoping/notifications
@@ -401,5 +486,6 @@ Changing the bootstrap secrets away from the defaults causes deployment failures
 | [Analytics guide](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/analytics-guide) | Analytics setup, configuration, self-hosted Matomo |
 | [Escalation runbook](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/pgr-escalation/RUNBOOK.md) | Enabling auto-escalation on a running environment |
 | [HTTPS with Let's Encrypt](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/enabling-https-with-letsencrypt.md) | TLS setup guide |
+| [Security scanner](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/security-scan) — [runner guide](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/security-scan/README.md), [setup](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/security-scan/SETUP.md), [live dashboard](https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan/) | Repo-embedded deep security scanning |
 | [PRD / solution design](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/superpowers/specs/mozambique-prd) | Product requirements and solution design |
 | [Mobile app](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/mobile) | Flutter WebView wrapper (configuration: [`app_config.json`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/mobile/assets/config/app_config.json)) |
