@@ -30,7 +30,7 @@ Most new capabilities are **switched off until an account chooses to turn them o
 * **New services:** a handful of new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
-### What's new for you by audience
+### What's new for you
 
 **For citizens**
 
