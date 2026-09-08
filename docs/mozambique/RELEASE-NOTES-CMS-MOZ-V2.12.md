@@ -46,7 +46,7 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 - **Configurable analytics (off by default)** — point the portal at Matomo/GA4/PostHog or a custom destination from the admin screens; one-command self-hosted Matomo provisioning; strict safety rails (host allowlist, PII scrubbing, kill switch)
 - **Admin console improvements** — role-actions editable from the UI, sensitive masters gated by role, translations propagate immediately on save, console boots in the environment's language, testing-tenant flag with guard rails
 - **Hierarchy management & migration** — the complaint classification tree is managed in the admin console (searchable tree view), including a guided migration that upgrades an existing 2-level tenant to the N-level model
-- **Operator tooling** — `ccrs-migrate.cjs` one-command idempotent tenant migration (schemas, hierarchy, localization, CMS roles/workflow, banner, gzip, Matomo); escalation enablement script + runbook; password-gated `/digit-ui-test` entrance (default off); HTTPS/Let's Encrypt guide; CI security scanning with a findings dashboard
+- **Operator tooling** — `ccrs-migrate.cjs` one-command idempotent tenant migration (schemas, hierarchy, localization, CMS roles/workflow, banner, gzip, Matomo); escalation enablement script + runbook; password-gated `/digit-ui-test` entrance (default off); HTTPS/Let's Encrypt guide; repo-embedded deep security scanner (`security-scan/`) with a public findings dashboard
 - **Notifications for Mozambique's infrastructure** — SMS via the Ozeki gateway; a direct-delivery mode that runs without the Novu stack on small servers; a dedicated OTP delivery pipeline; deep-link placeholders (`{website}`, `{rate_link}`, `{reopen_link}`)
 
 ---
@@ -66,11 +66,11 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 | **Frontend (citizen)** | Public landing/privacy/tutorial · 3-step wizard with dynamic fields · reopen/rate routing + data-loss fix · attachments & media playback · Portuguese-first with city wording overlays |
 | **Frontend (employee)** | Workflow-driven action modals · reception inbox scoping · confidential masking · admin search screen · channel chips · Fala Cidadão branding with MDMS-driven theme colours |
 | **Complaint classification** | Fixed 2-level model → N-level hierarchy defined as data · one-to-many department mapping · full operation without a department · routed department preserved across reopen/rate · localized category labels |
-| **Workflow** | CMS multi-tier BusinessService (11 states/18 actions) selected per deployment · escalation runbook + enablement script |
+| **Workflow** | CMS multi-tier BusinessService (11 states/18 actions) selected per deployment · reopened complaints (rejected **or** resolved) return to the Supervisor's REFERRED queue (production workflow updated 2026-08-21) · escalation runbook + enablement script |
 | **Configuration / MDMS** | New masters: complaint dispatcher & templates, extended-attribute schemas (IGE/IGSAE), landing page, analytics providers, privacy policy, tenant banner · all new backend settings opt-in with safe defaults |
 | **Roles** | 13 new roles (CMS officer chain, scope roles, permission roles) + ~2,180 grant lines |
 | **Localization** | Full pt_PT packs seeded per tenant · pt_PT default honoured on first load · configurator localized |
-| **Deployment** | gzip + no-cache on the UI bundle · unified migration runner · testing entrance · default-data-handler retired (seeds moved to the DB dump) · security-scanning CI (report-only) |
+| **Deployment** | gzip + no-cache on the UI bundle · unified migration runner · testing entrance · default-data-handler retired (seeds moved to the DB dump) · self-contained security scanner (repo-embedded, report-only, public dashboard) · Grafana requires login (anonymous access disabled) |
 
 All new capabilities are **opt-in with off/empty defaults** — a stock deployment is unaffected until each feature is deliberately enabled.
 
@@ -86,6 +86,7 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 - Login screens no longer double-translate; language selector restored; logout goes to the right screen
 - Notification recipient resolves the newest workflow step; department display no longer errors
 - MDMS caching moved to IndexedDB (fixes browser storage-quota failures); reference data cached between pages
+- Grafana requires login — anonymous access disabled, standard role model
 
 ---
 
@@ -102,8 +103,8 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 1. **OTP enablement flag does not de-mock the gateway** — `enable_otp_services: true` starts the real OTP services but Kong keeps routing `/user-otp` and `/otp` to mock responders; removing the mock is currently a manual gateway edit. Fix scheduled product-side.
 2. **New-citizen registration second-OTP failure** — on ansible/compose deployments, registration triggers a second validation of an already-consumed OTP. The correction (`CITIZEN_REGISTRATION_WITHLOGIN_ENABLED=true`, `OTP_VALIDATION_REGISTER_MANDATORY=false` on the user service) is applied on the live environment and already templated on the Helm path; it still needs to be committed to the compose/ansible path.
 3. **Deployment requires the default bootstrap password** — several deploy steps hardcode the default credential; changing bootstrap secrets currently breaks a full deploy. Sweep scheduled product-side.
-4. **Confidential-complaint masking is a display control** — masked values are hidden on screen; API-level masking gated on `CONFIDENTIAL_COMPLAINT_VIEWER` is not yet wired end-to-end.
-5. **Three roles need manual registration after deploy** — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER` are not auto-registered by the migration runner.
+4. **Confidential-complaint field masking is enforced at the API** — every complaint read path and the update response mask the confidential fields (`extendedAttributes`) to `****` server-side unless the caller is the complainant or holds a role in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); configured `x-no-mask` fields (e.g. institution name) stay visible. The complainant identity block (name/mobile/typed address) is masked on employee screens as a display control — API-level masking of that block is the remaining gap.
+5. **Three roles need manual registration after deploy** — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER` are not auto-registered by the migration runner (it registers the five workflow roles). Already registered on the production environment.
 6. **No dashboard geography drill-down** in this release.
 7. **Notification templates for the CMS workflow's new states** may be incomplete; transitions through those states can send nothing.
 8. **IGSAE authority is switched off by configuration** for this deployment (product functionality retained; re-enable via MDMS when required).
@@ -117,6 +118,7 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 - **Environments provisioned before the default-data-handler retirement** must run the migration runner to receive the analytics schema and CMS grants (seeds moved to `local-setup/db/full-dump.sql`).
 - After any localization upsert, evict the localization cache (`docker exec digit-redis redis-cli DEL computedMessages messages`) or the UI serves stale text.
 - A new/changed workflow BusinessService requires an `egov-workflow-v2` restart (service caches definitions).
+- The production workflow was updated in place on 2026-08-21 (reopening a **resolved** complaint now routes to the Supervisor's REFERRED queue). The seeded `CmsPgrWorkflowConfig.json` still carries the original transition — align a fresh deployment's workflow with production before go-live.
 - Optional features (escalation, testing entrance, analytics, Ozeki/direct notifications) each have a documented enablement path: `local-setup/scripts/enable-escalation.sh`, `docs/pgr-escalation/RUNBOOK.md`, `docs/analytics-guide/`, `docs/ops/digit-ui-compression.md`.
 - No database migration is required by this release.
 
