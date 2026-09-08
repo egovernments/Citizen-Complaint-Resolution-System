@@ -42,7 +42,7 @@ This is a **new capability**. We recommend verifying it against your own role se
 | No removal mechanism | A jurisdiction/department granted via Configurator cannot be removed. | Requires manual MDMS edit or re-provisioning. |
 | Personal info masking incomplete | Employee complaint timeline does not mask sensitive data, even where visibility settings suggest it should. | Treat as information disclosure risk; plan masking implementation. |
 
-**See also:** [Jurisdiction-Access-Control Guide](../jurisdiction-access-control.md)
+**See also:** [Jurisdiction-Access-Control Guide](jurisdiction-access-control.md)
 
 ---
 
@@ -96,7 +96,7 @@ The following remain open for this release and are candidates for future patch o
 | [release-config-changelog-v2.12.md](release-config-changelog-v2.12.md) | Configuration and infrastructure changelog |
 | [migration-guide-v2.11-to-v2.12.md](migration-guide-v2.11-to-v2.12.md) | Operator upgrade procedure (v2.11 → v2.12) |
 | [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md) | Complaint-category migration procedure |
-| [jurisdiction-access-control.md](../jurisdiction-access-control.md) | Jurisdiction & department access control — detailed guide |
+| [jurisdiction-access-control.md](jurisdiction-access-control.md) | Jurisdiction & department access control — detailed guide |
 | [WINDOWS-QUICKSTART.md](../../WINDOWS-QUICKSTART.md) | Windows setup via WSL2 |
 | [ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding & add-ons catalogue |
 | [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design doc |
