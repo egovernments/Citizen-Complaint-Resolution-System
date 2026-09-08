@@ -6,10 +6,11 @@
 // (sessionStorage) but writes the shared keys `Employee.token` /
 // `Citizen.token` (+ user-info) under FIXED names in localStorage, which every
 // tab shares. Two employees in one browser therefore leave the shared keys
-// holding whoever logged in last; the older tab keeps working until it
-// reloads, at which point it can pick up the newer identity. Employee +
-// citizen never collide (different key prefixes), and the same person in two
-// tabs never collides (same uuid).
+// holding whoever logged in last; a tab keeps its own identity across reloads
+// (per-tab session), but adopts the newer one whenever its own session is
+// missing or expired — a new tab, or a stale one past the session TTL.
+// Employee + citizen never collide (different key prefixes), and the same
+// person in two tabs never collides (same uuid).
 //
 // Detection only — nothing here logs anyone out or mutates a session. The
 // user decides what to do, so an in-progress complaint is never destroyed.
