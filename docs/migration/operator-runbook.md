@@ -1,5 +1,7 @@
 # Complaint Hierarchy Migration — Operator Runbook (2-level → N-level)
 
+> **If you are running v2.12 or later, start with [servicedefs-to-complainthierarchy-migration.md](./servicedefs-to-complainthierarchy-migration.md) instead.** This runbook was written while the two-master model was still on feature branch `feat/complaint-hierarchy-2master` — its Section 3 (build `pgr-services` from the branch, deploy via ansible with `build_*: true`) describes *shipping the feature itself*, which is already merged into v2.12. On a v2.12+ deployment you only need the per-tenant **data** migration (Section 2 below), which the newer document covers with both Docker Compose and Kubernetes commands. This document remains as the detailed historical record and gotcha catalog (G1–G10), which are still fully applicable.
+
 > **Status:** PROVEN end-to-end on the local `ke` stack (2026-06-24) **and live on bomet (2026-06-25)**.
 > This is the *battle-tested* step-by-step, including every gotcha we hit.
 > Server operators: read the [Production cutover notes](#appendix--production-cutover-notes-bomet-2026-06-25)
