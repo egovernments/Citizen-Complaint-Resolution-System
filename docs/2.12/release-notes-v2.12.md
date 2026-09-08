@@ -36,7 +36,6 @@ These require action from the operations team on existing installations — full
 * **Share performance publicly.** A new, curated Public Dashboard lets a city publish selected statistics for citizens and the public, no login required.
 * **Keep citizens informed using a powerful notification engine.** Automatic, timely updates through SMS, WhatsApp and Email at key stages of a complaint, configurable without code changes.
 * **Make sure nothing slips through.** Overdue complaints escalate automatically, and a tamper-evident audit trail records every action and status change.
-* **Enable two-way engagement through WhatsApp,** as a multi-city sandbox pilot.
 * **Deploy across countries with built-in internationalisation** — country-specific formats and validation rules for phone numbers, postal codes, names and emails.
 * **Decide precisely who can see what.** A new access-control policy governs who can see which dashboard, analytics, and search results, by jurisdiction (geography) and department — replacing a handful of hardcoded role exemptions with a configurable, per-city policy. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this works for search and the employee inbox specifically.
 * **Get up and running much faster and consistently with Ansible-based setup.** One settings file per local government, one command, built-in pre-flight checks — supported on **Ubuntu** and **macOS**, with a validated quickstart for **Windows via WSL2** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet explicitly supported.
@@ -49,7 +48,6 @@ These require action from the operations team on existing installations — full
 
 **For citizens**
 - Journey-wide notifications through SMS, WhatsApp and email for filing, assignment, resolution, rating and escalation.
-- Two-way WhatsApp support for filing, tracking and responding to complaints (sandbox pilot).
 - A simpler complaint form with map-based location capture, improved category selection, country-specific validation and local-language error messages.
 - Auditable, automated escalation when complaints exceed their resolution time.
 - Public Dashboard — a curated, no-login view of selected complaint statistics.
@@ -83,20 +81,21 @@ These require action from the operations team on existing installations — full
 
 ## New Services <a href="#new-services" id="new-services"></a>
 
-**Audited across the full 2.12-beta + 2.12 scope** — only genuinely new, separately-deployable backend components are listed here. (Earlier drafts of this document listed some *features* — the Supervisor Dashboard, the Public Dashboard, the analytics/reporting engine, and the access-control policy — in this section; none of those are standalone services, they run inside the existing complaints service and admin console, so they've been moved to [New Features](#new-features) below, where they belong.)
+Everything below is new compared to v2.11 — it didn't exist in this project at all before this release.
 
-| Service | What it does | How it's switched on |
-|---|---|---|
-| Novu bridge-endpoint & Novu admin dashboard | Renders self-hosted notification templates and provides Novu's own admin UI | `enable_novu` |
-| Real OTP delivery (otp-publisher) | Generates and delivers genuine one-time passwords for login, replacing the built-in test stub | `enable_otp_services` |
-| WhatsApp chatbot (xstate-chatbot) | Lets citizens file and track complaints on WhatsApp | Kubernetes deployment only (pilot) |
-| Location search (turbopass) | Address/place auto-complete when setting up city boundaries | `enable_turbopass` (off by default) |
-| Audit service | Keeps the tamper-evident record of complaint and workflow changes | Always on |
-| Host monitoring (node-exporter) | Server CPU/memory/disk metrics for the monitoring dashboards | Always on |
-| City-onboarding automation toolkit (digit-mcp) | Automation tools for setting up a new city, vendored into this repository this release | `enable_mcp` (on by default in the example settings) |
-| Web analytics (Matomo) *(landed after 2026-08-25)* | Citizen-traffic analytics | A Kubernetes/Helm chart only — **not yet available on the Docker Compose deployment path** |
-
-> 💡 `novu-bridge` itself (the core notification-dispatch service), the config service, and the user-preferences service that support notifications already existed before v2.11 and were substantially reworked for this release rather than newly introduced — see [Changed](#changed) for what changed in them.
+| New in v2.12 | What it is |
+|---|---|
+| **Admin Console** (Configurator, also called "DIGIT Studio") | The web app a city admin uses to set up and configure a city — boundaries, complaint categories, staff, dashboards, notifications. Replaces manual/scripted city setup. |
+| **digit-ui-esbuild** | The rebuilt citizen and employee web app. |
+| **digit-mcp** | An automation toolkit that speeds up onboarding a new city. On by default. |
+| **Real OTP delivery** (otp-publisher) | Sends genuine one-time passwords for login, instead of the earlier test stub. Switched on with `enable_otp_services`. |
+| **Notification admin dashboard** (novu-dashboard) + **novu-bridge-endpoint** | Lets a city manage its own notification (SMS/WhatsApp/Email) templates. Switched on with `enable_novu`. |
+| **Location search** (turbopass) | Address/place auto-complete when setting up city boundaries. Off by default (`enable_turbopass`). |
+| **Audit service** | Keeps a tamper-evident record of every complaint and workflow change. Always on. |
+| **Host monitoring** (node-exporter) | Server CPU/memory/disk metrics for the monitoring dashboards. Always on. |
+| **Single-VM installer** (local-setup, Ansible-driven) | Stands up a full deployment from one settings file and one command, with built-in pre-flight checks. |
+| **Performance testing framework** (`performance/`) | k6-based load tests used to validate this release at scale (up to 1M complaints / 500K+ daily transactions). |
+| **Web analytics** (Matomo) | Citizen-traffic analytics. Kubernetes/Helm only — not yet available on the Docker Compose path. |
 
 ## New Features <a href="#new-features" id="new-features"></a>
 
@@ -312,6 +311,7 @@ Per-service database-migration init containers close the Compose/Kubernetes pari
 Limitations to be aware of before adopting this release:
 
 - **Windows support is WSL2-only.** Native Windows and Red Hat Linux are not yet supported.
+- **The one-click installer does not currently work on AWS.** The Ansible-driven one-command install path fails when the target host is on AWS — use Docker Compose directly on an AWS host until this is fixed, or run the installer against a non-AWS host.
 - **No automated ServiceDefs → ComplaintHierarchy migration for hand-converting a tenant.** The old `ServiceDefs` complaint-category master is removed; a validated migration *tool* now exists (see [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md)) and is the recommended path, but there is still no automatic, zero-touch conversion — someone must run it per tenant.
 - **The new jurisdiction/department access control for dashboards and analytics needs care before enabling for admin roles.** An independent review found that tenant-wide admin/supervisor roles can lose unrestricted dashboard access and see it go empty, a cross-tenant config-refresh authorization gap, and a case where the "department scoping disabled" override doesn't actually apply. If your city relies on admin roles seeing the full dashboard, verify this specifically before rollout.
 - **The search/inbox filter panel isn't scoped, even though search results are.** The dropdown lists of jurisdictions and departments to filter by show every value in the tenant, not just the ones the logged-in employee is scoped to — a confirmed, currently open UI defect (#1984). The scoping itself still works correctly; only the filter picker's contents are wrong. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for the full picture.
@@ -459,11 +459,6 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - `ComplaintHierarchy` and multi-department support added to all MCP tools.
 - System-state snapshot and diff capability added to `digit-mcp`.
 - `city_setup_from_xlsx` emits a GeoJSON sidecar for boundary polygons.
-
-**Chatbot (WhatsApp / xstate)**
-- xstate PGR chatbot flow aligned with `ComplaintHierarchy` for complaint-type/category labels.
-- Multi-tenant support added for the sandbox WhatsApp chatbot.
-- Complaint lifecycle REASSIGN and RATE events wired into the chatbot notification flow.
 
 **Observability**
 - Full observability stack added: JVM metrics, logs, and distributed traces via OpenTelemetry + Promtail. Grafana root URL exposed per tenant.
@@ -630,11 +625,6 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 - Tilt onboarding path repaired; `digit-ui` build no longer floats to a stale image (#1288).
 - Mobile-number validation schema updated and the DB dump cleaned up to match (#1022).
 - *(Landed after the beta cutoff)* The sample database dump used for fresh local installs no longer ships the removed `ServiceDefs` category data (found during migration validation; a leftover schema definition and its sample rows have been dropped).
-
-**Chatbot**
-- Correct tenant ID used for complaint tracking in sandbox mode.
-- User `mobileNumber` preserved in session state to fix Twilio messaging.
-- Complaint tracking flow and location resolution fixed.
 
 **Analytics**
 - Global date range applied to events grain via `complaint_created_at`.
