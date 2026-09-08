@@ -1681,7 +1681,7 @@ services:
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
-    # the SPA Build Pipeline, multi-arch); the bundle lives at
+    # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
     image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-3c3d9fa}
     container_name: digit-ui
@@ -1708,7 +1708,7 @@ services:
   # ===========================================================================
   # Configurator (DIGIT Studio) — tenant onboarding admin console
   # Static Vite SPA served by the image's nginx under /configurator/.
-  # Tenant-neutral (no VITE_* baked); CI-built by the SPA Build Pipeline.
+  # Tenant-neutral (no VITE_* baked); CI-built by the Container Build Pipeline.
   # Ansible deploys may instead serve a host-built dist via host nginx
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
