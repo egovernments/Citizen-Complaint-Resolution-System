@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.pgr.service.DashboardService;
 import org.egov.pgr.service.PGRService;
+import org.egov.pgr.service.ChronologyService;
 import org.egov.pgr.service.VisibilityService;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.egov.pgr.util.PGRConstants;
@@ -34,6 +35,9 @@ public class RequestsApiController{
     private final ObjectMapper objectMapper;
 
     private PGRService pgrService;
+
+    @Autowired
+    private ChronologyService chronologyService;
 
     private ResponseInfoFactory responseInfoFactory;
 
@@ -97,6 +101,22 @@ public class RequestsApiController{
         		.averageResolutionTime(averageResolutionTime).complaintTypes(complaintTypes).build();
         return new ResponseEntity<>(response, HttpStatus.OK);
 
+    }
+
+    /**
+     * CRQ v2 AC-03 — the chronology endpoint. Wraps egov-workflow-v2
+     * process/_search and filters the payload for the requester (see
+     * ChronologyService); the response keeps workflow's exact JSON shape so
+     * the frontend only swaps the URL. Query params mirror the workflow API.
+     */
+    @RequestMapping(value = "/request/_chronology", method = RequestMethod.POST)
+    public ResponseEntity<Object> requestsChronologyPost(
+            @Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+            @RequestParam(value = "tenantId") String tenantId,
+            @RequestParam(value = "businessIds") String businessIds,
+            @RequestParam(value = "history", required = false) Boolean history) {
+        Object response = chronologyService.search(requestInfoWrapper.getRequestInfo(), tenantId, businessIds, history);
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     @RequestMapping(value = "request/_plainsearch", method = RequestMethod.POST)
