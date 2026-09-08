@@ -43,8 +43,6 @@ Most new capabilities are **switched off until an account chooses to turn them o
 * **New services:** a handful of genuinely new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
-<details>
-
 <summary>What's new, by audience (click to expand)</summary>
 
 **For citizens**
@@ -79,7 +77,6 @@ Most new capabilities are **switched off until an account chooses to turn them o
 - A validated deployment path for Windows, via WSL2.
 - Platform version upgraded to 2.9.3.
 
-</details>
 
 ### Migration Actions: What you need to do <a href="#what-you-need-to-do" id="what-you-need-to-do"></a>
 
@@ -94,6 +91,7 @@ These require action from the operations team on existing installations — full
 7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
 8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
 
+<details>
 ## New Services <a href="#new-services" id="new-services"></a>
 
 | Service | What it does | How it's switched on |
@@ -108,6 +106,7 @@ These require action from the operations team on existing installations — full
 | Web analytics (Matomo) *(landed after 2026-08-25)* | Citizen-traffic analytics | A Kubernetes/Helm chart only — **not yet available on the Docker Compose deployment path** |
 
 > 💡 `novu-bridge` itself (the core notification-dispatch service), the config service, and the user-preferences service that support notifications already existed before v2.11 and were substantially reworked for this release rather than newly introduced — see [Changed](#changed) for what changed in them.
+</details>
 
 ## New Features <a href="#new-features" id="new-features"></a>
 
@@ -342,9 +341,7 @@ Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/
 
 ---
 
-## Full Engineering Changelog (Keep a Changelog) <a href="#full-engineering-changelog-keep-a-changelog" id="full-engineering-changelog-keep-a-changelog"></a>
-
-*Kept in full as the complete historical record behind the summaries above — every item that shipped, grouped Added / Changed / Fixed / Deprecated / Removed / Security, in the order it was originally recorded.*
+## Full Engineering Changelog  <a href="#full-engineering-changelog-keep-a-changelog" id="full-engineering-changelog-keep-a-changelog"></a>
 
 ### [2.12] - 2026-08-03
 
