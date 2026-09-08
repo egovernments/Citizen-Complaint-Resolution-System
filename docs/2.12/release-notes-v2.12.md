@@ -1,9 +1,5 @@
 # DIGIT Complaint Management System (DIGIT CMS) v2.12 — Release Notes
 
-{% hint style="info" %}
-**Release Date:** _TBD — set at release sign-off. This document consolidates the 2.12-beta draft (2026-08-03) with everything that landed afterward, through two later sync passes (2026-08-25 and 2026-08-27, 229 additional commits combined) — items from those passes are marked accordingly throughout._
-{% endhint %}
-
 > **Note on product nomenclature:** The product is now called **the DIGIT Complaint Management System (DIGIT CMS)**. It was previously known as Public Grievance Redressal (PGR) and Citizen Complaint Resolution System (CCRS). This evolution positions the Complaints Management System to support a broader range of citizen engagement, case management, incident management and grievance resolution use cases across programmes and government contexts.
 >
 > The source-code repository continues to use the CCRS name while the updated product identity is introduced across communications. Retaining the existing repository name during this transition helps avoid disrupting integrations, deployment pipelines and other automations that implementation partners may have built around it.
@@ -315,7 +311,6 @@ Per-service database-migration init containers close the Compose/Kubernetes pari
 
 Limitations to be aware of before adopting this release:
 
-- **Kubernetes deployment is incomplete.** The supported deployment paths for v2.12 are Docker Compose and the Ansible-driven one-command install (Ubuntu / macOS / Windows via WSL2). The Helm/Kubernetes path is not yet a complete, supported deployment for this release.
 - **Windows support is WSL2-only.** Native Windows and Red Hat Linux are not yet supported.
 - **No automated ServiceDefs → ComplaintHierarchy migration for hand-converting a tenant.** The old `ServiceDefs` complaint-category master is removed; a validated migration *tool* now exists (see [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md)) and is the recommended path, but there is still no automatic, zero-touch conversion — someone must run it per tenant.
 - **The new jurisdiction/department access control for dashboards and analytics needs care before enabling for admin roles.** An independent review found that tenant-wide admin/supervisor roles can lose unrestricted dashboard access and see it go empty, a cross-tenant config-refresh authorization gap, and a case where the "department scoping disabled" override doesn't actually apply. If your city relies on admin roles seeing the full dashboard, verify this specifically before rollout.
