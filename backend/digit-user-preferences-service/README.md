@@ -166,4 +166,4 @@ Location: [`deploy-as-code/helm/charts/common-services/digit-user-preferences-se
 
 ## Resources
 
-- [Novu notifications guide](../../docs/novu-notifications/README.md)
+- [Novu notifications guide](../../docs/2.12/notifications/README.md)

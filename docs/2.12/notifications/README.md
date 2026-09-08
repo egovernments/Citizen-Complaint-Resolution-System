@@ -1,7 +1,7 @@
 # Enabling Notifications
 
 This enables SMS, WhatsApp and email notifications on a deployment created with
-[DEPLOYMENT.MD](../../DEPLOYMENT.MD). Run the repository commands below from the
+[the deployment guide](../deployment/README.md). Run the repository commands below from the
 root of the cloned `Citizen-Complaint-Resolution-System` repository.
 
 Each channel is independent — enable one, two or all three. Each has its own
@@ -357,10 +357,10 @@ operation.
 
 | What | Where |
 |---|---|
-| Ansible deployment | [`local-setup/ansible/playbook-deploy.yml`](../../local-setup/ansible/playbook-deploy.yml) |
-| Workflow/provider bootstrap | [`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh`](../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh) |
-| Notification seed | [`local-setup/scripts/seed-notifications.py`](../../local-setup/scripts/seed-notifications.py) |
-| Configurator provider UI | [`configurator/src/resources/notification-providers/NotificationProviderList.tsx`](../../configurator/src/resources/notification-providers/NotificationProviderList.tsx) |
-| Provider administration API | [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java) |
-| PGR routing/rendering | [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java) |
-| Bridge dispatch | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) |
+| Ansible deployment | [`local-setup/ansible/playbook-deploy.yml`](../../../local-setup/ansible/playbook-deploy.yml) |
+| Workflow/provider bootstrap | [`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh`](../../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh) |
+| Notification seed | [`local-setup/scripts/seed-notifications.py`](../../../local-setup/scripts/seed-notifications.py) |
+| Configurator provider UI | [`configurator/src/resources/notification-providers/NotificationProviderList.tsx`](../../../configurator/src/resources/notification-providers/NotificationProviderList.tsx) |
+| Provider administration API | [`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/ProviderController.java) |
+| PGR routing/rendering | [`backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java`](../../../backend/pgr-services/src/main/java/org/egov/pgr/service/NotificationService.java) |
+| Bridge dispatch | [`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`](../../../backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java) |

@@ -9,7 +9,7 @@ to the production code it exercises (linked below).
 - **Runner:** [`run-notif-suite.js`](./run-notif-suite.js) / [`run-notif-suite.sh`](./run-notif-suite.sh) — runs `cases/area-*.js` and prints a PASS/FAIL/SKIP matrix keyed by case id. Exits non-zero on any **FAIL** (SKIP is not a failure).
 - **Cases:** one file per area under [`cases/`](./cases/).
 
-Setting up the feature? Use the single [Novu notifications guide](../../../../docs/novu-notifications/README.md).
+Setting up the feature? Use the single [Novu notifications guide](../../../../docs/2.12/notifications/README.md).
 
 ## Run it
 
