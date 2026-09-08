@@ -6,13 +6,40 @@
 >
 > Some technical components, service names and configuration keys, such as `RAINMAKER-PGR.*` and `pgr.*`, continue to use the earlier PGR terminology for backward compatibility. These references relate only to the underlying implementation and should not be used as the product or feature name.
 
-## Release Summary <a href="#release-summary" id="release-summary"></a>
+## About This Release 
 
-DIGIT CMS v2.12 turns complaint categories into a flexible, city-shaped tree, adds a personalised Supervisor Dashboard and a curated public-facing dashboard, brings automatic multi-channel notifications and escalation, introduces jurisdiction- and department-based access control for search and dashboards, and simplifies deployment down to one settings file and one command. Most of this is **switched off until a city chooses to turn it on** — an upgraded installation behaves like v2.11 until a feature is explicitly enabled.
+CCRS v2.12 is the most significant release of the Complaints Management System since the repository was consolidated. It expands the product from a conventional grievance-redressal system into a configurable platform that can support multiple complaint, service-request and case-management use cases. In practical terms, this allows a local government to:
+
+- **Organize complaints in line with the structure in citizen charters.** Complaint categories are no longer fixed at two levels — complaint type and subtype. Governments can configure categories to the level of detail required and assign them to the appropriate responsible units, without being restricted to a fixed two-level hierarchy.
+
+- **Monitor performance through a personalised dashboard.** Last-mile resolvers and their supervisors see information relevant to their own area of responsibility, including preset indicators on complaint volumes, resolution times, status and geographic distribution, with clear explanations of what each indicator represents.
+
+- **Share performance publicly.** A new, curated Public Dashboard lets a city publish selected statistics for citizens and the public — no login required.
+
+- **Keep citizens informed using a powerful notification engine.** Governments can automatically send timely updates through **SMS**, **WhatsApp** and **Email** at key stages of a complaint, including registration, assignment, resolution and reopening. Notification rules, channels and message templates are configurable without code changes.
+
+- **Make sure nothing slips through.** Overdue complaints can be escalated either for action by the next responsible level or for visibility by supervisory authorities. A tamper-evident audit trail records every action and status change, supporting clear accountability and review.
+
+- **Enable two-way engagement through WhatsApp.** Citizens can receive complaint updates and respond through the same channel, allowing governments to collect additional information, support follow-up actions and keep communication connected to the complaint lifecycle. _Available as a multi-city sandbox pilot._
+
+- **Deploy across countries with built-in internationalisation.** Governments can configure country-specific formats and validation rules for phone numbers, postal codes, names and email addresses, rather than relying on requirements hardcoded for a single geography. Configurators can also fetch geography information directly when setting up boundaries.
+
+- **Decide precisely who can see what.** A new access-control policy governs who can see which dashboards, analytics and search results, by jurisdiction (geography) and department — replacing a handful of hardcoded role exemptions with a configurable, per-city policy. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this works for employee search and the inbox specifically.
+
+- **Switch working context in a click.** Employees holding more than one department or role can see which one they are currently acting as, and switch between them.
+
+- **Get up and running much faster and more consistently with Ansible-based setup.** The earlier Jupyter Notebook-led installation has evolved into a streamlined, automated deployment workflow: one settings file per local government, one command, and built-in pre-flight checks that surface common configuration issues before deployment begins. Supported on **Ubuntu** and **macOS**, with a validated quickstart for **Windows via WSL2** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet explicitly supported.
+
+- **One place for every image.** Every service build now comes from a single public source instead of a mix of internal and public locations, and the Configurator and citizen/employee UI builds are produced for both common processor architectures.
+
+The one-command deployment is supported on **Ubuntu** and **macOS**. Red Hat Linux and Windows are not yet explicitly supported; however, deployments using Ubuntu through WSL2 have worked successfully across several Windows environments.
+
+Most new capabilities are **switched off until an account chooses to turn them on**. An upgraded installation behaves like v2.11 until each feature is enabled (see [Turning Features On](#turning-features-on--configuration)). A small number of changes require action from the operations team before upgrading; they are summarised in [Changes That Need Attention Before Upgrading](#changes-that-need-attention-before-upgrading) and covered step-by-step in the migration guide.
+
 
 ### At a glance
 
-* **Upgrade path:** v2.11 → v2.12. (2.12-beta, 2026-08-03, was a milestone along this path, not a separate release — this document covers the full v2.11 → v2.12 scope.)
+* **Upgrade path:** v2.11 → v2.12.
 * **New services:** a handful of genuinely new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
@@ -28,20 +55,6 @@ These require action from the operations team on existing installations — full
 6. **Dashboard shows nothing for employees without a department** — check department assignments in HR data before rollout (see the migration guide's post-upgrade verification notes).
 7. **New always-on infrastructure** — download the telemetry agent before starting; budget for the monitoring stack; back up the secrets-store key file `/opt/digit/.openbao/init.json` (Section 3).
 8. **Review the new jurisdiction/department access control before enabling it for admin roles** — see [Known Issues](#known-issues); verify admin/supervisor dashboard and search access specifically before rollout. A plain-language explainer for the search/inbox side of this is at [jurisdiction-access-control.md](../jurisdiction-access-control.md).
-
-## Highlights <a href="#highlights" id="highlights"></a>
-
-* **Organize complaints in line with the structure in citizen charters.** Complaint categories are no longer fixed at two levels; governments can configure categories to the level of detail required, without being restricted to a fixed two-level hierarchy.
-* **Monitor performance through a personalised dashboard.** Last-mile resolvers and supervisors see information relevant to their own area, including preset indicators on complaint volumes, resolution times, status and geographic distribution.
-* **Share performance publicly.** A new, curated Public Dashboard lets a city publish selected statistics for citizens and the public, no login required.
-* **Keep citizens informed using a powerful notification engine.** Automatic, timely updates through SMS, WhatsApp and Email at key stages of a complaint, configurable without code changes.
-* **Make sure nothing slips through.** Overdue complaints escalate automatically, and a tamper-evident audit trail records every action and status change.
-* **Enable two-way engagement through WhatsApp,** as a multi-city sandbox pilot.
-* **Deploy across countries with built-in internationalisation** — country-specific formats and validation rules for phone numbers, postal codes, names and emails.
-* **Decide precisely who can see what.** A new access-control policy governs who can see which dashboard, analytics, and search results, by jurisdiction (geography) and department — replacing a handful of hardcoded role exemptions with a configurable, per-city policy. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for how this works for search and the employee inbox specifically.
-* **Get up and running much faster and consistently with Ansible-based setup.** One settings file per local government, one command, built-in pre-flight checks — supported on **Ubuntu** and **macOS**, with a validated quickstart for **Windows via WSL2** (see the [Windows quickstart guide](../../WINDOWS-QUICKSTART.md)). Native Windows and Red Hat Linux are not yet explicitly supported.
-* **One place for every image.** Every service build now comes from a single public source instead of a mix of internal and public locations; the Configurator and citizen/employee UI builds are now produced for both common processor architectures.
-* **A working-context switcher** for employees holding more than one department/role, so they can see and switch which one they're currently acting as.
 
 <details>
 
@@ -83,8 +96,6 @@ These require action from the operations team on existing installations — full
 
 ## New Services <a href="#new-services" id="new-services"></a>
 
-**Audited across the full 2.12-beta + 2.12 scope** — only genuinely new, separately-deployable backend components are listed here. (Earlier drafts of this document listed some *features* — the Supervisor Dashboard, the Public Dashboard, the analytics/reporting engine, and the access-control policy — in this section; none of those are standalone services, they run inside the existing complaints service and admin console, so they've been moved to [New Features](#new-features) below, where they belong.)
-
 | Service | What it does | How it's switched on |
 |---|---|---|
 | Novu bridge-endpoint & Novu admin dashboard | Renders self-hosted notification templates and provides Novu's own admin UI | `enable_novu` |
@@ -99,8 +110,6 @@ These require action from the operations team on existing installations — full
 > 💡 `novu-bridge` itself (the core notification-dispatch service), the config service, and the user-preferences service that support notifications already existed before v2.11 and were substantially reworked for this release rather than newly introduced — see [Changed](#changed) for what changed in them.
 
 ## New Features <a href="#new-features" id="new-features"></a>
-
-This section is the map of **what's new** and **how to turn each one on**. Settings live in three places: **deployment settings** (one file per city, `local-setup/ansible/inventory/host_vars/<city>.yml`), **complaints-service settings** (`application.properties`, overridable via `PGR_*` env vars), and **city master data** (MDMS, editable in the Admin Console — fresh installs get sensible defaults automatically, **already-running cities must add new records themselves**).
 
 ### 1. Multi-Level Complaint Categories — *always on*
 
