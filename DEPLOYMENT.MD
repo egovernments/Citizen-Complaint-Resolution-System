@@ -79,6 +79,10 @@ It takes around 60 minutes, use `tail -f /opt/digit/digit-stack-up.mycity.progre
 
 Use domain name instead of localhost, if used one during configuration.
 
+## Enabling Notifications
+
+See [this](docs/novu-notifications/README.md) to enable notifications.
+
 ---
 
 # Kubernetes Deployment (AWS)

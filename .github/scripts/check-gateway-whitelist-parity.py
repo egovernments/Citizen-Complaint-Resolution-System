@@ -40,6 +40,12 @@ KONG_ONLY_AUTH_OPTIONAL = {
     "/pgr-services/v2/analytics/public/_query",
     "/pgr-services/v2/analytics/public/catalog/_search",
     "/pgr-services/v2/analytics/public/_options",
+    # novu-bridge configurator-proxy POSTs: authenticated inside novu-bridge
+    # (ProxyAuthFilter, Bearer token), no RequestInfo.authToken in the body.
+    # The bridge is not routed by the Spring gateway tier at all.
+    "/novu-bridge/novu-adapter/v1/providers",
+    "/novu-bridge/novu-adapter/v1/providers/verify",
+    "/novu-bridge/novu-adapter/v1/providers/test-send",
 }
 
 

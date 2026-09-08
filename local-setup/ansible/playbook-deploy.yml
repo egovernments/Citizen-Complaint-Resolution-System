@@ -4536,34 +4536,46 @@
       when:
         - enable_novu | default(false)
 
-    - name: "novu-bootstrap — copy bootstrap script to target"
+    # BOTH files: the script sources ${SCRIPT_DIR}/load-dotenv.sh, so shipping it
+    # alone makes the bootstrap exit 1 on line 62 of a fresh box — silently, since
+    # the run task is failed_when:false — and no workflows are ever created.
+    - name: "novu-bootstrap — copy bootstrap script + dotenv helper to target"
       ansible.builtin.copy:
-        src: ../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
-        dest: "{{ digit_dir }}/bootstrap-novu-whatsapp.sh"
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/"
         mode: '0755'
+      loop:
+        - ../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh
+        - ../../backend/novu-bridge/config/load-dotenv.sh
       when:
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
-        - (twilio_account_sid | default('')) | length > 0
 
-    - name: "novu-bootstrap — run Twilio integration + workflow create"
+    - name: "novu-bootstrap — create channel workflows (+ Twilio provider if configured)"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         NOVU_BASE_URL=http://127.0.0.1:14002 \
         NOVU_API_KEY={{ effective_novu_key }} \
-        TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
-        TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
-        TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
+        TWILIO_ACCOUNT_SID='{{ twilio_account_sid | default("") }}' \
+        TWILIO_AUTH_TOKEN='{{ twilio_auth_token | default("") }}' \
+        TWILIO_WHATSAPP_FROM='{{ (twilio_whatsapp_from | default("whatsapp:+14155238886")) if (twilio_account_sid | default("")) | length > 0 else "" }}' \
         bash bootstrap-novu-whatsapp.sh
       register: novu_bootstrap_result
       when:
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
-        - (twilio_account_sid | default('')) | length > 0
-      # The provider bootstrap is OPTIONAL — the Novu key is already minted and
-      # wired, so a provider can always be added later via the Configurator
-      # (Notifications → Providers). A missing/placeholder Twilio cred or a
-      # transient Novu error must NOT abort the whole deploy.
+      # No longer gated on Twilio. This script creates the per-channel workflows
+      # (complaints-sms/-whatsapp/-email) that every deployment needs whichever
+      # gateway sends; gating it on Twilio left a non-Twilio tenant with zero
+      # workflows and Novu answering workflow_not_found. The script skips only
+      # the provider integration when Twilio is absent.
+      #
+      # TWILIO_WHATSAPP_FROM must stay empty unless a SID is set: the script
+      # treats any Twilio value as "Twilio configured" and then demands all
+      # three, so leaking the sandbox default here would fail the run and
+      # recreate the very gap this change closes.
+      #
+      # Still non-fatal — a transient Novu error must NOT abort the deploy.
       failed_when: false
       changed_when: "'created' in (novu_bootstrap_result.stdout | default(''))"
 
@@ -4604,14 +4616,16 @@
         msg: |
           Novu is up and its API key was minted + wired automatically
           (key: {{ (effective_novu_key | default(''))[:6] ~ '…' if (effective_novu_key | default('')) | length > 0 else 'MINT FAILED — see the novu-mint task above' }}).
-          novu-bridge can now reach Novu. To actually DELIVER messages, add a
-          provider (credentials live in Novu, never in our DB):
+          The complaints-sms/-whatsapp/-email workflows were created. What is
+          missing is a PROVIDER — the account that actually sends (credentials
+          live in Novu, never in our DB). Pick one:
             • Self-service: Configurator → Notifications → Notification Providers →
               Add provider (Twilio SMS/WhatsApp or SMTP), then Verify + Test-send.
-            • Or ansible-bootstrapped: set twilio_account_sid / twilio_auth_token /
+            • Twilio via ansible: set twilio_account_sid / twilio_auth_token /
               twilio_whatsapp_from in host_vars/{{ inventory_hostname }}.yml and
-              re-run ./deploy.sh {{ inventory_hostname }} (creates the Twilio
-              integration + complaints-* workflows for you).
+              re-run ./deploy.sh {{ inventory_hostname }}.
+            • A gateway novu-bridge drives directly, bypassing Novu: set
+              novu_bridge_sms_provider (e.g. smscountry) and its credentials.
       when:
         - enable_novu | default(false)
         - (twilio_account_sid | default('')) | length == 0

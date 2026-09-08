@@ -2337,7 +2337,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-7c91934}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-0469335}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2409,11 +2409,23 @@ services:
       # silently resolves to the PRIMARY sms integration (the plain SMS sender)
       # instead. Leave unset until that dedicated integration is onboarded.
       NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP: ${NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP:-}
+      # Ordinary SMS gateway. Blank = SMS goes through Novu. "smscountry" makes
+      # the SMS leg bypass Novu entirely (SmsCountryClient posts form-encoded to
+      # SMSCountry's legacy bulk API, which no Novu provider can express).
+      # These MUST be declared here, not merely written to /opt/digit/.env:
+      # Compose reads .env for ${...} interpolation only, so a variable absent
+      # from this block never reaches the container and the bridge silently
+      # falls back to the Novu path.
+      NOVU_BRIDGE_SMS_PROVIDER: ${NOVU_BRIDGE_SMS_PROVIDER:-}
+      NOVU_BRIDGE_SMS_SENDER_ID: ${NOVU_BRIDGE_SMS_SENDER_ID:-}
+      NOVU_BRIDGE_SMSCOUNTRY_URL: ${NOVU_BRIDGE_SMSCOUNTRY_URL:-http://api.smscountry.com/SMSCwebservice_bulk.aspx}
+      NOVU_BRIDGE_SMSCOUNTRY_USER: ${NOVU_BRIDGE_SMSCOUNTRY_USER:-}
+      NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
-      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
       # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
       # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
       # configurator's own provider/template screens are not 403'd.

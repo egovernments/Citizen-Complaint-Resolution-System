@@ -456,6 +456,33 @@ twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 
+
+# ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
+# For deployments that cannot use Twilio for SMS — e.g. the account has no SMS
+# compliance registration — the bridge can route the SMS leg through another
+# gateway using Novu's built-in "generic-sms" provider. WhatsApp is unaffected
+# and keeps using Twilio.
+#
+# Novu has no built-in provider for most regional gateways: setting an
+# integration's providerId to the gateway's own name fails at trigger time with
+# "Sms handler for provider <name> is not found". So the integration is created
+# in Novu with providerId "generic-sms", pointed at the gateway's REST endpoint
+# with its auth, and the bridge supplies the gateway-specific request body.
+#
+# Leave blank for Twilio SMS (the default). Set to "ozeki" (a gateway you run) or
+# "smscountry" (a bulk provider). The bootstrap does NOT create this integration —
+# add it in Novu or the Configurator first, then name its identifier here.
+# novu_bridge_sms_sender_id is used by smscountry only; Ozeki takes the sender
+# from its own gateway configuration.
+novu_bridge_sms_provider: ""
+novu_bridge_sms_sender_id: ""
+
+# SMSCountry only. Its legacy bulk API authenticates with the SMSCountry PANEL
+# LOGIN — that account type issues no API key — and the bridge posts to it
+# directly, so no Novu integration is needed for this gateway.
+novu_bridge_smscountry_user: ""
+novu_bridge_smscountry_password: ""
+
 # ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
 # The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
 # (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
