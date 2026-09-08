@@ -25,31 +25,30 @@ const useComplaintReceiptModel = (complaintDetails) => {
   // The hierarchy is onboarded at the COMPLAINT's tenant (e.g. mz.igsae), not
   // the citizen's home city, which on a multi-authority env is the state root
   // with no such rows. Same read the detail page performs.
-  const hierarchyTenant = service?.tenantId;
+  const hierarchyTenant = service?.tenantId || Digit.ULBService.getCurrentTenantId();
   const { data: hier } = Digit.Hooks.useCustomMDMS(
     hierarchyTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      // Honoured by the v1 branch below; the v2 branch hardcodes enabled:true,
-      // which is why the 5th arg is withheld until the tenant is known.
-      enabled: !!hierarchyTenant,
       select: (raw) => ({
         defs: (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false),
         allRows: raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [],
       }),
     },
-    // This 5th arg switches useCustomMDMS into its v2 branch, which IGNORES the
+    // The 5th arg switches useCustomMDMS into its v2 branch, which IGNORES the
     // positional tenantId — the tenant must ride inside this object.
     //
-    // It also hardcodes `enabled: mdmsv2 ? true : false`, so an `enabled` in the
-    // config above would be silently dropped. Passing `false` here until the
-    // complaint (and therefore its tenant) has loaded is the only way to stop a
-    // fetch that would otherwise run against the logged-in citizen's home
-    // tenant — the wrong tenant for this lookup, and a needless request on the
-    // post-submission screen.
-    hierarchyTenant ? { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: hierarchyTenant } : false
+    // It MUST be passed on every render: useCustomMDMS's v1/v2 branches call
+    // different hooks, so a value that flips between false and an object across
+    // renders changes the hook order and crashes React (this took the citizen
+    // success screen down: the tenant arrived only after the complaint fetch
+    // resolved). Callers therefore mount this hook only once the complaint
+    // record exists (see DownloadReceiptButton's mount gate); the
+    // getCurrentTenantId fallback above is a stability net for a misused
+    // caller, not a supported path.
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: hierarchyTenant }
   );
 
 
