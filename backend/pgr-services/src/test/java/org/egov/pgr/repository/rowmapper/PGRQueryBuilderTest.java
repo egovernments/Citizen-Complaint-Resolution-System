@@ -62,15 +62,44 @@ class PGRQueryBuilderTest {
     }
 
     @Test
-    void stateLevelScopeAddsTenantLikePredicate() {
+    void stateLevelScopeMatchesTheTenantAndItsSubtreeButNotASibling() {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg").build();
         List<Object> preparedStmtList = new ArrayList<>();
         PgrSearchScope scope = new PgrSearchScope("pg", true, null, null, null);
 
         String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
 
-        assertTrue(query.contains("ser.tenantId LIKE ?"));
-        assertTrue(preparedStmtList.contains("pg%"));
+        // `LIKE 'pg%'` alone also matches the unrelated tenant `pgx.city`; the delimiter has to
+        // be in the pattern, and the tenant itself matched separately.
+        assertTrue(query.contains("(ser.tenantId = ? OR ser.tenantId LIKE ?)"), query);
+        assertTrue(preparedStmtList.contains("pg"));
+        assertTrue(preparedStmtList.contains("pg.%"));
+        assertFalse(preparedStmtList.contains("pg%"));
+    }
+
+    @Test
+    void aSiblingTenantIsNotInsideTheSubtree() {
+        // pg.foo must not read pg.foobar. The two ids share a prefix and nothing else.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg.foo").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg.foo", true, null, null, null);
+
+        queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(preparedStmtList.contains("pg.foo."   + "%"));
+        assertFalse(preparedStmtList.contains("pg.foo%"), "a bare prefix would also match pg.foobar");
+    }
+
+    @Test
+    void likeMetacharactersInATenantIdAreEscaped() {
+        // An unescaped '_' matches any single character, silently widening the subtree.
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder().tenantId("pg_a").build();
+        List<Object> preparedStmtList = new ArrayList<>();
+        PgrSearchScope scope = new PgrSearchScope("pg_a", true, null, null, null);
+
+        queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, null, scope);
+
+        assertTrue(preparedStmtList.contains("pg\\_a.%"), preparedStmtList.toString());
     }
 
     @Test
