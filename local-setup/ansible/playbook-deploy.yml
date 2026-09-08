@@ -1381,6 +1381,66 @@
         dest: "{{ digit_dir }}/.env"
         mode: '0644'
 
+    # ==================== configurator runtime config.js (per-tenant) ==============
+    # The configurator SPA reads four deployment values at RUNTIME from
+    # <base>/config.js instead of having them baked in by `vite build`, so ONE
+    # published image serves every tenant. See configurator/src/api/runtimeConfig.ts.
+    #
+    # Rendered HERE, not with the other configurator tasks further down, because
+    # those run after `Start DIGIT stack` — and this file is bind-mounted into the
+    # configurator container. Docker silently creates a DIRECTORY at a bind-mount
+    # source that does not exist yet, which would shadow the bundle's config.js
+    # with an unreadable path.
+    #
+    # The Overpass extract check is hoisted up here for the same reason: it used to
+    # run near the Overpass container tasks, long after this point, but the URL we
+    # publish depends on it.
+    - name: "Overpass — check prepared extract exists"
+      ansible.builtin.stat:
+        path: "{{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}"
+      register: overpass_extract
+      when: enable_overpass | default(false)
+
+    # Only advertise the on-box Overpass once it is actually going to exist. The
+    # playbook skips the container when the flag is on but the operator-prepared
+    # extract is absent; pointing the SPA at an nginx location that proxies to
+    # nothing (502) is worse than the documented public fallback.
+    - name: "Overpass — effective endpoint for the configurator SPA"
+      ansible.builtin.set_fact:
+        configurator_overpass_url: >-
+          {{ '/overpass/api/interpreter'
+             if (((enable_overpass | default(false)) | bool)
+                 and ((overpass_extract.stat.exists | default(false)) | bool))
+             else '' }}
+
+    # The template also renders TURBOPASS_URL and BOUNDARY_SEARCH_LIMIT. Wire
+    # them from the inventory here, or an operator setting them in host_vars
+    # gets silence: the template would read facts nothing ever defines and
+    # render '' every deploy, and the SPA would quietly use its in-code
+    # defaults (/turbopass, 300) with no signal the override was dropped.
+    #
+    # Same-origin '/turbopass' only when this box actually runs the search-api;
+    # blank otherwise falls through to that same default in the SPA anyway.
+    - name: "Configurator SPA — effective Turbopass + boundary-limit settings"
+      ansible.builtin.set_fact:
+        configurator_turbopass_url: >-
+          {{ configurator_turbopass_url
+             | default('/turbopass' if (enable_turbopass | default(false)) else '') }}
+        configurator_boundary_search_limit: >-
+          {{ configurator_boundary_search_limit | default('') }}
+
+    - name: "Configurator SPA — ensure the runtime-config dir exists"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/configurator-runtime"
+        state: directory
+        mode: "0755"
+
+    - name: "Configurator SPA — render runtime config.js"
+      ansible.builtin.template:
+        src: templates/configurator-config.js.j2
+        dest: "{{ digit_dir }}/configurator-runtime/config.js"
+        mode: "0644"
+      register: configurator_config_render
     # The template above regenerates .env from scratch, which used to WIPE the
     # marked secret blocks the OpenBao section appends much later in the play
     # (TENANT SECRETS: POSTGRES_PASSWORD, MINIO creds, …; KEYCLOAK SECRETS
@@ -3150,7 +3210,7 @@
       # /overpass/) instead of the public, rate-limited overpass-api.de. Empty
       # otherwise → the code default (public Overpass) applies.
       environment:
-        VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
+        VITE_OVERPASS_URL: "{{ configurator_overpass_url | default('') }}"
         # Root (state) tenant baked into the build so the standalone configurator
         # (which has no digit-ui window.globalConfigs) can hint the login tenant
         # placeholder + pre-login default from the real deployment tenant. A city
@@ -3184,6 +3244,61 @@
       when:
         - nginx_features.configurator | default(false)
         - configurator_build is defined
+
+    # The from-source dist ships the neutral placeholder config.js, and the sync
+    # above would restore it over a tenant-rendered one — so copy the rendered
+    # file in AFTERWARDS. Only needed on this path: when build_configurator is
+    # false host nginx proxies /configurator/ to the container, which receives
+    # the same file through the bind mount in docker-compose.egov-digit.yaml.
+    # A single-FILE bind mount pins the inode. `template:` writes a temp file and
+    # moves it into place, so a re-render replaces the inode and the RUNNING
+    # container keeps serving the file it started with — compose will not
+    # recreate it, because the compose config itself has not changed. Verified on
+    # this stack: after a re-render the host file and the container's copy
+    # diverged, and `docker restart` re-resolved the mount.
+    #
+    # So: restart the container whenever the render actually changed. Note that
+    # `template:` reports changed on a brand-new render too, so this DOES fire on
+    # a first deploy — harmless, because the container was created after the
+    # render and already holds the right content, it just restarts once. What it
+    # avoids is a restart on every SUBSEQUENT deploy: an unchanged re-render
+    # reports ok, and the task is skipped.
+    #
+    # Deliberately NOT gated on `build_configurator`. The `configurator` compose
+    # service has no `profiles:` key, so the container runs even while host nginx
+    # is serving a host-built dist — and it would sit there pinned to the OLD
+    # inode. Skipping the restart in that mode leaves a trap for the mode switch
+    # this PR exists to enable:
+    #   1. build_configurator: true + a tenant change -> render CHANGED, restart
+    #      skipped, container still holds the previous tenant
+    #   2. a later deploy flips build_configurator to false with the SAME values
+    #      -> render reports ok, so nothing triggers a restart
+    #   3. host nginx now proxies to a container serving the OLD tenant, with no
+    #      error anywhere
+    # Restarting in both modes costs one `docker restart` of an idle container on
+    # the host-built path, and keeps the mount correct for whenever it starts
+    # serving. `failed_when` already tolerates the container being absent.
+    - name: "Configurator SPA — restart container so a re-rendered config.js is picked up"
+      ansible.builtin.command: docker restart configurator
+      register: configurator_restart
+      changed_when: configurator_restart.rc == 0
+      failed_when:
+        - configurator_restart.rc != 0
+        - '"No such container" not in (configurator_restart.stderr | default(""))'
+      when:
+        - nginx_features.configurator | default(false)
+        - configurator_config_render is defined
+        - configurator_config_render is changed
+
+    - name: "Configurator SPA — place runtime config.js beside the host-served dist"
+      ansible.builtin.copy:
+        src: "{{ digit_dir }}/configurator-runtime/config.js"
+        dest: "{{ configurator_www_dir }}/config.js"
+        remote_src: true
+        mode: "0644"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
 
     # ---- Turbopass search-api (opt-in: enable_turbopass) ----
     # OSM place-name autocomplete for the configurator's Phase 2 boundary
@@ -3262,12 +3377,6 @@
         path: "{{ overpass_data_dir | default('/opt/overpass/data') }}"
         state: directory
         mode: '0755'
-      when: enable_overpass | default(false)
-
-    - name: "Overpass — check prepared extract exists"
-      ansible.builtin.stat:
-        path: "{{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}"
-      register: overpass_extract
       when: enable_overpass | default(false)
 
     - name: "Overpass — warn if extract missing (container not started)"

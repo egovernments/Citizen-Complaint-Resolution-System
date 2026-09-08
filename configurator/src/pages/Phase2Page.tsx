@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../App';
+import { resolveConfig } from '../api/runtimeConfig';
 import {
   MapPin,
   Globe,
@@ -85,15 +86,20 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
 }
 
 // Turbopass suggestions endpoint. Same-origin '/turbopass' by default (nginx
-// proxies it to the search-api container); override via VITE_TURBOPASS_URL.
-const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
+// proxies it to the search-api container); override via TURBOPASS_URL in
+// config.js (or the build-time VITE_TURBOPASS_URL).
+const TURBOPASS_BASE: string =
+  resolveConfig('TURBOPASS_URL', import.meta.env.VITE_TURBOPASS_URL) || '/turbopass';
 
 // Overpass endpoint for the boundary-polygon fetch. Defaults to the public
 // instance (zero-config, but rate-limited / 504-prone under load). A deploy
-// that self-hosts Overpass sets VITE_OVERPASS_URL (e.g. same-origin
+// that self-hosts Overpass sets OVERPASS_URL in config.js (e.g. same-origin
 // '/overpass/api/interpreter', proxied by nginx to the on-box container behind
-// the enable_overpass gate) at configurator build time.
-const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+// the enable_overpass gate) — rendered by the ansible deploy, so a pre-built
+// image picks it up without a rebuild.
+const OVERPASS_URL: string =
+  resolveConfig('OVERPASS_URL', import.meta.env.VITE_OVERPASS_URL) ||
+  'https://overpass-api.de/api/interpreter';
 
 // Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
 // configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
