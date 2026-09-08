@@ -93,21 +93,19 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 ## Testing / UAT
 
 - Functional flows exercised on the UAT environment (`cms-pilot.digit.org`): citizen creation, the full assignment chain, resolve/reopen/rate, notification delivery, document upload/retrieval, dashboard rendering.
-- Automated coverage: 19 test files across the delta, concentrated in analytics (786-line suite), backend scoping and direct notification delivery. Workflow transitions, localization and roles rely on manual validation.
-- A formal UAT sign-off record is not kept in the repository.
+- Automated suites (run against `master`, 2026-09-08): frontend unit **51/51** + product **234/234** pass; configurator **137/137** tests pass; Playwright integration suite counts **281 tests in 100 files** (smoke: 5/6 on the local box — the miss is a seed gap the suite itself flags, not an app bug). Suite locations, run commands, prerequisites and recorded CI results are in the [technical reference, §15](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique/RELEASE-PREVIEW-CMS-MOZ-V2.12.md#15-testing-status).
+- Workflow transitions, localization completeness and role assignments still rely primarily on manual validation; a formal UAT sign-off record is not kept in the repository.
 
 ---
 
 ## Known Limitations
 
-1. **OTP enablement flag does not de-mock the gateway** — `enable_otp_services: true` starts the real OTP services but Kong keeps routing `/user-otp` and `/otp` to mock responders; removing the mock is currently a manual gateway edit. Fix scheduled product-side.
-2. **New-citizen registration second-OTP failure** — on ansible/compose deployments, registration triggers a second validation of an already-consumed OTP. The correction (`CITIZEN_REGISTRATION_WITHLOGIN_ENABLED=true`, `OTP_VALIDATION_REGISTER_MANDATORY=false` on the user service) is applied on the live environment and already templated on the Helm path; it still needs to be committed to the compose/ansible path.
-3. **Deployment requires the default bootstrap password** — several deploy steps hardcode the default credential; changing bootstrap secrets currently breaks a full deploy. Sweep scheduled product-side.
-4. **Confidential-complaint field masking is enforced at the API** — every complaint read path and the update response mask the confidential fields (`extendedAttributes`) to `****` server-side unless the caller is the complainant or holds a role in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); configured `x-no-mask` fields (e.g. institution name) stay visible. The complainant identity block (name/mobile/typed address) is masked on employee screens as a display control — API-level masking of that block is the remaining gap.
-5. **Three roles need manual registration after deploy** — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER` are not auto-registered by the migration runner (it registers the five workflow roles). Already registered on the production environment.
-6. **Notification templates** are seeded for apply/assign/reassign/reject/resolve/reopen/rate; the AWAITINGINFORMATION and COMMENT transitions have none seeded and send nothing until templates are added (the admin console can add them per transition).
-7. **IGSAE authority is switched off by configuration** for this deployment (product functionality retained; re-enable via MDMS when required).
-8. Admin search shows the result count as "N+" until the last page (backend count echo); rating retries once without an assignee where the workflow engine rejects it (accepted behaviour).
+1. **Deployment requires the default bootstrap password** — several deploy steps hardcode the default credential; changing bootstrap secrets currently breaks a full deploy. Sweep scheduled product-side.
+2. **Confidential-complaint field masking is enforced at the API** — every complaint read path and the update response mask the confidential fields (`extendedAttributes`) to `****` server-side unless the caller is the complainant or holds a role in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); configured `x-no-mask` fields (e.g. institution name) stay visible. The complainant identity block (name/mobile/typed address) is masked on employee screens as a display control — API-level masking of that block is the remaining gap.
+3. **Three roles need manual registration after deploy** — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER` are not auto-registered by the migration runner (it registers the five workflow roles). Already registered on the production environment.
+4. **Notification templates** are seeded for apply/assign/reassign/reject/resolve/reopen/rate; the AWAITINGINFORMATION and COMMENT transitions have none seeded and send nothing until templates are added (the admin console can add them per transition).
+5. **IGSAE authority is switched off by configuration** for this deployment (product functionality retained; re-enable via MDMS when required).
+6. Admin search shows the result count as "N+" until the last page (backend count echo); rating retries once without an assignee where the workflow engine rejects it (accepted behaviour).
 
 ---
 

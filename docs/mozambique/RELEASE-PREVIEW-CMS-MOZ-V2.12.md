@@ -413,21 +413,7 @@ The roles follow the layered model from the [solution design](https://github.com
 
 ## 14. Known Technical Issues (under product review)
 
-Three issues found during the Mozambique implementation and Ozeki SMS integration. Each was verified against the repository; none is fixed in the repository yet.
-
-### Enabling real OTP does not switch off the gateway mocks
-
-Setting `enable_otp_services: true` starts the real OTP services — but the API gateway keeps answering OTP calls with canned mock responses, so login still uses the fixed test code.
-
-- **Why:** the flag only adds the OTP containers to the stack ([`playbook-deploy.yml`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/local-setup/ansible/playbook-deploy.yml) line 1497) and a health check. The gateway file [`kong.yml`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/local-setup/kong/kong.yml) is static — its `user-otp-mock` and `otp-validate-mock` blocks stay active regardless of the flag, and removing them is a manual edit on the server.
-- **Fix needed (product):** make the gateway mock blocks conditional on the same flag, so one setting switches the whole OTP path to real services.
-
-### New-citizen registration fails on a second OTP check
-
-Registration validates the citizen's OTP twice; the code is deleted after the first successful check, so the second check fails and the citizen sees "invalid OTP".
-
-- **Fix applied on the live environment** (user-service settings): `CITIZEN_REGISTRATION_WITHLOGIN_ENABLED=true` and `OTP_VALIDATION_REGISTER_MANDATORY=false` — the citizen is created active after the first successful validation.
-- **Repository status:** these two settings exist in the Helm/Kubernetes charts ([`egov-user/values.yaml`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/devops/deploy-as-code/charts/core-services/egov-user/values.yaml)) but are missing from the compose/Ansible path that the Mozambique servers use — a redeploy from the repository reproduces the bug until they are added there.
+One issue found during the Mozambique implementation remains under product review. (Two issues documented in earlier revisions — the gateway OTP mocks not switching off with `enable_otp_services`, and the second OTP check failing new-citizen registration — have since been **resolved** and are no longer listed.)
 
 ### Deployment breaks when the default passwords are changed
 
@@ -440,9 +426,47 @@ Changing the bootstrap secrets away from the defaults causes deployment failures
 
 ## 15. Testing Status
 
+### Manual / UAT
+
 - Functional flows exercised on the UAT environment (`cms-pilot.digit.org`): citizen creation, the full assignment chain, resolve/reopen/rate, notification delivery, document upload and retrieval, dashboard rendering.
-- Automated coverage: 19 test files across the delta — concentrated in analytics (a 786-line suite), backend visibility scoping and direct notification delivery. Workflow transitions, localization and roles rely on manual validation.
 - A formal UAT sign-off record is not kept in the repository.
+
+### Automated test suites and how to run them
+
+The **customization delta** added 19 test files (concentrated in analytics, backend visibility scoping and direct notification delivery); the repository as a whole carries a much larger inherited-plus-new suite:
+
+| Suite | Location / size | How to run | Prerequisites |
+|---|---|---|---|
+| Frontend shell unit tests | `digit-ui-esbuild/tests/` | `cd digit-ui-esbuild && npm test` | Node ≥ 20, `npm install --legacy-peer-deps` |
+| Frontend product unit tests | 24 `node:test` files under `digit-ui-esbuild/products/` (dashboard presentation/i18n/services, PGR utils) | `node --test products/dashboard/src/**/*.test.js products/pgr/src/**/*.test.js` (from `digit-ui-esbuild/`) | same |
+| Configurator unit tests | 19 vitest files under `configurator/src` + the data-provider package | `cd configurator && npm test` | build/link the vendored `@digit-mcp/data-provider` first (see [`configurator/README.md`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/configurator/README.md)) |
+| Configurator E2E | `configurator/e2e/` (10 specs) | `cd configurator && npm run test:e2e` | running stack |
+| **Integration E2E (Playwright)** | [`tests/integration-tests/`](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/tests/integration-tests) — **281 tests in 100 files**, persona projects (citizen / employee / admin / lifecycle / smoke / api) | `cd tests/integration-tests && npm test`, or targeted: `npm run test:smoke`, `test:api`, `test:citizen`, `test:employee`, `test:admin`, `test:lifecycle` | running deployment (`BASE_URL`, default `http://localhost`); auth fixtures self-discover the deployment profile and report seed gaps explicitly |
+| Environment E2E | `local-setup/tests/` (33 files: localization, notification areas) | executed by the **Local Setup CI** workflow | compose stack |
+| Backend unit tests (Java) | `backend/pgr-services` (34 test classes incl. analytics, scoping), `backend/novu-bridge` (18: dispatch pipeline, direct delivery, PII masking), `backend/digit-config-service` (2) | `mvn test` per service | JDK 17 + Maven (not assumed on operator machines — use CI) |
+| digit-mcp | validator / integration / e2e / safety scripts | `cd digit-mcp && npm test` (see `package.json` for the full set) | CI: `digit-mcp-ci.yml` |
+| Data loader | `utilities/crs_dataloader` | CI: `dataloader-tests.yml` | — |
+
+### Results recorded for this document (run against `master`, 2026-09-08)
+
+| Suite | Result |
+|---|---|
+| Frontend shell unit tests | **51 / 51 pass** |
+| Frontend product unit tests | **234 / 234 pass** |
+| Configurator unit tests | **137 / 137 tests pass** (16 of 19 files; 3 files do not collect until the vendored `@digit-mcp/data-provider` is built — a setup prerequisite, not a test failure) |
+| Playwright inventory | 281 tests / 100 files listed |
+| Playwright `smoke` project (local compose stack) | **5 / 6 pass** — the one failure is the deployment-expectations check on a box whose seed lacks a ward-scoped CSR persona; the suite itself reports it as "a deployment/seed gap, not an app bug" |
+
+### Recorded CI results (GitHub Actions, most recent runs)
+
+| Workflow | Branch | Date | Conclusion |
+|---|---|---|---|
+| Security Scan — Ansible Remote Server | `master` | 2026-09-02 | success (findings on the [public dashboard](https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan/)) |
+| Tilt CI | `master` | 2026-09-07 | success |
+| Local Setup CI | `master` | 2026-09-07 | **failure** — boots the compose stack and runs `local-setup/tests`; under investigation |
+| Gatus coverage · DB migration/Flyway alignment guards | recent branches | 2026-09-07 | success |
+
+Workflow transitions, localization completeness and role assignments still rely primarily on manual validation.
 
 ---
 
@@ -456,7 +480,7 @@ Changing the bootstrap secrets away from the defaults causes deployment failures
 
 **Known limitations:**
 
-1. The three technical issues in [section 14](#14-known-technical-issues-under-product-review)
+1. The technical issue in [section 14](#14-known-technical-issues-under-product-review)
 2. Confidential-complaint **field masking is enforced at the API**: every complaint read path (`_search`, `inbox/_search`, `_plainsearch`, `_admin/_search`) and the `_update` response mask `service.extendedAttributes` to `****` server-side unless the caller is the complainant or holds a role listed in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); fields declared `x-no-mask` (e.g. institution name) stay visible by configuration. The complainant identity block (`service.citizen` name/mobile/typed address) is masked on employee screens as a display control — masking it at the API is the remaining gap
 3. Three roles need manual registration after deploy (see [Roles & Permissions](#9-roles--permissions)) — already registered on the production environment
 4. Notification templates are seeded for `APPLY / ASSIGN / REASSIGN / REJECT / RESOLVE / REOPEN / RATE`; the `AWAITINGINFORMATION` and `COMMENT` transitions have none seeded — those transitions send nothing until templates are added (the admin console's notification Configure screen can add them per transition)
