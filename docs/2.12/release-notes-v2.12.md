@@ -317,58 +317,8 @@ Per-service database-migration init containers close the Compose/Kubernetes pari
 | 28 | Employee & UI | Profile image visibility fixed; duplicate options removed from a dropdown; employee date-of-birth/date-of-appointment made optional where they shouldn't have been required |
 
 ### Known Issues <a href="#known-issues" id="known-issues"></a>
+Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/docs/v2.12-release_note_revamp/docs/2.12/known_issues_2.12.md
 
-Limitations to be aware of before adopting this release:
-
-- **Windows support is WSL2-only.** Native Windows and Red Hat Linux are not yet supported.
-- **No automated ServiceDefs → ComplaintHierarchy migration for hand-converting a tenant.** The old `ServiceDefs` complaint-category master is removed; a validated migration *tool* now exists (see [servicedefs-to-complainthierarchy-migration.md](../migration/servicedefs-to-complainthierarchy-migration.md)) and is the recommended path, but there is still no automatic, zero-touch conversion — someone must run it per tenant.
-- **The new jurisdiction/department access control for dashboards and analytics needs care before enabling for admin roles.** An independent review found that tenant-wide admin/supervisor roles can lose unrestricted dashboard access and see it go empty, a cross-tenant config-refresh authorization gap, and a case where the "department scoping disabled" override doesn't actually apply. If your city relies on admin roles seeing the full dashboard, verify this specifically before rollout.
-- **The search/inbox filter panel isn't scoped, even though search results are.** The dropdown lists of jurisdictions and departments to filter by show every value in the tenant, not just the ones the logged-in employee is scoped to — a confirmed, currently open UI defect (#1984). The scoping itself still works correctly; only the filter picker's contents are wrong. See [jurisdiction-access-control.md](../jurisdiction-access-control.md) for the full picture.
-- **There's no way to revoke a jurisdiction/department once it's been granted to an employee.** The Configurator can add a jurisdiction or department assignment, but has no corresponding "remove" path today — confirmed open (#1957).
-- **Migrating multiple cities that share common category codes can show one city's department on another's dashboard tiles**, because the reporting views resolve a category's department by comparing across the whole deployment rather than each city's own. See the migration tool's documentation for a query that checks your exposure.
-- **A complaint whose category hasn't been migrated will fail to send notifications** on its next workflow action (assign/resolve/escalate), even though it still opens and displays fine.
-- **The Department Grievance Routing Officer (DGRO) role gets the Dashboard sidebar link but not the underlying permission to use it.** DGRO's seeded role-actions include the nav-link action but none of the analytics capability actions, so a DGRO employee sees the Dashboard menu entry but every dashboard request is denied. Confirmed against the current seed data — grant DGRO the same capability actions as other supervisor-level roles if you need this role to actually use the dashboard.
-- **Escalation can misfire after it triggers.** Once a complaint auto-escalates, completing the workflow from the escalated assignee's side doesn't always work correctly — confirmed open (#1956, highest priority in the sign-off list below).
-- **Employee-timeline PII masking isn't wired up yet.** The visibility grants described under [New City Data & Settings](#new-features) (`DataSecurity.DecryptionABAC`) aren't actually applied on the employee timeline — confirmed open (#1970), consistent with the seed-data gap called out earlier in this document.
-- **GRO↔LME assignment can offer the wrong people.** The assignee dropdown doesn't always filter correctly by role when assigning a complaint from GRO to LME (or back) — confirmed open (#1968).
-- **LME can occasionally get stuck unable to mark a complaint resolved** — root-caused to a specific caching issue rather than a broader workflow defect (#1967).
-- **Several Supervisor Dashboard KPIs are wrong or unavailable**: SLA Non-Compliance Rate, Employees with Most Open Complaints, Employee Performance, and Complaints at Risk were the specific ones confirmed failing at sign-off (#1983).
-- **Dashboard CSV export shows raw numbers instead of percentages** for percentage-based statistics (#1977).
-- **WhatsApp/SMS can silently stop sending, with no error surfaced in the Configurator,** if the notification provider's (Twilio) token has expired (#1975) — check the provider console before assuming a configuration problem.
-
-**Confirmed at CMS 2.12 sign-off** (QA pass completed 2026-09-03), each tracked individually on GitHub — the authoritative, current list behind the bullets above:
-
-| Issue | Title | Priority | Status | Assignee |
-|---|---|---|---|---|
-| #1956 | Employee: after escalation the workflow doesn't proceed correctly | P0 | In progress | Lokendra-egov |
-| #1957 | Configurator UI: no way to revoke a jurisdiction/department already granted to an employee | P1 | In progress | Lokendra-egov |
-| #1983 | Dashboard: several KPIs incorrect or unavailable | P1 | Todo | KDwevedi |
-| #1967 | Employee: LME sometimes can't mark a complaint resolved (caching issue) | P2 | Todo | KDwevedi |
-| #1968 | Employee: GRO↔LME assign dropdown doesn't filter correctly by role | P2 | Todo | KDwevedi |
-| #1970 | Employee UI: timeline PII masking not implemented | P2 | In progress | vinothrallapalli-eGov |
-| #1975 | SMS/WhatsApp silently fails once the Twilio token expires | P2 | Todo | KDwevedi |
-| #1977 | Dashboard CSV export shows raw numbers, not percentages | P2 | Todo | KDwevedi |
-| #1984 | Search/inbox filter panel lists all jurisdictions/departments, not just the employee's own | P2 | Todo | vinothrallapalli-eGov |
-
-Other open items tracked against this release, lower priority or longer-tail (verified open on GitHub as of this writing — several items from an earlier draft of this list have since been closed and were removed):
-
-| Area | Issue |
-|---|---|
-| Notifications | Error while creating the workflow in Novu (#1517) |
-| Notifications | Sync WhatsApp templates from Twilio fails for some messages (#1516) |
-| Notifications | Configure Notifications: Delete and Recreate features not working as expected (#1501) |
-| Notifications | Employees are not yet notified on complaint assignment across email, SMS and WhatsApp (#904) |
-| Notifications | Notification setup documentation for implementation teams still to be published (#1032) |
-| Supervisor Dashboard | Use Dashboard in Portuguese (#1169) |
-| Supervisor Dashboard | Production load-time benchmark at 3K / 50K / 100K records (#1109) |
-| Supervisor Dashboard | Data dictionary asset creation for the CMS dashboard (#1575) |
-| Complaint lifecycle | Validate complaint types against the tenant master, dropping the state-level fallback (#902) |
-| Configuration | Resolve the department master per tenant with state-level fallback (#901) |
-| Deployment / operations | Observability dashboards for operations & maintenance (#541) |
-| Deployment / operations | Citizen login on the Docker Compose setup (#453) |
-| Deployment / operations | Developer environment setup within an hour (#191) |
-| Platform | Rate-limiter configuration (#1253) |
-| Quality & security | Vulnerability testing (#1482) |
 
 ## Related Documents <a href="#document-resources-and-links" id="document-resources-and-links"></a>
 
