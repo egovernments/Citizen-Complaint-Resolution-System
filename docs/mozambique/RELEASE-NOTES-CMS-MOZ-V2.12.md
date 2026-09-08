@@ -68,7 +68,7 @@ CMS Mozambique — **Fala Cidadão** — is the Mozambique implementation of the
 | **Complaint classification** | Fixed 2-level model → N-level hierarchy defined as data · one-to-many department mapping · full operation without a department · routed department preserved across reopen/rate · localized category labels |
 | **Workflow** | CMS multi-tier BusinessService (11 states/18 actions) selected per deployment · reopened complaints (rejected **or** resolved) return to the Supervisor's REFERRED queue (production workflow updated 2026-08-21) · escalation runbook + enablement script |
 | **Configuration / MDMS** | New masters: complaint dispatcher & templates, extended-attribute schemas (IGE/IGSAE), landing page, analytics providers, privacy policy, tenant banner · all new backend settings opt-in with safe defaults |
-| **Roles** | 13 new roles (CMS officer chain, scope roles, permission roles) + ~2,180 grant lines |
+| **Roles** | 13 new roles (CMS officer chain + permission roles) + ~2,180 grant lines |
 | **Localization** | Full pt_PT packs seeded per tenant · pt_PT default honoured on first load · configurator localized |
 | **Deployment** | gzip + no-cache on the UI bundle · unified migration runner · testing entrance · default-data-handler retired (seeds moved to the DB dump) · self-contained security scanner (repo-embedded, report-only, public dashboard) · Grafana requires login (anonymous access disabled) |
 
@@ -105,10 +105,9 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 3. **Deployment requires the default bootstrap password** — several deploy steps hardcode the default credential; changing bootstrap secrets currently breaks a full deploy. Sweep scheduled product-side.
 4. **Confidential-complaint field masking is enforced at the API** — every complaint read path and the update response mask the confidential fields (`extendedAttributes`) to `****` server-side unless the caller is the complainant or holds a role in `ComplaintTemplateType.allowedViewerRoles` (default `CONFIDENTIAL_COMPLAINT_VIEWER`); configured `x-no-mask` fields (e.g. institution name) stay visible. The complainant identity block (name/mobile/typed address) is masked on employee screens as a display control — API-level masking of that block is the remaining gap.
 5. **Three roles need manual registration after deploy** — `CMS_ADMIN`, `CMS_DASHBOARD_VIEWER`, `CONFIDENTIAL_COMPLAINT_VIEWER` are not auto-registered by the migration runner (it registers the five workflow roles). Already registered on the production environment.
-6. **No dashboard geography drill-down** in this release.
-7. **Notification templates for the CMS workflow's new states** may be incomplete; transitions through those states can send nothing.
-8. **IGSAE authority is switched off by configuration** for this deployment (product functionality retained; re-enable via MDMS when required).
-9. Admin search shows the result count as "N+" until the last page (backend count echo); rating retries once without an assignee where the workflow engine rejects it (accepted behaviour).
+6. **Notification templates** are seeded for apply/assign/reassign/reject/resolve/reopen/rate; the AWAITINGINFORMATION and COMMENT transitions have none seeded and send nothing until templates are added (the admin console can add them per transition).
+7. **IGSAE authority is switched off by configuration** for this deployment (product functionality retained; re-enable via MDMS when required).
+8. Admin search shows the result count as "N+" until the last page (backend count echo); rating retries once without an assignee where the workflow engine rejects it (accepted behaviour).
 
 ---
 
@@ -129,6 +128,7 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 - [Mozambique customization record](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique-customizations.md)
 - [Release audit / evidence document](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique/RELEASE-PREVIEW-CMS-MOZ-V2.12.md) — full product-baseline comparison behind these notes
 - [Migration runner guide](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/migration/README.md) — `ccrs-migrate.cjs`
+- [Localization workbook](https://docs.google.com/spreadsheets/d/1u_pWLayblgs7VVsuIifK14GHAD0DFMi3/edit?usp=sharing&rtpof=true&sd=true) — master translation Excel sheet (pt_PT / en_IN)
 - [Analytics setup & self-hosted Matomo](https://github.com/eGov-Global/CMS-MOZAMBIQUE/tree/master/docs/analytics-guide)
 - [Escalation enablement runbook](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/pgr-escalation/RUNBOOK.md)
 - [HTTPS with Let's Encrypt](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/enabling-https-with-letsencrypt.md)
