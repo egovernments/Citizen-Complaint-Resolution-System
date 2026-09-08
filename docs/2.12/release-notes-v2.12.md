@@ -384,7 +384,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 | [local-setup/docs/ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding + add-ons catalogue (every optional flag) |
 | [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design |
 | [dashboard-configuration.md](dashboard/dashboard-configuration.md) | Supervisor Dashboard configuration reference |
-| [notifications-guide/](../notifications-guide/01-mdms-masters.md) | Notifications setup guide |
+| [notifications/](notifications/README.md) | Notifications setup guide (SMS, WhatsApp, email) |
 | [observability/](../observability/enabling-monitoring.md) | Monitoring stack + dashboard telemetry |
 | [local-setup/ansible/runbooks/01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store (OpenBao) operations runbook |
 | [Test Cases - CMS 2.12.xlsx](Test%20Cases%20-%20CMS%202.12.xlsx) | QA test case sheet for this release |

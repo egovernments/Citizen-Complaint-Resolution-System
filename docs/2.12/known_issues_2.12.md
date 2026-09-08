@@ -101,7 +101,7 @@ The following remain open for this release and are candidates for future patch o
 | [ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding & add-ons catalogue |
 | [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design doc |
 | [dashboard-configuration.md](dashboard/dashboard-configuration.md) | Supervisor Dashboard configuration reference |
-| [notifications-guide/](../notifications-guide/01-mdms-masters.md) | Notifications setup & MDMS guide |
+| [notifications/](notifications/README.md) | Notifications setup guide (SMS, WhatsApp, email) |
 | [observability/](../observability/enabling-monitoring.md) | Monitoring stack & dashboard telemetry |
 | [01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store operations runbook |
 

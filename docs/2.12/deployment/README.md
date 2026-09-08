@@ -1,7 +1,7 @@
 # Deployment Process
 
 **📹 Prefer to follow along?** A walkthrough of the single-machine setup (example
-onboarding sheets are in [`docs/onboarding-example/`](docs/onboarding-example/)):
+onboarding sheets are in [`docs/onboarding-example/`](../../onboarding-example/)):
 
 <video src="https://github.com/egovernments/Citizen-Complaint-Resolution-System/raw/fix/master-k8s-deploy-convergence/docs/onboarding-example/ansible-setup-walkthrough.mp4" controls width="720"></video>
 
@@ -81,7 +81,7 @@ Use domain name instead of localhost, if used one during configuration.
 
 ## Enabling Notifications
 
-See [this](docs/novu-notifications/README.md) to enable notifications.
+See [this](../notifications/README.md) to enable notifications.
 
 ---
 
@@ -243,7 +243,7 @@ Open the **Configurator** at `https://<your-domain>/configurator/` and sign in
 with the admin user (`ADMIN` / `eGov@123` unless you changed it) and your tenant
 name. From there you upload your city and boundary sheets to get it running —
 exactly like the single-machine setup. See
-[`docs/onboarding-example/`](docs/onboarding-example/) for sample sheets
+[`docs/onboarding-example/`](../../onboarding-example/) for sample sheets
 (boundaries, masters, complaint hierarchy, employees) you can copy and adapt.
 
 > Setting up a whole new **country/state** (rather than a city under the sample
