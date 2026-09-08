@@ -27,7 +27,7 @@ Most new capabilities are **switched off until an account chooses to turn them o
 ### At a glance
 
 * **Upgrade path:** v2.11 → v2.12.
-* **New services:** a handful of genuinely new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
+* **New services:** a handful of new backend components shipped this release — see [New Services](#new-services) for the complete, audited list (several dashboard/notification *features* described elsewhere are not separate services; that distinction is called out explicitly below).
 * **Major feature:** complaint categories move from a fixed two-level list to a flexible tree each city shapes itself — **breaking, and not automatic** for a city that already has categories set up. A validated migration tool now exists for this.
 
 <details>
@@ -87,7 +87,7 @@ These require action from the operations team on existing installations — full
 ## New Services <a href="#new-services" id="new-services"></a>
 
 <details>
-<summary>Genuinely new backend components in this release (click to expand)</summary>
+<summary>New backend components in this release (click to expand)</summary>
 
 | Service | What it does | How it's switched on |
 |---|---|---|
@@ -340,7 +340,7 @@ Refer: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/
 ## Full Engineering Changelog <a href="#full-engineering-changelog-keep-a-changelog" id="full-engineering-changelog-keep-a-changelog"></a>
 
 <details>
-<summary>Complete Added / Changed / Fixed / Deprecated / Removed / Security log — Keep a Changelog format (click to expand)</summary>
+<summary>Complete Engineering change log (click to expand)</summary>
 
 ### [2.12] - 2026-08-03
 
