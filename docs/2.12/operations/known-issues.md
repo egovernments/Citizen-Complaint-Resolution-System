@@ -46,7 +46,7 @@ this and not something that looks like it, the **resolution**, who **applies** i
 |---|---|---|---|
 | One user sees errors everywhere, others fine | Works in a private window / on another account | Sign out fully and back in; clear site data for the domain | L1 |
 | One user gets "unauthorised" or sees no menu items | Other users with the same role are fine | Check the user's roles and tenant in HRMS / Configurator; missing role assignment | L1 **†** |
-| User can log in but their office's complaints are missing | Another user in the same office sees the same gap | Check the employee's jurisdiction/boundary assignment in HRMS | L1 **†** |
+| User can log in but their office's complaints are missing | Another user in the same office sees the same gap | Check the employee's jurisdiction/boundary assignment in HRMS — see [jurisdiction-access-control.md](../../jurisdiction-access-control.md) (this fails closed by design: missing HR data means the user sees nothing, not everything) | L1 **†** |
 | Site "down" for one person only | Loads for you on another network | Their DNS or network. Test with a phone hotspot | L1 |
 
 ---
