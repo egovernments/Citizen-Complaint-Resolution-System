@@ -3,7 +3,7 @@
 **Audience:** GTM / Solutions / Implementation teams
 **Source:** Load test results from March 2026 against DIGIT Complaints Management on Docker Compose (single-machine deployments)
 
-**Superseded sizing.** The hardware tiers in the March 2026 version of this page have been withdrawn. The minimum supported machine is now **16 vCPU / 32 GiB** and there is no smaller configuration — see [The Hardware Floor](#the-hardware-floor-16-vcpu-32-gib) below. The August 2026 results measured against a live deployment are in [Run 28-08-26](./run-28-08-26/).
+**Superseded sizing.** The hardware tiers in the March 2026 version of this page have been withdrawn. The minimum supported machine is now **16 vCPU / 32 GiB** and there is no smaller configuration — see [The Hardware Floor](#the-hardware-floor-16-vcpu-32-gib) below. The August 2026 results measured against a live deployment are in [Run 28-08-26](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/2.12/performance/ansible/README.md).
 
 ---
 
@@ -78,7 +78,7 @@ At the point where the system collapsed in the August 2026 tests, CPU was **64% 
 
 ### Above one machine
 
-Scale out by adding machines of the same size, not by growing one machine — the ceiling is queue and connection contention, which extra cores on a single host do not relieve. Roughly 2 nodes cover 1M complaints/day and roughly 11 cover 10M/day, both on Kubernetes with a managed database. These are projections from single-machine measurements; no multi-machine configuration has been tested. See [Run 28-08-26](./run-28-08-26/recommendations-transition-plan) for the detail.
+Scale out by adding machines of the same size, not by growing one machine — the ceiling is queue and connection contention, which extra cores on a single host do not relieve. Roughly 2 nodes cover 1M complaints/day and roughly 11 cover 10M/day, both on Kubernetes with a managed database. These are projections from single-machine measurements; no multi-machine configuration has been tested. See [Run 28-08-26](https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/2.12/performance/ansible/recommendations-transition-plan.md) for the detail.
 
 A single 32 vCPU / 64 GiB host remains a reasonable choice when you want headroom for **other DIGIT modules** or a co-located database, but it buys little additional complaint throughput.
 

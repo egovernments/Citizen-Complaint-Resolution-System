@@ -255,7 +255,7 @@ This handbook is about **things going wrong**. The routine admin work in the tab
 L1's, but it is documented elsewhere, because it is not incident response:
 
 - **Onboarding a city, boundaries, departments or employees** — see
-  [`../migration/operator-runbook.md`](../migration/operator-runbook.md) and the XLSX
+  [`../../migration/operator-runbook.md`](../../migration/operator-runbook.md) and the XLSX
   onboarding flow.
 - **Changing application configuration** (complaint types, SLAs, branding) — that is the
   Configurator. Doing it is L1 work; it is just not an incident.

@@ -1,15 +1,13 @@
 # MDMS schema reference
 
-The exact JSON shape of every MDMS record `docs/dashboard-configuration.md` describes updating.
-Field docs are copied from each schema's own `description`/`x-unique`/`x-ref-schema` — the schema
-files are the source of truth; this page just puts them next to a real example so you don't have to
-find and read all six files to write one update payload.
+Exact JSON shape of every record type `dashboard-configuration.md` describes updating. Fields are
+copied from each schema's own `description`/`x-unique`/`x-ref-schema` (source of truth); this page
+just puts them next to a real example.
 
-Schema sources:
-- `local-setup/db/dss-mdms-seed/schemas/dss.{KpiDefinition,DashboardPack,DashboardConfig}.json`
-- `utilities/default-data-handler/src/main/resources/schema/ACCESSCONTROL-ROLEACTIONS.json`
-  (holds all three of `ACCESSCONTROL-ACTIONS-TEST.actions-test`,
-  `ACCESSCONTROL-ROLEACTIONS.roleactions`, and `ACCESSCONTROL-ROLES.roles`)
+Schema sources: `local-setup/db/dss-mdms-seed/schemas/dss.{KpiDefinition,DashboardPack,DashboardConfig}.json`
+and `utilities/default-data-handler/src/main/resources/schema/ACCESSCONTROL-ROLEACTIONS.json` (holds
+`ACCESSCONTROL-ACTIONS-TEST.actions-test`, `ACCESSCONTROL-ROLEACTIONS.roleactions`, and
+`ACCESSCONTROL-ROLES.roles`).
 
 ---
 
@@ -118,7 +116,7 @@ Single-record master — the UI reads the record with `id: "default"`. `x-unique
 | `numberFormat` | string or `{[locale]: string, default?: string}` | Display-only number mask, per locale. String form = one mask tenant-wide (legacy). `#,##0.00` → `1,234.56`; `#.##0,00` → `1.234,56`. Absent/malformed → UI keeps built-in formatting. CSV export always stays raw |
 | `departmentScoping` | enum | `enforced` \| `disabled`. `disabled` widens visibility to all employees (temporary, pending #1280). Absent = `enforced` |
 | `publicDashboardEnabled` | boolean, default `false` | Fail-closed switch for the public dashboard. Only literal `true` enables it |
-| `timeZone` | string (IANA) | e.g. `Africa/Nairobi`, `Asia/Kolkata`. All windowed queries (dtd/wtd/mtd/qtd/ytd) resolve against this zone's calendar day. Absent/invalid falls back to `Africa/Nairobi`. MV-backed tiles only pick up a change on their next `DashboardRefreshScheduler` run, not instantly |
+| `timeZone` | string (IANA) | e.g. `Africa/Nairobi`. Windowed queries (dtd/wtd/mtd/qtd/ytd) resolve against this zone's calendar day; absent/invalid falls back to `Africa/Nairobi`. MV-backed tiles pick up a change only on their next `DashboardRefreshScheduler` run |
 
 **Example** (live `ke` record — number-format only, no role list):
 
@@ -159,7 +157,7 @@ Defines one navigable/callable action. `x-unique: [id]`.
 }
 ```
 
-**Capability actions** (2640–2648 — see `docs/dashboard-configuration.md` for which role holds which):
+**Capability actions** (2640–2648 — see `docs/2.12/dashboard/dashboard-configuration.md` for which role holds which):
 
 ```json
 { "id": 2646, "url": "/pgr-services/v2/analytics/capabilities/officer", "name": "MDMS", "displayName": "...", "enabled": false, "serviceCode": "MDMS" }
@@ -198,5 +196,5 @@ referencing it will resolve. `x-unique: [code]`, `additionalProperties: false`.
 
 ---
 
-Back to [`../dashboard-configuration.md`](../dashboard-configuration.md#updating-it--apis) for how
+Back to [`../../2.12/dashboard/dashboard-configuration.md`](../../2.12/dashboard/dashboard-configuration.md#updating-it--apis) for how
 these get written to (the `mdms-v2 _create`/`_update` calls) rather than just their shape.

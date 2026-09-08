@@ -205,7 +205,7 @@ instead; the steps are identical.
    - **Summary**: `Disk {{ $labels.mountpoint }} is {{ humanize $values.B }}% full on {{ $labels.instance }}`
    - **Description**: `Postgres will refuse writes when the disk fills. Check large Docker log files and Elasticsearch indices. Runbook: https://<your-runbook-host>/operations/l2-diagnosis#the-host-itself-cpu-ram-disk`
    - **Always put the runbook link in the description**, and make it an **absolute URL the
-     recipient can click**. A repository-relative path like `docs/operations/…` is not a
+     recipient can click**. A repository-relative path like `docs/2.12/operations/…` is not a
      link in Slack, email or a paging app, and the person on call may not have the repo
      checked out. Substitute wherever your team actually hosts this handbook — an internal
      wiki, a docs site, or the file's permalink on your git host. At 3am, the person

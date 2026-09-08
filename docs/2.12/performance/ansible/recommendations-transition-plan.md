@@ -67,7 +67,7 @@ The 120-test-user row was measured separately, four days later, and is the avera
 
 **One finding from that fault is worth acting on regardless of scale.** When the service ran out of memory it did not slow down, return errors and recover. It stopped permanently: it kept accepting connections, answered none, and stayed that way for six hours until it was restarted by hand. It could not recover on its own, and nothing restarted it automatically. Any deployment should therefore assume that a memory-related failure needs human intervention, and should be monitored for "accepting requests but not answering" rather than only for crashes.
 
-**Recommended before quoting any figure above 966,000/day:** have platform engineering raise the memory allowance and add a timeout to the message-queue call that caused the permanent hang, then re-run the ladder. Both are small changes. The full technical detail is in [When the heap gave out](./findings#when-the-heap-gave-out).
+**Recommended before quoting any figure above 966,000/day:** have platform engineering raise the memory allowance and add a timeout to the message-queue call that caused the permanent hang, then re-run the ladder. Both are small changes. The full technical detail is in [When the heap gave out](./findings.md#when-the-heap-gave-out).
 
 ---
 

@@ -8,7 +8,7 @@ Written for the question an operator actually has: **"how much can I afford, and
 > alerting test (`local-setup/otel/grafana/provisioning/alerting/`) arrive with **#1673**,
 > stacked on **#1609**. Until that lands, a deployed Grafana has **zero alert rules** and one
 > placeholder contact point — see
-> [../operations/alerts-setup.md](../operations/alerts-setup.md) for what to build in the
+> [../2.12/operations/alerts-setup.md](../2.12/operations/alerts-setup.md) for what to build in the
 > meantime, and note that **Gatus endpoint alerting has shipped** and needs only a webhook
 > URL.
 >

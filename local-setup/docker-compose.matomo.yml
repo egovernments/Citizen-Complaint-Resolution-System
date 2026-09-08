@@ -1,0 +1,173 @@
+# Self-hosted Matomo for the compose tier (issue #1254).
+#
+# Matomo is the analytics destination the portal's analytics shim sends to. The
+# shim (digit-ui-esbuild/public/analytics.js) is the client half and is
+# configured through MDMS; this file is the server half — the thing that
+# receives the events and stores them on the deployment's own box, which is the
+# point of self-hosting for a government portal.
+#
+# Layered ALWAYS by the Ansible deploy (see playbook-deploy.yml "Compute compose
+# -f flags"), like the migrations and monitoring overlays. "Always layered" is
+# about the -f flag, NOT about the services starting: all three services carry
+# `profiles: [matomo]` and so start only when the tenant sets
+# `enable_matomo: true`. The two are easy to conflate — layered onto the base,
+# `docker compose ... config --services` names no matomo service without the
+# profile and all three with it.
+#
+# Why its own database. Matomo is PHP + MySQL/MariaDB. The DIGIT stack is
+# Postgres-only and Matomo cannot use it, so this overlay brings its own
+# MariaDB. It shares nothing with the platform except the docker network, and
+# nothing the platform depends on reads or writes these two volumes.
+#
+# Memory: ~1 GB for the pair under the limits below. On a 16 GB box running the
+# full stack that is real; leave enable_matomo false on boxes that are tight.
+services:
+  # ────────────────────────────────────────────────────────────────────────
+  # Matomo's own database.
+  #
+  # Official Docker Hub image, same convention as the monitoring overlay's
+  # prom/node-exporter — not the egovio/* mirror, which carries no MariaDB.
+  #
+  # NO PUBLISHED PORT, deliberately: this is reachable only from inside
+  # egov-network. The credentials below come from .env, which the deploy
+  # writes from OpenBao (MATOMO_DB_PASSWORD / MATOMO_DB_ROOT_PASSWORD). The
+  # literal fallbacks exist so `docker compose config` and a bare
+  # non-ansible `up` still resolve; a real deploy always overrides them.
+  # ────────────────────────────────────────────────────────────────────────
+  matomo-db:
+    image: mariadb:11.4
+    container_name: digit-matomo-db
+    profiles: [matomo]
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: matomo
+      MARIADB_USER: matomo
+      MARIADB_PASSWORD: ${MATOMO_DB_PASSWORD:-matomo_local_only}
+      MARIADB_ROOT_PASSWORD: ${MATOMO_DB_ROOT_PASSWORD:-matomo_root_local_only}
+      # Matomo's schema is utf8mb4 throughout; setting it at the server
+      # avoids the installer's "database charset" warning on step 3.
+      MARIADB_CHARACTER_SET: utf8mb4
+      MARIADB_COLLATE: utf8mb4_general_ci
+    volumes:
+      - matomo_db_data:/var/lib/mysql
+    # healthcheck.sh ships in the official mariadb image. --connect proves the
+    # socket answers, --innodb_initialized proves recovery finished — a plain
+    # TCP probe goes green while InnoDB is still replaying, and Matomo's
+    # installer then fails on a connection it was told was ready.
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    # Memory ceiling (#1612) — see the note on otel-collector in
+    # docker-compose.egov-digit.yaml. 512m is comfortable for the row volume a
+    # single-tenant portal produces; raise it if you keep years of raw logs.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - egov-network
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Matomo itself (PHP + Apache).
+  #
+  # Bound to 127.0.0.1 ONLY. The admin UI is never on the internet: reach it
+  # over an SSH tunnel to 127.0.0.1:${MATOMO_PORT}, the same posture
+  # group_vars/digit.yml describes for Grafana when nginx_features.grafana is
+  # off. What IS public is the two tracking endpoints, proxied same-origin by
+  # the host nginx behind nginx_features.matomo — see nginx-site.conf.j2.
+  #
+  # Why a port and not a path for the admin UI: Matomo emits absolute asset
+  # URLs, so serving the whole app under /matomo/ 404s its own CSS and JS.
+  # Only the two tracking endpoints are path-proxied, and those are exact
+  # matches precisely so nothing else leaks through.
+  # ────────────────────────────────────────────────────────────────────────
+  matomo:
+    image: matomo:5-apache
+    container_name: digit-matomo
+    profiles: [matomo]
+    restart: unless-stopped
+    depends_on:
+      matomo-db:
+        condition: service_healthy
+    environment:
+      # These four are the ONLY environment variables matomo:5-apache reads.
+      # Do NOT add MATOMO_GENERAL_* here expecting it to work: the image
+      # ignores everything outside MATOMO_DATABASE_*, so e.g.
+      # MATOMO_GENERAL_TRUSTED_HOSTS is silently inert. Post-install General
+      # settings are applied with `console config:set` instead — the deploy
+      # does that for proxy_client_headers (which IS load-bearing: without it
+      # every visit is recorded as the docker bridge gateway) and trusted_hosts.
+      MATOMO_DATABASE_HOST: matomo-db
+      MATOMO_DATABASE_USERNAME: matomo
+      MATOMO_DATABASE_PASSWORD: ${MATOMO_DB_PASSWORD:-matomo_local_only}
+      MATOMO_DATABASE_DBNAME: matomo
+    ports:
+      - "127.0.0.1:${MATOMO_PORT:-18081}:80"
+    volumes:
+      # Matomo writes its installed config (config/config.ini.php), plugins and
+      # the GeoIP database here. This volume is what makes the install survive
+      # a redeploy — losing it means running the browser installer again.
+      - matomo_data:/var/www/html
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - egov-network
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Report archiving.
+  #
+  # Matomo stores raw hits on write and computes reports separately. Without an
+  # archiving run, Visitors → Overview and every dashboard graph read empty
+  # while data is demonstrably arriving — the single most common "it isn't
+  # working" report, and the reason this is packaged rather than left to a cron
+  # the operator is told to add.
+  #
+  # Runs the console archiver on a loop instead of a crontab so it needs no
+  # host-side state and no second image. `|| true` keeps the loop alive across
+  # a transient failure (a restarting database, an archive already running);
+  # the next pass picks the work up, and the container's logs still carry the
+  # error for anyone looking.
+  #
+  # --url is required because the CLI has no request to infer the base URL from.
+  # `matomo` (the compose service name) is not what the browser installer
+  # recorded in trusted_hosts, so the deploy adds it after install — see the
+  # "Matomo — apply proxy + trusted-host settings" task in playbook-deploy.yml.
+  # That is insurance rather than a fix: measured, archiving succeeds with an
+  # untrusted --url, because CliMulti archives in subprocesses and never issues
+  # an HTTP request. It only bites on the fallback path where exec() is
+  # unavailable and CliMulti fetches index.php over HTTP instead.
+  # ────────────────────────────────────────────────────────────────────────
+  matomo-archiver:
+    image: matomo:5-apache
+    container_name: digit-matomo-archiver
+    profiles: [matomo]
+    restart: unless-stopped
+    depends_on:
+      matomo:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          php /var/www/html/console core:archive --url=http://matomo/ || true
+          sleep ${MATOMO_ARCHIVE_INTERVAL:-3600}
+        done
+    volumes:
+      # Same volume as the app: the archiver runs Matomo's own code and reads
+      # the installed config.ini.php for its database credentials.
+      - matomo_data:/var/www/html
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - egov-network
+
+volumes:
+  matomo_data: null
+  matomo_db_data: null

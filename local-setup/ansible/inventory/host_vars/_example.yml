@@ -325,6 +325,34 @@ enable_otp_services: false
 # extra). Off by default; only enable if you actually use the inbox.
 enable_search_stack: false
 
+# ────────── Self-hosted Matomo (web analytics) ──────────
+# Bring up Matomo + its own MariaDB + a report archiver (~1 GB RAM extra;
+# #1254). Matomo is PHP + MySQL and cannot use the platform's Postgres, so it
+# brings its own database; nothing the platform depends on touches it.
+#
+# Turning this on stands up an EMPTY, self-contained analytics server and
+# sends nothing anywhere. Pointing the portal at it is a separate step done
+# through MDMS (configurator → System → Analytics Providers), so collection
+# can be switched on and off without a redeploy.
+#
+# MUST be paired with `nginx_features.matomo: true` below — preflight refuses
+# either half on its own. The admin UI is bound to 127.0.0.1 and is reached
+# over an SSH tunnel; only the two tracking endpoints are public.
+#
+# The deploy INSTALLS Matomo for you (matomo_auto_install, default true) — no
+# browser wizard. The superuser password is generated and kept in OpenBao:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Reach the UI over a tunnel: ssh -L 18081:127.0.0.1:18081 <host>
+#
+# See docs/matomo-deployment.md for the full walkthrough.
+# enable_matomo: false
+# matomo_auto_install: true       # false = click through the wizard yourself
+# matomo_admin_user: admin        # the Matomo superuser login
+# matomo_admin_email: ""          # defaults to admin@<domain>
+# matomo_site_name: ""            # defaults to <domain>; the label on reports
+# matomo_archive_interval: 3600   # seconds between report-archiving passes
+# upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
+
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
 # the configurator/frontend uses for tenant onboarding. Serving that shim
@@ -730,6 +758,10 @@ nginx_features:
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
+  matomo: false              # /matomo/matomo.js + .php — the two Matomo TRACKING endpoints only
+                             # (requires enable_matomo: true). The Matomo admin UI is NOT proxied:
+                             # it emits absolute asset URLs that break under a path prefix, and it
+                             # has no business being public. Tunnel to 127.0.0.1:18081 instead.
   # Deliberately DEFAULTS TO TRUE (group_vars/digit.yml, #1604): Grafana
   # carries a real login since #1602, and /grafana/ is its only public
   # path. Listed here so the knob is visible — set false to take Grafana

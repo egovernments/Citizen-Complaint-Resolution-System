@@ -58,6 +58,42 @@ digit_ui_mode: static
 # Off by default; tenants that use the inbox opt in via host_vars.
 enable_search_stack: false
 
+# Bring up self-hosted Matomo + its MariaDB + the report archiver
+# (~1 GB RAM; #1254). Off by default — analytics is opt-in, and on a
+# 16 GB box with no swap this is a real allocation.
+#
+# This is the SERVER half only: it stands the destination up. Pointing
+# the portal at it is a separate, MDMS-driven step (System → Analytics
+# Providers in the configurator) so that turning collection on or off
+# never needs a redeploy. Standing this up sends nothing anywhere.
+#
+# Lowering it back to false TEARS DOWN the containers, matching what
+# observability_level does (#1687). The two named volumes survive, so
+# the install and its data are still there when it is turned back on.
+#
+# Pair with nginx_features.matomo below: without that the tracking
+# endpoints are not reachable from the browser and the portal has
+# nothing same-origin to talk to. preflight.py refuses the combination.
+enable_matomo: false
+
+# Install Matomo headlessly during the deploy instead of leaving its 8-step
+# browser wizard for a human (#1254). Default ON, because "packaged" ought to
+# mean the deploy finishes with something that tracks.
+#
+# The superuser password is generated once and stored in OpenBao — never in
+# host_vars — and read back with:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Better than a wizard-typed password on every axis: unique per tenant, never
+# on disk in the inventory, and recoverable.
+#
+# Set false to keep the manual wizard (tunnel to 127.0.0.1:18081 and click
+# through it). Nothing else changes; the rest of the packaging is identical.
+matomo_auto_install: true
+matomo_admin_user: admin
+# matomo_admin_email defaults to admin@<domain>, matomo_site_name to <domain>,
+# and the site URL to this deployment's own origin. Override in host_vars if
+# the reports should carry different labels.
+
 # ──────────────────────────────────────────────────────────────────────
 # How much observability to deploy (#1657)
 # ──────────────────────────────────────────────────────────────────────
@@ -175,6 +211,13 @@ nginx_features:
                             # tunnel to 127.0.0.1:13000 instead).
   api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  matomo: false             # /matomo/matomo.js + /matomo/matomo.php — the two
+                            # tracking endpoints ONLY, as exact matches. The
+                            # Matomo admin UI is deliberately NOT proxied: it
+                            # emits absolute asset URLs that 404 under a path
+                            # prefix, and it has no business being public.
+                            # Reach it over an SSH tunnel to
+                            # 127.0.0.1:18081 (upstream_matomo_port) instead.
   # Note: `/` routing is derived from `digit_ui_mode`:
   #   static → host nginx serves /digit-ui/* + Kong gets / for API calls
   #   hmr    → esbuild dev server on :18080 gets / (serves both UI + API proxy)
@@ -187,6 +230,13 @@ upstream_gatus_port: 18889
 upstream_mcp_port: 13101
 upstream_esbuild_port: 18080
 upstream_minio_port: 19000
+# Matomo's admin UI. Bound to 127.0.0.1 by the overlay, so this is the
+# tunnel target, not a public port. It is also the Host header the nginx
+# tracking blocks send, and the origin Matomo's installer records in
+# General.trusted_hosts — so changing it after the installer has run leaves
+# the two disagreeing. Worth keeping in step, though measured behaviour is
+# that the tracker itself does not enforce trusted_hosts (the UI and API do).
+upstream_matomo_port: 18081
 
 # ──────────────────────────────────────────────────────────────────────
 # Custom Docker registry (digit-mcp image, future custom builds)

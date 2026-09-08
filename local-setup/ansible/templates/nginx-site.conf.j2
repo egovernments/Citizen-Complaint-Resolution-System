@@ -224,6 +224,62 @@ server {
   }
 
 {% endif %}
+{# `| default(false)` is load-bearing here for the same reason as grafana
+   above: host_vars replace nginx_features as a whole dict, so every tenant
+   file written before this key existed has no `matomo` member. #}
+{% if nginx_features.matomo | default(false) %}
+  # Self-hosted Matomo — TRACKING ENDPOINTS ONLY (#1254).
+  #
+  # Two exact-match locations, and exact-match on purpose: `location /matomo/`
+  # would proxy the whole application, and the Matomo admin UI must not be
+  # public. It is bound to 127.0.0.1 by docker-compose.matomo.yml; reach it
+  # over an SSH tunnel to 127.0.0.1:{{ upstream_matomo_port }}.
+  #
+  # These two paths are what the portal's analytics shim is pointed at (Script
+  # URL /matomo/matomo.js, Endpoint URL /matomo/matomo.php in the configurator).
+  # Same-origin is the point: no TLS of its own, no entry in the ops host
+  # allowlist, and it works where the portal is served over plain http. A path
+  # under /digit-ui/ would NOT work — nginx answers anything there with the SPA
+  # shell, so the browser would try to execute HTML.
+  location = /matomo/matomo.js {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.js;
+    # Matomo's own origin, NOT $host — the origin its installer recorded in
+    # General.trusted_hosts, so Matomo's view of where it lives stays consistent
+    # with what it was installed as.
+    #
+    # MEASURED, because the widely-repeated version of this is wrong: on Matomo
+    # 5.13 the TRACKER does not enforce trusted_hosts. A hit sent through a
+    # `proxy_set_header Host $host;` block with Host: evil.example.org was
+    # recorded normally, with the correct visitor IP. The trusted-host check
+    # guards the UI and API — where a poisoned Host would end up in generated
+    # links and password-reset mails — not matomo.php. So this line is defence
+    # and consistency, not a fix for a live tracking failure; do not "simplify"
+    # it to $host, but do not expect breakage if someone already has.
+    #
+    # Nothing is lost by overriding it either way: the tracked page URL travels
+    # in the payload's `url=` parameter, not in this header.
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  location = /matomo/matomo.php {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.php;
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    # Matomo reads REMOTE_ADDR by default, which behind this proxy is nginx
+    # itself — every visit would be attributed to one IP and geolocation would
+    # report a single city. The deploy sets General.proxy_client_headers to
+    # HTTP_X_FORWARDED_FOR so this header is what Matomo actually uses; see the
+    # "Matomo — apply proxy + trusted-host settings" task in playbook-deploy.yml.
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+{% endif %}
 {% if enable_novu | default(false) %}
 {% if build_novu_dashboard | default(false) %}
   # Novu dashboard (SPA) — REBASED image (backend/novu-dashboard/Dockerfile,
