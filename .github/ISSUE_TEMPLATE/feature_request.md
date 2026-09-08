@@ -26,13 +26,11 @@ What business, user, or operational outcome are we trying to achieve?
 
 # Roadmap Alignment
 
-## Release
+## Target Release
 
-- [ ] 2.11
-- [ ] 2.12 - Nosy Build
-- [ ] 2.20 - SaaSSy Phase 1
-- [ ] 2.30 - SaaSSy Phase 2
-- [ ] Backlog
+<!-- Release milestones are not yet defined for CMS-MOZAMBIQUE. Note the intended release here, or leave as TBD. -->
+
+- Target release: TBD
 
 ## Goals Supported
 
