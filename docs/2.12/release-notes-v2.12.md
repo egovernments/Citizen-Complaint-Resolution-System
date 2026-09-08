@@ -387,7 +387,7 @@ Other open items tracked against this release, lower priority or longer-tail (ve
 | [notifications-guide/](../notifications-guide/01-mdms-masters.md) | Notifications setup guide |
 | [observability/](../observability/enabling-monitoring.md) | Monitoring stack + dashboard telemetry |
 | [local-setup/ansible/runbooks/01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store (OpenBao) operations runbook |
-| [Test Cases - CMS 2.12-beta.xlsx](../2.12-beta/Test%20Cases%20-%20CMS%202.12-beta.xlsx) | QA test case sheet for this release (asset still lives under `docs/2.12-beta/`) |
+| [Test Cases - CMS 2.12.xlsx](Test%20Cases%20-%20CMS%202.12.xlsx) | QA test case sheet for this release |
 
 ---
 
