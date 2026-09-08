@@ -111,7 +111,7 @@ These require action from the operations team on existing installations — full
 
 ## New Features <a href="#new-features" id="new-features"></a>
 
-### 1. Multi-Level Complaint Categories — *always on*
+### 1. Multi-Level Complaint Categories
 
 Complaints are now classified using a category tree the city defines — for example *Sanitation → Garbage → Missed collection* — instead of a fixed two-level list. Already-filed complaints keep working as long as the same category codes are reused.
 
@@ -123,7 +123,7 @@ Complaints are now classified using a category tree the city defines — for exa
 | Related | Migration `V20260731000000__repoint_grain_mvs_to_complainthierarchy.sql` (and, found during later validation, `V20260810000000__tenant_business_calendar_grains.sql`, which fixes report time-groupings to use each city's own time zone) repoint the reporting views to the new categories — run automatically. |
 | Watch out for | Two gaps found during real-world validation of this migration: a complaint whose category hasn't been migrated yet will fail to send notifications on its next workflow action even though it still opens and displays fine; and the reporting views resolve a category's department by comparing across every city in the deployment rather than each city's own, so two cities sharing a default category code with different departments can end up showing one city's department on the other's dashboard tiles. See the migration tool's documentation for exposure-check queries. |
 
-### 2. Supervisor Dashboard *(feature, not a separate service — runs inside the complaints service and Admin Console)*
+### 2. Supervisor Dashboard 
 
 Live counts, resolution times, charts, and a complaint map. Each supervisor sees only their own area and department; access is role-based. Answers to "how many complaints, where, how fast resolved" are computed by a reporting/analytics engine that ships as part of the complaints service (refresh on by default) — not a separate deployable component.
 
@@ -137,7 +137,7 @@ Live counts, resolution times, charts, and a complaint map. Each supervisor sees
 | Performance telemetry | The dashboard reports its own loading speed by default, which adds two public gateway routes (`/otel/v1/metrics`, `/otel/v1/logs`). `dashboard_metrics_enabled: false` stops the dashboard from *sending* this telemetry, but the two routes themselves stay in place — they are not removed by this setting. |
 | An older dashboard | The pre-catalog dashboard that predates this KPI-catalog-driven Supervisor Dashboard is now hidden by default, kept only as a rollback aid. |
 
-### 3. Public Dashboard *(feature, not a separate service)*
+### 3. Public Dashboard
 
 A curated, no-login view of selected Supervisor Dashboard statistics, for citizens and the public.
 
@@ -147,7 +147,7 @@ A curated, no-login view of selected Supervisor Dashboard statistics, for citize
 | Access | Served without a login session, at its own web address. Deliberately excludes the schema-introspection endpoint (`_schema`) from its gateway whitelist, so a public caller can't discover column/data structure — only `/packs`, `/catalog/_search`, and `/_query` are exposed. |
 | Isolation | A public caller cannot escape the curated set of indicators the city admin selected — verified by dedicated isolation tests. |
 
-### 4. Jurisdiction- and Department-Based Access Control (Dashboards, Analytics & Search) *(feature, not a separate service)*
+### 4. Jurisdiction- and Department-Based Access Control (Dashboards, Analytics & Search)
 
 Decides which rows of dashboard, analytics, and complaint-search/inbox data a given role/employee can see, based on their assigned area (jurisdiction) and department — replacing a set of hardcoded role exemptions with a configurable policy. **A plain-language explainer covering exactly how this works for complaint search and the employee inbox is at [jurisdiction-access-control.md](../jurisdiction-access-control.md)** — read that first if you're configuring this for the first time.
 
@@ -170,7 +170,7 @@ Automatic messages to citizens (and staff) at each step of a complaint — filed
 | Split-domain setups | Notification-dashboard URLs default to the city's own domain; if TLS terminates on a different public hostname set `novu_public_base_url` (per-URL overrides exist for rare cases). |
 | Old messages | The previous fixed SMS wording (localisation keys) still works for cities that don't opt in — it is now deprecated. |
 
-### 6. Automatic Escalation of Overdue Complaints — *on by default*
+### 6. Automatic Escalation of Overdue Complaints
 
 A complaint that stays unresolved past its allowed time moves up automatically — for example from the field worker to their supervisor — up to a configurable number of levels.
 
@@ -181,7 +181,7 @@ A complaint that stays unresolved past its allowed time moves up automatically �
 | Service settings | `pgr.escalation.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — **this messaging topic must exist** while escalation is on. |
 | Prerequisite | `Workflow.BusinessServiceMasterConfig` must contain a `PGR` row (`active:true, isStatelevel:true`). |
 
-### 7. Employee Inbox — "My Complaints / All Complaints" — *off by default*
+### 7. Employee Inbox — "My Complaints / All Complaints"
 
 Adds two tabs to the employee inbox: complaints assigned to me (and my team), and all complaints I'm allowed to see, based on the HR reporting hierarchy. This is a **separate, additional** feature from the jurisdiction/department access control in Section 4 above — a complaint has to pass both to appear in a tab.
 
@@ -213,7 +213,7 @@ How long a citizen has to reopen a resolved complaint is now a real, editable ci
 | Enforcement | The deadline is also enforced on the server from the same `REOPENSLA` master, based on the stored complaint (not what the request claims). Deployments must unset `time-before-closing-complaint`, which used to override it. |
 | Fixed after 2026-08-25 | `REOPENSLA` originally couldn't be edited via the Admin Console/API at all — the master was keyed on the value itself, so any change was rejected outright. A database migration now re-keys it onto a stable identifier the first time a deployment upgrades; no action needed beyond letting that migration run. |
 
-### 10. Tamper-Evident Audit Trail — *always on*
+### 10. Complaint Audit Trail
 
 Every create/update of a complaint and every workflow step is recorded in a dedicated, signed audit log — who changed what, and when.
 
@@ -222,7 +222,7 @@ Every create/update of a complaint and every workflow step is recorded in a dedi
 | What | Complaint and workflow changes flow through the persister → audit-service into the `eg_audit_logs` table. |
 | Config | Persister mappings carry `isAuditEnabled` + module (`CMS` / `Workflow`); the audit service reads the local persister configs (`EGOV_PERSIST_YML_REPO_PATH`) to decide what to audit, and binds `PERSISTER_AUDIT_KAFKA_TOPIC=audit-create`. Wired by default; no flag. |
 
-### 11. Employee Working-Context Switcher *(landed after 2026-08-25)*
+### 11. Employee Working-Context
 
 Lets an employee holding more than one department/role see and switch which one they're currently acting as, from the top bar.
 
