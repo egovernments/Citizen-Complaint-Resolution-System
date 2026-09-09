@@ -150,16 +150,16 @@ keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP w
 # ── secrets (LOCAL TEST VALUES — kit redacts these as CHANGE_ME) ──
 secrets_path: kv/digit/bomet
 bootstrap_secrets:
-  postgres_password: egov123       # matches the role password already on this box's volume
-  mcp_db_password: egov123
+  postgres_password: <change-me>       # matches the role password already on this box's volume
+  mcp_db_password: <change-me>
   minio_root_user: minioadmin
   minio_root_password: minioadmin  # matches the existing minio volume
-  elasticsearch_master_password: "asd@#$@$!132123"  # MUST be this literal with db_fast_path
-  egov_hrms_default_password: "eGov@123"            # Bomet uses eGov@123 (kit note)
-  keycloak_admin_password: "eGov@123"
-  keycloak_db_password: "eGov@123"
+  elasticsearch_master_password: "<change-me>"  # MUST be this literal with db_fast_path
+  egov_hrms_default_password: "<change-me>"            
+  keycloak_admin_password: "e<change-me>"
+  keycloak_db_password: "<change-me>"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "eGov@123"        # Bomet uses eGov@123 (kit note)
+  token_exchange_system_password: "<change-me>"        
 
 pgr_services_image:  "egovio/pgr-services:release-v2.12-moz-9deb7e0"
 novu_bridge_image: "novu-bridge:local"  # manually built from source (OTP-via-Ozeki changes) — see backend/novu-bridge/Dockerfile
