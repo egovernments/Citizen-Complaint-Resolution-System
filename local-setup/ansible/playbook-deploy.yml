@@ -195,7 +195,7 @@
           digit_ui_mode '{{ digit_ui_mode }}' builds the SPA from source on the
           target, but digit_ui_esbuild_repo is empty. Either set
           digit_ui_bundle_image (static mode — the default,
-          egovio/digit-ui-esbuild:nightly-develop) and skip the build entirely,
+          egovio/digit-ui-esbuild:2.12-5137119) and skip the build entirely,
           or point digit_ui_esbuild_repo at a source tree to clone.
       when:
         - digit_ui_mode in ['static', 'hmr']
@@ -1363,7 +1363,7 @@
         otp_publisher_image: >-
           {{ otp_publisher_image
              | default('otp-publisher:local' if (build_otp_publisher | default(false))
-                       else 'egovio/otp-publisher:v2.12-beta') }}
+                       else 'egovio/otp-publisher:2.12-81fc6be') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability

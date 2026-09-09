@@ -1515,7 +1515,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-3c3d9fa}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1683,7 +1683,7 @@ services:
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-3c3d9fa}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1713,7 +1713,7 @@ services:
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-3c3d9fa}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
     container_name: configurator
     ports:
       - "18890:80"
@@ -1932,7 +1932,7 @@ services:
     # below pulls a public, pinned build from ghcr.io — no VPC access or
     # insecure-registries trust required. Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:master-b4f0eeb8d}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2244,7 +2244,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: egovio/digit-config-service:master-7c91934
+    image: egovio/digit-config-service:2.12-5137119
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2299,7 +2299,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: egovio/digit-user-preferences-service:master-7c91934
+    image: egovio/digit-user-preferences-service:2.12-5137119
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2337,7 +2337,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-0469335}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2659,7 +2659,7 @@ services:
   # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
   # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
-    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:v2.12-beta}
+    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
     container_name: otp-publisher
     restart: unless-stopped
     profiles: ["notifications"]

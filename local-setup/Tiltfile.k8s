@@ -132,7 +132,7 @@ if MONITORING:
 # ==================== PGR Services ====================
 if CI_MODE:
     docker_build('pgr-services-dev', context='.',
-        dockerfile_contents='FROM localhost:5000/egovio/pgr-services:multiarch-d448cb7',
+        dockerfile_contents='FROM localhost:5000/egovio/pgr-services:2.12-5137119',
         only=['.dockerignore'],
     )
 else:
