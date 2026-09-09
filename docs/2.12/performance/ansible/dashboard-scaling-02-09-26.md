@@ -18,8 +18,7 @@ and records waiting sessions from 10 VUs onward. The 100K fixture remains below
 
 ## Test shape
 
-- Target: the existing Bomet deployment used for Dhruv's baseline: 16 vCPU,
-  30.6 GiB RAM, with the rest of the stack running.
+- Target: 16 vCPU, 30.6 GiB RAM, with the entire stack running.
 - Load generator: separate `ovh-8c24g` host: 8 vCPU and 24 GiB RAM, using the
   pinned k6 image digest recorded by the harness.
 - PGR image under test:
@@ -36,13 +35,13 @@ and records waiting sessions from 10 VUs onward. The 100K fixture remains below
   `issue1109-scale10-20260902-100k-api` (100K), and
   `issue1109-scale11-20260902-500k-api` (500K).
 
-The VU levels match Dhruv's clean Bomet 2/10/50/75/100/125/150 ladder, with
-120 added because it was his repeated fixed-dataset checkpoint. Dhruv's test
+The VU levels match a clean 2/10/50/75/100/125/150 ladder, with
+120 added because it was his repeated fixed-dataset checkpoint. This test
 performed complaint create/assign/resolve/search writes and used think time;
 this dashboard scenario is read-only, so transaction latency is not directly
 comparable. Offered HTTP throughput is comparable context: this test reaches
-46.125 HTTP RPS at 150 VUs versus approximately 43.37 RPS in Dhruv's clean
-150-VU Bomet run.
+46.125 HTTP RPS at 150 VUs versus approximately 43.37 RPS in a clean
+150-VU run.
 
 ## API matrix
 
