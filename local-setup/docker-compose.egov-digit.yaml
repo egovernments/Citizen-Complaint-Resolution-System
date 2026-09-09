@@ -423,8 +423,11 @@ services:
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # No default: a missing secret must abort the stack, not silently bring
+      # MinIO up on the published minioadmin/minioadmin pair. The Ansible
+      # deploy sources both from OpenBao into .env.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
     volumes:
       - minio_data:/data
     ports:
@@ -448,20 +451,44 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # NOTE (audit finding minio-anonymous-access, still OPEN): the
+    # `mc anonymous set download` below makes egov-rainmaker world-readable,
+    # and nginx proxies /file-store/ straight to it — every uploaded
+    # attachment is public to anyone who can guess or is given the URL.
+    #
+    # It is deliberately still here. egov-filestore has no presigned-URL
+    # support today, so dropping the policy on its own 404s every attachment
+    # in the UI. Removing this line MUST land together with that filestore
+    # change, not before it. Tracked separately.
+
+    # Authenticate with the REAL root credentials, not the literal defaults.
+    #
+    # This used to be `mc alias set myminio http://minio:9000 minioadmin
+    # minioadmin`, hardcoded — so on any box where MINIO_ROOT_PASSWORD had been
+    # rotated (OpenBao writes it into .env) this container silently failed to
+    # authenticate, and the trailing `exit 0` swallowed the failure and reported
+    # success. The bucket then either did not exist or kept whatever policy it
+    # had. Worse, it meant the deploy only worked as long as minioadmin was
+    # still valid, which quietly rewarded leaving the default in place.
+    #
+    # `:?` on both: an unset credential now aborts the container instead of
+    # falling back to a published default. The trailing `exit 0` is gone for the
+    # same reason — a failure here must surface, not be masked.
     environment:
-      # mc writes its config to /root/.mc by default, but this image ships
-      # /root as dr-xr-x--- — writable by root ONLY via CAP_DAC_OVERRIDE,
-      # which cap_drop: [ALL] correctly takes away. Without this the container
-      # dies on `mc alias set` with "mkdir /root/.mc: permission denied".
-      # Redirect the config to a genuinely writable path rather than handing
-      # the container a capability back just so a CLI can drop a config file.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+      # mc defaults its config to /root/.mc, but this image ships /root as
+      # dr-xr-x--- — writable by root ONLY via CAP_DAC_OVERRIDE, which
+      # cap_drop: [ALL] correctly removes. Point mc at a genuinely writable
+      # path instead of handing the container a capability back just so a CLI
+      # can drop a config file.
       MC_CONFIG_DIR: /tmp/.mc
     entrypoint: >
       /bin/sh -c "
-      mc --config-dir /tmp/.mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      set -e;
+      mc --config-dir /tmp/.mc alias set myminio http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\";
       mc --config-dir /tmp/.mc mb --ignore-existing myminio/egov-rainmaker;
       mc --config-dir /tmp/.mc anonymous set download myminio/egov-rainmaker;
-      exit 0;
       "
     networks:
       - egov-network
@@ -1331,8 +1358,11 @@ services:
       # MinIO/S3 storage (local S3-compatible storage for dev)
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
-      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
-      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      # Falls back to the MinIO root credentials, which are themselves now
+      # required — so a missing secret aborts instead of quietly using
+      # minioadmin/minioadmin against a bucket holding citizen attachments.
+      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}}
+      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}}
       IS_BUCKET_FIXED: 'true'
       FIXED_BUCKETNAME: egov-rainmaker
       # From CCRS env.yaml - complete MIME type mapping
@@ -2398,7 +2428,9 @@ services:
       STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
       NOVU_SECRET_KEY: ${NOVU_SECRET_KEY:-dev-novu-secret-key-change-in-production}
       API_CONTEXT_PATH: ''
-      DISABLE_USER_REGISTRATION: 'false'
+      # Open sign-up on a reachable Novu dashboard lets anyone create an
+      # account on the notification platform and read/send through it.
+      DISABLE_USER_REGISTRATION: ${NOVU_DISABLE_USER_REGISTRATION:-true}
       IS_API_IDEMPOTENCY_ENABLED: 'false'
       IS_API_RATE_LIMITING_ENABLED: 'false'
       IS_NEW_MESSAGES_API_RESPONSE_ENABLED: 'true'

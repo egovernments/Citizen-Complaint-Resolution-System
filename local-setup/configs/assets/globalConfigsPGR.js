@@ -1,8 +1,16 @@
 var globalConfigs = (function () {
   var stateTenantId = "<tenant_id>";
   var contextPath = "digit-ui";
-  var gmaps_api_key_old = "AIzaSyAQOd09-vjmk1sXFb_ZQYDz2nlfhXq7Wf8";
-  var gmaps_api_key = "AIzaSyASqkAr3d494ihZaJeCOg4CJ3xnQ_83e2s";
+  // Google Maps keys REMOVED — two live keys were committed here in a public
+  // repo. Both must be REVOKED in the Google Cloud console; a key is a bearer
+  // credential billed to the project, and anyone who cloned this repo has them.
+  //
+  // Deployed tenants do not read this file: the Ansible deploy renders
+  // ansible/templates/globalConfigs.js.j2, which takes the key from
+  // `gmaps_api_key` in the inventory. Set it there, restricted to the
+  // deployment's HTTP referrers and to the Maps JavaScript API only.
+  var gmaps_api_key_old = "";
+  var gmaps_api_key = "";
   var finEnv = "demo";
   var centralInstanceEnabled = false;
   var footerBWLogoURL = "/digit-ui/brand/digit-footer-bw.png";

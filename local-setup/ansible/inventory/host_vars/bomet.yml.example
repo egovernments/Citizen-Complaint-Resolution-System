@@ -205,14 +205,29 @@ keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP w
 
 # ── secrets (LOCAL TEST VALUES — kit redacts these as CHANGE_ME) ──
 secrets_path: kv/digit/bomet
+# Secrets are NOT committed. This is a public repository, so anything that ships
+# here is equivalent to no secret at all — these previously carried the real
+# working values for this deployment.
+#
+# Fill them in locally (this file is a template; the live host_vars it is copied
+# to is gitignored), or better, put them straight into OpenBao with `bao kv put`.
+# They are seeded into OpenBao only on a tenant's FIRST deploy (cas=0); later
+# edits here are ignored.
+#
+# If this tenant already exists, these values must MATCH what is on the box
+# (the postgres role password in its volume, the MinIO root credentials, the
+# elasticsearch password its eg_enc_*_keys were encrypted under) or services
+# fail to authenticate at boot. Rotate on the box first, then set them here.
 bootstrap_secrets:
-  postgres_password: egov123       # matches the role password already on this box's volume
-  mcp_db_password: egov123
-  minio_root_user: minioadmin
-  minio_root_password: minioadmin  # matches the existing minio volume
-  elasticsearch_master_password: "asd@#$@$!132123"  # MUST be this literal with db_fast_path
-  egov_hrms_default_password: "eGov@123"            # Bomet uses eGov@123 (kit note)
-  keycloak_admin_password: "eGov@123"
-  keycloak_db_password: "eGov@123"
+  postgres_password: "CHANGE_ME"
+  mcp_db_password: "CHANGE_ME"
+  minio_root_user: "CHANGE_ME"
+  minio_root_password: "CHANGE_ME"
+  # Whatever this tenant's eg_enc_*_keys were encrypted under. A mismatch
+  # throws AEADBadTagException in egov-enc-service at boot.
+  elasticsearch_master_password: "CHANGE_ME"
+  egov_hrms_default_password: "CHANGE_ME"
+  keycloak_admin_password: "CHANGE_ME"
+  keycloak_db_password: "CHANGE_ME"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "eGov@123"        # Bomet uses eGov@123 (kit note)
+  token_exchange_system_password: "CHANGE_ME"
