@@ -1117,19 +1117,24 @@ class DigitApiClient {
     return Array.isArray(data) ? data : [];
   }
 
-  // Encryption — register a tenant with egov-enc-service (no RequestInfo needed).
+  // Encryption — register a tenant with egov-enc-service.
   // egov-enc-service discovers tenants via an MDMS search scoped to its own
   // STATE_LEVEL_TENANT_ID env var, so a brand-new tenant root is invisible to
   // it until this is called — every encrypt/decrypt for that tenant (e.g. the
   // ADMIN user creation below) otherwise fails with "Tenant Id not found".
   // Idempotent: returns created:false when a key already exists.
+  //
+  // MUST carry the auth token: /egov-enc-service is a Kong-PROTECTED path, and
+  // with gateway enforcement on (ENFORCE_UNAUTH) a tokenless RequestInfo is
+  // rejected 401 at the gateway before it ever reaches enc-service. The old
+  // "no RequestInfo needed" stub predated gateway enforcement.
   async generateEncKey(tenantId: string): Promise<boolean> {
     const url = `${this.environment.url}${this.endpoint('ENC_GENERATE_KEY')}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        RequestInfo: { apiId: 'Citizen', ver: '.01', ts: null },
+        RequestInfo: this.buildRequestInfo(),
         tenantId,
       }),
     });
