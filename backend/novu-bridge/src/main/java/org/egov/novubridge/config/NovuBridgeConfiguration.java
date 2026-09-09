@@ -28,6 +28,25 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")
     private String dlqTopic;
 
+    // Dedicated topic for the real DIGIT-Core user-otp service's own SMS-dispatch
+    // messages — deliberately separate from `inputTopic` (complaints.domain.events)
+    // so an unmodified user-otp's flat SMSRequest payload never lands on PGR's live
+    // topic (see UserOtpSmsConsumer + docs/notifications-guide/06-otp-flow.md §6.8).
+    // Point user-otp's own SMS_TOPIC env var at this same value; no source change
+    // needed on the user-otp side.
+    @Value("${novu.bridge.kafka.user-otp.sms.topic:egov.core.notification.sms.otp}")
+    private String userOtpSmsTopic;
+
+    // user-otp's SMSRequest carries no tenantId at all (confirmed by decompiling the
+    // real jar — mobileNumber/message/category/currentTime/countryCode only). This
+    // deployment is effectively single-tenant (mz), so a configured default is a
+    // pragmatic fit; a genuinely multi-tenant deployment would need user-otp itself
+    // to carry tenantId, or a tenant-suffixed topic-naming convention to parse it
+    // from (user-otp's own MultiStateInstanceUtil.getStateSpecificTopicName hints
+    // such a convention may already exist upstream — unconfirmed without its source).
+    @Value("${novu.bridge.user-otp.default.tenant.id:mz}")
+    private String userOtpDefaultTenantId;
+
     // Default channel for dispatch. SMS is the safer default — works
     // with any Twilio SMS-capable sender out of the box. WhatsApp
     // requires a pre-approved Twilio Programmable WhatsApp sender
