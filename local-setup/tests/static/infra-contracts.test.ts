@@ -209,13 +209,11 @@ describe('image pin immutability', () => {
   // four services hard-gated on it completing, so it took every login down with
   // it. The container now lives in docker-compose.migrations.yml and is BUILT
   // from ./docker/db-migrations, so the pin is gone rather than moved.
-  const FROZEN_LATEST_DEBT: Record<string, number> = {
-    'egovio/pgbouncer:latest': 1,
-    'egovio/curl:latest': 2, // two gate containers
-    'egovio/gatus:latest': 1,
-    'openbao/openbao:latest': 1,
-    'egovio/novu-bridge-endpoint:latest': 1,
-  };
+  // Retired: every image below was pinned to an immutable @sha256 digest, so
+  // none is floating-:latest debt any more. A digest-pinned `name:latest@sha256:…`
+  // is excluded from the scan below; a NEW bare `:latest` (no digest) would land
+  // here and fail — the list may shrink, never grow.
+  const FROZEN_LATEST_DEBT: Record<string, number> = {};
 
   // Strip a `${VAR:-<default>}` wrapper (use the default) and any leading
   // registry-host segment (segment before the first `/` that contains a
@@ -230,7 +228,8 @@ describe('image pin immutability', () => {
   test('no :latest image pins beyond the frozen debt list', () => {
     const pins = [...BASE_COMPOSE.matchAll(/^\s*image:\s*(.+)$/gm)]
       .map((m) => m[1].trim())
-      .filter((img) => /:latest\b|:latest\}/.test(img))
+      // a digest-pinned `:latest@sha256:…` is immutable — not floating debt
+      .filter((img) => /:latest\b|:latest\}/.test(img) && !img.includes('@sha256:'))
       .map(normalizeImage);
 
     const counts: Record<string, number> = {};
