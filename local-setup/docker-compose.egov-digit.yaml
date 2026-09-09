@@ -22,10 +22,23 @@
 # links, the dataloader and the documented `ssh -L <port>:localhost:<port>`
 # remote-dev tunnels all connect via localhost, which loopback binding serves.
 #
-# The one path that needs a different value is the macOS thin deploy, where
-# the playbook runs nginx as a CONTAINER reaching the stack over
-# host.docker.internal rather than loopback. Ansible sets BIND_IP=0.0.0.0 in
-# .env for `ansible_system == "Darwin"` only (templates/digit.env.j2).
+# TWO variables, deliberately:
+#
+#   BIND_IP        — everything. ALWAYS loopback, on every platform.
+#   PROXY_BIND_IP  — only the handful host nginx actually proxies
+#                    (kong 18000, digit-ui 18080, configurator 18890,
+#                    grafana 13000, gatus 18889, mcp 13101, minio 19000).
+#
+# They differ only on the macOS thin deploy, where the playbook runs nginx as a
+# CONTAINER reaching the stack over host.docker.internal rather than loopback —
+# so those upstreams must accept a non-loopback connection there.
+#
+# The split matters: a single BIND_IP=0.0.0.0 on Darwin would also expose
+# Postgres, Redis, Redpanda, Elasticsearch, the Kong Admin API, the OTEL
+# collector, Prometheus, Loki, Tempo AND OpenBao (the secrets store) on every
+# interface of the developer's machine — ten ports that were loopback-only
+# before this change. Widening the whole stack to accommodate one proxy path
+# would have made macOS materially worse than it started.
 
 services:
   # ==================== Tracing Infrastructure ====================
@@ -167,7 +180,7 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "${BIND_IP:-127.0.0.1}:13000:3000"
+      - "${PROXY_BIND_IP:-127.0.0.1}:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
@@ -351,7 +364,7 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "${BIND_IP:-127.0.0.1}:19000:9000"
+      - "${PROXY_BIND_IP:-127.0.0.1}:19000:9000"
       - "${BIND_IP:-127.0.0.1}:19001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -1707,7 +1720,7 @@ services:
     image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
-      - "${BIND_IP:-127.0.0.1}:18080:80"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
     volumes:
       # Custom nginx config with sub_filter to inject globalConfigs.js at runtime
       - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
@@ -1737,7 +1750,7 @@ services:
     image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
     container_name: configurator
     ports:
-      - "${BIND_IP:-127.0.0.1}:18890:80"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18890:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1773,7 +1786,7 @@ services:
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
-      - "${BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
+      - "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
       - "${BIND_IP:-127.0.0.1}:18443:8443"   # Proxy (HTTPS)
       - "${BIND_IP:-127.0.0.1}:18001:8001"   # Admin API
       - "${BIND_IP:-127.0.0.1}:18002:8002"   # Kong Manager GUI
@@ -1812,7 +1825,7 @@ services:
       # above is mounted read-only, so the database needs its own volume.
       - gatus_data:/data
     ports:
-      - "${BIND_IP:-127.0.0.1}:18889:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
       # Slack alerting (#1609). Unset = alerting off: gatus expands the
@@ -1993,7 +2006,7 @@ services:
       DIGIT_DB_USER: egov
       DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
-      - "${BIND_IP:-127.0.0.1}:13101:3000"
+      - "${PROXY_BIND_IP:-127.0.0.1}:13101:3000"
     healthcheck:
       # 127.0.0.1, not localhost: Alpine's wget resolves localhost to ::1
       # (IPv6) per /etc/hosts order; the MCP server binds IPv4-only, so

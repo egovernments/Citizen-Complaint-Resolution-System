@@ -877,12 +877,15 @@
                 proto: tcp
               loop: "{{ ([22, ansible_port | default(22)]) | unique }}"
 
+            # nginx_host_port is overridable (group_vars/all.yml). Hardcoding
+            # 80/443 here would let a tenant that moved its listener lock
+            # itself out of its own site the moment default-deny came on.
             - name: "ufw — allow http/https for host nginx"
               community.general.ufw:
                 rule: allow
                 port: "{{ item }}"
                 proto: tcp
-              loop: [80, 443]
+              loop: "{{ ([80, 443, (nginx_host_port | default(80) | int)]) | unique }}"
 
             - name: "ufw — default deny incoming, allow outgoing"
               community.general.ufw:
@@ -3502,7 +3505,6 @@
           to false to stop publishing the board.
       when:
         - nginx_features.status | default(false)
-        - ansible_system != "Darwin"
 
     # Idempotent via `creates`: rotate by deleting the file and re-running.
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
@@ -3517,6 +3519,25 @@
         - nginx_features.status | default(false)
         - status_basic_auth_password is defined
         - ansible_system != "Darwin"
+
+    # macOS thin path: nginx runs as a CONTAINER and only gets the files that
+    # are bind-mounted into it, so the host's /etc/nginx/.htpasswd-status is
+    # invisible to it. Write the file into {{ digit_dir }}/nginx/ instead; the
+    # container task below mounts it at the path the vhost expects. Without
+    # this, auth_basic_user_file points at a file nginx cannot open and every
+    # /status/ request is a 500 rather than a 401.
+    - name: "status board — basic-auth user for the Mac nginx container"
+      ansible.builtin.command: >-
+        htpasswd -bBc {{ digit_dir }}/nginx/.htpasswd-status
+        "{{ status_basic_auth_user | default('digit-status') }}"
+        "{{ status_basic_auth_password }}"
+      args:
+        creates: "{{ digit_dir }}/nginx/.htpasswd-status"
+      no_log: true
+      when:
+        - nginx_features.status | default(false)
+        - status_basic_auth_password is defined
+        - ansible_system == "Darwin"
 
     - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
       ansible.builtin.command: >-
@@ -3733,6 +3754,7 @@
               -p {{ nginx_host_port | default(80) }}:80 \
               -v {{ digit_dir }}/nginx/site.conf:/etc/nginx/conf.d/default.conf:ro \
               -v {{ configurator_www_dir }}:/var/www/configurator:ro \
+              {{ ('-v ' ~ digit_dir ~ '/nginx/.htpasswd-status:/etc/nginx/.htpasswd-status:ro \\') if (nginx_features.status | default(false)) else '\\' }}
               nginx:1.27-alpine
           register: mac_nginx
           changed_when: true
@@ -3838,6 +3860,10 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.configurator | default(false)
 
+    # /status/ is behind basic auth now, so this gate has to present the
+    # credential. Without it the task 401s and the deploy fails — meaning the
+    # only configuration that could complete a deploy would be the board turned
+    # OFF, which is the opposite of what the assert above asks for.
     - name: "validate — gatus /status/ returns 200 (when enabled)"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/status/"
@@ -3845,6 +3871,10 @@
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+        url_username: "{{ status_basic_auth_user | default('digit-status') }}"
+        url_password: "{{ status_basic_auth_password }}"
+        force_basic_auth: true
+      no_log: true
       when: nginx_features.status | default(false)
 
     - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"

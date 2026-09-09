@@ -309,24 +309,88 @@ describe('observability ports are loopback-bound in every compose file', () => {
     path.join(REPO_ROOT, 'docker-compose.egov-digit.yaml'),
   ].filter((f) => fs.existsSync(f));
 
-  test('every compose file that publishes one binds it to 127.0.0.1', () => {
+  // Datastores and the Kong control plane. Same incident class as the
+  // observability ports above: published on 0.0.0.0 they put the database,
+  // the session/OTP store, the object store and the gateway's own admin API
+  // on the internet on any box without a host firewall.
+  const DATASTORE_HOST_PORTS: Record<string, string> = {
+    '15432': 'postgres',
+    '16379': 'redis',
+    '19092': 'redpanda kafka',
+    '18082': 'redpanda pandaproxy',
+    '19001': 'minio console',
+    '19200': 'elasticsearch',
+    '18001': 'kong admin API',
+    '18002': 'kong manager GUI',
+    '18200': 'openbao',
+  };
+
+  /**
+   * `${BIND_IP:-127.0.0.1}` counts as loopback-bound.
+   *
+   * BIND_IP is not an operator knob — ansible/templates/digit.env.j2 writes it
+   * literally as 127.0.0.1 on every platform, and compose's `:-` form means an
+   * empty or absent value also falls back to loopback. So the expansion is
+   * loopback by construction.
+   *
+   * `${PROXY_BIND_IP:-...}` is the ONE exception and is deliberately narrow.
+   * It is 0.0.0.0 only on the macOS thin deploy, where host nginx runs as a
+   * CONTAINER and reaches its upstreams over host.docker.internal rather than
+   * loopback. It is allowed here solely for the two observability ports nginx
+   * actually proxies, and only because both now carry their own authentication
+   * — Grafana has a real login (GF_ADMIN_PASSWORD has no default and anonymous
+   * access is off unless a tenant opts in) and the Gatus board sits behind
+   * basic auth. That is the difference from #1603, where Grafana had no auth
+   * at all. Any OTHER port reaching for PROXY_BIND_IP fails this test.
+   */
+  const LOOPBACK_PREFIXES = ['127.0.0.1:', '${BIND_IP:-127.0.0.1}:'];
+  const PROXY_BIND_ALLOWED = new Set(['13000', '18889']);
+
+  const isLoopbackBound = (mapping: string, hostPort: string): boolean => {
+    if (LOOPBACK_PREFIXES.some((p) => mapping.startsWith(p))) return true;
+    return (
+      mapping.startsWith('${PROXY_BIND_IP:-127.0.0.1}:') && PROXY_BIND_ALLOWED.has(hostPort)
+    );
+  };
+
+  const collectOffenders = (portMap: Record<string, string>): string[] => {
     const offenders: string[] = [];
     for (const file of composeFiles) {
       const text = fs.readFileSync(file, 'utf8');
-      for (const m of text.matchAll(/^\s*-\s*"([^"]+)"\s*(?:#.*)?$/gm)) {
+      // Quoted AND bare mappings — the datastore entries were unquoted before
+      // this contract existed, and an unquoted `- 15432:5432` must not slip by.
+      for (const m of text.matchAll(/^\s*-\s*"?([^"\s#]+:[0-9]+)"?\s*(?:#.*)?$/gm)) {
         const mapping = m[1];
-        // A published-port mapping is `[host-ip:]host-port:container-port`.
         const parts = mapping.split(':');
         const hostPort = parts.length >= 2 ? parts[parts.length - 2] : null;
-        if (!hostPort || !(hostPort in OBSERVABILITY_HOST_PORTS)) continue;
-        if (!mapping.startsWith('127.0.0.1:')) {
+        if (!hostPort || !(hostPort in portMap)) continue;
+        if (!isLoopbackBound(mapping, hostPort)) {
           offenders.push(
             `${path.relative(REPO_ROOT, file)}: "${mapping}" ` +
-              `(${OBSERVABILITY_HOST_PORTS[hostPort]}) is not loopback-bound`,
+              `(${portMap[hostPort]}) is not loopback-bound`,
           );
         }
       }
     }
+    return offenders;
+  };
+
+  test('every compose file that publishes one binds it to 127.0.0.1', () => {
+    expect(collectOffenders(OBSERVABILITY_HOST_PORTS)).toEqual([]);
+  });
+
+  // Guards the binding added for audit findings backend-services-published /
+  // datastores-published-0000 / kong-admin-published, so a future `ports:`
+  // entry cannot silently re-expose them.
+  test('datastores and the Kong control plane are loopback-bound', () => {
+    const offenders = collectOffenders(DATASTORE_HOST_PORTS).filter((o) =>
+      // Only the Ansible-deployed file is in scope for now. The four parallel
+      // stacks (docker-compose.yml, deploy.yaml, db-migrations.yml,
+      // registry.yml) still publish these on 0.0.0.0 and are tracked
+      // separately — asserting on them here would land this test red rather
+      // than guard the file that was actually fixed.
+      o.includes('docker-compose.egov-digit.yaml'),
+    );
     expect(offenders).toEqual([]);
   });
 });
