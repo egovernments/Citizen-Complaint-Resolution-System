@@ -4228,6 +4228,13 @@
         status_code: [200]
         timeout: 600
       register: mcp_root_bootstrap
+      # MCP is recreated by "Recreate services with the new env" just above, so
+      # its DIGIT-API connection can need a few seconds even after /mcp/healthz
+      # is green. body.auth works once warm — retry rather than fail the deploy
+      # on a cold-start window.
+      until: mcp_root_bootstrap.json.success | default(false) | bool
+      retries: 6
+      delay: 20
       when:
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
@@ -4253,6 +4260,9 @@
         status_code: [200]
         timeout: 600
       register: mcp_city_bootstrap
+      until: mcp_city_bootstrap.json.success | default(false) | bool
+      retries: 6
+      delay: 20
       when:
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
