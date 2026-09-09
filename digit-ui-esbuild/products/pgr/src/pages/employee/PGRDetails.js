@@ -612,7 +612,13 @@ const PGRDetails = () => {
   // Same sentinel the backend emits, so masked rows look identical whichever
   // side did the masking.
   const CONFIDENTIAL_MASK = "****";
-  const maskIfConfidential = (value) => (isConfidentialComplaint ? CONFIDENTIAL_MASK : value);
+  // CRQ v2 AC-07: a CONFIDENTIAL_COMPLAINT_VIEWER sees the complainant's
+  // identity in clear even on a confidential complaint (display layer; the
+  // API-level gate on extendedAttributes already honours the same role).
+  const isConfidentialViewer = (Digit.UserService.getUser()?.info?.roles || []).some(
+    (r) => (r?.code || r) === "CONFIDENTIAL_COMPLAINT_VIEWER"
+  );
+  const maskIfConfidential = (value) => (isConfidentialComplaint && !isConfidentialViewer ? CONFIDENTIAL_MASK : value);
 
   return (
     <div className="v2-pgr-details v2-scope">
@@ -837,12 +843,12 @@ const PGRDetails = () => {
                         businessId={id}
                         labelPrefix="WF_PGR_"
                         tenantId={complaintTenantId}
-                        // CCSD-1971 (B4): confidential complaints hide the
-                        // citizen's identity from the employee timeline.
+                        // CRQ v2 §4: the citizen's identity in the chronology
+                        // follows the confidentiality flag (viewer role sees it
+                        // in clear); employee identities render in clear on the
+                        // employee timeline (supersedes QA #19's masking).
                         maskConfidential={!!pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.isConfidential}
-                        // QA #19: employee-side timeline masks employee names +
-                        // contact numbers (mask, not remove).
-                        maskEmployeeContacts
+                        complainantUuid={pgrData?.ServiceWrappers?.[0]?.service?.citizen?.uuid || pgrData?.ServiceWrappers?.[0]?.service?.accountId}
                       />
                     ),
                   },

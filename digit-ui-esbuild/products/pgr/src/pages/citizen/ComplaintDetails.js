@@ -227,8 +227,14 @@ function WorkflowComponent({ complaintDetails, id }) {
       hideEmployeeContacts
       // Comments and attachments exchanged BETWEEN officers (assignment,
       // escalation, internal notes) stay internal; the citizen sees the
-      // decision, any question put to them, and their own submissions.
+      // closing entry and their own submissions (CRQ v2 §3).
       hideInternalNotes
+      // CRQ v2: the citizen's OWN name/number in the chronology are shown on a
+      // non-confidential complaint and masked on a confidential one.
+      maskConfidential={complaintDetails?.service?.extendedAttributes?.isConfidential === true}
+      // Who the complainant IS — the actor/complainant split matches on this
+      // uuid, not on the CITIZEN role (officers can hold it too).
+      complainantUuid={complaintDetails?.service?.citizen?.uuid || complaintDetails?.service?.accountId}
     />
   );
 }
