@@ -850,6 +850,22 @@ hrms_dev_mode: false
 # which is arbitrary code by design, and is reachable through nginx /tests/api/.
 # integration_tests_runner_user: digit-tests
 
+# ==================== Keycloak dev redirect URIs ====================
+# Only consumed when enable_keycloak: true. EMPTY by default, deliberately.
+#
+# The realm template used to hardcode `http://localhost:*` as a redirect URI on
+# a PUBLIC client. On a public client the redirect list is the only thing
+# binding an authorization code to a legitimate destination, so a localhost
+# wildcard lets anything listening on the victim's own machine receive a real
+# code for that user. The wildcard `https://*.egov.theflywheel.in/*` origin is
+# gone for the same reason: any subdomain, including one an attacker controls.
+#
+# Set these on a DEV tenant only:
+# keycloak_dev_redirect_uris:
+#   - "http://localhost:5173/*"
+# keycloak_dev_web_origins:
+#   - "http://localhost:5173"
+
 # ==================== Host firewall ====================
 # The playbook installs and enables ufw on Debian/Ubuntu (default deny
 # incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
