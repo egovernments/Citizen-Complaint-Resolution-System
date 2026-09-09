@@ -939,12 +939,19 @@ secrets_path: kv/digit/mytenant
 # `asd@#$@$!132123` — the dump's eg_enc_*_keys decrypt only under that
 # value. Mismatch → AEADBadTagException in egov-enc-service on boot.
 bootstrap_secrets:
-  postgres_password: change-me-strong
-  mcp_db_password: change-me-strong
-  minio_root_user: minioadmin
-  minio_root_password: change-me-strong
-  elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
-  egov_hrms_default_password: "eGov@123"
+  # CHANGE_ME is enforced: scripts/check-committed-secrets.sh fails CI if a
+  # tracked host_vars file ships a real value, because this repo is public and
+  # anything committed here is disclosed the moment it lands.
+  postgres_password: "CHANGE_ME"
+  mcp_db_password: "CHANGE_ME"
+  minio_root_user: "CHANGE_ME"
+  minio_root_password: "CHANGE_ME"
+  # With db_fast_path: true this MUST be `asd@#$@$!132123` — see the note
+  # above. That value is not a secret: it belongs to the PUBLIC dump shipped
+  # with this repo, and the dump's eg_enc_*_keys decrypt only under it. On a
+  # real deployment (no dump) use a generated value.
+  elasticsearch_master_password: "CHANGE_ME"
+  egov_hrms_default_password: "CHANGE_ME"
   # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
   # playbook generates a 24-char password on first deploy and stores it here
   # in OpenBao. Read it back with:
@@ -960,4 +967,4 @@ bootstrap_secrets:
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
-  token_exchange_system_password: "eGov@123"  # DIGIT system user the exchange impersonates
+  token_exchange_system_password: "CHANGE_ME"  # DIGIT system user the exchange impersonates

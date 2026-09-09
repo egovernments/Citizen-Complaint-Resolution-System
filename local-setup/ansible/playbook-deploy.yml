@@ -2469,6 +2469,40 @@
       until: kong_health.stdout == 'healthy'
       changed_when: false
 
+    # ==================== Opt-in stack secrets ====================
+    # The Novu / Keycloak / MCP services ship dev-default secrets in
+    # docker-compose.egov-digit.yaml (novu's jwt secret, store encryption key,
+    # mongo password; KC_ADMIN_PASSWORD=admin; MCP_DB_PASSWORD=mcp123). Those
+    # defaults are DELIBERATELY still in the compose file: compose interpolates
+    # the whole file before it selects profiles, so a `${X:?}` on an opt-in
+    # service aborts even a default-profile `up` where that service is never
+    # started. Fail-fast there would break every deploy that does not run Novu.
+    #
+    # This is the layer that actually knows which profiles are enabled, so the
+    # enforcement lives here: if you turn a stack on, its secrets must be set
+    # and must not still be the published dev value.
+    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
+      ansible.builtin.assert:
+        that:
+          - lookup('vars', item.var, default='') | length > 0
+          - lookup('vars', item.var, default='') != item.bad
+        fail_msg: >-
+          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
+          the published default from docker-compose.egov-digit.yaml. Set it in
+          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml — these
+          values are in a public repo, so the default is equivalent to no
+          secret at all.
+      when: item.enabled
+      loop:
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
+        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
+        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
+
     # ==================== Kong CORS origins ====================
     # The repo's kong.yml ships `origins: ['*']` so a local `docker compose up`
     # or Tilt run (SPA on its own port) works without configuration. That
