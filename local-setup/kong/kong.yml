@@ -223,7 +223,44 @@ plugins:
           kong.log.warn("RBAC-audit(#5): unauthenticated request to protected path (would 401): ", uri)
         end
 
-        if kong.request.get_method() ~= "POST" then return end
+        -- Non-POST enforcement (audit: kong non-POST bypass).
+        -- DIGIT carries its authToken in the POST body (RequestInfo.authToken),
+        -- so the enrichment below only works for POST. The ORIGINAL code bailed
+        -- with a blanket `if method ~= POST then return end`, which skipped
+        -- authn AND RBAC for every GET/PUT/DELETE/PATCH — proven live: a
+        -- protected path that 401s on POST returned 400 (reached the backend)
+        -- on GET/PUT/DELETE. A protected path must be enforced on ALL methods.
+        --
+        -- A non-POST request has no body token to resolve/enrich, but DIGIT
+        -- also accepts a token out-of-band: the `auth-token` header or an
+        -- `access_token` query param. Honour those, verify against egov-user,
+        -- and fail CLOSED on a protected path with no resolvable token. Kong
+        -- routes only DIGIT API path-prefixes (no catch-all, no SPA route —
+        -- verified: GET / -> 404), so this affects API traffic only.
+        if kong.request.get_method() ~= "POST" then
+          if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          local hdr = kong.request.get_header("auth-token")
+          local q = kong.request.get_query()
+          local qtok = q and q["access_token"]
+          local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)
+                      or (type(qtok) == "string" and qtok ~= "" and qtok) or nil
+          if not ntoken then deny_unauth(); return end  -- protected, no token -> 401 (or audit-warn)
+          local nhttp = http.new(); nhttp:set_timeout(5000)
+          local nres = nhttp:request_uri(
+            "http://egov-user-proxy:8107/user/_details?access_token=" .. ntoken,
+            { method = "POST", headers = { ["Content-Type"] = "application/json" } })
+          local nok = nres and nres.status == 200
+          if nok then
+            local okd, u = pcall(cjson.decode, nres.body)
+            nok = okd and type(u) == "table" and (u["uuid"] or u["userName"]) and true or false
+          end
+          -- Reject invalid tokens; also fail closed if egov-user is unreachable
+          -- (nres == nil / 5xx) rather than forwarding a protected request
+          -- without a server-vouched principal. deny_unauth() 401s when
+          -- ENFORCE_UNAUTH, else audit-warns and falls through (parity with POST).
+          if not nok then deny_unauth() end
+          return
+        end
         local raw_body = kong.request.get_raw_body()
         if not raw_body or raw_body == "" then if is_protected then deny_unauth() end return end
         local ok, body = pcall(cjson.decode, raw_body)
