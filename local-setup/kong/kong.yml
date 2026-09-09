@@ -239,6 +239,13 @@ plugins:
         -- verified: GET / -> 404), so this affects API traffic only.
         if kong.request.get_method() ~= "POST" then
           if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          -- Liveness/readiness probes are unauthenticated GETs by convention
+          -- (Gatus, k8s probes, the deploy's own health validation). They carry
+          -- no tenant data. Let */health and */actuator/health through rather
+          -- than 401 them — they are not in the exact-match AUTH_OPTIONAL set
+          -- because they exist on every service under its own prefix.
+          if uri:match("/health$") or uri:match("/actuator/health$")
+             or uri:match("/actuator/health/") then return end
           local hdr = kong.request.get_header("auth-token")
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
