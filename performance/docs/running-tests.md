@@ -27,6 +27,36 @@ Results are saved to `results/<timestamp>_<env>_<profile>_<scenario>/` containin
 - `summary.json` — k6 summary export (for automated analysis)
 - `metrics.csv` — time-series metrics
 - `k6-output.json` — full k6 output
+- `run-manifest.env` — resolved run ID, workload profile/steps, principal,
+  dataset tier, scenario, target, and git SHA (never credentials)
+
+### Workload profiles and step tags
+
+Set `WORKLOAD_PROFILE` when invoking `run-test.sh`:
+
+| Profile | Direct PGR steps |
+|---------|------------------|
+| `pgr-lifecycle` | create, assign, resolve, search |
+| `pgr-write` | create, assign, resolve |
+| `pgr-create` | create |
+| `pgr-create-read` | create, search |
+
+`PGR_STEPS` can override the selected profile with a comma-separated ordered
+subset. Dependency-invalid combinations fail fast. `RUN_ID`, `PRINCIPAL`, and
+`DATASET_TIER` are propagated as request tags, which lets k6 output and tracing
+show which part of the harness initiated each request.
+
+```bash
+RUN_ID=read-filter-01 \
+WORKLOAD_PROFILE=pgr-create-read \
+PRINCIPAL=department-scoped \
+DATASET_TIER=3k \
+./scripts/run-test.sh dev baseline smoke
+```
+
+For dashboard-scale data, do not use `seed-1m`. Use the deterministic,
+run-scoped fixture documented in `performance/dashboard/README.md`; it refreshes
+the V2 grains and removes the fixture from source tables and MVs afterward.
 
 **Note:** The `profile` parameter is a label for organizing results. It does not apply the CPU profile — use Ansible for that (see [CPU Profiles](#cpu-profiles) below).
 

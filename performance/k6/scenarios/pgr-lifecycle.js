@@ -1,9 +1,10 @@
 import { sleep } from 'k6';
 import { Trend, Rate } from 'k6/metrics';
 import exec from 'k6/execution';
-import { login, makeRequestInfo } from '../helpers/auth.js';
-import { createComplaint, updateComplaint, searchComplaint, isAuthError } from '../helpers/pgr.js';
+import { login } from '../helpers/auth.js';
+import { createComplaint, updateComplaint, searchComplaint } from '../helpers/pgr.js';
 import { getEnv } from '../config/environments.js';
+import { getWorkloadConfig, requestContext } from '../config/workload.js';
 
 // Custom metrics
 export const transactionDuration = new Trend('transaction_duration', true);
@@ -12,7 +13,8 @@ export const transactionSuccess = new Rate('transaction_success');
 // Module-scope token cache (per VU)
 let employeeToken = null;
 let employeeUserInfo = null;
-let employeeUUID = null;
+
+const WORKLOAD = getWorkloadConfig();
 
 // All 33 PGR ServiceDefs from full-dump.sql — each VU/iteration uses a different one.
 // Override via env config `serviceCodes` for deployments with fewer ServiceDefs loaded.
@@ -83,7 +85,6 @@ function ensureEmployeeAuth(env) {
     if (!auth) return false;
     employeeToken = auth.token;
     employeeUserInfo = auth.userInfo;
-    employeeUUID = auth.userInfo.uuid;
   }
   return true;
 }
@@ -119,7 +120,8 @@ export function pgrLifecycle() {
     // Step 2: Create complaint (with 401 retry)
     let service = createComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      env.tenant, serviceCode, citizenPhone, citizenName, locality, city
+      env.tenant, serviceCode, citizenPhone, citizenName, locality, city,
+      requestContext(WORKLOAD, 'create')
     );
     if (!service) {
       // Could be 401 — clear auth and retry once
@@ -127,32 +129,72 @@ export function pgrLifecycle() {
       if (!ensureEmployeeAuth(env)) return;
       service = createComplaint(
         env.baseUrl, employeeToken, employeeUserInfo,
-        env.tenant, serviceCode, citizenPhone, citizenName, locality, city
+        env.tenant, serviceCode, citizenPhone, citizenName, locality, city,
+        requestContext(WORKLOAD, 'create')
       );
       if (!service) return;
     }
+
+    if (!WORKLOAD.steps.includes('assign')) {
+      if (WORKLOAD.steps.includes('search')) {
+        const created = searchComplaint(
+          env.baseUrl, employeeToken, employeeUserInfo,
+          env.tenant, service.serviceRequestId,
+          requestContext(WORKLOAD, 'search')
+        );
+        success = Boolean(created);
+      } else {
+        success = true;
+      }
+      return;
+    }
+
     thinkTime();
 
     // Step 3: Assign (auto-route via empty assignees)
     const assigned = updateComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      service, 'ASSIGN', [], 'Load test assignment'
+      service, 'ASSIGN', [], 'Load test assignment', undefined,
+      requestContext(WORKLOAD, 'assign')
     );
     if (!assigned) return;
+
+    if (!WORKLOAD.steps.includes('resolve')) {
+      if (WORKLOAD.steps.includes('search')) {
+        const foundAssigned = searchComplaint(
+          env.baseUrl, employeeToken, employeeUserInfo,
+          env.tenant, service.serviceRequestId,
+          requestContext(WORKLOAD, 'search')
+        );
+        success = Boolean(foundAssigned);
+      } else {
+        success = true;
+      }
+      return;
+    }
+
     thinkTime();
 
     // Step 4: Resolve
     const resolved = updateComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      assigned, 'RESOLVE', [], 'Load test resolution'
+      assigned, 'RESOLVE', [], 'Load test resolution', undefined,
+      requestContext(WORKLOAD, 'resolve')
     );
     if (!resolved) return;
+
+    if (!WORKLOAD.steps.includes('search')) {
+      success = true;
+      return;
+    }
+
     thinkTime();
 
     // Step 5: Verify via search
     const found = searchComplaint(
       env.baseUrl, employeeToken, employeeUserInfo,
-      env.tenant, service.serviceRequestId
+      env.tenant, service.serviceRequestId,
+      requestContext(WORKLOAD, 'search')
     );
     if (!found) return;
 
@@ -176,5 +218,4 @@ export function pgrLifecycle() {
 function clearEmployeeAuth() {
   employeeToken = null;
   employeeUserInfo = null;
-  employeeUUID = null;
 }
