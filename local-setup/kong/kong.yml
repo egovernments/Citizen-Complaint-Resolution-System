@@ -164,7 +164,17 @@ plugins:
           ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
-          ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- /user/_search REMOVED from auth-optional (audit: anonymous-user-search).
+          -- It is the user/employee directory: an unauthenticated caller could
+          -- enumerate every user on the tenant — names, mobile numbers, emails,
+          -- roles — which is both a privacy breach and a ready-made target list
+          -- for the credential-stuffing the fixed OTP already invites.
+          -- Its real callers (configurator org-chart, digit-ui-v2 citizen
+          -- profile) are all POST-LOGIN and carry a token, so they are
+          -- unaffected. If an anonymous lookup is ever genuinely needed, add a
+          -- narrow dedicated route with rate limiting and a response filter
+          -- rather than reopening the general search API.
+          ["/access/v1/actions/mdms/_get"]=true,
           -- Authenticated employees of every functional role may read their own HRMS-backed
           -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
           -- appropriate because HRMS employee creation does not guarantee a shared base role.

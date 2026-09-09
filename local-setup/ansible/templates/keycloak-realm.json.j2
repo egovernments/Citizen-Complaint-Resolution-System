@@ -29,7 +29,9 @@
       /citizen/*       — digit-ui-v2 (Vite + React 19) at /var/www/citizen/
       /digit-ui/*      — legacy digit-ui-esbuild bundle
       /auth/callback*  — explicit callback path some auth-adapters POST to
-    localhost:* keeps `npm run dev`-style local testing of any SPA working.
+    Local `npm run dev` testing is NOT covered by default any more — set
+    keycloak_dev_redirect_uris / keycloak_dev_web_origins in a DEV tenant's
+    host_vars to add them there, never on a real deployment.
     -#}
 {#- realm.attributes.frontendUrl: KC uses this when emitting absolute
     URLs (broker callbacks, well-known issuer, OAuth code-exchange
@@ -57,18 +59,21 @@
     {%- set _ = client.update({'standardFlowEnabled': true}) -%}
     {%- set _ = client.update({'directAccessGrantsEnabled': true}) -%}
     {%- set _ = client.setdefault('attributes', {}).update({'pkce.code.challenge.method': 'S256'}) -%}
+    {#- 'http://localhost:*' is NOT in this list any more (audit:
+        keycloak-loose-redirect). On a public client the redirect list is the
+        only thing binding an auth code to a legitimate destination, and a
+        localhost wildcard lets anything listening on the victim's own machine
+        — any local app, any other browser tab's dev server — receive a real
+        authorization code for that user.
+        Local SPA development sets `keycloak_dev_redirect_uris` in host_vars
+        on a DEV tenant only; it stays empty everywhere else. -#}
     {%- set new_redirects = [
         base + '/citizen/*',
         base + '/digit-ui/*',
-        base + '/auth/callback*',
-        'http://localhost:*'
-    ] -%}
+        base + '/auth/callback*'
+    ] + (keycloak_dev_redirect_uris | default([])) -%}
     {%- set _ = client.update({'redirectUris': new_redirects}) -%}
-    {%- set new_origins = [
-        base,
-        'http://localhost:3000',
-        'http://localhost:5173'
-    ] -%}
+    {%- set new_origins = [base] + (keycloak_dev_web_origins | default([])) -%}
     {%- set _ = client.update({'webOrigins': new_origins}) -%}
   {%- endif -%}
 {%- endfor -%}
