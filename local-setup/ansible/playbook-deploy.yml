@@ -107,7 +107,13 @@
       # unresolvable variable. The value is irrelevant to `down`; feed it a
       # placeholder rather than let a missing secret block a teardown.
       environment:
+        # All three are ${VAR:?} in the compose file (no default). Compose
+        # interpolates the whole file for `down` too, so a box whose previous
+        # deploy aborted before .env was populated would fail teardown on an
+        # unresolvable variable. The values are irrelevant to `down`.
         GF_ADMIN_PASSWORD: unused-by-down
+        MINIO_ROOT_USER: unused-by-down
+        MINIO_ROOT_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -1874,6 +1880,34 @@
     # below overwrites it with the authoritative value before anything but
     # OpenBao (and optionally keycloak-postgres) has actually started, so
     # Grafana itself only ever sees the real one.
+    # Refuse to deploy an opt-in stack on a secret that is published in this
+    # public repo. Runs HERE — before any `docker compose up` — so it is a
+    # true pre-flight refusal, not a post-mortem after the containers already
+    # started on the dev default. Reads bootstrap_secrets.<key> (host_vars),
+    # which is where these live and is available from the start of the play.
+    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
+      ansible.builtin.assert:
+        that:
+          - (bootstrap_secrets[item.var] | default('')) | length > 0
+          - (bootstrap_secrets[item.var] | default('')) != item.bad
+        fail_msg: >-
+          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
+          the published default from docker-compose.egov-digit.yaml. Set it in
+          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml — these
+          values are in a public repo, so the default is equivalent to no
+          secret at all.
+      when: item.enabled
+      loop:
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
+        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
+        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
+
+
     - name: "Secrets prep — write a placeholder GF_ADMIN_PASSWORD into .env (compose needs it to interpolate at all)"
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
@@ -1881,6 +1915,27 @@
         line: "GF_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
         create: true
         mode: '0600'
+      no_log: true
+
+    # Same story as GF_ADMIN_PASSWORD: docker-compose.egov-digit.yaml resolves
+    # MINIO_ROOT_USER/PASSWORD (and egov-filestore's AWS_KEY/AWS_SECRETKEY, which
+    # default to them) from ${VAR:?} with no default, so `up -d openbao` — which
+    # interpolates the whole file — needs them present. "OpenBao — write tenant
+    # secrets into .env" below overwrites these placeholders with the real
+    # values before "Start DIGIT stack" brings MinIO up, so MinIO only ever sees
+    # the authoritative credentials.
+    - name: "Secrets prep — write placeholder MINIO_ROOT_USER/PASSWORD into .env (compose needs them to interpolate)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: "^{{ item.k }}="
+        line: "{{ item.k }}={{ item.v }}"
+        create: true
+        mode: '0600'
+      loop:
+        - { k: 'MINIO_ROOT_USER', v: "placeholder-overwritten-by-openbao" }
+        - { k: 'MINIO_ROOT_PASSWORD', v: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}" }
+      loop_control:
+        label: "{{ item.k }}"
       no_log: true
 
     - name: "Secrets prep — bring up OpenBao (+ keycloak-postgres when enable_keycloak) first"
@@ -2073,6 +2128,16 @@
           AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          {# Opt-in Novu stack. default('') so a tenant without these keys writes
+             an empty value, which compose's ${NOVU_*:-dev-default} treats as
+             unset — the dev default only ever applies when the notifications
+             profile is off. When enable_novu is true the pre-flight assert
+             above requires real values, so these lines carry them. #}
+          NOVU_JWT_SECRET={{ bao_secrets.json.data.data.novu_jwt_secret | default('', true) }}
+          NOVU_STORE_ENCRYPTION_KEY={{ bao_secrets.json.data.data.novu_store_encryption_key | default('', true) }}
+          NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
+          NOVU_BRIDGE_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
+          NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
@@ -2487,28 +2552,6 @@
     # This is the layer that actually knows which profiles are enabled, so the
     # enforcement lives here: if you turn a stack on, its secrets must be set
     # and must not still be the published dev value.
-    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
-      ansible.builtin.assert:
-        that:
-          - lookup('vars', item.var, default='') | length > 0
-          - lookup('vars', item.var, default='') != item.bad
-        fail_msg: >-
-          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
-          the published default from docker-compose.egov-digit.yaml. Set it in
-          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml — these
-          values are in a public repo, so the default is equivalent to no
-          secret at all.
-      when: item.enabled
-      loop:
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
-        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
-        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
-      loop_control:
-        label: "{{ item.feature }} / {{ item.var }}"
-
     # ==================== Kong CORS origins ====================
     # The repo's kong.yml ships `origins: ['*']` so a local `docker compose up`
     # or Tilt run (SPA on its own port) works without configuration. That
