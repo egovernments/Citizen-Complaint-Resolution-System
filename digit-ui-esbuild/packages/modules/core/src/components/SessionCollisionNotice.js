@@ -5,14 +5,16 @@ import { detectSessionCollision, onSessionCollision } from "@egovernments/digit-
 
 // Tells the user when ANOTHER tab in this browser has signed in as a different
 // user of the same type. The platform keeps the active session per tab but
-// writes the shared `Employee.*` / `Citizen.*` keys under fixed names, so the
-// older tab can silently adopt the newer identity after a reload. Saying so is
-// far better than letting a complaint be filed under the wrong officer.
+// writes the shared `Employee.*` / `Citizen.*` keys under fixed names, so a
+// tab whose own session is missing or expired can silently adopt the newer
+// identity on its next load. Saying so is far better than letting a complaint
+// be filed under the wrong officer.
 //
-// NOTIFY-FIRST by design: dismissing changes nothing, so an in-progress
-// complaint is never destroyed. Switching to the other account is offered as a
-// deliberate secondary action for the user who actually wants it — it reloads,
-// which is why it is not the default.
+// NOTIFY-ONLY by design: dismissing changes nothing, so an in-progress
+// complaint is never destroyed. There is deliberately NO "switch account"
+// action (CCSD-2231): this tab's own session survives a reload, so a reload
+// cannot switch — it only brought the same notice back. Switching means
+// logging out here and signing in again.
 //
 // Never appears for employee+citizen (different key prefixes) or for the same
 // person in two tabs (same uuid) — see detectSessionCollision.
@@ -131,9 +133,7 @@ const SessionCollisionNotice = () => {
       heading={tx("CORE_SESSION_COLLISION_HEADING", "Another account signed in")}
       onClose={() => dismiss()}
       onOverlayClick={() => dismiss()}
-      // Align the link with the button on a shared centre line; the platform
-      // stacks these full-width on mobile, where the gap keeps them apart.
-      footerStyles={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "1rem", flexWrap: "wrap" }}
+      footerStyles={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}
       children={[
         <div key="body" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "0.25rem 0" }}>
           {/* Group 1 — the situation: lead sentence tied tightly to the two
@@ -168,7 +168,9 @@ const SessionCollisionNotice = () => {
                 {tx("CORE_SESSION_COLLISION_TIP_FINISH", "Finish and submit what you are working on in this tab.")}
               </li>
               <li style={{ marginBottom: "0.25rem" }}>
-                {tx("CORE_SESSION_COLLISION_TIP_REFRESH", "Avoid refreshing this tab — it may switch to the other account.")}
+                {/* "normally": a tab whose own session has expired (past the
+                    session TTL) DOES adopt the other account on its next load. */}
+                {tx("CORE_SESSION_COLLISION_TIP_STAYS", "Refreshing normally keeps your current account. To use the other account here, log out and sign in again.")}
               </li>
               <li>
                 {tx("CORE_SESSION_COLLISION_TIP_SEPARATE", "To use both accounts at once, open one in a private window.")}
@@ -178,16 +180,6 @@ const SessionCollisionNotice = () => {
         </div>,
       ]}
       footerChildren={[
-        // Secondary, and deliberately not the default: switching reloads the
-        // page, which would discard anything unsaved in this tab.
-        <Button
-          key="switch"
-          type="button"
-          size="large"
-          variation="link"
-          label={tx("CORE_SESSION_COLLISION_SWITCH", "Switch to the other account")}
-          onClick={() => window.location.reload()}
-        />,
         <Button
           key="ack"
           type="button"

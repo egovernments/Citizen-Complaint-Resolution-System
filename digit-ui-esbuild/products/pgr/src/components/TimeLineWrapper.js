@@ -17,37 +17,62 @@ import { parseFilestoreEntry } from '../utils/attachmentKind';
 const MASKED = "******";
 const maskName = (name) => (name ? MASKED : name);
 const maskPhone = (phone) => (phone ? MASKED : phone);
-// Workflow steps whose comment/attachments are addressed TO THE CITIZEN and
-// may therefore be shown on the citizen's timeline:
-//   RESOLVE / REJECT   the decision — this is the reply to the complaint
-//   AWAITINGINFORMATION a question put to the citizen, who must be able to read it
+// Workflow steps whose comment/attachments may be shown on the citizen's
+// timeline (CRQ "Complaint Chronology Visibility" v2.0, 08-09-2026):
+//   RESOLVE / REJECT   the CLOSING ENTRY — the single exception the CRQ allows:
+//                      the outcome and its justification reach the citizen
 //   APPLY / REOPEN / RATE / COMMENT-by-a-citizen  the citizen's own words
-// Every other step (ASSIGN, REASSIGN, ESCALATE, REFERRED, INVESTIGATION and
-// staff COMMENT) is internal handling between officers. Its text can name
-// departments, budgets, suspects or case strategy, so it must never reach the
-// complainant — see `hideInternalNotes`.
+// Every other employee step (ASSIGN, REASSIGN, ESCALATE, REFERRED,
+// INVESTIGATION, AWAITINGINFORMATION, staff COMMENT) renders status-only:
+// the citizen sees THAT the complaint moved, never the internal text.
+// AWAITINGINFORMATION was visible until CRQ v2 removed it — in the CMS flow
+// the question is relayed to the citizen by the Reception Officer, not read
+// off the timeline.
 //
 // The classification is by ACTION because a workflow comment is a plain string
-// with no audience field: nothing in the payload distinguishes a note to a
-// colleague from a reply to the citizen. Keying on the action is the safe
-// approximation — an internal note can never surface, because internal actions
-// are never rendered. A real per-comment visibility flag is the durable fix and
-// needs a backend change.
-const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "AWAITINGINFORMATION", "APPLY", "REOPEN", "RATE"]);
+// with no audience field. Client-side filtering only — the CRQ's AC-03
+// (nothing in the API payload either) still needs the backend change.
+const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "APPLY", "REOPEN", "RATE"]);
 
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
 
-// QA #19: maskEmployeeContacts — set by the EMPLOYEE details page —
-// masks every non-citizen actor's name and mobile in the timeline (the
-// requirement is mask, not remove).
-// QA #19 part 1 (sheet v4): hideEmployeeContacts — set by the CITIZEN details
-// page — OMITS employee name and contact lines entirely (the citizen must not
-// see who handled the complaint). Citizen actors' own entries stay visible.
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false, hideEmployeeContacts = false, hideInternalNotes = false }) => {
+// maskConfidential — set by BOTH pages from the complaint's isConfidential
+// flag: the citizen actor's name/number are masked ONLY on confidential
+// complaints (CRQ v2 §3/§4; supersedes the 2026-07-23 always-mask call), and
+// a holder of CONFIDENTIAL_COMPLAINT_VIEWER sees them in clear (AC-07).
+// maskEmployeeContacts — kept for compatibility; no page passes it since CRQ
+// v2's prototypes show employee identities in clear on the employee timeline
+// (supersedes QA #19's mask-not-remove).
+// hideEmployeeContacts — set by the CITIZEN details page — OMITS employee name
+// and contact lines entirely (the citizen must not see who handled the
+// complaint, incl. on the closing entry). The complainant's own entries stay.
+// complainantUuid — the complaint's accountId. The citizen-vs-employee split is
+// decided by MATCHING THE ACTOR TO THE COMPLAINANT, not by holding the CITIZEN
+// role: seeded admins and officers who also registered as citizens carry that
+// role, and classifying them as "citizen" leaked internal comments and
+// employee identities onto the citizen timeline. Role check is only the
+// fallback when no uuid is available.
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false, hideEmployeeContacts = false, hideInternalNotes = false, complainantUuid = null }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
+
+    // CRQ v2 AC-07: CONFIDENTIAL_COMPLAINT_VIEWER sees citizen PII in clear on
+    // confidential complaints. Employee app only: AC-01 masks the citizen's
+    // OWN identity on a confidential complaint with no exception, so the
+    // override must never apply on the citizen portal — even for a shared
+    // account that holds the role. Detected from the URL, not
+    // UserService.getType(): the stored userType key is routinely absent on a
+    // clean employee session (see User/index.js logout notes), which would
+    // silently strip the viewer privilege. UX layer only; the API-level gate
+    // lives in pgr-services (extendedAttributes).
+    const isEmployeeApp = window?.location?.pathname?.split("/").includes("employee");
+    const isConfidentialViewer =
+      isEmployeeApp &&
+      (Digit.UserService.getUser()?.info?.roles || []).some(
+        (r) => (r?.code || r) === "CONFIDENTIAL_COMPLAINT_VIEWER"
+      );
 
     // Manage timeline data
     const [timelineSteps, setTimelineSteps] = useState([]);
@@ -237,21 +262,25 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
-                // Product call (2026-07-23, follow-up on QA #19): the timeline
-                // ALWAYS masks the CITIZEN actor's name and number — even on
-                // non-confidential complaints. The complainant card is the one
-                // place that shows clear identity, per the viewer's privilege.
-                // (maskConfidential is kept as a prop for compatibility but the
-                // citizen actor no longer depends on it.)
-                const isEmployeeActor = personRecord && !isCitizenActor(personRecord);
-                // On the citizen's timeline, only citizen-facing steps (and the
-                // citizen's own actions) keep their comment and attachments.
+                // Complainant match by uuid when we have it (role fallback
+                // otherwise) — see the prop doc above for why role alone lies.
+                const isComplainant = (person) =>
+                  complainantUuid && person?.uuid ? person.uuid === complainantUuid : isCitizenActor(person);
+                const isEmployeeActor = personRecord && !isComplainant(personRecord);
+                // On the citizen's timeline, only the closing entry (and the
+                // complainant's own actions) keep their comment and attachments.
+                // The ACTOR of a step is always the assigner, even on assigning
+                // actions where the displayed person is the assignee.
                 const showInternalContent =
                   !hideInternalNotes ||
                   CITIZEN_FACING_ACTIONS.has(instance?.action) ||
-                  isCitizenActor(personRecord);
+                  isComplainant(instance?.assigner);
+                // CRQ v2 §3/§4: the citizen actor's identity follows the
+                // confidentiality flag — shown on a non-confidential complaint,
+                // masked on a confidential one, and shown to a holder of the
+                // confidential-viewer role regardless (AC-01/02/06/07/08).
                 const maskThis =
-                  isCitizenActor(personRecord) ||
+                  (maskConfidential && !isConfidentialViewer && isComplainant(personRecord)) ||
                   (maskEmployeeContacts && isEmployeeActor);
                 // QA #19 part 1: citizen view drops employee identity lines
                 // entirely (hide, not mask).
