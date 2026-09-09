@@ -1904,6 +1904,7 @@
         - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
         - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
         - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+        - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
@@ -2128,6 +2129,7 @@
           AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          ELASTICSEARCH_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_password | default('', true) }}
           {# Opt-in Novu stack. default('') so a tenant without these keys writes
              an empty value, which compose's ${NOVU_*:-dev-default} treats as
              unset — the dev default only ever applies when the notifications

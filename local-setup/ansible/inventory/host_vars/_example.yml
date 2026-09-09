@@ -966,6 +966,9 @@ bootstrap_secrets:
   # with this repo, and the dump's eg_enc_*_keys decrypt only under it. On a
   # real deployment (no dump) use a generated value.
   elasticsearch_master_password: "CHANGE_ME"
+  # ES login for the opt-in search stack (enable_search_stack). DISTINCT from
+  # the master password above — never reuse the PII-encryption master here.
+  # elasticsearch_password: "CHANGE_ME"
   egov_hrms_default_password: "CHANGE_ME"
   # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
   # playbook generates a 24-char password on first deploy and stores it here
