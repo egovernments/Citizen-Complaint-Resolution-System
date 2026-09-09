@@ -4,7 +4,7 @@ import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { digitDb } from '../services/digit-db.js';
-import { ensureAuthenticated, checkBaseUrlAllowed, getAuthMode } from '../services/auth.js';
+import { ensureAuthenticated, checkBaseUrlAllowed, getAuthMode, defaultProvisioningPassword } from '../services/auth.js';
 import { emitProgress } from '../services/progress.js';
 import { ENVIRONMENTS } from '../config/environments.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
@@ -1320,7 +1320,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // mint as that user 400'd "Invalid login credentials".
           const authInfo = digitApi.getAuthInfo();
           const currentUsername = authInfo.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
           const mobileNumber = deriveValidMobile(
             mobileRegex,
             Number(args.mobile_length) || 10,
@@ -2458,7 +2458,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // The session's login password, so the provisioned admin carries the
         // operator's actual credentials (CRS_PASSWORD only as a fallback for
         // token-only auth, where the password is unknown).
-        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
 
         // Get full user details from source tenant
         const sourceTenantForSearch = auth.user?.tenantId || source;
@@ -3463,7 +3463,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || defaultProvisioningPassword();
 
         const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'ACCOUNT_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
