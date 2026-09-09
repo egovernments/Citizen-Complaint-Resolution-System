@@ -256,8 +256,16 @@ docker_registry: 10.0.0.4:5000
 # TLS hostname in `insecure-registries` and refuses to start, taking the
 # whole stack down. Each entry must be `host` or `host:port`, never with
 # a path component.
-insecure_registries:
-  - "{{ docker_registry }}"
+# EMPTY by default. This list is written into /etc/docker/daemon.json, and an
+# entry there tells the daemon to pull over plain HTTP and to skip TLS
+# verification for that host — every image layer then arrives unauthenticated
+# and unencrypted, so anyone on the path can swap what runs on the box.
+#
+# It defaulted to the configured docker_registry, so a stock deploy trusted
+# 10.0.0.4:5000 over HTTP. Serve the registry over TLS instead. If you must
+# temporarily keep an HTTP registry, set this in that tenant's host_vars — a
+# conscious, per-tenant exception rather than the default for everyone.
+insecure_registries: []
 
 # Docker log rotation (daemon.json log-opts). Without these the json-file
 # driver grows a container's log without bound; a chatty JVM service can fill
@@ -322,6 +330,11 @@ mcp_ref: main
 # fork's source on the box — and note it is only consulted by `hmr` mode, or by
 # `static` mode with digit_ui_bundle_image deliberately blanked out.
 digit_ui_esbuild_repo: ""
+# Pin to a tag or commit SHA, not a moving branch: whatever `main` points at
+# when the deploy runs gets built and served as the citizen SPA, so an upstream
+# push (or a compromised one) lands on the box with no review and no way to
+# reproduce what a given deploy shipped. Setting digit_ui_bundle_image to a
+# digest-pinned image avoids the on-host build entirely and is preferred.
 digit_ui_esbuild_branch: main
 
 # Prebuilt digit-ui bundle (static mode) — the DEFAULT, and the robust

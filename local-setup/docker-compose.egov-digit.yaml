@@ -315,7 +315,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/pgbouncer:latest
+    image: egovio/pgbouncer:latest@sha256:939a6974d41200d4d629afd4867614510c737e27d9575432a77b9fbfe81f4d0d
     container_name: digit-pgbouncer
     environment:
       DB_HOST: postgres-db
@@ -1387,7 +1387,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/curl:latest
+    image: egovio/curl:latest@sha256:4940582f3591ca417f9e486a1cc2bfeef6cb3abb92b5a5c462655ceb8cff5115
     container_name: hrms-prereq-gate
     depends_on:
       egov-user:
@@ -1568,7 +1568,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/curl:latest
+    image: egovio/curl:latest@sha256:4940582f3591ca417f9e486a1cc2bfeef6cb3abb92b5a5c462655ceb8cff5115
     container_name: user-seed-container
     depends_on:
       egov-user:
@@ -2023,7 +2023,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/gatus:latest
+    image: egovio/gatus:latest@sha256:2d97306b3fbc5dd2cc7c968084a4063677210b7bb28293ef0a2bae7651d5b9c2
     container_name: digit-gatus
     depends_on:
       pgbouncer:
@@ -2329,7 +2329,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     cap_add: [IPC_LOCK]
-    image: openbao/openbao:latest
+    image: openbao/openbao:latest@sha256:11fd73a2102cda9c55d5d881a8c3210303146a7ec1e8ac76f526e175c6d24641
     container_name: openbao
     restart: unless-stopped
     environment:
@@ -2348,8 +2348,26 @@ services:
       - openbao_data:/openbao/file
     ports:
       - "${BIND_IP:-127.0.0.1}:18200:8200"
+    # Its OWN network, not egov-network.
+    #
+    # This holds every tenant secret, and it sat on the same flat bridge as ~50
+    # other containers — so any one of them (a JVM service parsing citizen input,
+    # a log shipper, a Node SPA front) could reach the vault API directly. The
+    # listener has tls_disable and speaks plain HTTP, so that reachability was
+    # the whole control.
+    #
+    # Nothing on egov-network is a legitimate client: the ONLY consumer is the
+    # Ansible playbook, which talks to 127.0.0.1:18200 on the HOST via the
+    # published port above (see the "OpenBao — ..." tasks). Isolating it costs
+    # nothing and removes the lateral path entirely.
+    #
+    # NOT fixed here: tls_disable is still true and the single unseal key plus
+    # root token still live on the same box in .openbao/init.json. Terminating
+    # TLS needs a cert the playbook and container both trust, and raising
+    # secret_shares above 1 is pointless while every share is stored next to the
+    # data — that wants KMS auto-unseal, or shares held off-box. Tracked.
     networks:
-      - egov-network
+      - openbao-network
     healthcheck:
       # 200 = unsealed+active, 429 = unsealed+standby, 472 = data-recovery
       # 473 = perf-standby, 501 = uninitialized, 503 = sealed.
@@ -2549,7 +2567,7 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: egovio/novu-bridge-endpoint:latest
+    image: egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -3057,6 +3075,11 @@ services:
 
 networks:
   egov-network:
+    driver: bridge
+  # Isolated bridge for OpenBao only — see the openbao service for why. Nothing
+  # else joins it, so the vault API is reachable from the host's loopback
+  # (published port) and from nowhere else.
+  openbao-network:
     driver: bridge
 
 volumes:
