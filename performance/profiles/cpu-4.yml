@@ -63,5 +63,3 @@ services:
     cpus: 0.02
   digit-ui:
     cpus: 0.02
-  jupyter:
-    cpus: 0.02

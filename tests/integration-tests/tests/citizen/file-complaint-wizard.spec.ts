@@ -8,8 +8,8 @@
  *
  * Ground rules from the 2026-04-29 walk:
  *   - Step 1 (Complaint Details) requires Type + Subtype dropdowns.
- *   - Step 2 (Pin Complaint Location) — don't touch the map (CCRS#469).
- *   - Step 3 (Location Details) postal code is auto-filled from step 2.
+ *   - Step 2 (Pin Complaint Location) is optional and starts with no marker.
+ *   - Step 3 (Location Details) still requires the boundary cascade.
  *   - Step 4 (Complaint's Location) cascades County → Sub-County → Ward,
  *     gating each level (CCRS#477).
  *   - Step 5 description is required.
@@ -130,9 +130,14 @@ test.describe('Citizen file-complaint wizard', () => {
     options: {
       onAfterStep?: (label: string) => Promise<void>;
       assertPincodeToast?: boolean;
+      exerciseOptionalPinClear?: boolean;
     } = {},
   ): Promise<void> {
-    const { onAfterStep, assertPincodeToast = false } = options;
+    const {
+      onAfterStep,
+      assertPincodeToast = false,
+      exerciseOptionalPinClear = false,
+    } = options;
 
     // Modern digit-ui renders dropdowns as <button role="combobox"> (shadcn
     // style); older builds used `input.digit-dropdown-employee-select-wrap--elipses`.
@@ -244,10 +249,103 @@ test.describe('Citizen file-complaint wizard', () => {
 
     await clickNext();
 
-    // ── Step 2: Pin Complaint Location — DON'T touch the map ────────
+    // ── Step 2: Pin Complaint Location (optional) ──────────────────
     await page.waitForTimeout(2500);
     await onAfterStep?.('Step 2 – Pin Location');
+
+    const map = page.locator('.leaflet-container').first();
+    const marker = map.locator('.leaflet-marker-icon');
+    const mapNext = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+    await expect(map, 'pin-location map must mount before its state is asserted').toBeVisible();
+    await expect(
+      marker,
+      'a fresh complaint must use the configured coordinates only as its viewport, not as a selected pin',
+    ).toHaveCount(0);
+    await expect(
+      mapNext,
+      'the exact map pin is optional; a citizen must be able to continue without one',
+    ).toBeEnabled();
+
+    if (exerciseOptionalPinClear) {
+      // Make reverse geocoding deterministic and deliberately slow. The old
+      // component accepted this response after Clear, patched the cleared
+      // GeoLocationsPoint back into formData, and restored the marker.
+      await page.route('https://nominatim.openstreetmap.org/reverse**', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            display_name: 'Playwright delayed reverse-geocode result',
+            address: { postcode: '00100' },
+          }),
+        });
+      });
+      // Typing makes the clear control available immediately. Forward search
+      // is irrelevant to this interaction, so keep it deterministic too.
+      await page.route('https://nominatim.openstreetmap.org/search**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
+
+      const searchInput = page.locator('input[type="text"]').first();
+      await expect(searchInput).toBeVisible();
+      await searchInput.fill('pin selected only to be cleared');
+
+      const bounds = await map.boundingBox();
+      expect(bounds, 'Leaflet map must have a measurable click target').not.toBeNull();
+      await map.click({
+        position: {
+          x: Math.max(20, Math.floor(bounds!.width * 0.62)),
+          y: Math.max(20, Math.floor(bounds!.height * 0.58)),
+        },
+      });
+      await expect(marker, 'clicking the map must create one explicit pin').toHaveCount(1);
+
+      // A reverse geocode is still deliberately in flight. The loading status
+      // must not intercept pointer input: the user can replace the pin and then
+      // clear it without waiting for address enrichment (CCRS#1808).
+      await map.click({
+        position: {
+          x: Math.max(20, Math.floor(bounds!.width * 0.38)),
+          y: Math.max(20, Math.floor(bounds!.height * 0.42)),
+        },
+      });
+      await expect(marker, 'a second real map click must replace the pin while geocoding is in flight').toHaveCount(1);
+
+      // GeoLocations renders this icon-only control immediately after the
+      // search input. Use a real pointer click so an input-blocking veil makes
+      // this regression test fail instead of being bypassed programmatically.
+      const clearControl = searchInput.locator('xpath=following-sibling::div[1]');
+      await expect(clearControl, 'the map search field must expose its clear control').toHaveCount(1);
+      await clearControl.click();
+
+      await expect(marker, 'Clear must remove the explicitly selected pin').toHaveCount(0);
+      await expect(mapNext, 'clearing an optional pin must not disable Next').toBeEnabled();
+
+      // Wait beyond the delayed reverse response. It must be ignored rather
+      // than resurrecting the marker/form value or rewriting session storage.
+      await page.waitForTimeout(1600);
+      await expect(marker, 'a stale reverse-geocode response must not restore a cleared pin').toHaveCount(0);
+      await expect(mapNext).toBeEnabled();
+      const savedMapLocation = await page.evaluate(() =>
+        (window as any).Digit?.SessionStorage?.get?.('PGR_MAP_LOCATION') ?? null,
+      );
+      expect(savedMapLocation, 'Clear must remove the cross-complaint map cache').toBeNull();
+    }
+
     await clickNext();
+
+    if (exerciseOptionalPinClear) {
+      // Re-entering the map step exercises the wizard restore path. The
+      // cleared value must remain cleared after the component remounts.
+      const back = page.locator('button:visible').filter({ hasText: /^BACK$/ }).first();
+      await expect(back).toBeVisible();
+      await back.click();
+      await expect(map).toBeVisible();
+      await expect(marker, 'Back navigation must not restore a cleared/session-cached pin').toHaveCount(0);
+      await expect(mapNext).toBeEnabled();
+      await clickNext();
+    }
 
     if (assertPincodeToast) {
       // No "Pincode not serviceable" toast (CCRS#469 fix verified)
@@ -258,12 +356,10 @@ test.describe('Citizen file-complaint wizard', () => {
     }
 
     // ── Step 3: Location Details — fill EVERY cascade level to the leaf ──
-    // The map pin auto-resolves the boundary cascade only as deep as the
-    // deployment has boundary geometry (geojson). On tenants whose tree is
-    // deeper than the geometry (e.g. Maputo: geometry stops at Bairro but the
-    // hierarchy has a Quarteirão leaf below it), the deepest level(s) render
-    // EMPTY after the pin auto-fill and must be picked manually — the form's
-    // mandatory leaf gate won't enable NEXT until the true leaf is selected.
+    // With no exact pin, every administrative-boundary level is selected
+    // manually. If a caller did keep a pin, its boundary match may prefill
+    // only as deep as the deployment has geometry; this same loop skips those
+    // filled levels and continues to the real leaf.
     // Loop up to 8 levels (was 3 — Kenya's County→SubCounty→Ward) so any
     // number of cascade levels is filled; already-auto-filled levels are
     // skipped, empty ones (the leaf) get selected.
@@ -326,8 +422,8 @@ Steps:
 1. OTP-login as the provisioned citizen (readProvisionedCitizen / citizen-fixture.json).
 2. Open /digit-ui/citizen/pgr/create-complaint/complaint-type.
 3. Step 1 (Complaint Details): pick Type and Subtype from the dropdowns, click Next.
-4. Step 2 (Pin Location): accept the default pin — do NOT touch the map (CCRS#469 keeps the test stable).
-5. Step 3 (Location Details): assert postal code is auto-filled from step 2; click Next.
+4. Step 2 (Pin Location): assert there is no default marker and NEXT is enabled; select a pin, clear it while reverse geocoding is in flight, and assert it stays cleared.
+5. Step 3 (Location Details): complete the required administrative-boundary cascade and click Next.
 6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (cascade gates each level — CCRS#477).
 7. Step 5 (Description): fill the required description, click Next.
 8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
@@ -349,7 +445,16 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     );
     await page.waitForTimeout(5000);
 
-    await walkWizard(page, { assertPincodeToast: true });
+    let createPayload: any = null;
+    page.on('request', (request) => {
+      if (request.method() !== 'POST' || !request.url().includes('/pgr-services/v2/request/_create')) return;
+      try { createPayload = request.postDataJSON(); } catch { /* assertion below reports the missing payload */ }
+    });
+
+    await walkWizard(page, {
+      assertPincodeToast: true,
+      exerciseOptionalPinClear: true,
+    });
 
     // ── Confirmation page contract ─────────────────────────────────
     // Gated on the declared capability, not a stray env hatch: whether a
@@ -373,6 +478,14 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
 
     // Smoke: no error fallback rendered
     await expect(body).not.toContainText('Something went wrong');
+
+    expect(createPayload, 'the wizard must issue a PGR create request').not.toBeNull();
+    const geoLocation = createPayload?.service?.address?.geoLocation ?? {};
+    expect(
+      geoLocation,
+      'a pin that was cleared before submit must not leak coordinates into the create payload',
+    ).not.toHaveProperty('latitude');
+    expect(geoLocation).not.toHaveProperty('longitude');
   });
 
   test('no raw localization keys visible at any wizard step', {

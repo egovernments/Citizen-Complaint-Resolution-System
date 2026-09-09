@@ -40,6 +40,7 @@ import useComplaintSubType from "./pgr/useComplaintSubType";
 import useComplaintTable from "./pgr/useComplaintTable";
 import useComplaintTypes from "./pgr/useComplaintTypes";
 import useEmployeeFilter from "./pgr/useEmployeeFilter";
+import useEmployeeWorkingContext from "./pgr/useEmployeeWorkingContext";
 import useInboxData from "./pgr/useInboxData";
 import useLocalities from "./pgr/useLocalities";
 import usePGRInboxSearch from "./pgr/usePGRInboxSearch";
@@ -102,6 +103,7 @@ const pgr = {
   useComplaintTable,
   useComplaintTypes,
   useEmployeeFilter,
+  useEmployeeWorkingContext,
   useInboxData,
   useLocalities,
   useServiceDefs,

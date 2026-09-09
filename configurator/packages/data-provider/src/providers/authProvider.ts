@@ -1,5 +1,14 @@
 import type { AuthProvider } from 'ra-core';
 import type { DigitApiClient } from '../client/DigitApiClient.js';
+import { loadMastersCapability, type MastersCapability } from './accessPolicy.js';
+
+/** Shape returned by `getPermissions()` — role codes plus the masters
+ *  visibility/edit capability computed from existing accesscontrol MDMS data.
+ *  See docs/design/masters-configurator-access-policy-design.md §3.3. */
+export interface DigitPermissions {
+  roles: string[];
+  masters: MastersCapability;
+}
 
 export function createDigitAuthProvider(client: DigitApiClient): AuthProvider {
   return {
@@ -34,10 +43,11 @@ export function createDigitAuthProvider(client: DigitApiClient): AuthProvider {
       };
     },
 
-    getPermissions: async () => {
-      const { user } = client.getAuthInfo();
-      if (!user?.roles) return [];
-      return user.roles.map((role) => role.code);
+    getPermissions: async (): Promise<DigitPermissions> => {
+      const { user, stateTenantId } = client.getAuthInfo();
+      const roles = user?.roles?.map((role) => role.code).filter(Boolean) ?? [];
+      const masters = await loadMastersCapability(client, user?.tenantId || stateTenantId, roles);
+      return { roles, masters };
     },
   };
 }

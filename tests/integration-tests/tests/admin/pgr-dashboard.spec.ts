@@ -1,21 +1,73 @@
 /**
  * PGR Dashboard E2E
  *
- * Verifies the Chart.js-based PGR analytics dashboard loads correctly:
- *   1. Login via API session injection
- *   2. Navigate to /manage/pgr-dashboard
- *   3. Verify overview card renders with 3 KPIs
- *   4. Verify all chart canvases render
- *   5. Verify chart section titles
- *   6. Verify sidebar nav link is present
- *   7. Verify breakdown table with tabs
+ * Verifies the default-off route/navigation contract and, when the rollback
+ * flag is baked on, the retained Chart.js dashboard surface.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { loginConfigurator, CONFIGURATOR_BASE } from '../utils/configurator-auth';
+
+type CcrsBuildFlags = {
+  legacyPgrDashboardEnabled: boolean;
+  legacyPgrDashboardRaw: string;
+};
+
+async function readLegacyDashboardFlag(page: Page): Promise<CcrsBuildFlags> {
+  const flags = await page.evaluate(() => (
+    window as Window & { __CCRS_BUILD_FLAGS__?: CcrsBuildFlags }
+  ).__CCRS_BUILD_FLAGS__);
+
+  expect(flags, 'Configurator must publish its baked feature-flag contract').toBeDefined();
+  expect(typeof flags?.legacyPgrDashboardEnabled).toBe('boolean');
+  expect(typeof flags?.legacyPgrDashboardRaw).toBe('string');
+
+  const expectedRaw = process.env.VITE_ENABLE_LEGACY_PGR_DASHBOARD;
+  if (expectedRaw !== undefined) {
+    expect(
+      flags?.legacyPgrDashboardRaw,
+      'The loaded Configurator bundle must match the feature flag expected by the test job',
+    ).toBe(expectedRaw);
+  }
+
+  return flags as CcrsBuildFlags;
+}
+
+async function navigateToLegacyDashboard(page: Page): Promise<CcrsBuildFlags> {
+  await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
+    waitUntil: 'networkidle',
+    timeout: 30_000,
+  });
+  return readLegacyDashboardFlag(page);
+}
+
+async function openEnabledLegacyDashboard(page: Page): Promise<void> {
+  const flags = await navigateToLegacyDashboard(page);
+  test.skip(!flags.legacyPgrDashboardEnabled, 'Legacy PGR dashboard is disabled in this build');
+}
 
 test.describe('PGR Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await loginConfigurator(page);
+  });
+
+  test('route and navigation follow the baked feature flag', {
+    annotation: {
+      type: 'description',
+      description: `Checks the deployed Configurator bundle's own feature-flag contract. With rollback mode disabled, the legacy route redirects directly to /manage and its navigation entry is absent. With rollback mode enabled, the route and navigation entry remain available. If VITE_ENABLE_LEGACY_PGR_DASHBOARD is supplied to the test job, its value must exactly match the value baked into the loaded bundle.`,
+    },
+    tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'],
+  }, async ({ page }) => {
+    const flags = await navigateToLegacyDashboard(page);
+
+    if (flags.legacyPgrDashboardEnabled) {
+      await expect(page).toHaveURL(/\/manage\/pgr-dashboard\/?$/);
+      await expect(page.locator('button', { hasText: 'PGR Dashboard' })).toBeVisible();
+      return;
+    }
+
+    await expect(page).toHaveURL(/\/manage\/?$/);
+    await expect(page.locator('h1', { hasText: 'PGR Dashboard' })).toHaveCount(0);
+    await expect(page.locator('button', { hasText: 'PGR Dashboard' })).toHaveCount(0);
   });
 
   test('dashboard page loads with heading', {
@@ -32,10 +84,7 @@ Steps:
 First test in a series of seven that walk the dashboard's UI surface.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     const heading = page.locator('h1');
     await expect(heading).toBeVisible({ timeout: 10_000 });
@@ -55,10 +104,7 @@ Steps:
 Pairs with the "KPI values show numbers" test below — together they confirm the labels AND values render.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     const expectedKpis = [
       'Total Complaints',
@@ -85,10 +131,7 @@ Steps:
 If the canvas count drifts, update both the dashboard layout and this test with the new expected count.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     // Wait for Chart.js to render canvases
     await page.waitForSelector('canvas', { timeout: 10_000 });
@@ -120,10 +163,7 @@ Steps:
 Note 9 titles vs 8 canvases — DSS Overview is a section header without its own chart.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     const expectedTitles = [
       'DSS Overview',
@@ -156,10 +196,7 @@ Steps:
 Loose regex on the class lets the design system rename specific Tailwind variants without false-positives.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     // The sidebar should have a "PGR Dashboard" button with active styling
     const navLink = page.locator('button', { hasText: 'PGR Dashboard' });
@@ -184,10 +221,7 @@ Steps:
 Loose regex tolerates "1,234", "0", "12.5%" — anything that's actually numeric.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     // Each KPI value should contain a number or percentage
     const kpiValues = page.locator('.text-3xl.font-bold');
@@ -217,10 +251,7 @@ Steps:
 Confirms tab-switching actually swaps the rendered table — not just the tab indicator.`,
     },
     tag: ['@area:configurator-manage', '@area:dashboard', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    await page.goto(`${CONFIGURATOR_BASE}/manage/pgr-dashboard`, {
-      waitUntil: 'networkidle',
-      timeout: 30_000,
-    });
+    await openEnabledLegacyDashboard(page);
 
     // Should show "Status by Tenant" section
     await expect(page.locator('text=Status by Tenant').first()).toBeVisible({ timeout: 5_000 });

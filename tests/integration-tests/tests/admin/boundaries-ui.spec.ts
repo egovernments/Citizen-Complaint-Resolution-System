@@ -35,10 +35,13 @@ import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
 import { ROOT_TENANT as ROOT, ADMIN_USER, ADMIN_PASS, BASE_URL } from '../utils/env';
+import { toLettersOnlySuffix } from '../utils/onboarding';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const SUFFIX = Date.now().toString().slice(-8);
+// Letters-only — the upload parser rejects digits in tenant codes; see
+// toLettersOnlySuffix for the rule and mapping.
+const SUFFIX = toLettersOnlySuffix(Date.now().toString().slice(-8));
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
 const HIERARCHY_TYPE = `PWHIER${SUFFIX}`;

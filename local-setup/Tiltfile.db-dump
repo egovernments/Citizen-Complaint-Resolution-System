@@ -94,9 +94,6 @@ dc_resource('kong', labels=['gateway'],
 dc_resource('gatus', labels=['tools'],
     links=[link('http://localhost:18889', 'Health Dashboard')])
 
-dc_resource('jupyter', labels=['tools'],
-    links=[link('http://localhost:18888/lab', 'Jupyter Lab')])
-
 # ==================== Buttons ====================
 cmd_button(
     name='nuke-db',

@@ -30,7 +30,9 @@ node_modules/
 .tmp/
 tmp/
 
-# Jupyter Notebook checkpoints
+# Notebook checkpoints — the bundled Jupyter service is gone, but the docs
+# suggest driving the loader from your own IPython/Jupyter pointed at the venv,
+# and that still writes these here.
 .ipynb_checkpoints/
 
 # OTEL Java Agent (21MB binary - use otel/download-agent.sh instead)

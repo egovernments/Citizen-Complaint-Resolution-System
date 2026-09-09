@@ -234,10 +234,12 @@ Everything config-relevant that landed after the beta cutoff. Sections Section 1
 - default-data-handler seeds a default 5-digit `postalCode` row at tenant creation; `full-dump.sql` also seeds the default rows. **Existing tenants (created pre-v2.12) must seed the rows manually** — DDH seeding is create-only.
 - host_vars shape change: `core_postal_configs` lost `postalCodeLength` and `postalCodeErrorMessage` — `postalCodePattern` is now the only knob (CCRS#722); the localized error message is derived from the pattern (`rainmaker-pgr` key `CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN`). Delete the two removed keys from any tenant host_vars.
 
-### 5.2 Complaint reopen window now driven by `REOPENSLA` (#925)
+### 5.2 Complaint reopen window now driven by `REOPENSLA` (#925, #1252)
 
-- `RAINMAKER-PGR.UIConstants.REOPENSLA` (ms; seeded 432000000 = 5 days) is now the single source of truth for the complaint reopen window — previously a hardcoded 1-hour default won on every tenant because the MDMS lookup was commented out. Applies to the citizen timeline and the employee/CSR action bar alike.
-- The deadline is additionally **enforced server-side**, anchored to the persisted record rather than the request body. Tenants that unknowingly relied on the de-facto 1-hour window should review their seeded `REOPENSLA` value.
+- `RAINMAKER-PGR.UIConstants.REOPENSLA` (ms; **shipped default 259200000 = 72 hours**) is the single source of truth for the complaint reopen window — previously a hardcoded 1-hour default won on every tenant because the MDMS lookup was commented out. Applies to the citizen timeline and the employee/CSR action bar alike.
+- The deadline is **enforced server-side** by `pgr-services` `validateReOpen()`, reading the same `REOPENSLA` master and anchored to the persisted record rather than the request body — so a direct API caller can no longer forge a fresh `lastModifiedTime` to reopen past the window.
+- `pgr.complain.idle.time` / `PGR_COMPLAIN_IDLE_TIME` is now a **fallback backstop only**, used when MDMS has no usable `REOPENSLA` (unseeded tenant or MDMS outage). **Deployments that set `time-before-closing-complaint` must unset it** — it pinned one deployment-wide window server-side while the UI kept honouring `REOPENSLA`, so the UI offered REOPEN and the API then rejected it. The shipped `env.yaml` no longer sets it.
+- **Existing tenants keep their current value.** The 72-hour default applies to tenants seeded or bootstrapped after this release; tenants already carrying 432000000 (5 days) stay there until an operator edits `REOPENSLA` in the configurator.
 
 ### 5.3 Signed audit logging for PGR + workflow (always-on)
 

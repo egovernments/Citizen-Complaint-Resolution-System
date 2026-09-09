@@ -1,0 +1,33 @@
+name: Analytics seed parity
+
+on:
+  pull_request:
+    paths:
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCapabilities.java'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ROLEACTIONS/ACCESSCONTROL-ROLEACTIONS.roleactions.json'
+      - 'ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/actions-test.json'
+      - 'local-setup/db/full-dump.sql'
+      - '.github/scripts/check-analytics-seed-parity.py'
+      - '.github/workflows/analytics-seed-parity.yml'
+  push:
+    branches: [master, develop]
+    paths:
+      - 'backend/pgr-services/src/main/java/org/egov/pgr/analytics/AnalyticsCapabilities.java'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'
+      - 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ROLEACTIONS/ACCESSCONTROL-ROLEACTIONS.roleactions.json'
+      - 'ansible/nairobi-mdms/mdms/ACCESSCONTROL-ACTIONS-TEST/actions-test.json'
+      - 'local-setup/db/full-dump.sql'
+      - '.github/scripts/check-analytics-seed-parity.py'
+      - '.github/workflows/analytics-seed-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  analytics-seed-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check analytics capability seed parity
+        run: python3 .github/scripts/check-analytics-seed-parity.py

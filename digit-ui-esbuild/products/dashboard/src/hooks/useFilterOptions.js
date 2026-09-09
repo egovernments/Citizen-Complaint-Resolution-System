@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { runBatchQueries } from "../services/analyticsService";
+import { runBatchQueries, fetchPublicFilterOptions, getTenantId } from "../services/analyticsService";
 import {
   buildComplaintTypeIndex,
   fetchComplaintHierarchyRecords,
@@ -110,7 +110,12 @@ function toComplaintTypeDecorator(hierarchyIndex) {
   };
 }
 
-export function useFilterOptions({ enabled = true } = {}) {
+/**
+ * `publicMode` swaps the inline distinct batch for the anonymous
+ * /public/_options endpoint (#1797) — same envelope, server-owned queries,
+ * counts stripped — so everything below the fetch is shared.
+ */
+export function useFilterOptions({ enabled = true, publicMode = false } = {}) {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
   const [raw, setRaw] = useState({
@@ -133,7 +138,7 @@ export function useFilterOptions({ enabled = true } = {}) {
     }
     let cancelled = false;
     Promise.all([
-      runBatchQueries(OPTION_QUERIES),
+      publicMode ? fetchPublicFilterOptions(getTenantId()) : runBatchQueries(OPTION_QUERIES),
       // Both hierarchy fetches resolve null on any failure (never reject) —
       // labels then fall back to the humanizer and the affected filter stays
       // flat, exactly the old behavior.
@@ -162,7 +167,7 @@ export function useFilterOptions({ enabled = true } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, publicMode]);
 
   return useMemo(() => {
     if (!raw.results) return { options: null, loading: raw.loading };

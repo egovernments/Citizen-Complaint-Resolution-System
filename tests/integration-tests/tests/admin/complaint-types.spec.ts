@@ -38,12 +38,32 @@ const HIERARCHY_TYPE = 'PGR';
 // renders a blank content pane, so drive the real route.
 const LIST_PATH = '/configurator/manage/complaint-hierarchy';
 
+/**
+ * The uniqueIdentifier a ComplaintHierarchy row is actually STORED under.
+ *
+ * mdms-v2 does NOT honour the `uniqueIdentifier` the client sends for this
+ * schema — it derives one server-side as `<hierarchyType>.<code>`. Verified
+ * directly: creating with uniqueIdentifier "PWPROBE325537" and
+ * hierarchyType "COMPLAINT" persists the row as "COMPLAINT.PWPROBE325537",
+ * and every seeded row carries the same shape ("PGR.BurningOfGarbage").
+ *
+ * So a _search for the bare code matches nothing, even though the create
+ * returned 202 and the persister logged "Persisted 1 row(s) to DB!". Searches
+ * and cleanup must use this derived form.
+ */
+const storedId = (code: string) => `${HIERARCHY_TYPE}.${code}`;
+
 const createdCodes = new Set<string>();
 
 // Scratch records this suite (and its predecessors) created are all prefixed
 // PW_ / *_PW* by helpers/manage/codes. A long-lived deployment accumulates
 // thousands of them, so "pick a real record" has to exclude them explicitly.
-const SCRATCH_CODE = /(^|_)PW[A-Z_]/i;
+// Also match after a '.', because mdms-v2 stores ComplaintHierarchy ids as
+// `<hierarchyType>.<code>` — so suite junk arrives as "PGR.PwsectorAbc...",
+// where the old `(^|_)` anchor never fired and every scratch row counted as
+// REAL data. Test 4 then picked a PW leaf whose department (PWD_abc) does not
+// exist, failed to resolve it, and silently test.skip()'d instead of running.
+const SCRATCH_CODE = /(^|[._])PW[A-Z_]/i;
 
 /** Escape a live-resolved label before embedding it in a locator RegExp. */
 function escapeRe(s: string): string {
@@ -168,7 +188,7 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     // deriving the code from the name.
     const code = testCode(testInfo, 'CT_RT');
     const name = `PW Roundtrip ${code}`;
-    createdCodes.add(code);
+    createdCodes.add(storedId(code));
 
     await page.goto(`${LIST_PATH}/create`);
     // The complaint-type name field was renamed "Name" → "Complaint Sub-Type".
@@ -200,7 +220,7 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     // Verify via MDMS API at the city tenant — MDMS v2 inherits root → city.
     const auth = loadAuth();
     const cityHit = await mdmsSearch(auth, CITY_TENANT, SCHEMA, {
-      uniqueIdentifiers: [code],
+      uniqueIdentifiers: [storedId(code)],
       limit: 5,
     });
     expect(
@@ -223,7 +243,7 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
 
     // --- Verify SLA persisted via MDMS ---
     const afterEdit = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-      uniqueIdentifiers: [code],
+      uniqueIdentifiers: [storedId(code)],
       limit: 5,
     });
     expect(afterEdit.length).toBeGreaterThan(0);
@@ -288,7 +308,15 @@ The filter itself did not exist before: ComplaintTypeList passed no \`filters\` 
     const deptName = String(
       (deptRecord!.data as Record<string, unknown>)?.name ?? deptRecord!.uniqueIdentifier,
     );
-    const serviceCode = String(leaf!.uniqueIdentifier);
+    // The list's "Service Code" column renders the record's `code` field, NOT its
+    // MDMS uniqueIdentifier. Those differ for ComplaintHierarchy because mdms-v2
+    // derives the identifier as `<hierarchyType>.<code>` (see storedId above):
+    //   uniqueIdentifier "PGR.BurningOfGarbage"  vs  code "BurningOfGarbage"
+    // Matching the row on the identifier therefore never finds it, and the test
+    // failed as though the department filter had hidden a row it never rendered.
+    const serviceCode = String(
+      (leaf!.data as Record<string, unknown>)?.code ?? leaf!.uniqueIdentifier,
+    );
 
     await page.goto(LIST_PATH);
 
@@ -363,7 +391,7 @@ If atRoot=1 but atCity=0, MDMS v2 inheritance is broken for this schema — a se
     // we catch inheritance regressions even if the form is half-wired.
     const auth = loadAuth();
     const code = testCode(testInfo, 'CT_PARITY');
-    createdCodes.add(code);
+    createdCodes.add(storedId(code));
 
     // Leaf-row shape for RAINMAKER-PGR.ComplaintHierarchy: `code` is the
     // serviceCode (verbatim) and the MDMS unique identifier; parentCode/path
@@ -384,10 +412,10 @@ If atRoot=1 but atCity=0, MDMS v2 inheritance is broken for this schema — a se
 
     const [atRoot, atCity] = await Promise.all([
       mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-        uniqueIdentifiers: [code], limit: 5,
+        uniqueIdentifiers: [storedId(code)], limit: 5,
       }),
       mdmsSearch(auth, CITY_TENANT, SCHEMA, {
-        uniqueIdentifiers: [code], limit: 5,
+        uniqueIdentifiers: [storedId(code)], limit: 5,
       }),
     ]);
     expect(atRoot.length, `should exist at ${TENANT_CODE}`).toBe(1);

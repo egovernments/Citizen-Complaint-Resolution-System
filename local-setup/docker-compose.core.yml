@@ -3,9 +3,9 @@
 # Use with:
 #   docker compose -f docker-compose.yml -f docker-compose.core.yml up -d
 #
-# This disables services that developers typically run locally (PGR, UI,
-# Jupyter) so there are no conflicts when multiple devs connect to the
-# same remote server.
+# This disables services that developers typically run locally (PGR, UI)
+# so there are no conflicts when multiple devs connect to the same remote
+# server.
 #
 # Kong stays running on the remote as the shared API gateway.
 
@@ -14,7 +14,4 @@ services:
     profiles: [local-dev]   # won't start unless explicitly requested
 
   digit-ui:
-    profiles: [local-dev]
-
-  jupyter:
     profiles: [local-dev]

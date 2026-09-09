@@ -4,7 +4,7 @@ CI DataLoader — XLSX-driven E2E test for DIGIT PGR.
 
 Takes a county input XLSX (e.g. Bomet County), generates CRSLoader templates,
 bootstraps a new root tenant, and loads all data through the standard
-Jupyter notebook code path. This validates the full dataloader pipeline
+CRSLoader code path. This validates the full dataloader pipeline
 end-to-end.
 
 Flow:
@@ -36,7 +36,7 @@ import requests
 
 # Add directories to path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATALOADER_DIR = os.path.join(SCRIPT_DIR, "..", "jupyter", "dataloader")
+DATALOADER_DIR = os.path.join(SCRIPT_DIR, "..", "dataloader")
 sys.path.insert(0, DATALOADER_DIR)
 sys.path.insert(0, SCRIPT_DIR)
 

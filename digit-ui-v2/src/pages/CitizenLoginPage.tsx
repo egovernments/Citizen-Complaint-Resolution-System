@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { apiClient, getApiBaseUrl, ENDPOINTS, isKeycloakMode } from '@/api';
 import { buildAuthorizeUrl, decodeJwtPayload, passwordGrantViaOverlay, saveKcTokens } from '@/api/keycloak';
 import { useApp } from '@/App';
+import { CITIZEN_HOME_PATH } from '@/config/featureFlags';
 
 const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'statea';
 const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'statea.citya';
@@ -240,7 +241,7 @@ export default function CitizenLoginPage() {
         },
         CITY_TENANT,
       );
-      navigate('/dashboard', { replace: true });
+      navigate(CITIZEN_HOME_PATH, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.');
     } finally {

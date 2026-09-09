@@ -1,0 +1,119 @@
+# OpenTelemetry collector for the production tier (#1646).
+#
+# Mirrors local-setup/otel/otel-collector-config.yaml, which is the working
+# arrangement on the Ansible tier, so both tiers converge on one telemetry
+# architecture rather than two.
+#
+# WHY THIS EXISTS AT ALL: the collector re-exposes every OTLP metric it
+# receives on a single Prometheus endpoint, with per-service labels preserved
+# via the `service.name` resource attribute. That is what turns "add a
+# ServiceMonitor to each of 41 charts" into "add one ServiceMonitor for the
+# collector" — see #1646.
+#
+# Metrics only for now. The OTLP receiver below already accepts traces, but the
+# pipeline that would forward them is deliberately absent until a trace backend
+# lands on this tier — see the NOTE under `service.pipelines`, and
+# `otel.tracesExporter: "none"` in charts/common/values.yaml. So this does not
+# yet close the tracing gap: 25 live services still emit Jaeger spans to an
+# agent that is not deployed and could not receive them if it were.
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+# The chart ships a default config; `config` here REPLACES the pipelines
+# wholesale, which is intended.
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    batch:
+      timeout: 5s
+      send_batch_size: 1024
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 400
+
+  exporters:
+    # Expose collected OTLP metrics in Prometheus scrape format. `service.name`
+    # from the OTLP resource attributes becomes the `job` label, so the Ansible
+    # tier's JVM dashboard groups panels by service without query changes.
+    prometheus:
+      endpoint: 0.0.0.0:8889
+      resource_to_telemetry_conversion:
+        enabled: true
+
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+
+  service:
+    extensions: [health_check]
+    pipelines:
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [prometheus]
+      # NOTE: no traces pipeline yet. The Ansible tier exports traces to Tempo,
+      # which this tier does not deploy — jaeger is installed: false and is a
+      # different architecture besides. Adding a traces pipeline with no
+      # backend would make the collector log export failures on a loop, which
+      # is the failure mode #1649 documents for blackbox. Traces land when a
+      # backend does; the receiver above already accepts them.
+      # Likewise no logs pipeline: this tier ships logs via promtail -> loki
+      # (loki-stack), not via OTLP.
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  # The Prometheus scrape target. Named `metrics` so the ServiceMonitor below
+  # can reference it by name rather than by number.
+  metrics:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+  # Not exposed: jaeger/zipkin receiver ports the chart enables by default.
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+# One ServiceMonitor, in place of 41. It MUST carry the release label:
+# prometheus runs with serviceMonitorSelectorNilUsesHelmValues true and an
+# empty selector, which renders as matchLabels {release: kube-prometheus-stack}.
+# Without it the object is created and silently never scraped — the trap
+# documented in #1646 and hit again in #1647 and #1648.
+serviceMonitor:
+  enabled: true
+  extraLabels:
+    release: kube-prometheus-stack
+  metricsEndpoints:
+    - port: metrics
+      interval: 30s
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    memory: 256Mi
+    cpu: 100m

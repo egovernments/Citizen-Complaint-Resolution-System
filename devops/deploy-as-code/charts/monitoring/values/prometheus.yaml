@@ -177,8 +177,23 @@ additionalPrometheusRules:
    groups:
      - name: SSLCertificateAlerts
        rules:
+       # instance= deliberately NOT pinned (#1649). The blackbox scrape relabels
+       # instance to the PROBED URL (source_labels: [__param_target] ->
+       # target_label: instance); the exporter's own address only ever appears
+       # in __address__. So matching instance="prometheus-blackbox-exporter:9115"
+       # could never select a probe series — this alert has never been able to
+       # fire, independently of blackbox having been installed: false.
+       #
+       # 10 days, not the 2 this rule carried. cert-manager renews at two-thirds
+       # of a 90-day lifetime, so a renewal that silently stops leaves ~30 days
+       # of runway; at 2 days the alert surfaced that in the last 48 hours, when
+       # the fix may need a DNS or ACME-account change and the on-call engineer
+       # may not be at a desk. 10 days is the sibling tier's already-reasoned
+       # number -- Gatus uses `[CERTIFICATE_EXPIRATION] > 240h` in #1632 against
+       # certbot's 30-day renewal -- so this is parity rather than a fresh
+       # guess, and it still cannot fire on a healthy renewal cycle.
        - alert: SSLCertificateExpiring
-         expr: probe_ssl_earliest_cert_expiry{job="blackbox", instance="prometheus-blackbox-exporter:9115"} - time() < 2*24*3600
+         expr: probe_ssl_earliest_cert_expiry{job="blackbox"} - time() < 10*24*3600
          for: 1m
          labels:
            severity: warning
@@ -451,7 +466,21 @@ alertmanager:
           from: 'unified.alerts@example.com'
           smarthost: 'smtp.gmail.com:587'
           auth_username: 'unified.alerts@egovernments.org'
-          auth_password: 'mujp cgjj fwxa whyd'
+          # SMTP password (#1640). Read from a mounted Secret, never from this
+          # file: this repo is PUBLIC, and a committed literal here is a
+          # working credential for anyone who clones it. Alertmanager reads
+          # the file at send time, so the value never enters git, the Helm
+          # release, or `helm get values` output.
+          #
+          # The path is fixed by the operator: kube-prometheus-stack mounts
+          # everything in alertmanagerSpec.secrets under
+          # /etc/alertmanager/secrets/<secret-name>/<key>.
+          #
+          # Create it once per cluster (the namespace must match this
+          # release's):
+          #   kubectl -n monitoring create secret generic alertmanager-smtp \
+          #     --from-literal=password='<smtp-app-password>'
+          auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
           send_resolved: true 
           headers:
             subject: |
@@ -793,7 +822,33 @@ alertmanager:
     ## Secrets is a list of Secrets in the same namespace as the Alertmanager object, which shall be mounted into the
     ## Alertmanager Pods. The Secrets are mounted into /etc/alertmanager/secrets/.
     ##
-    secrets: []
+    ## alertmanager-smtp carries the SMTP password (#1640) that the
+    ## email-notification receiver above reads via auth_password_file. Without
+    ## this mount that file does not exist and Alertmanager fails to send email
+    ## -- so the two must be changed together.
+    ##
+    ## THE SECRET MUST EXIST BEFORE THIS RELEASE IS APPLIED. The mount is
+    ## unconditional and prometheus-operator mounts it non-optionally, so if it
+    ## is absent Alertmanager does not crash-loop or log an error -- it sits at
+    ## Init:0/1 forever. Observed on a cluster:
+    ##
+    ##   MountVolume.SetUp failed for volume "secret-alertmanager-smtp":
+    ##     secret "alertmanager-smtp" not found
+    ##   alertmanager-kube-prometheus-stack-alertmanager-0   0/2   Init:0/1
+    ##
+    ## The pod's own logs are empty, so this reads as "Alertmanager is slow to
+    ## start" rather than a missing prerequisite. Creating the secret recovered
+    ## it to 2/2 Running in 45 seconds with no other action:
+    ##
+    ##   kubectl -n monitoring create secret generic alertmanager-smtp \
+    ##     --from-literal=password='<smtp-app-password>'
+    ##
+    ## Deliberately NOT read from env-secrets.yaml: that file is committed and
+    ## unencrypted, and moving the credential out of it is the entire point of
+    ## #1640. An out-of-band secret is the right shape; this note exists because
+    ## its failure mode is silent, not because the design is wrong.
+    secrets:
+      - alertmanager-smtp
 
     ## ConfigMaps is a list of ConfigMaps in the same namespace as the Alertmanager object, which shall be mounted into the Alertmanager Pods.
     ## The ConfigMaps are mounted into /etc/alertmanager/configmaps/.

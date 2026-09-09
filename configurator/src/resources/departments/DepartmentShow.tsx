@@ -2,12 +2,14 @@ import { DigitShow } from '@/admin';
 import { FieldSection, FieldRow, ReverseReferenceList } from '@/admin/fields';
 import { StatusChip } from '@/admin/fields';
 import { useShowController } from 'ra-core';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 export function DepartmentShow() {
   const { record } = useShowController();
+  const { canEditResource } = useMastersCapability();
 
   return (
-    <DigitShow title={record ? `Department: ${record.name ?? record.id}` : 'Department'} hasEdit>
+    <DigitShow title={record ? `Department: ${record.name ?? record.id}` : 'Department'} hasEdit={canEditResource('departments')}>
       {(rec: Record<string, unknown>) => (
         <div className="space-y-6">
           <FieldSection title="Details">

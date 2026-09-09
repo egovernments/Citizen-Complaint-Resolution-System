@@ -243,7 +243,7 @@ Catches a contract drift where MDMS returns records with missing required fields
       description: `Documents a known seed quirk: a city tenant (CITY_TENANT, from env) can be seeded with a slimmed-down city object missing districtName. The list grid renders an empty cell rather than crashing. The test asserts the grid survives the missing field — if a future seed fills it in, the test still passes (the UI tolerates both shapes).
 
 Steps:
-1. mdmsSearch for uniqueIdentifier CITY_TENANT; test.skip if absent.
+1. mdmsSearch tenant.tenants and find the row whose data.code is CITY_TENANT (uniqueIdentifier as fallback — the two are not the same field on every deployment); test.skip if absent.
 2. Read data.city; capture hasDistrict (boolean).
 3. Navigate to /configurator/manage/tenants; type CITY_TENANT in the search.
 4. Wait for networkidle; assert the matching row is visible.
@@ -255,11 +255,22 @@ If the UI ever starts crashing on the missing field, the row visibility assertio
     page,
   }) => {
     const auth = loadAuth();
-    const cityRecord = (
-      await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-        uniqueIdentifiers: [CITY_TENANT],
-      })
-    )[0] as MdmsRecord | undefined;
+    // Matched on data.code, NOT on uniqueIdentifier. The two are only the same
+    // field on some deployments: pg's root row is keyed `Tenant.pg` (MDMS id
+    // `tenant-root`) while its data.code is `pg`, and pg.citya/pg.cityb are
+    // keyed by a sha256 — so a uniqueIdentifiers=[CITY_TENANT] lookup came back
+    // empty and this test skipped "pg not present on this tenant" for a tenant
+    // that is very much present, and is in fact the one row whose city block is
+    // missing districtName, i.e. exactly the quirk under test. uniqueIdentifier
+    // stays as the fallback for the deployments that do key rows by the code
+    // (ke.nairobi, pg.citest), and an active row is preferred over a
+    // soft-deleted namesake for the same reason as test 3's picker.
+    const allTenants = await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 });
+    const isCityTenant = (r: MdmsRecord): boolean =>
+      (r.data as Record<string, unknown>)?.code === CITY_TENANT ||
+      r.uniqueIdentifier === CITY_TENANT;
+    const cityRecord: MdmsRecord | undefined =
+      allTenants.find((r) => r.isActive !== false && isCityTenant(r)) ?? allTenants.find(isCityTenant);
     test.skip(!cityRecord, `${CITY_TENANT} not present on this tenant`);
 
     const city = (cityRecord!.data as Record<string, unknown>).city as

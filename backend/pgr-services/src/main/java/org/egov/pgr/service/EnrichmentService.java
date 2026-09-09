@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.analytics.PrincipalScopeResolver;
+import org.egov.pgr.util.Principals;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.IdGenRepository;
 import org.egov.pgr.util.PGRUtils;
@@ -36,15 +36,15 @@ public class EnrichmentService {
 
     private UserService userService;
 
-    private PrincipalScopeResolver principalScopeResolver;
+    private Principals principals;
 
     @Autowired
-    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService, PrincipalScopeResolver principalScopeResolver) {
+    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService, Principals principals) {
         this.utils = utils;
         this.idGenRepository = idGenRepository;
         this.config = config;
         this.userService = userService;
-        this.principalScopeResolver = principalScopeResolver;
+        this.principals = principals;
     }
 
 
@@ -167,7 +167,7 @@ public class EnrichmentService {
         // search by another user's mobileNumber (reading their complaints — an IDOR) or omit all
         // filters and read every complaint (unscoped). Employees / internal principals are unaffected
         // and may still look up complaints by mobileNumber.
-        if (principalScopeResolver.isPureCitizen(requestInfo)) {
+        if (principals.isPureCitizen(requestInfo)) {
             criteria.setUserIds(Collections.singleton(requestInfo.getUserInfo().getUuid()));
             criteria.setMobileNumber(null);
         } else if (criteria.getMobileNumber() != null) {

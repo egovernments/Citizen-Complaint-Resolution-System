@@ -55,8 +55,21 @@ default-password-expiry: "90"
 mobile-number-validation: "false"
 roles-state-level: "true"
 citizen-registration-withlogin: "true"
-citizen-otp-fixed: "123456"
-citizen-otp-fixed-enabled: "true"
+# Fixed OTP — a TEST convenience, off by default (#1643).
+#
+# When enabled the platform stops generating a per-login code and accepts one
+# constant for EVERY citizen account, so anyone who knows a phone number can
+# pass verification for it. These keys previously defaulted to "123456"/"true"
+# HERE, in the chart, which is why "operators are expected to override it in
+# env.yaml" was not a sufficient answer: deleting the env.yaml block left the
+# feature on.
+#
+# Absent = off: the injection below is conditional on the key existing, so a
+# deployment that does not set them ships neither env var and the service uses
+# its normal OTP path. Set both in a non-production environment only.
+#
+#   citizen-otp-fixed: "123456"
+#   citizen-otp-fixed-enabled: "true"
 heap: "-Xmx384m -Xms256m"
 java-args: ""
 
@@ -172,13 +185,24 @@ env: |
   - name: CITIZEN_REGISTRATION_WITHLOGIN_ENABLED
     value: {{ index .Values "citizen-registration-withlogin" | quote }}
   {{- end }}
+  {{- /* eq "true" rather than a bare truthiness test: every non-empty string
+         is truthy in Go templates, so `citizen-otp-fixed-enabled: "false"`
+         previously still injected the variable and left the outcome to however
+         the service parses it. Now "false" genuinely disables it here.
+
+         Both env vars hang off this one switch. The fixed value used to be
+         injected on its own presence check, so a config that set
+         `citizen-otp-fixed` and forgot `-enabled` still shipped the constant
+         into the pod's environment — readable by anyone with exec/describe,
+         and live for any consumer that keys off the value rather than the
+         flag. Off means neither variable is emitted. */}}
+  {{- if eq (index .Values "citizen-otp-fixed-enabled" | default "false" | toString) "true" }}
   {{- if index .Values "citizen-otp-fixed" }}
   - name: CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE
     value: {{ index .Values "citizen-otp-fixed" | quote }}
   {{- end }}
-  {{- if index .Values "citizen-otp-fixed-enabled" }}
   - name: CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED
-    value: {{ index .Values "citizen-otp-fixed-enabled" | quote }}
+    value: "true"
   {{- end }}
   - name: JAVA_OPTS
     value: {{ index .Values "heap" | quote }}

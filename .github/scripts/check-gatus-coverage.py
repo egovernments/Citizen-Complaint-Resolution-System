@@ -104,6 +104,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.core.yml",
     LS / "docker-compose.tilt.yml",
     LS / "docker-compose.monitoring.yml",
+    LS / "docker-compose.matomo.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -138,13 +139,26 @@ EXEMPT = {
     "tempo": "observability plumbing: trace store, not a serving dependency",
     "otel-collector": "observability plumbing: telemetry pipeline, not a serving dependency",
     "node-exporter": "observability plumbing: host-metrics exporter (#1335), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml",
+    "postgres-exporter": "observability plumbing: database-metrics exporter (#1615), not a serving dependency; scraped by prometheus, absent from k3s tier and docker-compose.yml. The DATABASE it reads is already covered by the PostgreSQL check; this container going down costs metrics, not service.",
     # Deploy-time only: nothing declares depends_on openbao, and ansible reads its
     # secrets during the deploy and injects them as env, so a runtime outage does
     # not break serving. Listens on 127.0.0.1 only, so Gatus could not reach it.
     "openbao": "deploy-time secrets store: no runtime dependents, binds 127.0.0.1 only",
-    # Tooling, not part of the serving stack.
-    "jupyter": "dev tool, not a serving dependency",
     "gatus": "the monitor itself",
+    # Analytics (#1254). Same reasoning as the observability plumbing above and
+    # deliberately the same verdict: Gatus is the DIGIT serving-stack dashboard,
+    # and Matomo being down costs a report, not a complaint. The portal's
+    # analytics shim fails soft by design — nothing citizen-facing depends on
+    # any of these three.
+    #
+    # They are also profile-gated (`profiles: [matomo]`) and off by default, so
+    # an unconditional Gatus check would be red on every deployment that has not
+    # opted in — the exact false-alarm pattern that teaches operators to ignore
+    # the board. If Matomo monitoring is ever wanted it needs the same
+    # per-tier toggle the observability entries note.
+    "matomo": "analytics, not a serving dependency: profile-gated and off by default; the portal's shim fails soft when it is absent",
+    "matomo-db": "analytics store: no published port, reachable only inside egov-network, and read by nothing the platform serves",
+    "matomo-archiver": "no port: runs console core:archive on a loop, exposes no listener",
 }
 
 # Suffixes that mark generated one-shot migration containers. These are created
@@ -371,14 +385,47 @@ def k8s_targets(root: pathlib.Path):
     return k8s_targets_from_docs(docs)
 
 
+def _external_name_alias(spec):
+    """(service, namespace) an in-cluster ExternalName points at, else None.
+
+    A `type: ExternalName` Service has no selector and fronts no workload of its
+    own -- it is a DNS alias. local-setup/k8s/tools/gatus.yaml uses five of them
+    (#1613) so that Gatus, which runs in `digit`, can reach the observability
+    stack in `monitoring` by the SAME bare hostnames the compose tier uses; that
+    textual identity between the two endpoint catalogues is a thing this guard
+    itself requires.
+
+    Only an alias whose target is in-cluster counts. An ExternalName pointing at
+    something outside the cluster (`api.example.com`) really is its own distinct
+    target and must keep being treated as one.
+    """
+    if (spec.get("type") or "") != "ExternalName":
+        return None
+    host = (spec.get("externalName") or "").rstrip(".")
+    for suffix in (".svc.cluster.local", ".svc"):
+        if host.endswith(suffix):
+            parts = host[: -len(suffix)].split(".")
+            if len(parts) == 2 and all(parts):
+                return parts[0], parts[1]
+    return None
+
+
 def k8s_targets_from_docs(docs):
     """Collapse Services by selector; see k8s_targets. Split out to be testable."""
     by_selector = {}
+    aliases = []          # (alias name, target service name)
     for doc in docs:
         if doc.get("kind") != "Service":
             continue
         name = doc["metadata"]["name"]
-        sel = doc.get("spec", {}).get("selector") or {}
+        spec = doc.get("spec", {}) or {}
+        # Resolve in-cluster ExternalName aliases AFTER the real Services, so an
+        # alias declared before its target still lands on the right canonical.
+        alias = _external_name_alias(spec)
+        if alias is not None:
+            aliases.append((name, alias[0]))
+            continue
+        sel = spec.get("selector") or {}
         # Namespace is part of the identity: two Services in different namespaces with
         # the same selector front DIFFERENT workloads, and collapsing them would mask
         # one. Everything is in `digit` today, which is exactly when this looks safe.
@@ -426,6 +473,24 @@ def k8s_targets_from_docs(docs):
                 )
             out[n] = canonical
             owner[n] = gkey
+
+    # Aliases last. An alias to a Service this file also declares resolves to the
+    # SAME canonical target, so `grafana` in digit and `grafana` in monitoring
+    # stop looking like two workloads fighting over one name -- which is what
+    # they were reported as, wrongly, since #1613 added the aliases. The guard's
+    # "Rename one" advice is actively harmful here: renaming either would break
+    # the bare-hostname resolution the alias exists to provide.
+    for alias_name, target in aliases:
+        if alias_name in out and out[alias_name] != out.get(target, target):
+            # A real Service and an alias to something ELSE both claim this name.
+            # That is a genuine collision and still cannot be represented.
+            raise GuardError(
+                f"k8s Service {alias_name!r} is declared both as a real Service "
+                f"(target {out[alias_name]!r}) and as an ExternalName alias of "
+                f"{target!r}. A Gatus URL names only the host, so this map cannot "
+                f"tell them apart. Rename one."
+            )
+        out[alias_name] = out.get(target, target)
     return out
 
 
@@ -713,6 +778,39 @@ def self_test() -> int:
     if grouped != {"kafka": "kafka", "redpanda": "kafka", "redis": "redis"}:
         failures.append(f"selector grouping wrong: {grouped}")
 
+    # 3c-bis. in-cluster ExternalName aliases are aliases, not rival workloads
+    #         (#1613 put five of them in digit pointing at monitoring; the guard
+    #         called that a name collision and told operators to rename one,
+    #         which would have broken the bare-hostname resolution they exist for).
+    aliased = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName",
+                  "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if aliased != {"grafana": "grafana"}:
+        failures.append(f"in-cluster ExternalName alias not collapsed onto its target: {aliased}")
+
+    # ...and the alias must not need its target declared first.
+    reordered = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName",
+                  "externalName": "grafana.monitoring.svc.cluster.local"}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+    ])
+    if reordered != {"grafana": "grafana"}:
+        failures.append(f"ExternalName alias declared before its target broke: {reordered}")
+
+    # ...while an ExternalName pointing OUTSIDE the cluster is still its own target.
+    external = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "payments", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "api.example.com"}},
+    ])
+    if external != {"payments": "payments"}:
+        failures.append(f"off-cluster ExternalName wrongly treated as an alias: {external}")
+
     # 3d. the grouping key is namespace-aware, but the returned map is keyed by bare
     #     Service name (a Gatus host has no namespace). Two same-named Services in
     #     different namespaces front different workloads and cannot both be represented,
@@ -747,6 +845,39 @@ def self_test() -> int:
     except GuardError as e:
         if "duplicate" not in str(e).lower() or "different workloads" in str(e).lower():
             failures.append(f"duplicate manifest got the cross-workload message: {e}")
+
+    # 3f. an ExternalName Service is a cross-namespace ALIAS, not a second workload.
+    #     grafana(digit) -> grafana.monitoring.svc must collapse onto the real
+    #     grafana(monitoring) rather than collide by name -- the #1613-alias vs
+    #     #1618-real-Service case. Without this it raised "front different workloads".
+    collapsed = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "monitoring"},
+         "spec": {"selector": {"app": "grafana"}}},
+        {"kind": "Service", "metadata": {"name": "grafana", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if collapsed != {"grafana": "grafana"}:
+        failures.append(f"ExternalName alias did not collapse onto its target: {collapsed}")
+    #     ...an alias whose NAME differs from its target still resolves to (covers) it.
+    aliased = k8s_targets_from_docs([
+        {"kind": "Service", "metadata": {"name": "graf", "namespace": "digit"},
+         "spec": {"type": "ExternalName", "externalName": "grafana.monitoring.svc.cluster.local"}},
+    ])
+    if aliased != {"graf": "grafana"}:
+        failures.append(f"ExternalName alias to a distinct target resolved wrong: {aliased}")
+    #     ...and two DIFFERENT real workloads sharing a name (neither an ExternalName)
+    #     must STILL collide -- the fix must not have blunted the cross-workload guard.
+    try:
+        k8s_targets_from_docs([
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-a"},
+             "spec": {"selector": {"app": "a"}}},
+            {"kind": "Service", "metadata": {"name": "dup", "namespace": "ns-b"},
+             "spec": {"selector": {"app": "b"}}},
+        ])
+        failures.append("ExternalName handling blunted the real cross-workload collision guard")
+    except GuardError:
+        # Expected: duplicate real workloads with the same service name must raise GuardError.
+        pass
 
     # 4. a dangling check is caught
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:

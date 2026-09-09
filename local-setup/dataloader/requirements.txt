@@ -1,0 +1,25 @@
+# CRSLoader — runtime dependencies.
+#
+#   cd local-setup
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r dataloader/requirements.txt
+#
+# The virtualenv is not optional on Ubuntu 24.04, Debian 12+, Fedora 38+ or
+# Homebrew Python: a bare `pip install` there fails with PEP 668
+# `error: externally-managed-environment`.
+#
+# Replaces the pins that lived in the removed `local-setup/jupyter/
+# requirements.txt` (#1743), minus everything that existed only to run the
+# notebook — jupyterlab, notebook, ipykernel, ipywidgets and plotly — and minus
+# four pins nothing in this tree ever imported: xlsxwriter, sqlalchemy,
+# psycopg2-binary and tqdm. `jsonschema` is added: `mdms_validator` imports it
+# and the old file omitted it.
+
+pandas>=2.0.0,<3.0.0
+openpyxl>=3.1.0,<4.0.0
+requests>=2.31.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0
+
+# mdms_validator only. `crs_loader` imports without it, so an install that skips
+# this line still loads tenants — it just cannot validate against MDMS schemas.
+jsonschema>=4.0.0,<5.0.0
