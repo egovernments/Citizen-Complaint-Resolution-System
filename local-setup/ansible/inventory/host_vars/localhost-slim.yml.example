@@ -42,6 +42,11 @@
 ansible_host: localhost
 ansible_connection: local
 
+# This tenant deploys to THIS machine (ansible_connection: local), so the host
+# firewall block is off: a local dev box's ingress is the developer's business,
+# not the deploy's. On a real remote tenant leave it at its default (true).
+manage_host_firewall: false
+
 # Hosts written into Docker's daemon.json `insecure-registries` (registries
 # reachable over plain HTTP or with an untrusted cert).
 #

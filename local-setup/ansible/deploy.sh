@@ -114,6 +114,13 @@ fi
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.
 # Group-wide vars are static here — matching hosts.yml.example.
+# Host-key verification is pinned in ansible.cfg, but Ansible's config
+# precedence puts these env vars ABOVE the ini file — an exported
+# ANSIBLE_HOST_KEY_CHECKING=False would silently reinstate
+# `-o StrictHostKeyChecking=no` and re-open the MITM window on a run that ships
+# root credentials and every bootstrap secret. Drop them for this process.
+unset ANSIBLE_HOST_KEY_CHECKING ANSIBLE_SSH_HOST_KEY_CHECKING
+
 TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
   | xargs -n1 basename \
   | sed 's/\.yml$//' \
