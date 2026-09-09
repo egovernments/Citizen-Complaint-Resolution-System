@@ -2123,7 +2123,10 @@ services:
       EXEC: "0"
       IMAGES: "0"
       VOLUMES: "0"
-      NETWORKS: "0"
+      # NETWORKS=1 (read): promtail's docker_sd builds __meta_docker_network_*
+      # labels from GET /networks and aborts discovery on a 403 — CONTAINERS=1
+      # alone yields zero log targets. POST=0 still blocks network mutation.
+      NETWORKS: "1"
       SERVICES: "0"
       TASKS: "0"
       SECRETS: "0"

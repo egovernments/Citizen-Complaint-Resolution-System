@@ -35,6 +35,10 @@ services:
   # non-ansible `up` still resolve; a real deploy always overrides them.
   # ────────────────────────────────────────────────────────────────────────
   matomo-db:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     image: mariadb:11.4
     container_name: digit-matomo-db
     profiles: [matomo]
@@ -85,6 +89,10 @@ services:
   # matches precisely so nothing else leaks through.
   # ────────────────────────────────────────────────────────────────────────
   matomo:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     image: matomo:5-apache
     container_name: digit-matomo
     profiles: [matomo]
@@ -143,6 +151,10 @@ services:
   # unavailable and CliMulti fetches index.php over HTTP instead.
   # ────────────────────────────────────────────────────────────────────────
   matomo-archiver:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     image: matomo:5-apache
     container_name: digit-matomo-archiver
     profiles: [matomo]
