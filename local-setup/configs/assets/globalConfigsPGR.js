@@ -9,7 +9,6 @@ var globalConfigs = (function () {
   // ansible/templates/globalConfigs.js.j2, which takes the key from
   // `gmaps_api_key` in the inventory. Set it there, restricted to the
   // deployment's HTTP referrers and to the Maps JavaScript API only.
-  var gmaps_api_key_old = "";
   var gmaps_api_key = "";
   var finEnv = "demo";
   var centralInstanceEnabled = false;

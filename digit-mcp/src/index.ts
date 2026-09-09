@@ -28,7 +28,7 @@ import { redactDeep } from './utils/redact.js';
 import { setProgressEmitter, type ProgressEvent } from './services/progress.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, extname, resolve, sep } from 'node:path';
+import { join, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const transportMode = process.env.MCP_TRANSPORT === 'http' ? 'http' : 'stdio';
