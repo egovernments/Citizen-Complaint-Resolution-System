@@ -774,11 +774,42 @@ grafana_anonymous_enabled: false
 # the vhost render with an undefined-variable error instead of falling
 # back to off.
 
+# ==================== Gatus status board auth ====================
+# /status/ is served behind HTTP basic auth. The board lists every internal
+# component, its endpoint and its live health, which is a ready-made recon map
+# of the deployment — it used to be world-readable on every tenant that had
+# `nginx_features.status: true`, which every shipped template set. The feature
+# now defaults to false and the board is never served without a password.
+#
+# The playbook ASSERTS on this: enabling the feature without a password fails
+# the deploy rather than rendering a board nobody realises is public. Set the
+# password, or set nginx_features.status to false to stop publishing it.
+status_basic_auth_user: digit-status
+# status_basic_auth_password: ""      # REQUIRED when nginx_features.status is true
+#
+# Rotate by deleting /etc/nginx/.htpasswd-status on the box and re-running the
+# deploy (the task is idempotent via `creates`).
+
+# ==================== Host firewall ====================
+# The playbook installs and enables ufw on Debian/Ubuntu (default deny
+# incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
+# Set false ONLY when ingress is already managed elsewhere — a cloud security
+# group, a provider firewall — and a second policy layer would confuse
+# matters. Note this is defence in depth, not the control that contains the
+# container ports: Docker's DNAT rules bypass ufw's INPUT chain entirely, so
+# published ports are contained by BIND_IP loopback binding instead (see the
+# header of docker-compose.egov-digit.yaml).
+manage_host_firewall: true
+
 nginx_features:
   brand_assets: false        # /brand/ — local logo/banner mirror
   configurator: false        # /configurator/ — DIGIT Studio SPA
   configurator_caching: false  # asset-level cache headers for above
-  status: true               # /status/ — Gatus health dashboard
+  status: false              # /status/ — Gatus health dashboard. OFF by default:
+                             # the board maps every internal component and its
+                             # health. To publish it, set this true AND set
+                             # status_basic_auth_password (the deploy asserts).
+                             # set status_basic_auth_password below, or the deploy asserts)
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
