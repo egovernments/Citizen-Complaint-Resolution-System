@@ -434,7 +434,7 @@ build_novu_dashboard: false
 # otp-publisher is the 9th container in the notifications profile: it replaces
 # Kong's mock /user-otp termination with a real OTP generator (Redis + Kafka ->
 # novu-bridge -> Twilio SMS). Leave false to pull the published multi-arch image
-# (egovio/otp-publisher:v2.12-beta); set true to build the vendored Node service
+# (egovio/otp-publisher:2.12-81fc6be); set true to build the vendored Node service
 # at utilities/otp-publisher on the box instead (tag otp-publisher:local).
 build_otp_publisher: false
 # otp_publisher_image: ""           # override to pin a different published tag

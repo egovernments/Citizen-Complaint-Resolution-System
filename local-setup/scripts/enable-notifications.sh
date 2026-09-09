@@ -76,12 +76,16 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-0469335}"
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}"
 # ^ same multi-arch tag docker-compose.egov-digit.yaml pins, deliberately. It
 #   includes the WhatsApp integration-selection fix, so SMS/email and WhatsApp
 #   use one bridge image unless NOVU_BRIDGE_IMAGE_WA is explicitly overridden.
 NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-$NOVU_BRIDGE_IMAGE}"
-WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # PGR Content-SID build tag
+# WA_IMAGE_TAG was a feature-branch build (whatsapp-contentsid-pipeline-f76f6ea)
+# because the Content-SID pipeline was not yet released. #1284 is now merged and
+# is an ancestor of 5137119, so the release build carries it and both SMS/email
+# and WhatsApp can run one pgr-services image. Override to pin a branch build.
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-2.12-5137119}"                                 # PGR Content-SID ships in 2.12 (#1284)
 PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"     # public Docker Hub, multi-arch
 
 # Feature toggles that get written into .env.

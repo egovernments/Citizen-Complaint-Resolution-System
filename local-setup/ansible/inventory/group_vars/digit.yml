@@ -331,12 +331,14 @@ digit_ui_esbuild_branch: main
 # skipping the git clone with it.
 #
 # This is the multi-arch egovio Docker Hub build of THIS repo's
-# digit-ui-esbuild/ tree, rebuilt every night from develop
-# (build/build-config.yml → image-name: digit-ui-esbuild). Pin a
-# develop-<sha> / v2.12-beta tag in host_vars for a reproducible deploy.
-# Set to "" in host_vars to force an on-host build instead, which then needs
-# digit_ui_esbuild_repo pointed at a source tree.
-digit_ui_bundle_image: "egovio/digit-ui-esbuild:nightly-develop"
+# digit-ui-esbuild/ tree (build/build-config.yml → image-name:
+# digit-ui-esbuild). Pinned to the 2.12 release build, so an Ansible deploy
+# serves the SAME bundle as local-setup/docker-compose.egov-digit.yaml — a
+# rolling `nightly-develop` here meant the two paths could diverge silently.
+# Set `nightly-develop` (or a develop-<sha>) in host_vars to track develop
+# instead. Set to "" in host_vars to force an on-host build instead, which then
+# needs digit_ui_esbuild_repo pointed at a source tree.
+digit_ui_bundle_image: "egovio/digit-ui-esbuild:2.12-5137119"
 
 # Slack webhook for Gatus outage alerts (#1609). Empty = alerting OFF, which is
 # the default for every tenant: gatus warns about the unusable provider and

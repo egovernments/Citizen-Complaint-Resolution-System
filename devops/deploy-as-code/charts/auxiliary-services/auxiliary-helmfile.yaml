@@ -76,8 +76,8 @@ releases:
     missingFileHandler: Warn
     values:
       - image:
-          repository: ghcr.io/subhashini-egov/digit-mcp
-          tag: "2026-06-11"
+          repository: digit-mcp
+          tag: "2.12-81fc6be"
         service:
           type: ClusterIP
         env:
