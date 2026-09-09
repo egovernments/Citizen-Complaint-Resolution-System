@@ -113,7 +113,9 @@ public class RequestsApiController{
     public ResponseEntity<Object> requestsChronologyPost(
             @Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
             @RequestParam(value = "tenantId") String tenantId,
-            @RequestParam(value = "businessIds") String businessIds,
+            // Bound as a list (Spring splits the workflow API's comma form), so
+            // multi-id requests are first-class rather than string plumbing.
+            @RequestParam(value = "businessIds") List<String> businessIds,
             @RequestParam(value = "history", required = false) Boolean history) {
         Object response = chronologyService.search(requestInfoWrapper.getRequestInfo(), tenantId, businessIds, history);
         return new ResponseEntity<>(response, HttpStatus.OK);

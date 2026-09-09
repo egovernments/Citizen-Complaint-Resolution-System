@@ -18,12 +18,12 @@ import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.tracer.model.CustomException;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -104,17 +104,27 @@ public class ChronologyService {
         this.mapper = mapper;
     }
 
-    public Object search(RequestInfo requestInfo, String tenantId, String businessIds, Boolean history) {
+    public Object search(RequestInfo requestInfo, String tenantId, List<String> businessIds, Boolean history) {
         // No server-vouched identity → least privilege, and no workflow call at
         // all: the raw payload must not even transit on behalf of an anonymous
         // caller. Same empty shape the workflow returns for a no-match search.
         if (RequesterKind.of(requestInfo) == RequesterKind.ANONYMOUS)
             return emptyResponse();
 
+        // Reject blanks up front rather than forwarding a malformed search.
+        Set<String> idSet = businessIds == null ? Set.of()
+                : businessIds.stream().filter(Objects::nonNull).map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (tenantId == null || tenantId.isBlank() || idSet.isEmpty())
+            throw new CustomException("CHRONOLOGY_INVALID_REQUEST",
+                    "tenantId and at least one businessId are required");
+        String joinedIds = String.join(",", idSet);
+
         StringBuilder url = new StringBuilder(config.getWfHost())
                 .append(config.getWfProcessInstanceSearchPath())
                 .append("?tenantId=").append(tenantId)
-                .append("&businessIds=").append(businessIds);
+                .append("&businessIds=").append(joinedIds);
         if (Boolean.TRUE.equals(history))
             url.append("&history=true");
 
@@ -125,7 +135,7 @@ public class ChronologyService {
         // for citizens or a silent empty 200 for internal callers.
         if (wfResult == null)
             throw new CustomException("CHRONOLOGY_WORKFLOW_UNAVAILABLE",
-                    "Workflow service did not return a chronology for: " + businessIds);
+                    "Workflow service did not return a chronology for: " + joinedIds);
         ObjectNode root = mapper.valueToTree(wfResult);
 
         if (RequesterKind.of(requestInfo) == RequesterKind.INTERNAL)
@@ -133,12 +143,9 @@ public class ChronologyService {
 
         // The complaints these instances belong to — who the complainant is and
         // whether the complaint is confidential drive every rule below. The
-        // businessIds parameter mirrors the workflow API: comma-separated —
-        // split it, the PGR criteria field for a comma list is the Set (the
-        // single-valued field renders as an equality and would match nothing).
-        Set<String> idSet = Arrays.stream(businessIds.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // Set-valued criteria field is the one that renders as an IN-clause
+        // (the single-valued field is an equality and would match nothing on
+        // a multi-id request).
         RequestSearchCriteria criteria = new RequestSearchCriteria();
         criteria.setTenantId(tenantId);
         criteria.setServiceRequestIds(idSet);
