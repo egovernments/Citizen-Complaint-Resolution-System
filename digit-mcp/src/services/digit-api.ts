@@ -262,9 +262,17 @@ class DigitApiClient {
       );
     }
 
-    const data = await response.json() as { access_token: string; UserRequest: UserInfo };
+    const data = await response.json() as { access_token?: string; UserRequest?: UserInfo };
+    // A 200 without an access_token happens during Kong/egov-user warmup (Kong
+    // can return a 200 error envelope before the upstream is ready). Silently
+    // accepting it left authToken undefined, so isAuthenticated() was false and
+    // callers threw a confusing AuthRequiredError with no way to retry. Treat a
+    // tokenless 200 as a failure so the caller (and its retry loop) sees it.
+    if (!data.access_token) {
+      throw new Error('Login returned no access_token (auth service not ready?)');
+    }
     this.authToken = data.access_token;
-    this.userInfo = data.UserRequest;
+    this.userInfo = data.UserRequest ?? null;
     this.loginPassword = password;
 
     // Auto-detect state tenant from login tenant ID
