@@ -4070,11 +4070,15 @@
       no_log: true
       when: nginx_features.status | default(false)
 
-    - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"
+    # An unauthenticated HEAD /mcp now returns 401 (token required — the MCP
+    # auth hardening), or 405 on an older image that only rejects the method.
+    # Either proves the route reaches the MCP server; a 404/502 would mean it
+    # is not routed. Accept both so the check works across image versions.
+    - name: "validate — MCP HTTP transport is routed (401 auth-required, or 405) "
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/mcp"
         method: HEAD
-        status_code: [405]
+        status_code: [401, 405]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
