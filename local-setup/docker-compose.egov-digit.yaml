@@ -503,7 +503,19 @@ services:
     container_name: digit-elasticsearch
     environment:
     - discovery.type=single-node
-    - xpack.security.enabled=false
+    # Authentication ON. With it off, anything that could reach the container
+    # had unauthenticated read/write over every index — and the port used to be
+    # published on 0.0.0.0 as well, so that was the whole internet on a box with
+    # no host firewall. The port is loopback-bound now; this closes the other
+    # half, so a compromised container on the shared network cannot read or
+    # tamper with the PGR index either.
+    #
+    # SOAK BEFORE RELYING ON IT: the `search` profile is opt-in and off by
+    # default, and the indexer/inbox round trip has not been exercised end to
+    # end with auth on. Set ELASTICSEARCH_PASSWORD, enable the profile on a
+    # staging tenant, and confirm egov-indexer writes and inbox reads.
+    - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-true}
+    - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme-elastic}
     - ES_JAVA_OPTS=-Xms256m -Xmx384m
     volumes:
     - es_data:/usr/share/elasticsearch/data
@@ -558,9 +570,11 @@ services:
       EGOV_INDEXER_YML_REPO_PATH: "file:///indexer-config/pgr-services.yml,file:///indexer-config/pgr-inbox-indexer.yml"
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_STATELEVEL_TENANTID: pg
-      # No ES auth needed (xpack.security.enabled=false)
-      EGOV_INDEXER_ES_USERNAME: ""
-      EGOV_INDEXER_ES_PASSWORD: ""
+      # ES auth is ON (xpack.security.enabled). The built-in `elastic` superuser
+      # is used here because that is what the image bootstraps from
+      # ELASTIC_PASSWORD; a dedicated least-privilege role is the follow-up.
+      EGOV_INDEXER_ES_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      EGOV_INDEXER_ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
@@ -617,9 +631,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8080
       SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
-      # No ES auth needed (xpack.security.enabled=false)
-      SERVICES_ESINDEXER_USERNAME: ""
-      SERVICES_ESINDEXER_PASSWORD: ""
+      # ES auth is ON (xpack.security.enabled) — see egov-indexer above.
+      SERVICES_ESINDEXER_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      SERVICES_ESINDEXER_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
