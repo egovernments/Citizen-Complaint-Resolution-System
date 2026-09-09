@@ -18,21 +18,29 @@ const MASKED = "******";
 const maskName = (name) => (name ? MASKED : name);
 const maskPhone = (phone) => (phone ? MASKED : phone);
 // Workflow steps whose comment/attachments may be shown on the citizen's
-// timeline (CRQ "Complaint Chronology Visibility" v2.0, 08-09-2026):
-//   RESOLVE / REJECT   the CLOSING ENTRY — the single exception the CRQ allows:
-//                      the outcome and its justification reach the citizen
+// timeline (CRQ "Complaint Chronology Visibility" v2.0):
+//   RESOLVE / REJECT      the CLOSING ENTRY — the single exception the CRQ
+//                         allows: the outcome and its justification reach
+//                         the citizen
+//   AWAITINGINFORMATION   the CMS workflow's question put to the citizen
+//                         (INVESTIGATION --AWAITINGINFORMATION-->
+//                         INFOFROMCITIZEN). The CRQ change briefly removed it
+//                         on the theory the Reception Officer relays the
+//                         question, but the reply transition belongs to staff
+//                         and no notification reliably carries the comment —
+//                         the timeline IS the citizen's channel for it
+//                         (review of AC-03, flow-checked against
+//                         CmsPgrWorkflowConfig).
 //   APPLY / REOPEN / RATE / COMMENT-by-a-citizen  the citizen's own words
-// Every other employee step (ASSIGN, REASSIGN, ESCALATE, REFERRED,
-// INVESTIGATION, AWAITINGINFORMATION, staff COMMENT) renders status-only:
-// the citizen sees THAT the complaint moved, never the internal text.
-// AWAITINGINFORMATION was visible until CRQ v2 removed it — in the CMS flow
-// the question is relayed to the citizen by the Reception Officer, not read
-// off the timeline.
+// Every other employee step (ASSIGN, REASSIGN, ESCALATE, RESOLVEBYSUPERVISOR,
+// staff COMMENT) renders status-only: the citizen sees THAT the complaint
+// moved, never the internal text.
 //
 // The classification is by ACTION because a workflow comment is a plain string
 // with no audience field. Client-side filtering only — the CRQ's AC-03
-// (nothing in the API payload either) still needs the backend change.
-const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "APPLY", "REOPEN", "RATE"]);
+// (nothing in the API payload either) is enforced by the chronology endpoint,
+// whose CITIZEN_CONTENT_ACTIONS mirrors this set.
+const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "AWAITINGINFORMATION", "APPLY", "REOPEN", "RATE"]);
 
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
@@ -283,8 +291,11 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                   (maskConfidential && !isConfidentialViewer && isComplainant(personRecord)) ||
                   (maskEmployeeContacts && isEmployeeActor);
                 // QA #19 part 1: citizen view drops employee identity lines
-                // entirely (hide, not mask).
-                const hideThis = hideEmployeeContacts && isEmployeeActor;
+                // entirely (hide, not mask). A step with NO person record at
+                // all (the chronology endpoint nulls the employee identity
+                // server-side) is hidden the same way — otherwise
+                // formatPerson(undefined) would print a stray CS_NA caption.
+                const hideThis = hideEmployeeContacts && (isEmployeeActor || !personRecord);
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
                 // The backend already masks the mobile per viewer privilege
                 // ("Contact Details: *****0104"). Mirror that decision onto the
