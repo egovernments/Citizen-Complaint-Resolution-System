@@ -5,6 +5,27 @@
 # Usage: GF_ADMIN_PASSWORD=<something-strong> docker compose -f docker-compose.egov-digit.yaml up -d
 #        (or put GF_ADMIN_PASSWORD in ./.env). It has no default — see the
 #        grafana service below for why.
+#
+# ==================== BIND_IP: host publication address ====================
+# Every `ports:` entry below publishes through ${BIND_IP:-127.0.0.1}, so the
+# default binds the whole stack to host loopback only. Nothing here needs to be
+# reachable off-box: container-to-container traffic uses the egov-network DNS
+# names, and the only public entry point is host nginx, which proxies over
+# 127.0.0.1 (see ansible/templates/nginx-site.conf.j2, `nginx_upstream_host`).
+#
+# Publishing on 0.0.0.0 previously put Postgres, Redis, Redpanda, MinIO,
+# Elasticsearch, the Kong Admin API + Manager GUI and fourteen backend
+# microservices straight onto the internet on any box without a host firewall
+# — the gateway was trivially bypassable by hitting a service port directly.
+#
+# Same-host callers are unaffected: CI, local-setup/scripts/*, the Tiltfile
+# links, the dataloader and the documented `ssh -L <port>:localhost:<port>`
+# remote-dev tunnels all connect via localhost, which loopback binding serves.
+#
+# The one path that needs a different value is the macOS thin deploy, where
+# the playbook runs nginx as a CONTAINER reaching the stack over
+# host.docker.internal rather than loopback. Ansible sets BIND_IP=0.0.0.0 in
+# .env for `ansible_system == "Darwin"` only (templates/digit.env.j2).
 
 services:
   # ==================== Tracing Infrastructure ====================
@@ -39,9 +60,9 @@ services:
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "127.0.0.1:14317:4317"
-      - "127.0.0.1:14318:4318"
-      - "127.0.0.1:13133:13133"
+      - "${BIND_IP:-127.0.0.1}:14317:4317"
+      - "${BIND_IP:-127.0.0.1}:14318:4318"
+      - "${BIND_IP:-127.0.0.1}:13133:13133"
     # Memory ceiling (#1612). Observability is overhead, not workload:
     # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
     # have no swap, and the OOM killer takes the biggest process — a JVM
@@ -72,7 +93,7 @@ services:
       - ./otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "127.0.0.1:13200:3200"
+      - "${BIND_IP:-127.0.0.1}:13200:3200"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
       interval: 10s
@@ -146,7 +167,7 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "127.0.0.1:13000:3000"
+      - "${BIND_IP:-127.0.0.1}:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
@@ -195,7 +216,7 @@ services:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "127.0.0.1:19090:9090"
+      - "${BIND_IP:-127.0.0.1}:19090:9090"
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
     deploy:
@@ -227,7 +248,7 @@ services:
     volumes:
     - postgres_data:/var/lib/docker-postgresql/data
     ports:
-    - 15432:5432
+    - "${BIND_IP:-127.0.0.1}:15432:5432"
     healthcheck:
       test:
       - CMD-SHELL
@@ -271,7 +292,7 @@ services:
     image: egovio/redis:7.2.4
     container_name: digit-redis
     ports:
-    - 16379:6379
+    - "${BIND_IP:-127.0.0.1}:16379:6379"
     healthcheck:
       test:
       - CMD
@@ -306,8 +327,8 @@ services:
       - --advertise-pandaproxy-addr
       - PLAINTEXT://redpanda:8082
     ports:
-      - 19092:9092
-      - 18082:8082
+      - "${BIND_IP:-127.0.0.1}:19092:9092"
+      - "${BIND_IP:-127.0.0.1}:18082:8082"
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
       interval: 10s
@@ -330,8 +351,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - 19000:9000
-      - 19001:9001
+      - "${BIND_IP:-127.0.0.1}:19000:9000"
+      - "${BIND_IP:-127.0.0.1}:19001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -368,7 +389,7 @@ services:
     volumes:
     - es_data:/usr/share/elasticsearch/data
     ports:
-    - 19200:9200
+    - "${BIND_IP:-127.0.0.1}:19200:9200"
     healthcheck:
       test:
       - CMD-SHELL
@@ -431,7 +452,7 @@ services:
       JAVA_OPTS: "-Xms192m -Xmx512m"
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18095:8080
+    - "${BIND_IP:-127.0.0.1}:18095:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/egov-indexer/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -497,7 +518,7 @@ services:
       JAVA_OPTS: -Xms256m -Xmx256m
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18097:8080
+    - "${BIND_IP:-127.0.0.1}:18097:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/inbox/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -561,7 +582,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg.citya
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 11234:1234
+    - "${BIND_IP:-127.0.0.1}:11234:1234"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:1234/egov-enc-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -627,7 +648,7 @@ services:
     volumes:
       - ./nginx/mdms-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-    - 18094:8094
+    - "${BIND_IP:-127.0.0.1}:18094:8094"
     healthcheck:
       # Simplified: just verify API responds (don't require tenant data)
       test: ["CMD-SHELL", "curl -sf -X POST 'http://localhost:8094/mdms-v2/v1/_search' -H 'Content-Type: application/json' -d '{\"RequestInfo\":{\"apiId\":\"health\"},\"MdmsCriteria\":{\"tenantId\":\"pg\",\"moduleDetails\":[{\"moduleName\":\"tenant\",\"masterDetails\":[{\"name\":\"tenants\"}]}]}}'"]
@@ -949,7 +970,7 @@ services:
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       JAVA_OPTS: -Xms128m -Xmx512m
     ports:
-    - 18096:8096
+    - "${BIND_IP:-127.0.0.1}:18096:8096"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8096/localization/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1008,7 +1029,7 @@ services:
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18081:8081
+    - "${BIND_IP:-127.0.0.1}:18081:8081"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/boundary-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1064,7 +1085,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18090:8090
+    - "${BIND_IP:-127.0.0.1}:18090:8090"
     # No healthcheck: both the pinned default (egovio/egov-accesscontrol:abac-changes-cb6a372)
     # and the abac-local build are minimal/distroless images with no shell and no wget/curl —
     # confirmed by `docker exec`ing each of /bin/sh, wget, curl, ls, all of which fail with
@@ -1115,7 +1136,7 @@ services:
     - ./configs/egov-persister:/persister-config:ro
     - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     ports:
-    - 18091:8091
+    - "${BIND_IP:-127.0.0.1}:18091:8091"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8091/common-persist/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1175,7 +1196,7 @@ services:
       ALLOWED_FORMATS_MAP: "{jpg:{'image/jpg','image/jpeg'},jpeg:{'image/jpeg','image/jpg'},png:{'image/png'},pdf:{'application/pdf'},odt:{'application/vnd.oasis.opendocument.text'},ods:{'application/vnd.oasis.opendocument.spreadsheet'},docx:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},doc:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},dxf:{'text/plain','application/dxf','application/octet-stream','image/vnd.dxf','image/vnd.dxf; format=ascii','image/vnd.dxf; format=binary','image/vnd.dxb'},csv:{'text/plain'},txt:{'text/plain'},xlsx:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'},xls:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','multipart/form-data'},zip:{'application/zip','application/octet-stream'},geojson:{'application/json','text/plain','application/geo+json','multipart/form-data'},json:{'application/json','text/plain'}}"
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
     ports:
-      - 18084:8083
+      - "${BIND_IP:-127.0.0.1}:18084:8083"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/filestore/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1289,7 +1310,7 @@ services:
       # one. Required by the CCRS#482 fix in :digit-common-boundary.
       EGOV_HRMS_DEV_MODE: 'true'
     ports:
-      - 18092:8092
+      - "${BIND_IP:-127.0.0.1}:18092:8092"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8092/egov-hrms/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1339,7 +1360,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       KAFKAJS_NO_PARTITIONER_WARNING: 1
     ports:
-      - 18086:8080
+      - "${BIND_IP:-127.0.0.1}:18086:8080"
     healthcheck:
       # Service doesn't have a /health endpoint - use TCP check
       test: ["CMD-SHELL", "node -e \"require('net').connect(8080, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))\""]
@@ -1686,7 +1707,7 @@ services:
     image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
-      - "18080:80"
+      - "${BIND_IP:-127.0.0.1}:18080:80"
     volumes:
       # Custom nginx config with sub_filter to inject globalConfigs.js at runtime
       - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
@@ -1716,7 +1737,7 @@ services:
     image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
     container_name: configurator
     ports:
-      - "18890:80"
+      - "${BIND_IP:-127.0.0.1}:18890:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1752,16 +1773,16 @@ services:
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
-      - "18000:8000"   # Proxy (HTTP)
-      - "18443:8443"   # Proxy (HTTPS)
-      - "18001:8001"   # Admin API
-      - "18002:8002"   # Kong Manager GUI
+      - "${BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
+      - "${BIND_IP:-127.0.0.1}:18443:8443"   # Proxy (HTTPS)
+      - "${BIND_IP:-127.0.0.1}:18001:8001"   # Admin API
+      - "${BIND_IP:-127.0.0.1}:18002:8002"   # Kong Manager GUI
       # Status listener. Bound to loopback (#1614): with the Kong prometheus
       # plugin enabled, /metrics on this port exposes route names, per-route
       # status-code counts and latency histograms unauthenticated (Kong's
       # status API does not run plugins, so key-auth cannot be applied).
       # Prometheus and Gatus both reach it as kong:8100 over egov-network.
-      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
+      - "${BIND_IP:-127.0.0.1}:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1791,7 +1812,7 @@ services:
       # above is mounted read-only, so the database needs its own volume.
       - gatus_data:/data
     ports:
-      - "127.0.0.1:18889:8080"
+      - "${BIND_IP:-127.0.0.1}:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
       # Slack alerting (#1609). Unset = alerting off: gatus expands the
@@ -1851,7 +1872,7 @@ services:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
     ports:
-      - "127.0.0.1:13100:3100"
+      - "${BIND_IP:-127.0.0.1}:13100:3100"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
       interval: 10s
@@ -1972,7 +1993,7 @@ services:
       DIGIT_DB_USER: egov
       DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
-      - "13101:3000"
+      - "${BIND_IP:-127.0.0.1}:13101:3000"
     healthcheck:
       # 127.0.0.1, not localhost: Alpine's wget resolves localhost to ::1
       # (IPv6) per /etc/hosts order; the MCP server binds IPv4-only, so
@@ -2023,7 +2044,7 @@ services:
     volumes:
       - openbao_data:/openbao/file
     ports:
-      - "127.0.0.1:18200:8200"
+      - "${BIND_IP:-127.0.0.1}:18200:8200"
     networks:
       - egov-network
     healthcheck:
@@ -2102,7 +2123,7 @@ services:
       IS_V2_ENABLED: 'true'
       MONGO_AUTO_CREATE_INDEXES: 'true'
     ports:
-      - "14002:3000"
+      - "${BIND_IP:-127.0.0.1}:14002:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/v1/health-check >/dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -2163,7 +2184,7 @@ services:
       REDIS_DB_INDEX: '2'
       JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
     ports:
-      - "14003:3002"
+      - "${BIND_IP:-127.0.0.1}:14003:3002"
     networks:
       - egov-network
 
@@ -2189,7 +2210,7 @@ services:
       VITE_PUBLIC_PATH: /novu
       VITE_LEGACY_DASHBOARD_URL: ''
     ports:
-      - "14000:4000"
+      - "${BIND_IP:-127.0.0.1}:14000:4000"
     networks:
       - egov-network
 
@@ -2542,7 +2563,7 @@ services:
       # playbook then re-applies the real KC_ADMIN_PASSWORD value.
       KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
     ports:
-      - 18180:8180
+      - "${BIND_IP:-127.0.0.1}:18180:8180"
     volumes:
       # Per-tenant rendered realm goes in here too (written by the
       # keycloak-bootstrap Ansible block). The shipped template stays
@@ -2641,7 +2662,7 @@ services:
       # bomet/nairobi deployments — use 18300 instead. The nginx
       # /token-exchange/ location proxies to this port; if you change
       # it here, update the ansible nginx template too.
-      - 18300:3000
+      - "${BIND_IP:-127.0.0.1}:18300:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s

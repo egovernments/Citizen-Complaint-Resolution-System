@@ -175,7 +175,10 @@ nginx_features:
   brand_assets: false
   configurator: true
   configurator_caching: false
-  status: true
+  status: false              # /status/ — Gatus health dashboard. OFF by default:
+                             # the board maps every internal component and its
+                             # health. To publish it, set this true AND set
+                             # status_basic_auth_password (the deploy asserts).
   api_pgr: false
   mcp: true                        # kit: false — paired with enable_mcp above
   keycloak: true
