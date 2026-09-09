@@ -1397,6 +1397,18 @@
     "parentModule": ""
   },
   {
+    "id": 2635,
+    "url": "/pgr-services/v2/request/_chronology",
+    "code": "null",
+    "name": "Chronology Filtered Search",
+    "path": "",
+    "enabled": false,
+    "displayName": "Chronology Filtered Search",
+    "orderNumber": 0,
+    "serviceCode": "pgr-services",
+    "parentModule": ""
+  },
+  {
     "id": 2008,
     "url": "/pgr-services/v2/request/_search",
     "code": "null",

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,7 +72,11 @@ class ChronologyServiceTest {
     }
 
     private Map<String, ComplaintContext> ctx(boolean confidential) {
-        return Map.of(BID, new ComplaintContext(COMPLAINANT, confidential, "IGE"));
+        return ctx(confidential, false);
+    }
+
+    private Map<String, ComplaintContext> ctx(boolean confidential, boolean viewerAuthorized) {
+        return Map.of(BID, new ComplaintContext(COMPLAINANT, confidential, "IGE", viewerAuthorized));
     }
 
     // ---------- complainant (citizen) view ----------
@@ -79,7 +84,7 @@ class ChronologyServiceTest {
     @Test
     void complainantSeesStatusOnlyForInternalSteps() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
         JsonNode comment = root.get("ProcessInstances").get(1);
         assertEquals("COMMENT", comment.get("action").asText());
         assertTrue(comment.get("comment").isNull(), "internal comment must be stripped");
@@ -94,7 +99,7 @@ class ChronologyServiceTest {
     @Test
     void complainantKeepsTheClosingEntryContentWithoutTheEmployeeIdentity() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
         JsonNode resolve = root.get("ProcessInstances").get(0);
         assertTrue(resolve.get("comment").asText().contains("closing entry"));
         assertEquals("closing-file-1", resolve.get("documents").get(0).get("fileStoreId").asText());
@@ -104,9 +109,54 @@ class ChronologyServiceTest {
     }
 
     @Test
+    void complainantKeepsTheQuestionPutToThem() {
+        // igsae CMS workflow: INVESTIGATION --AWAITINGINFORMATION--> INFOFROMCITIZEN.
+        // The officer's comment IS the question, and the timeline is the
+        // citizen's one reliable channel for it (the reply transition belongs
+        // to staff; no notification reliably carries the comment). Stripping
+        // it stalls the complaint on a question the citizen cannot see.
+        // Identity still never survives.
+        ObjectNode root = fixture();
+        ObjectNode question = (ObjectNode) root.get("ProcessInstances").get(1);
+        question.put("action", "AWAITINGINFORMATION");
+        question.put("comment", "Por favor indique o numero do processo.");
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
+        JsonNode filtered = root.get("ProcessInstances").get(1);
+        assertEquals("Por favor indique o numero do processo.", filtered.get("comment").asText(),
+                "the request-for-information comment must reach the citizen");
+        assertEquals("secret-file-7", filtered.get("documents").get(0).get("fileStoreId").asText());
+        assertTrue(filtered.get("assigner").isNull(), "but never the employee identity");
+    }
+
+    @Test
+    void supervisorResolutionStaysStatusOnly_parityWithTheCitizenUi() {
+        // Deliberate: the citizen UI has never shown the RESOLVEBYSUPERVISOR
+        // comment, so the endpoint strips it too — parity, not a new rule.
+        ObjectNode root = fixture();
+        ((ObjectNode) root.get("ProcessInstances").get(0)).put("action", "RESOLVEBYSUPERVISOR");
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
+        JsonNode resolve = root.get("ProcessInstances").get(0);
+        assertTrue(resolve.get("comment").isNull());
+        assertTrue(resolve.get("assigner").isNull());
+    }
+
+    @Test
+    void aMissingActionDegradesToStatusOnlyInsteadOf500() {
+        // Set.of collections throw on contains(null); a migrated row without an
+        // action must degrade to status-only, not NPE the whole chronology.
+        ObjectNode root = fixture();
+        ((ObjectNode) root.get("ProcessInstances").get(1)).remove("action");
+        assertDoesNotThrow(() ->
+                ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false)));
+        JsonNode step = root.get("ProcessInstances").get(1);
+        assertTrue(step.get("comment").isNull());
+        assertTrue(step.get("assigner").isNull());
+    }
+
+    @Test
     void complainantsOwnStepStaysWhole() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
         JsonNode apply = root.get("ProcessInstances").get(2);
         assertEquals("my own words", apply.get("comment").asText());
         assertEquals("Maria Cossa", apply.get("assigner").get("name").asText());
@@ -115,7 +165,7 @@ class ChronologyServiceTest {
     @Test
     void anotherCitizenGetsNothing() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("CITIZEN", "someone-else", "CITIZEN"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("CITIZEN", "someone-else", "CITIZEN"), ctx(false));
         assertEquals(0, root.get("ProcessInstances").size());
     }
 
@@ -124,7 +174,7 @@ class ChronologyServiceTest {
     @Test
     void employeeKeepsEverythingOnANonConfidentialComplaint() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(false));
         JsonNode comment = root.get("ProcessInstances").get(1);
         assertTrue(comment.get("comment").asText().contains("INTERNAL NOTE"));
         assertEquals("Officer Nine", comment.get("assigner").get("name").asText());
@@ -135,7 +185,7 @@ class ChronologyServiceTest {
     @Test
     void employeeSeesComplainantMaskedOnAConfidentialComplaint() {
         ObjectNode root = fixture();
-        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(true), false);
+        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(true));
         JsonNode apply = root.get("ProcessInstances").get(2);
         assertEquals("****", apply.get("assigner").get("name").asText());
         assertEquals("****", apply.get("assigner").get("mobileNumber").asText());
@@ -149,32 +199,61 @@ class ChronologyServiceTest {
     void confidentialViewerSeesEverythingInClear() {
         ObjectNode root = fixture();
         ChronologyService.filterForRequester(root,
-                requester("EMPLOYEE", OFFICER, "EMPLOYEE", "CONFIDENTIAL_COMPLAINT_VIEWER"), ctx(true), true);
+                requester("EMPLOYEE", OFFICER, "EMPLOYEE", "CONFIDENTIAL_COMPLAINT_VIEWER"), ctx(true, true));
         assertEquals("Maria Cossa", root.get("ProcessInstances").get(2).get("assigner").get("name").asText());
     }
+
+    @Test
+    void viewerAuthorizationIsPerComplaintNotGlobal() {
+        // One request spanning two confidential complaints of different
+        // templates: authorization for the first must not unlock the second.
+        ObjectNode root = fixture();
+        String otherBid = "PG-PGR-2026-09-08-000002";
+        ((ObjectNode) root.get("ProcessInstances").get(1)).put("businessId", otherBid);
+        Map<String, ComplaintContext> contexts = Map.of(
+                BID, new ComplaintContext(COMPLAINANT, true, "IGE", true),
+                otherBid, new ComplaintContext(OFFICER, true, "IGSAE", false));
+        ChronologyService.filterForRequester(root, requester("EMPLOYEE", "emp-3", "EMPLOYEE"), contexts);
+        // authorized template: complainant stays clear
+        assertEquals("Maria Cossa", root.get("ProcessInstances").get(2).get("assigner").get("name").asText());
+        // unauthorized template: its complainant (the actor on that step) is masked
+        assertEquals("****", root.get("ProcessInstances").get(1).get("assigner").get("name").asText());
+    }
+
+    // ---------- internal & anonymous ----------
 
     @Test
     void internalCallerIsUntouchedPassthrough() {
         ObjectNode root = fixture();
         String before = root.toString();
         ChronologyService.filterForRequester(root,
-                requester("EMPLOYEE", "svc", "INTERNAL_MICROSERVICE_ROLE"), ctx(true), false);
+                requester("EMPLOYEE", "svc", "INTERNAL_MICROSERVICE_ROLE"), ctx(true));
         assertEquals(before, root.toString());
     }
 
     @Test
-    void missingUserInfoIsUntouchedPassthrough() {
+    void missingUserInfoGetsNothing() {
+        // The gateway strips client-supplied userInfo from token-less requests
+        // and (audit mode) still forwards them. Absent identity is ANONYMOUS —
+        // least privilege, never the internal passthrough.
         ObjectNode root = fixture();
-        String before = root.toString();
-        ChronologyService.filterForRequester(root, new RequestInfo(), ctx(true), false);
-        assertEquals(before, root.toString());
+        ChronologyService.filterForRequester(root, new RequestInfo(), ctx(true));
+        assertEquals(0, root.get("ProcessInstances").size(),
+                "an anonymous caller must receive an empty chronology");
+    }
+
+    @Test
+    void nullRequestInfoGetsNothing() {
+        ObjectNode root = fixture();
+        ChronologyService.filterForRequester(root, null, ctx(true));
+        assertEquals(0, root.get("ProcessInstances").size());
     }
 
     @Test
     void payloadShapeIsPreservedForEmployees() {
         ObjectNode root = fixture();
         String before = root.toString();
-        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(false), false);
+        ChronologyService.filterForRequester(root, requester("EMPLOYEE", OFFICER, "EMPLOYEE"), ctx(false));
         assertEquals(before, root.toString(), "non-confidential employee payload must be byte-identical");
         assertFalse(root.toString().isEmpty());
     }
