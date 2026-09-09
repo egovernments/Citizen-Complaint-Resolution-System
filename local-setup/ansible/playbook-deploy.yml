@@ -5052,17 +5052,31 @@
       changed_when: false
       when: enable_keycloak | default(false)
 
+    # This kcadm update is what actually lands on the running realm (the realm
+    # import is first-run only). It MUST match the hardened template: no
+    # http://localhost:* redirect and no localhost webOrigins on a deployed
+    # box (audit: keycloak-loose-redirect). Local-dev entries come only from
+    # keycloak_dev_redirect_uris / keycloak_dev_web_origins (empty by default),
+    # built into JSON arrays below. Also pins sslRequired=external on the realm,
+    # since the one-shot import never updates an existing realm.
     - name: "keycloak-bootstrap — update digit-ui client redirect URIs in-place"
       ansible.builtin.shell: |
         SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
         BASE="${SCHEME}{{ domain }}"
+        REDIRECTS='{{ ([ "__BASE__/citizen/*", "__BASE__/digit-ui/*", "__BASE__/auth/callback*" ] + (keycloak_dev_redirect_uris | default([]))) | to_json }}'
+        ORIGINS='{{ ([ "__BASE__" ] + (keycloak_dev_web_origins | default([]))) | to_json }}'
+        REDIRECTS="${REDIRECTS//__BASE__/${BASE}}"
+        ORIGINS="${ORIGINS//__BASE__/${BASE}}"
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
           "clients/{{ kc_digit_ui_client_id.stdout | trim }}" \
           -r "{{ state_tenant_id }}" \
           -s "rootUrl=${BASE}" \
           -s 'baseUrl=/citizen/' \
-          -s "redirectUris=[\"${BASE}/citizen/*\",\"${BASE}/digit-ui/*\",\"${BASE}/auth/callback*\",\"http://localhost:*\"]" \
-          -s "webOrigins=[\"${BASE}\",\"http://localhost:3000\",\"http://localhost:5173\"]"
+          -s "redirectUris=${REDIRECTS}" \
+          -s "webOrigins=${ORIGINS}"
+        # existing realms never get re-imported, so enforce TLS here too
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
+          -s 'sslRequired=external'
       when:
         - enable_keycloak | default(false)
         - kc_digit_ui_client_id is defined
