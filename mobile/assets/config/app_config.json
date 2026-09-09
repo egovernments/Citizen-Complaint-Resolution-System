@@ -1,0 +1,12 @@
+{
+  "appName": "CMS Mozambique",
+  "url": "https://uat.falacidadao.gov.mz/digit-ui/employee/user/login",
+  "citizenUrl": "https://uat.falacidadao.gov.mz/digit-ui/citizen/login",
+  "logoAsset": "assets/icons/app_icon.png",
+  "primaryColorHex": "#0B4F6C",
+  "allowMixedContent": true,
+  "javascriptEnabled": true,
+  "showAppBar": false,
+  "pullToRefresh": true,
+  "startWithCitizen": true
+}

@@ -140,3 +140,5 @@ charts/*.tgz
 local-testing/
 .agent/
 .playwright-mcp/
+# Strix local scan output (not committed)
+strix_runs/

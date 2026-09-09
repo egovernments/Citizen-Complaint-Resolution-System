@@ -1,10 +1,10 @@
-# Contributing to DIGIT Complaints
+# Contributing to CMS Mozambique
 
 This guide explains how to file bugs, request features, and propose enhancements so the team can triage and prioritize effectively.
 
 ## Before You File
 
-1. **Search existing issues** to avoid duplicates: [open issues](https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues)
+1. **Search existing issues** to avoid duplicates: [open issues](https://github.com/eGov-Global/CMS-MOZAMBIQUE/issues)
 2. If you found a duplicate, add a comment with your context instead of opening a new one
 
 ## Issue Types
@@ -31,10 +31,10 @@ Titles should be clear, specific, and scannable.
 
 **Bad:**
 - `bug in UI` (too vague)
-- `Maputo: Localization issue` (don't prefix with deployment name)
+- `PROD: Localization issue` (don't prefix with environment name)
 - `Fix the thing` (not descriptive)
 
-**Do NOT prefix titles with deployment or environment names** (Maputo, Nai Pepea, Local Setup, etc.). Use the **Source** project field instead (see below).
+**Do NOT prefix titles with environment names** (PROD, UAT, etc.). Use the **Source** project field instead (see below).
 
 ## Required Labels
 
@@ -57,9 +57,9 @@ Which roadmap feature does this relate to? Pick one:
 | `feature:platform-modernization` | UI framework, build tooling, service architecture |
 | `feature:knowledge-ecosystem` | Documentation, guides, training materials |
 
-**Not sure which feature?** Ask yourself: *"What business capability does this affect?"* Technology choices (Keycloak, Kafka, PostgreSQL) are never the feature — the capability they serve is.
+**Not sure which feature?** Ask yourself: *"What business capability does this affect?"* Technology choices (Keycloak, Kafka, PostgreSQL) are never the feature - the capability they serve is.
 
-**Maintenance bugs** that don't relate to any roadmap feature (e.g., a generic profile page crash) can skip the feature label. These are tracked by `bug` + `area:*` + Priority + Milestone.
+**Maintenance bugs** that don't relate to any roadmap feature (e.g., a generic profile page crash) can skip the feature label. These are tracked by `bug` + `area:*` + Priority.
 
 ### 2. Area Label
 
@@ -73,17 +73,14 @@ Where in the stack is the issue?
 
 ## Source Field (Project Board)
 
-If the issue was discovered during a specific deployment or environment, set the **Source** field on the [project board](https://github.com/orgs/egovernments/projects/22):
+If the issue was discovered in a specific environment, set the **Source** field on the [project board](https://github.com/orgs/eGov-Global/projects/16):
 
 | Source | When to use |
 |--------|-------------|
-| Maputo | Found during Maputo deployment |
-| Nai Pepea | Found during Nai Pepea deployment |
-| Sandbox | Found in sandbox environment |
-| Local Setup | Found during local development |
-| Unified Dev | Found in unified dev environment |
+| PROD | Found in production |
+| UAT | Found during UAT |
 
-This replaces the old convention of prefixing titles with deployment names.
+This replaces the old convention of prefixing titles with environment names.
 
 ## Priority
 
@@ -98,54 +95,16 @@ Set priority when filing if you can. If unsure, leave it for triage.
 
 ## Milestone
 
-Assign a milestone if you know which release it targets:
-
-- **Release 2.11** — Portable demo baseline
-- **Release 2.12 (Nosy Build)** — Due June 20, 2026
-- **Release 2.20 (SaaSSy Phase 1)** — Due July 31, 2026
-- **Release 2.30 (SaaSSy Phase 2)** — Due September 30, 2026
-
-If unsure, leave it blank. The team assigns milestones during sprint planning.
+Release milestones are not yet defined for CMS Mozambique. Leave the milestone blank; the team will assign one during sprint planning once the release plan is set.
 
 ## Bug Reports
 
 Use the **Bug report** template. A good bug report includes:
 
-1. **What happened** — Clear description of the broken behavior
-2. **Steps to reproduce** — Numbered steps someone else can follow
-3. **Expected behavior** — What should have happened
-4. **Environment** — Which deployment, browser, tenant
-5. **Screenshots/logs** — Attach if possible
+1. **What happened** - Clear description of the broken behavior
+2. **Steps to reproduce** - Numbered steps someone else can follow
+3. **Expected behavior** - What should have happened
+4. **Environment** - PROD or UAT, browser, tenant
+5. **Screenshots/logs** - Attach if possible
 
 **The single most important thing:** Can someone else reproduce it from your description? If not, add more detail.
-
-## Enhancements
-
-Use the **Enhancement** template. Describe:
-
-1. **What exists today** — Current behavior
-2. **What you want changed** — Proposed improvement
-3. **Why it matters** — Who benefits and how
-
-## Features (Maintainers Only)
-
-Feature issues represent long-lived roadmap workstreams. They use the **Feature request** template and are created only by project maintainers. If you think a new feature is needed, open a discussion or enhancement first.
-
-## What NOT to Do
-
-- Don't file issues with just a title and no body
-- Don't prefix titles with environment names (use Source field)
-- Don't create a Feature issue for a technology choice (Keycloak is not a feature; "Configuration & Customization" is)
-- Don't skip the area label — it's how we route bugs to the right people
-- Don't file multiple bugs in one issue — one issue per bug
-- Don't reopen closed issues for new problems — file a new issue and reference the old one
-
-## Quick Reference
-
-```
-Title:     [Bug] Clear, specific description
-Labels:    bug, feature:lifecycle-routing, area:frontend
-Priority:  P1
-Milestone: Release 2.12 (Nosy Build)
-Source:    Nai Pepea (set on project board)
-```

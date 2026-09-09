@@ -1,0 +1,75 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Which part of the SemVer to bump'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      create_tag:
+        description: 'Create and push tag v<version> (triggers a release build)'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump version in pubspec.yaml
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_LINE=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          NAME=${CURRENT_LINE%+*}
+          CODE=${CURRENT_LINE#*+}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$NAME"
+          case "${{ inputs.bump }}" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+          NEW_NAME="$MAJOR.$MINOR.$PATCH"
+          NEW_CODE=$((CODE+1))
+          sed -i "s/^version:.*/version: $NEW_NAME+$NEW_CODE/" pubspec.yaml
+          echo "previous=$NAME+$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$NEW_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$NEW_CODE" >> "$GITHUB_OUTPUT"
+          echo "Bumped $NAME+$CODE -> $NEW_NAME+$NEW_CODE"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml
+          git commit -m "Bump version to ${{ steps.bump.outputs.name }}+${{ steps.bump.outputs.code }}"
+          git push
+
+      - name: Create and push tag
+        if: ${{ inputs.create_tag }}
+        run: |
+          git tag "v${{ steps.bump.outputs.name }}"
+          git push origin "v${{ steps.bump.outputs.name }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Version bumped"
+            echo ""
+            echo "- Previous: \`${{ steps.bump.outputs.previous }}\`"
+            echo "- New: \`${{ steps.bump.outputs.name }}+${{ steps.bump.outputs.code }}\`"
+            echo "- Tag pushed: \`${{ inputs.create_tag }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
