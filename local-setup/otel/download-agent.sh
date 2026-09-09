@@ -29,14 +29,9 @@ DEST="$SCRIPT_DIR/$AGENT_JAR"
 CHECKSUMS="$SCRIPT_DIR/agent-checksums.txt"
 OTEL_SIGNING_KEY="3F05DDA9F317301E927136D417A27CE7A60FF5F0"
 
-if [[ -f "$DEST" ]]; then
-  echo "OTEL Java Agent already exists at $DEST"
-  echo "To re-download, delete it first: rm $DEST"
-  exit 0
-fi
-
-# Resolve the expected digest BEFORE downloading, so an unpinned version fails
-# fast instead of installing something unverified.
+# Resolve the expected digest FIRST — before trusting any existing file — so an
+# unpinned version fails fast and a stale/tampered jar already on disk is
+# re-verified rather than blindly accepted.
 if [[ ! -f "$CHECKSUMS" ]]; then
   echo "ERROR: $CHECKSUMS is missing — refusing to install an unverified agent." >&2
   exit 1
@@ -49,6 +44,21 @@ if [[ -z "$EXPECTED" ]]; then
   echo "       or set OTEL_AGENT_VERSION to a version that is already pinned:" >&2
   awk '$1 !~ /^#/ && NF == 2 { print "         " $2 }' "$CHECKSUMS" >&2
   exit 1
+fi
+
+sha_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'; else shasum -a 256 "$1" | awk '{print $1}'; fi; }
+
+# An existing jar is trusted ONLY if it matches the pinned digest. The old code
+# exited 0 on mere existence, so a jar left by a previous unverified download
+# (the pre-hardening script wrote straight to $DEST) was never re-checked —
+# meaning the fix never applied on an already-deployed controller.
+if [[ -f "$DEST" ]]; then
+  if [[ "$(sha_of "$DEST")" == "$EXPECTED" ]]; then
+    echo "OTEL Java Agent already present and verified against the pin ($AGENT_VERSION)."
+    exit 0
+  fi
+  echo "WARNING: existing $DEST does not match the pinned digest — re-downloading." >&2
+  rm -f "$DEST"
 fi
 
 BASE="https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${AGENT_VERSION}"
