@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { defaultProvisioningPassword } from '../services/auth.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
 import type { PaginationOptions } from '../utils/pagination.js';
 import { validateTenantId, validateMobileNumber, rejectControlChars, validateStringLength } from '../utils/validation.js';
@@ -138,6 +139,7 @@ export function registerUserTools(registry: ToolRegistry): void {
     name: 'user_create',
     group: 'admin',
     category: 'user',
+    access: 'admin',
     risk: 'write',
     description:
       'Create a new user in the DIGIT platform. Creates users without OTP validation (admin operation). ' +
@@ -190,7 +192,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         },
         password: {
           type: 'string',
-          description: 'Password for the user (default: "eGov@123")',
+          description: 'Password for the user. Defaults to the server\'s provisioning password (MCP_DEFAULT_PROVISIONING_PASSWORD).',
         },
       },
       required: ['tenant_id', 'name', 'mobile_number'],
@@ -226,7 +228,7 @@ export function registerUserTools(registry: ToolRegistry): void {
         name: args.name as string,
         mobileNumber,
         userName: (args.username as string) || mobileNumber,
-        password: (args.password as string) || 'eGov@123',
+        password: (args.password as string) || defaultProvisioningPassword(),
         type: userType,
         active: true,
         emailId: (args.email as string) || null,
@@ -279,6 +281,7 @@ export function registerUserTools(registry: ToolRegistry): void {
     name: 'user_role_add',
     group: 'admin',
     category: 'user',
+    access: 'admin',
     risk: 'write',
     description:
       'Add roles to an existing user for a specific tenant. CRITICAL for cross-tenant operations: ' +

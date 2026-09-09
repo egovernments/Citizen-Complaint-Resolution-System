@@ -2,6 +2,7 @@ import type { ToolMetadata, ValidationResult } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 import { validateTenantId, validateResourceId } from '../utils/validation.js';
 
 /**
@@ -629,6 +630,7 @@ export function registerValidatorTools(registry: ToolRegistry): void {
     name: 'boundary_create',
     group: 'boundary',
     category: 'boundary-mgmt',
+    access: 'admin',
     risk: 'write',
     description:
       'Create boundary hierarchy and entities from JSON. No Excel file needed — calls boundary-service APIs directly. ' +
@@ -934,6 +936,7 @@ export function registerValidatorTools(registry: ToolRegistry): void {
     name: 'boundary_mgmt_process',
     group: 'boundary',
     category: 'boundary-mgmt',
+    access: 'admin',
     risk: 'write',
     description:
       'Process (upload/update) boundary data via the boundary management service (egov-bndry-mgmnt). Submits resource details for boundary data processing. Requires a file with boundary data to be uploaded first via filestore.',
@@ -1030,6 +1033,7 @@ export function registerValidatorTools(registry: ToolRegistry): void {
     name: 'boundary_mgmt_generate',
     group: 'boundary',
     category: 'boundary-mgmt',
+    access: 'admin',
     risk: 'write',
     description:
       'Generate boundary codes via the boundary management service (egov-bndry-mgmnt). Creates boundary code mappings based on resource details. Typically used after processing boundary data.',
@@ -1120,18 +1124,3 @@ export function registerValidatorTools(registry: ToolRegistry): void {
 }
 
 // Auto-login helper
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-
-  if (!username || !password) {
-    throw new Error(
-      'Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.'
-    );
-  }
-
-  await digitApi.login(username, password, tenantId);
-}

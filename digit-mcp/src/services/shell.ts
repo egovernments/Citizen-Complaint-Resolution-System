@@ -14,12 +14,15 @@ export interface ShellResult {
 
 const TIMEOUT_MS = 15000;
 
-function run(file: string, args: string[]): ShellResult {
+function run(file: string, args: string[], extraEnv?: Record<string, string>): ShellResult {
   try {
     const stdout = execFileSync(file, args, {
       encoding: 'utf-8',
       timeout: TIMEOUT_MS,
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Credentials are passed to the one child that needs them, not written
+      // into this process's environment. See the note on psqlEnv below.
+      ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
     });
     return { stdout: stdout.trim(), ok: true };
   } catch (err: unknown) {
@@ -90,24 +93,33 @@ export function persisterLogs(since: string): ShellResult {
 
 // ── PostgreSQL row counts ──
 // Tables are hardcoded — never from user input.
+//
+// Connection details come from the DIGIT_DB_* vars shared with digit-db.ts,
+// falling back to the local compose defaults. Previously these were hardcoded
+// and the password was assigned to `process.env.PGPASSWORD` at module import,
+// which leaked it into every child process this server spawns (and into any
+// `pg` client that reads PGPASSWORD) merely because the module was imported.
+// It is now passed only to the psql child that needs it.
+const dbHost = () => process.env.DIGIT_DB_HOST || 'localhost';
+const dbPort = () => process.env.DIGIT_DB_PORT || '15432';
+const dbUser = () => process.env.DIGIT_DB_USER || 'egov';
+const dbName = () => process.env.DIGIT_DB_NAME || 'egov';
+const psqlEnv = (): Record<string, string> => ({
+  PGPASSWORD: process.env.DIGIT_DB_PASSWORD || 'egov123',
+});
 
-const DB_HOST = 'localhost';
-const DB_PORT = '15432';
-const DB_USER = 'egov';
-const DB_NAME = 'egov';
-const DB_PASS = 'egov123';
+function psqlArgs(extra: string[]): string[] {
+  return ['-h', dbHost(), '-p', dbPort(), '-U', dbUser(), '-d', dbName(), ...extra];
+}
 
 export function psqlCountAll(tables: readonly string[]): ShellResult {
   const query = tables
     .map(t => `SELECT '${t}' AS tbl, COUNT(*) AS cnt FROM ${t}`)
     .join(' UNION ALL ');
 
-  return run('psql', ['-h', DB_HOST, '-p', DB_PORT, '-U', DB_USER, '-d', DB_NAME, '-t', '-A', '-F|', '-c', query], );
+  return run('psql', psqlArgs(['-t', '-A', '-F|', '-c', query]), psqlEnv());
 }
 
 export function psqlCountOne(table: string): ShellResult {
-  return run('psql', ['-h', DB_HOST, '-p', DB_PORT, '-U', DB_USER, '-d', DB_NAME, '-t', '-c', `SELECT COUNT(*) FROM ${table}`]);
+  return run('psql', psqlArgs(['-t', '-c', `SELECT COUNT(*) FROM ${table}`]), psqlEnv());
 }
-
-// Override env for psql password (applied at module level)
-process.env.PGPASSWORD = DB_PASS;

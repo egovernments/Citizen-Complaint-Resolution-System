@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 export function registerFilestoreAclTools(registry: ToolRegistry): void {
   // ──────────────────────────────────────────
@@ -57,6 +58,7 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
     name: 'filestore_upload',
     group: 'admin',
     category: 'filestore',
+    access: 'admin',
     risk: 'write',
     description:
       'Upload a file to DIGIT filestore. Accepts base64-encoded file content, a filename, and a module name. ' +
@@ -230,13 +232,3 @@ export function registerFilestoreAclTools(registry: ToolRegistry): void {
   } satisfies ToolMetadata);
 }
 
-async function ensureAuthenticated(): Promise<void> {
-  if (digitApi.isAuthenticated()) return;
-  const username = process.env.CRS_USERNAME;
-  const password = process.env.CRS_PASSWORD;
-  const tenantId = process.env.CRS_TENANT_ID || digitApi.getEnvironmentInfo().stateTenantId;
-  if (!username || !password) {
-    throw new Error('Not authenticated. Call the "configure" tool first, or set CRS_USERNAME/CRS_PASSWORD env vars.');
-  }
-  await digitApi.login(username, password, tenantId);
-}
