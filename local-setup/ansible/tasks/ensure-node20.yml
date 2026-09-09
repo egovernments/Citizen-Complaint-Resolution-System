@@ -78,12 +78,22 @@
       ansible.builtin.shell: |
         set -euo pipefail
         install -m 0755 -d /etc/apt/keyrings
-        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-          | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-        chmod a+r /etc/apt/keyrings/nodesource.gpg
+        # Dearmor to a TEMP file, then mv into place only on full success.
+        # `gpg -o <dest>` (and the old `creates:` guard) truncated the dest
+        # BEFORE the piped curl's exit status was known: a failed download left
+        # a 0-byte keyring that `creates:` then skipped forever, wedging every
+        # later deploy with an unverifiable apt repo. `set -o pipefail` catches
+        # the curl failure; the temp+mv makes the dest all-or-nothing.
+        tmp=$(mktemp)
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o "$tmp"
+        test -s "$tmp"
+        install -m 0644 "$tmp" /etc/apt/keyrings/nodesource.gpg
+        rm -f "$tmp"
       args:
         executable: /bin/bash
-        creates: /etc/apt/keyrings/nodesource.gpg
+        # No `creates:` — the task is cheap and idempotent (mv over the same
+        # content), and a `creates:` guard on a path a previous run may have
+        # left empty is exactly the wedge described above.
 
     - name: "{{ node_ensure_label }} — register signed-by NodeSource apt source"
       ansible.builtin.copy:

@@ -1265,11 +1265,14 @@
     # own existence check, so re-runs of the playbook are no-ops after the
     # first download.
     - name: Download OpenTelemetry Java Agent
+      # No `creates:` — the script self-guards (verifies an existing jar against
+      # the pinned digest and re-downloads on mismatch), so let it run every
+      # time. A `creates:` guard would skip re-verification of a stale/tampered
+      # jar left by an older unverified download.
       shell: bash {{ playbook_dir }}/../otel/download-agent.sh
-      args:
-        creates: "{{ playbook_dir }}/../otel/opentelemetry-javaagent.jar"
       delegate_to: localhost
       become: false
+      changed_when: false
 
     # ==================== nairobi-mdms submodule (fetched, not vendored) ====================
     # The Nairobi MDMS dump (~84k LOC of JSON for departments, designations,
