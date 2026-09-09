@@ -376,7 +376,10 @@ nginx_features:
   brand_assets: false      # /brand/ — needs /var/www/brand on the host
   configurator: true       # /configurator/ — the onboarding wizard
   configurator_caching: false  # long-cache headers for its assets
-  status: true             # /status/ — the Gatus health dashboard
+  status: false              # /status/ — Gatus health dashboard. OFF by default:
+                             # the board maps every internal component and its
+                             # health. To publish it, set this true AND set
+                             # status_basic_auth_password (the deploy asserts).
   api_pgr: false           # /api/pgr/ — proxied to MCP for the dashboard
   mcp: true                # /mcp + /v1/* — needs enable_mcp: true
   keycloak: true           # /auth/ + /token-exchange/ — needs enable_keycloak: true

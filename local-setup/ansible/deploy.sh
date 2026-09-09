@@ -131,7 +131,14 @@ TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
   done
   echo "      vars:"
   echo "        ansible_user: root"
-  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'"
+  # accept-new, NOT no. `no` accepts a changed key silently on every
+  # connection, so a MITM between the controller and the box is invisible and
+  # the deploy hands it root plus every bootstrap secret. accept-new trusts
+  # the key on FIRST contact (same convenience for a fresh box) but then
+  # pins it — a later mismatch aborts loudly, which is the property that
+  # matters. Pre-seed instead with `ssh-keyscan -H <host> >> ~/.ssh/known_hosts`
+  # if you want to verify the fingerprint out of band before the first run.
+  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'"
 } > inventory/hosts.yml
 
 host="${1:-}"

@@ -842,6 +842,60 @@
             state: started
             enabled: yes
 
+        # ==================== ufw (Debian/Ubuntu) ====================
+        # Ubuntu cloud images ship ufw INACTIVE, so a deploy used to leave the
+        # box with no host firewall at all while publishing ~38 container
+        # ports. Those are now loopback-bound (BIND_IP in the compose file),
+        # which is the control that actually contains them: Docker inserts its
+        # DNAT rules in PREROUTING/FORWARD and they BYPASS ufw's INPUT chain
+        # entirely, so ufw alone would never have protected a published port.
+        # This block is defence in depth for host-level services (sshd, host
+        # nginx, anything an operator installs later).
+        #
+        # ORDER IS LOAD-BEARING: allow SSH *before* enabling, or the enable
+        # task severs the control connection and the play dies mid-deploy on
+        # an unreachable host. ansible_port is allowed explicitly so a box on
+        # a non-22 SSH port is not locked out.
+        #
+        # Escape hatch: set `manage_host_firewall: false` in host_vars for
+        # boxes whose ingress is managed elsewhere (cloud security groups, a
+        # provider firewall) and should not have a second policy layered on.
+        - name: "ufw — host firewall (Debian/Ubuntu)"
+          when:
+            - ansible_facts['os_family'] == 'Debian'
+            - manage_host_firewall | default(true)
+          block:
+            - name: Install ufw
+              ansible.builtin.apt:
+                name: ufw
+                state: present
+
+            - name: "ufw — allow SSH BEFORE enabling (do not lock ourselves out)"
+              community.general.ufw:
+                rule: allow
+                port: "{{ item }}"
+                proto: tcp
+              loop: "{{ ([22, ansible_port | default(22)]) | unique }}"
+
+            - name: "ufw — allow http/https for host nginx"
+              community.general.ufw:
+                rule: allow
+                port: "{{ item }}"
+                proto: tcp
+              loop: [80, 443]
+
+            - name: "ufw — default deny incoming, allow outgoing"
+              community.general.ufw:
+                direction: "{{ item.direction }}"
+                policy: "{{ item.policy }}"
+              loop:
+                - { direction: incoming, policy: deny }
+                - { direction: outgoing, policy: allow }
+
+            - name: "ufw — enable"
+              community.general.ufw:
+                state: enabled
+
         # ==================== firewalld (RHEL family only) ====================
         # Ubuntu's ufw ships inactive by default on cloud images, so this
         # playbook never needed firewall tasks. Rocky/RHEL-family images
@@ -3404,27 +3458,66 @@
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
 
-    - name: "integration-tests — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
+    - name: "nginx — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
       ansible.builtin.apt:
         name: apache2-utils
         state: present
       when:
-        - enable_integration_tests | default(false)
-        - integration_tests_basic_auth_password is defined
+        # Two consumers now: the integration-tests dashboards and the Gatus
+        # status board. Either one needs htpasswd present.
+        - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
+          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
         - ansible_facts['os_family'] == 'Debian'
 
-    - name: "integration-tests — ensure htpasswd tooling for basic-auth (RHEL family)"
+    - name: "nginx — ensure htpasswd tooling for basic-auth (RHEL family)"
       ansible.builtin.dnf:
         name: httpd-tools
         state: present
       when:
-        - enable_integration_tests | default(false)
-        - integration_tests_basic_auth_password is defined
+        # Two consumers now: the integration-tests dashboards and the Gatus
+        # status board. Either one needs htpasswd present.
+        - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
+          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
         - ansible_facts['os_family'] == 'RedHat'
 
     # Idempotent via `creates`: rotate the password by deleting the file and
     # re-running. Password comes from vault/host_vars; the task skips entirely
     # if unset (dashboards would then 401 with no valid user — set it).
+    # ---- Gatus status board basic auth (nginx_features.status) ----
+    # Fail CLOSED rather than render an open board: the nginx template always
+    # emits auth_basic for /status/, so a deploy that enables the feature
+    # without a password would serve a 403 (missing .htpasswd-status) and the
+    # operator would have to guess why. Assert up front instead.
+    - name: "status board — require a basic-auth password when /status/ is enabled"
+      ansible.builtin.assert:
+        that:
+          - status_basic_auth_password is defined
+          - status_basic_auth_password | length > 0
+        fail_msg: >-
+          nginx_features.status is true but `status_basic_auth_password` is not set.
+          The Gatus board enumerates the internal service topology, so it is no
+          longer served unauthenticated. Set status_basic_auth_password (and
+          optionally status_basic_auth_user, default 'digit-status') in
+          host_vars/{{ inventory_hostname }}.yml, or set nginx_features.status
+          to false to stop publishing the board.
+      when:
+        - nginx_features.status | default(false)
+        - ansible_system != "Darwin"
+
+    # Idempotent via `creates`: rotate by deleting the file and re-running.
+    - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
+      ansible.builtin.command: >-
+        htpasswd -bBc /etc/nginx/.htpasswd-status
+        "{{ status_basic_auth_user | default('digit-status') }}"
+        "{{ status_basic_auth_password }}"
+      args:
+        creates: /etc/nginx/.htpasswd-status
+      no_log: true
+      when:
+        - nginx_features.status | default(false)
+        - status_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
     - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
       ansible.builtin.command: >-
         htpasswd -bBc /etc/nginx/.htpasswd-tests

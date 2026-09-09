@@ -1,4 +1,4 @@
 ---
 collections:
   - name: ansible.posix   # provides: synchronize, mount, sysctl, etc.
-  - name: community.general   # provides: ini_file (WSL .wslconfig management)
+  - name: community.general   # provides: ini_file (WSL .wslconfig), ufw (host firewall)

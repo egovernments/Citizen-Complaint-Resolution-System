@@ -149,6 +149,15 @@ server {
   # from root. We sub_filter every layer so the browser routes everything
   # through this /status/ proxy (which strips the prefix back off).
   location /status/ {
+    # The board enumerates the whole internal service topology (every
+    # component, its endpoint and its live health), which is a free recon map
+    # of the deployment. Same basic-auth front as the integration-tests
+    # dashboards above; the playbook writes .htpasswd-status and refuses to
+    # deploy with `status: true` and no password set, so this cannot silently
+    # render open.
+    auth_basic "DIGIT status";
+    auth_basic_user_file /etc/nginx/.htpasswd-status;
+
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_gatus_port }}/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
