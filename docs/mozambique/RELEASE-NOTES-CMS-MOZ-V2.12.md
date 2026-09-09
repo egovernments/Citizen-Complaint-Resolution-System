@@ -121,6 +121,91 @@ All new capabilities are **opt-in with off/empty defaults** — a stock deployme
 
 ---
 
+## Container Image Inventory
+
+The image versions this release runs, captured from the live production deployment on 2026-09-09. Use this as the authoritative pin list when reproducing or upgrading an environment.
+
+### CMS application services
+
+| Container | Image |
+|---|---|
+| pgr-services | `egovio/pgr-services:master-df7ca8d` |
+| digit-ui | `egovio/digit-ui-esbuild:master-cae07a3` |
+| configurator | `egovio/configurator:master-cae07a3` |
+| digit-config-service | `egovio/digit-config-service:2.12-beta-96dcf10` |
+| digit-user-preferences-service | `egovio/digit-user-preferences-service:2.12-beta-96dcf10` |
+| digit-mcp | `digit-mcp:local` |
+| digit-mcp-postgres | `postgres:16-alpine` |
+| rest-adapter | `rest-adapter:current` |
+| otp-publisher | `otp-publisher:local` |
+
+### DIGIT platform services
+
+| Container | Image |
+|---|---|
+| egov-user | `egovio/egov-user:2.12-87e13fe` |
+| egov-workflow-v2 | `egovio/egov-workflow-v2:2.12-87e13fe` |
+| egov-localization | `egovio/egov-localization:2.12-87e13fe` |
+| egov-enc-service | `egovio/egov-enc-service:2.12-87e13fe` |
+| egov-hrms | `egovio/egov-hrms:2.12-beta-dd641a6` |
+| mdms-backend (mdms-v2) | `egovio/mdms-v2:maven-jdk21-9f83afb` |
+| egov-filestore | `egovio/egov-filestore:maven-jdk21-9f83afb` |
+| boundary-service | `egovio/boundary-service:maven-jdk21-9f83afb` |
+| egov-idgen | `egovio/egov-idgen:maven-jdk21-9f83afb` |
+| egov-persister | `egovio/egov-persister:maven-jdk21-9f83afb` |
+| egov-accesscontrol | `egovio/egov-accesscontrol:maven-jdk21-9f83afb` |
+| egov-bndry-mgmnt | `egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c` |
+| egov-url-shortening | `egovio/egov-url-shortening:maven-jdk21-983e8b2` |
+| egov-otp | `egovio/egov-otp:v2.9.2-4a60f20` |
+| audit-service | `egovio/audit-service:v2.9.2-4a60f20` |
+| user-otp | `egovio/user-otp:master-e22c7c5` |
+| egov-notification-sms | `egovio/egov-notification-sms:master-e22c7c5` |
+| egov-user-proxy / egov-workflow-proxy / egov-mdms-service | `egovio/nginx:alpine` |
+
+### Gateway & data infrastructure
+
+| Container | Image |
+|---|---|
+| kong-gateway | `egovio/kong:3.6` |
+| postgres | `egovio/postgres:16` |
+| pgbouncer | `egovio/pgbouncer:latest` |
+| redis | `egovio/redis:7.2.4` |
+| redpanda | `egovio/redpanda:v24.1.1` |
+| minio | `egovio/minio:RELEASE.2024-01-16T16-07-38Z` |
+| openbao | `openbao/openbao:latest` |
+
+### Notifications (Novu)
+
+| Container | Image |
+|---|---|
+| novu-api | `ghcr.io/novuhq/novu/api:2.3.0` |
+| novu-worker | `ghcr.io/novuhq/novu/worker:2.3.0` |
+| novu-ws | `ghcr.io/novuhq/novu/ws:2.3.0` |
+| novu-dashboard | `ghcr.io/novuhq/novu/dashboard:2.3.0` |
+| novu-mongo | `mongo:8.0.3` |
+| novu-bridge | `egovio/novu-bridge:develop-2cf2660` |
+| novu-bridge-endpoint | `egovio/novu-bridge-endpoint:latest` |
+
+### Analytics & observability
+
+| Container | Image |
+|---|---|
+| matomo | `matomo:5-apache` |
+| matomo-db | `mariadb:11.4` |
+| grafana | `egovio/grafana:11.4.0` |
+| prometheus | `prom/prometheus:v2.55.1` |
+| loki | `grafana/loki:3.4.2` |
+| promtail | `grafana/promtail:3.4.2` |
+| tempo | `egovio/tempo:2.6.1` |
+| node-exporter | `prom/node-exporter:v1.8.2` |
+| otel-collector | `egovio/opentelemetry-collector-contrib:0.114.0` |
+| gatus | `egovio/gatus:latest` |
+| jupyter (ops tooling) | `egovio/tilt-demo-jupyter:latest` |
+
+> Note: a few images run under floating or locally-built tags (`:latest`, `:local`, `:current` — pgbouncer, openbao, gatus, novu-bridge-endpoint, jupyter, digit-mcp, otp-publisher, rest-adapter). When rebuilding an environment to match this release, pin these to the digests running in production rather than re-pulling the tag.
+
+---
+
 ## Documentation
 
 - [Mozambique customization record](https://github.com/eGov-Global/CMS-MOZAMBIQUE/blob/master/docs/mozambique-customizations.md)
