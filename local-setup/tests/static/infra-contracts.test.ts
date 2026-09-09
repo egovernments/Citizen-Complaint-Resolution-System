@@ -44,8 +44,13 @@ describe('JVM OOM dashboard service scope', () => {
         jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
     )
     .map(({ name }) => name);
+  // `-migration` is the per-service Flyway container; `-migrations` (plural) is
+  // the single consolidated container PR #1595 introduced (BUILT from
+  // ./docker/db-migrations). Both are one-shot Flyway JVMs that can OOM mid-run,
+  // so both belong in the OOM allowlist — the singular-only filter left the
+  // dashboard listing db-migrations while the derivation dropped it.
   const migrationJvmServices = serviceBlocks(MIGRATIONS_COMPOSE)
-    .filter(({ name, body }) => name.endsWith('-migration') && /^\s*FLYWAY_[A-Z_]+:/m.test(body))
+    .filter(({ name, body }) => /-migrations?$/.test(name) && /^\s*FLYWAY_[A-Z_]+:/m.test(body))
     .map(({ name }) => name);
   const expectedJvmServices = [...new Set([...baseJvmServices, ...migrationJvmServices])].sort();
   const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);

@@ -965,7 +965,7 @@ bootstrap_secrets:
   # above. That value is not a secret: it belongs to the PUBLIC dump shipped
   # with this repo, and the dump's eg_enc_*_keys decrypt only under it. On a
   # real deployment (no dump) use a generated value.
-  elasticsearch_master_password: "CHANGE_ME"
+  elasticsearch_master_password: "asd@#$@$!132123"
   # ES login for the opt-in search stack (enable_search_stack). DISTINCT from
   # the master password above — never reuse the PII-encryption master here.
   # elasticsearch_password: "CHANGE_ME"

@@ -54,7 +54,7 @@ _PLACEHOLDER_RE = _re.compile(r"^(change[_-]?me|replace[_-]?me|change-me-strong|
 # Dump-fixture files use a PUBLIC dataset; only these exact (key,value) pairs are
 # permitted there, and ONLY there. Any other value — or any of these in a real
 # tenant file — fails. Key+value scoped so a real secret can't hide in a fixture.
-FIXTURES = {"localhost-full.yml.example","localhost-slim.yml.example","quickstart.yml.example"}
+FIXTURES = {"_example.yml","localhost-full.yml.example","localhost-slim.yml.example","quickstart.yml.example"}
 FIXTURE_OK = {
   ("elasticsearch_master_password","asd@#$@$!132123"),
   ("postgres_password","egov123"), ("mcp_db_password","egov123"),
