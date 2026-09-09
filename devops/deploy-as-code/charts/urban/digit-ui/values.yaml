@@ -18,8 +18,8 @@ initContainers: {}
 #   #1098 (fix/egov-location-boundary-migration) — digit-ui-v2/packages/data-provider/src/client/endpoints.ts
 # Without a rebuild the boundary/location UI wiring is stale. Refs #1160.
 image:
-  repository: "digit-ui"
-  tag: "v2.11-a520687"
+  repository: "digit-ui-esbuild"
+  tag: "2.12-5137119"
 replicas: "1"
 httpPort: 80
 healthChecks:
