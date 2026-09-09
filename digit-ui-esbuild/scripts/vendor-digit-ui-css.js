@@ -253,6 +253,19 @@ function fetchText(url) {
   });
 }
 
+// Upstream `@egovernments/digit-ui-components-css@0.2.0-beta.14` ships
+// `.digit-hamburger-profile` (the uploaded-photo <img> in the mobile citizen
+// drawer, Hamburger.js) with no border-radius, while the default placeholder
+// icon it replaces at the same size is circular (CCRS#997) — swapping one for
+// the other reads as the avatar flipping from a circle to a square. Patch it
+// here, after fetch, so re-running this script (predev/prebuild) doesn't
+// silently drop a hand-edit made directly to the vendored file.
+function patchDigitUiComponentsCss(css) {
+  return css.replace(/\.digit-hamburger-profile\s*\{([^}]*)\}/, (match, body) =>
+    /border-radius/.test(body) ? match : `.digit-hamburger-profile {${body}\n  border-radius: 50%; }`
+  );
+}
+
 async function processSource(source, prependRoot) {
   const originalPath = path.join(VENDOR_DIR, `${source.name}.original.css`);
   const outputPath = path.join(VENDOR_DIR, `${source.name}.css`);
@@ -264,7 +277,10 @@ async function processSource(source, prependRoot) {
   // Only the first output needs the :root block — it applies globally. Writing
   // it to every file would just duplicate declarations; the browser would pick
   // the last one but the extra bytes are wasted.
-  const { css, counts } = transformCss(original, TOKENS, prependRoot ? ROOT_BLOCK : "");
+  let { css, counts } = transformCss(original, TOKENS, prependRoot ? ROOT_BLOCK : "");
+  if (source.name === "digit-ui-components-css") {
+    css = patchDigitUiComponentsCss(css);
+  }
   for (const [name, n] of Object.entries(counts)) {
     if (n > 0) console.log(`  ${name}: ${n}`);
   }

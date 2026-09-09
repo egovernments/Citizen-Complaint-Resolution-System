@@ -184,18 +184,130 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
           },
           "dimensionKey": {
             "type": "string"
-          }
-        }
-      },
-      "rbac": {
-        "type": "object",
-        "properties": {
-          "visibleTo": {
+          },
+          "columns": {
             "type": "array",
             "items": {
-              "type": "string"
-            },
-            "description": "Role codes that can see this KPI; empty = all authenticated roles. Officer-PII KPIs must list specific roles here."
+              "type": "object",
+              "required": [
+                "id",
+                "type"
+              ],
+              "anyOf": [
+                {
+                  "required": [
+                    "label"
+                  ]
+                },
+                {
+                  "required": [
+                    "labelKey"
+                  ]
+                }
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "text",
+                    "integer",
+                    "percent",
+                    "hours",
+                    "hoursDays",
+                    "rating",
+                    "trend",
+                    "tags",
+                    "officer",
+                    "department",
+                    "dimension"
+                  ],
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "labelKey": {
+                  "type": "string"
+                },
+                "align": {
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ],
+                  "type": "string"
+                },
+                "width": {
+                  "type": "string"
+                },
+                "dimension": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "comparison": {
+            "type": "object",
+            "required": [
+              "period",
+              "mode",
+              "joinBy",
+              "valueKey",
+              "outputKey"
+            ],
+            "properties": {
+              "period": {
+                "enum": [
+                  "prior"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "enum": [
+                  "percentChange"
+                ],
+                "type": "string"
+              },
+              "joinBy": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "valueKey": {
+                "type": "string"
+              },
+              "outputKey": {
+                "type": "string"
+              }
+            }
+          },
+          "rowFilter": {
+            "type": "object",
+            "required": [
+              "column"
+            ],
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "eq": {},
+              "gte": {
+                "type": "number"
+              },
+              "gt": {
+                "type": "number"
+              },
+              "lte": {
+                "type": "number"
+              },
+              "lt": {
+                "type": "number"
+              }
+            }
           }
         }
       },
@@ -242,6 +354,14 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
       "version": {
         "type": "string",
         "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      },
+      "requiredActionUrl": {
+        "type": "string",
+        "description": "The egov-accesscontrol action URL a caller must be granted to see this KPI (e.g. /pgr-services/v2/analytics/_query, /pgr-services/v2/analytics/capabilities/officer). Absent means no authenticated caller reaches it."
+      },
+      "public": {
+        "type": "boolean",
+        "description": "Additive anonymous-access marker, not a ceiling: true also opts the tile into the credential-free public dashboard. Absent/false = not public."
       }
     }
   },
@@ -251,7 +371,6 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
     "$schema": "http://json-schema.org/draft-07/schema#",
     "required": [
       "id",
-      "roles",
       "tiles",
       "layout"
     ],
@@ -261,13 +380,6 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
     "properties": {
       "id": {
         "type": "string"
-      },
-      "roles": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        },
-        "description": "Role codes this pack applies to; server picks best match for caller's token"
       },
       "tiles": {
         "type": "array",
@@ -312,6 +424,14 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
       },
       "description": {
         "type": "string"
+      },
+      "requiredActionUrl": {
+        "type": "string",
+        "description": "The egov-accesscontrol action URL a caller must be granted for this pack to be a match candidate; the server picks the best match for the caller's resolved capabilities."
+      },
+      "public": {
+        "type": "boolean",
+        "description": "True marks this pack as the credential-free public dashboard's default; absent/false = not public."
       }
     }
   },
@@ -320,8 +440,7 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
     "title": "DashboardConfig",
     "$schema": "http://json-schema.org/draft-07/schema#",
     "required": [
-      "id",
-      "allowedRoles"
+      "id"
     ],
     "x-unique": [
       "id"
@@ -330,14 +449,6 @@ export const DASHBOARD_CATALOG_SCHEMAS: Record<string, Record<string, unknown>> 
       "id": {
         "type": "string",
         "description": "Config record key; the UI reads the \"default\" record (single-record master)"
-      },
-      "allowedRoles": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        },
-        "minItems": 1,
-        "description": "Role codes allowed to see the dashboard home card and open /employee/dashboard. Nav/route gate only — NOT a security boundary: the data plane is enforced server-side by the analytics catalog + scope RBAC. Absent record → the UI falls back to its built-in DASHBOARD_ROLES list."
       },
       "numberFormat": {
         "description": "Number DISPLAY mask for the supervisor dashboard — separators only, resolved PER LOCALE. Canonical form: an object keyed by locale code (the values of common-masters.StateInfo.languages, e.g. \"en_IN\") with an optional \"default\" mask for locales without an entry — each user sees their selected language's convention. Legacy form: a plain string = one mask applied for every locale (kept for back-compat). Mask syntax: placeholder chars are [#0]; the first non-placeholder is the grouping separator, the last is the decimal separator; decimal COUNT stays per-KPI (viz.format). Examples: \"#,##0.00\" (en_IN → 1,234.56), \"#.##0,00\" (pt_PT → 1.234,56), \"# ##0,00\" (fr_FR → 1 234,56). Absent/malformed (or no entry for the locale and no default) → the UI keeps its built-in formatting unchanged. Display-only: CSV export always stays raw.",
@@ -428,11 +539,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_created_today_count",
@@ -472,9 +580,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "sparklineMeasureKey": "total"
     },
     "params": [],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_resolution_rate_count",
@@ -537,11 +643,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_reopen_rate_count",
@@ -606,11 +709,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_csat_avg",
@@ -668,9 +768,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_first_assignment_rate_count",
@@ -739,9 +837,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_sla_compliance_rate_count",
@@ -805,9 +901,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_resolved_on_time_rate_count",
@@ -872,9 +966,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_open_complaints_live",
@@ -924,11 +1016,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_resolved_date_range_count",
@@ -986,11 +1075,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_oldest_open_age",
@@ -1047,9 +1133,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_avg_resolution_time",
@@ -1100,9 +1184,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_chart_complaints_by_type",
@@ -1184,11 +1266,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "allowed": []
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_chart_departments_by_type",
@@ -1242,9 +1321,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_chart_department_resolution_rate",
@@ -1310,11 +1387,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_chart_officer_sla",
@@ -1396,14 +1470,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PGR_SUPERVISOR",
-        "PGR_ADMIN",
-        "SUPERUSER",
-        "SUPERVISOR"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
   },
   {
     "id": "cl_chart_open_by_type_stage",
@@ -1504,9 +1571,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "allowed": []
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_chart_open_by_channel",
@@ -1648,9 +1713,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_chart_open_by_age",
@@ -1709,9 +1772,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_map_ward_wow_current",
@@ -1777,11 +1838,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_table_complaint_type_details",
@@ -1998,9 +2056,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "allowed": []
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_table_complaints_at_risk",
@@ -2072,14 +2128,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PGR_SUPERVISOR",
-        "PGR_ADMIN",
-        "SUPERUSER",
-        "SUPERVISOR"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
   },
   {
     "id": "cl_chart_over_time_created_daily",
@@ -2191,11 +2240,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "ep_table_employee_performance",
@@ -2398,14 +2444,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PGR_SUPERVISOR",
-        "PGR_ADMIN",
-        "SUPERUSER",
-        "SUPERVISOR"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/officer"
   },
   {
     "id": "rs_breach_total",
@@ -2463,9 +2502,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_map_complaint_pins",
@@ -2526,9 +2563,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_map_complaint_pins_all",
@@ -2596,9 +2631,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_chart_department_flow_ratio",
@@ -2666,11 +2699,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": [
-        "PUBLIC"
-      ]
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query",
+    "public": true
   },
   {
     "id": "cl_sla_noncompliance_rate_count",
@@ -2732,9 +2762,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         ]
       }
     ],
-    "rbac": {
-      "visibleTo": []
-    }
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_total_complaints_count",
@@ -2757,19 +2785,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "valueKey": "total",
       "deltaLabel": "vs prior period",
       "sparklineMeasureKey": "total"
-    },
-    "rbac": {
-      "visibleTo": [
-        "SUPERVISOR",
-        "PGR_SUPERVISOR",
-        "GRO",
-        "DGRO",
-        "PGR_LME",
-        "PGR_ADMIN",
-        "SUPERUSER",
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
     },
     "query": {
       "grain": "facts",
@@ -2795,7 +2810,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": true
+    "supportsSeries": true,
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "cl_flow_ratio_count",
@@ -2816,12 +2832,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
       "valueKey": "ratio",
       "deltaLabel": "vs prior period"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
     },
     "query": {
       "grain": "facts",
@@ -2860,7 +2870,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_chart_complaints_over_time",
@@ -2919,12 +2930,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       ],
       "dimensionKey": "created_date"
     },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
-    },
     "query": {
       "sort": [
         {
@@ -2959,7 +2964,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_chart_over_time_open_daily",
@@ -2974,11 +2980,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
       "valueKey": "open",
       "dimensionKey": "snapshot_date"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER"
-      ]
     },
     "query": {
       "sort": [
@@ -3017,7 +3018,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended"
   },
   {
     "id": "cl_chart_wards_by_sla",
@@ -3070,12 +3072,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "dimensionKey": "ward_code",
       "sortBySegment": "breached"
     },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
-    },
     "query": {
       "grain": "daily",
       "limit": 120,
@@ -3105,7 +3101,8 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_chart_department_breach_scatter",
@@ -3134,12 +3131,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "numeratorKey": "breached",
       "denominatorKey": "sla_elapsed",
       "scatterProfile": "departmentBreachCaseload"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
     },
     "query": {
       "sort": [
@@ -3198,21 +3189,22 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_table_ward_performance",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Ward performance",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "wardLabel",
-          "type": "text",
+          "id": "ward_code",
+          "type": "dimension",
           "align": "left",
           "label": "Ward",
           "width": "24%"
@@ -3232,21 +3224,21 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "14%"
         },
         {
-          "id": "reopenRate",
+          "id": "reopen_rate",
           "type": "percent",
           "align": "left",
           "label": "Reopen %",
           "width": "16%"
         },
         {
-          "id": "ontimeRate",
+          "id": "ontime_rate",
           "type": "percent",
           "align": "left",
           "label": "On-time %",
           "width": "16%"
         },
         {
-          "id": "avgCsat",
+          "id": "avg_csat",
           "type": "rating",
           "align": "left",
           "label": "CSAT",
@@ -3265,14 +3257,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "ontime_rate",
         "avg_csat"
       ],
-      "dimensionKey": "ward_code",
-      "tableProfile": "wardPerformance"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
+      "dimensionKey": "ward_code"
     },
     "query": {
       "sort": [
@@ -3289,6 +3274,13 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "created"
         },
         {
+          "agg": "count",
+          "name": "open",
+          "filter": {
+            "is_open": true
+          }
+        },
+        {
           "agg": "ratio",
           "name": "reopen_rate",
           "numerator": {
@@ -3296,18 +3288,12 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
             "filter": {
               "is_reopened": true,
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           },
           "denominator": {
             "agg": "count",
             "filter": {
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         },
@@ -3319,18 +3305,12 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
             "filter": {
               "is_resolved": true,
               "sla_breached": false
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           },
           "denominator": {
             "agg": "count",
             "filter": {
               "is_resolved": true
-            },
-            "window": {
-              "timeRole": "resolved_at"
             }
           }
         },
@@ -3341,9 +3321,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "filter": {
             "has_rating": true,
             "is_resolved": true
-          },
-          "window": {
-            "timeRole": "resolved_at"
           }
         }
       ],
@@ -3365,8 +3342,9 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.0.0",
-    "supportsSeries": false
+    "version": "1.1.0",
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_table_ward_open_daily",
@@ -3381,11 +3359,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
       "valueKey": "open",
       "dimensionKey": "ward_code"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER"
-      ]
     },
     "query": {
       "sort": [
@@ -3424,21 +3397,22 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.0.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports-extended"
   },
   {
     "id": "cl_table_service_quality_by_channel",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Service quality by channel",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "channelLabel",
-          "type": "text",
+          "id": "source",
+          "type": "dimension",
           "align": "left",
           "label": "Channel",
           "width": "28%"
@@ -3451,14 +3425,14 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "20%"
         },
         {
-          "id": "resolutionRate",
+          "id": "resolution_rate",
           "type": "percent",
           "align": "left",
           "label": "Resolution",
           "width": "26%"
         },
         {
-          "id": "avgCsat",
+          "id": "avg_csat",
           "type": "rating",
           "align": "left",
           "label": "CSAT",
@@ -3472,17 +3446,10 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       "valueKey": "volume",
       "measureKeys": [
         "volume",
-        "resolved",
+        "resolution_rate",
         "avg_csat"
       ],
-      "dimensionKey": "source",
-      "tableProfile": "serviceQualityByChannel"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
+      "dimensionKey": "source"
     },
     "query": {
       "sort": [
@@ -3499,14 +3466,17 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "name": "volume"
         },
         {
-          "agg": "count",
-          "name": "resolved",
-          "filter": {
-            "is_open": false,
-            "is_resolved": true
+          "agg": "ratio",
+          "name": "resolution_rate",
+          "numerator": {
+            "agg": "count",
+            "filter": {
+              "is_open": false,
+              "is_resolved": true
+            }
           },
-          "window": {
-            "timeRole": "resolved_at"
+          "denominator": {
+            "agg": "count"
           }
         },
         {
@@ -3516,9 +3486,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "filter": {
             "has_rating": true,
             "is_resolved": true
-          },
-          "window": {
-            "timeRole": "resolved_at"
           }
         }
       ],
@@ -3540,8 +3507,9 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.0.0",
-    "supportsSeries": false
+    "version": "1.1.0",
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_table_subtype_performance",
@@ -3593,12 +3561,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         "ideal_sla_ms"
       ],
       "dimensionKey": "service_code"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
     },
     "query": {
       "sort": [
@@ -3663,28 +3625,29 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
     ],
     "status": "published",
     "version": "1.2.0",
-    "supportsSeries": false
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   },
   {
     "id": "cl_table_recurring_ward_subtype",
     "viz": {
       "pii": false,
-      "kind": "rankedList",
+      "kind": "table",
       "group": "complaint-landscape",
       "title": "Recurring complaints by ward & sub-type",
       "accent": "teal",
       "format": "integer",
       "columns": [
         {
-          "id": "wardLabel",
-          "type": "text",
+          "id": "ward_code",
+          "type": "dimension",
           "align": "left",
           "label": "Ward",
           "width": "28%"
         },
         {
-          "id": "subtypeLabel",
-          "type": "text",
+          "id": "service_code",
+          "type": "dimension",
           "align": "left",
           "label": "Sub-type",
           "width": "32%"
@@ -3697,7 +3660,7 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "width": "18%"
         },
         {
-          "id": "trendPct",
+          "id": "trend_pct",
           "type": "trend",
           "align": "left",
           "label": "Trend",
@@ -3705,23 +3668,28 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
         }
       ],
       "compose": null,
-      "minCount": 3,
+      "comparison": {
+        "period": "prior",
+        "mode": "percentChange",
+        "joinBy": [
+          "ward_code",
+          "service_code"
+        ],
+        "valueKey": "total",
+        "outputKey": "trend_pct"
+      },
+      "rowFilter": {
+        "column": "total",
+        "gte": 3
+      },
       "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
       "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
       "valueKey": "total",
-      "needsPrior": true,
       "measureKeys": [
         "total"
       ],
-      "dimensionKey": "ward_code",
-      "tableProfile": "wardSubtypeRecurring"
-    },
-    "rbac": {
-      "visibleTo": [
-        "TICKET_REPORT_VIEWER",
-        "PGR_VIEWER"
-      ]
+      "dimensionKey": "ward_code"
     },
     "query": {
       "sort": [
@@ -3773,8 +3741,9 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
       }
     ],
     "status": "published",
-    "version": "1.2.0",
-    "supportsSeries": false
+    "version": "1.3.0",
+    "supportsSeries": false,
+    "requiredActionUrl": "/pgr-services/v2/analytics/capabilities/reports"
   }
 ];
 
@@ -3782,15 +3751,6 @@ export const DASHBOARD_PACKS: Record<string, unknown>[] = [
   {
     "id": "supervisor-default",
     "description": "Default supervisor dashboard pack — complaint metrics, officer SLA chart, map, and at-risk table",
-    "roles": [
-      "SUPERVISOR",
-      "PGR_SUPERVISOR",
-      "GRO",
-      "DGRO",
-      "PGR_LME",
-      "PGR_ADMIN",
-      "SUPERUSER"
-    ],
     "tiles": [
       "cl_resolution_rate_count",
       "rs_breach_total",
@@ -3882,14 +3842,12 @@ export const DASHBOARD_PACKS: Record<string, unknown>[] = [
         "w": 12,
         "h": 5
       }
-    ]
+    ],
+    "requiredActionUrl": "/pgr-services/v2/analytics/_query"
   },
   {
     "id": "public-default",
     "description": "Curated public dashboard — aggregate complaint totals, trends, and service performance",
-    "roles": [
-      "PUBLIC"
-    ],
     "tiles": [
       "cl_new_created_count",
       "cl_resolution_rate_count",
@@ -3957,6 +3915,7 @@ export const DASHBOARD_PACKS: Record<string, unknown>[] = [
         "w": 12,
         "h": 6
       }
-    ]
+    ],
+    "public": true
   }
 ];

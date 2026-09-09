@@ -58,7 +58,9 @@ This guide is for an operator with a live v2.11 tenant (data, users, complaints 
 
 - host_vars shape change: `core_postal_configs` lost `postalCodeLength` and `postalCodeErrorMessage` — `postalCodePattern` is the only remaining knob and the localized error message is derived from it. Delete the two removed keys from your tenant's host_vars.
 
-> **Check your reopen window:** `RAINMAKER-PGR.UIConstants.REOPENSLA` (seeded 432000000 ms = 5 days) is now actually read — previously a hardcoded 1-hour default won regardless of this value, and the deadline is now also enforced server-side. If your tenant implicitly relied on the de-facto 1-hour window, adjust `REOPENSLA` before upgrading.
+> **Check your reopen window:** `RAINMAKER-PGR.UIConstants.REOPENSLA` is now actually read — previously a hardcoded 1-hour default won regardless of this value — and the deadline is now enforced server-side too. New tenants ship 259200000 ms (72 hours); **existing tenants keep whatever they already have** (typically 432000000 = 5 days), so set `REOPENSLA` explicitly if 72 hours is what you want.
+>
+> **Unset `time-before-closing-complaint` in your deployment values.** It maps to `PGR_COMPLAIN_IDLE_TIME`, which used to be the enforced window and is now only a fallback. Leaving it set pins one window server-side while the UI honours the per-tenant `REOPENSLA` — the two disagree and citizens get a "Complaint is closed" error on a REOPEN button the UI still offered. See §5.2 of the config changelog.
 
 ## 4. New mandatory infrastructure (always-on after upgrade)
 
@@ -66,7 +68,7 @@ These have no off-switch — every v2.12-beta deployment gets them, whether or n
 
 - **OpenTelemetry agent** — every Java service now mounts `./otel/opentelemetry-javaagent.jar` and sets `JAVA_TOOL_OPTIONS=-javaagent:...`. Run `local-setup/otel/download-agent.sh` (pinned version 2.11.0) **before** `docker compose up`, or every Java container fails to start on a missing mount source.
 - **Full observability stack** — otel-collector, Tempo (tracing), Promtail+Loki (logs), Grafana+Prometheus (dashboards/metrics) start unconditionally. Budget the extra RAM/CPU/disk, and be aware of the new loopback ports (Loki 13100, Prometheus 19090, Tempo 13200, OTel-collector 14317/14318/13133, OpenBao 18200).
-- **Client-side dashboard render-lag instrumentation** — ships two new **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs`, so the browser can report metrics directly. Set `dashboard_metrics_enabled: false` (ansible) / `DASHBOARD_METRICS_ENABLED=false` (globalConfigs) to turn it off if you don't want the extra public routes. See `docs/observability/dashboard-metrics.md` and `docs/observability/dashboard-metrics-server.md` for what it measures and how to read it.
+- **Client-side dashboard render-lag instrumentation** — ships two new **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs`, so the browser can report metrics directly. Set `dashboard_metrics_enabled: false` (ansible) / `DASHBOARD_METRICS_ENABLED=false` (globalConfigs) to turn it off if you don't want the extra public routes. See `docs/observability/dashboard-metrics.md` for what it measures and how to read it (it now covers both the client and server sides).
 - **OpenBao** — see the backup note in Section 2. Initializes and auto-unseals on every deploy run.
 - **audit-service, db-migrations, hrms-prereq-gate, user-seed** — new always-on compose services with no profile gate.
 - **egov-enc-service dependency** — pgr-services now calls this service for PII encryption on every request path that touches it; it must be deployed and reachable or those calls fail.
@@ -104,7 +106,7 @@ None of these are required to upgrade — enable only what you need:
 | Feature | Flag(s) | Notes |
 |---|---|---|
 | Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + your own approved WhatsApp Content templates persisted into `RAINMAKER-PGR.NotificationProviderTemplate` (via Configurator's **Sync WhatsApp templates** UI or `local-setup/scripts/persist-provider-templates.py`) | Do **not** rely on `local-setup/db/notif-mdms-seed/seed.sh` — it seeds `TemplateBinding`/`ProviderDetail`, which the config-driven WhatsApp path no longer reads. The seeded reference Content SIDs are Twilio-account- and Meta-approval-bound; you must author and get your own approved on your own Twilio account. See Section 3.3 for channel defaults to review first |
-| Supervisor dashboard | Seed `dss.DashboardConfig` (+ `dss.KpiDefinition` / `dss.DashboardPack`), setting `allowedRoles` to gate access | MV refresh is already default-enabled (Section 4); this only controls route/card visibility |
+| Supervisor dashboard | Seed `dss.DashboardConfig`, capability-based `dss.KpiDefinition` / `dss.DashboardPack`, actions 2640–2648, navigation action 4557 and matching roleactions | MV refresh is already default-enabled (Section 4); `DashboardConfig` no longer carries employee role access |
 | PGR Visibility V1 (My/All inbox tabs, reportee-scoped inbox) | `pgr.visibility.enabled=true` / `PGR_VISIBILITY_ENABLED` + `RAINMAKER-PGR.InboxVisibilityConfig` record | Needs the new `eg_pgr_hrms_projection` table (migration #8) and HRMS Kafka topics |
 | digit-ui-v2 citizen SPA | `enable_digit_ui_v2` | Serves alongside the existing citizen UI at `/citizen/` |
 | Elasticsearch-backed inbox v2 | `enable_search_stack` | ~3GB additional RAM |
@@ -131,7 +133,7 @@ None of these are required to upgrade — enable only what you need:
 - [ ] Mobile-number entry accepts your tenant's real number format on both citizen and employee create-complaint forms.
 - [ ] Dashboard loads without errors and KPI tiles show non-null values (confirms the new materialized views populated correctly). If tiles are unexpectedly empty for a given employee, check their HRMS department is set (Section 1.3 of the companion changelog — the new scoping fails closed).
 - [ ] If notifications are enabled: `drive-test-complaint.py` (local-setup/scripts) completes and a real SMS/WhatsApp message is received using your **own** approved Content templates, not the seeded reference SIDs.
-- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service; if dashboard render-lag metrics are enabled, see `docs/observability/dashboard-metrics.md` / `dashboard-metrics-server.md` for how to read them.
+- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service; if dashboard render-lag metrics are enabled, see `docs/observability/dashboard-metrics.md` for how to read them.
 - [ ] The backed-up OpenBao `init.json` matches what is currently on disk at `/opt/digit/.openbao/init.json`.
 
 ---

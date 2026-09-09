@@ -64,16 +64,34 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
 
 /** Search HRMS employees for a tenant. */
 async function searchEmployees(token: string, tenantId: string): Promise<any[]> {
-  const resp = await fetch(
-    `${BASE_URL}/egov-hrms/employees/_search?tenantId=${tenantId}&offset=0&limit=100`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: token } }),
-    },
-  );
-  const data: any = await resp.json();
-  return data.Employees || [];
+  // Paged: a single limit=100 read silently truncates on tenants with real
+  // staffing history (bomet holds 345 employee records), and the seed plan's
+  // assignee then "doesn't exist" purely because it sits past page one.
+  const PAGE = 100;
+  // Ceiling is a tripwire, not a quiet cap — silently stopping would recreate
+  // the very truncation bug this replaces, just further out. Largest known
+  // pool: bomet ke at 345 records.
+  const HARD_CEILING = 2000;
+  const out: any[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const resp = await fetch(
+      `${BASE_URL}/egov-hrms/employees/_search?tenantId=${tenantId}&offset=${offset}&limit=${PAGE}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: token } }),
+      },
+    );
+    const batch: any[] = ((await resp.json()) as any).Employees || [];
+    out.push(...batch);
+    if (batch.length < PAGE) break;
+    if (out.length >= HARD_CEILING) {
+      throw new Error(
+        `searchEmployees: hit the ${HARD_CEILING}-record ceiling on ${tenantId} with a full page still coming — raise HARD_CEILING`,
+      );
+    }
+  }
+  return out;
 }
 
 /** Search workflow process instances for a businessId. */
@@ -360,7 +378,27 @@ If this fails due to insufficient same-department employees, downstream escalati
     const deptCandidates = allEmployees.filter(
       (e: any) => e.user?.userName !== 'ADMIN' && (e.assignments || []).some((a: any) => a.department === department),
     );
-    const subordinate = deptCandidates.find((e: any) => e.uuid === plan.assigneeUuid);
+    // Keep suite-created scratch employees OUT of the hierarchy. They match on
+    // department just like real staff, but other specs deactivate them mid-run
+    // (admin/employees "5. deactivate"), and HRMS keeps the now-dangling
+    // reportingTo. The escalation then targets a uuid that resolves to nothing:
+    //     PGR ESCALATE: 400 INVALID UUID "User not found for uuid: d9a0c378-..."
+    // Observed directly — after a run, PGGRO1's reportingTo pointed at
+    // PW_9C341439_EMPROLE instead of the seeded PGLME2.
+    // The subordinate itself is exempt: it is fixed by resolveSeedPlan(), and
+    // dropping it here would skip the whole chain rather than fix it.
+    const SCRATCH_EMP = /(^|[._])PW[A-Z_]/i;
+    const isScratch = (e: any) =>
+      SCRATCH_EMP.test(String(e.code ?? '')) || SCRATCH_EMP.test(String(e.user?.userName ?? ''));
+    const realCandidates = deptCandidates.filter(
+      (e: any) => !isScratch(e) || e.uuid === plan.assigneeUuid,
+    );
+    // Fall back to the unfiltered pool only if the deployment genuinely lacks
+    // three real same-department employees — a scratch supervisor is still
+    // better than skipping, it is just less stable.
+    const pool = realCandidates.length >= 3 ? realCandidates : deptCandidates;
+
+    const subordinate = pool.find((e: any) => e.uuid === plan.assigneeUuid);
     if (!subordinate) {
       test.skip(
         true,
@@ -369,7 +407,7 @@ If this fails due to insufficient same-department employees, downstream escalati
       );
       return;
     }
-    const others = deptCandidates.filter((e: any) => e.uuid !== plan.assigneeUuid);
+    const others = pool.filter((e: any) => e.uuid !== plan.assigneeUuid);
     if (others.length < 2) {
       test.skip(
         true,

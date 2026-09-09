@@ -24,6 +24,10 @@
     "test:integration": "node --import tsx --test src/providers/dataProvider.integration.test.ts",
     "test:watch": "node --import tsx --test --watch src/**/*.test.ts"
   },
+  "dependencies": {
+    "@digit-mcp/data-provider": "^0.1.0",
+    "json-logic-js": "^2.0.5"
+  },
   "peerDependencies": {
     "ra-core": ">=4.0.0"
   },
@@ -33,6 +37,7 @@
     }
   },
   "devDependencies": {
+    "@types/json-logic-js": "^2.0.8",
     "@types/node": "^20.0.0",
     "ra-core": "^5.0.0",
     "tsx": "^4.15.0",

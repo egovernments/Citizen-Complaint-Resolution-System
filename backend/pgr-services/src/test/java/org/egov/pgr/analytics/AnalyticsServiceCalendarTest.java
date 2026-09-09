@@ -1,6 +1,7 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.egov.pgr.policy.PgrSearchScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.Role;
@@ -43,7 +44,7 @@ public class AnalyticsServiceCalendarTest {
     @Mock private AnalyticsPlanner planner;
     @Mock private JdbcTemplate jdbc;
     @Mock private KpiCatalogService kpiCatalogService;
-    @Mock private PrincipalScopeResolver scopeResolver;
+    @Mock private AnalyticsRowScopeResolver scopeResolver;
 
     private JsonNode json(String s) {
         try { return om.readTree(s); } catch (Exception e) { throw new RuntimeException(e); }
@@ -68,7 +69,7 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn(fixedAsOf);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
@@ -79,7 +80,7 @@ public class AnalyticsServiceCalendarTest {
                 + "\"c\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}"
                 + "}}");
 
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         // resolveTimeZone and the asOf query each fire exactly once per request, not once per entry.
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
@@ -118,13 +119,13 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn((Long) null);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Asia/Kolkata"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        Map<String, Object> out = service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        Map<String, Object> out = service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         assertTrue(out.containsKey("asOf"));
         assertNull(out.get("asOf"));
@@ -142,13 +143,13 @@ public class AnalyticsServiceCalendarTest {
                 .thenReturn(1_700_000_000_000L);
         when(kpiCatalogService.resolveTimeZone("ke")).thenReturn(ZoneId.of("Africa/Nairobi"));
         when(scopeResolver.resolve(any(), eq("ke"), anyInt()))
-                .thenReturn(new AnalyticsScope("ke", true, null, null, null));
+                .thenReturn(new PgrSearchScope("ke", true, null, null, null));
         when(planner.plan(any(), any(), any()))
                 .thenReturn(new AnalyticsPlanner.Planned("SELECT 1", List.of(), List.of("total"), "facts"));
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
         JsonNode body = json("{\"query\":{\"grain\":\"facts\",\"measures\":[{\"name\":\"total\",\"agg\":\"count\"}]}}");
-        service.query(body, requestInfoWithRole("SUPERVISOR"), "ke", 1);
+        service.query(body, null, AnalyticsCapabilityFixtures.full(), "ke", 1);
 
         verify(kpiCatalogService, times(1)).resolveTimeZone("ke");
         verify(jdbc, times(1)).queryForObject(eq("SELECT max(facts_built_at) FROM complaint_facts"), eq(Long.class));

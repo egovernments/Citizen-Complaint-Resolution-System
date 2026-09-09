@@ -73,3 +73,88 @@ Catches the class of regressions where a service code has missing fields and the
   const crashErrors = pageErrors.filter(e => e.includes('Cannot read properties of undefined'));
   expect(crashErrors, `JS crash errors: ${crashErrors.join('; ')}`).toHaveLength(0);
 });
+
+test('complaint location section is hidden when absent and supports valid zero-axis coordinates (#1750)', {
+  annotation: {
+    type: 'description',
+    description: `End-to-end coordinate-display contract for citizen complaint details. API-files four complaints owned by the logged-in citizen: an empty geoLocation, the historical (0,0) sentinel, a point on the equator, and a point on the prime meridian. The whole Complaint Location card must be absent for the first two and must render a Leaflet marker for the latter two. This catches both the empty-header bug and truthiness guards that accidentally reject a legitimate zero coordinate.`,
+  },
+  tag: ['@area:pgr', '@ccrs:1750', '@kind:regression', '@layer:ui', '@persona:citizen'],
+}, async ({ page }) => {
+  test.setTimeout(180_000);
+
+  if (!readProvisionedCitizen()) {
+    test.skip(true, 'citizen-fixture.json missing — citizen-setup project did not run');
+    return;
+  }
+
+  let ids: { missing: string; legacyZero: string; equator: string; primeMeridian: string };
+  try {
+    const [missing, legacyZero, equator, primeMeridian] = await Promise.all([
+      seedComplaintAsCitizen({
+        description: 'PW #1750 missing geo-location detail test',
+        geoLocation: {},
+      }),
+      seedComplaintAsCitizen({
+        description: 'PW #1750 legacy zero geo-location detail test',
+        geoLocation: { latitude: 0, longitude: 0 },
+      }),
+      seedComplaintAsCitizen({
+        description: 'PW #1750 equator geo-location detail test',
+        geoLocation: { latitude: 0, longitude: 36.8 },
+      }),
+      seedComplaintAsCitizen({
+        description: 'PW #1750 prime-meridian geo-location detail test',
+        geoLocation: { latitude: -1.2, longitude: 0 },
+      }),
+    ]);
+    ids = {
+      missing: missing.srid,
+      legacyZero: legacyZero.srid,
+      equator: equator.srid,
+      primeMeridian: primeMeridian.srid,
+    };
+  } catch (error) {
+    test.skip(true, `complaint create blocked on this deployment: ${(error as Error).message.slice(0, 200)}`);
+    return;
+  }
+
+  await citizenOtpLogin(page);
+  await page.route('https://nominatim.openstreetmap.org/reverse**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ display_name: 'Playwright coordinate contract' }),
+    }),
+  );
+
+  const locationHeading = () =>
+    page.getByText(/^(Complaint Location|CS_COMPLAINT_LOCATION)$/i, { exact: true });
+  const locationMarker = () => page.locator('.leaflet-container .leaflet-marker-icon');
+  const openComplaint = async (srid: string) => {
+    await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${srid}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    await expect(page.getByText('Complaint Summary', { exact: true })).toBeVisible({ timeout: 30_000 });
+  };
+
+  await openComplaint(ids.missing);
+  await expect(
+    locationHeading(),
+    'SQL NULL coordinates must hide the complete card, not leave an empty heading',
+  ).toHaveCount(0);
+  await expect(locationMarker()).toHaveCount(0);
+
+  await openComplaint(ids.legacyZero);
+  await expect(locationHeading(), 'historical (0,0) must remain treated as absent').toHaveCount(0);
+  await expect(locationMarker()).toHaveCount(0);
+
+  await openComplaint(ids.equator);
+  await expect(locationHeading(), 'latitude=0 with non-zero longitude is a valid location').toBeVisible();
+  await expect(locationMarker()).toHaveCount(1);
+
+  await openComplaint(ids.primeMeridian);
+  await expect(locationHeading(), 'longitude=0 with non-zero latitude is a valid location').toBeVisible();
+  await expect(locationMarker()).toHaveCount(1);
+});

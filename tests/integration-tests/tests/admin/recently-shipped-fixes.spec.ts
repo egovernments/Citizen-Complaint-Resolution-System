@@ -38,29 +38,10 @@ async function adminToken(): Promise<string> {
   return t.access_token;
 }
 
-/**
- * True when the CCRS Kenya-rollout locale (sw_KE) is seeded on this deployment.
- * The #42 (SERVICEDEFS/COMPLAINT_HIERARCHY categories) and #44 (sw_KE rows)
- * blocks are tier-3 / deployment-pinned — on a non-Kenya deployment the sw_KE
- * bundle isn't loaded, so those tests self-skip rather than fail on the
- * missing seed.
- */
-async function swKeSeeded(): Promise<boolean> {
-  try {
-    const r = await fetch(
-      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-      },
-    );
-    const json = await r.json();
-    return (json.messages ?? []).length > 0;
-  } catch {
-    return false;
-  }
-}
+// swKeSeeded() lived here: a "does this deployment have the Kenya-rollout sw_KE
+// bundle?" guard, used to self-skip the CCRS#44 block everywhere but Kenya. Gone
+// because the #44 tests no longer pin sw_KE — they read the deployment's own
+// advertised locales, so there is nothing left to gate on.
 
 /**
  * The `COMPLAINT_HIERARCHY.<code>` localization keys this deployment should carry
@@ -376,9 +357,9 @@ which is unrelated to whether those codes exist.`,
     // The category codes are read from THIS deployment's own hierarchy, not
     // pinned to Kenya's rollout. The previous list (ADMINISTRATION, WATERRELATED,
     // LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE) exists only on ke, so on any
-    // other tenant this failed on the very first locale — and the old
-    // `swKeSeeded()` guard could not save it, because it probes whether the sw_KE
-    // LOCALE has rows, which is unrelated to whether the Kenya HIERARCHY exists.
+    // other tenant this failed on the very first locale — and the since-removed
+    // `swKeSeeded()` guard could not have saved it, because it probed whether the
+    // sw_KE LOCALE had rows, which is unrelated to whether the Kenya HIERARCHY exists.
     const codes = await categoryCodes();
     test.skip(
       codes.length === 0,
@@ -414,61 +395,85 @@ which is unrelated to whether those codes exist.`,
   });
 });
 
-// Tier-3 / deployment-pinned: sw_KE rows are seeded by the CCRS Kenya
-// rollout. TODO(Phase 7): skip-when-locale-not-seeded guard (see CCRS#42
-// describe block above).
+/**
+ * Row count for `module=rainmaker-common` at a given locale on this deployment.
+ * Local to this block so the two tests below bracket the same regression from
+ * the same read.
+ */
+async function commonRowCount(locale: string): Promise<number> {
+  const r = await fetch(
+    `${LOC_SEARCH}?module=rainmaker-common&locale=${encodeURIComponent(locale)}&tenantId=${ROOT_TENANT}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+    },
+  );
+  const json = await r.json();
+  return (json.messages ?? []).length;
+}
+
+/**
+ * The mangle CCRS#44 produced: `getLocale`/`updateResources` appended a
+ * hardcoded `IN` region to whatever locale was already region-qualified, turning
+ * `sw_KE` into `sw_KEIN`. The suffix is India's regardless of the locale, so the
+ * same bug turns `en_IN` into `en_ININ` — which is what makes this checkable on
+ * a single-locale Indian deployment too, rather than only on Kenya.
+ */
+const mangleLocale = (locale: string) => `${locale}IN`;
+
 test.describe('CCRS#44 — locale region-append regression', () => {
-  test('API: rainmaker-common sw_KE search returns rows (not the broken sw_KEIN)', {
+  test('API: every locale this deployment advertises resolves rainmaker-common rows', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#44 (locale region-append regression): the UI's getLocale/updateResources used to mangle 'sw_KE' into 'sw_KEIN', and the broken locale returned 0 messages — every Swahili UI string fell back to en_IN. Post-fix the locale stays clean.
+      description: `Catches CCRS#44 (locale region-append regression): the UI's getLocale/updateResources used to append a hardcoded 'IN' region, mangling 'sw_KE' into 'sw_KEIN'; the broken locale returned 0 messages, so every string in that language silently fell back to en_IN.
+
+Asserted against the locales the deployment ITSELF advertises (profile-discovered, LOCALES) rather than the hardcoded sw_KE this used to pin. Pinning sw_KE meant the test self-skipped on every non-Kenya deployment — including \`pg\`, where the identical bug would mangle en_IN into en_ININ and break the only language the tenant has.
 
 Steps:
-1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KE&tenantId=ke.
-2. Read response.messages.
-3. Assert messages.length > 100.
-
-Threshold of 100 is far above the empty-result case but below any realistic message count, so it cleanly distinguishes "broken" from "working".`,
+1. For each locale in LOCALES, POST /localization/messages/v1/_search?module=rainmaker-common&locale=<locale>&tenantId=<root>.
+2. Assert every advertised locale returns at least one row — a locale the deployment advertises but cannot resolve is the post-mangle symptom.
+3. Assert the richest advertised locale returns > 100 rows: far above the empty-result case, below any realistic count, so it cleanly separates "broken" from "working" without assuming how big the module is.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
-    const r = await fetch(
-      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-      },
-    );
-    const json = await r.json();
-    const messages = json.messages ?? [];
-    // Pre-fix the UI sent `?locale=sw_KEIN` and got 0; even if the
-    // server were asked directly for sw_KEIN it would also return 0.
-    expect(messages.length).toBeGreaterThan(100);
+    const counts: Record<string, number> = {};
+    for (const locale of LOCALES) counts[locale] = await commonRowCount(locale);
+
+    for (const locale of LOCALES) {
+      expect(
+        counts[locale],
+        `${locale} is advertised by this deployment but resolves 0 rainmaker-common rows: ${JSON.stringify(counts)}`,
+      ).toBeGreaterThan(0);
+    }
+    // Threshold applied to the richest locale only. Every advertised locale is
+    // already within 25% of the richest (that is discoverLocales' own floor), so
+    // a per-locale >100 would be asserting the seed's absolute size rather than
+    // the regression — and would fail on a legitimately sparse secondary language.
+    expect(
+      Math.max(...Object.values(counts)),
+      `no advertised locale carries a real rainmaker-common bundle: ${JSON.stringify(counts)}`,
+    ).toBeGreaterThan(100);
   });
 
-  test('API: rainmaker-common sw_KEIN (the buggy mangle) is empty — proves the dataset itself is clean', {
+  test('API: the region-appended mangle of each advertised locale is empty — proves the dataset itself is clean', {
     annotation: {
       type: 'description',
-      description: `Companion test to the sw_KE check: confirms the buggy locale 'sw_KEIN' (what the UI used to send pre-fix) returns 0 rows. Proves the dataset itself doesn't contain mangled rows — pre-fix the bug was strictly client-side, not a stale upload.
+      description: `Companion to the test above: confirms the mangled locale the UI used to send pre-fix ('<locale>' + 'IN' — sw_KE -> sw_KEIN, en_IN -> en_ININ) returns 0 rows. Proves the dataset itself contains no mangled rows, i.e. pre-fix the bug was strictly client-side rather than a stale upload — and that the mangle is genuinely destructive, which is what made the regression invisible as anything but "everything is in English".
 
 Steps:
-1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KEIN&tenantId=ke.
-2. Assert response.messages array has length === 0.
+1. For each locale in LOCALES, POST /localization/messages/v1/_search with locale=<locale>IN.
+2. Assert each returns exactly 0 messages.
 
-Pairs with the sw_KE test to bracket the regression — sw_KE must work, sw_KEIN must be empty.`,
+Pairs with the test above to bracket the regression: the clean locale must resolve, the mangled one must not.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    const r = await fetch(
-      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KEIN&tenantId=${ROOT_TENANT}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-      },
-    );
-    const json = await r.json();
-    expect(json.messages ?? []).toHaveLength(0);
+    for (const locale of LOCALES) {
+      const mangled = mangleLocale(locale);
+      expect(
+        await commonRowCount(mangled),
+        `${mangled} must resolve nothing — a row set here would mean the mangled locale was actually uploaded`,
+      ).toBe(0);
+    }
   });
 });
 

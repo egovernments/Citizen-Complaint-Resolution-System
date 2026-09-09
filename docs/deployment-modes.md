@@ -39,6 +39,13 @@ bootstraps the tenant.
 
 Runs today on bomet (dev, nightly), naipepea (demo), maputo. CI uses it for E2E validation.
 
+**Self-targeting (localhost) variants.** Mode A does not require a remote host: with
+`ansible_host: localhost` + `ansible_connection: local`, `deploy.sh` converges the machine
+you are on. Two presets ship for that — **full** (~16 GB, everything including the Novu
+notification stack) and **slim** (full minus Novu, sized for a 16 GB box or a WSL2 VM). They
+differ by exactly two flags. See
+[`local-setup/docs/LOCALHOST-FULL-AND-SLIM.md`](../local-setup/docs/LOCALHOST-FULL-AND-SLIM.md).
+
 ## Mode B — Local Kubernetes (dev cluster)
 
 **Entry point:** `Tiltfile.k8s` + manifests in `local-setup/k8s/`

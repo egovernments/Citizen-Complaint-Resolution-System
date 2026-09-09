@@ -1,0 +1,10 @@
+apiVersion: v2
+name: gatus
+description: >-
+  Gatus health dashboard for the DIGIT stack (#1619). A single at-a-glance
+  page showing every backbone, core, application and observability service as
+  up/down, with optional Slack alerting on failure. Ships the endpoint
+  catalogue as a ConfigMap and stores uptime history in a small sqlite PVC.
+type: application
+version: 0.1.0
+appVersion: v5.36.0

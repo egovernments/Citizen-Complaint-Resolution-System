@@ -1,11 +1,9 @@
-import { DASHBOARD_ROLES } from "../../roles";
 import { isPublicDashboardRuntime } from "./dashboardRuntime";
 
 /**
  * dashboardMetrics — client-side render-lag instrumentation (issue #1110, PR1).
  *
- * Dependency-free (no npm deps; only the pure DASHBOARD_ROLES constant), hand-rolled
- * OTLP/HTTP JSON emitter. Statically imported (the bundle is a single IIFE —
+ * Dependency-free (no npm deps), hand-rolled OTLP/HTTP JSON emitter. Statically imported (the bundle is a single IIFE —
  * splitting:false — so dynamic import() would save nothing); the cheap core
  * (`beginLoad`, marks, `getTraceHeaders`) runs synchronously, while the
  * PerformanceObserver subscription and the flush machinery defer to
@@ -21,6 +19,7 @@ import { isPublicDashboardRuntime } from "./dashboardRuntime";
  *   dashboard.transfer.bytes          sum        Σ resource transferSize in the load window
  *                                                (network transfer incl. headers; 0 on cache hits)
  *   dashboard.error_widgets.count     sum        errored tiles at load settle (base kpiIds)
+ *   dashboard.analytics_round_trips.count sum     sequential analytics calls per settled batch
  * All histograms/sums use DELTA temporality (browsers are ephemeral emitters).
  * Variable tags (tenant/persona/layout_id/record_count_tier/ua_family/nav_type)
  * are DATAPOINT attributes; the resource carries only service.name=dashboard-web
@@ -176,6 +175,7 @@ function newLoadCtx(navType, t0, ttfbMs) {
     allReadyMs: null,
     allReadyPending: false,
     errorWidgets: 0,
+    analyticsRoundTrips: 0,
     slowApiCalls: 0,
     transferBytes: 0,
     quiesced: false, // load window closed (accumulators frozen)
@@ -266,7 +266,7 @@ export function markFirstWidgetVisible() {
  *  - one-shot load mark (all_widgets_ready + error_widgets + quiesce flush)
  *  - interaction-window close for the SAME reqId (filter_apply/persona_switch)
  */
-export function markAllWidgetsReady(errorCount = 0, reqId) {
+export function markAllWidgetsReady(errorCount = 0, reqId, roundTrips = 1) {
   if (!on()) return;
   const load = state.load;
   const needLoadMark = !!load && load.allReadyMs == null && !load.allReadyPending;
@@ -274,10 +274,14 @@ export function markAllWidgetsReady(errorCount = 0, reqId) {
   const mayCloseWindow = windowMatches(reqId);
   if (!needLoadMark && !mayCloseWindow) return;
 
+  const requestCount = Math.max(1, Number(roundTrips) || 1);
+  recordSum("dashboard.analytics_round_trips.count", requestCount);
+
   postPaint((ts) => {
     if (needLoadMark && state.load === load && load.allReadyMs == null) {
       load.allReadyMs = Math.max(0, ts - load.t0);
       load.errorWidgets = Math.max(0, Number(errorCount) || 0);
+      load.analyticsRoundTrips = requestCount;
       recordHist("dashboard.all_widgets_ready.ms", load.allReadyMs);
       if (load.errorWidgets > 0) recordSum("dashboard.error_widgets.count", load.errorWidgets);
       // Close the load window shortly after settle so buffered resource entries
@@ -393,20 +397,6 @@ export function withTraceHeaders(headers) {
 /* Tags (datapoint attributes only — D6)                                     */
 /* ------------------------------------------------------------------------- */
 
-function readLocalStorage(key) {
-  try {
-    const raw = window.localStorage?.getItem(key);
-    if (!raw || raw === "undefined") return null;
-    try {
-      return JSON.parse(raw);
-    } catch (e) {
-      return raw;
-    }
-  } catch (e) {
-    return null;
-  }
-}
-
 function getTenantTag() {
   try {
     return (
@@ -420,21 +410,13 @@ function getTenantTag() {
 }
 
 /**
- * persona tag: prefer the server's actual pack-match decision (packMeta.persona,
- * PR2); fall back to the first caller role present in DASHBOARD_ROLES, in the
- * DASHBOARD_ROLES array order (deterministic — mirrors the BE first-match), else
- * "other". Bounded cardinality either way.
+ * persona tag: the server's actual pack-match decision (packMeta.persona,
+ * PR2), else "other". No client-side role list — access-control (not the
+ * frontend) owns role/capability resolution. Bounded cardinality either way.
  */
 function getPersonaTag() {
   if (isPublicDashboardRuntime()) return "PUBLIC";
   if (state.packMeta?.persona) return state.packMeta.persona;
-  const info = readLocalStorage("Employee.user-info");
-  const roleCodes = new Set(
-    (Array.isArray(info?.roles) ? info.roles : []).map((r) => String(r?.code ?? "")).filter(Boolean)
-  );
-  for (const role of DASHBOARD_ROLES) {
-    if (roleCodes.has(role)) return role;
-  }
   return "other";
 }
 
@@ -705,6 +687,7 @@ function buildLoadLogRecord(load) {
     slow_api_calls: load.slowApiCalls,
     transfer_bytes: load.transferBytes,
     error_widgets: load.errorWidgets,
+    analytics_round_trips: load.analyticsRoundTrips,
     failed_api_calls: load.failedApiCalls || 0,
   });
 }

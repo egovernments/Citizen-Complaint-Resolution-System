@@ -10,6 +10,8 @@ import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
+import { formatNumber } from '../utils/numberFormat';
+import { transformTableRows } from '../utils/tableRows';
 import {
   adaptBarRows,
   adaptDow,
@@ -54,6 +56,7 @@ import { markFirstWidgetVisible } from '../services/dashboardMetrics';
  *     values,  // map of named scalars
  *     series,  // pre-shaped multi-series payload (line/stacked) when BE supplies it
  *     prior,   // prior-period scalar/series for deltas
+ *     priorRows, // prior-period rows for catalog-declared table comparisons
  *     sparkline, // daily series for sparkline cards
  *     asOf, scope }
  *
@@ -368,7 +371,7 @@ function renderTable(ctx) {
   // SLAs caveat at non-leaf levels is documented in the KPI catalog docs
   // (PR1), not surfaced in-cell.
   const columns = applyGroupByToColumns(viz.columns || deriveColumnsFromResult(result), groupBy);
-  const rows = result.rows || [];
+  const rows = transformTableRows(result, viz);
   if (loading && !rows.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
   return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
 }

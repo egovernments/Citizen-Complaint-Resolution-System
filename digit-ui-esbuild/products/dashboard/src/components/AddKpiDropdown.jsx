@@ -171,7 +171,11 @@ const AddKpiDropdown = ({
   const panel = (
     <div
       ref={panelRef}
-      className="dashboard-add-kpi-panel tw-flex tw-max-h-[min(24rem,70vh)] tw-flex-col tw-overflow-hidden"
+      // dashboard-root: the panel portals to document.body, outside the styled
+      // subtree — the class re-applies the scoped font/palette variables there.
+      // Without it the standalone/public page (no vendor CSS on <body>) renders
+      // the panel in the browser's default serif.
+      className="dashboard-root dashboard-add-kpi-panel tw-flex tw-max-h-[min(24rem,70vh)] tw-flex-col tw-overflow-hidden"
       style={{
         position: "fixed",
         top: panelPosition.top,

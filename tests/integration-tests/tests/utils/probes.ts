@@ -418,6 +418,35 @@ export async function fetchLocalizationCount(
   return data.messages?.length ?? 0;
 }
 
+/**
+ * One localization message by code, or undefined when this deployment has no
+ * row for it.
+ *
+ * That undefined is meaningful rather than merely an error case: it is the same
+ * question the SPA answers implicitly when `t(key)` hands the key back unchanged
+ * and the caller falls through to a hardcoded English default. A test asserting
+ * on user-visible copy has to know which of the two it will get, and that varies
+ * per deployment — `pg` seeds neither
+ * CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN nor its _GENERIC sibling, so the
+ * string a citizen sees there is the code fallback, not a seeded translation.
+ */
+export async function fetchLocalizedMessage(
+  tenantId: string,
+  locale: string,
+  code: string,
+  opts?: { module?: string; authToken?: string; baseUrl?: string },
+): Promise<string | undefined> {
+  const baseUrl = opts?.baseUrl ?? BASE_URL;
+  const moduleParam = opts?.module ? `&module=${encodeURIComponent(opts.module)}` : '';
+  const data = await postJson<{ messages?: { code: string; message: string }[] }>(
+    `${baseUrl}/localization/messages/v1/_search` +
+      `?tenantId=${encodeURIComponent(tenantId)}&locale=${encodeURIComponent(locale)}` +
+      `&codes=${encodeURIComponent(code)}${moduleParam}`,
+    { RequestInfo: requestInfo(opts?.authToken) },
+  );
+  return (data.messages || []).find((m) => m.code === code)?.message;
+}
+
 // ── MDMS ─────────────────────────────────────────────────────────────────────
 
 /**

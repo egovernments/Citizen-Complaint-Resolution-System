@@ -40,8 +40,16 @@ spec:
       securityContext:
         fsGroup: 65533 # to make SSH key readable 
     {{- end }} 
-    {{- if or .Values.initContainers.gitSync.enabled .Values.extraVolumes }}     
+    {{- if or .Values.initContainers.gitSync.enabled .Values.extraVolumes .Values.otel.enabled }}     
       volumes:  
+    {{- if .Values.otel.enabled }}
+      # OTEL javaagent (#1646) — mirrors _deployment.yaml. Kept in step so a
+      # statefulset service cannot inherit JAVA_TOOL_OPTIONS from the shared
+      # extraEnv.java block without the jar being staged: a -javaagent path
+      # that does not exist makes the JVM fail at startup.
+      - name: otel-agent
+        emptyDir: {}
+    {{- end }}
     {{- if .Values.initContainers.gitSync.enabled }}  
       - name: git-secret
         secret:
@@ -69,6 +77,15 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount }}    
     {{- end }}     
       initContainers:
+      {{- if .Values.otel.enabled }}
+      - name: otel-agent
+        image: {{ .Values.otel.agentImage }}
+        imagePullPolicy: IfNotPresent
+        command: ['sh', '-c', 'cp {{ .Values.otel.agentJarPath }} /otel/opentelemetry-javaagent.jar']
+        volumeMounts:
+        - name: otel-agent
+          mountPath: /otel
+      {{- end }}
       {{- with .Values.initContainers.extraInitContainers }}
         {{- tpl . $ | nindent 8 }}
       {{- end }}
@@ -126,12 +143,17 @@ spec:
           lifecycle:
           {{- toYaml .Values.lifecycle | nindent 12 }}
         {{- end }}      
-        {{- if or .Values.initContainers.gitSync.enabled .Values.extraVolumeMounts }}
+        {{- if or .Values.initContainers.gitSync.enabled .Values.extraVolumeMounts .Values.otel.enabled }}
           volumeMounts:              
         {{- if .Values.initContainers.gitSync.enabled }}            
           - name: workdir
             mountPath: "/work-dir"
         {{- end }} 
+        {{- if .Values.otel.enabled }}
+          - name: otel-agent
+            mountPath: /otel
+            readOnly: true
+        {{- end }}
         {{- if .Values.persistence.enabled }}            
         {{- with .Values.extraVolumeMounts }}
           {{- tpl . $ | nindent 10 }}

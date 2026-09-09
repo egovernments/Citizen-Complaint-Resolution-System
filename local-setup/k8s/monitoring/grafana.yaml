@@ -1,0 +1,119 @@
+# Grafana for the k3s tier (#1618, phase 1).
+#
+# Provisioning (datasources + dashboards) is NOT duplicated here. Tiltfile.k8s
+# generates ConfigMaps straight from local-setup/otel/grafana/provisioning/,
+# the same files the compose tier uses, via the `kubectl create configmap
+# --from-file` pattern already established in that file for persister/kong/nginx.
+# One source of truth, so the tiers cannot drift in what they display.
+#
+# That works verbatim only because the Services in this namespace are named
+# `prometheus`, `loki` and `tempo` -- exactly the hostnames the datasource files
+# already point at. Renaming a Service here silently breaks the datasources.
+#
+# Dashboards get ONE ConfigMap EACH (#1618 item 4): node-exporter-full.json is
+# 456 KB against Kubernetes' ~1 MiB per-object limit, so a combined map would
+# work today and fail on whoever adds the next dashboard.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: monitoring
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  # ReadWriteOnce PVC -- a rolling update would deadlock on the volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472        # the grafana user in the official image
+        runAsUser: 472
+        runAsNonRoot: true
+      containers:
+        - name: grafana
+          image: egovio/grafana:11.4.0
+          env:
+            # Authenticated by default. The compose tier shipped anonymous
+            # Admin with the login form hidden (#1602); this tier must not
+            # reintroduce what that closed, so anonymous access is OFF and an
+            # admin password is required.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            # From a Secret, never a literal. Create it before deploying:
+            #   kubectl -n monitoring create secret generic grafana-admin \
+            #     --from-literal=password='<choose one>'
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: password
+          ports:
+            - containerPort: 3000
+              name: http
+          volumeMounts:
+            - {name: datasources, mountPath: /etc/grafana/provisioning/datasources}
+            - {name: dashboards-provider, mountPath: /etc/grafana/provisioning/dashboards}
+            # Nested UNDER the provider directory on purpose. dashboards.yaml
+            # sets options.path: /etc/grafana/provisioning/dashboards, and
+            # Grafana's file provider walks that path recursively -- so mounting
+            # each dashboard ConfigMap as a subdirectory of it lets the provider
+            # config be reused from the compose tier VERBATIM.
+            # Mounting them elsewhere (e.g. /var/lib/grafana/dashboards) needs a
+            # k3s-only provider file, which is a drift point for no gain; it
+            # also fails silently -- Grafana starts happily and simply shows no
+            # dashboards, which is how this was caught.
+            - {name: dash-jvm, mountPath: /etc/grafana/provisioning/dashboards/jvm}
+            - {name: dash-node, mountPath: /etc/grafana/provisioning/dashboards/node}
+            - {name: dash-loki, mountPath: /etc/grafana/provisioning/dashboards/loki}
+            - {name: dash-tempo, mountPath: /etc/grafana/provisioning/dashboards/tempo}
+            - {name: data, mountPath: /var/lib/grafana}
+          readinessProbe:
+            httpGet: {path: /api/health, port: 3000}
+            initialDelaySeconds: 10
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+      volumes:
+        - {name: datasources, configMap: {name: grafana-datasources}}
+        - {name: dashboards-provider, configMap: {name: grafana-dashboards-provider}}
+        - {name: dash-jvm, configMap: {name: grafana-dash-jvm}}
+        - {name: dash-node, configMap: {name: grafana-dash-node}}
+        - {name: dash-loki, configMap: {name: grafana-dash-loki}}
+        - {name: dash-tempo, configMap: {name: grafana-dash-tempo}}
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http

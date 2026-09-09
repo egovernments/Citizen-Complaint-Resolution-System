@@ -5,6 +5,7 @@ import {
   hasAuth,
 } from "./authService";
 import { selectHierarchyDefinition, orderedLevels } from "../utils/hierLevelGrouping";
+import { isPublicDashboardRuntime } from "./dashboardRuntime";
 import { withTraceHeaders } from "./dashboardMetrics";
 
 /**
@@ -13,7 +14,7 @@ import { withTraceHeaders } from "./dashboardMetrics";
  * Falls back to the legacy service name when no config is present
  * (e.g. the standalone dashboard build without globalConfigs.js).
  */
-function getMdmsSearchUrl() {
+export function getMdmsSearchUrl() {
   const get = window.globalConfigs?.getConfig?.bind(window.globalConfigs);
   const contextPath =
     get?.("MDMS_V1_CONTEXT_PATH") ||
@@ -88,7 +89,10 @@ export function buildComplaintTypeIndex(records) {
  * humanized flat labels without blocking the dashboard.
  */
 export async function fetchComplaintHierarchyRecords() {
-  if (!hasAuth()) return null;
+  // The master is anonymously readable (MDMS _search is auth-optional on
+  // Kong); the public runtime sends a role-less single-shot request, exactly
+  // like boundaryService, so the public filter bar gets the same tree (#1797).
+  if (!isPublicDashboardRuntime() && !hasAuth()) return null;
 
   try {
     const response = await authFetch(getMdmsSearchUrl(), {

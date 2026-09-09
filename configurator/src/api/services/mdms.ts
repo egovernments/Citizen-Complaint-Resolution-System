@@ -20,15 +20,6 @@ import {
 // UI reads MapConfig[0], which then picks between them arbitrarily.
 const MAP_CONFIG_KEY = 'DEFAULT';
 const DASHBOARD_CONFIG_KEY = 'default';
-const DEFAULT_DASHBOARD_ROLES = [
-  'SUPERVISOR',
-  'PGR_SUPERVISOR',
-  'GRO',
-  'DGRO',
-  'PGR_LME',
-  'PGR_ADMIN',
-  'SUPERUSER',
-];
 
 export const mdmsService = {
   /**
@@ -179,8 +170,8 @@ export const mdmsService = {
 
   /**
    * Patch the singleton DashboardConfig without dropping its existing timezone,
-   * number formatting, scoping, or role settings. A fresh tenant gets the schema's
-   * required fields as a conservative baseline.
+   * number formatting, or scoping. Route and data access are capabilities owned by
+   * egov-accesscontrol, not fields in this tenant configuration record.
    */
   async upsertDashboardConfig(
     tenantId: string,
@@ -195,7 +186,6 @@ export const mdmsService = {
 
     const data: DashboardConfigData = {
       id: DASHBOARD_CONFIG_KEY,
-      allowedRoles: DEFAULT_DASHBOARD_ROLES,
       ...patch,
     };
     return this.create(

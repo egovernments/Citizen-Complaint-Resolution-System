@@ -76,16 +76,20 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 
 # Novu.
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
-NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:develop-20260716}"
-# ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
-#   template) WhatsApp path needs this PR branch's build, published to public
-#   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.
-WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # bump to the latest published tag after re-publish
-NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-egovio/novu-bridge:$WA_IMAGE_TAG}"   # public Docker Hub, multi-arch — WhatsApp Content-SID bridge (this PR)
-PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"                  # public Docker Hub, multi-arch — WhatsApp Content-SID pgr (this PR)
+NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}"
+# ^ same multi-arch tag docker-compose.egov-digit.yaml pins, deliberately. It
+#   includes the WhatsApp integration-selection fix, so SMS/email and WhatsApp
+#   use one bridge image unless NOVU_BRIDGE_IMAGE_WA is explicitly overridden.
+NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-$NOVU_BRIDGE_IMAGE}"
+# WA_IMAGE_TAG was a feature-branch build (whatsapp-contentsid-pipeline-f76f6ea)
+# because the Content-SID pipeline was not yet released. #1284 is now merged and
+# is an ancestor of 5137119, so the release build carries it and both SMS/email
+# and WhatsApp can run one pgr-services image. Override to pin a branch build.
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-2.12-5137119}"                                 # PGR Content-SID ships in 2.12 (#1284)
+PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"     # public Docker Hub, multi-arch
 
 # Feature toggles that get written into .env.
-CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (compose default is SMS,EMAIL)
+CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (no compose default: unset = nothing dispatched)
 PROXY_ALLOWED_ROLES="${PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}"
 # ^ NOVU_BRIDGE_PROXY_ALLOWED_ROLES. MDMS_ADMIN is the config-admin; it is
 #   EXCLUDED by the compose default, which 403s the configurator's own screens.
@@ -371,11 +375,9 @@ do_step1() {
 do_step2() {
   step step2 "$(step_title step2)"
 
-  # pre: the image we are about to PIN must be pullable or already present. The gate
-  # is on the WhatsApp path when WHATSAPP is enabled — a fresh box may have NO access
-  # to the base preview registry at all, so requiring the base image there is wrong.
-  #   WHATSAPP on  → require ONLY the Content-SID bridge image (public Docker Hub).
-  #   WHATSAPP off → require the base bridge image, as before.
+  # The image we are about to pin must be pullable or already present. The
+  # WhatsApp image defaults to the same PR #1905-capable public image as the base
+  # path, but remains separately overridable for deliberate testing.
   if _wa_enabled; then
     require "WhatsApp Content-SID bridge image available (Docker Hub pull OR already present)" \
       "sudo docker pull '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1"
@@ -385,8 +387,8 @@ do_step2() {
   fi
 
   log "Pinning the bridge image…"
-  # When WHATSAPP is enabled we PULL + PIN the Content-SID bridge and FAIL LOUDLY
-  # if it can't be resolved (never silently keep the base image).
+  # When WHATSAPP is enabled, pull and pin its configured bridge image. Do not
+  # silently ignore an explicit NOVU_BRIDGE_IMAGE_WA override that cannot resolve.
   if _wa_enabled; then
     if [[ "$DRY_RUN" == true ]]; then
       note "WHATSAPP enabled → would pull + pin ${NOVU_BRIDGE_IMAGE_WA}; would BLOCK the run if it can't be resolved"
@@ -395,8 +397,8 @@ do_step2() {
       set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE_WA"
     else
       err "WHATSAPP is enabled but the Content-SID bridge image ${NOVU_BRIDGE_IMAGE_WA} could not be resolved or pulled."
-      err "Publish/pull it (or set NOVU_BRIDGE_IMAGE_WA / WA_IMAGE_TAG), or drop WHATSAPP from CHANNELS_ENABLED."
-      err "Refusing to silently fall back to the base image (no Content-SID WhatsApp path)."
+      err "Publish/pull it (or set NOVU_BRIDGE_IMAGE_WA), or drop WHATSAPP from CHANNELS_ENABLED."
+      err "Refusing to silently fall back from the configured WhatsApp bridge image."
       return 1
     fi
   else
