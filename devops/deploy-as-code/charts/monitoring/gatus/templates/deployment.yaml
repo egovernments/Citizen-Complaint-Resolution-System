@@ -1,0 +1,129 @@
+{{- if .Values.persistence.enabled }}
+# Backing store for the sqlite uptime history (#1610). A PVC, not emptyDir,
+# so history is not wiped on every reschedule/eviction.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gatus-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.persistence.storageClassName }}
+  storageClassName: {{ .Values.persistence.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatus
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the RWO claim holds a sqlite file, so a rolling
+  # update would deadlock (new pod cannot mount until the old releases it) and
+  # would also risk two Gatus processes on one sqlite file.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gatus
+  template:
+    metadata:
+      labels:
+        app: gatus
+      annotations:
+        # Roll the pod when the endpoint catalogue or the /status proxy changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/status-proxy: {{ include (print $.Template.BasePath "/status-proxy-configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: gatus
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GATUS_CONFIG_PATH
+              value: /config/config.yaml
+            # Optional Slack alerting. `optional: true` -> a cluster without the
+            # secret still starts, the variable stays unset, and Gatus drops the
+            # slack provider with a warning. Switch alerting on without editing
+            # this chart:
+            #   kubectl -n {{ .Values.namespace }} create secret generic gatus-alerting \
+            #     --from-literal=slack-webhook-url='https://hooks.slack.com/services/...'
+            - name: GATUS_SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gatus-alerting
+                  key: slack-webhook-url
+                  optional: true
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /config/config.yaml
+              subPath: config.yaml
+            - name: data
+              mountPath: /data
+        # Sidecar nginx that serves Gatus under {{ .Values.ingress.path }} by
+        # sub_filter-rewriting the SPA's absolute asset/API paths. See
+        # status-proxy-configmap.yaml for why this is needed and why it is a
+        # sidecar rather than an ingress snippet.
+        - name: status-proxy
+          image: "{{ .Values.proxyImage.repository }}:{{ .Values.proxyImage.tag }}"
+          imagePullPolicy: {{ .Values.proxyImage.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.proxyPort | default 8081 }}
+          resources:
+{{ toYaml .Values.proxyResources | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.proxyPort | default 8081 }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.proxyPort | default 8081 }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          volumeMounts:
+            - name: status-proxy-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: config
+          configMap:
+            name: gatus-config
+        - name: status-proxy-config
+          configMap:
+            name: gatus-status-proxy
+        - name: data
+        {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: gatus-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}

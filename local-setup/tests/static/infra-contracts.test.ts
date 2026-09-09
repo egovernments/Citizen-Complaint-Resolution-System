@@ -12,8 +12,76 @@ import * as path from 'node:path';
 const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
 const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
 const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
+const MIGRATIONS_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.migrations.yml'), 'utf8');
 const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
 const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
+
+describe('JVM OOM dashboard service scope', () => {
+  /**
+   * Incident: #1925 — the OOM panels queried every non-empty service_name.
+   * Promtail also labels Loki and Grafana logs with service_name, so Loki's
+   * query-completion log included the literal OutOfMemoryError expression and
+   * became a false OOM event on the next dashboard refresh.
+   */
+  const dashboard = JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, 'otel', 'grafana', 'provisioning', 'dashboards', 'jvm-services.json'),
+      'utf8',
+    ),
+  );
+  const serviceBlocks = (compose: string) => {
+    const headers = [...compose.matchAll(/^  ([a-z0-9][a-z0-9_-]*):\s*$/gm)];
+    return headers.map((header, index) => ({
+      name: header[1],
+      body: compose.slice(header.index, headers[index + 1]?.index ?? compose.length),
+    }));
+  };
+  const jvmEnvironment =
+    /^\s*(?:-\s*)?(?:JAVA_OPTS|JAVA_TOOL_OPTIONS|ES_JAVA_OPTS|FLYWAY_[A-Z_]+)(?::|=)/m;
+  const baseJvmServices = serviceBlocks(BASE_COMPOSE)
+    .filter(
+      ({ body }) =>
+        jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
+    )
+    .map(({ name }) => name);
+  const migrationJvmServices = serviceBlocks(MIGRATIONS_COMPOSE)
+    .filter(({ name, body }) => name.endsWith('-migration') && /^\s*FLYWAY_[A-Z_]+:/m.test(body))
+    .map(({ name }) => name);
+  const expectedJvmServices = [...new Set([...baseJvmServices, ...migrationJvmServices])].sort();
+  const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);
+  const selectorServices = oomPanels.map((panel: { targets: Array<{ expr: string }> }) => {
+    const selector = panel.targets[0].expr.match(/service_name=~"\^\(([^)]+)\)\$"/);
+    expect(selector).not.toBeNull();
+    return selector![1].split('|');
+  });
+
+  test('OOM panels use the JVM allowlist derived from deployed service definitions', () => {
+    expect(oomPanels).toHaveLength(2);
+
+    for (const services of selectorServices) {
+      expect(services).toEqual(expectedJvmServices);
+    }
+  });
+
+  test('OOM panels cannot select observability or non-JVM infrastructure logs', () => {
+    const excluded = ['grafana', 'loki', 'promtail', 'otel-collector', 'prometheus', 'tempo'];
+    for (const services of selectorServices) {
+      for (const service of excluded) {
+        expect(services).not.toContain(service);
+      }
+    }
+  });
+
+  test('OOM panels cannot regress to a catch-all selector', () => {
+    for (const panel of oomPanels) {
+      expect(panel.targets[0].expr).not.toContain('service_name=~".+"');
+    }
+  });
+
+  test('dashboard version supersedes UI-saved copies from the previous version', () => {
+    expect(dashboard.version).toBeGreaterThanOrEqual(100);
+  });
+});
 
 describe('Kong declarative route syntax', () => {
   /**
@@ -132,9 +200,17 @@ describe('image pin immutability', () => {
   // rename plus one genuine retirement, not a relaxation. (Note the pre-rename
   // names still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml},
   // which this test does not read: it scans the base compose only.)
+  //
+  // Six -> five: `egovio/tilt-demo-db-migrations:latest` is retired. It was the
+  // clearest case this list exists to catch — a mutable tag with no rebuild
+  // pipeline behind it, so the image froze at 2026-03-06 while migrate-all.sh
+  // moved on to the canonical Flyway history names. The stale copy then failed
+  // on every box (`relation "egov_user_schema_version_pk" already exists`), and
+  // four services hard-gated on it completing, so it took every login down with
+  // it. The container now lives in docker-compose.migrations.yml and is BUILT
+  // from ./docker/db-migrations, so the pin is gone rather than moved.
   const FROZEN_LATEST_DEBT: Record<string, number> = {
     'egovio/pgbouncer:latest': 1,
-    'egovio/tilt-demo-db-migrations:latest': 1,
     'egovio/curl:latest': 2, // two gate containers
     'egovio/gatus:latest': 1,
     'openbao/openbao:latest': 1,

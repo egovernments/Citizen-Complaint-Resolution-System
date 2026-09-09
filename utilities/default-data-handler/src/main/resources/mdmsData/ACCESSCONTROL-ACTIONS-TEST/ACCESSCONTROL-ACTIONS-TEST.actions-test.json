@@ -1434,11 +1434,11 @@
         "scope": {
           "axes": ["department", "jurisdiction"],
           "roleScopes": {
-            "GRO": { "department": "ALL", "jurisdiction": "OWN" },
+            "GRO": { "department": "OWN", "jurisdiction": "OWN" },
             "PGR_LME": { "department": "OWN", "jurisdiction": "OWN" },
             "SUPERVISOR": { "department": "OWN", "jurisdiction": "ALL" }
           },
-          "default": { "department": "ALL", "jurisdiction": "OWN" }
+          "default": { "department": "OWN", "jurisdiction": "OWN" }
         },
         "attributes": {
           "citizen.mobileNumber": {

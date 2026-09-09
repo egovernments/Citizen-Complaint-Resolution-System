@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { ToolMetadata, MdmsRecord } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { digitDb } from '../services/digit-db.js';
 import { emitProgress } from '../services/progress.js';
 import { ENVIRONMENTS } from '../config/environments.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
@@ -1354,6 +1356,64 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       };
 
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
+
+      // Step 0: RBAC floor — seed ACCESSCONTROL-ROLEACTIONS.roleactions and
+      // ACCESSCONTROL-ACTIONS-TEST.actions-test directly into the target's
+      // mdms-v2 storage, bypassing the mdms-v2 write API.
+      //
+      // Every write below — including Step 1's own copy of these exact two
+      // schemas — goes through mdms-v2, which egov-accesscontrol authorizes
+      // by looking up the CALLING role's roleaction grants on the TARGET
+      // tenant (ActionService#isAuthorizedOnGivenTenantLevel). On a target
+      // with zero roleaction rows — any brand-new state_root, not just a
+      // fresh city under an established one — that check can never pass:
+      // the only way to grant a role write access is to write a roleaction
+      // record, which itself needs write access. Direct SQL is the one path
+      // around that circle. See CCRS#1928 for the failure this fixes (a
+      // from-scratch bootstrap died with AccessDeniedException on all 42
+      // schemas, `source`'s own roleactions included).
+      //
+      // Idempotent and additive only: skipped entirely once target already
+      // has roleaction rows (a re-run, or a target that inherited them some
+      // other way), and Step 1's normal per-record copy loop below no-ops on
+      // any uid this already created (create-if-absent).
+      try {
+        const already = await digitDb.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`,
+          [target],
+        );
+        if (Number(already[0]?.count || 0) === 0) {
+          const floorSchemas = ['ACCESSCONTROL-ROLEACTIONS.roleactions', 'ACCESSCONTROL-ACTIONS-TEST.actions-test'];
+          const sourceRows = await digitDb.query<{ uniqueidentifier: string; schemacode: string; data: Record<string, unknown>; isactive: boolean }>(
+            `SELECT uniqueidentifier, schemacode, data, isactive FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = ANY($2)`,
+            [source, floorSchemas],
+          );
+          const now = Date.now();
+          for (const row of sourceRows) {
+            // roleactions.roleactions carries its own tenantId inside `data` —
+            // rewrite it to match; actions-test rows are tenant-agnostic (no
+            // `tenantId` field) and copy across untouched.
+            const data = row.schemacode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+              ? { ...row.data, tenantId: target }
+              : row.data;
+            await digitDb.execute(
+              `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $7, $7)
+               ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
+              [randomUUID(), target, row.uniqueidentifier, row.schemacode, JSON.stringify(data), row.isactive, now],
+            );
+          }
+          if (sourceRows.length > 0) {
+            results.warnings.push(`RBAC floor: seeded ${sourceRows.length} roleaction/action rows for "${target}" directly from "${source}" (target had none — see CCRS#1928)`);
+          }
+          emitProgress({ phase: 'bootstrap:rbac-floor', message: `Seeded ${sourceRows.length} RBAC floor rows for ${target}`, data: { target, source, seeded: sourceRows.length }, pct: 1 });
+        }
+      } catch (e) {
+        // Non-fatal by design: on failure, Step 1 below fails loudly on the
+        // SAME schemas with the SAME AccessDeniedException as before this
+        // fix existed — no worse off, and the real error still surfaces.
+        console.error(`[tenant_bootstrap] RBAC floor seed failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       // Step 1: Copy ALL schemas from source to target
       //

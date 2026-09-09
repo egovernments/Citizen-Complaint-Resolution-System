@@ -136,9 +136,15 @@ describe('Novu workflow creation deployment contract', () => {
   const novuValues = read('devops/deploy-as-code/charts/backbone-services/novu/values.yaml');
   const dashboardValues = novuValues.slice(novuValues.lastIndexOf('\ndashboard:'));
   const novuIngress = read('devops/deploy-as-code/charts/backbone-services/novu/templates/ingress.yaml');
+  // NB: composeEnv is the ANSIBLE TEMPLATE that writes /opt/digit/.env, not the
+  // compose file. composeFile is the compose file. Asserting the first alone
+  // proves only that a value is written down, never that a container gets it.
   const composeEnv = read('local-setup/ansible/templates/digit.env.j2');
+  const composeFile = read('local-setup/docker-compose.egov-digit.yaml');
+  const playbookFile = read('local-setup/ansible/playbook-deploy.yml');
   const composeNginx = read('local-setup/ansible/templates/nginx-site.conf.j2');
   const novuEnv = read('backend/novu-bridge/config/.env.novu');
+  const novuBootstrap = read('backend/novu-bridge/config/bootstrap-novu-whatsapp.sh');
   const dotenvLoader = path.join(
     REPO_ROOT,
     'backend/novu-bridge/config/load-dotenv.sh'
@@ -195,5 +201,149 @@ describe('Novu workflow creation deployment contract', () => {
       'Complaint {{payload.complaintNo}} status is {{payload.status}}',
       'caller wins',
     ]);
+  });
+
+  test('the bootstrap preserves Handlebars braces in the default SMS body and explicit overrides', () => {
+    const smsBodyDefault = novuBootstrap.match(
+      /if \[\[ -z "\$\{NOVU_SMS_BODY:-\}" \]\]; then\n  NOVU_SMS_BODY='[^'\n]*'\nfi/
+    );
+    expect(smsBodyDefault).not.toBeNull();
+
+    const probe = `${smsBodyDefault![0]}\nprintf '%s\\n' "$NOVU_SMS_BODY"`;
+    const runProbe = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_SMS_BODY;
+      } else {
+        env.NOVU_SMS_BODY = override;
+      }
+      return execFileSync('bash', ['-c', probe], {
+        encoding: 'utf8',
+        env,
+      }).trim();
+    };
+
+    expect(runProbe()).toBe(
+      'Complaint {{payload.complaintNo}} status is {{payload.status}}'
+    );
+    expect(runProbe('Custom {{payload.status}} update')).toBe(
+      'Custom {{payload.status}} update'
+    );
+  });
+
+  // Nothing triggers the legacy COMPLAINTS.WORKFLOW.* workflows: the bridge resolves
+  // its Novu workflow from the channel (NovuBridgeConfiguration.getNovuWorkflowId),
+  // never from the event name. The playbook runs this script with only the Twilio
+  // vars set, so a non-empty default here silently creates them on every deploy.
+  test('the bootstrap creates no event-convention workflows unless asked', () => {
+    expect(novuBootstrap).toContain('NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"');
+
+    const probe = [
+      'NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-}"',
+      'IFS="," read -r -a IDS <<< "$NOVU_EVENT_WORKFLOWS"',
+      'n=0',
+      'for i in "${IDS[@]}"; do i="$(echo "$i" | xargs)"; [[ -z "$i" ]] && continue; n=$((n+1)); done',
+      'printf "%s\\n" "$n"',
+    ].join('\n');
+
+    const countCreated = (override?: string) => {
+      const env = { ...process.env };
+      if (override === undefined) {
+        delete env.NOVU_EVENT_WORKFLOWS;
+      } else {
+        env.NOVU_EVENT_WORKFLOWS = override;
+      }
+      return execFileSync('bash', ['-c', probe], { encoding: 'utf8', env }).trim();
+    };
+
+    expect(countCreated()).toBe('0');
+    // The comma idiom older runbooks used must keep working.
+    expect(countCreated(',')).toBe('0');
+    expect(countCreated('A.B,C.D')).toBe('2');
+  });
+
+  // Ansible rendering a variable into /opt/digit/.env is NOT enough: Compose reads
+  // .env for ${...} interpolation only, so a variable the novu-bridge service does
+  // not declare never reaches the container. That gap shipped once — the bridge
+  // silently fell back to the Novu path and SMS never reached SMSCountry — because
+  // the test only checked the template. Assert both halves of the handover.
+  // bootstrap-novu-whatsapp.sh does two unrelated jobs: register the Twilio
+  // PROVIDER, and create the per-channel WORKFLOWS every deployment needs
+  // whichever gateway sends. Gating the whole task on twilio_account_sid left a
+  // non-Twilio tenant with zero workflows and Novu answering workflow_not_found.
+  // The bootstrap sources ${SCRIPT_DIR}/load-dotenv.sh. Copying only the script
+  // made it exit 1 on a fresh box before creating anything — silently, because the
+  // run task is failed_when:false. Existing boxes hid it: workflows already in the
+  // Novu mongo volume survive redeploys.
+  // Defaulting the channel list to SMS,EMAIL meant a deployment that never set it
+  // attempted email dispatch with no SMTP provider onboarded, failing silently on
+  // every complaint. Nothing is dispatched now until an operator names a channel.
+  test('no channel is dispatched by default', () => {
+    expect(composeFile).toContain('NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}');
+    expect(composeEnv).toContain(
+      "NOVU_BRIDGE_CHANNELS_ENABLED={{ novu_bridge_channels_enabled | default('') }}"
+    );
+    expect(composeFile).not.toContain('NOVU_BRIDGE_CHANNELS_ENABLED:-SMS');
+  });
+
+  test('the bootstrap ships with the helper it sources', () => {
+    const sourced = novuBootstrap.match(/source "\$\{SCRIPT_DIR\}\/([a-z-]+\.sh)"/);
+    expect(sourced).not.toBeNull();
+    expect(playbookFile).toContain(`backend/novu-bridge/config/${sourced![1]}`);
+  });
+
+  // Novu derives the stored workflowId from the NAME and ignores the workflowId in
+  // the payload, so a friendly name yields an id novu-bridge never triggers.
+  test('the WhatsApp workflow name defaults to its id', () => {
+    expect(novuBootstrap).toContain(
+      'NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-$NOVU_WORKFLOW_ID}"'
+    );
+    expect(novuBootstrap).not.toContain('Complaints WhatsApp Workflow}"');
+  });
+
+  test('channel-workflow creation is not gated on Twilio', () => {
+    const task = playbookFile.slice(
+      playbookFile.indexOf('novu-bootstrap — copy bootstrap script'),
+      playbookFile.indexOf('changed_when: "\'created\' in')
+    );
+    expect(task.length).toBeGreaterThan(0);
+    expect(task).not.toMatch(/when:[\s\S]*?\(twilio_account_sid \| default\(''\)\) \| length > 0/);
+
+    // The sandbox default must not leak in when no SID is set: the script reads
+    // any Twilio value as "Twilio configured" and then demands all three, which
+    // would fail the run and reopen the gap.
+    expect(task).toContain(
+      'if (twilio_account_sid | default("")) | length > 0 else ""'
+    );
+  });
+
+  test('the SMSCountry settings are rendered AND handed to the container', () => {
+    const vars = [
+      'NOVU_BRIDGE_SMS_PROVIDER',
+      'NOVU_BRIDGE_SMS_SENDER_ID',
+      'NOVU_BRIDGE_SMSCOUNTRY_URL',
+      'NOVU_BRIDGE_SMSCOUNTRY_USER',
+      'NOVU_BRIDGE_SMSCOUNTRY_PASSWORD',
+    ];
+
+    // half 1: ansible writes them into the env file
+    for (const v of vars) {
+      expect(composeEnv).toContain(`${v}=`);
+    }
+
+    // half 2: the novu-bridge service declares them, so they reach the process
+    // from the novu-bridge key to the next service key at the same indent
+    const start = composeFile.indexOf('\n  novu-bridge:');
+    expect(start).toBeGreaterThan(-1);
+    const rest = composeFile.slice(start + 1);
+    const next = rest.search(/\n {2}[a-z0-9-]+:\n/);
+    const bridgeBlock = next === -1 ? rest : rest.slice(0, next);
+    expect(bridgeBlock).toContain('novu-bridge:');
+    for (const v of vars) {
+      expect(bridgeBlock).toContain(`${v}: \${${v}`);
+    }
+
+    // nothing routes SMSCountry through Novu — it is a direct client
+    expect(composeEnv).not.toContain('NOVU_BRIDGE_SMS_INTEGRATION_IDENTIFIER');
   });
 });

@@ -12,8 +12,11 @@ service:
 env:
   MCP_TRANSPORT: http
   MCP_PORT: "3000"
-  CRS_ENVIRONMENT: ""
-  CRS_TENANT_ID: ""
+  CRS_ENVIRONMENT: "self-hosted"
+  CRS_TENANT_ID: "pg"
+  # DIGIT API base the shim proxies to (in-cluster gateway service).
+  CRS_API_URL: "http://gateway.egov:8080"
+  CRS_ENV_NAME: "CCRS"
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...

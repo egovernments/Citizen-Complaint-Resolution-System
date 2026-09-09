@@ -26,42 +26,25 @@ const FunnelIcon = () => (
   </svg>
 );
 
-const FilterChevron = () => (
-  <svg
-    className="dashboard-filter-inline-chevron"
-    xmlns="http://www.w3.org/2000/svg"
-    width="10"
-    height="10"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
 /**
- * Degrade path for the complaint-type filter when no usable/pruned hierarchy
- * exists (flat tenant, MDMS fetch failure, empty scoped distincts): the same
- * flat {id,label,group?} option list the old native <select> showed, now
- * rendered through the shared PopoverMenu primitive (owner design pass — no
- * native selects). Consecutive same-group runs get a non-interactive group
+ * Flat {id,label,group?} option list rendered through the shared PopoverMenu
+ * primitive (owner design pass — no native selects; a native <select> pops the
+ * OS menu, visibly unlike every other dropdown in the bar). Serves the ward
+ * filter always, and the complaint-type filter's degrade path when no
+ * usable/pruned hierarchy exists (flat tenant, MDMS fetch failure, empty
+ * scoped distincts). Consecutive same-group runs get a non-interactive group
  * label, exactly where the old <optgroup>s sat; the wire contract is
- * untouched (a bare leaf-code string through onFilterChange).
+ * untouched (a bare option id string through onFilterChange).
  */
-const FlatComplaintTypeMenu = ({ options, value, loading, onChange, t }) => {
+const FlatFilterMenu = ({ ariaLabel, options, value, loading, onChange, panelWidth = 272, t }) => {
   const selected = options.find((opt) => opt.id === value);
   return (
     <PopoverMenu
-      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+      ariaLabel={ariaLabel}
       chip={loading ? t("DASHBOARD_COMMON_LOADING", "Loading…") : selected?.label ?? String(value)}
       chipTitle={selected?.label}
       disabled={loading}
-      panelWidth={272}
+      panelWidth={panelWidth}
     >
       {({ close }) => {
         const rows = [];
@@ -166,26 +149,15 @@ const DashboardFilters = ({
           </div>
         </div>
 
-        <div className="dashboard-filter-inline-select-wrap">
-          <select
-            value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
-            disabled={filterOptionsLoading && geographyOptions.length <= 1}
-            onChange={(e) => onFilterChange("geography", e.target.value)}
-            aria-label={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
-            className="dashboard-filter-inline-select"
-          >
-            {filterOptionsLoading && geographyOptions.length <= 1 ? (
-              <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
-            ) : (
-              geographyOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))
-            )}
-          </select>
-          <FilterChevron />
-        </div>
+        <FlatFilterMenu
+          ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
+          options={geographyOptions}
+          value={geography}
+          loading={filterOptionsLoading && geographyOptions.length <= 1}
+          onChange={(id) => onFilterChange("geography", id)}
+          panelWidth={240}
+          t={t}
+        />
 
         {complaintTypeTree ? (
           // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",
@@ -197,7 +169,8 @@ const DashboardFilters = ({
             t={t}
           />
         ) : (
-          <FlatComplaintTypeMenu
+          <FlatFilterMenu
+            ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
             options={complaintTypeOptions}
             value={complaintType}
             loading={filterOptionsLoading && complaintTypeOptions.length <= 1}

@@ -844,7 +844,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   WhatsApp specifics: Content templates must be authored and approved at the
   provider **first**, then synced to Content-SIDs (configurator UI or headless
   CLI). Full walkthrough:
-  [`../../docs/notification-onboarding/RUNBOOK.md`](../../docs/notification-onboarding/RUNBOOK.md)
+  [`../../docs/2.12/notifications/README.md`](../../docs/2.12/notifications/README.md)
   (§5 covers templates → SIDs → test-send → drive a real complaint), with
   `TUTORIAL.md`, `install-fresh.md`, `install-upgrade.md` and the
   provider-onboarding runbook alongside it.
@@ -914,7 +914,7 @@ against a *running* stack (neither redeploys anything). Both support `--list`,
   References:
   [`../../docs/migration/tenant-department-migration-guide.md`](../../docs/migration/tenant-department-migration-guide.md)
   (department preflight and back-fill) and
-  [`../../docs/dashboard-configuration/README.md`](../../docs/dashboard-configuration/README.md)
+  [`../../docs/2.12/dashboard/dashboard-configuration.md`](../../docs/2.12/dashboard/dashboard-configuration.md)
   (KPI catalog, packs & RBAC, operations).
 
 New state roots bootstrapped via `tenant_bootstrap` get the dashboard catalog

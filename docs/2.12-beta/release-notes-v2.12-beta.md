@@ -282,8 +282,8 @@ These require action from the operations team on existing installations — full
 | [migration-guide-v2.11-to-v2.12-beta.md](migration-guide-v2.11-to-v2.12-beta.md) | Operator upgrade procedure v2.11 → v2.12-beta |
 | [local-setup/docs/ONBOARDING-AND-ADDONS.md](../../local-setup/docs/ONBOARDING-AND-ADDONS.md) | City onboarding + add-ons catalogue (every optional flag) |
 | [complaint-hierarchy-feature.md](../complaint-hierarchy-feature.md) | Multi-level complaint categories — design |
-| [docs/dashboard-configuration](../dashboard-configuration) | Supervisor Dashboard configuration reference |
-| [docs/notifications-guide](../notifications-guide) | Notifications setup guide |
+| [docs/2.12/dashboard](../2.12/dashboard/dashboard-configuration.md) | Supervisor Dashboard configuration reference |
+| [docs/2.12/notifications](../2.12/notifications) | Current Novu notifications setup guide |
 | [docs/observability](../observability) | Monitoring stack + dashboard telemetry |
 | [local-setup/ansible/runbooks/01-openbao.md](../../local-setup/ansible/runbooks/01-openbao.md) | Secrets store (OpenBao) operations runbook |
 | [Test Cases - CMS 2.12-beta.xlsx](Test%20Cases%20-%20CMS%202.12-beta.xlsx) | QA test case sheet for this release |

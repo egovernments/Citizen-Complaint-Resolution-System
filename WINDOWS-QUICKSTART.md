@@ -1,17 +1,19 @@
 # Windows Quickstart — DIGIT via WSL2 in one session
 
-Validated 2026-07-29 on a 16 GB Windows machine / WSL2 Ubuntu 24.04. Brings up
-the full DIGIT stack with `./deploy.sh <name>` — the playbook self-heals every
-WSL-specific quirk (memory caps, mount propagation, Node toolchain), so the
-happy path is short. The same steps work on any Linux machine or VM; only the
-WSL2 sections are Windows-specific.
+Re-validated **2026-09-01** on Windows 11 (build 26200), 16 GB / i7-1255U,
+WSL 2.7.11 + Ubuntu 24.04 — including a cold run on a distro created from
+scratch (`wsl --install` → green in ~35 min, `failed=0`). Brings up the full DIGIT
+stack with `./deploy.sh <name>` — the playbook self-heals every WSL-specific
+quirk (memory caps, mount propagation, Node toolchain), so the happy path is
+short. The same steps work on any Linux machine or VM; only the WSL2 sections
+are Windows-specific.
 
 ## What you get
 
-~40 containers: all DIGIT core services, PGR, the employee UI, citizen SPA,
+38 containers: all DIGIT core services, PGR, the employee UI, citizen SPA,
 configurator (DIGIT Studio), Kong, host nginx on port 80, Gatus health board,
-Grafana/Prometheus/Loki/Tempo observability, OpenBao —
-on the dump-seeded `pg` / `pg.citya` tenants. Login works immediately.
+Grafana/Prometheus/Loki/Tempo observability, OpenBao — on the dump-seeded
+`pg` / `pg.citya` tenants. Login works immediately.
 
 Two sizing profiles (see step 4):
 
@@ -24,7 +26,9 @@ Two sizing profiles (see step 4):
 
 - Windows 10/11 with hardware virtualization enabled (Intel VT-x / AMD SVM —
   usually on by default; enable in BIOS if step 1 errors with `0x80370102`).
-- ≥ 16 GB RAM and ~60 GB free disk.
+- ≥ 16 GB RAM and ~40 GB free disk. (Measured on a cold build: 54 images,
+  **20 GB** on the WSL disk. A distro that has accumulated several image
+  versions over time reaches ~38 GB, so leave headroom.)
 - **Do NOT install Docker Desktop** (or disable its WSL integration for this
   distro). The playbook installs Docker Engine natively inside WSL and manages
   its daemon; Docker Desktop's injected `docker` conflicts with it.
@@ -40,11 +44,14 @@ Reboot if Windows asks, run the install command again if the distro isn't
 there yet, then create your Linux user on first launch. Confirm you're in:
 
 ```bash
-uname -a          # must contain "microsoft ... WSL2"
+uname -a                      # must contain "microsoft ... WSL2"
 systemctl is-system-running   # "running" or "degraded" (Ubuntu 24.04 default)
 ```
 
-If systemd reports `offline`, add to `/etc/wsl.conf`:
+A current Ubuntu-24.04 image already ships `/etc/wsl.conf` with
+`[boot] systemd=true`, so this should just work — verified on a freshly
+installed distro. If systemd nonetheless reports `offline`, add to
+`/etc/wsl.conf`:
 
 ```ini
 [boot]
@@ -57,24 +64,48 @@ then `wsl --shutdown` in PowerShell and relaunch Ubuntu.
 
 ```bash
 sudo apt update && sudo apt install -y git ansible python3 python3-pip rsync curl
-ansible --version    # ansible-core must be < 2.19 — Ubuntu 24.04's apt (2.16.x) is correct
+ansible --version    # Ubuntu 24.04's apt ships ansible-core 2.16.3
 ```
 
-> **Version matters.** The playbook breaks on ansible-core ≥ 2.19. Use the apt
-> package; don't pip-install a newer one.
+Optional, but `deploy.sh` prints a `WARN` for each if missing — it runs
+ansible-lint + yamllint as a static gate before touching anything:
+
+```bash
+sudo apt install -y ansible-lint yamllint
+```
+
+> **On ansible-core versions.** Earlier revisions of this guide said the
+> playbook breaks on ansible-core ≥ 2.19 and told you to pin to apt's. The
+> underlying defect — a bare dict used as a `when:` conditional in the
+> `core_mobile_configs` preflight — was fixed in `1442b194` (PR #1545).
+> Verified on this machine: the pre-fix expression still fails on 2.21.3 with
+> `Conditional result (True) was derived from value of type 'dict'.
+> Conditionals must have a boolean result`, while the current expression
+> evaluates cleanly on both 2.16.3 and 2.21.3.
+> See the version-matrix note at the bottom for the full-deploy result.
+> The apt package remains the recommended, best-tested path.
 
 ## 3. Clone INSIDE the WSL filesystem
 
 ```bash
+mkdir -p ~/projects && cd ~/projects
 git clone https://github.com/egovernments/Citizen-Complaint-Resolution-System.git
 cd Citizen-Complaint-Resolution-System
 ```
 
-> **Never run the stack from a Windows-side clone** (`/mnt/c/...`). Windows
-> git checks out CRLF line endings, which break every shell script with
-> errors like `cannot execute: required file not found` or
-> `$'\r': command not found`, and `/mnt/c` bind mounts are slow. Clone under
-> your Linux home.
+> **Never run the stack from a Windows-side clone** (`/mnt/c/...`). This is not
+> a style preference — Git for Windows sets `core.autocrlf=true` in its
+> **system** config, so it applies even when you've set nothing yourself.
+> Measured on this machine, same file in both clones:
+>
+> ```
+> /mnt/c/.../deploy.sh:  Bourne-Again shell script, ..., with CRLF line terminators   (8200 bytes)
+> ~/projects/.../deploy.sh: Bourne-Again shell script, ... (no CRLF)                  (8028 bytes)
+> ```
+>
+> Those 172 stray `\r` bytes produce `cannot execute: required file not found`
+> and `$'\r': command not found`. `/mnt/c` bind mounts are also slow. Clone
+> under your Linux home.
 
 ## 4. Create your host_vars from a template
 
@@ -89,28 +120,40 @@ filename (`mybox`) is just your tenant handle for `deploy.sh`.
 
 ## 5. Deploy (as root)
 
-```bash
-sudo -i
-cd /home/<you>/Citizen-Complaint-Resolution-System/local-setup/ansible
-./deploy.sh mybox
-```
-
 Root is required: the play installs Docker, writes system config, and
 regenerates `inventory/hosts.yml`.
 
-**Expect the first run to stop early, once, on purpose.** The play writes the
-WSL memory caps into your Windows-side `.wslconfig` (12 GB VM / 16 GB swap /
-6 CPUs by default) and then fails fast telling you to apply them — Ansible
-cannot restart the VM it runs inside:
+```bash
+sudo -i
+cd /home/<you>/projects/Citizen-Complaint-Resolution-System/local-setup/ansible
+./deploy.sh mybox
+```
+
+**If you don't know your WSL sudo password**, Windows can hand you a root
+shell in the distro with no password at all — this is the more Windows-native
+route and is what this guide was validated with:
+
+```powershell
+wsl -d Ubuntu-24.04 -u root
+```
+
+(Verified: the play's Windows-interop tasks — `cmd.exe /c echo %UserProfile%`
+and `wslpath` — work correctly under this root shell.)
+
+### Expect the first run to stop early, once, on purpose
+
+The play writes the WSL memory caps into your Windows-side `.wslconfig`
+(12 GB VM / 16 GB swap / 6 CPUs by default) and then fails fast telling you to
+apply them — Ansible cannot restart the VM it runs inside:
 
 ```powershell
 wsl --shutdown        # from PowerShell
 ```
 
-Reopen Ubuntu, re-run the same `./deploy.sh mybox`. From here it runs through:
-Docker Engine install, WSL mount-propagation fix (automatic), image pull
-(tens of GB — the long pole on a first run), Node 20 install, UI builds,
-~40-container stack up, health waits, and end-to-end validation probes.
+Reopen Ubuntu and re-run the same `./deploy.sh mybox`. From here it runs
+through: Docker Engine install, WSL mount-propagation fix (automatic), image
+pull, Node 20 install, UI builds, ~38-container stack up, health waits, and
+end-to-end validation probes.
 
 **Watch it live** from a second WSL terminal (the deploy banner prints this):
 
@@ -118,8 +161,34 @@ Docker Engine install, WSL mount-propagation fix (automatic), image pull
 tail -f /opt/digit/digit-stack-up.mybox.progress
 ```
 
-First run from a blank machine: expect 30–60 min depending on bandwidth.
-Re-runs into a healthy stack are idempotent and take ~1–2 min.
+Measured on this machine, on a distro created from scratch with an empty image
+cache: **29 min 06 s** for the deploy itself, `failed=0`, no manual
+intervention — about **35 min** counting `wsl --install`, apt and the clone.
+The long poles are the 54-image pull, the `digit-ui-v2` npm install + vite
+build, and the local `digit-mcp` image build; the total is bandwidth-bound, so
+your mileage will vary with the connection. Re-runs into a healthy stack are
+idempotent: **5–7 min**, measured across five runs.
+
+### What success looks like
+
+```
+TASK [validate — summary]
+    "===== INFRA VALIDATION RESULTS =====",
+    "All containers:        HEALTHY",
+    "Public UI:             200 OK",
+    "Configurator:          200 OK",
+    "Gatus /status/:        200 OK",
+    "MCP /mcp:              200 OK",
+    "Auth flow:             access_token minted",
+    "MDMS StateInfo:        non-empty",
+    "OpenBao:               unsealed + initialized",
+    "===================================="
+
+PLAY RECAP
+mybox : ok=133  changed=40  unreachable=0  failed=0  skipped=206
+```
+
+`failed=0` is the thing to check.
 
 ## 6. Verify + log in (from your Windows browser)
 
@@ -129,35 +198,119 @@ Re-runs into a healthy stack are idempotent and take ~1–2 min.
 | Citizen SPA | http://localhost/citizen/ |
 | Configurator (DIGIT Studio) | http://localhost/configurator/ |
 | Health dashboard (Gatus) | http://localhost/status/ |
-| Grafana | http://localhost:13000 |
+| Grafana | http://localhost/**grafana**/ |
 
-The play's final `INFRA VALIDATION RESULTS` summary should show every row
-green before you ever open a browser.
+Check them all from PowerShell in one go:
+
+```powershell
+foreach ($u in 'digit-ui','citizen','configurator','status','grafana') {
+  $url = "http://localhost/$u/"
+  try   { "{0,-14} {1}" -f $u, (Invoke-WebRequest $url -UseBasicParsing -TimeoutSec 20).StatusCode }
+  catch { "{0,-14} {1}" -f $u, $_.Exception.Response.StatusCode.value__ }
+}
+```
+
+All five return `200`. Verified from Windows on 2026-08-31.
+
+### Browser end-to-end (verified)
+
+Beyond HTTP 200s, the full employee login was driven through a real headless
+Chromium against this deployment — actual form submission, no token injection:
+
+| Check | Result |
+|---|---|
+| Employee UI loads, redirects to `/employee/user/login` | PASS |
+| City dropdown populated | PASS — `CI Test \| PG \| City A \| City B` |
+| Login submit enables once username + password + city + privacy are set | PASS |
+| `ADMIN` / `eGov@123` / **City A** logs in | PASS — lands on `/digit-ui/employee`, `Employee.token` written to localStorage |
+| PGR inbox `/digit-ui/employee/pgr/inbox` renders | PASS |
+| Citizen SPA `/citizen/` | PASS — "Citizen sign in" |
+| Configurator `/configurator/` | PASS — DIGIT Studio sign-in, Onboarding/Management modes |
+| Gatus `/status/` | PASS — every endpoint card green |
+| Grafana `/grafana/` | PASS |
+
+Two form details worth knowing if you script this yourself: the city field is a
+`button[role="combobox"]`, not a `<select>`; and the privacy checkbox has
+`pointer-events: none` on the real input, so you must click
+`label[for="privacy-component-check"]` — the Login button stays `disabled`
+until both are satisfied.
+
+> **Grafana is at `/grafana/`, NOT `localhost:13000`.** Earlier revisions of
+> this guide listed `http://localhost:13000`, which does not work from a
+> Windows browser. Docker publishes Grafana and OpenBao to the WSL VM's
+> **loopback only** —
+>
+> ```
+> LISTEN  0  511         0.0.0.0:80        <- nginx: reachable from Windows
+> LISTEN  0  4096      127.0.0.1:13000     <- grafana: NOT reachable from Windows
+> LISTEN  0  4096      127.0.0.1:18200     <- openbao: NOT reachable from Windows
+> ```
+>
+> — and WSL2's NAT-mode localhost relay does not forward those. Everything you
+> need is proxied through nginx on port 80, which binds `0.0.0.0` and does
+> work. If you specifically need the raw ports from Windows, add
+> `networkingMode=mirrored` to `[wsl2]` in `.wslconfig` (WSL ≥ 2.0), or reach
+> them from inside WSL with `curl`.
+>
+> Beware a stale-relay false positive: `Get-NetTCPConnection` can still show
+> `wslrelay` listening on a port whose backend is long gone, and a probe
+> against it may briefly succeed. Confirm from inside WSL before believing it.
 
 ## Day-to-day
 
 ```bash
-sudo -i && cd .../local-setup/ansible
+wsl -d Ubuntu-24.04 -u root
+cd /home/<you>/projects/Citizen-Complaint-Resolution-System/local-setup/ansible
 ./deploy.sh mybox        # idempotent — also the "bring it back" command after
-                         # a reboot or wsl --shutdown
+                         # a reboot, a wsl --shutdown, or an idle VM shutdown
 ```
 
 Container data persists in Docker volumes; the stack directory is
 `/opt/digit`. Keep `/opt/digit/.openbao/init.json` safe — it holds the
-OpenBao unseal key for re-deploys.
+OpenBao unseal key and root token for re-deploys.
+
+Stop without losing data:
+
+```bash
+docker compose -f /opt/digit/docker-compose.egov-digit.yaml \
+               -f /opt/digit/docker-compose.fast-path.yml down
+```
 
 ## If something breaks
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| `x509: certificate has expired` on image pull | `registry.preview.egov.theflywheel.in`'s cert lapsed. The templates ship an `insecure_registries` workaround already; if you removed it, put it back or get the cert renewed. |
+| Every URL 502s, `docker ps` shows a fraction of the stack | WSL idled the distro or VM down and only the `restart: unless-stopped` containers came back. Set `instanceIdleTimeout=-1` under `[general]` and `vmIdleTimeout=-1` under `[wsl2]` in `%UserProfile%\.wslconfig` (Windows 11), then `wsl --shutdown` and `./deploy.sh mybox`. |
+| Deploy fails on the **last** task: `OpenBao ... Status code was 503`, `"sealed": true` | You're on a playbook predating the re-unseal fix. Update, or re-run `./deploy.sh mybox` to work around it. |
 | `cannot execute: required file not found` / `$'\r'` errors | You're in a Windows-side clone. Re-clone inside WSL (step 3). |
 | `Permission denied: inventory/hosts.yml` | Run `deploy.sh` as root (step 5). |
-| Deploy frozen AND new WSL windows won't open | VM memory starvation — the `.wslconfig` caps aren't applied. `wsl --shutdown` from PowerShell, reopen, re-run the deploy (it verifies the caps before doing anything heavy). |
+| Deploy frozen AND new WSL windows won't open | VM memory starvation — the `.wslconfig` caps aren't applied. `wsl --shutdown` from PowerShell, reopen, re-run. |
+| `x509: certificate has expired` on image pull | `registry.preview.egov.theflywheel.in`'s cert lapsed. The templates ship an `insecure_registries` workaround already. |
 | `path / is mounted on / but it is not a shared or slave mount` | Handled automatically (`make-rshared-root.service`) — seeing it means you're on a branch without the fix. |
-| Containers OOM-killed / restart-looping | `free -h` inside WSL; check `dmesg \| grep -i oom`. On 16 GB machines use the **slim** template and close heavy Windows apps. |
+| Containers OOM-killed / restart-looping | `free -h` inside WSL. At steady state the slim profile sits at ~7.5 GiB of the 11 GiB VM. On 16 GB machines use the **slim** template and close heavy Windows apps. |
 | Port 80 already in use | Something on Windows (IIS?) owns it: `netstat -ano \| findstr :80` in PowerShell. |
-| `Conditional result was ...` errors at play start | ansible-core ≥ 2.19 — install the apt version (step 2). |
+| `Conditional result was ...` errors at play start | You're on a playbook predating `1442b194`. Update, or use apt's ansible-core. |
+
+
+## Known limitations / caveats
+
+- **Grafana and OpenBao are not reachable on their raw ports from Windows.**
+  Use `/grafana/` through nginx; use `curl` inside WSL for OpenBao's API.
+  `networkingMode=mirrored` lifts this if you need it.
+- **The stack does not survive a WSL VM stop.** Disabling the WSL idle
+  timeouts prevents the idle case; a Windows reboot or explicit
+  `wsl --shutdown` still needs a re-run of `./deploy.sh`.
+- **Slim profile has no Novu notifications** (SMS/WhatsApp delivery). Use
+  `localhost-full.yml.example` on a 32 GB machine.
+- **Headroom is tight on 16 GB.** Steady state is ~7.5 GiB used of an 11 GiB
+  VM with ~4.2 GiB available. Heavy Windows apps alongside will hurt.
+- **Kong is not published on `localhost:18000`** in this profile. The
+  `newman ... baseUrl=http://localhost:18000` snippets in
+  `local-setup/ansible/README.md` do not apply here — go through nginx on
+  port 80.
+- **ansible-core version matrix** — apt's 2.16.3 is the recommended path.
+  A full deploy on **2.21.3** also completed `failed=0` with zero fatals
+  (5 m 58 s), so the old "< 2.19" pin is no longer required.
 
 ## Not included in the slim profile
 

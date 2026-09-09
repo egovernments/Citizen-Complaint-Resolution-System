@@ -80,7 +80,14 @@ export function EmployeeCreate() {
       dob: toEpochMs(userInput.dob),
     };
 
-    const doa = toEpochMs(data.dateOfAppointment) ?? Date.now();
+    // Leave a blank Date of Appointment blank. Stamping `Date.now()` here used
+    // to be harmless because the field was mandatory; now that it isn't, the
+    // default would silently invent an appointment date the operator never
+    // entered — and one that HRMS then enforces as a floor on every
+    // assignment's fromDate (HRMS_INVALID_ASSIGNMENT_DATES_APPOINTMENT),
+    // rejecting any backdated assignment. `undefined` is dropped from the JSON
+    // body, and egov-hrms skips both DOA rules when the field is absent.
+    const doa = toEpochMs(data.dateOfAppointment);
 
     return {
       ...data,
@@ -122,14 +129,21 @@ export function EmployeeCreate() {
             help={mobileRules.errorMessage}
           />
           <DigitFormInput source="user.emailId" label="Email" type="email" validate={v.emailOptional} />
-          <DigitFormInput source="user.dob" label="Date of Birth" type="date" validate={v.dobRequired} />
+          {/* DOB and Date of Appointment are optional — Edit already lets an
+              operator clear both and save, so requiring them here only made the
+              two screens disagree (egovernments/CCRS#1949). egov-hrms treats both
+              as nullable: every DOB / DOA rule in EmployeeValidator is guarded by
+              a null check, and the Employee POJO carries no @NotNull on
+              dateOfAppointment. `dateInPast` keeps the "no future DOB" rule for a
+              value that IS supplied, without marking the field required. */}
+          <DigitFormInput source="user.dob" label="Date of Birth" type="date" validate={v.dateInPast} />
           <DigitFormSelect
             source="user.gender"
             label="Gender"
             choices={GENDER_CHOICES}
             placeholder="Select gender..."
           />
-          <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" validate={v.required} />
+          <DigitFormInput source="dateOfAppointment" label="Date of Appointment" type="date" />
           <DigitFormSelect
             source="employeeStatus"
             label="Employee Status"

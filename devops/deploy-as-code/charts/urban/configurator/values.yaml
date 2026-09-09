@@ -1,0 +1,37 @@
+# Common Labels
+labels:
+  app: "configurator"
+  group: "web"
+
+# Ingress Configs
+# The SPA is served under /configurator/ (its image bakes that base path) and
+# auto-detects the DIGIT API base from window.location.origin, so it talks to
+# the same-origin gateway with each user's own OAuth token — same public-SPA
+# model as digit-ui. No API base is baked at build time.
+ingress:
+  enabled: true
+  context: "configurator"
+
+# Init Containers Configs
+initContainers: {}
+
+# Container Configs
+# Tenant-neutral CI image (no VITE_* baked); tag tracks the compose/ansible
+# default (CONFIGURATOR_IMAGE in local-setup) so every tier runs the same build.
+image:
+  repository: "configurator"
+  tag: "2.12-beta-96dcf10"
+replicas: "1"
+httpPort: 80
+healthChecks:
+  enabled: true
+  livenessProbePath: "/configurator/"
+  readinessProbePath: "/configurator/"
+
+# Static nginx SPA — a small, fixed footprint.
+resources: |
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    memory: 64Mi

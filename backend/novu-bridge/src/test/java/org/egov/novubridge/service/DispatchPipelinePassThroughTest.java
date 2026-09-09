@@ -64,7 +64,7 @@ class DispatchPipelinePassThroughTest {
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                dispatchLogRepository, config, mdmsServiceClient);
+                null, dispatchLogRepository, config, mdmsServiceClient);
     }
 
     private ComplaintsDomainEvent smsEvent() {

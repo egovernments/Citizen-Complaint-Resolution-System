@@ -224,9 +224,13 @@ public class PGRQueryBuilder {
      * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
      * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
      * department-scope, and — per {@link PgrSearchScope}'s own Javadoc — the tenant axis itself),
-     * plus PGR search's own jurisdiction axis (exact-match on the complaint's address locality —
-     * see {@code PgrSearchScope#jurisdictionCodes}, distinct from the analytics module's own
-     * hierarchical {@code boundaryPrefix}, which stays unwired here).
+     * plus PGR search's own jurisdiction axis: an exact-match IN-list against the complaint's
+     * address locality, but {@code PgrSearchScope#jurisdictionCodes} itself already carries every
+     * DESCENDANT of each HRMS-assigned boundary (see {@code PolicyDrivenScopeResolver} /
+     * {@code BoundaryHierarchyExpander}), so this exact match still behaves like a hierarchical
+     * cascade for a coarse-grained jurisdiction assignment — the same cascade the analytics
+     * module's {@code AnalyticsPlanner} achieves independently via ancestor-path segment
+     * matching, since both read from the same resolved {@code jurisdictionCodes}.
      *
      * <p>{@code scope == null} is fail-closed, not "unrestricted": a missing scope on this path is
      * a wiring bug (a caller forgot to resolve/pass one), and silently treating that as no

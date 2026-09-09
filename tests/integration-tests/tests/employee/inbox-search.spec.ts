@@ -115,6 +115,11 @@ test.describe('employee inbox-v2 — search', () => {
   test('search by mobile number returns the matching complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!setupSkip, setupSkip);
     await openInbox(page);
+    // Widen to "All Complaints" BEFORE searching: switching tabs re-issues the
+    // tab's own default query and silently drops an in-flight search filter, so
+    // the later showAllInboxRows call (which now tab-switches too) must find the
+    // tab already widened and only enlarge the page size.
+    await showAllInboxRows(page);
 
     await page.locator('input[name="mobileNumber"]').fill(phone);
     await runSearch(page);

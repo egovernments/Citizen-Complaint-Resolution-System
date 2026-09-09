@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -52,6 +53,8 @@ class PolicyDrivenScopeResolverTest {
     private KpiCatalogService catalog;
     @Mock
     private MDMSUtils mdmsUtils;
+    @Mock
+    private BoundaryHierarchyExpander boundaryHierarchyExpander;
 
     private PolicyDrivenScopeResolver resolver;
 
@@ -65,7 +68,12 @@ class PolicyDrivenScopeResolverTest {
         // Unstubbed mdmsUtils.getDepartmentCodeToNameMap defaults to an empty map (Mockito's
         // built-in empty-collection default), which is exactly "no dual-read expansion available"
         // — the department-code lists these tests assert on are left unchanged.
-        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, new Principals(), mdmsUtils);
+        // Default the expander to a no-op passthrough (single code, no descendants) so every
+        // pre-existing jurisdiction assertion below stays exact — descendant expansion itself is
+        // covered separately in jurisdictionScopeUnionsInEveryDescendantOfTheAssignedBoundary.
+        when(boundaryHierarchyExpander.descendantsOf(any(), any(), any(), any()))
+                .thenAnswer(inv -> java.util.Set.of(inv.getArgument(3, String.class)));
+        resolver = new PolicyDrivenScopeResolver(config, restTemplate, mapper, new Principals(), mdmsUtils, boundaryHierarchyExpander);
     }
 
     @Test
@@ -137,6 +145,35 @@ class PolicyDrivenScopeResolverTest {
         PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
 
         assertEquals(List.of("WARD_NEW"), scope.jurisdictionCodes);
+    }
+
+    @Test
+    void jurisdictionScopeUnionsInEveryDescendantOfTheAssignedBoundary() {
+        // A County-level HRMS assignment must resolve to that County code PLUS every Ward under
+        // it, not just the bare County code — complaints are always addressed at the Ward level,
+        // so an unexpanded exact match against the County code alone would never match anything.
+        doReturn(java.util.Set.of("BOMET", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_EAST_KEMBU"))
+                .when(boundaryHierarchyExpander)
+                .descendantsOf(any(), eq("pg.city"), eq("ADMIN"), eq("BOMET"));
+        ScopePolicy policy = ScopePolicy.of(List.of("jurisdiction"), Map.of("jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of(Map.of("boundary", "BOMET", "hierarchy", "ADMIN", "isActive", true)));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertTrue(scope.jurisdictionCodes.containsAll(
+                List.of("BOMET", "BOMET_BOMET_CENTRAL_CHESOEN", "BOMET_BOMET_EAST_KEMBU")));
+        assertEquals(3, scope.jurisdictionCodes.size());
+    }
+
+    @Test
+    void jurisdictionWithoutHierarchyKeepsTheRawBoundaryCode() {
+        ScopePolicy policy = ScopePolicy.of(List.of("jurisdiction"), Map.of("jurisdiction", ScopeLevel.OWN));
+        stubHrms(List.of(), List.of(Map.of("boundary", "WARD_LEGACY", "isActive", true)));
+
+        PgrSearchScope scope = resolver.resolve(requestInfo("emp1", "EMPLOYEE", "GRO"), "pg.city", 2, policy);
+
+        assertEquals(List.of("WARD_LEGACY"), scope.jurisdictionCodes);
+        verifyNoInteractions(boundaryHierarchyExpander);
     }
 
     @Test

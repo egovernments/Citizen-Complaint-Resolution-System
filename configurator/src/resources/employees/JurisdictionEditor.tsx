@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { uniqueBy } from '@/lib/uniqueBy';
 import type { EmployeeJurisdiction } from '@/api/types';
 
 export interface JurisdictionEditorProps {
@@ -80,15 +81,29 @@ export function JurisdictionEditor({
     { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' } },
   );
 
+  // One option per hierarchyType. `boundary-hierarchies` aggregates the state
+  // tenant's definitions with every city tenant's, and nothing stops two tenants
+  // from both calling theirs "ADMIN" — bomet has 7 — which Radix renders as 7
+  // identical, all-checked options (#1923). The cascade below keys purely off
+  // the hierarchyType string, so the collapsed option drives it identically.
   const hierarchyChoices = useMemo(() => {
     if (!hierarchies) return [] as { value: string; label: string }[];
-    return hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType }));
+    return uniqueBy(
+      hierarchies.map((h) => ({ value: h.hierarchyType, label: h.hierarchyType })),
+      (c) => c.value,
+    );
   }, [hierarchies]);
 
+  // Keyed by hierarchyType, first definition wins — deliberately the same
+  // survivor `hierarchyChoices` keeps, so the levels the cascade renders belong
+  // to the tenant whose option the operator actually picked. Last-wins here let
+  // a sub-tenant's shallower "ADMIN" silently truncate the state tenant's
+  // County -> Ward cascade to just County.
   const boundaryTypesByHierarchy = useMemo(() => {
     const map = new Map<string, string[]>();
     if (!hierarchies) return map;
     for (const h of hierarchies) {
+      if (map.has(h.hierarchyType)) continue;
       const levels = Array.isArray(h.boundaryHierarchy) ? h.boundaryHierarchy : [];
       const types: string[] = [];
       const seen = new Set<string>();
@@ -201,7 +216,10 @@ export function JurisdictionEditor({
         ? inner.get(levelType) ?? []
         : boundariesByHierarchyAndType.byTypeOnly.get(levelType) ?? [];
     if (parentCode) candidates = candidates.filter((b) => b.parentCode === parentCode);
-    return candidates;
+    // Boundary codes are unique per tenant, not globally — `ke.mycitynew` and
+    // `ke.hajbvfg` both seed CITY_001/WARD_001 — and the provider concatenates
+    // both tenants' trees. Collapse by code so one boundary is one option.
+    return uniqueBy(candidates, (b) => b.code);
   };
 
   // Picking a boundary at a level makes it the deepest stored selection;

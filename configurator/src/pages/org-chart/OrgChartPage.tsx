@@ -7,6 +7,7 @@ import { useGetList } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Maximize, Minimize } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { uniqueBy } from '@/lib/uniqueBy';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { useOrgChartData } from './useOrgChartData';
@@ -98,7 +99,7 @@ export default function OrgChartPage() {
               <SelectValue placeholder={tenantsLoading ? 'Loading tenants…' : 'Select a tenant…'} />
             </SelectTrigger>
             <SelectContent>
-              {(tenants ?? []).filter((t) => t.code).map((t) => (
+              {uniqueBy((tenants ?? []).filter((t) => t.code), (t) => t.code).map((t) => (
                 <SelectItem key={t.code} value={t.code}>{t.name ?? t.code}</SelectItem>
               ))}
             </SelectContent>

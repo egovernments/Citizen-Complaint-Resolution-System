@@ -4,8 +4,7 @@
 #
 
 variable "cluster_name" {
-  description = "Name of the Kubernetes cluster"
-  default = <cluster_name> #REPLACE
+  description = "Name of the Kubernetes cluster. Set it in terraform.tfvars (see terraform.tfvars.example)."
 }
 
 variable "vpc_cidr_block" {
@@ -26,17 +25,21 @@ variable "availability_zones" {
 
 variable "kubernetes_version" {
   description = "kubernetes version"
-  default = "1.33"
+  default = "1.35"  # currently-supported EKS version (1.33 exited standard support)
 }
 
 variable "db_version" {
   description = "DB version"
-  default = "15.12"
+  default = "15.18"  # 15.12 minor deprecated on RDS; use a current 15.x
 }
 
 variable "db_instance_class" {
   description = "DB instance class"
-  default = "db.t4g.medium"
+  # t3.medium (x86), not the cheaper t4g.medium (Graviton): db.t4g.medium hit
+  # InsufficientInstanceCapacity in ap-south-1a and 1b (2026-08-11), which fails
+  # the RDS create and aborts the whole apply. t3.medium is the x86 twin
+  # (+~$7/mo) and had capacity in all three AZs. Revisit t4g if capacity returns.
+  default = "db.t3.medium"
 }
 
 variable "architecture" {
@@ -82,13 +85,11 @@ variable "max_worker_nodes" {
 }
 
 variable "db_name" {
-  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail"
-  default = <db_name> #REPLACE
+  description = "RDS DB name. Make sure there are no hyphens or other special characters in the DB name. Else, DB creation will fail. Set it in terraform.tfvars."
 }
 
 variable "db_username" {
-  description = "RDS database user name"
-  default = <db_username> #REPLACE
+  description = "RDS database user name. Set it in terraform.tfvars."
 }
 
 variable "filestore_namespace" {
@@ -96,6 +97,7 @@ variable "filestore_namespace" {
   default = "egov" #REPLACE
 }
 
-#DO NOT fill in here. This will be asked at runtime
+# Set it in terraform.tfvars (which is gitignored), or leave it unset and
+# Terraform will prompt for it at runtime.
 variable "db_password" {}
 
