@@ -20,7 +20,20 @@ plugins:
     header_type: w3c
 - name: cors
   config:
-    origins:
+    # ORIGINS — rewritten per tenant by the Ansible deploy.
+    #
+    # The marker below is what the playbook's "Kong — pin CORS origins to the
+    # tenant domain" task keys on; it replaces the '*' entry with the value of
+    # `kong_cors_origins` (defaulting to https://<domain>). Keep the marker
+    # comment and the single-entry list shape intact or that task no-ops and
+    # the deploy asserts.
+    #
+    # '*' is the LOCAL-DEV default only (Tilt / direct `docker compose up`,
+    # where the SPA runs on its own port). A real deployment serves the SPAs
+    # and Kong from one origin behind nginx, so it needs no wildcard at all.
+    #
+    # NOTE: `credentials` is deliberately absent — see below.
+    origins:  # kong-cors-origins-marker
     - '*'
     methods:
     - GET
@@ -46,7 +59,19 @@ plugins:
     - x-trace-id
     exposed_headers:
     - X-Auth-Token
-    credentials: true
+    # `credentials: true` REMOVED (was paired with origins '*').
+    #
+    # Kong's CORS plugin, given origins '*' AND credentials, does not send the
+    # literal `Access-Control-Allow-Origin: *` (browsers reject that pairing) —
+    # it echoes the caller's own Origin back and adds
+    # `Access-Control-Allow-Credentials: true`. The effect is the opposite of a
+    # wildcard's usual read-only weakness: EVERY origin becomes trusted for
+    # CREDENTIALED cross-origin requests, so any page a logged-in user visits
+    # could drive the DIGIT APIs as them and read the responses.
+    #
+    # Nothing here needs it. DIGIT authenticates with the `auth-token` request
+    # header (allowed above) and a Bearer Authorization header, not cookies or
+    # TLS client certs — which is all the credentials flag governs.
     max_age: 3600
 - name: request-size-limiting
   config:
