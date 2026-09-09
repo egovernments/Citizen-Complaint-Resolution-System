@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db } from './db.js';
+import { redactDeep } from '../utils/redact.js';
 import { telemetry as matomo } from './telemetry.js';
 
 // --- Types ---
@@ -26,14 +27,8 @@ interface SessionRecord {
 
 // --- Sensitive field sanitization (matches logger.ts) ---
 
-const SENSITIVE_KEYS = ['password', 'secret', 'token', 'auth_token'];
-
 function sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const out = { ...args };
-  for (const key of SENSITIVE_KEYS) {
-    if (key in out) out[key] = '***';
-  }
-  return out;
+  return redactDeep(args) as Record<string, unknown>;
 }
 
 function truncate(text: string, maxLen: number): string {

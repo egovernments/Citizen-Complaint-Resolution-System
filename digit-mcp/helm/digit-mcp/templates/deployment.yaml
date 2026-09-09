@@ -14,10 +14,22 @@ spec:
       labels:
         {{- include "digit-mcp.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000          # `node` in the official node images
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: {{ .Values.healthcheck.port }}
@@ -27,6 +39,16 @@ spec:
                 name: {{ include "digit-mcp.fullname" . }}
             - secretRef:
                 name: {{ include "digit-mcp.fullname" . }}
+          # readOnlyRootFilesystem is on, so every path the server writes needs
+          # an explicit mount: the access log, the session JSONL directory, and
+          # the snapshot artifact directory it confines output_path to.
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/digit-mcp
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: {{ .Values.healthcheck.path }}
@@ -41,3 +63,10 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

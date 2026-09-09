@@ -1,6 +1,7 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 export function registerEncryptionTools(registry: ToolRegistry): void {
   // ──────────────────────────────────────────
@@ -11,9 +12,10 @@ export function registerEncryptionTools(registry: ToolRegistry): void {
     name: 'encrypt_data',
     group: 'encryption',
     category: 'encryption',
+    access: 'admin',
     risk: 'write',
     description:
-      'Encrypt sensitive data using the DIGIT encryption service (egov-enc-service). Accepts plain text values and returns encrypted strings. Does not require user authentication — the encryption service handles its own key management.',
+      'Encrypt sensitive data using the DIGIT encryption service (egov-enc-service). Accepts plain text values and returns encrypted strings. Requires authentication.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -30,6 +32,8 @@ export function registerEncryptionTools(registry: ToolRegistry): void {
       required: ['tenant_id', 'values'],
     },
     handler: async (args) => {
+      await ensureAuthenticated();
+
       const tenantId = args.tenant_id as string;
       const values = args.values as string[];
 
@@ -52,9 +56,11 @@ export function registerEncryptionTools(registry: ToolRegistry): void {
     name: 'decrypt_data',
     group: 'encryption',
     category: 'encryption',
+    access: 'admin',
+    sensitiveOutput: true,
     risk: 'write',
     description:
-      'Decrypt encrypted data using the DIGIT encryption service (egov-enc-service). Accepts encrypted strings and returns plain text values. May fail if the encryption key is not configured for the tenant.',
+      'Decrypt encrypted data using the DIGIT encryption service (egov-enc-service). Accepts encrypted strings and returns plain text values. Requires authentication — this returns citizen PII in plain text. May fail if the encryption key is not configured for the tenant.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -71,6 +77,8 @@ export function registerEncryptionTools(registry: ToolRegistry): void {
       required: ['tenant_id', 'encrypted_values'],
     },
     handler: async (args) => {
+      await ensureAuthenticated();
+
       const tenantId = args.tenant_id as string;
       const encryptedValues = args.encrypted_values as string[];
 
