@@ -2485,27 +2485,60 @@
     # `kong_cors_origins` in host_vars when a tenant genuinely needs more (a
     # separate analytics host, say).
     #
-    # unsafe_writes is load-bearing for the same reason the sync above uses
-    # --inplace: kong.yml is a single-file bind mount, so an atomic
-    # write-temp-then-rename would swap the inode and the running container
-    # would keep reading the old file forever (#1683). unsafe_writes edits in
-    # place and preserves the inode. The reload task below then applies it.
-    - name: "Kong — pin CORS origins to the tenant domain"
+    # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
+    # or the running container keeps reading the old one forever (#1683 — the
+    # same reason the config sync above uses rsync --inplace).
+    #
+    # `unsafe_writes: true` does NOT achieve that. An earlier revision of this
+    # task assumed it did. ansible.builtin.replace writes a temp file and calls
+    # atomic_move(), which tries os.rename() FIRST; on a plain host file that
+    # succeeds, so the unsafe_writes path is never reached and the inode is
+    # swapped regardless. Verified directly: os.rename over a file changes its
+    # inode; an open-for-write truncation does not.
+    #
+    # The failure was silent, and worse than not doing it at all: Kong would
+    # keep serving the un-pinned config, the host-side check below would read
+    # the correct file and report success, and every FUTURE kong.yml change
+    # would land on an inode the container no longer holds — freezing the
+    # gateway's config permanently.
+    #
+    # So: edit a staging copy, then `cat` it over the original. The redirect
+    # truncates the existing file in place, preserving the inode.
+    - name: "Kong — stage a copy to pin CORS origins into"
+      ansible.builtin.copy:
+        src: "{{ digit_dir }}/kong/kong.yml"
+        dest: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        remote_src: true
+        mode: '0644'
+
+    # `[ \t]*-` rather than `\s*-`: \s matches newlines, so the greedy form
+    # could run past a blank line and swallow the NEXT plugin's `- name:` entry.
+    - name: "Kong — pin CORS origins to the tenant domain (staging copy)"
       ansible.builtin.replace:
-        path: "{{ digit_dir }}/kong/kong.yml"
-        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:\\s*-\\s*.*\\n)+"
-        replace: "\\1{% for o in (kong_cors_origins | default(['https://' + domain])) %}    - '{{ o }}'\n{% endfor %}"
-        unsafe_writes: true
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
+        replace: "\\1{% for o in (kong_cors_origins | default(['https://' ~ domain])) %}    - '{{ o }}'\n{% endfor %}"
       register: kong_cors_pin
+
+    - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cat "{{ digit_dir }}/kong/.kong.yml.pinned" > "{{ digit_dir }}/kong/kong.yml"
+        rm -f "{{ digit_dir }}/kong/.kong.yml.pinned"
+      changed_when: true
 
     # Fail loudly rather than silently leaving '*' in place: if the marker ever
     # drifts out of kong.yml the replace above is a no-op, and a green deploy
     # would ship the wildcard to production.
-    - name: "Kong — verify the CORS wildcard is gone"
+    # Read what the CONTAINER has, not the host path. A host-side check cannot
+    # detect the inode-orphaning failure described above: the file on disk looks
+    # correct while the gateway serves something else entirely. That is exactly
+    # the false-green this verification exists to prevent.
+    - name: "Kong — verify the CORS wildcard is gone (as the container sees it)"
       ansible.builtin.shell: |
         set -euo pipefail
-        awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{exit}' \
-          "{{ digit_dir }}/kong/kong.yml"
+        docker exec kong-gateway cat /kong/kong.yml \
+          | awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{exit}'
       register: kong_cors_effective
       changed_when: false
 
