@@ -5,8 +5,37 @@
 # `nginx_features` map — flip the flag rather than commenting locations
 # out by hand. SSL termination + http→https redirect are managed by
 # Certbot (the `# managed by Certbot` blocks below).
+{#
+   ==================== Security headers ====================
+   nginx's add_header does NOT inherit into a location that declares its own
+   add_header — several locations below set Cache-Control, and would silently
+   lose every security header if these were only set at server level. So they
+   live in a macro that is emitted at server level AND re-emitted in each
+   location that adds a header of its own. Change them here, once.
+
+   CSP ships in Report-Only mode by default and is NOT enforced: an untested
+   policy against these SPAs (digit-ui, configurator, Grafana, Gatus, Novu,
+   Matomo, all on one origin) breaks the UI rather than hardening it. Collect
+   reports, tune, then set `nginx_csp_enforce: true` in host_vars to enforce
+   the same policy. Override the policy itself with `nginx_csp_policy`.
+#}
+{% macro security_headers(indent='  ') %}
+{{ indent }}add_header X-Content-Type-Options nosniff always;
+{{ indent }}add_header X-Frame-Options SAMEORIGIN always;
+{{ indent }}add_header Referrer-Policy strict-origin-when-cross-origin always;
+{% if tls_enabled | default(true) %}
+{{ indent }}add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+{% endif %}
+{{ indent }}add_header {{ 'Content-Security-Policy' if (nginx_csp_enforce | default(false)) else 'Content-Security-Policy-Report-Only' }} "{{ nginx_csp_policy | default("default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'") }}" always;
+{%- endmacro %}
 server {
   server_name {{ domain }};
+
+  # Don't advertise the exact nginx version in Server: / error pages — it
+  # hands an attacker a precise version to match CVEs against for free.
+  server_tokens off;
+
+{{ security_headers('  ') }}
 
 {% if nginx_features.brand_assets %}
   # Brand assets (logos, footers) served from /var/www/brand/. Requires
@@ -14,6 +43,7 @@ server {
   location /brand/ {
     alias /var/www/brand/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
 
@@ -32,6 +62,7 @@ server {
   location /configurator/assets/ {
     alias /var/www/configurator/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
 
@@ -39,6 +70,7 @@ server {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 {% else %}
   # Configurator SPA — host-built dist (build_configurator: true), no
@@ -73,12 +105,14 @@ server {
   location /citizen/assets/ {
     alias /var/www/citizen/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
+    {{ security_headers('    ') }}
     try_files $uri =404;
   }
   location /citizen {
     alias /var/www/citizen/;
     try_files $uri $uri/ /citizen/index.html;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 
 {% endif %}
@@ -96,6 +130,7 @@ server {
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
     try_files $uri $uri/ $uri/index.html =404;
   }
   location /tests-v2/ {
@@ -103,6 +138,7 @@ server {
     auth_basic "DIGIT integration tests";
     auth_basic_user_file /etc/nginx/.htpasswd-tests;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
     try_files $uri $uri/ /tests-v2/index.html =404;
   }
 {% if nginx_features.integration_tests_runner | default(false) %}
@@ -546,6 +582,7 @@ server {
     alias {{ digit_dir }}/nginx/globalConfigs.js;
     default_type application/javascript;
     add_header Cache-Control "no-cache, must-revalidate" always;
+    {{ security_headers('    ') }}
   }
 
   # ----------------------------------------------------------------

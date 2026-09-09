@@ -2472,6 +2472,55 @@
       until: kong_health.stdout == 'healthy'
       changed_when: false
 
+    # ==================== Kong CORS origins ====================
+    # The repo's kong.yml ships `origins: ['*']` so a local `docker compose up`
+    # or Tilt run (SPA on its own port) works without configuration. That
+    # wildcard must never reach a deployed box: paired with the credentials
+    # flag it used to make every origin trusted for CREDENTIALED calls, and
+    # even without credentials it lets any site read every auth-optional API
+    # cross-origin.
+    #
+    # A real deployment serves the SPAs and Kong from ONE origin behind nginx,
+    # so the correct value is just this tenant's domain. Override with
+    # `kong_cors_origins` in host_vars when a tenant genuinely needs more (a
+    # separate analytics host, say).
+    #
+    # unsafe_writes is load-bearing for the same reason the sync above uses
+    # --inplace: kong.yml is a single-file bind mount, so an atomic
+    # write-temp-then-rename would swap the inode and the running container
+    # would keep reading the old file forever (#1683). unsafe_writes edits in
+    # place and preserves the inode. The reload task below then applies it.
+    - name: "Kong — pin CORS origins to the tenant domain"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/kong.yml"
+        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:\\s*-\\s*.*\\n)+"
+        replace: "\\1{% for o in (kong_cors_origins | default(['https://' + domain])) %}    - '{{ o }}'\n{% endfor %}"
+        unsafe_writes: true
+      register: kong_cors_pin
+
+    # Fail loudly rather than silently leaving '*' in place: if the marker ever
+    # drifts out of kong.yml the replace above is a no-op, and a green deploy
+    # would ship the wildcard to production.
+    - name: "Kong — verify the CORS wildcard is gone"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{exit}' \
+          "{{ digit_dir }}/kong/kong.yml"
+      register: kong_cors_effective
+      changed_when: false
+
+    - name: "Kong — assert no wildcard CORS origin on a deployed box"
+      ansible.builtin.assert:
+        that:
+          - "\"'*'\" not in kong_cors_effective.stdout"
+          - kong_cors_effective.stdout | trim | length > 0
+        fail_msg: >-
+          kong.yml still has a wildcard (or empty) CORS origin list after
+          templating: {{ kong_cors_effective.stdout | default('<empty>') }}.
+          The 'origins:  # kong-cors-origins-marker' line must be present in
+          local-setup/kong/kong.yml immediately above the origins list.
+        success_msg: "Kong CORS origins: {{ kong_cors_effective.stdout | trim }}"
+
     # Kong is DB-less: it loads kong.yml once at startup and does not watch it.
     # So a changed kong.yml is PRESENT but not APPLIED until Kong re-reads it,
     # and nothing else in this playbook recreates Kong when only its config

@@ -790,6 +790,29 @@ status_basic_auth_user: digit-status
 # Rotate by deleting /etc/nginx/.htpasswd-status on the box and re-running the
 # deploy (the task is idempotent via `creates`).
 
+# ==================== Kong CORS origins ====================
+# The repo's kong/kong.yml ships `origins: ['*']` so a local `docker compose up`
+# or a Tilt run works with the SPA on its own port. The deploy REWRITES that to
+# the value below, because a wildcard on a real box lets any website read every
+# auth-optional DIGIT API cross-origin. (It was previously paired with
+# `credentials: true`, which made every origin trusted for authenticated calls;
+# that flag is now gone from kong.yml entirely.)
+#
+# Default is https://<domain> — correct for the normal single-origin
+# deployment, where nginx serves the SPAs and proxies Kong on one hostname.
+# Only set this when a genuinely separate browser origin must call the APIs.
+# kong_cors_origins:
+#   - "https://{{ domain }}"
+#   - "https://analytics.example.org"
+
+# ==================== nginx security headers ====================
+# X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when
+# tls_enabled) are always sent. The Content-Security-Policy is sent in
+# Report-Only mode by default: an untested policy against these SPAs breaks the
+# UI instead of hardening it. Collect reports, tune, then enforce.
+# nginx_csp_enforce: false
+# nginx_csp_policy: "default-src 'self'; ..."   # override the shipped policy
+
 # ==================== Host firewall ====================
 # The playbook installs and enables ufw on Debian/Ubuntu (default deny
 # incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
