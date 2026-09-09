@@ -3679,6 +3679,35 @@
         - integration_tests_dir is defined
         - ansible_system != "Darwin"
 
+    # The unit now runs as an unprivileged account instead of root, so create
+    # it and hand it the two paths ReadWritePaths names. System account: no
+    # login shell, no home — it exists only to own the runner process.
+    - name: "integration-tests runner — unprivileged service account"
+      ansible.builtin.user:
+        name: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+        state: present
+      when:
+        - enable_integration_tests_runner | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — own its checkout and webroot"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        group: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        recurse: true
+      loop:
+        - "{{ integration_tests_dir }}"
+        - /var/www/integration-tests
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
     - name: "integration-tests runner — install systemd unit"
       ansible.builtin.template:
         src: templates/integration-tests-runner.service.j2

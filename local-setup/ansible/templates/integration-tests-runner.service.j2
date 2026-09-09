@@ -7,6 +7,30 @@ After=network.target
 
 [Service]
 Type=simple
+
+# Ran as root with no confinement: the unit declared no User=, so a daemon
+# that clones a branch and executes a Playwright suite (arbitrary code, by
+# design) did so as root on the box holding every tenant secret. It is reached
+# through nginx /tests/api/, so a flaw in the RUN button was host root.
+#
+# The account is created by the playbook alongside this unit.
+User={{ integration_tests_runner_user | default('digit-tests') }}
+Group={{ integration_tests_runner_user | default('digit-tests') }}
+
+# NoNewPrivileges also neuters any setuid binary the test suite might reach.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# ProtectSystem=strict makes the whole filesystem read-only, so name the two
+# paths the runner legitimately writes: its checkout (clone/npm/test output)
+# and the webroot it publishes results into.
+ReadWritePaths=/var/www/integration-tests {{ integration_tests_dir }}
+
 WorkingDirectory={{ integration_tests_dir }}
 ExecStart=/usr/bin/env node {{ integration_tests_dir }}/runner/server.mjs
 Environment=RUNNER_PORT={{ integration_tests_runner_port | default(8181) }}

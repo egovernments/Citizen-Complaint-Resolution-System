@@ -23,7 +23,12 @@ clients:
 scrape_configs:
   - job_name: docker
     docker_sd_configs:
-      - host: unix:///var/run/docker.sock
+      # Via the read-only socket proxy, NOT the raw socket. Promtail only needs
+      # container metadata to build labels; a direct /var/run/docker.sock bind
+      # would give this log shipper the full daemon API, which is host root
+      # (`:ro` only makes the socket file read-only, not the API behind it).
+      # docker-socket-proxy exposes CONTAINERS=1 and denies every write path.
+      - host: tcp://docker-socket-proxy:2375
         refresh_interval: 15s
     relabel_configs:
       # `compose_service` is what compose stamps on every container it starts.
