@@ -1,8 +1,8 @@
 /**
  * Matomo telemetry for DIGIT MCP server.
  *
- * Sends lightweight usage events to Matomo (fire-and-forget, opt-out via TELEMETRY=false).
- * Uses the same Matomo instance and conventions as the CCRS local-setup telemetry.
+ * Sends lightweight usage events to Matomo (fire-and-forget). OPT-IN: nothing is
+ * sent unless MATOMO_URL is set. TELEMETRY=false disables it even when set.
  *
  * Events sent:
  *   - mcp / session_start    — new MCP session
@@ -18,12 +18,30 @@ import { hostname } from 'node:os';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const MATOMO_URL = process.env.MATOMO_URL || 'https://unified-demo.digit.org/matomo/matomo.php';
+// No default endpoint. This previously defaulted to a shared demo host with
+// TELEMETRY defaulting to "true", so any deployment that didn't override either
+// value — including production, where neither is set in the Helm chart — sent
+// tool-call events off-cluster. Telemetry is now strictly opt-in: it requires an
+// explicit MATOMO_URL, so an unconfigured deployment emits nothing.
+const MATOMO_URL = process.env.MATOMO_URL || '';
 const MATOMO_SITE_ID = process.env.MATOMO_SITE_ID || '5';
 const UA = 'Mozilla/5.0 (DIGIT-MCP/1.0; Linux) AppleWebKit/537.36';
 
+let startupNoticeLogged = false;
+
 function isEnabled(): boolean {
-  return (process.env.TELEMETRY ?? 'true').toLowerCase() !== 'false';
+  // Both conditions required: an endpoint to send to, and no explicit opt-out.
+  if (!MATOMO_URL) return false;
+  if ((process.env.TELEMETRY ?? 'true').toLowerCase() === 'false') return false;
+
+  if (!startupNoticeLogged) {
+    startupNoticeLogged = true;
+    console.error(
+      `[telemetry] Enabled — sending MCP usage events to ${MATOMO_URL} (site ${MATOMO_SITE_ID}). ` +
+      'Unset MATOMO_URL or set TELEMETRY=false to disable.'
+    );
+  }
+  return true;
 }
 
 // Stable visitor ID: SHA256(hostname)[0:16] — same approach as CCRS telemetry

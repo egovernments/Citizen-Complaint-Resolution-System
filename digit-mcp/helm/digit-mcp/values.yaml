@@ -2,21 +2,42 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/chakshugautam/digit-mcp
-  tag: latest
+  # Empty => Chart.AppVersion, so a release is pinned to a known build rather
+  # than whatever ":latest" happens to be at pull time. Override per deploy.
+  tag: ""
   pullPolicy: IfNotPresent
 
 service:
+  # ClusterIP only. /mcp and /v1/* expose admin-capable tooling; do not put an
+  # Ingress in front of this without an authenticating proxy.
   type: ClusterIP
   port: 3000
 
 env:
   MCP_TRANSPORT: http
   MCP_PORT: "3000"
+  # Deployment targeting (from develop — matches the ccrs-prod configmap).
   CRS_ENVIRONMENT: "self-hosted"
   CRS_TENANT_ID: "pg"
   # DIGIT API base the shim proxies to (in-cluster gateway service).
   CRS_API_URL: "http://gateway.egov:8080"
   CRS_ENV_NAME: "CCRS"
+  # Require a validated DIGIT token on /mcp and /v1/*. Do not set this to
+  # "ambient" unless the socket is bound to loopback — ambient makes every
+  # anonymous caller act as CRS_USERNAME.
+  MCP_AUTH_MODE: token
+  # Usage telemetry is opt-in: unset MATOMO_URL means nothing leaves the cluster.
+  TELEMETRY: "false"
+  # Hosts `configure` may be pointed at. Empty => only the configured CRS_API_URL.
+  MCP_ALLOWED_BASE_URLS: ""
+  # Directory snapshot artifacts are confined to (must be writable; see volumes).
+  MCP_ARTIFACT_DIR: /app/data/artifacts
+  # Role codes that satisfy a tool's access: 'admin' requirement. Empty => the
+  # built-in defaults (SUPERUSER, MDMS_ADMIN, SYSTEM_ADMIN, STADMIN).
+  MCP_ADMIN_ROLES: ""
+  # Peers whose X-Forwarded-For may be trusted (IPv4/CIDR list, or "*" behind an
+  # ingress that overwrites the header). Empty => never trust it.
+  MCP_TRUSTED_PROXIES: ""
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...
