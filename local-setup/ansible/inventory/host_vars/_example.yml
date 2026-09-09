@@ -813,6 +813,43 @@ status_basic_auth_user: digit-status
 # nginx_csp_enforce: false
 # nginx_csp_policy: "default-src 'self'; ..."   # override the shipped policy
 
+# ==================== HRMS dev mode ====================
+# Lets employee-create honour a password supplied in the request rather than
+# generating one. The configurator / XLSX onboarding wizards need it to set a
+# known first password for the employees they create. It was previously ON for
+# every deployment, which means anyone authorised to create employees chose
+# their credentials directly and bypassed the generated-password flow.
+#
+# Turn it on while you are onboarding employees through those wizards, then
+# turn it back off.
+hrms_dev_mode: false
+
+# ==================== Deploy SSH account ====================
+# The generated inventory defaults to `ansible_user: root` because a freshly
+# provisioned box has root (or the image's default user) and nothing else.
+# host_vars beat group vars, so setting it here switches THIS tenant to an
+# unprivileged deploy account — the play already runs under `become`, and the
+# rsync/synchronize tasks already opt out of it, so nothing else changes.
+#
+# Recommended once the box exists:
+#   1. useradd -m -s /bin/bash digit-deploy && usermod -aG sudo digit-deploy
+#   2. install the controller's public key in ~digit-deploy/.ssh/authorized_keys
+#   3. set ansible_user below (and ansible_become_password, unless you granted
+#      NOPASSWD sudo)
+#   4. disable root SSH: PermitRootLogin no in /etc/ssh/sshd_config
+#
+# ansible_user: digit-deploy
+# ansible_become_password: "..."      # omit with NOPASSWD sudo
+#
+# Set DIGIT_ANSIBLE_USER in the environment to change the default for every
+# tenant at once instead of per file.
+
+# ==================== Integration-tests runner account ====================
+# The RUN-button daemon runs as this unprivileged system account (created by
+# the playbook), not root. It clones a branch and executes a Playwright suite,
+# which is arbitrary code by design, and is reachable through nginx /tests/api/.
+# integration_tests_runner_user: digit-tests
+
 # ==================== Host firewall ====================
 # The playbook installs and enables ufw on Debian/Ubuntu (default deny
 # incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.

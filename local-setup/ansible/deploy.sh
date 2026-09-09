@@ -130,7 +130,18 @@ TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
     echo "        ${t}:"
   done
   echo "      vars:"
-  echo "        ansible_user: root"
+  # Group-level default only. host_vars/<tenant>.yml wins over group vars in
+  # Ansible, so a tenant that sets `ansible_user: digit-deploy` (plus
+  # ansible_become_password, or NOPASSWD sudo) deploys unprivileged with no
+  # change here — the play already runs under
+  # `become: {{ deploy_become | default(true) }}` and the synchronize tasks
+  # already opt out with become: false, so that path works today.
+  #
+  # The default stays root because a freshly provisioned cloud box has root or
+  # the image's default user and nothing else; pointing every tenant at an
+  # account that does not exist yet would fail to connect rather than harden
+  # anything. Override per tenant, or set DIGIT_ANSIBLE_USER for all of them.
+  echo "        ansible_user: ${DIGIT_ANSIBLE_USER:-root}"
   # accept-new, NOT no. `no` accepts a changed key silently on every
   # connection, so a MITM between the controller and the box is invisible and
   # the deploy hands it root plus every bootstrap secret. accept-new trusts
