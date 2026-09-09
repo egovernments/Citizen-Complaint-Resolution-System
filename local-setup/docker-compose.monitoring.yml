@@ -22,6 +22,9 @@
 # harmless but not meaningful. The real targets are the Linux VPS boxes.
 services:
   node-exporter:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Official Docker Hub image (same source as the base stack's
     # prom/prometheus) — not the registry.preview mirror.
     image: prom/node-exporter:v1.8.2
@@ -68,6 +71,9 @@ services:
   # published host port (Prometheus reaches it by DNS over egov-network), and
   # always layered by the Ansible deploy.
   postgres-exporter:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: digit-postgres-exporter
     restart: unless-stopped
