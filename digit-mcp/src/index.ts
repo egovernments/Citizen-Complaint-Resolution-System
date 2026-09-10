@@ -676,7 +676,19 @@ if (transportMode === 'stdio') {
     const userAgent = String(req.headers['user-agent'] || '');
     const forwarded = (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) as string | undefined;
     const peer = resolveClientIp(req.socket.remoteAddress, forwarded);
-    void runWithRequestContext({ ip: peer.ip, userAgent }, () => handleHttpRequest(req, res, peer));
+    // In token mode every request gets its OWN DigitApiClient, exactly as the
+    // /mcp path does below. Without this the REST shim shared one process-level
+    // client guarded only by snapshot/restore + a mutex, and a concurrent
+    // request's `finally { restoreAuth(snap) }` wiped the token another request
+    // had just applied — so under any real concurrency (or even a single call
+    // racing the container health probe) the tool ran unauthenticated and every
+    // /v1/tools/:name call 401'd with "not authenticated". Isolating per request
+    // makes the caller's token visible to its own tool run and to nothing else.
+    // Ambient mode keeps the shared client so `configure` once, then use tools
+    // still works — same rule as the /mcp handler.
+    const run = () => handleHttpRequest(req, res, peer);
+    const scoped = getAuthMode() === 'token' ? () => runWithIsolatedClient(run) : run;
+    void runWithRequestContext({ ip: peer.ip, userAgent }, scoped);
   });
 
   async function handleHttpRequest(
