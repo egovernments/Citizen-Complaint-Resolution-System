@@ -4,7 +4,7 @@ XState-Chatbot is a chatbot developed on the technology [XState](https://xstate.
  
 Chatbot is developed as a backend service that will receive messages incoming from the user, and send messages to the user using a separate API call.
  
-In this project, the `nodejs` directory contains the primary project. It contains all the files of the project that will get deployed on the server. `react-app` is provided only to ease the process of dialog development. It should be used only on a developer's local machine when developing any new chat flow. `nodejs` should be run as a backend service and tested once on the local machine using postman before deploying the build to the server.
+In this project, the `nodejs` directory contains the primary project. It contains all the files of the project that will get deployed on the server. `nodejs` should be run as a backend service and tested once on the local machine using postman before deploying the build to the server.
 
 ## Remote Debugging
 
