@@ -2931,7 +2931,9 @@ services:
     # Hardening: no capabilities, no privilege escalation (see file header).
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
-    image: quay.io/keycloak/keycloak:24.0
+    # 26.7 provides the supported Organizations/group model and Standard
+    # Token Exchange V2 required by the organization-aware identity BFF.
+    image: quay.io/keycloak/keycloak:26.7.3
     container_name: keycloak
     restart: unless-stopped
     profiles: ["keycloak"]
