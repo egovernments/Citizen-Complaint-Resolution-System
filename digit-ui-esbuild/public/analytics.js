@@ -70,6 +70,9 @@
     "*.posthog.com"
   ];
 
+  /* PostHog's own identity/session keys. See sanitize_properties below. */
+  var PH_ID_KEYS = ["distinct_id", "$device_id", "$session_id", "$window_id", "$anon_distinct_id"];
+
   /* Globals a CUSTOM record may never claim. */
   var GLOBAL_DENYLIST = [
     "Digit", "eGov", "globalConfigs", "contextPath", "globalPath", "i18next",
@@ -775,8 +778,22 @@
 
   function pushTo(name, args) {
     try {
-      if (!isArray(window[name])) window[name] = [];
-      window[name].push(args);
+      var q = window[name];
+      /* Only create the queue when there is nothing usable there.
+       *
+       * The array test was wrong once the vendor script loads. Matomo replaces
+       * window._paq with a TrackerProxy: not an array, but it does have push(),
+       * and pushing to it executes the command immediately. Testing isArray
+       * therefore threw that live proxy away on the very next call and put a
+       * fresh [] in its place — an array nothing drains. Everything after
+       * matomo.js finished loading went into it and was silently lost: every
+       * SPA route change, every trackEvent, every tagged click. Only the first
+       * pageview of a full page load survived, because that one is queued
+       * before the vendor script arrives and is drained when it does.
+       *
+       * GA4's dataLayer stays a real array, so it is unaffected either way. */
+      if (!q || typeof q.push !== "function") { q = []; window[name] = q; }
+      q.push(args);
     } catch (e) {}
   }
 
@@ -903,6 +920,16 @@
                 for (var k in props) {
                   if (!props.hasOwnProperty(k)) continue;
                   var v = props[k];
+                  /* PostHog's own machine-generated ids pass through untouched.
+                   * They are opaque values PostHog created, not anything from
+                   * our app, and they are what every per-visitor and
+                   * per-session number is built on. They also happen to look
+                   * exactly like the UUIDs scrub() exists to redact, so
+                   * scrubbing them rewrote EVERY visitor to the literal
+                   * ":uuid" — one person for the entire audience, sessions
+                   * collapsed with it, and person_mode stuck at propertyless.
+                   * Everything else is still scrubbed. */
+                  if (indexOf(PH_ID_KEYS, k) !== -1) { out[k] = v; continue; }
                   out[k] = isStr(v) ? scrub(v) : v;
                 }
                 /* Vendor-injected URL properties are not covered by our page
@@ -1343,10 +1370,14 @@
            * localised and complaint pages interpolate ids into them. */
           for (var hops = 0; el && hops < 5; hops++) {
             if (el.getAttribute && el.getAttribute("data-analytics-event")) {
+              var eventName = scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60);
               emitEvent({
-                name: scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60),
+                name: eventName,
                 category: "click",
-                action: "click",
+                /* Matomo identifies events by category + action; its optional
+                 * third field is already used for our label. Keep the stable
+                 * declarative name as the action so tags stay distinguishable. */
+                action: eventName,
                 label: scrub(String(el.getAttribute("data-analytics-label") || "")).substring(0, 60)
               });
               return;

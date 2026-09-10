@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { serializeGeoLocation } from "../../../utils/geoLocation";
+import { trackEvent } from "../../../utils/analytics";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -938,11 +939,16 @@ const CreatePGRFlowV2: React.FC = () => {
       const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
       createMutation(payload, {
         onError: () => {
+          // Outcome, not intent. The submit click is already tagged; whether the
+          // complaint was actually created happens later and a click listener
+          // cannot see it. Without this pair the funnel ends at "pressed submit".
+          trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
           history.push(`/digit-ui/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
+          trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
