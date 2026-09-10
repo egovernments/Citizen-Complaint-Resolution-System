@@ -70,6 +70,9 @@
     "*.posthog.com"
   ];
 
+  /* PostHog's own identity/session keys. See sanitize_properties below. */
+  var PH_ID_KEYS = ["distinct_id", "$device_id", "$session_id", "$window_id", "$anon_distinct_id"];
+
   /* Globals a CUSTOM record may never claim. */
   var GLOBAL_DENYLIST = [
     "Digit", "eGov", "globalConfigs", "contextPath", "globalPath", "i18next",
@@ -917,6 +920,16 @@
                 for (var k in props) {
                   if (!props.hasOwnProperty(k)) continue;
                   var v = props[k];
+                  /* PostHog's own machine-generated ids pass through untouched.
+                   * They are opaque values PostHog created, not anything from
+                   * our app, and they are what every per-visitor and
+                   * per-session number is built on. They also happen to look
+                   * exactly like the UUIDs scrub() exists to redact, so
+                   * scrubbing them rewrote EVERY visitor to the literal
+                   * ":uuid" — one person for the entire audience, sessions
+                   * collapsed with it, and person_mode stuck at propertyless.
+                   * Everything else is still scrubbed. */
+                  if (indexOf(PH_ID_KEYS, k) !== -1) { out[k] = v; continue; }
                   out[k] = isStr(v) ? scrub(v) : v;
                 }
                 /* Vendor-injected URL properties are not covered by our page

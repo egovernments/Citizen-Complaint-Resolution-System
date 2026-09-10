@@ -598,6 +598,35 @@ test("PostHog init forces every restraint, and no record can loosen them", () =>
   assert.equal(typeof cfg.sanitize_properties, "function");
 });
 
+test("sanitize_properties scrubs content but not PostHog's own identity keys", () => {
+  /* Regression. PostHog's distinct_id, $device_id and $session_id are UUIDs it
+     generates itself. scrub() redacts anything UUID-shaped, so sanitising them
+     rewrote every visitor to the literal ":uuid": one person for the whole
+     audience, sessions collapsed with it, person_mode stuck at propertyless.
+     Observed on the Bomet deployment before fixing. They are opaque ids from
+     the vendor, not anything from our app, so they pass through while real
+     content is still scrubbed. */
+  const t = loadShim({
+    deferScriptLoad: true,
+    respond: (tenant) => (tenant === "mz" ? [row("mz", POSTHOG_OK)] : []),
+  });
+  t.sandbox.posthog = { init: (key, cfg) => { t.sandbox.__cfg = cfg; }, capture: () => {} };
+  t.loadScripts();
+  const sanitize = t.sandbox.__cfg.sanitize_properties;
+
+  const out = sanitize({
+    distinct_id: "01a08c48-1198-79a0-b276-5f84fa6ddd7a",
+    $device_id: "01a08c48-1198-79a0-b276-5f84fa6ddd7b",
+    $session_id: "01a08c48-1198-79a0-b276-5f84fa6ddd7c",
+    page_title: "Complaint 01a08c48-1198-79a0-b276-5f84fa6ddd7a",
+  });
+
+  assert.equal(out.distinct_id, "01a08c48-1198-79a0-b276-5f84fa6ddd7a", "identity must survive");
+  assert.equal(out.$device_id, "01a08c48-1198-79a0-b276-5f84fa6ddd7b");
+  assert.equal(out.$session_id, "01a08c48-1198-79a0-b276-5f84fa6ddd7c");
+  assert.ok(out.page_title.indexOf(":uuid") !== -1, "real content is still scrubbed");
+});
+
 test("the pending queue is bounded so a script that never loads cannot grow it", () => {
   const t = loadShim({
     deferScriptLoad: true,
