@@ -439,6 +439,52 @@ await test('9.7 empty fields array returns all fields', () => {
 });
 
 // =====================================================================
+// 10. Read-only mode (MCP_READ_ONLY): write tools are ABSENT, not disabled —
+//     they cannot be listed, enabled, or dispatched on /mcp or any /v1 route.
+// =====================================================================
+
+await test('10.1 read-only registry registers no non-core write tool', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const leaked = ro.getAllTools().filter((t) => t.risk === 'write' && t.group !== 'core');
+  assert(leaked.length === 0, `write tools leaked into read-only: ${leaked.map((t) => t.name).join(', ')}`);
+  assert(ro.isReadOnly(), 'isReadOnly() must be true');
+});
+
+await test('10.2 read-only drops the dangerous mutators', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  for (const name of ['tenant_destroy', 'tenant_bootstrap', 'decrypt_data', 'mdms_create', 'user_create', 'workflow_create']) {
+    assert(ro.getTool(name) === undefined, `${name} must be absent in read-only mode`);
+  }
+});
+
+await test('10.3 read-only keeps read tools', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  for (const name of ['mdms_search', 'user_search', 'pgr_search', 'health_check']) {
+    assert(ro.getTool(name) !== undefined, `${name} must remain available in read-only mode`);
+  }
+});
+
+await test('10.4 read-only exempts core session write tools', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const coreWrites = ro.getAllTools().filter((t) => t.group === 'core' && t.risk === 'write');
+  assert(coreWrites.length > 0, 'core session write tools (init/session_checkpoint) should remain');
+});
+
+await test('10.5 a normal registry keeps write tools and has strictly more tools', () => {
+  const full = new ToolRegistry({ readOnly: false });
+  registerAllTools(full);
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  assert(full.getTool('tenant_destroy') !== undefined, 'full registry must keep tenant_destroy');
+  assert(!full.isReadOnly(), 'isReadOnly() must be false on a normal registry');
+  assert(ro.getAllTools().length < full.getAllTools().length, 'read-only must expose fewer tools than full');
+});
+
+// =====================================================================
 // Summary
 // =====================================================================
 

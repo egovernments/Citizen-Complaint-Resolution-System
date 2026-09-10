@@ -5,11 +5,39 @@ export class ToolRegistry {
   private enabledGroups: Set<ToolGroup> = new Set(['core', 'docs']);
   private onToolListChanged?: () => void;
 
+  // Read-only mode. When on, write-risk tools are never registered (see
+  // `register`), so the mutating surface is ABSENT rather than merely disabled:
+  // it cannot be listed, enabled, or dispatched — on `/mcp` or on any `/v1`
+  // route (they all resolve tools through `getTool` and 404 when missing).
+  // Enabled per-instance via the MCP_READ_ONLY env var, so a publicly-exposed
+  // instance can safely carry only reads. Defaults from the env; the constructor
+  // option lets tests set it explicitly.
+  private readonly readOnly: boolean;
+
+  constructor(options?: { readOnly?: boolean }) {
+    this.readOnly =
+      options?.readOnly ??
+      (process.env.MCP_READ_ONLY === 'true' || process.env.MCP_READ_ONLY === '1');
+  }
+
+  isReadOnly(): boolean {
+    return this.readOnly;
+  }
+
   setToolListChangedCallback(cb: () => void): void {
     this.onToolListChanged = cb;
   }
 
   register(tool: ToolMetadata): void {
+    // Read-only mode drops every write-risk tool so it can never be called.
+    // `core` is exempt: its only writes are session bookkeeping (`init`,
+    // `session_checkpoint`) that touch local session state, not DIGIT data, and
+    // dropping them would break the session-hint flow. Every data-mutating tool
+    // (tenant_destroy, decrypt_data, *_create/_update, workflow_create, ...)
+    // lives in a non-core group and is therefore excluded.
+    if (this.readOnly && tool.risk === 'write' && tool.group !== 'core') {
+      return;
+    }
     this.tools.set(tool.name, tool);
   }
 

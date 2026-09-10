@@ -511,6 +511,10 @@ if (transportMode === 'stdio') {
         nodeVersion: process.version,
         startedAt: new Date(Date.now() - Math.floor(process.uptime() * 1000)).toISOString(),
         uptimeSec: Math.floor(process.uptime()),
+        // Read-only instances (MCP_READ_ONLY) carry only read-risk tools, so an
+        // operator/client can confirm the mutating surface is absent up front.
+        readOnly: restRegistry.isReadOnly(),
+        toolCount: restRegistry.getAllTools().length,
         features: ['v1/tenant/bootstrap', 'v1/tenant/city', 'v1/tenant/cleanup', 'v1/tenant/:id/export', 'v1/tools/:name', 'v1/tools/:name/bulk', 'sse-progress', 'cors'],
       });
       return;

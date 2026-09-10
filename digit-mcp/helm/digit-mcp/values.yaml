@@ -17,6 +17,12 @@ env:
   # DIGIT API base the shim proxies to (in-cluster gateway service).
   CRS_API_URL: "http://gateway.egov:8080"
   CRS_ENV_NAME: "CCRS"
+  # Read-only mode. Leave unset for the normal (full) instance. Set to "1" for a
+  # SEPARATE, publicly-exposable instance that carries only read tools — every
+  # write-risk tool (tenant_destroy, decrypt_data, *_create/_update, ...) is
+  # absent, on /mcp and every /v1 route. Even so, gate it with auth/allowlist:
+  # some reads (user_search, pgr_search) return data.
+  # MCP_READ_ONLY: "1"
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...

@@ -330,6 +330,7 @@ getResourceBySchema('RAINMAKER-PGR.ServiceDefs');  // → complaint-types config
 | `CRS_PASSWORD` | — | DIGIT admin password |
 | `CRS_TENANT_ID` | from env config | Tenant for authentication |
 | `MCP_ENABLE_ALL_GROUPS` | — | Set to `1` to enable all tool groups on startup |
+| `MCP_READ_ONLY` | — | Set to `1`/`true` to start a **read-only** instance: every write-risk tool is dropped at registration (absent, not just disabled) so it can't be listed, enabled, or dispatched — on `/mcp` or any `/v1` route. Read tools remain; `core` session tools (`init`, `session_checkpoint`) are exempt. Intended for a publicly-exposable instance; still gate it with auth/allowlist since some reads expose data. |
 
 ## Environments
 
