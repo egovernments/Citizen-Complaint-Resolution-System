@@ -12,7 +12,7 @@ Many DIGIT services store sensitive fields (mobile numbers, email addresses, per
 
 Decryption may fail if the encryption key is not configured for the specified tenant or if the encrypted values were produced by a different encryption service instance with different keys.
 
-**Authentication and authorization.** This tool requires an authenticated caller holding an admin role (see `MCP_ADMIN_ROLES`), and the request carries your token through to egov-enc-service. It previously sent no `Authorization` header at all, which made it an unauthenticated decryption oracle for citizen PII. Its output is also marked sensitive, so the plaintext is never written to the session store or the access log.
+**Authentication and authorization.** This tool requires an authenticated caller holding an admin role (see `MCP_ADMIN_ROLES`) — that admin-tier check is the functional gate. The egov-enc-service `/_decrypt` endpoint takes a bare ciphertext array (a wrapping envelope returns HTTP 500), so unlike the encrypt path the request cannot carry a body token, and the DIGIT gateway therefore denies a tokenless decrypt rather than serving it — it is not an anonymous oracle. (An earlier version relied on an `Authorization` header the gateway never reads.) Its output is also marked sensitive, so the plaintext is never written to the session store or the access log.
 
 ## Parameters
 

@@ -1155,23 +1155,22 @@ class DigitApiClient {
     encryptedValues: string[]
   ): Promise<string[]> {
     const url = `${this.environment.url}${this.endpoint('ENC_DECRYPT')}`;
-    // egov-enc-service recursively decrypts every encrypted-format string in the
-    // body and echoes everything else unchanged. Wrapping the ciphertext with
-    // RequestInfo lets the Kong body-token gate authenticate the POST — the
-    // bare-array form this used to send carries no token and is 401'd on the
-    // protected /egov-enc-service path (the Authorization header it also sent was
-    // never read by the gateway). The authToken string is not in encrypted
-    // format, so it passes through untouched and only the ciphertext is
-    // decrypted. Response parsing accepts both the wrapped object (token path)
-    // and a flat array (older contract), so a stack without gateway enforcement
-    // still works.
+    // egov-enc-service /_decrypt takes a BARE JSON array of ciphertext strings
+    // and returns a bare array of plaintext — verified against the live service:
+    // a wrapping envelope ({RequestInfo, ...}) returns HTTP 500. That contract
+    // leaves no place for RequestInfo.authToken, so unlike encryptData this call
+    // cannot carry a body token, and Kong's body-token gate therefore DENIES a
+    // tokenless decrypt on the protected /egov-enc-service path (it is not an
+    // anonymous oracle — a caller with no token is 401'd, not served). The
+    // functional gate is the tool's own access:'admin' tier; reaching decrypt
+    // through the gateway would require the enc-service to accept an
+    // authenticated envelope, or the caller to be on the internal network.
+    // (The Authorization header this used to send was never read by the gateway,
+    // so it is gone.)
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: this.buildRequestInfo(),
-        decryptionData: encryptedValues,
-      }),
+      body: JSON.stringify(encryptedValues),
     });
 
     if (!response.ok) {
@@ -1179,11 +1178,7 @@ class DigitApiClient {
     }
 
     const data = await response.json();
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray((data as { decryptionData?: unknown }).decryptionData)) {
-      return (data as { decryptionData: string[] }).decryptionData;
-    }
-    return [];
+    return Array.isArray(data) ? data : [];
   }
 
   // Boundary — create boundary entities (batch)
