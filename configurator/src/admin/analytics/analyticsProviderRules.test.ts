@@ -28,14 +28,12 @@ import {
 /** The shim lives in the sibling package, outside this app's Vite root, so it
  *  cannot be imported (`?raw` is refused by Vite's fs policy) — it is read from
  *  disk instead. The app tsconfig deliberately limits ambient types to
- *  vite/client, and widening that so one test can see node builtins would also
- *  let application code reach for them; hence the single local suppression. */
+ *  vite/client; the explicit `node:` imports below still resolve, so no local
+ *  suppression is needed. */
 let shimSource = '';
 
 beforeAll(async () => {
-  // @ts-expect-error node:fs is intentionally outside this app's ambient types
   const fs = await import('node:fs');
-  // @ts-expect-error node:process is intentionally outside this app's ambient types
   const proc = await import('node:process');
   // import.meta.url is not a file: URL under the vitest module runner, so resolve
   // from the run root instead and accept either the package root or the repo root.
