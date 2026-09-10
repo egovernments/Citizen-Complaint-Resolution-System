@@ -16,8 +16,6 @@
     "start": "microbundle-crl watch --no-compress --format modern,cjs",
     "prepare": "yarn build",
     "publish:components": "npm publish --tag core-v0.1",
-    "predeploy": "cd example && yarn install && yarn run build",
-    "deploy": "gh-pages -d example/build",
     "storybook": "start-storybook -p 6006 -s public",
     "build-storybook": "build-storybook -s public -o dist-storybook",
     "deploy-storybook": "npm run build-storybook && surge --project dist-storybook --domain svg-components-$npm_package_version.surge.sh"
@@ -53,7 +51,6 @@
     "@storybook/blocks":"8.3.5",
     "babel-eslint": "10.1.0",
     "cross-env": "7.0.3",
-    "gh-pages": "2.2.0",
     "husky": "7.0.4",
     "lint-staged": "12.3.7",
     "microbundle-crl": "0.13.11",

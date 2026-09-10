@@ -13,8 +13,7 @@
   "scripts": {
     "start": "gulp build",
     "build:prod": "NODE_ENV=production gulp build",
-    "prepublish": "yarn build:prod",
-    "deploy": "gulp && cp -R svg example && cp -R img example && gh-pages -d example"
+    "prepublish": "yarn build:prod"
   },
   "browserslist": [
     "> 3%",
@@ -30,7 +29,6 @@
   "devDependencies": {
     "autoprefixer": "10.4.14",
     "cssnano": "4.1.11",
-    "gh-pages": "3.2.3",
     "gulp": "4.0.2",
     "gulp-clean": "0.4.0",
     "gulp-clean-css": "4.3.0",
