@@ -19,11 +19,11 @@
 // createdBy/lastModifiedBy — a PDF is far more forwardable than a screen, and
 // the citizen detail page already hides employee contacts (QA #19).
 //
-// It DOES carry the complainant's own name, contact and address: this is the
-// citizen's own complaint and the receipt is for them. On a CONFIDENTIAL
-// complaint those rows are masked to "****" (see CONFIDENTIAL_MASK), matching
-// the employee detail page's CCSD-2130 rule, so identity never reaches a
-// document that can be forwarded.
+// It DOES carry the complainant's own name, contact and address, in clear,
+// confidential or not: this is the citizen's OWN receipt and the citizen UI
+// shows them their own data — confidentiality masking protects the complainant
+// from EMPLOYEES and is applied server-side for them (CCSD-2234). Whatever the
+// backend hands us already masked ("****") is printed as received.
 
 import { jsPDF } from "jspdf";
 
@@ -87,9 +87,6 @@ const S = (v) => {
 // Em dash reads as "no data"; an empty cell reads as a rendering fault.
 const DASH = "—";
 
-// Same sentinel the backend and the employee detail page use for masked values.
-const CONFIDENTIAL_MASK = "****";
-
 const isBlank = (s) => !S(s);
 
 export const RECEIPT_FALLBACKS = {
@@ -124,6 +121,7 @@ const ROW_LABEL_FALLBACKS = {
   ES_CREATECOMPLAINT_ADDRESS: "Address",
   CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS: "Complaint Details",
   CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS: "Additional Details",
+  CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION: "Description",
 };
 
 // "CS_COMPLAINT_FILED_DATE" -> "Filed Date": last-resort label for a key we
@@ -375,29 +373,6 @@ export const buildComplaintReceipt = ({
     y += rowH + 2.5;
   };
 
-  // Long free text spans the full width, emitted one line at a time so an
-  // unbounded description flows across pages instead of forcing an oversized
-  // single block (which could never fit and would loop).
-  const textBlock = (labelText, valueText) => {
-    const value = S(valueText);
-    if (!value) return;
-    y = ensure(LH(9.5) + LH(10) + 5, y);
-    setFont(9.5, "normal", COLOR.label);
-    doc.text(S(labelText), MARGIN_L, y + 3.4);
-    y += LH(9.5) + 1.5;
-    const lines = wrap(value, CONTENT_W, 10, "normal");
-    setFont(10, "normal", COLOR.value);
-    for (const ln of lines) {
-      y = ensure(LH(10), y);
-      setFont(10, "normal", COLOR.value);
-      doc.text(ln, MARGIN_L, y + 3.4);
-      y += LH(10);
-    }
-    y += 3;
-    rule(y);
-    y += 2.5;
-  };
-
   // --- what happens next: the receipt's job for a first-time filer is to say
   // what this number is for and where to look next. Static text, so it always
   // renders even on a complaint with almost no data.
@@ -455,59 +430,67 @@ export const buildComplaintReceipt = ({
     return s;
   };
 
-  // CCSD-2130: the backend masks extendedAttributes on a confidential complaint
-  // but NOT service.citizen, which pgr-services enriches from egov-user. The
-  // address row is composed partly from citizen.correspondenceAddress, so it has
-  // to be masked here alongside the name/contact rows.
-  const isConfidential = service?.extendedAttributes?.isConfidential === true;
-  const maskIfConfidential = (v) => (isConfidential ? CONFIDENTIAL_MASK : S(v));
-  const CITIZEN_DERIVED_KEYS = new Set(["ES_CREATECOMPLAINT_ADDRESS"]);
-
   const detailKeys = details && typeof details === "object" ? Object.keys(details) : [];
   // When the hierarchy renders, its levels replace the flat type rows. Matched by
   // KEY, never by comparing translated label text — the on-screen version compares
   // English strings and so duplicates these rows under pt_MZ.
   const FLAT_TYPE_KEYS = new Set(["CS_ADDCOMPLAINT_COMPLAINT_TYPE", "CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE"]);
   const shownKeys = detailKeys.filter((k) => !(hasClassification && FLAT_TYPE_KEYS.has(k)));
-  // Description gets its own full-width block below.
+  // The free-text description closes this section as an ordinary two-column
+  // row labelled "Description". Its source key translates to "Additional
+  // Details" — the same words as the extended-attributes heading below, which
+  // read as a duplicate — and the old full-width block sat out of line with
+  // the rows around it (CCSD-2234). row() flows an oversized value across pages.
   const DESC_KEY = "CS_COMPLAINT_ADDTIONAL_DETAILS";
+  const hasDescription = detailKeys.includes(DESC_KEY) && !isBlank(details[DESC_KEY]);
 
-  if (shownKeys.length) {
+  if (shownKeys.length || hasDescription) {
     heading(label("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS", ROW_LABEL_FALLBACKS.CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS));
     shownKeys
       .filter((k) => k !== DESC_KEY)
       .forEach((k) => {
         const raw = details[k];
-        const resolved = Array.isArray(raw)
+        const value = Array.isArray(raw)
           ? raw.map((item) => resolveValue(item)).filter(Boolean).join(", ")
           : resolveValue(raw);
-        const value = CITIZEN_DERIVED_KEYS.has(k) ? maskIfConfidential(resolved) : resolved;
         row(S(label(k, ROW_LABEL_FALLBACKS[k] || prettifyKey(k))), value);
       });
-  }
-
-  if (detailKeys.includes(DESC_KEY) && !isBlank(details[DESC_KEY])) {
-    textBlock(S(label(DESC_KEY, ROW_LABEL_FALLBACKS[DESC_KEY])), S(details[DESC_KEY]));
+    if (hasDescription) {
+      row(
+        S(label("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION", ROW_LABEL_FALLBACKS.CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION)),
+        S(details[DESC_KEY])
+      );
+    }
   }
 
   // --- complainant details ---
-  // Mirrors the employee detail card, with the same CCSD-2130 masking. This is
-  // the citizen's OWN receipt, so their name/contact is appropriate to print —
-  // but a confidential complaint must not carry the complainant's identity onto
-  // a document that can be forwarded.
+  // The name the citizen TYPED on the form travels in
+  // extendedAttributes.complainantName (the create flow deliberately leaves the
+  // account's citizen.name alone), so that is the name to print, with the
+  // account name as the fallback. It is shown here once and dropped from the
+  // extended-attribute rows below, which used to print it a second time
+  // (CCSD-2234). Nothing is masked: this is the citizen's own receipt.
+  const COMPLAINANT_NAME_FIELD = "complainantName";
+  const complainantName = S(service?.extendedAttributes?.[COMPLAINANT_NAME_FIELD]) || S(service?.citizen?.name);
   const complainantRows = [
-    [label("COMPLAINTS_COMPLAINANT_NAME", RECEIPT_FALLBACKS.complainantName), maskIfConfidential(service?.citizen?.name)],
-    [label("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER", RECEIPT_FALLBACKS.complainantContact), maskIfConfidential(service?.citizen?.mobileNumber)],
+    [label("COMPLAINTS_COMPLAINANT_NAME", RECEIPT_FALLBACKS.complainantName), complainantName],
+    [label("COMPLAINTS_COMPLAINANT_CONTACT_NUMBER", RECEIPT_FALLBACKS.complainantContact), S(service?.citizen?.mobileNumber)],
   ].filter(([, v]) => S(v));
   if (complainantRows.length) {
-    heading(label("ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS", RECEIPT_FALLBACKS.complainantTitle));
+    // Not ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS: its pt_PT message is
+    // "Detalhes da Manifestação" — identical to the complaint-details heading
+    // above, so the receipt showed the same section title twice.
+    heading(label("CS_COMPLAINT_DETAILS_COMPLAINANT_DETAILS", RECEIPT_FALLBACKS.complainantTitle));
     complainantRows.forEach(([l, v]) => row(S(l), S(v)));
   }
 
-  // --- additional information (extended attributes; already masked by backend) ---
-  if (Array.isArray(extendedRows) && extendedRows.length > 0) {
+  // --- additional information (extended attributes, exactly as the backend returned them) ---
+  const additionalRows = Array.isArray(extendedRows)
+    ? extendedRows.filter((r) => r?.fieldKey !== COMPLAINANT_NAME_FIELD)
+    : [];
+  if (additionalRows.length > 0) {
     heading(label("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", ROW_LABEL_FALLBACKS.CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS));
-    extendedRows.forEach((r) => row(S(r?.label), S(r?.value)));
+    additionalRows.forEach((r) => row(S(r?.label), S(r?.value)));
   }
 
   // --- watermark + footer on every page ---

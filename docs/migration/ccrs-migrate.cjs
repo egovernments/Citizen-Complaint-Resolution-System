@@ -756,8 +756,12 @@ async function phaseLanding() {
   try {
     sections = readJson(SEED.landingSections);
     config = readJson(SEED.landingConfig);
-    locEn = readJson(SEED.locEn).filter((m) => m.code.startsWith('PGR_LANDING_'));
-    locPt = readJson(SEED.locPt).filter((m) => m.code.startsWith('PGR_LANDING_'));
+    // Landing copy plus the citizen receipt's own labels (CCSD-2234): both are
+    // CCRS-added keys no other seed carries, and both must never overwrite an
+    // operator's edits — seeded missing-only below.
+    const runnerSeeded = (m) => /^PGR_(LANDING|RECEIPT)_/.test(m.code);
+    locEn = readJson(SEED.locEn).filter(runnerSeeded);
+    locPt = readJson(SEED.locPt).filter(runnerSeeded);
   } catch (e) {
     // Seed files absent (checkout predates the merged landing feature) — the
     // environment may still be fully seeded already, so verify before failing.
