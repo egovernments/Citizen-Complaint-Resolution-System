@@ -9,7 +9,8 @@
     "prebuild": "node scripts/vendor-digit-ui-css.js",
     "build:docker": "docker build -f docker/Dockerfile -t digit-ui:esbuild .",
     "build:dashboard-css": "tailwindcss -c products/dashboard/src/tailwind.config.js -i products/dashboard/src/styles/input.css -o products/dashboard/src/styles/dashboard.css",
-    "check-aliases": "node scripts/check-aliases.js"
+    "check-aliases": "node scripts/check-aliases.js",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.13.10",

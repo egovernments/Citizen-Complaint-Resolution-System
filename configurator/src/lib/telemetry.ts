@@ -7,6 +7,11 @@
 
 import posthog from 'posthog-js';
 import * as Sentry from '@sentry/react';
+import { isTelemetryKilled } from './telemetryGate';
+
+// Every exported function below is gated. Gating only the init calls in main.tsx
+// would leave these reachable, and whether posthog-js / @sentry-react silently
+// drop calls made before init is not something to rely on.
 
 // ============================================
 // User Identification
@@ -24,6 +29,7 @@ export interface TelemetryUser {
  * Identify the current user for analytics and error tracking
  */
 export function identifyUser(user: TelemetryUser) {
+  if (isTelemetryKilled()) return;
   // PostHog identification
   posthog.identify(user.id, {
     name: user.name,
@@ -50,6 +56,7 @@ export function identifyUser(user: TelemetryUser) {
  * Clear user identification (on logout)
  */
 export function clearUser() {
+  if (isTelemetryKilled()) return;
   posthog.reset();
   Sentry.setUser(null);
 }
@@ -100,6 +107,7 @@ interface EventProperties {
  * Track a custom event
  */
 export function trackEvent(event: EventName, properties?: EventProperties) {
+  if (isTelemetryKilled()) return;
   posthog.capture(event, properties);
 
   // Also add breadcrumb to Sentry for context
@@ -127,6 +135,7 @@ interface ErrorContext {
  * Capture an error with context
  */
 export function captureError(error: Error, context?: ErrorContext) {
+  if (isTelemetryKilled()) return;
   // Send to Sentry
   Sentry.captureException(error, {
     extra: context,
@@ -149,6 +158,7 @@ export function captureApiError(
   message: string,
   requestBody?: unknown
 ) {
+  if (isTelemetryKilled()) return;
   const error = new Error(`API Error: ${status} - ${message}`);
 
   Sentry.captureException(error, {
@@ -179,6 +189,7 @@ export function captureApiError(
  * Start a performance measurement
  */
 export function startMeasure(name: string): () => void {
+  if (isTelemetryKilled()) return () => {};
   const start = performance.now();
 
   return () => {
@@ -194,6 +205,7 @@ export function startMeasure(name: string): () => void {
  * Track page load performance
  */
 export function trackPagePerformance() {
+  if (isTelemetryKilled()) return;
   if (typeof window !== 'undefined' && window.performance) {
     const timing = performance.timing;
     const loadTime = timing.loadEventEnd - timing.navigationStart;
@@ -215,6 +227,7 @@ export function trackPagePerformance() {
  * Check if a feature flag is enabled
  */
 export function isFeatureEnabled(flagName: string): boolean {
+  if (isTelemetryKilled()) return false;
   return posthog.isFeatureEnabled(flagName) ?? false;
 }
 
@@ -222,6 +235,7 @@ export function isFeatureEnabled(flagName: string): boolean {
  * Get feature flag value
  */
 export function getFeatureFlag<T>(flagName: string): T | undefined {
+  if (isTelemetryKilled()) return undefined;
   return posthog.getFeatureFlag(flagName) as T | undefined;
 }
 
@@ -233,6 +247,7 @@ export function getFeatureFlag<T>(flagName: string): T | undefined {
  * Start session recording
  */
 export function startRecording() {
+  if (isTelemetryKilled()) return;
   posthog.startSessionRecording();
 }
 
@@ -240,6 +255,7 @@ export function startRecording() {
  * Stop session recording
  */
 export function stopRecording() {
+  if (isTelemetryKilled()) return;
   posthog.stopSessionRecording();
 }
 
@@ -251,6 +267,7 @@ export function stopRecording() {
  * Enable debug mode for development
  */
 export function enableDebugMode() {
+  if (isTelemetryKilled()) return;
   posthog.debug();
   console.log('[Telemetry] Debug mode enabled');
 }
