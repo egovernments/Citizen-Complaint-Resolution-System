@@ -235,7 +235,14 @@ plugins:
         local function is_public_infra(p)
           return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
               or p == "/auth" or p:find("/auth/", 1, true) == 1
-              or p == "/health" or p:find("/health/", 1, true) == 1
+              -- `/health$` (suffix) not `== "/health"`: the per-service liveness
+              -- endpoints are `/mdms-v2/health`, `/user/health`, `/access/health`,
+              -- `/egov-idgen/health`, `/egov-workflow-v2/health`, `/pgr-services/health`
+              -- — all ending in /health. The pre-existing gate matched them with
+              -- uri:match("/health$"); narrowing to an exact "/health" 401'd every
+              -- one (caught by the health-check.sh CI step). Keep the `/health/`
+              -- PREFIX too for Kong's own /health/<svc> proxy routes.
+              or p:match("/health$") or p:find("/health/", 1, true) == 1
               or p:match("/actuator/health$") or p:match("/actuator/health/")
         end
         if is_public_infra(uri) then return end
