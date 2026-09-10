@@ -7,12 +7,18 @@
 // unified input rule + brand CTA without going through the legacy
 // vendor wrappers.
 //
-// Submit logic is unchanged: hits `Digit.UserService.sendOtp` with
-// `type: "passwordreset"` and pushes to /change-password on success;
-// inline error stays on the form when the username/city combo doesn't
+// Submit hits `Digit.UserService.sendOtp` with `type: "passwordreset"` for the
+// MOBILE NUMBER the employee types, with the deployment's country code (the OTP
+// gateway needs a routable prefix), then pushes to /change-password with
+// `mobile_number` — what that page reads to resend the code. The page used to
+// ask for the USERNAME, which the SMS gateway cannot route and which the
+// change-password step never expected; inline error stays on the form when
+// the number/institution combo doesn't
 // resolve to a real account.
 
 import { Loader, Toast } from "@egovernments/digit-ui-components";
+import { computeMobileLengths, buildMobileErrorMessage } from "@egovernments/digit-ui-libraries";
+import { Phone } from "lucide-react";
 import {
   Button as V2Button,
   Card as V2Card,
@@ -26,6 +32,7 @@ import { useTranslation } from "react-i18next";
 import { useHistory, useLocation } from "react-router-dom";
 import ImageComponent from "../../../components/ImageComponent";
 import { useLoginConfig } from "../../../hooks/useLoginConfig";
+import { useMobileValidationConfig } from "../../../hooks/useMobileValidationConfig";
 import { V2LoginShell, scopeLoginTenants } from "../Login/login";
 
 const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
@@ -36,7 +43,11 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
   const { data: mdmsData } = useLoginConfig(stateCode);
 
   const [user, setUser] = useState(null);
-  const [username, setUsername] = useState("");
+  const [mobile, setMobile] = useState("");
+  const { countryCode, pattern } = useMobileValidationConfig();
+  const mobileRegex = new RegExp(pattern);
+  const { max: derivedMax } = computeMobileLengths(pattern);
+  const mobileMaxLength = derivedMax > 0 ? derivedMax : 15;
   const [city, setCity] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -67,8 +78,8 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
 
   const onSubmit = async (e) => {
     e?.preventDefault?.();
-    if (!username?.trim()) {
-      setShowToast(tr("ERR_HRMS_INVALID_USERNAME", "Please enter your username."));
+    if (!mobileRegex.test(mobile || "")) {
+      setShowToast(buildMobileErrorMessage(pattern, tr));
       setTimeout(closeToast, 5000);
       return;
     }
@@ -80,7 +91,8 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
     setSubmitting(true);
     const requestData = {
       otp: {
-        userName: username.trim(),
+        mobileNumber: mobile,
+        countryCode,
         userType: (Digit.UserService.getType() || "employee").toUpperCase(),
         type: "passwordreset",
         tenantId: city.code,
@@ -89,8 +101,8 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
     try {
       await Digit.UserService.sendOtp(requestData, city.code);
       history.push(
-        `/${window?.contextPath}/employee/user/change-password?USERNAME=${encodeURIComponent(
-          username.trim()
+        `/${window?.contextPath}/employee/user/change-password?mobile_number=${encodeURIComponent(
+          mobile
         )}&tenantId=${encodeURIComponent(city.code)}`
       );
     } catch (err) {
@@ -149,7 +161,7 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
           >
             {tr(
               propsConfig?.texts?.description,
-              "Enter your username and city. We'll send a one-time code to reset your password."
+              "Enter your mobile number and institution. We'll send a one-time code to reset your password."
             )}
           </p>
         </div>
@@ -157,20 +169,64 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
         <form onSubmit={onSubmit}>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <V2Field
-              label={tr("USERNAME", "Username")}
+              label={tr("CORE_COMMON_MOBILE_NUMBER", "Mobile number")}
               required
-              htmlFor="forgot-username"
+              htmlFor="forgot-mobile"
             >
-              <V2Input
-                id="forgot-username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={tr(
-                  "CORE_FORGOT_USERNAME_PLACEHOLDER",
-                  "Your work username"
-                )}
-                autoComplete="username"
-              />
+              {/* Prefix-aware input, same chrome as the citizen login's
+                  SelectMobileNumber: the country code is shown, not typed. */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "stretch",
+                  border: "1px solid var(--color-border, #d6d5d4)",
+                  borderRadius: "0.375rem",
+                  overflow: "hidden",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 12px",
+                    borderRight: "1px solid var(--color-border, #d6d5d4)",
+                    backgroundColor: "var(--color-primary-selected-bg, #FFF4D7)",
+                    color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Phone style={{ height: "0.95rem", width: "0.95rem" }} aria-hidden />
+                  {countryCode}
+                </span>
+                <input
+                  id="forgot-mobile"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="tel-national"
+                  value={mobile}
+                  onChange={(e) => setMobile((e.target.value || "").replace(/\D/g, ""))}
+                  maxLength={mobileMaxLength}
+                  placeholder={tr("CORE_FORGOT_MOBILE_PLACEHOLDER", "Your registered mobile number")}
+                  style={{
+                    flex: 1,
+                    border: 0,
+                    outline: "none",
+                    padding: "0 12px",
+                    fontSize: "1rem",
+                    background: "transparent",
+                    color: "var(--color-text-primary, #0B0C0C)",
+                    minWidth: 0,
+                    height: "44px",
+                  }}
+                />
+              </div>
+              <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "var(--color-text-secondary, #6B7280)" }}>
+                {buildMobileErrorMessage(pattern, tr)}
+              </p>
             </V2Field>
 
             <V2Field
