@@ -775,8 +775,22 @@
 
   function pushTo(name, args) {
     try {
-      if (!isArray(window[name])) window[name] = [];
-      window[name].push(args);
+      var q = window[name];
+      /* Only create the queue when there is nothing usable there.
+       *
+       * The array test was wrong once the vendor script loads. Matomo replaces
+       * window._paq with a TrackerProxy: not an array, but it does have push(),
+       * and pushing to it executes the command immediately. Testing isArray
+       * therefore threw that live proxy away on the very next call and put a
+       * fresh [] in its place — an array nothing drains. Everything after
+       * matomo.js finished loading went into it and was silently lost: every
+       * SPA route change, every trackEvent, every tagged click. Only the first
+       * pageview of a full page load survived, because that one is queued
+       * before the vendor script arrives and is drained when it does.
+       *
+       * GA4's dataLayer stays a real array, so it is unaffected either way. */
+      if (!q || typeof q.push !== "function") { q = []; window[name] = q; }
+      q.push(args);
     } catch (e) {}
   }
 

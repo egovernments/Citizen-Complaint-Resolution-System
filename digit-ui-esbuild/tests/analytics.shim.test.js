@@ -450,6 +450,31 @@ test("an enabled Matomo record initialises exactly one allowlisted script", () =
   assert.ok(paq.indexOf("setSiteId") !== -1 && paq.indexOf("trackPageView") !== -1);
 });
 
+test("a vendor queue that is no longer an array is never replaced", () => {
+  /* Regression. matomo.js swaps window._paq for a TrackerProxy once it loads:
+     not an array, but it has push(), and pushing executes the command. The
+     queue helper used to test isArray, so the first push after the vendor
+     script landed threw the live proxy away and installed a fresh []. Nothing
+     drains that, so every SPA route change, every trackEvent and every tagged
+     click was silently lost — only the first pageview of a full page load
+     survived. Verified against the Bomet deployment before fixing: the tracker
+     was healthy and correctly configured, with four events stranded in a dead
+     array. */
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []) });
+
+  const executed = [];
+  const proxy = { push: (args) => executed.push(args) };
+  t.sandbox._paq = proxy;
+
+  t.sandbox.DigitAnalytics.trackEvent("pgr.test.event", { category: "pgr" });
+
+  assert.strictEqual(t.sandbox._paq, proxy, "the live tracker proxy must survive");
+  assert.ok(
+    executed.some((c) => c[0] === "trackEvent"),
+    "the event must reach the live tracker rather than a dead queue"
+  );
+});
+
 test("a record whose script host is not allowlisted loads nothing", () => {
   const bad = Object.assign({}, MATOMO_OK, { code: "evil", scriptUrl: "https://evil.example.com/m.js" });
   const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", bad)] : []) });
