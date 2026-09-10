@@ -1370,10 +1370,14 @@
            * localised and complaint pages interpolate ids into them. */
           for (var hops = 0; el && hops < 5; hops++) {
             if (el.getAttribute && el.getAttribute("data-analytics-event")) {
+              var eventName = scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60);
               emitEvent({
-                name: scrub(String(el.getAttribute("data-analytics-event"))).substring(0, 60),
+                name: eventName,
                 category: "click",
-                action: "click",
+                /* Matomo identifies events by category + action; its optional
+                 * third field is already used for our label. Keep the stable
+                 * declarative name as the action so tags stay distinguishable. */
+                action: eventName,
                 label: scrub(String(el.getAttribute("data-analytics-label") || "")).substring(0, 60)
               });
               return;

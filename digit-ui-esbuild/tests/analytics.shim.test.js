@@ -48,6 +48,7 @@ function loadShim(opts) {
   const xhrCalls = [];
   const scripts = [];
   const timers = [];
+  const documentListeners = {};
 
   const sandbox = {};
   sandbox.window = sandbox;
@@ -89,7 +90,7 @@ function loadShim(opts) {
     },
     documentElement: { appendChild(el) { scripts.push(el); } },
     createElement: makeEl,
-    addEventListener() {},
+    addEventListener(name, handler) { documentListeners[name] = handler; },
     referrer: "",
   };
   // The real bundle captures the history OBJECT, so the shim's later patch still
@@ -132,6 +133,9 @@ function loadShim(opts) {
     xhrCalls, scripts, sandbox, session, local,
     flush: () => { while (timers.length) timers.shift()(); },
     loadScripts: () => { while (deferred.length) deferred.shift().onload(); },
+    dispatchDocument: (name, event) => {
+      if (documentListeners[name]) documentListeners[name](event);
+    },
   };
 }
 
@@ -472,6 +476,30 @@ test("a vendor queue that is no longer an array is never replaced", () => {
   assert.ok(
     executed.some((c) => c[0] === "trackEvent"),
     "the event must reach the live tracker rather than a dead queue"
+  );
+});
+
+test("a tagged click keeps its event name as the Matomo action", () => {
+  const enabled = Object.assign({}, MATOMO_OK, { trackClicks: true });
+  const t = loadShim({ respond: (tenant) => (tenant === "mz" ? [row("mz", enabled)] : []) });
+  const attrs = {
+    "data-analytics-event": "pgr.file-complaint.submit",
+    "data-analytics-label": "final-step",
+  };
+  const target = {
+    getAttribute: (name) => attrs[name] || null,
+    parentNode: null,
+  };
+
+  t.dispatchDocument("click", { target });
+
+  assert.ok(
+    t.sandbox._paq.some((command) =>
+      command[0] === "trackEvent"
+      && command[1] === "click"
+      && command[2] === "pgr.file-complaint.submit"
+      && command[3] === "final-step"),
+    "Matomo must receive the stable declarative event name, not a generic click/click event"
   );
 });
 
