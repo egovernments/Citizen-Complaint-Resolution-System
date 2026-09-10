@@ -307,8 +307,15 @@ public class ChronologyService {
         JsonNode assigner = pi.get("assigner");
         String actorUuid = assigner != null && assigner.isObject() ? text((ObjectNode) assigner, "uuid") : null;
         boolean ownStep = accountId != null && accountId.equals(actorUuid);
-        if (ownStep)
+        if (ownStep) {
+            // The citizen's own step (APPLY / REOPEN / RATE / their COMMENT):
+            // comment, documents and the assigner (which IS the citizen) stay.
+            // But assignes names the OFFICER the step was routed TO — an
+            // employee identity that must not reach the citizen. A REOPEN, for
+            // instance, carries the supervisor it lands on. Strip it.
+            pi.putNull("assignes");
             return;
+        }
         // Set.of collections reject null lookups — a migrated row may carry no
         // action at all, which is simply "not citizen-facing", not a 500.
         String action = text(pi, "action");
