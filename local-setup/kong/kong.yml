@@ -126,17 +126,18 @@ plugins:
         -- docs/parity-item5-gateway-rbac-design.md.
         --
         -- ENFORCED (2026-08-21): unauthenticated hits on protected paths now get a real 401.
-        -- Known gap at flip time: /common-persist still has zero
-        -- ACCESSCONTROL-ACTIONS-TEST.actions-test coverage (see docs/parity-item5-gateway-rbac-design.md)
-        -- — accepted as-is for now; persister calls will 403 under ENFORCE_RBAC below until that
-        -- coverage is added. /novu-bridge/* is covered (actiontest + roleactions for
-        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME).
+        -- /novu-bridge/* is covered by accesscontrol (actiontest + roleactions for
+        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME). Internal service
+        -- primitives that DIGIT does not action-RBAC (enc-service crypto/key,
+        -- /common-persist) are authn-required but RBAC-exempt — see RBAC_EXEMPT in
+        -- enforce_rbac below, where the reasoning lives.
         local ENFORCE_UNAUTH = true
         -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. ENFORCED
-        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. Known gap: PGR_ADMIN is
+        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. PGR_ADMIN was
         -- referenced in ACCESSCONTROL-ROLEACTIONS.roleactions but missing from
-        -- ACCESSCONTROL-ROLES.roles, and /common-persist has no actiontest rows at
-        -- all — both will deny until fixed separately.
+        -- ACCESSCONTROL-ROLES.roles (now added to the seed). Internal service
+        -- primitives with no user-facing action (enc-service, /common-persist) are
+        -- RBAC-exempt rather than covered — see RBAC_EXEMPT in enforce_rbac.
         local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
@@ -266,8 +267,29 @@ plugins:
         -- non-POST paths so every method gets RBAC, not just authentication.
         -- Ships in AUDIT mode; fails CLOSED (403) when ENFORCE_RBAC — a protected
         -- action is denied unless accesscontrol returns an explicit allow.
+        -- Internal service primitives: authenticated (a valid token is required
+        -- by the caller paths above — a tokenless hit is 401'd, so these are NOT
+        -- anonymous oracles) but NOT action-RBAC'd at the gateway. DIGIT ships
+        -- their accesscontrol actions disabled/unmapped because internal services
+        -- call them service-to-service, not as user actions — so a gateway-routed
+        -- caller (the MCP) would 403 forever despite holding a valid admin token.
+        --   * /egov-enc-service/*  — PII crypto + key generation (_encrypt,
+        --     _decrypt, _generatekey). The token gates them; decrypt additionally
+        --     can only be invoked by the MCP's admin-tier tool. Granting blanket
+        --     anonymous access here is what would reopen the decrypt oracle — this
+        --     does not: it keeps authn and only skips the per-action role lookup.
+        --   * /common-persist      — the persister's HTTP sink, driven internally.
+        -- This replaces the "will 403 until accesscontrol coverage is added" gap
+        -- noted above for these paths: coverage is the wrong tool for an internal
+        -- primitive that has no user-facing action.
+        local RBAC_EXEMPT = function(p)
+          return p:find("/egov-enc-service/", 1, true) == 1
+              or p:find("/common-persist", 1, true) == 1
+        end
+
         local function enforce_rbac(resolved, token)
           if not (is_protected and resolved) then return end
+          if RBAC_EXEMPT(uri) then return end
           local tid = resolved["tenantId"]
           local az = http.new(); az:set_timeout(5000)
           local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {

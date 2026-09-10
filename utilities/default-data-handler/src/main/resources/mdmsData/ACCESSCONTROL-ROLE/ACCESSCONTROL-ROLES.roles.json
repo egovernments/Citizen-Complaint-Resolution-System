@@ -1,5 +1,10 @@
 [
   {
+    "code": "PGR_ADMIN",
+    "name": "PGR Administrator",
+    "description": "One who administers PGR — referenced by ACCESSCONTROL-ROLEACTIONS.roleactions, which previously named a role that had no definition here"
+  },
+  {
     "code": "CMS_SCREENING_OFFICER",
     "name": "CMS Screening Officer",
     "description": "Screens complaints and routes them to the correct department"
