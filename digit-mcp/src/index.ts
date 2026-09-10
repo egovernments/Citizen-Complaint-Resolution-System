@@ -413,7 +413,15 @@ if (transportMode === 'stdio') {
         const { auth: _ignored, ...toolArgs } = args;
         void _ignored;
 
-        return auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => ({ status: 200, body: parsed }));
+        // MUST await: `return <promise>` inside a try/finally runs the finally
+        // (restoreAuth, which puts back the pre-auth empty snapshot) BEFORE the
+        // returned promise settles — i.e. while the tool is still running inside
+        // auditedCall. That wiped the caller's just-applied token mid-tool, so in
+        // token mode the tool's own ensureAuthenticated threw "not authenticated"
+        // and every POST /v1/tools/:name 401'd. (Ambient mode hid it: the tool
+        // silently re-logged-in with env creds.) Awaiting holds the finally until
+        // the tool completes. The streaming and bulk paths already await.
+        return await auditedCall(tool, toolArgs as Record<string, unknown>, (parsed) => ({ status: 200, body: parsed }));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const norm = normalizeError(msg);
