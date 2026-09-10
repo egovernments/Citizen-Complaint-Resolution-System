@@ -163,6 +163,22 @@ class ChronologyServiceTest {
     }
 
     @Test
+    void complainantsOwnStepDropsTheOfficerItWasRoutedTo() {
+        // Regression (UAT PRD-2026-000001): a citizen's own REOPEN/APPLY names,
+        // in assignes, the OFFICER it was routed TO. That is an employee
+        // identity and must not reach the citizen even on their own step.
+        ObjectNode root = fixture();
+        ObjectNode apply = (ObjectNode) root.get("ProcessInstances").get(2);
+        apply.set("assignes", M.createArrayNode().add(
+                M.createObjectNode().put("uuid", "officer-routed-to").put("name", "MISAU Supervisor 1")));
+        ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
+        JsonNode own = root.get("ProcessInstances").get(2);
+        assertEquals("my own words", own.get("comment").asText(), "own comment stays");
+        assertEquals("Maria Cossa", own.get("assigner").get("name").asText(), "the citizen's own identity stays");
+        assertTrue(own.get("assignes").isNull(), "but the officer it was routed to must be stripped");
+    }
+
+    @Test
     void anotherCitizenGetsNothing() {
         ObjectNode root = fixture();
         ChronologyService.filterForRequester(root, requester("CITIZEN", "someone-else", "CITIZEN"), ctx(false));
