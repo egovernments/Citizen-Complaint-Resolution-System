@@ -17,6 +17,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { findLatestAssigneeUuidByRole } from "../../utils/workflowAssignee";
+import { returnToHandlerRole } from "../../utils/returnToHandler";
 import { EV, trackE } from "../../utils/analytics";
 
 // CCSD-2167 (employee side) — route-back / terminal actions derive their
@@ -60,7 +61,7 @@ const parseAdditionalDetail = (ad) => {
   return {};
 };
 
-const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
+const buildActionFormConfig = ({ action, fromState, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
   const body = [];
   // QA #23 (sheet v4 follow-up): the REJECT modal carries NO dropdowns at all —
   // no assignee (below) and no rejection-reason picker (removed per product
@@ -74,7 +75,12 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
   // complaint waits on the CITIZEN, so picking a "next level user" makes no
   // sense and mis-assigned it to another case manager. No assignee here either.
   const NO_ASSIGNEE_ACTIONS = ["REJECT", "AWAITINGINFORMATION"];
-  if (!NO_ASSIGNEE_ACTIONS.includes(action) && !isTerminal && (assigneeRoles?.length || 0) > 0) {
+  // FC-0002: recording the citizen's answer (INFOFROMCITIZEN -> INVESTIGATION)
+  // returns the case to the case manager who asked — no picker; the assignee is
+  // derived from history on submit (see returnToHandler.js). Comment and
+  // attachment fields are untouched.
+  const returnsToHandler = !!returnToHandlerRole(action, fromState);
+  if (!NO_ASSIGNEE_ACTIONS.includes(action) && !returnsToHandler && !isTerminal && (assigneeRoles?.length || 0) > 0) {
     body.push({
       type: "component",
       // Callers pass assigneeMandatory (dept-mapping + actor aware); default
@@ -387,7 +393,11 @@ const PGRDetails = () => {
     // the assignee from the complaint's workflow history by role — the person
     // who previously handled it — unless the officer explicitly picked someone.
     const pickedUuid = _data?.SelectedAssignee?.uuid || null;
-    const derivedRole = HISTORY_DERIVED_ASSIGNEE_ROLE[selectedAction.action];
+    // FC-0002: on the return from INFOFROMCITIZEN there is no picker at all, so
+    // the case manager who asked the question is always derived from history.
+    const derivedRole =
+      HISTORY_DERIVED_ASSIGNEE_ROLE[selectedAction.action] ||
+      returnToHandlerRole(selectedAction.action, selectedAction.fromState);
     let assigneeUuid = pickedUuid;
     if (!pickedUuid && derivedRole) {
       // Search history at the COMPLAINT's tenant: its process instances live
@@ -547,6 +557,10 @@ const PGRDetails = () => {
             // timeline labels ("Rejected"), which read as states in an action menu.
             name: action.action,
             roles: action.roles,
+            // The state this action leaves FROM: some actions (COMMENT) exist in
+            // several states with different meanings, so the modal and the
+            // submit need the origin, not just the action name.
+            fromState: matchingState.state,
             nextState: action.nextState,
             assigneeRoles: computeAssigneeRoles(action.nextState, businessServiceResponse),
             isTerminal: !!nextStateData?.isTerminateState,
