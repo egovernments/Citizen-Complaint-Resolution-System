@@ -1,6 +1,13 @@
+/* Analytics (CCRS#2007): `analyticsEvent` names the step's primary control.
+ * FormStep spreads a step's config into InputCard, which puts the name on the
+ * button as data-analytics-event, and the portal's analytics shim emits it on
+ * click. Names are written out rather than derived from `path` so renaming a
+ * route cannot silently rename a funnel step in the reports.
+ */
 export const newComplaintSteps = [
   {
     path: "/complaint-type",
+    analyticsEvent: "pgr.file-complaint.complaint-type",
     texts: {
       headerCaption: "",
       header: "CS_ADDCOMPLAINT_COMPLAINT_TYPE_PLACEHOLDER",
@@ -10,6 +17,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/sub-type",
+    analyticsEvent: "pgr.file-complaint.sub-type",
     texts: {
       header: "CS_ADDCOMPLAINT_COMPLAINT_SUBTYPE_PLACEHOLDER",
       cardText: "CS_COMPLAINT_SUBTYPE_TEXT",
@@ -18,6 +26,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/pincode",
+    analyticsEvent: "pgr.file-complaint.pincode",
     texts: {
       headerCaption: "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
       header: "CS_FILE_APPLICATION_PINCODE_LABEL",
@@ -40,6 +49,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/address",
+    analyticsEvent: "pgr.file-complaint.address",
     texts: {
       headerCaption: "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
       header: "CS_ADDCOMPLAINT_PROVIDE_COMPLAINT_ADDRESS",
@@ -49,6 +59,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/landmark",
+    analyticsEvent: "pgr.file-complaint.landmark",
     texts: {
       headerCaption: "CS_ADDCOMPLAINT_COMPLAINT_LOCATION",
       header: "CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE",
@@ -66,6 +77,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/upload-photos",
+    analyticsEvent: "pgr.file-complaint.upload-photos",
     texts: {
       header: "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
       cardText: "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
@@ -75,6 +87,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/additional-details",
+    analyticsEvent: "pgr.file-complaint.additional-details",
     texts: {
       header: "CS_ADDCOMPLAINT_PROVIDE_ADDITIONAL_DETAILS",
       cardText: "CS_ADDCOMPLAINT_ADDITIONAL_DETAILS_TEXT",
@@ -90,6 +103,7 @@ export const newComplaintSteps = [
   },
   {
     path: "/response",
+    analyticsEvent: "pgr.file-complaint.response",
     texts: {
       cardText: "CS_COMMON_TRACK_COMPLAINT_TEXT",
       nextText: "CORE_COMMON_GO_TO_HOME",

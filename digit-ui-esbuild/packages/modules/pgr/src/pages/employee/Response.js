@@ -39,7 +39,7 @@ const Response = (props) => {
       {appState.complaints.response && <BannerPicker response={appState} />}
       <CardText>{t("ES_COMMON_TRACK_COMPLAINT_TEXT")}</CardText>
       <Link to={`/${window?.contextPath}/employee`}>
-        <SubmitBar label={t("CORE_COMMON_GO_TO_HOME")} />
+        <SubmitBar data-analytics-event="pgr.complaint.response-go-home" label={t("CORE_COMMON_GO_TO_HOME")} />
       </Link>
     </Card>
   );
