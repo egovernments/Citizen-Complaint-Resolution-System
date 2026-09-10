@@ -8291,5 +8291,59 @@
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
-    {"code": "ES_PGR_FILTER_ONLY_MY_COMPLAINTS", "message": "Only complaints I created", "module": "rainmaker-pgr", "locale": "en_IN"}
+    {"code": "ES_PGR_FILTER_ONLY_MY_COMPLAINTS", "message": "Only complaints I created", "module": "rainmaker-pgr", "locale": "en_IN"},
+    {
+        "code": "PGR_RECEIPT_CLASSIFICATION",
+        "message": "Classification",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_DOWNLOAD",
+        "message": "Download Receipt",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_ERROR",
+        "message": "Could not generate the receipt. Please try again.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_GENERATED_ON",
+        "message": "Generated on",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_NEXT_TITLE",
+        "message": "What happens next",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_NEXT_TRACK",
+        "message": "Keep this complaint number — you need it to ask about your complaint.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_NEXT_UPDATE",
+        "message": "You can track the status any time under My Complaints.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_SYSTEM_GENERATED",
+        "message": "This is a system-generated document and does not require a signature.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RECEIPT_TITLE",
+        "message": "Complaint Receipt",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    }
 ]
