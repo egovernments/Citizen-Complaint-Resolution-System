@@ -67,8 +67,9 @@ releases:
   # digit-mcp — DIGIT REST/JSON-RPC admin shim (tenant onboarding tooling).
   # Uses the standalone chart at repo-root digit-mcp/helm/digit-mcp (single
   # source of truth), NOT the common-chart pattern, so it declares its own
-  # values instead of <<: *default. Kept internal-only: ClusterIP + no ingress
-  # template exists in the chart, so it is never publicly reachable.
+  # values instead of <<: *default. This full instance is kept internal-only:
+  # ClusterIP + ingress.enabled defaults to false, so it is never publicly
+  # reachable. A separate, opt-in READ-ONLY instance is defined below.
   - name: digit-mcp
     installed: true
     namespace: egov
@@ -91,3 +92,43 @@ releases:
         secret:
           CRS_USERNAME: {{ index .Values.secrets "digit-mcp" "username" | quote }}
           CRS_PASSWORD: {{ index .Values.secrets "digit-mcp" "password" | quote }}
+
+  # digit-mcp-readonly — OPT-IN, publicly-exposable READ-ONLY instance. With
+  # MCP_READ_ONLY=1 every write-risk tool is ABSENT (see the digit-mcp README),
+  # so only reads are reachable. OFF by default; the full instance above stays
+  # internal. To turn it on: (1) ensure the image carries MCP_READ_ONLY, (2) flip
+  # installed: true, (3) set ingress.host to a real hostname, (4) create the
+  # basic-auth Secret in `egov` (kubectl create secret generic
+  # mcp-readonly-basic-auth --from-file=auth). Auth is enforced at the ingress
+  # because /mcp has no app-level auth. Some reads still return data, so keep the
+  # basic-auth (and optionally allowSourceRange) on.
+  - name: digit-mcp-readonly
+    installed: false
+    namespace: egov
+    chart: ../../../../digit-mcp/helm/digit-mcp
+    missingFileHandler: Warn
+    values:
+      - image:
+          repository: digit-mcp
+          tag: "2.12-81fc6be"
+        service:
+          type: ClusterIP
+        env:
+          MCP_TRANSPORT: http
+          MCP_PORT: "3000"
+          MCP_READ_ONLY: "1"
+          CRS_ENVIRONMENT: self-hosted
+          CRS_ENV_NAME: CCRS
+          CRS_TENANT_ID: {{ index .Values.configmaps "egov-config" "data" "egov-state-level-tenant-id" | quote }}
+          CRS_API_URL: http://gateway.egov:8080
+        secret:
+          CRS_USERNAME: {{ index .Values.secrets "digit-mcp" "username" | quote }}
+          CRS_PASSWORD: {{ index .Values.secrets "digit-mcp" "password" | quote }}
+        ingress:
+          enabled: true
+          className: nginx
+          host: "mcp-readonly.REPLACE-your-domain"   # set a real host before enabling
+          clusterIssuer: letsencrypt-prod
+          tlsSecret: mcp-readonly-tls
+          basicAuthSecret: mcp-readonly-basic-auth
+          # allowSourceRange: "1.2.3.4/32,10.0.0.0/8"   # optional IP allowlist

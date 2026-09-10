@@ -1601,6 +1601,7 @@
             ([]
               + (['search']        if enable_search_stack  | default(false) else [])
               + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['mcp-readonly']  if enable_mcp_readonly  | default(false) else [])
               + (['notifications'] if enable_novu          | default(false) else [])
               + (['keycloak']      if enable_keycloak      | default(false) else [])
               + (['otp']           if enable_otp_services  | default(false) else [])
@@ -3436,6 +3437,41 @@
       when:
         - enable_integration_tests | default(false)
         - integration_tests_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # ---- digit-mcp-readonly basic-auth (nginx front for the public read-only MCP) ----
+    - name: "mcp-readonly — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
+      ansible.builtin.apt:
+        name: apache2-utils
+        state: present
+      when:
+        - enable_mcp_readonly | default(false)
+        - mcp_readonly_basic_auth_password is defined
+        - ansible_facts['os_family'] == 'Debian'
+
+    - name: "mcp-readonly — ensure htpasswd tooling for basic-auth (RHEL family)"
+      ansible.builtin.dnf:
+        name: httpd-tools
+        state: present
+      when:
+        - enable_mcp_readonly | default(false)
+        - mcp_readonly_basic_auth_password is defined
+        - ansible_facts['os_family'] == 'RedHat'
+
+    # Idempotent via `creates`: rotate by deleting the file and re-running. Skips
+    # if the password is unset (the read-only MCP routes would 401 with no valid
+    # user — set mcp_readonly_basic_auth_password in vault/host_vars).
+    - name: "mcp-readonly — basic-auth user in /etc/nginx/.htpasswd-mcp-readonly"
+      ansible.builtin.command: >-
+        htpasswd -bBc /etc/nginx/.htpasswd-mcp-readonly
+        "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
+        "{{ mcp_readonly_basic_auth_password }}"
+      args:
+        creates: /etc/nginx/.htpasswd-mcp-readonly
+      no_log: true
+      when:
+        - enable_mcp_readonly | default(false)
+        - mcp_readonly_basic_auth_password is defined
         - ansible_system != "Darwin"
 
     # ---- RUN button: on-box test-runner daemon (opt-in: enable_integration_tests_runner) ----

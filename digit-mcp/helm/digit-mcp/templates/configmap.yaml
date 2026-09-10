@@ -13,3 +13,8 @@ data:
   # without it the 'self-hosted' env falls back to http://kong:8000 (compose-only).
   CRS_API_URL: {{ .Values.env.CRS_API_URL | quote }}
   CRS_ENV_NAME: {{ .Values.env.CRS_ENV_NAME | quote }}
+  {{- if .Values.env.MCP_READ_ONLY }}
+  # Read-only instance: write-risk tools are dropped at registration (see the
+  # digit-mcp README). Only set on a dedicated read-only release.
+  MCP_READ_ONLY: {{ .Values.env.MCP_READ_ONLY | quote }}
+  {{- end }}

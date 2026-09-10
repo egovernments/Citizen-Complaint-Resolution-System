@@ -224,6 +224,43 @@ server {
   }
 
 {% endif %}
+{% if nginx_features.mcp_readonly | default(false) and not nginx_features.mcp | default(false) %}
+  # DIGIT MCP — PUBLIC READ-ONLY instance (digit-mcp-readonly, MCP_READ_ONLY=1).
+  # Every write-risk tool is ABSENT, so /mcp is safe to expose here — but reads
+  # still return data, so both paths sit behind basic auth
+  # (/etc/nginx/.htpasswd-mcp-readonly, created by the playbook when
+  # mcp_readonly_basic_auth_password is set). Mutually exclusive with
+  # nginx_features.mcp — both define /mcp and /v1/, so enable ONE. Routes to the
+  # read-only container on upstream_mcp_readonly_port.
+  location /mcp {
+    auth_basic "DIGIT MCP (read-only)";
+    auth_basic_user_file /etc/nginx/.htpasswd-mcp-readonly;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_readonly_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 24h;
+    proxy_send_timeout 24h;
+  }
+
+  location /v1/ {
+    auth_basic "DIGIT MCP (read-only)";
+    auth_basic_user_file /etc/nginx/.htpasswd-mcp-readonly;
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_readonly_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+  }
+
+{% endif %}
 {# `| default(false)` is load-bearing here for the same reason as grafana
    above: host_vars replace nginx_features as a whole dict, so every tenant
    file written before this key existed has no `matomo` member. #}

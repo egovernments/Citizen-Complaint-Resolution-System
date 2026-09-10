@@ -1986,6 +1986,55 @@ services:
     networks:
       - egov-network
 
+  # digit-mcp-readonly — READ-ONLY variant of the MCP, for public exposure.
+  # MCP_READ_ONLY=1 makes every write-risk tool ABSENT (tenant_destroy,
+  # decrypt_data, *_create/_update, ...) on /mcp and every /v1 route. Same image
+  # as digit-mcp. Gated behind its own profile so it is OFF unless requested;
+  # nginx fronts it with basic auth (nginx_features.mcp_readonly). Data-returning
+  # reads (user_search, pgr_search) remain, so keep the auth on.
+  digit-mcp-readonly:
+    profiles: ["mcp-readonly"]
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
+    container_name: digit-mcp-readonly
+    restart: unless-stopped
+    depends_on:
+      mcp-postgres:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    environment:
+      MCP_TRANSPORT: http
+      MCP_PORT: "3000"
+      MCP_READ_ONLY: "1"
+      CRS_ENVIRONMENT: self-hosted
+      CRS_ENV_NAME: ${MCP_ENV_NAME:-Self-hosted DIGIT}
+      CRS_API_URL: http://kong:8000
+      CRS_USERNAME: ${MCP_USERNAME:-ADMIN}
+      CRS_PASSWORD: ${MCP_PASSWORD:-eGov@123}
+      CRS_TENANT_ID: ${MCP_TENANT_ID:-pg}
+      SESSION_DB_HOST: mcp-postgres
+      SESSION_DB_PORT: "5432"
+      SESSION_DB_NAME: mcp_sessions
+      SESSION_DB_USER: mcp
+      SESSION_DB_PASSWORD: ${MCP_DB_PASSWORD:-mcp123}
+      EGOV_REDIS_HOST: redis
+      EGOV_REDIS_PORT: "6379"
+      DIGIT_DB_HOST: postgres
+      DIGIT_DB_PORT: "5432"
+      DIGIT_DB_NAME: egov
+      DIGIT_DB_USER: egov
+      DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+    ports:
+      - "13102:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - egov-network
+
   # ==================== OpenBao (secrets backend) ====================
   # Per-tenant secrets store. File-backed KV v2; the playbook handles
   # init + auto-unseal on first deploy and stores the unseal keys at

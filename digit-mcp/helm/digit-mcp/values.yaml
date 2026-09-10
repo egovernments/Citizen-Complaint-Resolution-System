@@ -9,6 +9,24 @@ service:
   type: ClusterIP
   port: 3000
 
+# Public exposure. OFF by default — the MCP is a platform-admin surface and is
+# only reachable in-cluster (port-forward) unless you opt in here. Intended for a
+# SEPARATE read-only release (env.MCP_READ_ONLY=1). Auth is enforced at the edge,
+# because /mcp has no app-level auth: set basicAuthSecret and/or allowSourceRange.
+ingress:
+  enabled: false
+  className: nginx
+  host: ""                 # e.g. mcp.cms-saas.digit.org
+  path: /
+  clusterIssuer: ""        # e.g. letsencrypt-prod (cert-manager issues TLS)
+  tlsSecret: ""            # e.g. <host>-mcp-tls
+  # htpasswd Secret created out of band (kubectl create secret generic <name> --from-file=auth).
+  # Leave empty ONLY if allowSourceRange alone is your gate.
+  basicAuthSecret: ""
+  # CIDR(s) allowed to reach the ingress, e.g. "1.2.3.4/32,10.0.0.0/8".
+  allowSourceRange: ""
+  annotations: {}
+
 env:
   MCP_TRANSPORT: http
   MCP_PORT: "3000"
