@@ -1086,12 +1086,6 @@ class DigitApiClient {
    * caller needed no credentials because none were forwarded. The token is now
    * attached so the enc-service / gateway can authorise the request.
    */
-  private encHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.authToken) headers['Authorization'] = `Bearer ${this.authToken}`;
-    return headers;
-  }
-
   async encryptData(
     tenantId: string,
     values: string[]
@@ -1099,8 +1093,15 @@ class DigitApiClient {
     const url = `${this.environment.url}${this.endpoint('ENC_ENCRYPT')}`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: this.encHeaders(),
+      headers: { 'Content-Type': 'application/json' },
+      // Carry RequestInfo.authToken in the BODY. /egov-enc-service is a
+      // Kong-protected path and the gateway authorizes POSTs from the body
+      // token, NOT an Authorization header — so the header these calls used to
+      // send was never read, and a tokenless body is 401'd at the gateway (same
+      // root cause generateEncKey was fixed for). The _encrypt endpoint ignores
+      // the extra RequestInfo field alongside encryptionRequests.
       body: JSON.stringify({
+        RequestInfo: this.buildRequestInfo(),
         encryptionRequests: values.map((value) => ({
           tenantId,
           type: 'Normal',
@@ -1153,12 +1154,24 @@ class DigitApiClient {
     tenantId: string,
     encryptedValues: string[]
   ): Promise<string[]> {
-    // The decrypt API expects a flat JSON array of encrypted strings, not an envelope
     const url = `${this.environment.url}${this.endpoint('ENC_DECRYPT')}`;
+    // egov-enc-service recursively decrypts every encrypted-format string in the
+    // body and echoes everything else unchanged. Wrapping the ciphertext with
+    // RequestInfo lets the Kong body-token gate authenticate the POST — the
+    // bare-array form this used to send carries no token and is 401'd on the
+    // protected /egov-enc-service path (the Authorization header it also sent was
+    // never read by the gateway). The authToken string is not in encrypted
+    // format, so it passes through untouched and only the ciphertext is
+    // decrypted. Response parsing accepts both the wrapped object (token path)
+    // and a flat array (older contract), so a stack without gateway enforcement
+    // still works.
     const response = await fetch(url, {
       method: 'POST',
-      headers: this.encHeaders(),
-      body: JSON.stringify(encryptedValues),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: this.buildRequestInfo(),
+        decryptionData: encryptedValues,
+      }),
     });
 
     if (!response.ok) {
@@ -1166,7 +1179,11 @@ class DigitApiClient {
     }
 
     const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray((data as { decryptionData?: unknown }).decryptionData)) {
+      return (data as { decryptionData: string[] }).decryptionData;
+    }
+    return [];
   }
 
   // Boundary — create boundary entities (batch)

@@ -25,7 +25,15 @@ export const ALL_GROUPS: ToolGroup[] = ['core', 'mdms', 'boundary', 'masters', '
  * - `admin`     — caller must hold one of MCP_ADMIN_ROLES. For destructive or
  *                 PII-revealing tools.
  */
-export type ToolAccess = 'public' | 'employee' | 'admin';
+// Access tiers, least to most privileged:
+//   public        — no authentication required
+//   authenticated — any logged-in caller, role-agnostic (citizen OR staff); the
+//                    backend service still enforces per-action RBAC. Use for
+//                    tools citizens legitimately call (e.g. file/rate/reopen a
+//                    PGR complaint) that must not be gated to staff-only.
+//   employee      — a staff (non-citizen) account
+//   admin         — an admin-role account
+export type ToolAccess = 'public' | 'authenticated' | 'employee' | 'admin';
 
 export interface ToolMetadata {
   name: string;

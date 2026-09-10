@@ -1880,35 +1880,6 @@
     # below overwrites it with the authoritative value before anything but
     # OpenBao (and optionally keycloak-postgres) has actually started, so
     # Grafana itself only ever sees the real one.
-    # Refuse to deploy an opt-in stack on a secret that is published in this
-    # public repo. Runs HERE — before any `docker compose up` — so it is a
-    # true pre-flight refusal, not a post-mortem after the containers already
-    # started on the dev default. Reads bootstrap_secrets.<key> (host_vars),
-    # which is where these live and is available from the start of the play.
-    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
-      ansible.builtin.assert:
-        that:
-          - (bootstrap_secrets[item.var] | default('')) | length > 0
-          - (bootstrap_secrets[item.var] | default('')) != item.bad
-        fail_msg: >-
-          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
-          the published default from docker-compose.egov-digit.yaml. Set it in
-          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml — these
-          values are in a public repo, so the default is equivalent to no
-          secret at all.
-      when: item.enabled
-      loop:
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
-        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
-        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
-        - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
-      loop_control:
-        label: "{{ item.feature }} / {{ item.var }}"
-
-
     - name: "Secrets prep — write a placeholder GF_ADMIN_PASSWORD into .env (compose needs it to interpolate at all)"
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
@@ -2061,6 +2032,43 @@
         status_code: [200]
       register: bao_secrets
       no_log: true
+
+    # Refuse to deploy an opt-in stack on a secret that is published in this
+    # public repo. Runs HERE — right after the OpenBao read and before the .env
+    # is written / any app `docker compose up` — and asserts on the value that
+    # ACTUALLY reaches .env (bao_secrets, read back from OpenBao), NOT on
+    # bootstrap_secrets in host_vars. The two can diverge: the bootstrap seed is
+    # cas:0 (writes only when no version exists), so on a box whose OpenBao was
+    # initialised before a key was added, host_vars can hold a real value while
+    # OpenBao — and therefore .env — is empty and compose silently falls back to
+    # the published dev default. Checking the post-read value catches exactly
+    # that, and also lets a tenant that set the secret straight in OpenBao
+    # (`bao kv put`) with an empty host_vars pass.
+    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
+      ansible.builtin.assert:
+        that:
+          - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
+          - (bao_secrets.json.data.data[item.var] | default('')) != item.bad
+        fail_msg: >-
+          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
+          the published default in OpenBao — so .env gets an empty value and
+          compose falls back to the public default from
+          docker-compose.egov-digit.yaml. Set it with
+          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` (or put it in
+          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
+          whose OpenBao has not been seeded yet). These values are in a public
+          repo, so the default is equivalent to no secret at all.
+      when: item.enabled
+      loop:
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
+        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
+        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+        - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
 
     # Grafana admin password. Tenants seeded BEFORE this key existed can't get
     # it from the bootstrap seed above (that write is cas:0 — it only fires when
@@ -3752,7 +3760,29 @@
         chromium
       args:
         chdir: "{{ integration_tests_dir }}"
+      # Install into a SHARED path, not root's $HOME. This task runs as root, so
+      # without this Playwright drops the browsers in /root/.cache/ms-playwright,
+      # which the runner unit — running as digit-tests with ProtectHome=true —
+      # cannot read, and every RUN fails "Executable doesn't exist". The unit
+      # below sets the SAME PLAYWRIGHT_BROWSERS_PATH so it finds them here.
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: "{{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}"
       changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    # Playwright installs as root (0755 dirs), which is world-readable, but make
+    # it explicit so the digit-tests account can always read + execute the
+    # browser binaries from the shared path under the unit's ProtectSystem=strict
+    # (read-only) view of the filesystem.
+    - name: "integration-tests runner — make the shared Playwright browsers path readable"
+      ansible.builtin.file:
+        path: "{{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}"
+        state: directory
+        mode: "0755"
+        recurse: true
       when:
         - enable_integration_tests_runner | default(false)
         - integration_tests_dir is defined
@@ -4230,9 +4260,15 @@
       register: mcp_root_bootstrap
       # MCP is recreated by "Recreate services with the new env" just above, so
       # its DIGIT-API connection can need a few seconds even after /mcp/healthz
-      # is green. body.auth works once warm — retry rather than fail the deploy
-      # on a cold-start window.
-      until: mcp_root_bootstrap.json.success | default(false) | bool
+      # is green. body.auth works once warm — retry the COLD-START window only.
+      # Retry until we get an HTTP 200 *response*, NOT until success=true:
+      # success=false is also the normal signal for a PARTIAL seed failure (one
+      # schema/data step), which the dedicated non-fatal handlers below report.
+      # Gating the retry on success would re-POST this full multi-minute tenant
+      # bootstrap 11× — replaying every write — on any partial failure. A 200
+      # (even success=false) means MCP is warm and answered; stop and let the
+      # handlers decide.
+      until: mcp_root_bootstrap.status | default(0) == 200
       retries: 10
       delay: 30
       when:
@@ -4260,7 +4296,10 @@
         status_code: [200]
         timeout: 600
       register: mcp_city_bootstrap
-      until: mcp_city_bootstrap.json.success | default(false) | bool
+      # Retry the cold-start window only — until an HTTP 200 response, not until
+      # success=true — so a partial seed failure is not replayed 11×. See the
+      # root-tenant task above.
+      until: mcp_city_bootstrap.status | default(0) == 200
       retries: 10
       delay: 30
       when:

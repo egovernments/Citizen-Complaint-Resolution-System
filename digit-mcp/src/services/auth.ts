@@ -136,6 +136,12 @@ export function checkToolAccess(
     return `Tool "${toolName}" requires an authenticated ${required} caller, but the token carried no user context.`;
   }
 
+  // Any logged-in caller, role-agnostic. A citizen must be able to file, rate
+  // and reopen their own PGR complaint; the backend workflow/PGR service is
+  // what authorizes the specific action against the caller's role. Gating these
+  // tools to 'employee' locks citizens out of their own transitions.
+  if (required === 'authenticated') return null;
+
   const roles = (user.roles || []).map((r) => (r.code || '').toUpperCase()).filter(Boolean);
   const isCitizenOnly =
     roles.length > 0 && roles.every((code) => CITIZEN_ROLE_CODES.has(code));

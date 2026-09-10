@@ -14,8 +14,19 @@
 const SENSITIVE_WORDS = [
   'password', 'passwd', 'pwd', 'secret', 'token', 'credential', 'credentials',
   'apikey', 'privatekey', 'passphrase', 'authorization', 'auth', 'bearer',
-  'jwt', 'signature', 'sig', 'otp',
+  'jwt', 'signature', 'otp',
 ];
+
+/**
+ * Short, ambiguous tokens that are a credential only as a WHOLE segment, never
+ * as a substring. `sig` IS a real signature field name, but substring-matching
+ * it in the glued-spelling fallback below redacted `deSIGnation`, `asSIGnee`
+ * and `conSIGnment` — ordinary employee_create / PGR arguments — out of the
+ * audit trail and session store. These join the exact-segment set but are kept
+ * OUT of the substring fallback. (`signature` stays in SENSITIVE_WORDS above and
+ * still covers the common key name.)
+ */
+const EXACT_ONLY_WORDS = ['sig'];
 
 /**
  * Words that are only credential-ish next to a qualifier. `key` alone is far
@@ -36,7 +47,7 @@ const QUALIFIED_WORDS: Record<string, string[]> = {
  * Segmenting keeps `access_token`, `apiKey` and `X-Auth-Token` while leaving
  * `author` alone.
  */
-const SENSITIVE_WORD_SET = new Set(SENSITIVE_WORDS);
+const SENSITIVE_WORD_SET = new Set([...SENSITIVE_WORDS, ...EXACT_ONLY_WORDS]);
 
 /**
  * Depth budget. Generous because it bounds a real payload, not an attack:

@@ -267,7 +267,7 @@ const EXPECTED_PUBLIC = new Set([
 ]);
 
 await test('3.1 every tool declares a valid access tier or omits it', () => {
-  const valid = new Set(['public', 'employee', 'admin', undefined]);
+  const valid = new Set(['public', 'authenticated', 'employee', 'admin', undefined]);
   for (const t of allTools) {
     assert.ok(valid.has(t.access), `${t.name} has access="${t.access}"`);
   }
@@ -302,10 +302,10 @@ await test('3.3b the tier census matches what the docs claim', () => {
   // Pinned so prose and code cannot drift: the PR body and README quote these
   // numbers, and they have already gone stale once. If this fails, a tier
   // moved — update the docs in the same commit, not the number here alone.
-  const census = { public: 0, employee: 0, admin: 0 } as Record<string, number>;
+  const census = { public: 0, authenticated: 0, employee: 0, admin: 0 } as Record<string, number>;
   for (const t of allTools) census[t.access ?? 'employee']++;
   assert.equal(allTools.length, 70, 'tool count changed');
-  assert.deepEqual(census, { public: 6, employee: 25, admin: 39 });
+  assert.deepEqual(census, { public: 6, authenticated: 2, employee: 23, admin: 39 });
 });
 
 await test('3.4 destructive and PII tools are admin-tier', () => {

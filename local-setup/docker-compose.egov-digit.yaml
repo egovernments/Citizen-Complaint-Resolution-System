@@ -527,7 +527,7 @@ services:
       # auth required now that xpack.security is on; without -u this 401s,
       # ES stays "unhealthy", and every depends_on: service_healthy dependent
       # (egov-indexer, inbox) never starts -> the whole deploy fails.
-      - curl -fsS -u "elastic:$ELASTIC_PASSWORD" http://localhost:9200/_cluster/health || exit 1
+      - curl -fsS -u "elastic:$$ELASTIC_PASSWORD" http://localhost:9200/_cluster/health || exit 1
       interval: 30s
       timeout: 10s
       retries: 5

@@ -349,17 +349,24 @@ with open(config_path, 'w') as f:
     json.dump(config, f, indent=2)
     f.write('\n')
 
+# The DIGIT-MCP entry embeds a bearer token, so keep the file owner-only. This
+# also tightens a pre-existing file that may still be 0644.
+os.chmod(config_path, 0o600)
+
 " "$config_path" "$server_entry" "$client"
   else
     # New file
     python3 -c "
-import json, sys
+import json, sys, os
 
 server_json = sys.argv[1]
 entry = json.loads(server_json)
 config = {'mcpServers': {'DIGIT-MCP': entry}}
 
-with open(sys.argv[2], 'w') as f:
+# Create owner-only (0600): the entry embeds a bearer token and a fresh file
+# would otherwise land world-readable at the process umask (typically 0644).
+fd = os.open(sys.argv[2], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, 'w') as f:
     json.dump(config, f, indent=2)
     f.write('\n')
 " "$server_entry" "$config_path"

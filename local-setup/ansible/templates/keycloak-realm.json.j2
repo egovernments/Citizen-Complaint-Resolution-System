@@ -18,6 +18,15 @@
 {%- set tpl = lookup('file', tpl_path) | from_json -%}
 {%- set _ = tpl.update({'realm': state_tenant_id}) -%}
 
+{#- sslRequired: Keycloak refuses to authenticate over plain HTTP unless this is
+    relaxed. The shipped template hard-codes "external", but with
+    KC_PROXY_HEADERS=xforwarded Keycloak sees the real client IP, so on a
+    tls_enabled:false tenant (the sandbox / localhost / quickstart default)
+    every login returns "HTTPS required". Template it off tls_enabled so the
+    hardening stays wherever TLS actually terminates and only relaxes where it
+    cannot apply. -#}
+{%- set _ = tpl.update({'sslRequired': 'external' if (tls_enabled | default(true)) else 'none'}) -%}
+
 {%- set scheme = 'https://' if (tls_enabled | default(true)) else 'http://' -%}
 {%- set base = scheme + domain -%}
 

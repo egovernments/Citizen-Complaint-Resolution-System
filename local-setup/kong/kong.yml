@@ -223,6 +223,82 @@ plugins:
           kong.log.warn("RBAC-audit(#5): unauthenticated request to protected path (would 401): ", uri)
         end
 
+        -- Infrastructure routes Kong also fronts that are NOT DIGIT APIs and
+        -- carry no RequestInfo body token: the SPA bundle (/digit-ui), the
+        -- Keycloak auth server (/auth and its OIDC/login/resources), and Kong's
+        -- per-service liveness routes (/health/<svc>, */actuator/health). The
+        -- global pre-function runs on EVERY route, but the body-token enrichment
+        -- below must not apply to these — they stay publicly reachable on ALL
+        -- methods (the SPA login page, Keycloak's form POST, k8s/Gatus probes).
+        -- This scopes the auth gate to the DIGIT API routes it is meant to cover.
+        local function is_public_infra(p)
+          return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
+              or p == "/auth" or p:find("/auth/", 1, true) == 1
+              or p == "/health" or p:find("/health/", 1, true) == 1
+              or p:match("/actuator/health$") or p:match("/actuator/health/")
+        end
+        if is_public_infra(uri) then return end
+
+        -- Resolve a token against egov-user and return the server-vouched
+        -- principal (roles/tenantId/uuid), plus a status: "ok" | "rejected"
+        -- (invalid/expired) | "transient" (unreachable / 5xx / unparseable).
+        -- The token is URL-escaped before it becomes a query value, so a value
+        -- containing & = whitespace / CR / LF cannot inject extra introspection
+        -- parameters into the _details call.
+        local function resolve_principal(ntoken)
+          local c = http.new(); c:set_timeout(5000)
+          local r = c:request_uri(
+            "http://egov-user-proxy:8107/user/_details?access_token=" .. ngx.escape_uri(ntoken),
+            { method = "POST", headers = { ["Content-Type"] = "application/json" } })
+          if r and r.status == 200 then
+            local okd, u = pcall(cjson.decode, r.body)
+            if okd and type(u) == "table" and (u["uuid"] or u["userName"]) then return u, "ok" end
+            return nil, "transient"
+          elseif r and (r.status == 401 or r.status == 403
+                        or (r.body and r.body:find("InvalidAccessTokenException", 1, true))) then
+            return nil, "rejected"
+          end
+          return nil, "transient"
+        end
+
+        -- Action-level authorization (Phase 2, #5) against egov-accesscontrol
+        -- for a resolved principal on a protected path. SHARED by the POST and
+        -- non-POST paths so every method gets RBAC, not just authentication.
+        -- Ships in AUDIT mode; fails CLOSED (403) when ENFORCE_RBAC — a protected
+        -- action is denied unless accesscontrol returns an explicit allow.
+        local function enforce_rbac(resolved, token)
+          if not (is_protected and resolved) then return end
+          local tid = resolved["tenantId"]
+          local az = http.new(); az:set_timeout(5000)
+          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
+            method = "POST",
+            headers = { ["Content-Type"] = "application/json" },
+            body = cjson.encode({
+              RequestInfo = { apiId = "Rainmaker", authToken = token },
+              AuthorizationRequest = {
+                roles = resolved["roles"] or cjson.empty_array,
+                uri = uri,
+                tenantIds = tid and { tid } or cjson.empty_array,
+              },
+            }),
+          })
+          if not (ares and ares.status == 200) then
+            if ENFORCE_RBAC then
+              return kong.response.exit(403, cjson.encode({
+                ResponseInfo = cjson.null,
+                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
+                            description = "You are not authorized to perform this action" }},
+              }), { ["Content-Type"] = "application/json" })
+            end
+            if ares then
+              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
+                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
+            else
+              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
+            end
+          end
+        end
+
         -- Non-POST enforcement (audit: kong non-POST bypass).
         -- DIGIT carries its authToken in the POST body (RequestInfo.authToken),
         -- so the enrichment below only works for POST. The ORIGINAL code bailed
@@ -234,38 +310,27 @@ plugins:
         -- A non-POST request has no body token to resolve/enrich, but DIGIT
         -- also accepts a token out-of-band: the `auth-token` header or an
         -- `access_token` query param. Honour those, verify against egov-user,
-        -- and fail CLOSED on a protected path with no resolvable token. Kong
-        -- routes only DIGIT API path-prefixes (no catch-all, no SPA route —
-        -- verified: GET / -> 404), so this affects API traffic only.
+        -- then run the SAME action-level RBAC as POST — authn alone is not
+        -- enough: a valid CITIZEN token must not pass a protected GET/PUT/DELETE
+        -- that its roles cannot authorize. Fail CLOSED on a protected path with
+        -- no resolvable token. (The SPA, Keycloak and health routes were already
+        -- returned above, so this reaches only DIGIT API routes.)
         if kong.request.get_method() ~= "POST" then
           if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
-          -- Liveness/readiness probes are unauthenticated GETs by convention
-          -- (Gatus, k8s probes, the deploy's own health validation). They carry
-          -- no tenant data. Let */health and */actuator/health through rather
-          -- than 401 them — they are not in the exact-match AUTH_OPTIONAL set
-          -- because they exist on every service under its own prefix.
-          if uri:match("/health$") or uri:match("/actuator/health$")
-             or uri:match("/actuator/health/") then return end
           local hdr = kong.request.get_header("auth-token")
           local q = kong.request.get_query()
           local qtok = q and q["access_token"]
           local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)
                       or (type(qtok) == "string" and qtok ~= "" and qtok) or nil
           if not ntoken then deny_unauth(); return end  -- protected, no token -> 401 (or audit-warn)
-          local nhttp = http.new(); nhttp:set_timeout(5000)
-          local nres = nhttp:request_uri(
-            "http://egov-user-proxy:8107/user/_details?access_token=" .. ntoken,
-            { method = "POST", headers = { ["Content-Type"] = "application/json" } })
-          local nok = nres and nres.status == 200
-          if nok then
-            local okd, u = pcall(cjson.decode, nres.body)
-            nok = okd and type(u) == "table" and (u["uuid"] or u["userName"]) and true or false
+          local resolved, status = resolve_principal(ntoken)
+          if status == "ok" then
+            return enforce_rbac(resolved, ntoken)       -- authn verified -> action-level RBAC
           end
-          -- Reject invalid tokens; also fail closed if egov-user is unreachable
-          -- (nres == nil / 5xx) rather than forwarding a protected request
-          -- without a server-vouched principal. deny_unauth() 401s when
+          -- "rejected" (invalid/expired) and "transient" (egov-user unreachable
+          -- / 5xx) both fail CLOSED on a protected path: deny_unauth() 401s when
           -- ENFORCE_UNAUTH, else audit-warns and falls through (parity with POST).
-          if not nok then deny_unauth() end
+          deny_unauth()
           return
         end
         local raw_body = kong.request.get_raw_body()
@@ -284,7 +349,7 @@ plugins:
         -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
-        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
+        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. ngx.escape_uri(token), {
           method = "POST",
           headers = { ["Content-Type"] = "application/json" },
         })
@@ -361,53 +426,15 @@ plugins:
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
 
-        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization for protected paths =====
-        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol whether the
-        -- principal's roles may call this action (uri): 200 = allow, non-200 = deny. Mirrors the
-        -- Spring gateway's RBAC filter. Ships in AUDIT mode; when ENFORCE_RBAC it fails CLOSED (a
-        -- protected action is denied unless we get an explicit allow). See
-        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call per protected
-        -- request; response caching keyed by roles+uri+tenant is a documented follow-up.)
-        if is_protected and resolved then
-          -- Guard tenantIds: a principal without a tenantId (e.g. a freshly-created citizen
-          -- before city selection) must NOT serialize as tenantIds:[null], which accesscontrol
-          -- would reject as malformed — send an empty array instead.
-          local tid = resolved["tenantId"]
-          local az = http.new()
-          az:set_timeout(5000)
-          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
-            method = "POST",
-            headers = { ["Content-Type"] = "application/json" },
-            body = cjson.encode({
-              RequestInfo = { apiId = "Rainmaker", authToken = token },
-              AuthorizationRequest = {
-                -- cjson.empty_array so empty roles/tenantIds serialize as JSON [] (not {}),
-                -- which egov-accesscontrol expects for these fields.
-                roles = resolved["roles"] or cjson.empty_array,
-                uri = uri,
-                tenantIds = tid and { tid } or cjson.empty_array,
-              },
-            }),
-          })
-          if not (ares and ares.status == 200) then
-            if ENFORCE_RBAC then
-              -- fail CLOSED: deny on an explicit non-200 AND on an unreachable accesscontrol.
-              return kong.response.exit(403, cjson.encode({
-                ResponseInfo = cjson.null,
-                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
-                            description = "You are not authorized to perform this action" }},
-              }), { ["Content-Type"] = "application/json" })
-            end
-            -- AUDIT: separate a legitimate DENY (accesscontrol answered non-200) from a transient
-            -- infra failure (accesscontrol UNREACHABLE) so operators know which alerts to act on.
-            if ares then
-              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
-                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
-            else
-              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
-            end
-          end
-        end
+        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization =====
+        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol
+        -- whether the principal's roles may call this action. Same shared
+        -- enforce_rbac() the non-POST path uses, so GET/PUT/DELETE and POST are
+        -- authorized identically. Mirrors the Spring gateway's RBAC filter; see
+        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call
+        -- per protected request; response caching keyed by roles+uri+tenant is a
+        -- documented follow-up.)
+        return enforce_rbac(resolved, token)
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094

@@ -127,6 +127,11 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'pgr_create',
+    // Citizens file their own complaints — the description below says as much
+    // ("any user with EMPLOYEE, CITIZEN, or CSR role"). 'authenticated' (not the
+    // 'employee' default) so a citizen token is not rejected before the backend,
+    // which does the real role check, ever sees the request.
+    access: 'authenticated',
     // Returns a plaintext provisioning password (loginCredentials /
     // citizenLogin). The session store keeps a 200-char prefix of every result
     // in Postgres and the JSONL log, so without this the credential is
@@ -406,6 +411,11 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'pgr_update',
+    // RATE and REOPEN are CITIZEN-role transitions, so this tool is reachable by
+    // citizens, not staff-only. 'authenticated' (not the 'employee' default) so
+    // a citizen token can perform its own RATE/REOPEN; the workflow service
+    // authorizes the specific action against the caller's role.
+    access: 'authenticated',
     group: 'pgr',
     category: 'pgr',
     risk: 'write',
