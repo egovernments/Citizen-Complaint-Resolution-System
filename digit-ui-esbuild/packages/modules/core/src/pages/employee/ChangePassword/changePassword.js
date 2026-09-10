@@ -7,10 +7,14 @@ import Background from "../../../components/Background";
 import Header from "../../../components/Header";
 import SelectOtp from "../../citizen/Login/SelectOtp";
 import ImageComponent from "../../../components/ImageComponent";
+import { useMobileValidationConfig } from "../../../hooks/useMobileValidationConfig";
 
 const ChangePasswordComponent = ({ config: propsConfig, t }) => {
   const [user, setUser] = useState(null);
   const { mobile_number: mobileNumber, tenantId } = Digit.Hooks.useQueryParams();
+  // Same country code the forgot-password page sent the first OTP with — the
+  // display used to hardcode "+ 91", which is not this deployment's code.
+  const { countryCode } = useMobileValidationConfig();
   const history = useHistory();
   const [otp, setOtp] = useState("");
   const [isOtpValid, setIsOtpValid] = useState(true);
@@ -34,6 +38,7 @@ const ChangePasswordComponent = ({ config: propsConfig, t }) => {
     const requestData = {
       otp: {
         mobileNumber,
+        countryCode,
         userType: getUserType().toUpperCase(),
         type: "passwordreset",
         tenantId,
@@ -126,7 +131,7 @@ const ChangePasswordComponent = ({ config: propsConfig, t }) => {
           {`${t(`CS_LOGIN_OTP_TEXT`)} `}
           <b>
             {" "}
-            {`${t(`+ 91 - `)}`} {mobileNumber}
+            {countryCode} - {mobileNumber}
           </b>
         </CardText>
         <SelectOtp t={t} userType="employee" otp={otp} onOtpChange={setOtp} error={isOtpValid} onResend={onResendOTP} />
