@@ -9,10 +9,16 @@
          before the module below, so the flag exists before main.tsx decides
          whether to initialise PostHog and Sentry. Shipped in dist alongside this
          file, so the two can never skew. See src/lib/telemetryGate.ts. -->
-    <!-- Base-aware: vite.config.ts sets base '/configurator/', so an origin-root
-         path 404s once deployed under that prefix. A missing global makes
-         isTelemetryKilled() return false — i.e. the kill switch fails OPEN. -->
-    <script src="./telemetry-config.js"></script>
+    <!-- %BASE_URL%, not "./". vite.config.ts sets base '/configurator/', and a
+         DOCUMENT-relative src resolves against the current route: deep-linking
+         /configurator/manage/tenants asks for
+         /configurator/manage/telemetry-config.js, which nginx answers from the
+         SPA try_files fallback with index.html — 200 text/html, parsed as JS,
+         SyntaxError, and no global. A missing global makes isTelemetryKilled()
+         return false, so the ops kill switch would fail OPEN on every route
+         except the root. %BASE_URL% is substituted at build time and always
+         resolves to /configurator/telemetry-config.js. -->
+    <script src="%BASE_URL%telemetry-config.js"></script>
   </head>
   <body>
     <div id="root"></div>

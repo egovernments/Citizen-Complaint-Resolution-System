@@ -233,6 +233,13 @@ function validateScriptUrl(url: unknown, extraHosts: readonly string[] = []): Ve
   return ok();
 }
 
+/** Exactly how public/analytics.js derives the Matomo beacon destination. */
+function matomoEndpoint(rec: AnalyticsProviderRecord): string {
+  if (isStr(rec.endpointUrl) && rec.endpointUrl) return rec.endpointUrl;
+  if (isStr(rec.scriptUrl) && rec.scriptUrl) return rec.scriptUrl.replace(/matomo\.js(\?.*)?$/, 'matomo.php');
+  return '';
+}
+
 function badTemplateString(s: string): boolean {
   const re = /\{\{([a-zA-Z]+)\}\}/g;
   let m: RegExpExecArray | null;
@@ -332,7 +339,13 @@ export function validateProviderRecord(
   const type = trim(rec.type).toUpperCase();
   if (type === 'MATOMO') {
     if (!trim(rec.siteId)) return fail(REASONS.MISSING_SITE_ID);
-    return validateScriptUrl(rec.scriptUrl, extraHosts);
+    const script = validateScriptUrl(rec.scriptUrl, extraHosts);
+    if (!script.ok) return script;
+    // CWE-201 parity with the shim. The endpoint is the BEACON DESTINATION, so
+    // it is allowlisted on the same rule as the script — otherwise a record with
+    // an allowlisted scriptUrl and an arbitrary endpointUrl reads as `ok` here,
+    // saves, enables, counts as live, and is then refused by the portal.
+    return validateScriptUrl(matomoEndpoint(rec), extraHosts);
   }
   if (type === 'GA4') {
     if (!trim(rec.measurementId)) return fail(REASONS.MISSING_MEASUREMENT_ID);
@@ -401,6 +414,17 @@ export function hasResidencyAck(rec: AnalyticsProviderRecord): boolean {
  *  that value. So the editor treats an unknown host as something to WARN about
  *  ("the portal will refuse this unless ops has declared the host") rather than
  *  as a hard save block it has no authority to impose. The shim is the enforcer. */
+/** CUSTOM records need an ops flag (ANALYTICS_CUSTOM_ENABLED) that this app
+ *  cannot read, exactly like ANALYTICS_SCRIPT_HOSTS. The editor therefore
+ *  validates a CUSTOM record's shape with customEnabled: true and warns that
+ *  ops still has to switch the type on — the warning ValidateOptions has always
+ *  promised. Without it an admin can create, enable and see a CUSTOM
+ *  destination counted as live while the shim refuses it with
+ *  `custom_disabled_by_ops` and nothing ever runs. */
+export function customNeedsOpsFlag(rec: AnalyticsProviderRecord): boolean {
+  return trim(rec.type).toUpperCase() === 'CUSTOM';
+}
+
 export function hostIsUnverifiable(rec: AnalyticsProviderRecord): string | null {
   const type = trim(rec.type).toUpperCase();
   let url = '';

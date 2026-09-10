@@ -20,6 +20,7 @@ import {
   fieldsForType,
   hasResidencyAck,
   hostIsUnverifiable,
+  customNeedsOpsFlag,
   requiresResidencyAck,
   validateProviderRecord,
   type AnalyticsProviderRecord,
@@ -281,6 +282,18 @@ export function AnalyticsProvidersEditor() {
   );
 
   const verdict = draft ? validateProviderRecord(draft, { requireEnabled: false, customEnabled: true }) : null;
+  // SCRIPT_URL_HOST_NOT_ALLOWED is the one verdict this screen may not act on:
+  // ops can widen the portal's allowlist through ANALYTICS_SCRIPT_HOSTS, which
+  // this app cannot read. It is surfaced as a warning instead. Everything else
+  // is a real block. Defined once because save, the list's enable toggle, the
+  // "actually run" count and the row badge had drifted apart on exactly this.
+  // A type predicate, so the callers that then read `.reason` still narrow.
+  const blocks = (
+    v: { ok: boolean; reason?: string } | null | undefined,
+  ): v is { ok: false; reason: string } =>
+    !!v && !v.ok && v.reason !== REASONS.SCRIPT_URL_HOST_NOT_ALLOWED;
+
+
   const ackMissing = draft ? requiresResidencyAck(draft) && !hasResidencyAck(draft) : false;
   // A draft may be saved incomplete while it is switched OFF; enabling it
   // requires it to be complete and, for a cloud destination, acknowledged.
@@ -289,13 +302,17 @@ export function AnalyticsProvidersEditor() {
   // widen the list with ANALYTICS_SCRIPT_HOSTS, which this app cannot read. Warn,
   // and let the shim be the enforcer.
   const unverifiableHost = draft ? hostIsUnverifiable(draft) : null;
+  const needsCustomOpsFlag = draft ? customNeedsOpsFlag(draft) : false;
+  // Changes only when the acknowledgement itself flips, so a remount happens
+  // exactly when the settings JSON on screen has gone stale — never mid-typing.
+  const ackKey = String((draft?.settings as Record<string, unknown> | undefined)?.residencyAck === true);
   const blockedReason = !draft
     ? null
     : jsonError
       ? jsonError
       : !String(draft.code || '').trim()
       ? REASON_TEXT[REASONS.MISSING_CODE]
-      : draft.enabled === true && verdict && !verdict.ok && verdict.reason !== REASONS.SCRIPT_URL_HOST_NOT_ALLOWED
+      : draft.enabled === true && blocks(verdict)
         ? REASON_TEXT[verdict.reason] ?? verdict.reason
         : ackMissing
           ? 'Tick the data-residency acknowledgement before switching a destination outside the cluster on.'
@@ -349,7 +366,7 @@ export function AnalyticsProvidersEditor() {
     const candidate: AnalyticsProviderRecord = { ...row.data, enabled: next };
     if (next) {
       const v = validateProviderRecord(candidate, { requireEnabled: false, customEnabled: true });
-      if (!v.ok) {
+      if (blocks(v)) {
         toast({ title: 'Cannot enable this destination', description: REASON_TEXT[v.reason] ?? v.reason });
         startEdit(row);
         return;
@@ -386,7 +403,7 @@ export function AnalyticsProvidersEditor() {
   // merely-enabled rows overstates the rollout — an enabled row missing its
   // siteId is refused at boot.
   const effective = rows.filter(
-    (r) => r.data.enabled === true && validateProviderRecord(r.data, { requireEnabled: false, customEnabled: true }).ok
+    (r) => r.data.enabled === true && !blocks(validateProviderRecord(r.data, { requireEnabled: false, customEnabled: true }))
   );
 
   const label = (path: string, fallback: string) => specByPath.get(path)?.label ?? fallback;
@@ -471,7 +488,14 @@ export function AnalyticsProvidersEditor() {
             // shared the key '-settings' and the textarea was reused, leaving
             // the previous session's JSON on screen over an empty draft.
             // createSeq increments per startCreate so repeated creates remount too.
-            key={`${editingCode || `new-${createSeq}`}-${key}`}
+            // ...and by the residency tick, because the checkbox writes
+            // residencyAck straight into draft.settings while this textarea is
+            // uncontrolled. Without remounting, the on-screen JSON is stale the
+            // moment the box is ticked, and the next keystroke parses that stale
+            // text back over draft.settings — silently discarding the tick, then
+            // blocking save with "Tick the data-residency acknowledgement…"
+            // against a checkbox that now looks unticked.
+            key={`${editingCode || `new-${createSeq}`}-${key}-${ackKey}`}
             rows={key === 'adapter' ? 10 : 4}
             spellCheck={false}
             className={
@@ -637,7 +661,7 @@ export function AnalyticsProvidersEditor() {
                             copy for {tenantId} and leaves the parent untouched
                           </>
                         )}
-                        {!v.ok && v.reason !== REASONS.DISABLED && ` · incomplete: ${REASON_TEXT[v.reason] ?? v.reason}`}
+                        {blocks(v) && v.reason !== REASONS.DISABLED && ` · incomplete: ${REASON_TEXT[v.reason] ?? v.reason}`}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -697,6 +721,18 @@ export function AnalyticsProvidersEditor() {
                       <span className="font-mono"> settings.residencyAck</span>.
                     </span>
                   </label>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {needsCustomOpsFlag && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  CUSTOM destinations are off unless ops has set{' '}
+                  <span className="font-mono">ANALYTICS_CUSTOM_ENABLED</span> in globalConfigs. This screen cannot check
+                  that, and cannot switch it on — until it is set the portal refuses this record and nothing is sent,
+                  however this page counts it.
                 </AlertDescription>
               </Alert>
             )}

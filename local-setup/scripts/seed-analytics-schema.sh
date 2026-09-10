@@ -241,7 +241,13 @@ else
   while IFS= read -r g; do
     [ -n "$g" ] || continue
     role="$(printf '%s' "$g" | jq -r '.rolecode')"; act="$(printf '%s' "$g" | jq -r '.actionid')"
-    uid="$role.$act"
+    # actionid.rolecode, matching DataHandlerService (uniqueId = actionid +
+    # "." + rolecode). Built the other way round, the presence check below
+    # never matched a DDH-seeded tenant, so every run re-POSTed rows that
+    # mdms-v2 then rejected on the rolecode+actionid uniqueness rule — and
+    # the duplicate was swallowed as success, so the summary reported
+    # "created" for rows it had not created.
+    uid="$act.$role"
     if printf '%s\n' "$have_grants" | grep -qx "$uid"; then gpresent=$((gpresent+1)); continue; fi
     data="$(printf '%s' "$g" | jq -c --arg t "$TENANT" '.tenantId = $t')"
     mdms_data_create 'ACCESSCONTROL-ROLEACTIONS.roleactions' "$uid" "$data" && gcreated=$((gcreated+1)) || true

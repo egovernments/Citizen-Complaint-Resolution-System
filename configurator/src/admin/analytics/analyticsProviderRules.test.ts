@@ -127,6 +127,19 @@ const FIXTURES: Array<{ name: string; rec: AnalyticsProviderRecord; customEnable
     rec: { code: 'x', type: 'MATOMO', enabled: true, siteId: '1', scriptUrl: 'https://evil.example.com/m.js' },
   },
   { name: 'matomo valid', rec: MATOMO_OK },
+  {
+    // The drift this table exists to catch: an allowlisted script with an
+    // off-allowlist beacon destination. The shim has always refused it
+    // (CWE-201); the Configurator used to call it ok, so a record could save,
+    // enable and count as live while the portal silently dropped it.
+    name: 'matomo with off-allowlist endpointUrl',
+    rec: { ...MATOMO_OK, endpointUrl: 'https://evil.example.com/collect' },
+  },
+  {
+    name: 'matomo with same-origin endpointUrl',
+    rec: { ...MATOMO_OK, endpointUrl: '/matomo/matomo.php' },
+  },
+
   { name: 'matomo bad sampleRate', rec: { ...MATOMO_OK, sampleRate: 2 } },
   { name: 'matomo sampleRate 0.5', rec: { ...MATOMO_OK, sampleRate: 0.5 } },
   { name: 'ga4 without measurementId', rec: { code: 'g', type: 'GA4', enabled: true } },
