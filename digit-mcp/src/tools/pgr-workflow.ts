@@ -127,11 +127,14 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
 
   registry.register({
     name: 'pgr_create',
-    // Citizens file their own complaints — the description below says as much
-    // ("any user with EMPLOYEE, CITIZEN, or CSR role"). 'authenticated' (not the
-    // 'employee' default) so a citizen token is not rejected before the backend,
-    // which does the real role check, ever sees the request.
-    access: 'authenticated',
+    // Employee-tier (the default — no explicit `access`). This tool provisions a
+    // citizen user (userCreate below) and hands back a plaintext
+    // loginCredentials/citizenLogin password; that account-minting must stay
+    // staff-gated, exactly as the on-tiers note at the userCreate call explains
+    // and as test-security 3.4 pins user_create for the same reason. An earlier
+    // round briefly lowered this to 'authenticated' to mirror pgr_update's
+    // citizen RATE/REOPEN path, but pgr_update does not mint accounts and
+    // pgr_create does — so only pgr_update carries the citizen-reachable tier.
     // Returns a plaintext provisioning password (loginCredentials /
     // citizenLogin). The session store keeps a 200-char prefix of every result
     // in Postgres and the JSONL log, so without this the credential is

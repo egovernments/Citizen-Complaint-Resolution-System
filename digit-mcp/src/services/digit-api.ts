@@ -1181,6 +1181,19 @@ class DigitApiClient {
     });
 
     if (!response.ok) {
+      // The gateway denies this by design (see above): a tokenless bare-array
+      // POST on a protected enc path. Turn the bare 401/403 into an explanation
+      // so an operator gets the reason, not a naked gateway status.
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          `decrypt_data is not reachable through the API gateway (HTTP ${response.status}). ` +
+          `egov-enc-service /_decrypt takes a bare ciphertext array, which cannot carry the ` +
+          `RequestInfo.authToken the gateway requires on a protected path — so the gateway ` +
+          `denies it rather than exposing an anonymous decryption oracle. This tool works only ` +
+          `against an MCP with direct (internal-network) access to egov-enc-service; encryption ` +
+          `and key generation are unaffected.`,
+        );
+      }
       throw new Error(`Decryption failed: HTTP ${response.status}`);
     }
 

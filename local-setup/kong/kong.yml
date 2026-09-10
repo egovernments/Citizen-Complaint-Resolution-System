@@ -199,17 +199,26 @@ plugins:
           -- the options endpoint takes nothing but tenantId.
           ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
           ["/pgr-services/v2/analytics/public/_options"]=true,
-          -- novu-bridge configurator-proxy POSTs: these endpoints authenticate
+          -- novu-bridge configurator-proxy calls: these endpoints authenticate
           -- INSIDE novu-bridge (ProxyAuthFilter introspects the Authorization:
           -- Bearer token against egov-user /user/_details and enforces
-          -- novu.bridge.proxy.allowed.roles). Their clients send NO
-          -- RequestInfo.authToken body, so without this whitelist the global
-          -- POST enrichment 401s every Configurator provider create/verify/
-          -- test-send before the bridge sees it. Kong-only: the bridge is not
-          -- routed by the Spring gateway tier.
+          -- novu.bridge.proxy.allowed.roles). Their clients send the token as a
+          -- Bearer header and NO RequestInfo.authToken body, so the global body
+          -- enrichment cannot authenticate them — whitelist so the bridge (the
+          -- real auth boundary) sees them. Kong-only: the bridge is not routed by
+          -- the Spring gateway tier. The GETs are here for the same reason as the
+          -- POSTs: master returned early on non-POST, but the non-POST gate now
+          -- enforces, so without these the Configurator's Notification Logs,
+          -- Providers and Preferences panels 401 (Bearer-only GETs, not in the
+          -- body-token flow).
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          ["/novu-bridge/novu-adapter/v1/logs"]=true,
+          ["/novu-bridge/novu-adapter/v1/integrations"]=true,
+          ["/novu-bridge/novu-adapter/v1/preferences"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/templates"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/twilio-templates"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -235,6 +244,11 @@ plugins:
         local function is_public_infra(p)
           return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
               or p == "/auth" or p:find("/auth/", 1, true) == 1
+              -- /kc is keycloak-api-route -> token-exchange-svc: the UI hits it
+              -- BEFORE the caller holds a DIGIT token (KeycloakAuthAdapter), and
+              -- /kc/healthz is a plain liveness probe that ends in "z" (so the
+              -- /health$ match below does not catch it). Same bucket as /auth.
+              or p == "/kc" or p:find("/kc/", 1, true) == 1
               -- `/health$` (suffix) not `== "/health"`: the per-service liveness
               -- endpoints are `/mdms-v2/health`, `/user/health`, `/access/health`,
               -- `/egov-idgen/health`, `/egov-workflow-v2/health`, `/pgr-services/health`
@@ -289,9 +303,25 @@ plugins:
         -- This replaces the "will 403 until accesscontrol coverage is added" gap
         -- noted above for these paths: coverage is the wrong tool for an internal
         -- primitive that has no user-facing action.
+        -- EXACT paths, not a prefix: exempt only the two enc endpoints the MCP
+        -- actually calls with a body token (_encrypt during provisioning,
+        -- _generatekey for a new tenant). A prefix exempted the whole
+        -- /egov-enc-service/ namespace — including any future endpoint (e.g. key
+        -- rotation) — and let any authenticated token, even a self-registered
+        -- CITIZEN, run _generatekey/_encrypt for an arbitrary tenantId.
+        -- _decrypt is deliberately NOT listed: it stays RBAC-gated, and its
+        -- bare-array body has no RequestInfo.authToken so the POST gate already
+        -- 401s it before RBAC — no need to exempt, and not exempting keeps it
+        -- maximally protected if the contract ever changes.
+        -- NB: plain `==` comparisons, deliberately NOT a Lua set/table keyed by
+        -- path string. The gateway-parity CI check scrapes the whole pre-function
+        -- for the bracketed exact-match entry syntax that AUTH_OPTIONAL uses, so a
+        -- table here would be misread as making these paths anonymous (they are
+        -- not — they stay authn-required, only the role lookup is skipped).
         local RBAC_EXEMPT = function(p)
-          return p:find("/egov-enc-service/", 1, true) == 1
-              or p:find("/common-persist", 1, true) == 1
+          return p == "/egov-enc-service/crypto/v1/_encrypt"
+              or p == "/egov-enc-service/crypto/v1/_generatekey"
+              or p:find("/common-persist", 1, true) == 1  -- persister HTTP sink, internal
         end
 
         local function enforce_rbac(resolved, token)

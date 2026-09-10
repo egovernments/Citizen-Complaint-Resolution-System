@@ -305,7 +305,7 @@ await test('3.3b the tier census matches what the docs claim', () => {
   const census = { public: 0, authenticated: 0, employee: 0, admin: 0 } as Record<string, number>;
   for (const t of allTools) census[t.access ?? 'employee']++;
   assert.equal(allTools.length, 70, 'tool count changed');
-  assert.deepEqual(census, { public: 6, authenticated: 2, employee: 23, admin: 39 });
+  assert.deepEqual(census, { public: 6, authenticated: 1, employee: 24, admin: 39 });
 });
 
 await test('3.4 destructive and PII tools are admin-tier', () => {
