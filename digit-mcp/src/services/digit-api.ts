@@ -191,8 +191,15 @@ class DigitApiClient {
         );
       }
       if (!response.ok) return null;
-      const data = (await response.json()) as { UserRequest?: UserInfo };
-      return data?.UserRequest ?? null;
+      // egov-user's /user/_details returns the UserInfo at the TOP LEVEL on this
+      // stack — {id,userName,name,roles,tenantId,uuid,...} — with NO UserRequest
+      // wrapper (verified live; Kong's own enrichment reads the same top-level
+      // shape). Some egov-user builds do wrap it as {UserRequest:{...}}. Accept
+      // either: reading only `data.UserRequest` treated every valid token as
+      // invalid and 401'd the entire REST shim against this deployment.
+      const data = (await response.json()) as { UserRequest?: UserInfo } & Partial<UserInfo>;
+      const user = (data?.UserRequest ?? data) as UserInfo | undefined;
+      return user && (user.uuid || user.userName) ? user : null;
     } catch (err) {
       if (err instanceof TokenIntrospectionError) throw err;
       // Network error, DNS failure, or the 10s timeout. Also not a bad token.
