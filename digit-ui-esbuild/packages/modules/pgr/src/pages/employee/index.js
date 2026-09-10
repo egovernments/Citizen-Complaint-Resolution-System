@@ -94,11 +94,7 @@ const Complaint = () => {
       </div>
       {/* <ActionBar>
         {displayMenu ? <Menu options={["Assign Complaint", "Reject Complaint"]} onSelect={popupCall} /> : null}
-        <SubmitBar
-          data-analytics-event="pgr.complaint.take-action"
-          label="Take Action"
-          onSubmit={() => setDisplayMenu(!displayMenu)}
-        />
+        <SubmitBar label="Take Action" onSubmit={() => setDisplayMenu(!displayMenu)} />
       </ActionBar> */}
     </React.Fragment>
   );

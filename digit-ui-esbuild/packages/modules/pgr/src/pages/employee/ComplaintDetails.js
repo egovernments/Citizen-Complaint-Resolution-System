@@ -567,11 +567,7 @@ export const ComplaintDetails = (props) => {
               onSelect={onActionSelect}
             />
           ) : null}
-          <SubmitBar
-            data-analytics-event="pgr.complaint.take-action"
-            label={t("WF_TAKE_ACTION")}
-            onSubmit={() => setDisplayMenu(!displayMenu)}
-          />
+          <SubmitBar label={t("WF_TAKE_ACTION")} onSubmit={() => setDisplayMenu(!displayMenu)} />
         </ActionBar>
       )}
     </React.Fragment>

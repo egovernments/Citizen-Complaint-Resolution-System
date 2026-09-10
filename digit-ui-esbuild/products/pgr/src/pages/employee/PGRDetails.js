@@ -791,6 +791,12 @@ const PGRDetails = () => {
           actionFields={[
             <Button
               className="custom-class"
+              // Analytics (CCRS#2007): opening the action menu. The action the
+              // operator then picks arrives through onOptionSelect, which the
+              // click tracker cannot see — that needs an explicit
+              // DigitAnalytics.trackEvent and is deliberately left until the
+              // naming is agreed.
+              data-analytics-event="pgr.complaint.take-action"
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
