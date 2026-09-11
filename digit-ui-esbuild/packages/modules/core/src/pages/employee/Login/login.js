@@ -98,6 +98,12 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           justifyContent: "center",
           minHeight: "100vh",
           padding: "24px",
+          // Without this the 24px padding is added *outside* the 100vh
+          // min-height (the .v2-scope root itself isn't covered by the
+          // `.v2-scope *` border-box reset), so the shell overhangs the
+          // banner by 48px and the white page background shows as a band
+          // under the footer.
+          boxSizing: "border-box",
           // .banner is a flex container that centers its children, so
           // without an explicit width this wrapper shrink-wraps to the
           // card's min-content and a leftover page-bg paints a full-height
@@ -414,6 +420,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
               // wear the colour reserved for things you can click.
               color: "var(--color-text-heading, #1D2433)",
               lineHeight: 1.2,
+              textAlign: "center",
             }}
           >
             {tr(headerKey, "Login")}
@@ -507,12 +514,11 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
                 color:
                   "var(--color-button-tertiary-text, var(--color-link-normal, #2563EB))",
                 // Matches the field labels rather than inventing a third
-                // size, and sits on the same left edge as every input and
-                // the submit button instead of floating centre.
+                // size, and stays centred under the submit button.
                 fontWeight: 500,
                 fontSize: "0.875rem",
                 lineHeight: 1.4,
-                alignSelf: "flex-start",
+                alignSelf: "center",
               }}
             >
               {tr(

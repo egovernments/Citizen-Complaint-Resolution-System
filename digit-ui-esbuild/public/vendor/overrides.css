@@ -1710,14 +1710,25 @@ button[class*="toast-close"] svg,
   position: absolute !important;
   left: 0 !important;
   top: 0 !important;
-  width: 24px !important;
-  height: 24px !important;
+  width: 18px !important;
+  height: 18px !important;
   margin: 0 !important;
   vertical-align: middle;
 }
+/* 24px is a tick the size of the sentence next to it. 18px sits with the
+ * 0.875rem label instead of shouting over it. */
 .v2-scope .digit-privacy-checkbox .digit-custom-checkbox,
 .v2-scope .digit-privacy-checkbox .digit-custom-checkbox-emp {
   margin-left: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  flex: 0 0 18px !important;
+}
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox svg,
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox-emp svg {
+  width: 18px !important;
+  height: 18px !important;
 }
 .v2-scope .digit-privacy-checkbox button.digit-button-link,
 .v2-scope .digit-privacy-checkbox .digit-button-link,
