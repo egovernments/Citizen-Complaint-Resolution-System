@@ -101,6 +101,18 @@
             {
               "tenantId": "{tenantid}",
               "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ESCALATE",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER",
+                "AUTO_ESCALATE"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
               "action": "REJECT",
               "nextState": "REJECTED",
               "roles": [
@@ -201,8 +213,22 @@
               "tenantId": "{tenantid}",
               "currentState": "PENDINGATLME",
               "action": "FORWARD",
-              "nextState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "nextState": "PENDINGATSUPERVISOR",
               "roles": [
+                "AUTO_ESCALATE",
+                "GRO"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATLME",
+              "action": "ESCALATE",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "PGR_LME",
+                "PGR_VIEWER",
+                "SYSTEM",
                 "AUTO_ESCALATE"
               ],
               "active": true
@@ -335,9 +361,29 @@
           "actions": [
             {
               "tenantId": "{tenantid}",
-              "currentState": "04752227-e267-43e3-bfd8-6e48bdbfd97a",
+              "currentState": "PENDINGATSUPERVISOR",
               "action": "RESOLVEBYSUPERVISOR",
-              "nextState": "e80e3dd6-8336-4586-b84a-c191dcd80c98",
+              "nextState": "RESOLVED",
+              "roles": [
+                "SUPERVISOR"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "COMMENT",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
               "roles": [
                 "SUPERVISOR"
               ],
