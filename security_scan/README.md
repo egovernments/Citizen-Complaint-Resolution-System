@@ -26,7 +26,7 @@ security_scan/
 
 ```bash
 export SECSCAN_TOKEN='<token>'      # obtain from your administrator
-curl -fsSL https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/security/vulnerability-scan/security_scan/ansible/run.sh | bash
+curl -fsSL https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/master/security_scan/ansible/run.sh | bash
 ```
 
 You pick a **branch** (type to filter), then a **module** (Ansible). It clones the branch, runs the
