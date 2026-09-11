@@ -976,26 +976,54 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
   }
 
-  .dashboard-active-filter-chips {
+  .dashboard-active-filter-tags {
     @apply tw-flex tw-flex-wrap tw-items-center tw-gap-1 tw-border-t tw-border-border tw-pt-1.5;
   }
 
-  .dashboard-active-filter-chip {
-    @apply tw-inline-flex tw-h-6 tw-max-w-full tw-items-center tw-gap-1 tw-rounded-full tw-bg-muted tw-pl-2 tw-pr-1 tw-text-[10px] tw-font-medium tw-text-foreground;
+  .dashboard-active-filter-tag {
+    @apply tw-box-border tw-inline-flex tw-h-6 tw-max-w-full tw-items-center tw-gap-1 tw-rounded-full tw-bg-muted tw-pl-2 tw-pr-1 tw-text-[10px] tw-font-medium tw-text-foreground;
   }
 
-  .dashboard-active-filter-chip > span {
-    @apply tw-max-w-[14rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  .dashboard-active-filter-tag > span {
+    @apply tw-max-w-[14rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-leading-tight;
   }
 
-  .dashboard-active-filter-chip > button {
-    @apply tw-m-0 tw-inline-flex tw-h-4 tw-w-4 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-full tw-border-0 tw-bg-transparent tw-p-0 tw-text-[13px] tw-leading-none tw-text-muted-foreground hover:tw-bg-surface hover:tw-text-foreground;
+  .dashboard-active-filter-tag > button {
+    @apply tw-m-0 tw-inline-flex tw-h-4 tw-w-4 tw-min-h-4 tw-min-w-4 tw-shrink-0 tw-cursor-pointer tw-items-center tw-justify-center tw-self-center tw-rounded-full tw-border-0 tw-bg-transparent tw-p-0 tw-text-[13px] tw-leading-none tw-text-muted-foreground hover:tw-bg-surface hover:tw-text-foreground;
     font-family: inherit;
+    box-shadow: none;
+    -webkit-appearance: none;
+    appearance: none;
   }
 
-  .dashboard-active-filter-chip > button:focus-visible {
+  .dashboard-active-filter-tag > button:focus-visible {
     @apply tw-outline-none;
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+  }
+
+  /* Beat host Digit button chrome on the remove control. */
+  .dashboard-root .dashboard-active-filter-tag > button {
+    height: 1rem !important;
+    width: 1rem !important;
+    min-height: 1rem !important;
+    min-width: 1rem !important;
+    max-height: 1rem !important;
+    max-width: 1rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 9999px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--muted-foreground) !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    align-self: center !important;
+  }
+
+  .dashboard-root .dashboard-active-filter-tag > button:hover {
+    background-color: var(--surface) !important;
+    color: var(--foreground) !important;
   }
 
   /* Widget-header wrapper for the per-widget settings gear: right-aligned

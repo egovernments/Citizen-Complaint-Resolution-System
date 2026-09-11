@@ -65,7 +65,7 @@ const TZ = "Africa/Nairobi";
 const noop = () => {};
 
 const baseProps = {
-  filters: { geography: "all", complaintType: "all" },
+  filters: { geographies: [], complaintTypes: [], departments: [] },
   onFilterChange: noop,
   onClearFilters: noop,
   timeZone: TZ,
@@ -95,10 +95,14 @@ test("filter bar renders no native <select> — ward and type are PopoverMenu ch
   );
 });
 
-test("ward chip shows the selected ward's label", () => {
+test("ward chip shows a selection count when wards are applied", () => {
   const html = renderFilters({
     ...baseProps,
-    filters: { geography: "W01", complaintType: "all" },
+    filters: {
+      geographies: [{ code: "W01", path: null, leaf: true, codes: ["W01"] }],
+      complaintTypes: [],
+      departments: [],
+    },
     filterOptions: {
       geography: [
         { id: "all", label: "All wards" },
@@ -106,6 +110,10 @@ test("ward chip shows the selected ward's label", () => {
       ],
     },
   });
+  // Multi-select chip stays compact ("Wards" + count); the removable label
+  // lives in the active-filter chips row below the controls.
+  assert.match(html, /Wards/);
+  assert.match(html, /dashboard-multiselect-count|>1</);
   assert.match(html, /Ward One/);
   assert.doesNotMatch(html, /<select/);
 });
@@ -115,8 +123,9 @@ test("ward chip degrades to a disabled Loading state while options resolve", () 
     ...baseProps,
     filterOptionsLoading: true,
   });
-  assert.match(html, /Loading…/);
+  // Multi-select keeps the "All wards" label while disabled (no "Loading…" chip text).
   assert.match(html, /disabled/);
+  assert.match(html, /All wards/);
 });
 
 /* ---------------- fonts: portals + the public page body ---------------- */

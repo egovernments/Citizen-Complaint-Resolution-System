@@ -1,3 +1,4 @@
+import React from "react";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import HierarchyMultiSelectFilter from "./HierarchyMultiSelectFilter";
@@ -7,22 +8,8 @@ import {
   humanizeBoundaryCode,
 } from "../utils/boundaryTree";
 
-/**
- * The geography (ward) filter as a boundary drill-down — Província →
- * Distrito → Município — instead of the flat ward list (CCSD-2171,
- * "similar to complaint type dropdown"). Chip + traversal panel are the
- * ComplaintTypeTreePanel verbatim (hierarchy-agnostic via labelFor/allLabel
- * props); this wrapper owns only geography-specific labeling and the
- * persisted-selection contract:
- *
- *   leaf (ward)          → { code, path, leaf:true }  → params.ward
- *   interior ("All in")  → { code, path, leaf:false } → params.boundaryPath
- *   "All wards" reset    → cleared trio
- *
- * Labels resolve through the same dimensionLabel("boundary") seam the flat
- * select uses (localized boundary names), with a humanized last-segment
- * fallback so a raw "municipio_maputo_katembe" never reaches the chip.
- */
+/** Geography hierarchy multi-select filter (CCSD-2171 / #1455). */
+
 
 export function boundaryDisplayLabel(tree, code) {
   const node = nodeOf(tree, code);

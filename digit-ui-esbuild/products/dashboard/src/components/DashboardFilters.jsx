@@ -256,11 +256,11 @@ const DashboardFilters = ({
         </div>
         {activeChips.length > 0 && (
           <div
-            className="dashboard-active-filter-chips"
+            className="dashboard-active-filter-tags"
             aria-label={t("DASHBOARD_FILTERS_ACTIVE", "Active filters")}
           >
             {activeChips.map((chip) => (
-              <span key={chip.key} className="dashboard-active-filter-chip">
+              <span key={chip.key} className="dashboard-active-filter-tag">
                 <span>{chip.label}</span>
                 <button
                   type="button"

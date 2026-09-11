@@ -1494,7 +1494,7 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
 }
 
-.dashboard-active-filter-chips{
+.dashboard-active-filter-tags{
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1504,7 +1504,7 @@
   padding-top: 0.375rem;
 }
 
-.dashboard-active-filter-chip{
+.dashboard-active-filter-tag{
   display: inline-flex;
   height: 1.5rem;
   max-width: 100%;
@@ -1517,45 +1517,85 @@
   font-size: 10px;
   font-weight: 500;
   color: var(--foreground);
+  box-sizing: border-box;
+  vertical-align: middle;
 }
 
-.dashboard-active-filter-chip > span{
+.dashboard-active-filter-tag > span{
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.25;
 }
 
-.dashboard-active-filter-chip > button{
+.dashboard-active-filter-tag > button{
   margin: 0px;
   display: inline-flex;
   height: 1rem;
   width: 1rem;
+  min-height: 1rem;
+  min-width: 1rem;
+  max-height: 1rem;
+  max-width: 1rem;
+  flex-shrink: 0;
   cursor: pointer;
   align-items: center;
   justify-content: center;
+  align-self: center;
   border-radius: 9999px;
   border-width: 0px;
+  border-style: none;
   background-color: transparent;
   padding: 0px;
   font-size: 13px;
   line-height: 1;
   color: var(--muted-foreground);
+  box-shadow: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
-.dashboard-active-filter-chip > button:hover{
+.dashboard-active-filter-tag > button:hover{
   background-color: var(--surface);
   color: var(--foreground);
 }
 
-.dashboard-active-filter-chip > button {
+.dashboard-active-filter-tag > button {
   font-family: inherit;
 }
 
-.dashboard-active-filter-chip > button:focus-visible{
+.dashboard-active-filter-tag > button:focus-visible{
   outline: 2px solid transparent;
   outline-offset: 2px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+/* Beat host Digit button chrome on the remove control (vendor 44px /
+   primary fills). Keep this scoped to active-filter tags only. */
+.dashboard-root .dashboard-active-filter-tag > button {
+  height: 1rem !important;
+  width: 1rem !important;
+  min-height: 1rem !important;
+  min-width: 1rem !important;
+  max-height: 1rem !important;
+  max-width: 1rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted-foreground) !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  align-self: center !important;
+}
+
+.dashboard-root .dashboard-active-filter-tag > button:hover {
+  background-color: var(--surface) !important;
+  color: var(--foreground) !important;
 }
 
 /* Widget-header wrapper for the per-widget settings gear: right-aligned

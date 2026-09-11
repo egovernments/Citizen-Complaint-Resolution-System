@@ -309,7 +309,7 @@ test("filter bar smoke: ward, type and department selections stay compact and re
   assert.match(html, /Ward 1/);
   assert.match(html, /Pothole/);
   assert.match(html, /Roads/);
-  assert.match(html, /dashboard-active-filter-chip/g);
+  assert.match(html, /dashboard-active-filter-tag/g);
   assert.match(html, /aria-label="Remove Ward 1"/);
   assert.match(html, /aria-label="Remove Pothole"/);
   assert.match(html, /aria-label="Remove Roads"/);
