@@ -1,5 +1,11 @@
 import { appliedHierLevel } from "./hierLevelGrouping";
 import { complaintTypeParams } from "./complaintTypeTree";
+import { geographyParams } from "./boundaryTree";
+import {
+  normalizeHierarchySelections,
+  normalizeStringList,
+  selectedCodes,
+} from "./multiSelectFilters";
 
 /**
  * Query-plan helpers for the catalog dashboard (extracted from
@@ -19,7 +25,10 @@ export const CARD_KINDS = new Set([
   "number-tile-sparkline",
   "sparkline-card",
 ]);
-export const SPARKLINE_KINDS = new Set(["number-tile-sparkline", "sparkline-card"]);
+export const SPARKLINE_KINDS = new Set([
+  "number-tile-sparkline",
+  "sparkline-card",
+]);
 export const MAP_KINDS = new Set(["map", "choropleth-map"]);
 
 // The internal pin source: map tiles fetch this alongside their ward aggregates
@@ -84,17 +93,55 @@ export function needsPriorComparison(def) {
  */
 export function globalParams(filters) {
   const params = {};
-  if (filters?.geography && filters.geography !== "all") {
-    params.ward = filters.geography;
+  if (Array.isArray(filters?.geographies)) {
+    const wards = selectedCodes(filters.geographies);
+    if (wards.length === 1) params.ward = wards[0];
+    else if (wards.length > 1) params.wards = wards;
+    else {
+      // Held interior (tree not loaded yet / legacy migration with empty codes):
+      // keep narrowing via boundaryPath so the first query after reload is not
+      // silently unfiltered (#1455 review).
+      const interiors = normalizeHierarchySelections(filters.geographies).filter(
+        (selection) => selection.leaf === false && selection.path
+      );
+      if (interiors.length === 1) Object.assign(params, geographyParams(interiors[0]));
+    }
+  } else {
+    // One-release persisted-state compatibility for the v4 scalar selection.
+    Object.assign(
+      params,
+      geographyParams({
+        code: filters?.geography,
+        path: filters?.geographyPath,
+        leaf: filters?.geographyLeaf,
+      })
+    );
   }
-  Object.assign(
-    params,
-    complaintTypeParams({
-      code: filters?.complaintType,
-      path: filters?.complaintTypePath,
-      leaf: filters?.complaintTypeLeaf,
-    })
-  );
+
+  if (Array.isArray(filters?.complaintTypes)) {
+    const serviceCodes = selectedCodes(filters.complaintTypes);
+    if (serviceCodes.length === 1) params.serviceCode = serviceCodes[0];
+    else if (serviceCodes.length > 1) params.serviceCodes = serviceCodes;
+    else {
+      const interiors = normalizeHierarchySelections(filters.complaintTypes).filter(
+        (selection) => selection.leaf === false && selection.path
+      );
+      if (interiors.length === 1)
+        Object.assign(params, complaintTypeParams(interiors[0]));
+    }
+  } else {
+    Object.assign(
+      params,
+      complaintTypeParams({
+        code: filters?.complaintType,
+        path: filters?.complaintTypePath,
+        leaf: filters?.complaintTypeLeaf,
+      })
+    );
+  }
+
+  const departments = normalizeStringList(filters?.departments);
+  if (departments.length) params.departments = departments;
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
     params.dateFrom = filters.dateFrom; // yyyy-MM-dd
     params.dateTo = filters.dateTo; // yyyy-MM-dd
@@ -139,7 +186,10 @@ export function buildRefs(tiles, kpis, filters, hierOverrides) {
       refs[`${kpiId}__prior`] = { kpiId, params: { ...base, compare: "prior" } };
     }
     if (isSparklineKind(kind)) {
-      refs[`${kpiId}__series`] = { kpiId, params: { ...base, series: "daily" } };
+      refs[`${kpiId}__series`] = {
+        kpiId,
+        params: { ...base, series: "daily" },
+      };
     }
     if (isMapKind(kind)) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
@@ -175,7 +225,9 @@ export function buildPublicRefs(tiles, kpis, filters) {
 export function buildPublicRefsKey(tiles, kpis, filters) {
   return JSON.stringify({
     public: true,
-    ids: (tiles || []).map((tile) => tile?.kpiId).filter((id) => id && kpis?.[id]),
+    ids: (tiles || [])
+      .map((tile) => tile?.kpiId)
+      .filter((id) => id && kpis?.[id]),
     versions: (tiles || []).map((tile) => kpis?.[tile?.kpiId]?.version ?? null),
     gp: globalParams(filters),
   });

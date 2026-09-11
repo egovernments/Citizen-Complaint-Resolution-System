@@ -25,7 +25,7 @@ import DashboardLogin, {
 import { useDashboardConfig } from "../useDashboardConfig";
 import { configurePublicDashboardRuntime } from "./services/dashboardRuntime";
 import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
-import { resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
+import { isValidTimeZone, resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -823,14 +823,28 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
   // No stamp (rather than a fabricated "now") when the batch hasn't supplied one.
   const lastUpdatedLabel = useMemo(() => {
     if (batch.asOf == null) return null;
-    const zone = batch.calendar?.timeZone || timeZone;
-    return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      ...(zone ? { timeZone: zone } : {}),
-    });
+    // Prefer the batch-echoed zone, but only if Intl accepts it — a bad
+    // calendar.timeZone from an older/misconfigured backend used to throw
+    // RangeError here and trip the route ErrorBoundary ("Something went wrong")
+    // after the analytics calls had already succeeded.
+    const echoed = batch.calendar?.timeZone;
+    const zone = isValidTimeZone(echoed) ? echoed.trim() : timeZone;
+    try {
+      return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        ...(isValidTimeZone(zone) ? { timeZone: zone.trim() } : {}),
+      });
+    } catch {
+      return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
   }, [batch.asOf, batch.calendar, timeZone, language]);
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
@@ -932,6 +946,18 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     },
     [clearFilters]
   );
+  // The header's "Reset" button and the filter bar's "Clear" link are two
+  // independent controls over two independent stores — resetLayout (from
+  // useCatalogLayout) only rebuilds the KPI grid geometry, it never touches
+  // filter state. Without also calling clearFilters here, "Reset" left the
+  // complaint-type tree filter (and every other filter) exactly as the user
+  // had set it, while "Clear" correctly restored it to "All types" — the
+  // exact inconsistency reported in egovernments/CCRS#1471.
+  const handleResetLayout = useCallback(() => {
+    dashboardMetrics.markInteraction("filter");
+    resetLayout();
+    clearFilters();
+  }, [resetLayout, clearFilters]);
 
   return (
     <DashboardLayout
@@ -941,7 +967,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
       visibleLayoutIds={visibleLayoutIds}
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
-      onResetLayout={resetLayout}
+      onResetLayout={handleResetLayout}
       onDragWidgetStart={handleDragWidgetStart}
       onDragWidgetEnd={handleDragWidgetEnd}
       onExport={handleExport}
