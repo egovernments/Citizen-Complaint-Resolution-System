@@ -1,7 +1,7 @@
 /**
  * Unit tests for utils/mobile.ts — tenant-aware test mobile numbers.
  *
- * egov-user enforces the tenant's UserValidation mobile rule even on
+ * egov-user enforces the tenant's MobileNumberValidation mobile rule even on
  * _createnovalidate (ethiopia: ^[17][0-9]{8}$ → INVALID_MOBILE_FORMAT
  * for the old hardcoded 10-digit numbers), so the generators must
  * follow CITIZEN_MOBILE_LENGTH / CITIZEN_MOBILE_PREFIX and default to
@@ -104,7 +104,7 @@ describe('tenant-rule self-assert (CITIZEN_MOBILE_PATTERN)', () => {
     expect(uniqueMobile()).toMatch(/^0?[17][0-9]{8}$/);
   });
 
-  test('no pattern set → no assertion (pg/statea ship no UserValidation)', () => {
+  test('no pattern set → no assertion (pg/statea ship no MobileNumberValidation)', () => {
     process.env.CITIZEN_MOBILE_LENGTH = '10';
     process.env.CITIZEN_MOBILE_PREFIX = '9';
     expect(() => uniqueMobile()).not.toThrow();

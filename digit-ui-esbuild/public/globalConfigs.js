@@ -4,8 +4,8 @@ var globalConfigs = (function () {
   var gmaps_api_key = "";
   var finEnv = "dev";
   var centralInstanceEnabled = false;
-  var footerBWLogoURL = "https://s3.ap-south-1.amazonaws.com/egov-uat-assets/digit-footer-bw.png";
-  var footerLogoURL = "https://s3.ap-south-1.amazonaws.com/egov-uat-assets/digit-footer.png";
+  var footerBWLogoURL = "/digit-ui/brand/digit-footer-bw.png";
+  var footerLogoURL = "/digit-ui/brand/digit-footer.png";
   var digitHomeURL = "https://www.digit.org/";
   var assetS3Bucket = "pg-egov-assets";
   var configModuleName = "commonMDMSConfig";
@@ -52,6 +52,15 @@ var globalConfigs = (function () {
   var hierarchyType = "ADMIN";
   var boundaryType = "Ward";
 
+  // Analytics adapter registry (public/analytics.js). Destinations themselves are
+  // MDMS rows, not config; these three are the ops-only knobs that MDMS must not
+  // be able to set. Note the polarity: the shim disables ONLY on an explicit
+  // true, because getConfig has no terminal else and returns undefined on any
+  // environment whose globalConfigs.js predates these keys.
+  var analyticsKillSwitch = false;   // true => hard off, whatever MDMS says
+  var analyticsScriptHosts = [];     // extra allowed script hostnames (ops only)
+  var analyticsCustomEnabled = false; // true => allow type:"CUSTOM" records
+
   var getConfig = function (key) {
     if (key === "STATE_LEVEL_TENANT_ID") return stateTenantId;
     else if (key === "GMAPS_API_KEY") return gmaps_api_key;
@@ -76,6 +85,9 @@ var globalConfigs = (function () {
     else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") return pgrBoundaryHighestLevel;
     else if (key === "HIERARCHY_TYPE") return hierarchyType;
     else if (key === "BOUNDARY_TYPE") return boundaryType;
+    else if (key === "ANALYTICS_KILL_SWITCH") return analyticsKillSwitch;
+    else if (key === "ANALYTICS_SCRIPT_HOSTS") return analyticsScriptHosts;
+    else if (key === "ANALYTICS_CUSTOM_ENABLED") return analyticsCustomEnabled;
   };
 
   return {

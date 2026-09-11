@@ -74,6 +74,17 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
                 if(additionalDetails != null)
                     currentService.setAdditionalDetail(additionalDetails);
 
+                String extJson = rs.getString("extended_attributes");
+                if (extJson != null) {
+                    try {
+                        currentService.setExtendedAttributes(
+                                mapper.readValue(extJson, ExtendedAttributes.class));
+                    } catch (IOException e) {
+                        throw new CustomException("PARSING_ERROR",
+                                "Failed to parse extended_attributes JSON");
+                    }
+                }
+
                 serviceMap.put(currentService.getId(),currentService);
 
             }
@@ -90,8 +101,14 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
 
         if(service.getAddress() == null){
 
-            Double latitude =  rs.getDouble("latitude");
+            Double latitude = rs.getDouble("latitude");
+            if (rs.wasNull()) {
+                latitude = null;
+            }
             Double longitude = rs.getDouble("longitude");
+            if (rs.wasNull()) {
+                longitude = null;
+            }
             Boundary locality = Boundary.builder().code(rs.getString("locality")).build();
 
             GeoLocation geoLocation = GeoLocation.builder().latitude(latitude).longitude(longitude).build();

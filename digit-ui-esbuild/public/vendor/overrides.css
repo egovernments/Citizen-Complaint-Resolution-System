@@ -381,6 +381,13 @@ table.digit-table-main thead th {
   color: var(--color-tooltip-text, #FFFFFF) !important;
 }
 
+/* Dashboard Add-KPI hover card is not a DIGIT tooltip — keep surface styling. */
+.dashboard-add-kpi-preview,
+.dashboard-add-kpi-preview.dashboard-root {
+  background-color: #ffffff !important;
+  color: #1a1917 !important;
+}
+
 /* Loader / progress — designer's "Misc / Loader" + "Progress" (both
  * Nairobi: #204F37, primary-1). */
 .digit-loader,
@@ -1338,6 +1345,16 @@ button[class*="submit-bar"] *,
   fill: #ffffff !important;
   color: #ffffff !important;
 }
+/* ...but paths explicitly marked fill="none" (e.g. the (x) close button and
+ * viewbox-padding shapes) must STAY transparent — otherwise the white fill
+ * above turns them into solid white boxes (#883/#923). */
+.toast-success svg path[fill="none"],
+.digit-toast-success svg path[fill="none"],
+[class*="toast-error"] svg path[fill="none"],
+[class*="toast-warning"] svg path[fill="none"],
+[class*="toast-info"] svg path[fill="none"] {
+  fill: none !important;
+}
 /* Inner chips / boxes inside the toast (the source of the
  * outline mismatch) — make them transparent. */
 .toast-success > div,
@@ -2184,6 +2201,23 @@ button[class*="toast-close"] svg,
 .employee .digit-sidebar .digit-sidebar-search-container ::placeholder {
   color: var(--color-sidebar-text-default, rgba(255, 255, 255, 0.55)) !important;
 }
+/* CCRS#1469: typed text was invisible in the sidebar's nav filter.
+ *
+ * The rules above colour the *input* white for the dark sidebar, but the
+ * generic input-standardisation block below (which lists
+ * `.digit-text-input-field`) paints TextInput's wrapper solid white. The input
+ * itself is transparent, so the painted stack ended up white text on a white
+ * wrapper — the filtering worked, you just could not see what you had typed.
+ *
+ * Keep the wrapper and its inner container transparent so the translucent
+ * container behind them shows through and the white text stays legible. */
+.employee .digit-sidebar .digit-sidebar-search-container .digit-text-input-field,
+.employee .digit-sidebar .digit-sidebar-search-container .input-container {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
 
 /* Sidebar position — vendor `top: 0` + topbar height 72 + sidebar
  * effective top from layout = 64. With our 56px topbar override the
@@ -2945,6 +2979,49 @@ button[class*="toast-close"] svg,
   min-height: 100%;
 }
 
+/* My/All visibility tabs (Visibility V1, PR #1052). Rendered inside the
+ * composer's results column (`resultsHeader` slot) so the strip sits
+ * directly above the complaint list per the PRD. `sticky; left: 0` keeps
+ * it in place when wide tables give the wrapper `overflow-x: auto`.
+ * Colours come from the brand palette vars (same pattern as the table
+ * header rules below) so tenant theming applies. */
+.v2-pgr-inbox .pgr-inbox-tabs {
+  display: flex;
+  gap: 2rem;
+  border-bottom: 1px solid var(--color-border, #d6d5d4);
+  margin-bottom: 8px;
+  position: sticky;
+  left: 0;
+  flex-shrink: 0;
+}
+.v2-pgr-inbox .pgr-inbox-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #505a5f);
+}
+.v2-pgr-inbox .pgr-inbox-tab.active {
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  border-bottom-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  font-weight: 700;
+}
+.v2-pgr-inbox .pgr-inbox-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error, #d4351c);
+  display: inline-block;
+}
+
 /* react-data-table-component header colour — vendor renders header
  * cells as `.rdt_TableCol` (styled-components), which inherits its
  * legacy dark-teal `#0B4B66` colour. Force it through the brand
@@ -2977,6 +3054,187 @@ button[class*="toast-close"] svg,
  * pagination. */
 .employee .app-container.ground-container:has(.v2-pgr-inbox) {
   margin-bottom: 0 !important;
+}
+
+/* Employee dashboard (embedded in digit-ui chrome) — vendor `.main` uses
+ * margin-left: 72px while the collapsed sidebar rail is 48px, leaving a
+ * visible white strip between the nav and the dashboard. Also zero the
+ * ground-container padding (16px @ 780px+) that other modules use. */
+.employee .ground-container.digit-home-ground:has(.dashboard-root.dashboard-embedded) {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+.employee .employee-app-wrapper.digit-home-app-wrapper:has(.dashboard-root.dashboard-embedded) {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+  margin-left: 0 !important;
+  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: clip !important;
+  padding-top: 56px !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-root.dashboard-embedded {
+  --dashboard-embedded-inset: 12px;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
+  padding-left: var(--dashboard-embedded-inset);
+  padding-right: var(--dashboard-embedded-inset);
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-wrap .react-grid-layout {
+  max-width: 100% !important;
+  min-width: 0;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-layout .react-grid-item {
+  overflow: hidden;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-header-top {
+  padding-left: var(--dashboard-embedded-inset) !important;
+  padding-right: var(--dashboard-embedded-inset) !important;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-filters-bar {
+  padding-left: var(--dashboard-embedded-inset);
+  padding-right: var(--dashboard-embedded-inset);
+  margin-bottom: 12px;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-layout {
+  box-sizing: border-box;
+}
+
+/* Dashboard card headings — vendor `h2[class*="title"]` paints primary blue/green. */
+.dashboard-root .dashboard-kpi-title {
+  color: var(--foreground, #0b0c0c) !important;
+}
+
+.dashboard-root h2.dashboard-drag-handle-title,
+.dashboard-root .dashboard-drag-handle-title {
+  color: var(--foreground, #0b0c0c) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+}
+
+/* Compact dashboard filters — vendor forces 44px on select/date. */
+.dashboard-root .dashboard-filter-inline-date,
+.dashboard-root .dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+}
+
+/* Beat vendor `input[type=date] { border… !important }` (higher specificity). */
+.dashboard-root input.dashboard-filter-inline-date[type="date"] {
+  border: 1px solid var(--border, #e5e2db) !important;
+  background-color: var(--surface, #ffffff) !important;
+  box-shadow: none !important;
+  padding-left: 0.375rem !important;
+  padding-right: 0.375rem !important;
+  width: 100% !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-date-wrap {
+  height: 1.75rem !important;
+  width: 6.75rem;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+  padding-right: 1.5rem !important;
+  border: 1px solid var(--border, #e5e2db) !important;
+  background-color: var(--surface, #ffffff) !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select::-ms-expand,
+.dashboard-root .dashboard-widget-group-by-select::-ms-expand {
+  display: none;
+}
+
+.dashboard-root .dashboard-widget-group-by-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select-wrap::after {
+  content: none !important;
+  display: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select-wrap,
+.dashboard-root .dashboard-filter-inline-date-wrap,
+.dashboard-root .dashboard-filters-heading,
+.dashboard-root .dashboard-filters-date-range,
+.dashboard-root .dashboard-filters-clear-inline {
+  height: 1.75rem !important;
+}
+
+.dashboard-root .dashboard-filters-card {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Header search — same height as Add KPI / Reset / Export (vendor forces 44px). */
+.dashboard-root .dashboard-header-search,
+.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+}
+
+.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 2rem !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+  box-sizing: border-box !important;
 }
 
 /* (Status checkbox column padding — restored to vendor default; user
@@ -5609,7 +5867,7 @@ input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input),
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
 input[type="url"]:not(.v2-otp-box):not(.sandbox-otp-input),
-input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input),
+input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):not(.dashboard-filter-inline-date),
 textarea:not(.v2-otp-skip),
 select,
 button[role="combobox"],
@@ -5643,7 +5901,7 @@ input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input),
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
 input[type="url"]:not(.v2-otp-box):not(.sandbox-otp-input),
-input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input),
+input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):not(.dashboard-filter-inline-date),
 select,
 button[role="combobox"],
 .digit-text-input-field,
@@ -5792,7 +6050,7 @@ input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):hover,
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):hover,
 input[type="url"]:not(.v2-otp-box):not(.sandbox-otp-input):hover,
-input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):hover,
+input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):not(.dashboard-filter-inline-date):hover,
 textarea:not(.v2-otp-skip):hover,
 select:hover,
 button[role="combobox"]:hover,
@@ -5827,7 +6085,7 @@ input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus,
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus-visible,
 input[type="url"]:not(.v2-otp-box):not(.sandbox-otp-input):focus,
-input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):focus,
+input[type="date"]:not(.v2-otp-box):not(.sandbox-otp-input):not(.dashboard-filter-inline-date):focus,
 textarea:not(.v2-otp-skip):focus,
 textarea:not(.v2-otp-skip):focus-visible,
 select:focus,
@@ -5957,4 +6215,240 @@ header.digit-header .digit-dropdown-master {
 .navbar select:focus,
 .navbar .digit-dropdown-employee-select-wrap:focus-within {
   border-color: revert !important;
+}
+
+/* ============================================================================
+   Moz QA CSS batch (CCSD-1982 / 1983 / 1984)
+   ========================================================================= */
+
+/* CCSD-1982 — text inputs clickable across the full field.
+   The wrapper was made flex but its child container never told to fill it,
+   so the <input> spanned ~60% of the bordered box and the right side didn't
+   place the caret. Stretch the container (and thus the input) to full width. */
+.digit-text-input-field > .input-container {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* CCSD-1983 — header/brand logo must not stretch.
+   The navbar logo had object-fit:fill + min-width:78px, distorting non-square
+   logos. Use contain and drop the min-width. Profile avatars keep cover. */
+.navbar img {
+  object-fit: contain !important;
+  min-width: 0 !important;
+  width: auto !important;
+}
+.profile-section img {
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+/* CCSD-1984 — employee inbox Date Range: align the box + float the calendar.
+   (a) normalize to the 44px rounded v2 chrome and vertically center contents;
+   (b) render the calendar as an absolute popover so it overlays instead of
+       pushing the page down and leaving empty space. */
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select {
+  height: 44px !important;
+  border: 1px solid var(--color-border, #d6d5d4) !important;
+  border-radius: 6px !important;
+  background: var(--v2-surface-color, var(--color-surface, #fff)) !important;
+  display: flex !important;
+  align-items: center !important;
+}
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select input[type="text"] {
+  position: static !important;
+  height: 100% !important;
+  width: calc(100% - 32px) !important;
+  border: 0 !important;
+}
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select svg {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  margin: 0 !important;
+  transform: translateY(-50%);
+}
+.v2-pgr-inbox .digit-employee-select-wrap .options-card {
+  position: absolute !important;
+  z-index: 20;
+  margin-top: 4px;
+  width: max-content;
+  max-width: none;
+  background: #fff;
+  box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12), 0 5px 5px -3px rgba(0,0,0,.2);
+}
+
+/* ===========================================================================
+ * Legacy select/date-range vertical alignment (CCRS#921)
+ *
+ * Two generations of the same widget ship side by side. The current one
+ * (digit-ui-components: .digit-employee-select-wrap > .digit-select) is a flex
+ * row with align-items:center and horizontal padding, so its text sits on the
+ * box's centre line. The legacy one (react-components:
+ * .employee-select-wrap > .select) is a plain block with no padding, so the
+ * input renders at the top of the box and the text reads ~8px high with a band
+ * of dead space beneath it, touching the left border.
+ *
+ * That legacy markup is still what DateRangeNew, DateRange and the legacy
+ * employee Dropdown render, so match it to the current one rather than
+ * patching the date field alone.
+ * ======================================================================== */
+.employee .employee-select-wrap > .select,
+.employee .employee-select-wrap > .select-active {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+  min-height: 44px !important;
+}
+
+/* ===========================================================================
+ * Employee working context (CCRS#1833)
+ * Compact line in the employee header, read-only panel on click, and a sticky
+ * row on mobile. Scoped to .employee so the citizen shell is untouched.
+ * ======================================================================== */
+/* The header's action-field row is overflow:hidden, so anything wider than the
+ * space left over is sliced off at the edge rather than truncated. A flex item
+ * will not shrink below its content until min-width:0 is set, so without this
+ * the context overflows the container and loses its first characters instead
+ * of ending in an ellipsis. */
+/* Only the field holding the context may shrink — applying this to every
+ * action field let the avatar collapse into an oval. If :has() is unsupported
+ * the rule is simply skipped, which degrades to the clipping it replaces
+ * rather than to broken controls. */
+.employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { min-width: 0; }
+.employee .digit-working-context {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.employee .digit-working-context-trigger { min-width: 0; max-width: 100%; }
+/* Circular avatar must keep its aspect ratio regardless of flex pressure. */
+.employee .digit-header-action-fields .digit-profile-image,
+.employee .digit-header-action-fields img[alt="Profile"],
+.employee .digit-header-action-fields .digit-dropdown-employee-select-wrap { flex-shrink: 0; }
+.employee .digit-working-context-trigger {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.employee .digit-working-context-trigger:focus-visible {
+  outline: 2px solid var(--color-primary-accent, #c84c0e);
+  outline-offset: 2px;
+}
+/* Single line, truncated — the employee topbar is 56px and this sits beside
+ * the city/language controls, so it must never wrap or push them off-screen.
+ * block + nowrap (rather than flex) so text-overflow actually applies. */
+.employee .digit-working-context-summary {
+  display: block;
+  max-width: 22rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 1.35;
+  /* Inherit the header's own text colour. The employee topbar is dark in CCRS
+   * (#22394D) but light elsewhere, so a fixed grey is unreadable on one of
+   * them — inheriting tracks whatever the shell uses for its own controls. */
+  color: inherit;
+  opacity: .85;
+}
+.employee .digit-working-context-summary > * { vertical-align: baseline; }
+.employee .digit-working-context-sep { opacity: .5; margin: 0 5px; }
+/* Stand out by weight, not hue: the brand orange fails contrast on the dark
+ * topbar, and the accent has to work on both grounds. */
+.employee .digit-working-context-more { font-weight: 700; opacity: 1; margin-left: 3px; }
+.employee .digit-working-context-error { font-style: italic; }
+
+/* Positioned inline as fixed by the component (the header container is
+ * overflow:hidden), so only the chrome lives here. */
+.employee .digit-working-context-panel {
+  z-index: 10000;
+  min-width: 272px;
+  max-width: 352px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d6d8da;
+  border-radius: 2px;
+  box-shadow: 0 6px 22px rgba(11, 12, 12, .16);
+  padding: 8px 0;
+  text-align: left;
+}
+.employee .digit-working-context-group { padding: 8px 15px; }
+.employee .digit-working-context-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #787878;
+  margin-bottom: 2px;
+}
+/* The panel renders inside the topbar subtree, which colours its descendants
+ * white for the dark header. Re-assert the panel's own palette on every child
+ * or the values are white-on-white. */
+.employee .digit-working-context-panel,
+.employee .digit-working-context-panel div,
+.employee .digit-working-context-panel span {
+  color: #0b0c0c;
+}
+.employee .digit-working-context-group-value {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0b0c0c;
+}
+.employee .digit-working-context-panel .digit-working-context-group-label { color: #787878; }
+.employee .digit-working-context-panel .digit-working-context-qualifier,
+.employee .digit-working-context-panel .digit-working-context-raw-roles { color: #505a5f; }
+.employee .digit-working-context-qualifier { color: #505a5f; font-size: 12px; }
+.employee .digit-working-context-raw-roles { color: #505a5f; font-size: 11.5px; margin-top: 2px; }
+
+/* Mobile: its own row under the 56px topbar, sticky so the context stays put
+ * while an operator scrolls the inbox (requested on CCRS#1833). */
+/* Desktop: the inline copy in the header is the one that shows. */
+.employee .digit-working-context-mobile { display: none; }
+@media (max-width: 640px) {
+  /* Mobile: the sticky row takes over. The header only drops its action fields
+   * when the page *loads* narrow — mobileView is sampled once in App.js — so
+   * resizing down from desktop leaves the inline copy rendered and both would
+   * show. Hide it explicitly rather than relying on that. */
+  .employee .digit-working-context-mobile { display: block; }
+  .employee .digit-header-action-fields .digit-working-context { display: none; }
+  /* …and collapse the wrapper Header.js puts around it so it leaves no gap.
+   * Layered: the rule above always hides the content, this one removes the
+   * empty slot where :has() is supported. */
+  .employee .digit-header-action-fields .individual-action-field:has(> .digit-working-context) { display: none; }
+}
+.employee .digit-working-context-mobile {
+  position: sticky;
+  top: 56px;
+  z-index: 40;
+  background: #fff;
+  border-bottom: 1px solid #d6d8da;
+  padding: 6px 12px;
+}
+/* In the mobile row the trigger spans the bar so the whole strip is tappable,
+ * and the summary is centred in it. */
+.employee .digit-working-context-mobile .digit-working-context,
+.employee .digit-working-context-mobile .digit-working-context-trigger { display: block; width: 100%; }
+.employee .digit-working-context-mobile .digit-working-context-trigger { padding: 0; text-align: center; }
+.employee .digit-working-context-mobile .digit-working-context-summary { text-align: center; }
+/* Panel is fixed and positioned by the component; keep it inside narrow screens. */
+@media (max-width: 640px) {
+  .employee .digit-working-context-panel { max-width: calc(100vw - 16px); }
+}
+
+/* This row paints its own white ground, so it cannot inherit the dark
+ * topbar's white text. */
+.employee .digit-working-context-mobile .digit-working-context-summary {
+  color: var(--color-text-secondary, #505a5f);
+  opacity: 1;
+  max-width: 100%;
 }

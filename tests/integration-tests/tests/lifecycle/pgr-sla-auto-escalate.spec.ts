@@ -6,10 +6,16 @@
  * single auto-escalation assertion.
  *
  * Prerequisites on the target deployment:
- *   PGR_ESCALATION_INTERVAL_MS=60000   (scan every 60 s)
- *   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (SLA breach in 30 s)
- *   ESCALATE workflow action allows role SYSTEM at root tenant
- *   At least one HRMS reportingTo relationship in the city tenant
+ *   ESCALATE workflow action allows role SYSTEM at root tenant   (tests 1-3, always run)
+ *   At least one HRMS reportingTo relationship in the city tenant (tests 1-3, always run)
+ *   PGR_ESCALATION_INTERVAL_MS=60000   (scan every 60 s)          (test 4 only, opt-in)
+ *   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (SLA breach in 30 s)      (test 4 only, opt-in)
+ *
+ * Only test 4 is gated (on PGR_FAST_ESCALATION=1) — it is the one with a
+ * wall-clock deadline. Tests 1-3 are cheap reads and run everywhere, so a
+ * deployment that has auto-escalation misconfigured still gets a red rather
+ * than a silent skip. On a stock deployment this file is 3 passes + 1 skip and
+ * finishes in seconds; the ~2 min figure applies only with the gate opened.
  *
  * Worst-case timing:
  *   - Just-missed scheduler tick: 60 s wait
@@ -17,21 +23,20 @@
  *   - + ~10 s for create/assign/poll buffer ≈ 100 s
  * Test deadline is set to 130 s.
  *
+ * Deployment-independence note: complaint creation goes through seed.ts's
+ * seedComplaintAsCitizen() (files as a CITIZEN against resolveSeedPlan()'s
+ * serviceCode/localityCode) rather than a bespoke OTP-registration + raw
+ * _create — PGR's APPLY action is [CITIZEN, CSR] on every deployment, and
+ * this used to duplicate exactly the citizen-registration dance seed.ts
+ * already centralizes.
+ *
  * Run:
  *   npx playwright test tests/lifecycle/pgr-sla-auto-escalate.spec.ts
  */
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
-import {
-  BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD,
-  SERVICE_CODE, LOCALITY_CODE,
-  generateCitizenPhone,
-} from '../utils/env';
-
-const CITIZEN_PHONE = generateCitizenPhone();
-const CITIZEN_NAME = 'E2E SLA Auto-Escalate Citizen';
+import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { seedComplaintAsCitizen } from '../utils/seed';
 
 async function assertOk(resp: Response, ctx: string): Promise<any> {
   const body = await resp.json();
@@ -39,48 +44,6 @@ async function assertOk(resp: Response, ctx: string): Promise<any> {
     throw new Error(`${ctx}: HTTP ${resp.status} — ${JSON.stringify(body).slice(0, 500)}`);
   }
   return body;
-}
-
-async function registerCitizen(phone: string): Promise<{ token: string; userInfo: Record<string, unknown> }> {
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  });
-
-  const tokenReq = () => fetch(`${BASE_URL}/user/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-    },
-    body: new URLSearchParams({
-      grant_type: 'password', username: phone, password: FIXED_OTP,
-      tenantId: ROOT_TENANT, scope: 'read', userType: 'CITIZEN',
-    }).toString(),
-  });
-
-  let resp = await tokenReq();
-  if (!resp.ok) {
-    await fetch(`${BASE_URL}/user/citizen/_create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker' },
-        user: {
-          name: CITIZEN_NAME, userName: phone, mobileNumber: phone,
-          password: DEFAULT_PASSWORD, tenantId: ROOT_TENANT, type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: ROOT_TENANT }],
-          otpReference: FIXED_OTP,
-        },
-      }),
-    });
-    resp = await tokenReq();
-  }
-  const data: any = await resp.json();
-  return { token: data.access_token, userInfo: data.UserRequest };
 }
 
 async function searchEmployees(token: string, tenantId: string): Promise<any[]> {
@@ -123,21 +86,33 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
 }
 
 test.describe.serial('PGR SLA auto-escalation (fast)', () => {
+  // NOTE: the PGR_FAST_ESCALATION gate lives on test 4 ONLY — see the skip at the
+  // top of that test's body.
+  //
+  // It used to sit here, in the describe body, which in Playwright applies to
+  // every test in the group. That silently suppressed tests 1-3 as well, and
+  // those three don't depend on escalation TIMING at all: they read a token,
+  // read the workflow config, and read HRMS. On a stock deployment they run in
+  // a couple of seconds and assert real, load-bearing facts — that
+  // ESCALATE@PENDINGATLME grants role SYSTEM (without it the scheduler's
+  // SYSTEM-identity transition is rejected) and that HRMS has a reportingTo
+  // link (without it scanAndEscalate finds no escalation target). Those are
+  // exactly the two ways auto-escalation breaks SILENTLY in production, so
+  // reporting them as "skipped" hid the checks that were still worth running.
+  // Per the annotation on test 2, a clear FAILURE here is the intended outcome
+  // when the prerequisite is missing — it saves the 130 s wait in test 4.
+
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
-  let citizenToken: string;
-  let citizenUserInfo: Record<string, unknown>;
   let employeeUuid: string;
 
-  test('1 — acquire tokens', {
+  test('1 — acquire admin token', {
     annotation: {
       type: 'description',
-      description: `Token-acquisition step for the fast SLA auto-escalation test (~2 min total). Acquires both admin (root) and citizen (registered via OTP helper) tokens.
+      description: `Token-acquisition step for the fast SLA auto-escalation test (~2 min total). Only needs the admin token — the complaint itself is filed by seedComplaintAsCitizen() (step 4), which owns its own citizen identity.
 
 Steps:
 1. getDigitToken with ROOT_TENANT, ADMIN_USER, ADMIN_PASS; assert access_token truthy.
-2. registerCitizen(CITIZEN_PHONE) to send OTP, then login (or create+login on first run).
-3. Assert citizen token truthy.
 
 Trimmed-down sibling of the larger pgr-escalation-api spec — does only the assertions needed to drive a single auto-escalation observation.`,
     },
@@ -146,11 +121,6 @@ Trimmed-down sibling of the larger pgr-escalation-api spec — does only the ass
     adminToken = adminResp.access_token;
     adminUserInfo = adminResp.UserRequest as Record<string, unknown>;
     expect(adminToken).toBeTruthy();
-
-    const cit = await registerCitizen(CITIZEN_PHONE);
-    citizenToken = cit.token;
-    citizenUserInfo = cit.userInfo;
-    expect(citizenToken).toBeTruthy();
   });
 
   test('2 — verify ESCALATE allows SYSTEM role on PENDINGATLME', {
@@ -209,7 +179,7 @@ Read-only: doesn't patch HRMS — fails fast with a clear error if the deploymen
 
 Steps:
 1. setTimeout 160s.
-2. POST PGR _create as the citizen; capture srid.
+2. seedComplaintAsCitizen() to file as CITIZEN; capture srid.
 3. ASSIGN via raw /egov-wf/process/_transition (not PGR _update) so processInstance.assignes is populated — the scheduler depends on this.
 4. Poll workflow history every 5s for up to 130s, looking for any ProcessInstance with action=ESCALATE and comment starting "Auto-escalated".
 5. Assert escalated === true (with diagnostic message pointing at PGR_ESCALATION_* env vars).
@@ -219,28 +189,45 @@ Steps:
 Test timeout is 160s because the worst-case wall-clock is ~130s (just-missed scheduler tick + SLA + buffer). If the deployment doesn't have the env config, this is the fastest way to discover that.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    // Timing gate — this test, and ONLY this test, needs fast escalation tuning.
+    //
+    // The ~130 s poll deadline is meetable only when the scan interval and the
+    // SLA are both small. pgr-services' shipped defaults
+    // (application.properties: pgr.escalation.interval.ms=300000,
+    // pgr.escalation.default.sla.ms=432000000) mean a complaint must sit idle
+    // for 5 DAYS before it is even eligible, and the scan runs only every 5
+    // minutes — so on a stock deployment this can't pass, by three orders of
+    // magnitude, and would be pure red noise.
+    //
+    // There is no way for the test to force the issue: pgr-services exposes no
+    // on-demand escalation endpoint (RequestsApiController is /v2/request/*
+    // only), and the escalation Kafka topic is produce-only. The two levers are
+    // both deployment-side:
+    //   1. env PGR_ESCALATION_INTERVAL_MS / PGR_ESCALATION_DEFAULT_SLA_MS, or
+    //   2. an MDMS RAINMAKER-PGR.EscalationConfig record with a small
+    //      defaultSlaByLevel / per-serviceCode overrides entry.
+    // Even with (2), the floor on the poll deadline is the scan interval, so a
+    // deployment that only seeds MDMS still needs the interval lowered too.
+    //
+    // Opt in with PGR_FAST_ESCALATION=1 once a deployment has done that (mirrors
+    // how enc-key-drift-622.spec.ts gates its destructive variant on an env flag).
+    test.skip(
+      process.env.PGR_FAST_ESCALATION !== '1',
+      'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
+        '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000, ' +
+        'or an MDMS RAINMAKER-PGR.EscalationConfig with a small defaultSlaByLevel). ' +
+        'pgr-services defaults (300000 / 432000000 = 5-min scan, 5-day SLA) make the ' +
+        '~130s poll deadline unmeetable. Tests 1-3 above still verify the ' +
+        'non-timing prerequisites on every deployment.',
+    );
+
     test.setTimeout(160_000);
 
-    // Create a fresh complaint
-    const createResp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${citizenToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: citizenToken, userInfo: citizenUserInfo },
-        service: {
-          tenantId: TENANT,
-          serviceCode: SERVICE_CODE,
-          description: `E2E SLA auto-escalate — ${new Date().toISOString()}`,
-          source: 'web',
-          address: { city: TENANT, locality: { code: LOCALITY_CODE }, geoLocation: { latitude: 0, longitude: 0 } },
-          citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-        },
-        workflow: { action: 'APPLY', verificationDocuments: [] },
-      }),
-    });
-    const createData = await assertOk(createResp, 'PGR _create');
-    const srid = createData.ServiceWrappers[0].service.serviceRequestId;
-    console.log(`[${srid}] created → PENDINGFORASSIGNMENT`);
+    // Create a fresh complaint — filed as CITIZEN via seed.ts (APPLY is
+    // [CITIZEN, CSR] on every deployment).
+    const created = await seedComplaintAsCitizen({ description: `E2E SLA auto-escalate — ${new Date().toISOString()}` });
+    const srid = created.srid;
+    console.log(`[${srid}] created → ${created.status}`);
 
     // ASSIGN via raw workflow API so process_instance.assignes is populated
     // (PGR _update wraps self-loops and drops assignes — scheduler then skips the complaint)

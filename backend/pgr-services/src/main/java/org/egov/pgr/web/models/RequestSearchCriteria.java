@@ -59,6 +59,19 @@ public class RequestSearchCriteria {
     @JsonProperty("slaDeltaMaxLimit")
     private Long slaDeltaMaxLimit;
 
+    /**
+     * Internal (VisibilityService only, never client-bound): together these
+     * compose the reportee-scoped All predicate
+     * `(serviceRequestId IN visibilityIds OR applicationStatus IN visibilityUnassignedStates)`
+     * — team-assigned complaints plus the unassigned queues. Both restrict the
+     * result set; they can't widen a search.
+     */
+    @JsonIgnore
+    private Set<String> visibilityIds;
+
+    @JsonIgnore
+    private Set<String> visibilityUnassignedStates;
+
     @JsonProperty("slaDeltaMinLimit")
     private Long slaDeltaMinLimit;
 

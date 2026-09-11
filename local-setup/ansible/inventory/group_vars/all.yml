@@ -19,3 +19,16 @@ configurator_www_dir: "{{ '/var/www/configurator' if (ansible_system | default('
 # Host port the macOS nginx container publishes (maps to its :80). Linux is
 # unaffected (host nginx binds 80/443 directly).
 nginx_host_port: 80
+
+# Optional: move Docker's data-root (images + named volumes — the bulk of
+# disk usage) off the root filesystem onto a dedicated partition, e.g.
+# "/opt/docker". Empty = Docker's default (/var/lib/docker). Set this on any
+# box where `/` is small and a larger partition (commonly /opt) is available
+# — a fresh RHEL box pulling the ~30 images in this stack onto a small `/`
+# reliably fills it mid-deploy. Setting this ALSO relocates containerd's own
+# root (a separate config file Docker's data-root does not control — the
+# image layers actually live there) to a sibling "containerd" directory, e.g.
+# "/opt/containerd". Only takes effect on a box where Docker/containerd have
+# never been started before — see local-setup/ansible/README.md for the
+# migration steps if they're already populated on the root filesystem.
+docker_data_root: ""

@@ -31,7 +31,10 @@ const ResultsDataTable = ({
   onChangeRowsPerPage,
   paginationTotalRows,
   isPaginationRequired,
+  defaultSortFieldId,
   defaultSortAsc,
+  sortServer,
+  onSort,
   tableClassName,
   onRowExpandToggled,
   showTableDescription,
@@ -94,7 +97,10 @@ const ResultsDataTable = ({
             ? `digit-data-table ${showCheckBox ? "selectable" : "unselectable"} ${tableClassName}`
             : `digit-data-table ${showCheckBox ? "selectable" : "unselectable"}`
         }
+        defaultSortFieldId={defaultSortFieldId}
         defaultSortAsc={defaultSortAsc}
+        sortServer={sortServer}
+        onSort={onSort}
         pagination={
           isPaginationRequired !== undefined ? isPaginationRequired : true
         }

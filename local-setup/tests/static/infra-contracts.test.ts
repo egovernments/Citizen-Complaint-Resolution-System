@@ -1,0 +1,332 @@
+/**
+ * Infra contract tests — cross-file invariants that lint can't see.
+ *
+ * Each describe block encodes a REAL incident, same philosophy as
+ * scripts/preflight.py (which gates operator host_vars at deploy time —
+ * these tests gate the tracked artifacts in CI). Add a contract when an
+ * incident bites; cite it.
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+const ROOT = path.resolve(__dirname, '..', '..'); // local-setup/
+const PLAYBOOK = fs.readFileSync(path.join(ROOT, 'ansible', 'playbook-deploy.yml'), 'utf8');
+const BASE_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.egov-digit.yaml'), 'utf8');
+const MIGRATIONS_COMPOSE = fs.readFileSync(path.join(ROOT, 'docker-compose.migrations.yml'), 'utf8');
+const KONG = fs.readFileSync(path.join(ROOT, 'kong', 'kong.yml'), 'utf8');
+const KONG_REGEX_PATHS = [...KONG.matchAll(/^\s*-\s+(~\S+)\s*$/gm)].map((match) => match[1]);
+
+describe('JVM OOM dashboard service scope', () => {
+  /**
+   * Incident: #1925 — the OOM panels queried every non-empty service_name.
+   * Promtail also labels Loki and Grafana logs with service_name, so Loki's
+   * query-completion log included the literal OutOfMemoryError expression and
+   * became a false OOM event on the next dashboard refresh.
+   */
+  const dashboard = JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, 'otel', 'grafana', 'provisioning', 'dashboards', 'jvm-services.json'),
+      'utf8',
+    ),
+  );
+  const serviceBlocks = (compose: string) => {
+    const headers = [...compose.matchAll(/^  ([a-z0-9][a-z0-9_-]*):\s*$/gm)];
+    return headers.map((header, index) => ({
+      name: header[1],
+      body: compose.slice(header.index, headers[index + 1]?.index ?? compose.length),
+    }));
+  };
+  const jvmEnvironment =
+    /^\s*(?:-\s*)?(?:JAVA_OPTS|JAVA_TOOL_OPTIONS|ES_JAVA_OPTS|FLYWAY_[A-Z_]+)(?::|=)/m;
+  const baseJvmServices = serviceBlocks(BASE_COMPOSE)
+    .filter(
+      ({ body }) =>
+        jvmEnvironment.test(body) || /^\s*image:\s*quay\.io\/keycloak\/keycloak:/m.test(body),
+    )
+    .map(({ name }) => name);
+  const migrationJvmServices = serviceBlocks(MIGRATIONS_COMPOSE)
+    .filter(({ name, body }) => name.endsWith('-migration') && /^\s*FLYWAY_[A-Z_]+:/m.test(body))
+    .map(({ name }) => name);
+  const expectedJvmServices = [...new Set([...baseJvmServices, ...migrationJvmServices])].sort();
+  const oomPanels = dashboard.panels.filter(({ id }: { id: number }) => id === 2 || id === 3);
+  const selectorServices = oomPanels.map((panel: { targets: Array<{ expr: string }> }) => {
+    const selector = panel.targets[0].expr.match(/service_name=~"\^\(([^)]+)\)\$"/);
+    expect(selector).not.toBeNull();
+    return selector![1].split('|');
+  });
+
+  test('OOM panels use the JVM allowlist derived from deployed service definitions', () => {
+    expect(oomPanels).toHaveLength(2);
+
+    for (const services of selectorServices) {
+      expect(services).toEqual(expectedJvmServices);
+    }
+  });
+
+  test('OOM panels cannot select observability or non-JVM infrastructure logs', () => {
+    const excluded = ['grafana', 'loki', 'promtail', 'otel-collector', 'prometheus', 'tempo'];
+    for (const services of selectorServices) {
+      for (const service of excluded) {
+        expect(services).not.toContain(service);
+      }
+    }
+  });
+
+  test('OOM panels cannot regress to a catch-all selector', () => {
+    for (const panel of oomPanels) {
+      expect(panel.targets[0].expr).not.toContain('service_name=~".+"');
+    }
+  });
+
+  test('dashboard version supersedes UI-saved copies from the previous version', () => {
+    expect(dashboard.version).toBeGreaterThanOrEqual(100);
+  });
+});
+
+describe('Kong declarative route syntax', () => {
+  /**
+   * Incident: public-dashboard regex routes used the older `~^/path` form.
+   * The deployed Kong parser accepts regex paths only when they begin `~/`,
+   * so Kong exited during startup while YAML/static gateway checks stayed green.
+   */
+  test('every regex path uses the Kong 3 declarative `~/` prefix', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => !routePath.startsWith('~/'))).toEqual([]);
+  });
+
+  test('public analytics regex routes stay end-anchored and Kong-parseable', () => {
+    expect(KONG_REGEX_PATHS.filter((routePath) => routePath.startsWith('~/pgr-services/v2/analytics/public/'))).toEqual([
+      '~/pgr-services/v2/analytics/public/packs$',
+      '~/pgr-services/v2/analytics/public/_query$',
+      '~/pgr-services/v2/analytics/public/catalog/_search$',
+      '~/pgr-services/v2/analytics/public/_options$',
+    ]);
+  });
+});
+
+describe('compose invocation discipline', () => {
+  /**
+   * Incident: bomet egov-user rollback (2026-06-09). A container was
+   * recreated with `docker compose -f docker-compose.egov-digit.yaml up`
+   * — without the per-tenant overlay in the -f stack — which silently
+   * dropped the tenant's image pin and booted an image with a known
+   * regression (#771). The playbook's protection is that every mutating
+   * invocation goes through the single templated `{{ compose_files }}`
+   * stack; this contract pins that discipline.
+   */
+  const MUTATING = /\b(up|down|restart|rm|stop|start|create|pull)\b/;
+
+  // Read-only or deliberately-scoped invocations, each justified:
+  const ALLOWED_RAW_F = [
+    // `ps` against the base file only — read-only health probe; the
+    // service set is identical across overlays so a partial stack is fine.
+    /docker compose -f \{\{ digit_dir \}\}\/docker-compose\.egov-digit\.yaml ps/,
+  ];
+
+  // Mutating raw-`f` invocations that legitimately cannot use {{ compose_files }}.
+  // The bomet 2026-06-09 incident this contract encodes was an `up` regression
+  // that silently dropped an overlay image pin; `down` has no image-pin surface.
+  // Anything added here MUST be justified individually.
+  const ALLOWED_MUTATING_RAW_F = [
+    // Pre-stack force-clean teardown (playbook-deploy.yml `force-clean — tear
+    // down existing DIGIT stack`). Runs in pre_tasks BEFORE compose_files is
+    // set_fact'd; the *previous* run's overlay set is not reconstructible here
+    // (tenant may have switched between runs). `down --remove-orphans` on the
+    // base file still tears down overlay-only containers under the compose
+    // project name, and `down` cannot create anything so the image-pin risk
+    // that motivates the {{ compose_files }} rule doesn't apply.
+    /^docker compose -f docker-compose\.egov-digit\.yaml down --remove-orphans --timeout \d+$/,
+  ];
+
+  const invocations = PLAYBOOK.split('\n')
+    .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+    .filter(({ line }) => line.includes('docker compose') && !line.startsWith('#'));
+
+  test('every mutating `docker compose` call uses the templated {{ compose_files }} stack', () => {
+    const offenders = invocations.filter(({ line }) => {
+      if (!MUTATING.test(line)) return false;            // read-only — next test
+      if (line.includes('{{ compose_files }}')) return false; // canonical stack
+      if (!line.includes(' -f ')) return false;          // no file args (e.g. `docker compose version`)
+      if (ALLOWED_MUTATING_RAW_F.some((rx) => rx.test(line))) return false; // justified carve-out
+      return !ALLOWED_RAW_F.some((rx) => rx.test(line));
+    });
+    expect(
+      offenders.map(({ n, line }) => `playbook-deploy.yml:${n}: ${line}`),
+    ).toEqual([]);
+  });
+
+  test('raw -f invocations are on an allowlist (read-only or justified mutating)', () => {
+    const rawF = invocations.filter(
+      ({ line }) => line.includes(' -f ') && !line.includes('{{ compose_files }}'),
+    );
+    for (const { n, line } of rawF) {
+      const readOnlyAllowed = ALLOWED_RAW_F.some((rx) => rx.test(line));
+      const mutatingAllowed = ALLOWED_MUTATING_RAW_F.some((rx) => rx.test(line));
+      const mutating = MUTATING.test(line);
+      const ok = mutatingAllowed || (readOnlyAllowed && !mutating);
+      expect({
+        where: `playbook-deploy.yml:${n}`,
+        line,
+        verdict: ok ? 'ok' : 'NEW RAW -f INVOCATION — route it through {{ compose_files }} or justify it in ALLOWED_RAW_F / ALLOWED_MUTATING_RAW_F',
+      }).toEqual(expect.objectContaining({ verdict: 'ok' }));
+    }
+  });
+});
+
+describe('image pin immutability', () => {
+  /**
+   * Incidents (three in one month): `digit-ui:pgr-fixes` re-tag drift left
+   * two servers running different content under the same tag;
+   * `pgr-services-dev:latest` in the base compose diverged from what the
+   * live container ran; `egov-user` regressions shipped under a reused tag.
+   * Mutable tags make `docker compose pull` a silent deploy of unreviewed
+   * content.
+   *
+   * Policy: no NEW `:latest` pins in the base compose. The existing ones
+   * are frozen below as debt — burn the list down, never grow it. (Exact
+   * known set, so a removal also fails the test until the list is updated:
+   * that's intentional — the list IS the changelog of this debt.)
+   */
+  // Exact multiset of :latest pins allowed in the base compose. Each pin
+  // is normalized to `<owner>/<image>:tag` (registry host and any
+  // `${VAR:-...}` env wrapper stripped). Every entry MUST appear exactly
+  // this many times, no more, no less — extras, duplicates, AND removals
+  // all fail the test until this list is updated to match. The list IS
+  // the changelog of this debt; it may shrink, never grow.
+  //
+  // Renamed wholesale to the `egovio/*` Docker Hub org by e6323a09
+  // ("chore(compose): move all image refs to egovio Docker Hub org"). The
+  // count went seven -> six when the Jupyter Lab service was removed (#1743);
+  // every other entry is the same image under a new owner, so this records a
+  // rename plus one genuine retirement, not a relaxation. (Note the pre-rename
+  // names still appear in docker-compose.{yml,deploy.yaml,db-migrations.yml},
+  // which this test does not read: it scans the base compose only.)
+  //
+  // Six -> five: `egovio/tilt-demo-db-migrations:latest` is retired. It was the
+  // clearest case this list exists to catch — a mutable tag with no rebuild
+  // pipeline behind it, so the image froze at 2026-03-06 while migrate-all.sh
+  // moved on to the canonical Flyway history names. The stale copy then failed
+  // on every box (`relation "egov_user_schema_version_pk" already exists`), and
+  // four services hard-gated on it completing, so it took every login down with
+  // it. The container now lives in docker-compose.migrations.yml and is BUILT
+  // from ./docker/db-migrations, so the pin is gone rather than moved.
+  const FROZEN_LATEST_DEBT: Record<string, number> = {
+    'egovio/pgbouncer:latest': 1,
+    'egovio/curl:latest': 2, // two gate containers
+    'egovio/gatus:latest': 1,
+    'openbao/openbao:latest': 1,
+    'egovio/novu-bridge-endpoint:latest': 1,
+  };
+
+  // Strip a `${VAR:-<default>}` wrapper (use the default) and any leading
+  // registry-host segment (segment before the first `/` that contains a
+  // `.` or `:` — Docker's own registry-host convention).
+  const normalizeImage = (img: string): string => {
+    const env = img.match(/^\$\{[A-Za-z0-9_]+:-([^}]+)\}$/);
+    const raw = env ? env[1] : img;
+    const parts = raw.split('/');
+    return parts.length > 1 && /[.:]/.test(parts[0]) ? parts.slice(1).join('/') : raw;
+  };
+
+  test('no :latest image pins beyond the frozen debt list', () => {
+    const pins = [...BASE_COMPOSE.matchAll(/^\s*image:\s*(.+)$/gm)]
+      .map((m) => m[1].trim())
+      .filter((img) => /:latest\b|:latest\}/.test(img))
+      .map(normalizeImage);
+
+    const counts: Record<string, number> = {};
+    for (const p of pins) counts[p] = (counts[p] || 0) + 1;
+
+    expect(counts).toEqual(FROZEN_LATEST_DEBT);
+  });
+});
+
+describe('per-tenant overlay services exist in the base compose', () => {
+  /**
+   * Incident class: an overlay referencing a service name the base compose
+   * doesn't define is a silent no-op for env overrides — the deploy
+   * "succeeds" and the override never applies.
+   */
+  // Only files layered ONTO the base via -f stacking are overlays. The
+  // standalone compose files (deploy.yaml, db-migrations.yml, registry.yml)
+  // define their own service universes and are exempt. Add new per-tenant
+  // overlays (docker-compose.<inventory_hostname>.yml) here as they land.
+  const overlays = ['docker-compose.bomet.yml', 'docker-compose.fast-path.yml', 'docker-compose.core.yml']
+    .filter((f) => fs.existsSync(path.join(ROOT, f)));
+
+  const baseServices = new Set(
+    [...BASE_COMPOSE.matchAll(/^ {2}([a-z0-9][a-z0-9_-]*):\s*$/gm)].map((m) => m[1]),
+  );
+
+  test.each(overlays)('%s only references base services', (overlay) => {
+    const text = fs.readFileSync(path.join(ROOT, overlay), 'utf8');
+    const inServices = text.match(/^services:\s*$([\s\S]*)/m);
+    if (!inServices) return; // overlay without a services block — nothing to check
+    const overlayServices = [...inServices[1].matchAll(/^ {2}([a-z0-9][a-z0-9_-]*):\s*$/gm)].map(
+      (m) => m[1],
+    );
+    const unknown = overlayServices.filter((s) => !baseServices.has(s));
+    expect(unknown).toEqual([]);
+  });
+});
+
+describe('observability ports are loopback-bound in every compose file', () => {
+  /**
+   * Incident: #1603 — Grafana, Prometheus, Loki, Tempo, the otel-collector
+   * and the Gatus board were published on 0.0.0.0 (and [::]), so every one
+   * of them was reachable from the public internet on any box without a
+   * host firewall. Grafana additionally had no auth at the time.
+   *
+   * Fixed in #1606 — but the fix had to be applied in FOUR places, because
+   * these compose files are parallel full stacks rather than overlays of a
+   * single base (`docker-compose.yml`, `docker-compose.deploy.yaml` — which
+   * `performance/ansible/playbook-setup.yml` ships straight to hosts —
+   * `docker-compose.db-migrations.yml`, `docker-compose.registry.yml`, and
+   * the repo-root standalone `docker-compose.egov-digit.yaml`). YAML anchors
+   * can't span files, so there is no way to factor the mapping into one
+   * place; this contract is the substitute. Adding an observability port to
+   * a new compose file without the `127.0.0.1:` prefix fails here.
+   */
+  const REPO_ROOT = path.resolve(ROOT, '..');
+
+  // Host ports owned by the observability stack. Keyed by port so a service
+  // renamed or copied into another file is still caught.
+  const OBSERVABILITY_HOST_PORTS: Record<string, string> = {
+    '13000': 'grafana',
+    '13100': 'loki',
+    '13133': 'otel-collector health',
+    '13200': 'tempo',
+    '14317': 'otel-collector OTLP/gRPC',
+    '14318': 'otel-collector OTLP/HTTP',
+    '18889': 'gatus',
+    '19090': 'prometheus',
+  };
+
+  const composeFiles = [
+    ...fs
+      .readdirSync(ROOT)
+      .filter((f) => /^docker-compose\..*\.(yml|yaml)$/.test(f) || f === 'docker-compose.yml')
+      .map((f) => path.join(ROOT, f)),
+    path.join(REPO_ROOT, 'docker-compose.egov-digit.yaml'),
+  ].filter((f) => fs.existsSync(f));
+
+  test('every compose file that publishes one binds it to 127.0.0.1', () => {
+    const offenders: string[] = [];
+    for (const file of composeFiles) {
+      const text = fs.readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/^\s*-\s*"([^"]+)"\s*(?:#.*)?$/gm)) {
+        const mapping = m[1];
+        // A published-port mapping is `[host-ip:]host-port:container-port`.
+        const parts = mapping.split(':');
+        const hostPort = parts.length >= 2 ? parts[parts.length - 2] : null;
+        if (!hostPort || !(hostPort in OBSERVABILITY_HOST_PORTS)) continue;
+        if (!mapping.startsWith('127.0.0.1:')) {
+          offenders.push(
+            `${path.relative(REPO_ROOT, file)}: "${mapping}" ` +
+              `(${OBSERVABILITY_HOST_PORTS[hostPort]}) is not loopback-bound`,
+          );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

@@ -11,6 +11,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 // One RAINMAKER-PGR.ComplaintHierarchy row (interior node OR leaf complaint type).
 interface HierNode {
@@ -20,6 +21,8 @@ interface HierNode {
   levelCode?: string;
   order?: number;
   active?: boolean;
+  /** Record-level mdms-v2 soft-delete flag, stamped by mdmsService.search(). */
+  _isActive?: boolean;
   hierarchyType?: string;
   department?: string;
   slaHours?: number;
@@ -37,8 +40,17 @@ interface Level {
  * (MAIN_CATEGORY → SECTOR → SUB_TYPE …). The form field (`source`, e.g.
  * serviceCode) is set to the DEEPEST node the operator selects. A branch that
  * has no children at the next level is terminal — its own code becomes the
- * serviceCode (pgr-services accepts any ComplaintHierarchy code). Levels deeper
- * than a terminal selection are hidden.
+ * serviceCode. Levels deeper than a terminal selection are hidden.
+ *
+ * Only rows pgr-services will actually accept may be offered. It resolves a
+ * complaint's serviceCode against ComplaintHierarchy with `isActive = true` and
+ * rejects anything else with `400 INVALID_SERVICECODE: The service code: X is
+ * not present in MDMS`, so BOTH gates apply here:
+ *   - `_isActive` — the mdms-v2 record-level soft-delete flag (a "removed" row
+ *     keeps `data.active: true`, so this is the only thing that reveals it).
+ *     `mdmsService.search()` already filters these out server-side; the check
+ *     below is the local restatement of the contract.
+ *   - `active` — the schema's own business flag, set by the operator.
  */
 export function ComplaintHierarchyCascade(props: InputProps & { label?: string }) {
   const { label } = props;
@@ -61,7 +73,9 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
         ),
         mdmsService.search<HierNode>(tenant, 'RAINMAKER-PGR.ComplaintHierarchy', { limit: 2000 }),
       ]);
-      const allRows = (nodes || []).filter((n) => n.active !== false && n.code);
+      const allRows = (nodes || []).filter(
+        (n) => n._isActive !== false && n.active !== false && n.code,
+      );
       const def =
         (defs || []).find(
           (d) => Array.isArray(d.levels) && d.levels!.length && allRows.some((n) => n.hierarchyType === d.hierarchyType),
@@ -106,21 +120,32 @@ export function ComplaintHierarchyCascade(props: InputProps & { label?: string }
     if (!lvl) return [];
     const parentCode = i === 0 ? null : selArr[i - 1];
     if (i > 0 && !parentCode) return [];
-    return rows
-      .filter((n) => n.levelCode === lvl.levelCode)
-      .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Collapse on `code` — the value each SelectItem submits. Two hierarchy
+    // rows sharing a code at the same level would render as identical options
+    // that Radix treats as one selection, checking both (#1923).
+    return uniqueBy(
+      rows
+        .filter((n) => n.levelCode === lvl.levelCode)
+        .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      (n) => n.code,
+    );
   };
 
   const handleChange = (i: number, value: string) => {
+    // Radix's hidden form-bubble <select> echoes an EMPTY onValueChange whenever
+    // the controlled `value` changes while the dropdown is closed: its options
+    // are only mounted with the (portalled) content, so assigning a value it has
+    // no <option> for leaves the native select at "" and the synthetic `change`
+    // it dispatches reports "". Rehydrating the cascade from an existing
+    // serviceCode does exactly that, so an unguarded handler wiped the very
+    // value it had just restored. A real pick is never empty — Radix forbids an
+    // empty SelectItem value — so an empty payload is always the echo. Ignore it.
+    if (!value) return;
     const next = sel.slice();
-    next[i] = value || null;
+    next[i] = value;
     for (let j = i + 1; j < next.length; j++) next[j] = null;
     setSel(next);
-    if (!value) {
-      field.onChange('');
-      return;
-    }
     // Terminal when this is the declared leaf level OR the next level has no
     // options for this selection → its code is the serviceCode. Otherwise clear
     // (force the operator to drill deeper).

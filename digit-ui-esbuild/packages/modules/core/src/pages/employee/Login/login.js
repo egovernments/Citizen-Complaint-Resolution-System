@@ -98,6 +98,13 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           justifyContent: "center",
           minHeight: "100vh",
           padding: "24px",
+          // .banner is a flex container that centers its children, so
+          // without an explicit width this wrapper shrink-wraps to the
+          // card's min-content and a leftover page-bg paints a full-height
+          // white/grey column beside (and behind) the card instead of the
+          // <Background> banner showing edge-to-edge (CCSD-1995 / #1860).
+          width: "100%",
+          backgroundColor: "transparent",
         }}
       >
         {children}
@@ -167,9 +174,17 @@ function PasswordInput({ id, value, onChange, autoComplete, invalid }) {
   );
 }
 
-const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
-  const { data: cities, isLoading } = Digit.Hooks.useTenants();
+const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }) => {
+  const { data: hookCities, isLoading: isHookCitiesLoading } = Digit.Hooks.useTenants();
   const { data: storeData, isLoading: isStoreLoading } = Digit.Hooks.useStore.getInitData();
+  const cities = appTenants?.length
+    ? appTenants
+    : storeData?.tenants?.length
+      ? storeData.tenants
+      : hookCities;
+  // Only gate on the hooks while no city list has resolved yet — appTenants
+  // (or already-fetched store tenants) should render without a page loader.
+  const isLoading = !cities?.length && (isHookCitiesLoading || isStoreLoading);
   const [user, setUser] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [disable, setDisable] = useState(false);
@@ -323,7 +338,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
 
   const onForgotPassword = () => history.push(`/${window?.contextPath}/employee/user/forgot-password`);
 
-  if (isLoading || isStoreLoading) {
+  if (isLoading) {
     return <Loader page={true} variant="PageLoader" />;
   }
 

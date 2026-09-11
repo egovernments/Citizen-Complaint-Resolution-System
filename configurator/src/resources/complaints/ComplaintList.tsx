@@ -42,6 +42,7 @@ const filters = [
     source="additionalDetail.department"
     reference="departments"
     label="Department"
+    alwaysOn
   />,
   <TextFilterInput key="srid" source="serviceRequestId" label="Request ID" />,
 ];

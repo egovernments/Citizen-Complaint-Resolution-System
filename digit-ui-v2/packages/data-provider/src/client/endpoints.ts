@@ -37,7 +37,6 @@ export const ENDPOINTS = {
   ACCESS_ROLES_SEARCH: '/access/v1/roles/_search',
   ACCESS_ACTIONS_SEARCH: '/access/v1/actions/_search',
   IDGEN_GENERATE: '/egov-idgen/id/_generate',
-  LOCATION_BOUNDARY_SEARCH: '/egov-location/location/v11/boundarys/_search',
 
   ENC_ENCRYPT: '/egov-enc-service/crypto/v1/_encrypt',
   ENC_DECRYPT: '/egov-enc-service/crypto/v1/_decrypt',

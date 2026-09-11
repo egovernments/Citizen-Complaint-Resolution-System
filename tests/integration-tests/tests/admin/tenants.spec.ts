@@ -26,11 +26,12 @@ import {
 } from '../utils/manage/api';
 import { testCode } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT, CITY_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
-// A real city tenant known to exist in the list. naipepea → ke.nairobi,
-// bomet → ke.bomet. Parameterized so the search test isn't pinned to Nairobi.
-const CITY_TENANT = process.env.CITY_TENANT || 'ke.nairobi';
+// Root (state) tenant from env — no hardcoded 'ke'. CITY_TENANT is a real
+// city tenant known to exist in the list (from env), so the search test isn't
+// pinned to any particular city.
+const TENANT_CODE = ROOT_TENANT;
 const SCHEMA = 'tenant.tenants';
 const LIST_PATH = '/configurator/manage/tenants';
 
@@ -92,36 +93,67 @@ Catches a regression where TenantList.tsx loses a column or the data provider re
   test('2. search filter narrows to a known tenant code', {
     annotation: {
       type: 'description',
-      description: `End-to-end search-filter test on the tenants list: typing "ke.nairobi" must narrow the grid to a row containing that code; typing a nonsense code must drop the grid to zero data rows. Drives the actual placeholder-matching search input the operator uses.
+      description: `End-to-end search-filter test on the tenants list: typing a REAL tenant code (discovered live over MDMS) must drop every non-matching row from the grid while keeping the matching one; typing a nonsense code must drop the grid to zero data rows.
 
 Steps:
-1. Navigate to /configurator/manage/tenants.
-2. Locate getByPlaceholder(/search/i); assert visible.
-3. Fill "ke.nairobi"; wait for networkidle.
-4. Assert at least one row matching /ke.nairobi/ is visible.
-5. Clear and type "zzz_no_such_tenant_xyz"; wait for networkidle.
-6. Assert getByRole('row').filter({ hasText: 'zzz_no_such_tenant_xyz' }) has count === 0.
+1. mdmsSearch tenant.tenants; pick an active, non-suite-artifact code (prefer CITY_TENANT).
+2. Navigate to /configurator/manage/tenants; wait for the grid to render data rows.
+3. Record how many rendered rows do NOT contain the target code (the narrowing we are about to observe). Skip only if the deployment has a single tenant, where narrowing is unobservable.
+4. Fill the search input with the target code.
+5. Poll (the grid debounces) until zero rendered rows lack the target code.
+6. Assert at least one row containing the target code is still rendered — so an empty grid can't pass step 5.
+7. Clear and type a nonsense code; poll until the grid holds zero data rows.
 
-Confirms the search input feeds into the data provider's filter and the grid re-renders accordingly.`,
+Previously this asserted \`rows.filter({hasText:'zzz_no_such_tenant_xyz'}).count() === 0\` — a literal no tenant row could ever contain, so the assertion held whether or not the search input did anything at all (deleting the fill left it green). Both halves are now mutation-sensitive.`,
     },
     tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    // Discover a real code live rather than pinning a deployment literal.
+    // Prefer the configured CITY_TENANT; otherwise any active city-level code.
+    // The ROOT code is deliberately excluded as a target: it is a prefix of
+    // every city code, so searching for it matches every row and could never
+    // demonstrate narrowing.
+    const auth = loadAuth();
+    const active = (await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 }))
+      .filter((r) => r.isActive !== false)
+      .map((r) => r.uniqueIdentifier)
+      .filter((c) => c !== TENANT_CODE);
+    const target = active.includes(CITY_TENANT) ? CITY_TENANT : active[0];
+    expect(target, 'deployment must expose at least one active city tenant').toBeTruthy();
+
     await page.goto(LIST_PATH);
+
+    // Header rows carry role=columnheader, data rows carry role=cell.
+    const dataRows = page.getByRole('row').filter({ has: page.getByRole('cell') });
+    await expect.poll(() => dataRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+
+    const nonMatching = dataRows.filter({ hasNotText: target });
+    const nonMatchingBefore = await nonMatching.count();
+    test.skip(
+      nonMatchingBefore === 0,
+      `every rendered tenant row already matches ${target} — narrowing is unobservable on a single-tenant deployment`,
+    );
 
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill(CITY_TENANT);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await search.fill(target);
 
-    await expect(
-      page.getByRole('row').filter({ hasText: CITY_TENANT }).first(),
-    ).toBeVisible();
+    // DigitList.handleSearchChange calls setFilters(..., undefined, true) —
+    // a DEBOUNCED refetch. Typing fires no navigation either, so the page's
+    // load state is already 'networkidle' and waitForLoadState() returns in
+    // ~0.2 ms, long before React has dispatched the new query. Poll instead.
+    await expect
+      .poll(() => nonMatching.count(), { timeout: 30_000 })
+      .toBe(0);
+    // ...and the grid must not have simply emptied itself.
+    expect(
+      await dataRows.filter({ hasText: target }).count(),
+      `searching for ${target} should keep its own row`,
+    ).toBeGreaterThan(0);
 
     // A nonsense code should drop us to empty-state (zero data rows).
     await search.fill('');
     await search.fill('zzz_no_such_tenant_xyz');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const rows = page.getByRole('row').filter({ hasText: 'zzz_no_such_tenant_xyz' });
-    expect(await rows.count()).toBe(0);
+    await expect.poll(() => dataRows.count(), { timeout: 30_000 }).toBe(0);
   });
 
   test('3. show page renders Code / Name / City / District for a known tenant', {
@@ -147,12 +179,23 @@ Skips gracefully on deployments missing a fleshed-out tenant — better than fai
     const auth = loadAuth();
     const allTenants = await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 });
     const fleshedOut = allTenants.find((r) => {
+      // mdmsSearch returns raw MDMS rows and does NOT filter isActive, but the
+      // configurator's dataProvider filters isActive on getOne. Picking a
+      // deactivated row therefore drives the Show page at a record the UI
+      // refuses to load: it renders nothing and the assertions below fail with
+      // a bare "element not found" that looks like a UI regression.
+      // This bit: test 6 API-creates `<tenant>.pwt<hash>` tenants and the
+      // afterAll soft-deletes them (isActive=false) — those leftovers persist in
+      // MDMS across runs, sort ahead of the real seed, and carry a fleshed-out
+      // city block, so this picker kept selecting a dead PW tenant.
+      if (r.isActive === false) return false;
+      if (/\.pwt/i.test(r.uniqueIdentifier)) return false;
       const city = (r.data as Record<string, unknown>).city as
         | Record<string, unknown>
         | undefined;
       return typeof city?.districtName === 'string' && city.districtName !== '';
     });
-    test.skip(!fleshedOut, 'No tenant with city.districtName present');
+    test.skip(!fleshedOut, 'No active (non-PW) tenant with city.districtName present');
 
     const code = fleshedOut!.uniqueIdentifier;
     await page.goto(`${LIST_PATH}/${encodeURIComponent(code)}/show`);
@@ -194,15 +237,15 @@ Catches a contract drift where MDMS returns records with missing required fields
     }
   });
 
-  test('5. QUIRK — ke.nairobi city object lacks districtName, list tolerates it', {
+  test('5. QUIRK — city tenant object may lack districtName, list tolerates it', {
     annotation: {
       type: 'description',
-      description: `Documents a known seed quirk: the ke.nairobi tenant was seeded with a slimmed-down city object missing districtName. The list grid renders an empty cell rather than crashing. The test asserts the grid survives the missing field — if a future seed fills it in, the test still passes (the UI tolerates both shapes).
+      description: `Documents a known seed quirk: a city tenant (CITY_TENANT, from env) can be seeded with a slimmed-down city object missing districtName. The list grid renders an empty cell rather than crashing. The test asserts the grid survives the missing field — if a future seed fills it in, the test still passes (the UI tolerates both shapes).
 
 Steps:
-1. mdmsSearch for uniqueIdentifier 'ke.nairobi'; test.skip if absent.
+1. mdmsSearch tenant.tenants and find the row whose data.code is CITY_TENANT (uniqueIdentifier as fallback — the two are not the same field on every deployment); test.skip if absent.
 2. Read data.city; capture hasDistrict (boolean).
-3. Navigate to /configurator/manage/tenants; type 'ke.nairobi' in the search.
+3. Navigate to /configurator/manage/tenants; type CITY_TENANT in the search.
 4. Wait for networkidle; assert the matching row is visible.
 5. If !hasDistrict, log a warning that the list tolerated the missing field.
 
@@ -212,14 +255,25 @@ If the UI ever starts crashing on the missing field, the row visibility assertio
     page,
   }) => {
     const auth = loadAuth();
-    const nairobi = (
-      await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-        uniqueIdentifiers: ['ke.nairobi'],
-      })
-    )[0] as MdmsRecord | undefined;
-    test.skip(!nairobi, 'ke.nairobi not present on this tenant');
+    // Matched on data.code, NOT on uniqueIdentifier. The two are only the same
+    // field on some deployments: pg's root row is keyed `Tenant.pg` (MDMS id
+    // `tenant-root`) while its data.code is `pg`, and pg.citya/pg.cityb are
+    // keyed by a sha256 — so a uniqueIdentifiers=[CITY_TENANT] lookup came back
+    // empty and this test skipped "pg not present on this tenant" for a tenant
+    // that is very much present, and is in fact the one row whose city block is
+    // missing districtName, i.e. exactly the quirk under test. uniqueIdentifier
+    // stays as the fallback for the deployments that do key rows by the code
+    // (ke.nairobi, pg.citest), and an active row is preferred over a
+    // soft-deleted namesake for the same reason as test 3's picker.
+    const allTenants = await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 });
+    const isCityTenant = (r: MdmsRecord): boolean =>
+      (r.data as Record<string, unknown>)?.code === CITY_TENANT ||
+      r.uniqueIdentifier === CITY_TENANT;
+    const cityRecord: MdmsRecord | undefined =
+      allTenants.find((r) => r.isActive !== false && isCityTenant(r)) ?? allTenants.find(isCityTenant);
+    test.skip(!cityRecord, `${CITY_TENANT} not present on this tenant`);
 
-    const city = (nairobi!.data as Record<string, unknown>).city as
+    const city = (cityRecord!.data as Record<string, unknown>).city as
       | Record<string, unknown>
       | undefined;
     // The minimal seed lacks districtName — the column should render
@@ -228,10 +282,10 @@ If the UI ever starts crashing on the missing field, the row visibility assertio
     const hasDistrict = typeof city?.districtName === 'string' && city.districtName !== '';
 
     await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill('ke.nairobi');
+    await page.getByPlaceholder(/search/i).first().fill(CITY_TENANT);
     await page.waitForLoadState('networkidle').catch(() => {});
 
-    const row = page.getByRole('row').filter({ hasText: 'ke.nairobi' });
+    const row = page.getByRole('row').filter({ hasText: CITY_TENANT });
     await expect(row.first()).toBeVisible();
 
     if (!hasDistrict) {
@@ -239,7 +293,7 @@ If the UI ever starts crashing on the missing field, the row visibility assertio
       // visibility. If the UI ever starts crashing here the test will
       // time out, flagging the regression.
       // eslint-disable-next-line no-console
-      console.warn('[tenants] ke.nairobi has no city.districtName — list tolerated it');
+      console.warn(`[tenants] ${CITY_TENANT} has no city.districtName — list tolerated it`);
     }
   });
 
@@ -261,6 +315,10 @@ Teardown is API-only — no UI delete for tenants. Soft-delete via cleanupMdms w
     tag: ['@area:configurator-manage', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    // (Previously skipped with "tenant.tenants create requires emailId/imageId".
+    // That was wrong: the live schema declares required: ['code','name'] and
+    // emailId / imageId as optional nullable strings, and a minimal _create
+    // returns "status":"successful". Re-enabled 2026-07-27.)
     const auth = loadAuth();
     const code = `${TENANT_CODE}.${testCode(testInfo, 'TNT').toLowerCase().replace(/^pw_/, 'pw')}`;
     createdCodes.add(code);

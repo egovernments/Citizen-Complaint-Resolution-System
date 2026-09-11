@@ -10,7 +10,7 @@ test.describe('02-pgr-employee: assign + workflow guards (#479 + follow-ups)', (
 
 Steps:
 1. Log in as the test employee.
-2. Call workflowBusinessService(auth, 'ke.nairobi', 'PGR').
+2. Call workflowBusinessService(auth, <TENANT>, 'PGR').
 3. Find the PENDINGFORASSIGNMENT state and its ASSIGN action.
 4. Assert assign.nextState is truthy and NOT equal to pfa.uuid (so it's not a self-loop).
 5. Look up the state with that nextState UUID and assert its applicationStatus === 'PENDINGATLME'.
@@ -36,7 +36,7 @@ Catches CCRS#479 regression directly at the workflow-config layer.`,
 
 Steps:
 1. Log in as the test employee.
-2. hrmsSearch(auth, 'ke.nairobi', ['PGR_LME']).
+2. hrmsSearch(auth, <TENANT>, ['PGR_LME']).
 3. Assert response.Employees.length > 0.
 
 Pairs with the workflow nextState test — together they ensure both halves of the assign flow (workflow target and assignee list) are healthy.`,
@@ -57,7 +57,7 @@ Pairs with the workflow nextState test — together they ensure both halves of t
 
 Steps:
 1. Log in as the test employee.
-2. POST to /mdms-v2/v1/_search for moduleName=RAINMAKER-PGR / masterDetails=[{ name: 'RejectionReasons' }] at tenant ke.nairobi.
+2. POST to /mdms-v2/v1/_search for moduleName=RAINMAKER-PGR / masterDetails=[{ name: 'RejectionReasons' }] at the configured tenant.
 3. Assert MdmsRes['RAINMAKER-PGR'].RejectionReasons array exists and has length > 0.
 
 If this fails on a fresh deployment, the configurator seed needs to add at least one rejection reason.`,

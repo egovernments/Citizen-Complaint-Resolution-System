@@ -65,6 +65,8 @@ interface RunSummary {
   failed: number;
   skipped: number;
   timedOut: number;
+  /** On disk, but the Playwright config filters it out on this deployment. */
+  excluded: number;
   total: number;
   sha: string;
   branch: string;
@@ -363,13 +365,30 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
 
-  // Compute the surviving run-id set after this run is published. publish.sh
-  // prunes runs/ on the host to RUN_LIMIT (=HISTORY_LIMIT here, 5). Any
-  // latestRun pointer to a run NOT in this set is about to be unreachable, so
-  // we drop it. Pointers into still-extant runs are preserved.
+  // The runs/ folders on disk are the source of truth for what the dashboard
+  // can actually open. In the local-serve model the published history/catalog
+  // live in the webroot next to runs/, so drop any prior-history run whose
+  // runs/<id>/ folder no longer exists — otherwise a folder that an earlier
+  // cycle pruned (or that a failed-no-report run occupied without ever writing
+  // a report/catalog entry) leaves the catalog pointing at a 404, and the
+  // reportless-but-newer folder that evicted it stays invisible (#907 skew).
+  // Only trust disk when the runs are actually local (the current run's own
+  // folder is present); the CI rsync model publishes runs elsewhere, so there
+  // we keep the old purely-logical window and this stays a no-op.
+  const runsDir = opts.publicHistoryPath
+    ? path.join(path.dirname(opts.publicHistoryPath), 'runs')
+    : null;
+  const runsAreLocal = !!runsDir && fs.existsSync(path.join(runsDir, opts.runId));
+  const runExists = (id: string): boolean =>
+    !runsAreLocal || fs.existsSync(path.join(runsDir!, id));
+  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId && runExists(r.id));
+
+  // Surviving run-id set after this run is published: the current run plus the
+  // still-extant prior runs, capped at the rolling window. run-cycle.sh prunes
+  // runs/ to exactly this set, so a latestRun pointer into it is guaranteed
+  // reachable; pointers to anything else are dropped below.
   const survivingRunIds = new Set<string>(
-    [opts.runId, ...oldHistory.runs.map(r => r.id).filter(id => id !== opts.runId)]
-      .slice(0, HISTORY_LIMIT)
+    [opts.runId, ...priorRuns.map(r => r.id)].slice(0, HISTORY_LIMIT)
   );
 
   // Merge: every test from disk → CatalogTest. Tests that ran get latestRun.
@@ -463,10 +482,33 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   for (const [k, v] of Object.entries(facetsMap)) tagFacets[k] = Array.from(v).sort();
 
   // Run summary (counts derived from disk-truth, not just stats — accounts for did-not-run).
-  const passed = tests.filter(t => t.lastStatus === 'passed').length;
-  const failed = tests.filter(t => t.lastStatus === 'failed' || t.lastStatus === 'timedOut').length;
-  const skipped = tests.filter(t => t.lastStatus === 'skipped').length;
-  const total = tests.length;
+  //
+  // ...but "did not run" has two very different causes, and only one is a signal:
+  //
+  //   a) the spec stopped being collected (renamed, crashed, filtered by mistake)
+  //      — a real regression, and the reason this is derived from disk rather
+  //        than from report.json's stats. Must keep counting against the run.
+  //   b) playwright.config.ts EXCLUDES it here by design: `grepInvert:
+  //      /@local-only/` unless LOCAL_STACK=1. Those specs need the Keycloak
+  //      admin port (18180), which is loopback-only, so on any remote
+  //      deployment they are filtered out before the run starts and never
+  //      reach report.json — not even as 'skipped'. They are still on disk, so
+  //      the AST walk above enumerates them, and they used to land in `total`
+  //      with lastStatus null: pure denominator, permanently unpassable.
+  //
+  // On bomet that was 11 keycloak specs pinning the headline ~4 points under
+  // the real pass rate with no way to ever recover them. Bucket (b) separately
+  // and keep it out of `total`; leave (a) exactly as it was.
+  const localStack = process.env.LOCAL_STACK === '1';
+  const configExcluded = (t: CatalogTest) =>
+    !localStack && t.lastStatus === null && (t.tags || []).includes('@local-only');
+
+  const counted = tests.filter(t => !configExcluded(t));
+  const passed = counted.filter(t => t.lastStatus === 'passed').length;
+  const failed = counted.filter(t => t.lastStatus === 'failed' || t.lastStatus === 'timedOut').length;
+  const skipped = counted.filter(t => t.lastStatus === 'skipped').length;
+  const excluded = tests.length - counted.length;
+  const total = counted.length;
 
   const newRun: RunSummary = {
     id: opts.runId,
@@ -475,7 +517,8 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     passed,
     failed,
     skipped,
-    timedOut: tests.filter(t => t.lastStatus === 'timedOut').length,
+    timedOut: counted.filter(t => t.lastStatus === 'timedOut').length,
+    excluded,
     total,
     sha: opts.sha,
     branch: opts.branch,
@@ -487,7 +530,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     lastRunId: opts.runId,
     tagFacets,
     tests: tests.sort((a, b) => a.id.localeCompare(b.id)),
-    runs: [newRun, ...oldHistory.runs.filter(r => r.id !== opts.runId)].slice(0, HISTORY_LIMIT),
+    runs: [newRun, ...priorRuns].slice(0, HISTORY_LIMIT),
   };
 
   // Persist next history.json.

@@ -1,7 +1,13 @@
 import { ENDPOINTS } from '../client/endpoints.js';
 import { MDMS_SCHEMAS } from '../client/types.js';
 
-export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy';
+export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
+  // 'custom' resources are NOT MDMS-backed. They are read-only lists fetched
+  // from an out-of-band DIGIT service (today: the novu-bridge read proxy) via
+  // a plain GET to `endpoint.search`, using the same DIGIT auth token the rest
+  // of the provider carries. The data provider maps react-admin filters onto
+  // query params and returns the service's {data,total} envelope verbatim.
+  | 'custom';
 
 export interface ResourceConfig {
   type: ResourceType;
@@ -16,6 +22,18 @@ export interface ResourceConfig {
     update?: string;
   };
   dedicated?: boolean;
+  /** For `type: 'custom'` resources only: the origin-relative path of the
+   *  read-only GET endpoint on the out-of-band service (e.g.
+   *  `/novu-bridge/novu-adapter/v1/logs`). The data provider prefixes it with
+   *  the current origin and attaches the DIGIT Bearer token. Routed by Kong
+   *  (local-setup/kong/kong.yml); novu-bridge validates the Bearer token
+   *  server-side against egov-user /user/_details and masks recipient PII in
+   *  responses. */
+  customPath?: string;
+  /** For `type: 'custom'` resources: when true, the fetcher appends the session
+   *  tenantId as a `tenantId` query param (the novu-bridge /logs endpoint
+   *  requires it). Providers/integrations don't take a tenant, so omit it. */
+  customTenantScoped?: boolean;
   /** 2-master complaint hierarchy: when set, the MDMS fetcher keeps only the
    *  LEAF rows of RAINMAKER-PGR.ComplaintHierarchy (rows carrying `department`
    *  or `slaHours`) and maps each to the legacy ServiceDefs shape
@@ -84,10 +102,19 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'access-roles': {
     type: 'access-role', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
+    // `schema` here is a masters-visibility policy key only (see
+    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
+    // resource still fetches via the accesscontrol role API (`type:
+    // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
+    // every fetch branch in dataProvider.ts before `config.schema` is ever
+    // read, so adding it here does not change how this resource is fetched.
+    schema: MDMS_SCHEMAS.ROLES,
   },
   'access-actions': {
     type: 'access-action', label: 'Access Actions', idField: 'id',
     nameField: 'displayName', descriptionField: 'url', dedicated: true,
+    // Policy key only — see the comment on 'access-roles' above.
+    schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
   },
   'mdms-schemas': {
     type: 'mdms-schema', label: 'MDMS Schemas', idField: 'code',
@@ -102,6 +129,20 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'complaint-hierarchies': {
     type: 'mdms', label: 'Complaint Hierarchies', schema: 'RAINMAKER-PGR.ComplaintHierarchyDefinition',
     idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
+  },
+  // Analytics destinations for the citizen/employee SPA (one row per destination).
+  //
+  // `dedicated: true` is load-bearing here, not cosmetic. The generic MDMS CRUD
+  // would be actively unsafe for this master: dataProvider's update and delete
+  // both re-resolve the record with a mdmsSearch that is NOT scoped to the
+  // session tenant, so a city admin editing a row INHERITED from the state
+  // tenant would rewrite the state row for every city that inherits it, and one
+  // delete click would deactivate analytics everywhere. The dedicated editor
+  // writes only rows the current tenant owns and never deletes — turning a
+  // destination off is `enabled: false` on a permanent record.
+  'analytics-providers': {
+    type: 'mdms', label: 'Analytics Providers', schema: 'common-masters.AnalyticsProvider',
+    idField: 'code', nameField: 'code', descriptionField: 'type', dedicated: true,
   },
 
   // Generic MDMS Resources
@@ -141,7 +182,50 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
-  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
+  // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
+  // record on its own only value made the reopen window permanently uneditable —
+  // Save always 400'd (#1252). nameField stays REOPENSLA so the list shows the
+  // configured window rather than the constant "DEFAULT".
+  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
+  'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
+  // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
+  // (see mapMdmsRecord), so idField/nameField here are display-only.
+  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' },
+  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
+  // Provider-scoped external template mapping (e.g. Twilio WhatsApp ContentSids +
+  // ordered variables + per-locale approval). Surfaces the localization linkage:
+  // each row carries `locale` and `approvalStatus`, so an operator sees which
+  // (provider, channel, key, locale) templates are approved and sendable.
+  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' },
+
+  // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
+  // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer
+  // token server-side against egov-user /user/_details and masks recipient PII.
+  // notification-log      -> GET /novu-bridge/novu-adapter/v1/logs         (nb_dispatch_log delivery logs)
+  // notification-provider -> GET /novu-bridge/novu-adapter/v1/integrations (Novu integrations, allowlisted fields only)
+  'notification-log': {
+    type: 'custom', label: 'Notification Logs', idField: 'transactionId', nameField: 'referenceNumber',
+    descriptionField: 'status', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/logs', customTenantScoped: true,
+  },
+  'notification-provider': {
+    type: 'custom', label: 'Notification Providers', idField: '_id', nameField: 'providerId',
+    descriptionField: 'channel', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: false,
+  },
+  // notification-preference -> GET /novu-bridge/novu-adapter/v1/preferences
+  // (per-user consent per channel + preferredLanguage; same {data,total} envelope
+  // as integrations). Keyed by the row's `userId`, which is always present, so
+  // react-admin gets a stable id straight from the response. Tenant-scoped like
+  // notification-log: the backend's tenantId query param is optional, but
+  // omitting it returns CROSS-TENANT rows (capped at 100), so the screen leaked
+  // other tenants' preferences and could miss the session tenant's own.
+  'notification-preference': {
+    type: 'custom', label: 'User Preferences', idField: 'userId', nameField: 'userId',
+    descriptionField: 'preferredLanguage', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/preferences', customTenantScoped: true,
+  },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {
@@ -190,4 +274,31 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
     if (config.schema === schemaCode) return name;
   }
   return undefined;
+}
+
+/**
+ * Non-'mdms' resource types that nonetheless have a real MDMS-v2 schema with genuine
+ * `/mdms-v2/v2/_create|_update/<schema>` write actions in the ACCESSCONTROL-ACTIONS-TEST seed, and
+ * so must still be checked against ACCESSCONTROL-ROLEACTIONS by {@link isAccessControlGated} —
+ * `access-roles`/`access-actions` use a dedicated `type` for their read path (a different fetch
+ * shape than the generic MDMS list), but their EDIT gating is identical to any other mdms master.
+ * Narrowing the gate to `type === 'mdms'` silently opened these two — the screens that edit the
+ * permission system itself — to every role (#1826 review). Add a type here ONLY when you've
+ * confirmed it has a real mdms-v2 write action in the seed; do not widen this to "any resource
+ * with a `schema` field" — Employees/Boundaries/Complaints/Localization/Users all set `schema`-like
+ * identifiers too but write through non-mdms-v2 endpoints (HRMS, boundary-service, PGR,
+ * localization) and must stay unrestricted, matching pre-gating behavior.
+ */
+const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role', 'access-action']);
+
+/**
+ * Whether `useMastersCapability.canViewResource`/`canEditResource` should check this resource
+ * against the real ACCESSCONTROL-ACTIONS-TEST/ROLEACTIONS policy (accessPolicy.ts) rather than
+ * treating it as unrestricted. Every `type: 'mdms'` resource qualifies by construction (it always
+ * carries a real schema); a small explicit allowlist ({@link EXPLICITLY_GATED_TYPES}) covers the
+ * non-'mdms'-typed exceptions that still need it.
+ */
+export function isAccessControlGated(config: ResourceConfig | undefined): boolean {
+  if (!config) return false;
+  return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type);
 }

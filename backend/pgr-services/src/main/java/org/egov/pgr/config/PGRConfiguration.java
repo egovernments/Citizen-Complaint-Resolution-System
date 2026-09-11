@@ -127,12 +127,39 @@ public class PGRConfiguration {
     @Value("${egov.mdms.search.endpoint}")
     private String mdmsEndPoint;
 
+    //Accesscontrol — Tier-2 PDP condition lookup, see org.egov.pgr.policy
+    @Value("${egov.accesscontrol.host}")
+    private String accessControlHost;
+
+    @Value("${egov.accesscontrol.actions.mdms.get.path}")
+    private String accessControlActionsMdmsGetPath;
+
+    // Explicit rollout gate for org.egov.pgr.policy.AccessPolicyRegistry#getCondition: false (the
+    // default) preserves today's backward-compatible behavior — a missing/invisible
+    // ACCESSCONTROL-ACTIONS-TEST entry for an action allows, same as before ABAC existed. A tenant
+    // only gets the ABAC-strict "missing action fails closed" behavior once it explicitly opts in
+    // here, after its policies are fully authored — never as a silent default that could brick an
+    // existing deployment's PGR search on the next redeploy.
+    @Value("${pgr.abac.strict-mode:false}")
+    private boolean abacStrictMode;
+
     //HRMS
     @Value("${egov.hrms.host}")
     private String hrmsHost;
 
     @Value("${egov.hrms.search.endpoint}")
     private String hrmsEndPoint;
+
+    // Display-only employee working-context classification. Deployments can map their own
+    // functional role codes to the three product-level contexts without a service code change.
+    @Value("#{'${pgr.employee.context.resolver-role-codes:PGR_LME,GRO,DGRO}'.split(',')}")
+    private List<String> employeeContextResolverRoleCodes;
+
+    @Value("#{'${pgr.employee.context.citizen-role-codes:CITIZEN}'.split(',')}")
+    private List<String> employeeContextCitizenRoleCodes;
+
+    @Value("#{'${pgr.employee.context.admin-role-codes:PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR}'.split(',')}")
+    private List<String> employeeContextAdminRoleCodes;
 
     //Notification
     @Value("${egov.user.event.notification.enabled}")
@@ -219,6 +246,22 @@ public class PGRConfiguration {
     @Value("${state.level.tenantid.length}")
     private Integer stateLevelTenantIdLength;
 
+    // ---- analytics config caches ----
+
+    /**
+     * Fallback for {@code pgr.analytics.config-cache-ttl-ms} when the bean is built
+     * outside Spring (hand-constructed/mocked in tests) and the field is null. 5 minutes.
+     */
+    public static final long DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS = 5 * 60_000L;
+
+    /**
+     * The ONE TTL for every analytics in-memory config cache — recordCount in
+     * AnalyticsService and departmentScoping in KpiCatalogService both read THIS
+     * property; per-file hardcoded TTLs are not allowed (#1282 review).
+     */
+    @Value("${pgr.analytics.config-cache-ttl-ms:300000}")
+    private Long analyticsConfigCacheTtlMs;
+
     @Value("${is.environment.central.instance}")
     private Boolean isEnvironmentCentralInstance;
 
@@ -230,6 +273,9 @@ public class PGRConfiguration {
 
     @Value("${egov.boundary.search.url}")
     private String boundarySearchEndpoint;
+
+    @Value("${egov.boundary.relationship.search.url}")
+    private String boundaryRelationshipSearchEndpoint;
 
     @Value("${pgr.kafka.create.inbox.topic}")
     private String inboxCreateTopic;
@@ -245,6 +291,51 @@ public class PGRConfiguration {
 
     @Value("${complaints.domain.events.default.locale:en_IN}")
     private String complaintsDomainEventDefaultLocale;
+
+    // Visibility (V1 Step-2 reportee core) — deploy-level kill switch plus
+    // resolver defaults; the per-tenant switch is MDMS InboxVisibilityConfig.
+    //
+    // WHERE OPERATORS SET THESE (Ansible/compose setup):
+    //  - pgr.visibility.enabled maps to the PGR_VISIBILITY_ENABLED env var,
+    //    surfaced in the pgr-services env block of
+    //    local-setup/docker-compose.egov-digit.yaml (deploy-wide default).
+    //  - Per-tenant/box overrides go in the per-tenant compose overlay
+    //    local-setup/docker-compose.<inventory_hostname>.yml, which the
+    //    Ansible playbook includes in every compose invocation when present.
+    //  - The remaining pgr.visibility.* knobs follow Spring relaxed binding
+    //    (e.g. pgr.visibility.team.fanout.max -> PGR_VISIBILITY_TEAM_FANOUT_MAX)
+    //    and can be set the same two ways; none are required — the defaults
+    //    below apply otherwise.
+    //  - Per-tenant FEATURE enablement (and the client->server cutover) is
+    //    NOT env config: it lives in MDMS RAINMAKER-PGR.InboxVisibilityConfig
+    //    (`enabled` / `serverSide`), editable at runtime via the configurator.
+    @Value("${pgr.visibility.enabled:false}")
+    private Boolean visibilityEnabled;
+
+    @Value("${pgr.visibility.reportee.depth.default:1}")
+    private Integer visibilityReporteeDepthDefault;
+
+    @Value("#{'${pgr.visibility.unassigned.states:PENDINGFORASSIGNMENT,PENDINGFORREASSIGNMENT}'.split(',')}")
+    private java.util.List<String> visibilityUnassignedStates;
+
+    @Value("${pgr.visibility.team.fanout.max:25}")
+    private Integer visibilityTeamFanoutMax;
+
+    // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
+    @Value("${pgr.notification.config.driven:false}")
+    private Boolean notificationConfigDriven;
+
+    @Value("${pgr.notification.default.locale:en_IN}")
+    private String notificationDefaultLocale;
+
+    @Value("${pgr.notification.rolepool.page.size:100}")
+    private Integer notificationRolePoolPageSize;
+
+    @Value("${pgr.notification.rolepool.max.pages:10}")
+    private Integer notificationRolePoolMaxPages;
+
+    @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
+    private Long notificationMdmsCacheTtlMs;
 
     // Escalation
     @Value("${pgr.escalation.enabled}")
@@ -271,5 +362,15 @@ public class PGRConfiguration {
 
     @Value("${pgr.dashboard.refresh.interval.ms:300000}")
     private Long dashboardRefreshIntervalMs;
+
+    // Encryption (egov-enc-service) — no keyId; resolved by tenantId inside the service
+    @Value("${egov.enc.host:http://egov-enc-service:1234}")
+    private String encHost;
+
+    @Value("${egov.enc.encrypt.endpoint:/egov-enc-service/crypto/v1/_encrypt}")
+    private String encEncryptEndpoint;
+
+    @Value("${egov.enc.decrypt.endpoint:/egov-enc-service/crypto/v1/_decrypt}")
+    private String encDecryptEndpoint;
 
 }

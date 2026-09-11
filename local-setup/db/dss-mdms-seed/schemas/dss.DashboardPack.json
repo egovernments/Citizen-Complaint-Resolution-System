@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "title": "DashboardPack",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "id",
+    "tiles",
+    "layout"
+  ],
+  "x-unique": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "kpiIds in this pack (must all be published KpiDefinitions)"
+    },
+    "layout": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kpiId",
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "properties": {
+          "h": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "w": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kpiId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "description": {
+      "type": "string"
+    },
+    "requiredActionUrl": {
+      "type": "string",
+      "description": "The egov-accesscontrol action URL a caller must be granted for this pack to be a match candidate; the server picks the best match for the caller's resolved capabilities."
+    },
+    "public": {
+      "type": "boolean",
+      "description": "True marks this pack as the credential-free public dashboard's default; absent/false = not public."
+    }
+  }
+}

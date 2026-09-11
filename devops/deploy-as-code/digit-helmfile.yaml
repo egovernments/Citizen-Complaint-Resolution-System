@@ -15,4 +15,11 @@ helmfiles:
   - path: ./charts/common-services/common-services-helmfile.yaml
   - path: ./charts/analytics/analytics-helmfile.yaml
   - path: ./charts/auxiliary-services/auxiliary-helmfile.yaml
-#  - path: ./charts/monitoring/monitoring-helmfile.yaml
+  # Monitoring (#1619). This arrived already commented out in the wholesale
+  # import from upstream DIGIT-DevOps -- nobody here disabled it deliberately,
+  # so every monitoring fix in this tree was inert.
+  #
+  # Enabling the path is safe on its own: all six releases in that helmfile are
+  # gated on `monitoring.*` in charts/environments/env.yaml and default to
+  # false, so this line deploys NOTHING until an operator opts in.
+  - path: ./charts/monitoring/monitoring-helmfile.yaml

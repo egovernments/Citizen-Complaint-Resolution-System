@@ -1,51 +1,142 @@
 # docker-compose.egov-digit.yaml
-# Standalone compose — all images from public registry registry.preview.egov.theflywheel.in
+# Standalone compose — all images from the egovio Docker Hub org (plus upstream public registries)
 # Generated from docker-compose.deploy.yaml with registry-prefixed images and build: removed
 #
-# Usage: docker compose -f docker-compose.egov-digit.yaml up -d
+# Usage: GF_ADMIN_PASSWORD=<something-strong> docker compose -f docker-compose.egov-digit.yaml up -d
+#        (or put GF_ADMIN_PASSWORD in ./.env). It has no default — see the
+#        grafana service below for why.
 
 services:
   # ==================== Tracing Infrastructure ====================
   otel-collector:
-    image: registry.preview.egov.theflywheel.in/otel/opentelemetry-collector-contrib:0.114.0
+    image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
+    # Deliberately NOT profiled (#1657).
+    #
+    # Twelve unprofiled core services declare `depends_on: otel-collector`
+    # (egov-user, egov-workflow-v2, egov-persister, egov-filestore, ...).
+    # Compose rejects the whole project when a selected service depends on one
+    # excluded by profile:
+    #
+    #   service "egov-filestore" depends on undefined service
+    #   "otel-collector": invalid compose project
+    #
+    # With it profiled, EVERY ad-hoc `docker compose` command failed unless the
+    # caller happened to export COMPOSE_PROFILES -- config, ps, logs, up. The
+    # ansible deploy always passes them, so deploys were fine; what broke was
+    # everything a human types, including six runbooks under docs/.
+    #
+    # It is also the wrong thing to gate. The collector is the pipeline every
+    # instrumented service emits into, so it is needed at EVERY level -- the
+    # tiers gate what CONSUMES telemetry (prometheus/grafana/loki/tempo), not
+    # what receives it. A site on `observability_level: metrics` still needs the
+    # collector; what it does not need is Tempo and Loki.
+    #
+    # Cheap to leave running: OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER already
+    # follow the level, so at a lower tier it simply receives less.
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "14317:4317"
-      - "14318:4318"
-      - "13133:13133"
+      - "127.0.0.1:14317:4317"
+      - "127.0.0.1:14318:4318"
+      - "127.0.0.1:13133:13133"
+    # Memory ceiling (#1612). Observability is overhead, not workload:
+    # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
+    # have no swap, and the OOM killer takes the biggest process — a JVM
+    # service — not the monitoring that misbehaved.
+    #
+    # Written as deploy.resources.limits.memory rather than the legacy
+    # top-level mem_limit key, because that is already the convention here:
+    # egov-otp, user-otp and egov-notification-sms use it in this file, and
+    # 28 of docker-compose.yml's services do. Compose V2 applies it outside
+    # Swarm exactly as it applies mem_limit — egov-otp's cap was raised
+    # 256M→512M precisely because it was taking effect — so this is one
+    # convention rather than a second one for the same job.
+    deploy:
+      resources:
+        limits:
+          memory: 320M   # internal memory_limiter is 200 MiB; this is the hard backstop above it
     networks:
       - egov-network
 
   tempo:
-    image: registry.preview.egov.theflywheel.in/grafana/tempo:2.6.1
+    image: egovio/tempo:2.6.1
     container_name: digit-tempo
+    # trace store — the only traces-only component (#1657)
+    profiles: [obs-traces]
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
     volumes:
       - ./otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "13200:3200"
+      - "127.0.0.1:13200:3200"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    #
+    # 384M OOM-looped on bomet (#1824): the blocklist replay at startup, not
+    # retention, is the driver — ~380 MB to replay 13,364 compacted blocks
+    # from a 6.3 GB store, before any query workload runs. 768M gives
+    # headroom over that rather than sitting right at the edge of it.
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     networks:
       - egov-network
 
   grafana:
-    image: registry.preview.egov.theflywheel.in/grafana/grafana:11.4.0
+    image: egovio/grafana:11.4.0
     container_name: digit-grafana
+    # the only UI for any of it (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # ---- Auth ----
+      # Anonymous access is OFF by default, and "read-only" is NOT "safe" here.
+      # The Loki datasource is provisioned with `access: proxy`
+      # (otel/grafana/provisioning/datasources/tempo.yaml), so Grafana's backend
+      # queries Loki on behalf of whoever is logged in — Viewer included. And
+      # promtail ships EVERY container's stdout into Loki
+      # (otel/promtail-config.yaml), which includes egov-user-proxy's nginx
+      # access log, where Kong's auth-enrichment call lands as
+      #   GET /user/_details?access_token=<live session token>
+      # (kong/kong.yml puts the token in the query string). So turning the flag
+      # below on hands every anonymous visitor a token-harvesting console: the
+      # Admin *write* surface stays closed, but the credential *disclosure* this
+      # PR is closing comes straight back. Do not enable it on an
+      # internet-reachable box until access_token is scrubbed out of the log
+      # pipeline.
+      #
+      # Ansible tenants set `grafana_anonymous_enabled: true` in host_vars —
+      # hand-editing /opt/digit/.env does NOT survive the next deploy, because
+      # the playbook re-renders that file from templates/digit.env.j2.
+      GF_AUTH_ANONYMOUS_ENABLED: ${GF_ANONYMOUS_ENABLED:-false}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      # Admin login. Deliberately NO `:-admin` fallback: this file is also run
+      # standalone (see the Usage line in the header), and a silent fallback
+      # there ships the classic admin/admin behind the login form this PR just
+      # enabled — which is the same "guessable default nobody notices" hole in a
+      # narrower shape. Failing closed is the tradeoff: an unset variable aborts
+      # the WHOLE compose invocation, not just Grafana, so every path that runs
+      # this file must supply the value first.
+      #   - README quickstart (`docker compose up -d` → docker-compose.yml):
+      #     unaffected, that file has no grafana service.
+      #   - Ansible: playbook-deploy.yml writes GF_ADMIN_PASSWORD into
+      #     /opt/digit/.env in "Grafana prep — …BEFORE compose-up", ahead of the
+      #     first `up`; the OpenBao-backed value replaces it later in the same
+      #     run and `grafana cli admin reset-admin-password` applies it.
+      #   - standalone: export it, or put it in ./.env.
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:?required - export it or set it in ./.env, there is no default (see the grafana comment in this file)}"
       # Domain + root URL templated per tenant via /opt/digit/.env
       # (Ansible writes GF_SERVER_DOMAIN there from inventory `domain`).
       GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:-api.egov.theflywheel.in}
@@ -55,19 +146,31 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "13000:3000"
+      - "127.0.0.1:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # Only prometheus, which shares grafana's profile (#1657). tempo and loki
+    # were hard dependencies here, which breaks two ways:
+    #   1. compose refuses to start a service whose depends_on target is
+    #      excluded by the active profiles — so `metrics` or `logs` level would
+    #      fail the deploy outright, not degrade;
+    #   2. even at full stack, `condition: service_healthy` made the dashboards
+    #      unreachable whenever the LOG store was unhealthy — a trace/log
+    #      backend being down is a reason to open Grafana, not to withhold it.
+    # Grafana needs neither at boot: an unreachable datasource surfaces as a
+    # panel error and recovers on its own once the backend appears.
     depends_on:
-      tempo:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
       prometheus:
         condition: service_started
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 256M   # query proxy + dashboard rendering
     networks:
       - egov-network
 
@@ -77,24 +180,45 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: digit-prometheus
+    # metrics store (#1657)
+    profiles: [obs-metrics]
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
-      - --web.enable-lifecycle
+      # NOTE: no --web.enable-lifecycle (#1608). That flag exposes
+      # POST /-/reload AND POST /-/quit with no authentication — a remote
+      # shutdown for the metrics store. The deploy reloads config by sending
+      # SIGHUP instead (playbook-deploy.yml, "Reload Prometheus config"),
+      # which is Prometheus's documented equivalent and has no HTTP surface.
     volumes:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "19090:9090"
+      - "127.0.0.1:19090:9090"
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # 15d TSDB; scrape targets grow as exporters are added
     networks:
       - egov-network
 
   # ==================== Core Infrastructure ====================
   # Actual PostgreSQL - services should NOT connect directly to this
   postgres-db:
-    image: registry.preview.egov.theflywheel.in/postgres:16
+    image: egovio/postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query. Docker's default pad is 64 MB, so the 9th concurrent parallel
+    # query fails with "could not resize shared memory segment ... No space
+    # left on device". pgbouncer runs transaction pooling, so its
+    # DEFAULT_POOL_SIZE (60 below) is what bounds concurrency at the database:
+    # 60 x 8 MB = 480 MB worst case. A tmpfs is a ceiling, not a reservation —
+    # unused pages cost no memory.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
@@ -116,7 +240,7 @@ services:
 
   # PgBouncer - transparent connection pooler, aliased as "postgres"
   pgbouncer:
-    image: registry.preview.egov.theflywheel.in/edoburu/pgbouncer:latest
+    image: egovio/pgbouncer:latest
     container_name: digit-pgbouncer
     environment:
       DB_HOST: postgres-db
@@ -144,7 +268,7 @@ services:
           - postgres
 
   redis:
-    image: registry.preview.egov.theflywheel.in/redis:7.2.4
+    image: egovio/redis:7.2.4
     container_name: digit-redis
     ports:
     - 16379:6379
@@ -161,7 +285,7 @@ services:
 
   # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
   redpanda:
-    image: registry.preview.egov.theflywheel.in/redpandadata/redpanda:v24.1.1
+    image: egovio/redpanda:v24.1.1
     container_name: digit-redpanda
     command:
       - redpanda
@@ -197,7 +321,7 @@ services:
 
   # MinIO - S3-compatible object storage for filestore
   minio:
-    image: registry.preview.egov.theflywheel.in/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
@@ -218,7 +342,7 @@ services:
 
   # MinIO init - creates the bucket
   minio-init:
-    image: registry.preview.egov.theflywheel.in/minio/mc:RELEASE.2024-01-16T16-06-34Z
+    image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
@@ -234,7 +358,7 @@ services:
       - egov-network
 
   elasticsearch:
-    image: registry.preview.egov.theflywheel.in/docker.elastic.co/elasticsearch/elasticsearch:8.10.3
+    image: egovio/elasticsearch:8.10.3
     profiles: ["search"]
     container_name: digit-elasticsearch
     environment:
@@ -282,13 +406,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: egov_indexer_schema
+      # Embedded Flyway off — egov-indexer-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8080
@@ -302,11 +421,11 @@ services:
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-indexer
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       # heap-tuned via JAVA_OPTS by patch-jvm-heaps.py for egov-indexer
       JAVA_OPTS: "-Xms192m -Xmx512m"
@@ -326,7 +445,7 @@ services:
   # Inbox v2 - Queries Elasticsearch for inbox/search views
   # ===========================================================================
   inbox:
-    image: registry.preview.egov.theflywheel.in/egovio/inbox:state-tenant-fix
+    image: egovio/inbox:state-tenant-fix
     profiles: ["search"]
     container_name: digit-inbox
     depends_on:
@@ -358,8 +477,8 @@ services:
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: mz
-      PARENT_LEVEL_TENANT_ID: mz
+      STATE_LEVEL_TENANT_ID: pg
+      PARENT_LEVEL_TENANT_ID: pg
       WORKFLOW_PROCESS_SEARCH_PATH: egov-workflow-v2/egov-wf/process/_search
       WORKFLOW_BUSINESSSERVICE_SEARCH_PATH: egov-workflow-v2/egov-wf/businessservice/_search
       WORKFLOW_PROCESS_COUNT_PATH: egov-workflow-v2/egov-wf/process/_count
@@ -369,11 +488,11 @@ services:
       MANAGEMENT_SECURITY_ENABLED: 'false'
       # Accept unknown fields in userInfo (locale, active, permanentCity etc.)
       SPRING_JACKSON_DESERIALIZATION_FAIL_ON_UNKNOWN_PROPERTIES: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: inbox
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_OPTS: -Xms256m -Xmx256m
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
@@ -389,19 +508,16 @@ services:
     - egov-network
 
   egov-enc-service:
-    # `:generatekey-endpoint` stacks the POST /crypto/v1/_generatekey
-    # endpoint (Digit-Core #1354) on top of :v2.9.2-4a60f20. Without
-    # _generatekey, the first encrypt for a brand-new state root (created
-    # by MCP tenant_bootstrap or similar) throws "Tenant Id not found" —
-    # enc-service only discovers tenants via MDMS search under
-    # STATE_LEVEL_TENANT_ID, and a brand-new root isn't under any
-    # existing root's tenant.tenants list. Bump can be replaced with a
-    # versioned tag once Digit-Core #1354 lands and a release ships.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:generatekey-endpoint
+    # Bumped to the 2.12 core-services merge (87e13fe), which includes
+    # the Digit-Core #1354 _generatekey fix previously carried via the
+    # :generatekey-endpoint preview pin.
+    image: egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
         condition: service_healthy
+      # Flyway is disabled for this service; egov-enc-service-migration in
+      # docker-compose.migrations.yml owns the schema and gates this service.
       otel-collector:
         condition: service_started
     volumes:
@@ -419,14 +535,21 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
+      # Schema is owned by the external egov-enc-service-migration container
+      # (like every other service — egov-user/filestore/localization all set
+      # this false). enc was the lone service still running embedded Flyway;
+      # on an existing DB the app's Flyway then fights the migrator's history
+      # table (enc_schema_version vs the standard egov_enc_service_schema) and
+      # the service crash-loops on "relation enc_schema_version_pk already
+      # exists". Disable it so the external migrator is the single source.
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_FLYWAY_TABLE: enc_schema_version
       SERVER_PORT: 1234
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-enc-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       MASTER_PASSWORD: ${ELASTICSEARCH_MASTER_PASSWORD:-asd@#$@$!132123}
       MASTER_SALT: qweasdzx
@@ -450,7 +573,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: egovio/mdms-v2:maven-jdk21-f3a7c13
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -468,25 +591,23 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: mdms_schema_version
+      # Embedded Flyway off — mdms-backend-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8094
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: mdms-backend
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms512m -Xmx1024m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     healthcheck:
-      # Check Spring Boot health - Flyway runs before app context starts, so health implies migrations done
+      # egovio/mdms-v2:maven-jdk21-f3a7c13 is the standard Alpine/Temurin build (real shell +
+      # wget) — unlike the earlier mdms-count-api-3ac4f8e distroless build, this image can
+      # actually run a CMD-SHELL check. Flyway runs before app context starts, so health implies
+      # migrations done.
       test: ["CMD-SHELL", "wget -qO- http://localhost:8094/mdms-v2/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 10s
@@ -498,7 +619,7 @@ services:
   # MDMS Proxy - handles path rewriting for backward compatibility
   # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
   egov-mdms-service:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-mdms-service
     depends_on:
       mdms-backend:
@@ -526,8 +647,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -541,7 +660,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       MDMS_HOST: http://egov-mdms-service:8094/
@@ -551,11 +671,11 @@ services:
       AUTOCREATE_NEW_SEQ: 'true'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8088
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-idgen
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
@@ -568,38 +688,68 @@ services:
     networks:
     - egov-network
 
-  # Unified database migrations for all DIGIT services
-  # Runs all Flyway migrations in one container before services start
-  db-migrations:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-db-migrations:latest
+  # audit-service (deployment-parity item #13). Adds the audit QUERY API + the
+  # processor that turns raw audit events (process-audit-records) into persist-ready
+  # records (persist-audit-records); egov-persister then writes them to eg_audit_logs
+  # via configs/egov-persister/audit-service-persister.yml. K8s runs this too
+  # (coreservices-helmfile: audit-service installed:true). Compose previously lacked
+  # it, so audit capture was non-functional (no eg_audit_logs table). This restores
+  # cross-stack parity. Its schema is owned by an audit-service-db Flyway init
+  # container, declared with every other migrator in docker-compose.migrations.yml
+  # (which the playbook always layers) — this file stays free of migration wiring.
+  audit-service:
+    image: egovio/audit-service:v2.9.2-4a60f20
     depends_on:
       pgbouncer:
         condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/egov
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # Flyway disabled on the app — its migration init container owns the schema
+      # (docker-compose.migrations.yml). Also set there, alongside the migrator.
+      SPRING_FLYWAY_ENABLED: 'false'
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: audit-service
+      PROCESS_AUDIT_LOGS_KAFKA_TOPIC: process-audit-records
+      # signed logs are published where audit-service-persister.yml consumes them
+      # (app property is persister.audit.kafka.topic; PERSIST_AUDIT_LOGS_KAFKA_TOPIC
+      # bound to nothing in this build)
+      PERSISTER_AUDIT_KAFKA_TOPIC: audit-create
+      # audit-service decides WHAT to audit by parsing the same persister configs
+      # (mappings with isAuditEnabled: true). Without this it falls back to the
+      # image's baked-in GitHub URLs and never audits local topics.
+      EGOV_PERSIST_YML_REPO_PATH: /persister-config/
+      # integrity-hash signing goes through enc-service (same as K8s EGOV_ENC_SIGN_HOST)
+      EGOV_ENC_SIGN_HOST: http://egov-enc-service:1234
+      SERVER_PORT: 8080
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+    volumes:
+      - ./configs/egov-persister:/persister-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/audit-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     networks:
       - egov-network
-    restart: "no"
 
   egov-user:
-    # Custom image stacks (a) the tenant-aware encryption fix from
-    # egovernments/Digit-Core#1044 — cherry-pick of c6f5438 + call-site
-    # migration 884c5e6 — on (b) the ccc0e13 NPE fix base in
-    # _updatenovalidate / profile/_update. Built off the pre-d69ce29
-    # commit lineage, so it also sidesteps the SafeHtmlValidator
-    # BeanCreationException regression that blocks citizen registration on
-    # the stock maven-jdk21-* images (CCRS#771).
-    #
-    # When Digit-Core#1044 merges upstream and an official
-    # `egovio/egov-user:<post-1044>` tag exists, replace this pin with
-    # the canonical image.
-    #
-    # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
-    # in front of the egov-ci VPC registry — public cert, no
-    # insecure-registries trust required, pullable from anywhere.
-    image: egovio/egov-user:master-e22c7c5
+    # Bumped to the 2.12 core-services merge (87e13fe), which now
+    # includes the Digit-Core#1044 fixes (tenant-aware encryption,
+    # SafeHtmlValidator/CCRS#771, NPE fix) previously carried via the
+    # :mobilevalidation-jdk8 preview pin.
+    image: egovio/egov-user:2.12-68f707e
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -609,8 +759,6 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -621,7 +769,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       FLYWAY_ENABLED: 'false'
       # Kafka config - use property name expected by egov-user
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
@@ -642,11 +791,11 @@ services:
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_STATE_LEVEL_TENANT_ID: pg
       STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-user
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
@@ -665,7 +814,7 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
       egov-user:
@@ -682,7 +831,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:maven-jdk21-983e8b2
+    image: egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -702,28 +851,28 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: workflow_schema_version
+      # Embedded Flyway off — egov-workflow-v2-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8109
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      # STATE_LEVEL_TENANT_ID MUST be the state ROOT (pg → rewritten to state_root),
+      # NOT the city tier. egov-workflow-v2 resolves the businessservice (PGR) at this
+      # tenant, and the businessservice is seeded at the state root. Grouping this with
+      # enc-service on `pg.citya` (city) makes workflow look for PGR at the city, find
+      # nothing, and fail every complaint APPLY. Refs #1160.
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-workflow-v2
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       # Raise default search limit from 10 to 200 — PGR's internal workflow call
@@ -747,7 +896,7 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
-    image: registry.preview.egov.theflywheel.in/nginx:alpine
+    image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
       egov-workflow-v2:
@@ -764,7 +913,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: egovio/egov-localization:maven-jdk21-9f83afb
+    image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -775,8 +924,6 @@ services:
         condition: service_healthy
       egov-mdms-service:
         condition: service_healthy
-      db-migrations:
-        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -787,7 +934,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container
+      # Flyway disabled - migrations run by the per-service migrator in
+      # docker-compose.migrations.yml
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_REDIS_HOST: redis
@@ -796,7 +944,7 @@ services:
       # OTEL export disabled — image has OTEL on classpath, but no agent attached
       # This avoids the ~200MB heap overhead from the javaagent while keeping OTEL JDBC driver happy
       OTEL_TRACES_EXPORTER: none
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       JAVA_OPTS: -Xms128m -Xmx512m
@@ -812,6 +960,12 @@ services:
     - egov-network
 
   boundary-service:
+    # NOT bumped to 2.12-87e13fe — that build changes the
+    # /boundary-relationships/_search contract from query-param-bound
+    # criteria (@ModelAttribute) to a body-only BoundaryRelationshipSearchRequest,
+    # which breaks the currently-deployed UI's locality/address search
+    # (NullPointerException on boundaryRelationshipSearchCriteria). Holding
+    # this pin until that's resolved.
     image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
@@ -832,13 +986,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: boundary_schema_version
+      # Embedded Flyway off — boundary-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8081
@@ -849,11 +998,11 @@ services:
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096
       STATE_LEVEL_TENANT_ID: pg
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: boundary-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
@@ -870,7 +1019,18 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    # Parameterized so deploys can pin a local ABAC-testing build via
+    # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
+    # the pgr-services image param below.
+    #
+    # TODO(before merging #1441 to master): the default below
+    # (egovio/egov-accesscontrol:abac-changes-cb6a372) is a per-feature-branch build —
+    # it carries the /access/v1/actions/mdms/_get endpoint this PR's ABAC engine
+    # depends on (verified live: pg tenant, 2026-08-18), but it is NOT a permanent
+    # release tag. If the abac-changes branch is deleted / the image is pruned, this
+    # default silently breaks every fresh `docker compose pull` on master. Retag to a
+    # stable release build carrying the same endpoint before merge (#1441 review).
+    image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:abac-changes-cb6a372}
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -891,61 +1051,32 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: accesscontrol_schema_version
+      # Embedded Flyway off — egov-accesscontrol-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8090
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-accesscontrol
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
     - 18090:8090
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
+    # No healthcheck: both the pinned default (egovio/egov-accesscontrol:abac-changes-cb6a372)
+    # and the abac-local build are minimal/distroless images with no shell and no wget/curl —
+    # confirmed by `docker exec`ing each of /bin/sh, wget, curl, ls, all of which fail with
+    # "executable file not found in $PATH". Docker/Compose healthchecks always exec a command
+    # INSIDE the container; there is no way to run one here short of changing the image itself
+    # (a Digit-Core build concern, not this compose file). Do not add a CMD-SHELL wget/curl
+    # check back — it will sit "unhealthy" forever and, combined with a dependent's
+    # `condition: service_healthy`, hard-fails every deploy despite the app being genuinely up
+    # (verified via logs: Tomcat/Spring Boot start fine and serve real traffic). Dependents
+    # needing ordering must use `condition: service_started`, not `service_healthy`.
     networks:
     - egov-network
-
-  # Default Data Handler - seeds schemas and master data for new tenants.
-  # Image ref is wired through .env (DDH_IMAGE) so the deploy can either
-  # build it locally (`build_default_data_handler: true` in host_vars,
-  # tagged `default-data-handler:local`) or pull the registry image.
-  # See the MCP_IMAGE plumbing below for the parallel pattern.
-  default-data-handler:
-    image: ${DDH_IMAGE}
-    container_name: default-data-handler
-    depends_on:
-      mdms-backend:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      EGOV_MDMS_HOST: http://mdms-backend:8094/
-      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
-      EGOV_USER_HOST: http://egov-user-proxy:8107/
-      EGOV_HRMS_HOST: http://egov-hrms:8092/
-      EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
-      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
-      STATE_LEVEL_TENANT_ID: pg
-      DEFAULT_TENANT_ID: pg
-      JAVA_OPTS: -Xms128m -Xmx256m
-    networks:
-      - egov-network
 
   egov-persister:
     image: egovio/egov-persister:maven-jdk21-9f83afb
@@ -971,11 +1102,11 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8091
       EGOV_PERSIST_YML_REPO_PATH: /persister-config/
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-persister
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # Kafka consumer concurrency — process more messages in parallel
@@ -1019,18 +1150,18 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: filestore_schema_version
+      # Embedded Flyway must stay OFF: egov-filestore-migration in
+      # docker-compose.migrations.yml owns this schema under the canonical
+      # egov_filestore_schema history table. With it ON, a partial redeploy that
+      # skips the overlay baselines a fresh legacy-named history at version 1 and
+      # replays V1 onto a populated database — 42P07 crash loop (#1586).
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: 8083
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-filestore
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       # MinIO/S3 storage (local S3-compatible storage for dev)
@@ -1058,7 +1189,7 @@ services:
   # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
   # ===========================================================================
   hrms-prereq-gate:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: hrms-prereq-gate
     depends_on:
       egov-user:
@@ -1094,24 +1225,17 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # 800-preview: adds the user-enrichment tenant fix (DIGIT-Common#70 /
-    # CCRS#800) on top of digit-common-boundary-uuidlink. With the prior
-    # image, /egov-hrms/employees/_search returned `"user": null` for
-    # every employee on multi-tenant deploys — HRMS was sending the
-    # state-stripped tenant (`ke`) to egov-user while EMPLOYEE rows
-    # actually live at the city tenant (`ke.bomet`), so the SQL WHERE
-    # missed every row. Drop this back to a canonical
-    # `digit-common-boundary-uuidlink-<post-fix>` tag once DIGIT-Common#70
-    # merges and a follow-up build is published.
-    #
-    # Previous lineage notes (still in this image):
-    # - CCRS#482: custom password on employee create
-    # - CCRS#484: null tenantId on User object breaking MDMS mobile
-    #   validation
+    # 2.12-beta-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # preview-only 800-preview build). Its lineage relative to the previously
+    # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
+    # CCRS#482 custom password on employee create, CCRS#484 null tenantId
+    # breaking MDMS mobile validation) has not been re-verified — check for
+    # regressions in those specific behaviors before relying on this tag in
+    # a multi-tenant deploy.
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1136,21 +1260,17 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: hrms_schema_version
+      # Embedded Flyway off — egov-hrms-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: employee-group1
       SERVER_PORT: 8092
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: egov-hrms
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
@@ -1183,7 +1303,7 @@ services:
   # Boundary Management Service - Boundary generation from Excel
   # ===========================================================================
   egov-bndry-mgmnt:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
+    image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
     depends_on:
       pgbouncer:
@@ -1232,18 +1352,31 @@ services:
 
   # RE-ENABLED: Required for services to start (schema definitions)
   user-seed:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
+    image: egovio/curl:latest
     container_name: user-seed-container
     depends_on:
       egov-user:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
+      # The script talks to egov-user-proxy (EGOV_USER_HOST below), and a
+      # container's DNS name only registers once the container exists — on
+      # a cold start the seed could burn its whole retry budget on curl
+      # exit 6 (couldn't resolve host) because the proxy hadn't started yet.
+      egov-user-proxy:
+        condition: service_started
     volumes:
       - ./seeds/user-seed.sh:/user-seed.sh:ro
     entrypoint: ["sh", "/user-seed.sh"]
     environment:
       EGOV_USER_HOST: http://egov-user-proxy:8107
+      # The bootstrap admin the Ansible tier authenticates as (host_vars
+      # bootstrap_user/bootstrap_password, rendered into .env). Seeding it
+      # here — before the playbook's auth validate — is what lets operators
+      # move off the well-known ADMIN/eGov@123 defaults on a fresh box.
+      # Standalone compose users get the stock defaults unchanged.
+      SEED_ADMIN_USER: ${BOOTSTRAP_USER:-ADMIN}
+      SEED_ADMIN_PASSWORD: ${BOOTSTRAP_PASSWORD:-eGov@123}
     networks:
       - egov-network
     restart: "no"
@@ -1270,7 +1403,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      # Flyway disabled - migrations run by egov-otp-migration
+      # (docker-compose.migrations.yml); pgbouncer's transaction mode is
+      # incompatible with in-service Flyway anyway
       SPRING_FLYWAY_ENABLED: "false"
       SERVER_PORT: 8089
       EGOV_OTP_LENGTH: 6
@@ -1289,7 +1424,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 256M OOM-kills (Exited 137) this Spring Boot 3.2 / Java 17 service — heap
+          # (Xmx192m) + metaspace/threads/off-heap exceeds the container cap. 512M is headroom.
+          memory: 512M
           cpus: '0.2'
     networks:
       - egov-network
@@ -1331,7 +1468,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 256M OOM-kills (Exited 137) this Spring Boot 3.2 / Java 17 service — see egov-otp above.
+          memory: 512M
           cpus: '0.2'
     networks:
       - egov-network
@@ -1356,11 +1494,17 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      # Console only logs the OTP SMS to this container's stdout — no SMS is
+      # actually sent. For production, set enable_otp_services: true in the
+      # tenant's Ansible host_vars AND replace this with a real provider
+      # class + credentials (e.g. an SMSCountry/Twilio/MSG91 provider class
+      # supported by this image) before relying on real OTP delivery.
       SMS_PROVIDER_CLASS: Console
     deploy:
       resources:
         limits:
-          memory: 256M
+          # Bumped 256M→512M with the other otp-profile services for headroom (Spring Boot 3.2 / Java 17).
+          memory: 512M
           cpus: '0.1'
     networks:
       - egov-network
@@ -1371,7 +1515,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1387,6 +1531,14 @@ services:
         condition: service_healthy
       egov-localization:
         condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
+      egov-accesscontrol:
+        # service_healthy is unavailable — see the "No healthcheck" note on egov-accesscontrol's
+        # own service block above; this still orders pgr-services' start after the container
+        # starts, which is what PGR startup actually needs (fail-closed access-control lookups
+        # already handle "not up yet" at the application layer).
+        condition: service_started
       otel-collector:
         condition: service_started
     volumes:
@@ -1397,13 +1549,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
-      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_TABLE: pgr_services_schema
+      # Embedded Flyway off — pgr-services-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: egov-pgr-services
@@ -1417,7 +1564,19 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
+      # Explicit ABAC rollout gate (org.egov.pgr.policy.AccessPolicyRegistry#getCondition, #1441
+      # review). Left "false" (backward compatible) deliberately: this stack serves multiple
+      # tenants (e.g. new/onboarded ones) that don't yet have a resource.complaint.scope/condition
+      # authored on the ACCESSCONTROL-ACTIONS-TEST action 2008 record for /pgr-services/v2/request/_search
+      # — flipping this to "true" makes PGR search fail closed (empty results) for EVERY tenant
+      # this instance serves that lacks that policy, not just the ones that have it. Only set this
+      # to "true" once every tenant this deployment serves has action 2008's resource/condition
+      # (or resource.complaint.scope) fully authored — e.g. the reference tenant `pg` already does,
+      # via db/full-dump.sql's seed data, but others onboarded later may not.
+      PGR_ABAC_STRICT_MODE: "false"
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
       # consumed by EscalationScheduler#getStateLevelTenantId). Without
@@ -1429,9 +1588,29 @@ services:
       EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
+      # Config-driven notifications (design D1/D4). When 'true', PGR reads the
+      # PGR.NotificationRouting + PGR.NotificationTemplate MDMS masters, renders
+      # + localizes per recipient, and publishes ONE pre-rendered event per
+      # (recipient × channel) to complaints.domain.events for novu-bridge to
+      # deliver. DEFAULT stays 'false' here (and in application.properties) so
+      # non-Bomet tenants keep the legacy hardcoded path; Bomet flips it 'true'
+      # via docker-compose.bomet.yml. Spring relaxed-binding maps this env to
+      # the `pgr.notification.config.driven` property.
+      PGR_NOTIFICATION_CONFIG_DRIVEN: ${PGR_NOTIFICATION_CONFIG_DRIVEN:-false}
+      # Kafka topic the per-recipient pre-rendered events are published to.
+      # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
+      # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
+      KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
+      # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
+      # Baked-in default is already 'true'; surfaced here so the auto-escalation
+      # engine is a visible, per-tenant-overridable knob. Set 'false' to disable
+      # the scan entirely (no workflow transitions / kafka events). Note: with
+      # EGOV_UI_APP_HOST_MAP set above, this scan actively fires on the 5-day
+      # fallback SLA when MDMS EscalationConfig is unseeded.
+      PGR_ESCALATION_ENABLED: 'true'
       COMMENT_BY_EMPLOYEE_NOTIF_ENABLED: 'false'
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
@@ -1439,13 +1618,19 @@ services:
       PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
+      # Visibility V1 Step-2 (reportee-scoped inbox tabs). Deploy-level
+      # switch for the /request/inbox/_search|_count endpoints + the HRMS
+      # projection consumer/rebuild; per-tenant enablement (and the
+      # client->server cutover) stays in MDMS
+      # RAINMAKER-PGR.InboxVisibilityConfig (enabled / serverSide).
+      PGR_VISIBILITY_ENABLED: 'true'
       JAVA_OPTS: '-Xmx384m -Xms384m'
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: pgr-services
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/pgr-services/health >/dev/null 2>&1 || exit 1"]
@@ -1464,12 +1649,21 @@ services:
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
@@ -1486,10 +1680,10 @@ services:
   # ===========================================================================
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
-    # DIGIT_UI_IMAGE; default keeps the prior pinned tag. NOTE: this is the
-    # legacy micro-ui container — the modern esbuild bundle is laid in via
-    # build_digit_ui or served by host nginx (see build/NIGHTLY-BUILDS.md).
-    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
+    # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
+    # the Container Build Pipeline, multi-arch); the bundle lives at
+    # /var/web/digit-ui, matching the mounted digit-ui.conf root.
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1512,11 +1706,32 @@ services:
       - egov-network
 
   # ===========================================================================
+  # Configurator (DIGIT Studio) — tenant onboarding admin console
+  # Static Vite SPA served by the image's nginx under /configurator/.
+  # Tenant-neutral (no VITE_* baked); CI-built by the Container Build Pipeline.
+  # Ansible deploys may instead serve a host-built dist via host nginx
+  # (build_configurator: true) — this container is the pull-based default.
+  # ===========================================================================
+  configurator:
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
+    container_name: configurator
+    ports:
+      - "18890:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - egov-network
+
+  # ===========================================================================
   # Kong API Gateway (DB-less mode)
   # Main entry point: http://localhost:18000/digit-ui/
   # ===========================================================================
   kong:
-    image: registry.preview.egov.theflywheel.in/kong:3.6
+    image: egovio/kong:3.6
     container_name: kong-gateway
     environment:
       KONG_DATABASE: "off"
@@ -1541,7 +1756,12 @@ services:
       - "18443:8443"   # Proxy (HTTPS)
       - "18001:8001"   # Admin API
       - "18002:8002"   # Kong Manager GUI
-      - "18100:8100"   # Status endpoint
+      # Status listener. Bound to loopback (#1614): with the Kong prometheus
+      # plugin enabled, /metrics on this port exposes route names, per-route
+      # status-code counts and latency histograms unauthenticated (Kong's
+      # status API does not run plugins, so key-auth cannot be applied).
+      # Prometheus and Gatus both reach it as kong:8100 over egov-network.
+      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1558,7 +1778,7 @@ services:
 
   # ==================== Gatus Health Monitoring ====================
   gatus:
-    image: registry.preview.egov.theflywheel.in/twinproduction/gatus:latest
+    image: egovio/gatus:latest
     container_name: digit-gatus
     depends_on:
       pgbouncer:
@@ -1567,10 +1787,55 @@ services:
         condition: service_healthy
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      # sqlite store (#1610) — uptime history survives redeploys. The config
+      # above is mounted read-only, so the database needs its own volume.
+      - gatus_data:/data
     ports:
-      - "18889:8080"
+      - "127.0.0.1:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Slack alerting (#1609). Unset = alerting off: gatus expands the
+      # missing variable to an empty string and drops the slack provider
+      # with a warning instead of failing to start. Set it in .env to
+      # switch alerting on.
+      GATUS_SLACK_WEBHOOK_URL: ${GATUS_SLACK_WEBHOOK_URL:-}
+      # Profile-gated stacks: keep these beside COMPOSE_PROFILES in .env.
+      # Unset means off -- gatus enables an endpoint when its variable is missing.
+      GATUS_PROFILE_OTP: ${GATUS_PROFILE_OTP:-false}
+      GATUS_CONFIGURATOR: ${GATUS_CONFIGURATOR:-true}
+      GATUS_PROFILE_SEARCH: ${GATUS_PROFILE_SEARCH:-false}
+      GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
+      GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
+      GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
+      GATUS_AUDIT: "true"
+      GATUS_PROXIES: "true"
+      GATUS_SMS_PORT: "8005"
+      # Watch the monitoring itself (#1613). This is the only compose path that
+      # deploys the full observability stack, so it is the only one where these
+      # checks can pass. Ansible renders it true in .env; the default keeps a
+      # bare `docker compose up` of this file honest if the overlay is skipped.
+      GATUS_OBSERVABILITY: ${GATUS_OBSERVABILITY:-true}
+      # Public TLS-certificate check (#1622). Ansible renders both of these into
+      # .env from `domain` + `tls_enabled`; the defaults keep the check OFF for a
+      # bare `docker compose up` outside Ansible, where there is no public
+      # hostname. Off is the safe default: an unset `enabled` var reads as TRUE to
+      # Gatus, which would leave a permanently-red check against a URL that never
+      # resolves — and a red square nobody can fix is how dashboards get ignored.
+      GATUS_TLS: ${GATUS_TLS:-false}
+      # The fallback is non-empty on purpose, and `:-` (not `-`) is load-bearing:
+      # it fires when the var is unset OR set-but-empty, so a stale .env carrying
+      # `GATUS_PUBLIC_URL=` cannot reintroduce the empty value. Gatus validates
+      # `url` on EVERY endpoint before it consults `enabled:`, so "" aborts
+      # startup with "you must specify an url for each endpoint" and takes the
+      # whole dashboard down (nginx /status/ then 502s). Only ever parsed here --
+      # with GATUS_TLS false the endpoint is never dialled.
+      GATUS_PUBLIC_URL: ${GATUS_PUBLIC_URL:-https://localhost/}
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 64M   # matches the 64Mi already set on the k3s Deployment
     networks:
       - egov-network
 
@@ -1578,18 +1843,26 @@ services:
   loki:
     image: grafana/loki:3.4.2
     container_name: digit-loki
+    # log store (#1657)
+    profiles: [obs-logs]
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
     ports:
-      - "13100:3100"
+      - "127.0.0.1:13100:3100"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # largest real-world grower: chunks plus query working set
     networks:
       - egov-network
 
@@ -1601,6 +1874,8 @@ services:
   promtail:
     image: grafana/promtail:3.4.2
     container_name: digit-promtail
+    # log shipper (#1657)
+    profiles: [obs-logs]
     restart: unless-stopped
     command: ["-config.file=/etc/promtail/config.yaml"]
     volumes:
@@ -1611,6 +1886,12 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    # Memory ceiling (#1612) — see the note on otel-collector at the top of
+    # docker-compose.egov-digit.yaml.
+    deploy:
+      resources:
+        limits:
+          memory: 128M   # log shipper: tails files, small buffers
     networks:
       - egov-network
 
@@ -1651,7 +1932,7 @@ services:
     # below pulls a public, pinned build from ghcr.io — no VPC access or
     # insecure-registries trust required. Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-11}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -1702,44 +1983,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - egov-network
-
-  # ==================== Jupyter Lab for PGR Configuration ====================
-  jupyter:
-    image: registry.preview.egov.theflywheel.in/tilt-demo-jupyter:latest
-    container_name: digit-jupyter
-    user: root
-    depends_on:
-      egov-mdms-service:
-        condition: service_healthy
-      egov-user:
-        condition: service_healthy
-      kong:
-        condition: service_healthy
-    environment:
-      DIGIT_URL: http://kong:8000
-      DIGIT_DIRECT_MDMS: http://egov-mdms-service:8094
-      DIGIT_DIRECT_USER: http://egov-user:8107
-      DIGIT_DIRECT_PGR: http://pgr-services:8080
-      DIGIT_TENANT: pg
-      JUPYTER_ENABLE_LAB: "yes"
-    command: >
-      jupyter lab
-      --ip=0.0.0.0
-      --port=8888
-      --no-browser
-      --allow-root
-      --ServerApp.token=''
-      --ServerApp.password=''
-      --ServerApp.base_url=/jupyter
-      --ServerApp.allow_origin='*'
-    ports:
-      - "18888:8888"
-    volumes:
-      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
-      - ./jupyter/dataloader:/home/jovyan/work/dataloader
-      - ./jupyter/dataloader/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
     networks:
       - egov-network
 
@@ -1925,7 +2168,13 @@ services:
       - egov-network
 
   novu-dashboard:
-    image: ghcr.io/novuhq/novu/dashboard:2.3.0
+    # Image ref is wired through .env (NOVU_DASHBOARD_IMAGE) so the deploy can
+    # either use a locally-built, subpath-rebased image (built when
+    # `build_novu_dashboard: true`, tagged `novu-dashboard:local`) or pull the
+    # stock registry image. Default (build off) = stock, which serves at base=/
+    # and needs the legacy root-path nginx workarounds. See
+    # backend/novu-dashboard/Dockerfile and the nginx-site.conf.j2 enable_novu branch.
+    image: ${NOVU_DASHBOARD_IMAGE:-ghcr.io/novuhq/novu/dashboard:2.3.0}
     container_name: novu-dashboard
     restart: unless-stopped
     profiles: ["notifications"]
@@ -1954,7 +2203,7 @@ services:
   # /backend/novu-bridge-endpoint/workflows.js — one per domain event
   # (OTP send + 6 complaint lifecycle events).
   novu-bridge-endpoint:
-    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge-endpoint:latest
+    image: egovio/novu-bridge-endpoint:latest
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -1995,7 +2244,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    image: egovio/digit-config-service:2.12-5137119
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2014,11 +2263,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       # application.properties keeps Flyway URL separate from datasource;
       # both env vars must be set or Flyway falls back to localhost.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: digit_config_service_schema
+      # Embedded Flyway off — digit-config-service-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: '8080'
       SERVER_SERVLET_CONTEXT_PATH: /config-service
       CONFIG_DEFAULT_OFFSET: '0'
@@ -2034,11 +2280,11 @@ services:
       # tenant has no schema of its own. Should match the deployment's
       # state-level tenant (set in host_vars).
       STATE_LEVEL_TENANT_ID: ${STATE_LEVEL_TENANT_ID:-pg}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: digit-config-service
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
     healthcheck:
@@ -2053,7 +2299,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    image: egovio/digit-user-preferences-service:2.12-5137119
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2074,12 +2320,24 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      # This service is implemented in Go (see backend/digit-user-preferences-service),
+      # not Spring Boot. Even so, a 30s grace period proved insufficient during a
+      # full-stack cold start and was an outlier among its slow-starting peers.
+      # novu-bridge is the only service that depends_on this one with
+      # condition: service_healthy, so when it flaps the whole `compose up -d`
+      # exits non-zero, ansible stops the play, and every task after
+      # "Start DIGIT stack" is silently skipped. That is the mechanism behind
+      # CCRS#1551. Keep the observed-safe grace period.
+      start_period: 120s
     networks:
       - egov-network
 
   novu-bridge:
-    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest
+    # Overridable so Bomet can pull the pass-through build (PGR pre-renders
+    # + localizes; the bridge only identifies the Novu subscriber and
+    # delivers renderedBody — design D4/D6). Default is the multi-arch
+    # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2105,11 +2363,8 @@ services:
       # application.properties hardcodes spring.flyway.url to localhost
       # without an env placeholder — relaxed binding to SPRING_FLYWAY_*
       # is the only way to override.
-      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/egov
-      SPRING_FLYWAY_USER: egov
-      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      SPRING_FLYWAY_ENABLED: 'true'
-      SPRING_FLYWAY_TABLE: novu_bridge_schema
+      # Embedded Flyway off — novu-bridge-migration (docker-compose.migrations.yml) owns this schema (#1586)
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       # application.properties also reads kafka.config.bootstrap_server_config
       # (an egov-services-common convention); set both so any path that
@@ -2122,12 +2377,12 @@ services:
       NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
       NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
-      NOVU_BRIDGE_MAX_RETRIES: '3'
       # Channel is compared CASE-SENSITIVELY against the TemplateBinding
       # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
       # — keep this lowercase too. Override per-tenant in host_vars.
-      # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
+      # (Default SMS: WhatsApp is paused pending an A2P/provider. The config-
+      # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       # NOTE: the preference check calls
       # `digit-user-preferences-service/user-preference/v1/_check`,
@@ -2138,14 +2393,43 @@ services:
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      # Full search endpoint (returns the preferences list) — used by the
+      # read-only /novu-adapter/v1/preferences proxy for the configurator's
+      # User Preferences screen. Distinct from the boolean _check path above.
+      NOVU_BRIDGE_PREFERENCE_SEARCH_PATH: /user-preference/v1/_search
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
-      NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
-      # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
-      # controller mapping (/config/v1) + endpoint. The earlier
-      # `/config-service/v1/_resolve` was missing the `/config/`
-      # segment and got Spring's "No static resource v1/_resolve" 500.
-      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/config/v1/_resolve
-      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
+      # Per-channel Novu workflow ids the bridge triggers (rendered text
+      # travels in payload.body; the workflow is just the delivery shell).
+      NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
+      NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
+      NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
+      # Novu integration identifier to explicitly target for WHATSAPP triggers
+      # (a distinct, WhatsApp-registered Twilio integration). Twilio WhatsApp is
+      # an "sms"-channel step in Novu, so without this a WHATSAPP dispatch
+      # silently resolves to the PRIMARY sms integration (the plain SMS sender)
+      # instead. Leave unset until that dedicated integration is onboarded.
+      NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP: ${NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP:-}
+      # Ordinary SMS gateway. Blank = SMS goes through Novu. "smscountry" makes
+      # the SMS leg bypass Novu entirely (SmsCountryClient posts form-encoded to
+      # SMSCountry's legacy bulk API, which no Novu provider can express).
+      # These MUST be declared here, not merely written to /opt/digit/.env:
+      # Compose reads .env for ${...} interpolation only, so a variable absent
+      # from this block never reaches the container and the bridge silently
+      # falls back to the Novu path.
+      NOVU_BRIDGE_SMS_PROVIDER: ${NOVU_BRIDGE_SMS_PROVIDER:-}
+      NOVU_BRIDGE_SMS_SENDER_ID: ${NOVU_BRIDGE_SMS_SENDER_ID:-}
+      NOVU_BRIDGE_SMSCOUNTRY_URL: ${NOVU_BRIDGE_SMSCOUNTRY_URL:-http://api.smscountry.com/SMSCwebservice_bulk.aspx}
+      NOVU_BRIDGE_SMSCOUNTRY_USER: ${NOVU_BRIDGE_SMSCOUNTRY_USER:-}
+      NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
+      # TTL cache (ms) skips redundant identifies for the same subscriberId.
+      NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
+      # Channels actually delivered. WHATSAPP stays OFF until a legitimate
+      # provider is onboarded as a Novu integration (then just add it here).
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
+      # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
+      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
+      # configurator's own provider/template screens are not 403'd.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default
@@ -2168,11 +2452,11 @@ services:
       # to the compose .env).
       NOVU_BASE_URL: ${NOVU_BASE_URL:-http://novu-api:3000}
       NOVU_API_KEY: ${NOVU_API_KEY:-changeme}
-      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: novu-bridge
-      OTEL_METRICS_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar
     healthcheck:
@@ -2290,14 +2574,13 @@ services:
   # token-exchange-svc — bridges a Keycloak access_token to a DIGIT
   # access_token (and resolves / provisions the matching eg_user).
   # Source: /root/DIGIT-keycloak-overlay (Dockerfile, TypeScript).
-  # The image is pre-built and pushed to the preview registry; if you
+  # The image is pre-built and pushed to the egovio Docker Hub org; if you
   # need to rebuild locally, switch from `image:` to a `build:` block
   # pointing at the overlay repo path.
   token-exchange-svc:
-    # Published unscoped (not under egovio/) at registry.preview because
-    # it predates the namespace standardisation. Pin to :dev for now;
-    # bump when a versioned tag is published.
-    image: registry.preview.egov.theflywheel.in/token-exchange-svc:keycloak-deploy
+    # Pinned to the keycloak-deploy tag on egovio; bump when a versioned
+    # tag is published.
+    image: egovio/token-exchange-svc:keycloak-deploy
     container_name: token-exchange-svc
     restart: unless-stopped
     profiles: ["keycloak"]
@@ -2373,9 +2656,10 @@ services:
   # SMS-OTP path; gated behind the notifications profile (off by default).
   # Node service vendored at utilities/otp-publisher; built locally via
   # `build_otp_publisher: true` (tag otp-publisher:local) or override with
-  # OTP_PUBLISHER_IMAGE.
+  # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
+  # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
-    image: ${OTP_PUBLISHER_IMAGE:-otp-publisher:local}
+    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
     container_name: otp-publisher
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2421,3 +2705,4 @@ volumes:
   keycloak_postgres_data: null
   openbao_data: null
   novu_mongo_data: null
+  gatus_data: null

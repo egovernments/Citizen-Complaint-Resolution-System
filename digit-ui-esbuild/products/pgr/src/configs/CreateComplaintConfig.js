@@ -1,3 +1,5 @@
+import { isPostalCodeValid } from "../utils/postalCode";
+
 export const CreateComplaintConfig = {
   get tenantId() { return Digit.ULBService.getCurrentTenantId(); },
   moduleName: "RAINMAKER-PGR",
@@ -17,10 +19,10 @@ export const CreateComplaintConfig = {
                 name: "ComplainantContactNumber",
                 error: "CORE_COMMON_MOBILE_ERROR",
                 // Read order (per @vinothrallapalli-eGov review on
-                // PR #689, canonical UserValidation pattern):
+                // PR #689, canonical FormValidations pattern):
                 //   1. `window.__DIGIT_USER_VALIDATION.mobile` —
                 //      populated by `useMobileValidation` from the
-                //      `common-masters.UserValidation` MDMS master.
+                //      `common-masters.FormValidations` MDMS master.
                 //   2. `globalConfigs.CORE_MOBILE_CONFIGS` — build-time
                 //      fallback rendered by the playbook for tenants
                 //      that haven't seeded the master OR for the first
@@ -54,10 +56,39 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
+                  // Read order (canonical FormValidations pattern, same as the
+                  // mobile field above):
+                  //   1. `window.__DIGIT_USER_VALIDATION.name` — populated by
+                  //      `useMobileValidation` from common-masters.FormValidations
+                  //      (the fieldType:"name" row, optional).
+                  //   2. Built-in fallback below — always valid, so an
+                  //      unseeded or malformed master value can't break the form.
+                  // Getter re-evaluates on every read, so the MDMS value wins
+                  // as soon as the hook resolves.
                   // CCRS#437: Allow 4-character names (e.g. "John"). The
                   // quantifier counts characters AFTER the leading letter,
-                  // so {3,29} = total length 4–30, not 5–30.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{3,29}$)^.*$/,
+                  // CCSD-1990: min length 1 (was 4). {0,29} = total 1–30.
+                  // Letter-first / no leading-trailing-doubled separator kept.
+                  get pattern() {
+                    const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
+                    if (raw) {
+                      try {
+                        if (raw instanceof RegExp) return raw;
+                        // Compile with the `u` flag first so Unicode property
+                        // escapes (\p{L}/\p{N}) in the master work; fall back
+                        // to a plain compile for legacy patterns that aren't
+                        // valid in Unicode mode.
+                        try {
+                          return new RegExp(raw, "u");
+                        } catch (eu) {
+                          return new RegExp(raw);
+                        }
+                      } catch (e) {
+                        console.error("Invalid name pattern in FormValidations master:", e);
+                      }
+                    }
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[\p{L}][\p{L}\p{N} _\-\(\)]{0,29}$)^.*$/u;
+                  },
                 }
               },
             },
@@ -184,7 +215,14 @@ export const CreateComplaintConfig = {
             {
               inline: true,
               label: "CS_COMPLAINT_POSTALCODE__DETAILS",
-              type: "number",
+              // "text", not "number": the configured postalCodePattern may be
+              // alnum or dash-suffixed (UK / US 5+4 examples in
+              // _example.yml), and a number input physically can't hold those
+              // shapes — the shared validator would then reject every value
+              // the widget allows, making the field unfillable. The native
+              // maxLength cap (TextInput passes populators.validation.maxlength
+              // through) still applies to text inputs.
+              type: "text",
               disable: false,
               populators: {
                 name: "postalCode",
@@ -196,16 +234,35 @@ export const CreateComplaintConfig = {
                 required: false,
                 validation: {
                   required: false,
-                  // Postal-code shape is per-country. Read the pattern from
-                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
-                  // instead of hardcoding 5, so this field rule matches the
-                  // config-driven check in createComplaintForm.js. Falls back
-                  // to the legacy 5-digit default when the host hasn't set it.
-                  pattern: new RegExp(
-                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
-                  ),
+                  // No configured postal pattern needs more than this many
+                  // digits — caps unbounded typing client-side (RenderFormFields
+                  // reads populators.validation.maxlength, lowercase) instead of
+                  // relying solely on the pattern check, which only surfaces
+                  // its error on submit.
+                  maxlength: 16,
+                  // Postal-code shape is per-country — enforced through the
+                  // shared isPostalCodeValid() (utils/postalCode.js), the same
+                  // check createComplaintForm.js runs at submit, so this field
+                  // rule can't drift from it. A react-hook-form `validate`
+                  // rule, NOT `pattern`: FieldV1 copies validation.pattern
+                  // onto the native input's pattern attribute, and on a text
+                  // input the browser then blocks submit with its own
+                  // unlocalized "Please match the requested format" bubble
+                  // (made worse by React stringifying a RegExp value with its
+                  // slashes, so the native check failed for EVERY value). A
+                  // validate function is consumed by react-hook-form only and
+                  // never reaches the DOM.
+                  validate: (value) => isPostalCodeValid(value),
                 },
-                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
+                // Static fallback only: createComplaintForm.js overrides this
+                // per render with the dynamic, length-aware message from
+                // getPostalCodeErrorMessage(t) ("Please enter a valid 4-digit
+                // postal code" on a 4-digit tenant — the same text the
+                // citizen v2 flow shows). This generic, still-localized key
+                // remains for any consumer that renders the raw config,
+                // rather than the old fixed "…5 digit…" key, which lied
+                // about the length on any non-5-digit tenant (CCRS#722).
+                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
               },
             },
 
@@ -258,7 +315,10 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  pattern: /^(?!\s*$).+/,
+                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
+                  // (e.g. "000000000000") — require at least 3 letters (any
+                  // language). Non-empty is implied.
+                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
                 },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },

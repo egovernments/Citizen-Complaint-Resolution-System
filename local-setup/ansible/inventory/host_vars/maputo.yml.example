@@ -18,7 +18,7 @@ tls_enabled: false
 # When docker_registry below is a PUBLIC TLS registry (ghcr.io, docker.io)
 # this MUST be []. Docker rejects a path-bearing or TLS hostname in
 # insecure-registries and refuses to start, taking the whole stack down.
-# For Hetzner-VPC deploys (docker_registry: 10.0.0.4:5000) omit this line —
+# For Hetzner-VPC deploys (docker_registry: <vpc-registry>:5000) omit this line —
 # group_vars/digit.yml defaults to [docker_registry], the historical behaviour.
 insecure_registries: []
 
@@ -44,8 +44,8 @@ employee_module_denylist: [ IM ]
 # Keep locale_region "IN" → i18n locale stays en_IN, which the bootstrap always
 # seeds (generic English, nothing India-specific) → localization works with zero
 # extra seeding. The phone-input prefix is INDEPENDENT in the current digit-ui:
-# the citizen login reads CORE_MOBILE_CONFIGS.mobilePrefix (below), not
-# LOCALE_REGION. So +258 comes from mobilePrefix while text stays readable.
+# the citizen login reads CORE_MOBILE_CONFIGS.countryCode (below), not
+# LOCALE_REGION. So +258 comes from countryCode while text stays readable.
 # (Requires the from-source build — build_digit_ui: true; the old pinned image
 # lacked this decoupling and fell back to +91.)
 locale_region: "IN"
@@ -53,23 +53,29 @@ locale_region: "IN"
 pgr_boundary_highest_level: "Município"
 pgr_boundary_lowest_level: "Bairro"
 boundary_type: "Bairro"
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: "+258"
-  mobileNumberPattern: "^8[0-9]{8}$"
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["8"]
-  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+  countryCode: "+258"
+  mobileNumberRegex: "^8[0-9]{8}$"
 asset_s3_bucket: "maputo-egov-assets"
-footer_logo_url: ""
-footer_bw_logo_url: ""
+
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 digit_ui_mode: container
-# Build digit-ui from source at deploy (files/digit-ui-build.sh: clone +
-# npm run build) and mount the bundle over the container web root, instead of
-# the pinned (stale) registry image. Mirrors build_configurator / build_mcp.
+# Build digit-ui from source at deploy (files/digit-ui-build.sh) and lay the
+# bundle over the container web root, instead of the pinned registry image.
+# With digit_ui_esbuild_repo unset the build is VENDORED: it compiles this
+# monorepo's own digit-ui-esbuild/ tree in place, no clone and no external
+# repo. Mirrors build_configurator / build_mcp.
 build_digit_ui: true
-# digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
-# digit_ui_esbuild_branch: main
+# digit_ui_esbuild_repo:    # only for building a FORK's source on the box;
+# digit_ui_esbuild_branch: main   # the monorepo tree ships as egovio/digit-ui-esbuild
 # Configurator built FROM SOURCE by the deploy itself (files/configurator-build.sh):
 # clone ChakshuGautam/digit-configurator + vite build --base=/configurator/.
 # Fully self-contained — no pre-built dist dependency. The build task sets
@@ -88,24 +94,19 @@ db_fast_path: true
 run_ci_tests: false
 install_claude_code: false
 
-# `docker_registry` is the tag prefix used for two specific fallbacks only:
+# `docker_registry` is the tag prefix used for one specific fallback only:
 #   - MCP image pull       — when `build_mcp: false`
-#   - DDH pinned image     — when `build_default_data_handler: false`
 # Every other DIGIT image is referenced by FULL hardcoded path in the
 # compose file (`docker-compose.egov-digit.yaml`) — `docker_registry`
 # does NOT redirect those.
 #
-# Two known prefixes for CCRS:
-#   ghcr.io/chakshugautam                               — Chakshu's personal images
-#   registry.preview.egov.theflywheel.in/egovio         — Flywheel-hosted egovio mirror
-# Both serve TLS, so keep `insecure_registries: []` above.
-docker_registry: "registry.preview.egov.theflywheel.in/egovio"
-
-# Build DDH from in-tree source (`utilities/default-data-handler/`) instead
-# of pulling the pinned image from docker_registry. Slower first deploy,
-# but deterministic and gets the latest PR #598 idempotency guard. Bomet
-# runs with this on; recommended for fresh Linux deploys.
-build_default_data_handler: true
+# Use the egovio Docker Hub namespace — the same one every hardcoded compose
+# image already uses. The old Flywheel mirror
+# (registry.preview.egov.theflywheel.in/egovio) is retired: its wildcard cert
+# expired 2026-07-25, so pulls through it fail x509 unless the box also carries
+# an insecure_registries entry. Docker Hub serves valid TLS, so keep
+# `insecure_registries: []` above.
+docker_registry: "egovio"
 
 nginx_features:
   brand_assets: false

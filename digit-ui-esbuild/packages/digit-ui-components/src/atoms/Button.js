@@ -10,6 +10,13 @@ const Button = (props) => {
   const actionRef = useRef(null);
  const fieldId = props?.id||Digit?.Utils?.getFieldIdName?.( props?.label || props?.className || "button")||"NA";
 
+  // Allow callers to opt controls into analytics and other DOM-level data
+  // contracts without leaking component-only props onto the native button.
+  const dataAttrs = {};
+  Object.keys(props || {}).forEach((key) => {
+    if (key.indexOf("data-") === 0) dataAttrs[key] = props[key];
+  });
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (actionRef?.current && !actionRef?.current.contains(event.target)) {
@@ -109,6 +116,7 @@ const Button = (props) => {
 
   const buttonElement = (
     <button
+      {...dataAttrs}
       ref={props?.ref}
       className={`digit-button-${
         props?.variation ? props?.variation : "default"

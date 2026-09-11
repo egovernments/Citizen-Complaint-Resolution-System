@@ -60,6 +60,12 @@ spec:
               value: "true"
             - name: REOPEN_COMPLAINT_ENABLED
               value: "true"
+            # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
+            # Baked-in default is already "true"; surfaced here so the auto-escalation
+            # engine is a visible, per-tenant-overridable knob. Set "false" to disable
+            # the scan entirely (no workflow transitions / kafka events).
+            - name: PGR_ESCALATION_ENABLED
+              value: "true"
             - name: COMMENT_BY_EMPLOYEE_NOTIF_ENABLED
               value: "false"
             - name: NOTIFICATION_ALLOWED_ON_STATUS

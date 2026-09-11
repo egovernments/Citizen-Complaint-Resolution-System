@@ -1,5 +1,5 @@
-import { TypeSelectCard } from "@egovernments/digit-ui-react-components";
 import React, { useState } from "react";
+import { CardLabel, Dropdown, FormStep } from "@egovernments/digit-ui-react-components";
 
 const SelectSubType = ({ t, config, onSelect, value }) => {
   const [subType, setSubType] = useState(() => {
@@ -7,26 +7,37 @@ const SelectSubType = ({ t, config, onSelect, value }) => {
     return subType ? subType : {};
   });
   const { complaintType } = value;
+
+  // A–Z sorted sub-types (sorting happens in the hook), rendered as a
+  // searchable Dropdown so the citizen can type to filter (CCRS#941).
   const menu = Digit.Hooks.pgr.useComplaintSubType(complaintType, t);
-  const goNext = () => {
-    // const serviceCode = subType.key;
-    onSelect({ subType });
-  };
 
   function selectedValue(value) {
     setSubType(value);
   }
 
-  const configNew = {
-    ...config.texts,
-    ...{ headerCaption: complaintType?.name || complaintType?.key },
-    ...{ menu: menu },
-    ...{ optionsKey: "name" },
-    ...{ selected: selectedValue },
-    ...{ selectedOption: subType },
-    ...{ onSave: goNext },
+  const onSubmit = () => {
+    onSelect({ subType });
   };
 
-  return <TypeSelectCard {...configNew} disabled={Object.keys(subType).length === 0 || subType === null ? true : false} t={t} />;
+  const isDisabled = !subType || Object.keys(subType).length === 0;
+
+  // Preserve the original behaviour of showing the chosen parent type as the
+  // card caption above the sub-type picker.
+  const configWithCaption = {
+    ...config,
+    texts: {
+      ...config.texts,
+      headerCaption: complaintType?.name || complaintType?.key,
+    },
+  };
+
+  return (
+    <FormStep config={configWithCaption} onSelect={onSubmit} t={t} isDisabled={isDisabled}>
+      <CardLabel>{t("CS_COMPLAINT_DETAILS_SUB_COMPLAINT_TYPE")}</CardLabel>
+      <Dropdown isMandatory selected={subType} option={menu || []} select={selectedValue} optionKey="name" t={t} />
+    </FormStep>
+  );
 };
+
 export default SelectSubType;

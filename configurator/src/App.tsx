@@ -30,8 +30,18 @@ import {
   ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate,
   AdvancedPage,
 } from '@/resources';
+// Novu-into-configurator read-only screens. Imported directly (not via the
+// @/resources barrel) so the notification surfaces stay self-contained.
+import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
+import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
+import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
+import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEditor';
 import PgrDashboard from './pages/PgrDashboard';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
+import OrgChartPage from './pages/org-chart/OrgChartPage';
+import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 // UndoToast removed — see CCRS#417. The previous Undo button only popped
@@ -44,10 +54,11 @@ import HelpModal from './components/ui/HelpModal';
 // without unique-key collisions).
 // import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
-import { apiClient, getApiBaseUrl } from './api';
+import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
+import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
 
 // App context for global state
 type AppMode = 'onboarding' | 'management';
@@ -101,7 +112,22 @@ const queryClient = new QueryClient({
 });
 
 function ManagementAdmin() {
+  return (
+    <MastersCapabilityProvider>
+      <ManagementAdminResources />
+    </MastersCapabilityProvider>
+  );
+}
+
+// Split from ManagementAdmin so useMastersCapability() (which reads the
+// context MastersCapabilityProvider establishes above) resolves correctly —
+// see docs/design/masters-configurator-access-policy-design.md §3.3. Masters
+// the current role can't see are filtered out via `{cond && <Resource .../>}`
+// (React.Children.toArray drops the resulting `false`), keeping every
+// <Resource> a direct child of <CoreAdminUI> as react-admin requires.
+function ManagementAdminResources() {
   const { state } = useApp();
+  const { canViewResource } = useMastersCapability();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
@@ -112,39 +138,59 @@ function ManagementAdmin() {
     >
       <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
         {/* Core entities with List/Show/Edit/Create */}
-        <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />
-        <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />
-        <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />
+        {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />}
+        {canViewResource('departments') && <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />}
+        {canViewResource('designations') && <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />}
         {/* Complaint types are the LEAF rows of the single ComplaintHierarchy
             master (registry key 'complaint-hierarchy'); the data provider
             filters leaves and maps them to the legacy ServiceDefs shape so
             these dedicated views keep working unchanged. */}
-        <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
-        <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />
-        <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />
-        <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />
-        <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} create={LocalizationCreate} />
-        <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />
+        {canViewResource('complaint-hierarchy') && <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />}
+        {canViewResource('employees') && <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />}
+        {canViewResource('complaints') && <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />}
+        {canViewResource('boundaries') && <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />}
+        {canViewResource('localization') && <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} create={LocalizationCreate} />}
+        {canViewResource('users') && <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />}
 
         {/* Read-only entities with List/Show */}
-        <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />
-        <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />
-        <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />
-        <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />
-        <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
-        <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
-        <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
-        <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
+        {canViewResource('access-roles') && <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />}
+        {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
+        {canViewResource('role-actions') && <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />}
+        {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />}
+        {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
+        {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
+        {canViewResource('boundary-hierarchies') && <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />}
+        {canViewResource('complaint-hierarchies') && <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />}
+
+        {/* Novu-into-configurator: read-only notification surfaces served by the
+            novu-bridge proxy (not egov-mdms). Names match the 'custom' registry
+            keys the data provider branches on. Routable at
+            /manage/notification-log and /manage/notification-provider. */}
+        {canViewResource('notification-log') && <Resource name="notification-log" list={NotificationLogList} />}
+        {canViewResource('notification-provider') && <Resource name="notification-provider" list={NotificationProviderList} />}
+        {canViewResource('notification-preference') && <Resource name="notification-preference" list={NotificationPreferenceList} />}
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
-        {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
+        {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions' && canViewResource(name)).map((name) => (
           <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
         {/* Custom routes */}
         <CustomRoutes>
+          <Route path="/notification-configure" element={<NotificationConfigure />} />
+          {/* Analytics destinations. A CustomRoute rather than a <Resource>: the
+              screen deliberately does not use react-admin's list/edit/delete
+              machinery, because the generic MDMS mutation path is not scoped to
+              the session tenant and would rewrite or deactivate rows owned by
+              the parent tenant. */}
+          <Route path="/analytics-providers" element={<AnalyticsProvidersEditor />} />
           <Route path="/advanced" element={<AdvancedPage />} />
-          <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          <Route
+            path="/pgr-dashboard"
+            element={LEGACY_PGR_DASHBOARD_ENABLED ? <PgrDashboard /> : <Navigate to="/manage" replace />}
+          />
+          <Route path="/public-dashboard" element={<PublicDashboardConfigure />} />
+          <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
@@ -157,6 +203,10 @@ function ManagementAdmin() {
 
 // Storage key for persisting auth state
 const AUTH_STORAGE_KEY = 'crs-auth-state';
+
+// One-shot flag (sessionStorage) set when a request is rejected for an expired
+// session, read by LoginPage to explain why the operator was sent back.
+export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
@@ -214,6 +264,17 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
   return null;
 }
 
+// Root (state-level) tenant the deployment is configured for, read from the
+// build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy from
+// host_vars `state_tenant_id`). Used only as the pre-login default; once the
+// operator logs in, `state.tenant` becomes the tenant they authenticated
+// against. Kept config-driven so no country code is baked into the build.
+// City tenants like "mz.maputo" collapse to their root segment; empty string
+// when the build wasn't given one.
+function getConfiguredTenantDefault(): string {
+  return getConfiguredRootTenant();
+}
+
 function App() {
   // Initialize state from localStorage if available
   const [state, setState] = useState<AppState>(() => {
@@ -225,12 +286,13 @@ function App() {
         showHelp: false,
       };
     }
+    const defaultTenant = getConfiguredTenantDefault();
     return {
       isAuthenticated: false,
       user: null,
       environment: getApiBaseUrl(),
-      tenant: 'ke',
-      targetTenant: 'ke',
+      tenant: defaultTenant,
+      targetTenant: defaultTenant,
       mode: 'onboarding',
       currentPhase: 1,
       completedPhases: [],
@@ -238,6 +300,28 @@ function App() {
       showHelp: false,
     };
   });
+
+  // Drop the session and bounce to /login when any request reports the token
+  // is no longer valid (e.g. it expired while the operator was partway through
+  // a long flow like the Phase 2 OSM boundary fetch). Without this, an expired
+  // token surfaces only on the first write, as a cryptic downstream NPE, with
+  // the UI still pretending to be logged in.
+  useEffect(() => {
+    const expire = () => {
+      try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
+      clearUser();
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      apiClient.logout();
+      digitClient.clearAuth();
+      resetProviders();
+      setState(s => ({ ...s, isAuthenticated: false, user: null }));
+    };
+    apiClient.setSessionExpiredHandler(expire);
+    // Management lists (employees / complaints / access-roles) go through
+    // digitClient, not apiClient — without this they show InvalidAccessTokenException
+    // while MDMS cards keep working (those routes don't enforce the token).
+    DigitApiClient.setSessionExpiredHandler(expire);
+  }, []);
 
   // Re-sync apiClient on every render if authenticated (handles HMR)
   useEffect(() => {
@@ -268,7 +352,11 @@ function App() {
   // Persist auth state to localStorage
   useEffect(() => {
     if (state.isAuthenticated && state.user) {
-            const authData = {
+      const token = apiClient.getAuth().token;
+      // Never persist a blank token over a good session (HMR can run this
+      // before apiClient is restored and would log the operator out).
+      if (!token) return;
+      const authData = {
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         environment: state.environment,
@@ -277,7 +365,7 @@ function App() {
         mode: state.mode,
         currentPhase: state.currentPhase,
         completedPhases: state.completedPhases,
-        authToken: apiClient.getAuth().token,
+        authToken: token,
       };
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
     }
@@ -439,7 +527,7 @@ function App() {
           {/* Onboarding Mode Routes */}
           <Route path="/" element={
             state.isAuthenticated
-              ? state.mode === 'onboarding' ? <Layout /> : <Navigate to="/manage" />
+              ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
               : <Navigate to="/login" />
           }>
             <Route index element={<Navigate to="/phase/1" />} />

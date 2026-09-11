@@ -1,0 +1,197 @@
+import React, { useCallback, useMemo } from "react";
+import {
+  COMPLAINT_TYPE_OPTIONS,
+  GEOGRAPHY_OPTIONS,
+  buildDefaultFilters,
+  hasActiveFilters,
+} from "../config/globalFilterGroups";
+import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
+import PopoverMenu, { PopoverMenuItem, PopoverMenuGroupLabel } from "./ui/PopoverMenu";
+import useDashboardT from "../i18n/useDashboardT";
+
+const FunnelIcon = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="tw-shrink-0 tw-text-muted-foreground"
+    aria-hidden
+  >
+    <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+  </svg>
+);
+
+/**
+ * Flat {id,label,group?} option list rendered through the shared PopoverMenu
+ * primitive (owner design pass — no native selects; a native <select> pops the
+ * OS menu, visibly unlike every other dropdown in the bar). Serves the ward
+ * filter always, and the complaint-type filter's degrade path when no
+ * usable/pruned hierarchy exists (flat tenant, MDMS fetch failure, empty
+ * scoped distincts). Consecutive same-group runs get a non-interactive group
+ * label, exactly where the old <optgroup>s sat; the wire contract is
+ * untouched (a bare option id string through onFilterChange).
+ */
+const FlatFilterMenu = ({ ariaLabel, options, value, loading, onChange, panelWidth = 272, t }) => {
+  const selected = options.find((opt) => opt.id === value);
+  return (
+    <PopoverMenu
+      ariaLabel={ariaLabel}
+      chip={loading ? t("DASHBOARD_COMMON_LOADING", "Loading…") : selected?.label ?? String(value)}
+      chipTitle={selected?.label}
+      disabled={loading}
+      panelWidth={panelWidth}
+    >
+      {({ close }) => {
+        const rows = [];
+        let lastGroup = null;
+        for (const opt of options) {
+          if (opt.group && opt.group !== lastGroup) {
+            rows.push(
+              <PopoverMenuGroupLabel key={`group-${opt.group}`}>{opt.group}</PopoverMenuGroupLabel>
+            );
+          }
+          lastGroup = opt.group || null;
+          rows.push(
+            <PopoverMenuItem
+              key={opt.id}
+              selected={opt.id === value}
+              title={opt.label}
+              onSelect={() => {
+                onChange(opt.id);
+                close();
+              }}
+            >
+              {opt.label}
+            </PopoverMenuItem>
+          );
+        }
+        return <div className="dashboard-popover-list">{rows}</div>;
+      }}
+    </PopoverMenu>
+  );
+};
+
+const DashboardFilters = ({
+  filters,
+  onFilterChange,
+  onClearFilters,
+  timeZone,
+  filterOptions,
+  filterOptionsLoading = false,
+}) => {
+  const { t } = useDashboardT();
+  const canClear = hasActiveFilters(filters, timeZone);
+
+  const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
+  const complaintTypeOptions =
+    filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
+  const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
+
+  // Date fallbacks resolve from buildDefaultFilters(timeZone) at render time — never
+  // GLOBAL_FILTER_FIELDS' module-load defaultValue, which would freeze on whatever
+  // calendar day the JS bundle happened to first evaluate in the browser's local zone.
+  const defaultFilters = useMemo(() => buildDefaultFilters(timeZone), [timeZone]);
+  const dateFrom = filters?.dateFrom ?? defaultFilters.dateFrom;
+  const dateTo = filters?.dateTo ?? defaultFilters.dateTo;
+  const geography = filters?.geography ?? "all";
+  const complaintType = filters?.complaintType ?? "all";
+
+  const openCalendar = useCallback((input) => {
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    input.focus();
+  }, []);
+
+  return (
+    <div className="dashboard-filters-bar tw-mb-4">
+      <div className="dashboard-filters-card">
+        <div className="dashboard-filters-row">
+        <div className="dashboard-filters-heading">
+          <FunnelIcon />
+          <span className="dashboard-filters-title">{t("DASHBOARD_FILTERS_TITLE", "Filters")}</span>
+        </div>
+
+        <div className="dashboard-filters-date-range">
+          <div className="dashboard-filter-inline-date-wrap">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onFilterChange("dateFrom", e.target.value)}
+              onClick={(e) => openCalendar(e.currentTarget)}
+              aria-label={t("DASHBOARD_FILTERS_FROM_DATE", "From date")}
+              className="dashboard-filter-inline-date"
+            />
+          </div>
+          <span className="dashboard-filters-date-arrow" aria-hidden>
+            →
+          </span>
+          <div className="dashboard-filter-inline-date-wrap">
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => onFilterChange("dateTo", e.target.value)}
+              onClick={(e) => openCalendar(e.currentTarget)}
+              aria-label={t("DASHBOARD_FILTERS_TO_DATE", "To date")}
+              className="dashboard-filter-inline-date"
+            />
+          </div>
+        </div>
+
+        <FlatFilterMenu
+          ariaLabel={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
+          options={geographyOptions}
+          value={geography}
+          loading={filterOptionsLoading && geographyOptions.length <= 1}
+          onChange={(id) => onFilterChange("geography", id)}
+          panelWidth={240}
+          t={t}
+        />
+
+        {complaintTypeTree ? (
+          // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",
+          // reset), ABAC-pruned; leaf → serviceCode, interior → complaintPath.
+          <ComplaintTypeTreeFilter
+            tree={complaintTypeTree}
+            filters={filters}
+            onFilterChange={onFilterChange}
+            t={t}
+          />
+        ) : (
+          <FlatFilterMenu
+            ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+            options={complaintTypeOptions}
+            value={complaintType}
+            loading={filterOptionsLoading && complaintTypeOptions.length <= 1}
+            onChange={(id) => onFilterChange("complaintType", id)}
+            t={t}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={onClearFilters}
+          disabled={!canClear}
+          className="dashboard-filters-clear-inline"
+          aria-disabled={!canClear}
+        >
+          {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
+        </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardFilters;

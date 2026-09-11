@@ -9,8 +9,8 @@ A single-machine DIGIT deployment can handle **544,000 complaint transactions pe
 | Daily capacity at 1M records | **544,320 txn/day** |
 | Peak throughput (empty DB) | 37 lifecycles/sec |
 | Throughput at 1M records | 6.3 lifecycles/sec |
+| Minimum deployment spec | **16 vCPU / 32 GiB** |
 | Max concurrent users (16 vCPU) | ~300 |
-| Max concurrent users (8 vCPU) | ~250 |
 | Performance issues identified | 3 |
 | Throughput recovery after fixes | **9.4x** |
 | Records tested at | 1,006,743 complaints |
@@ -97,7 +97,9 @@ See the [Architecture](./architecture), [Setup](./setup), and [Running Tests](./
 
 | Machine | Specs | Role |
 |---------|-------|------|
-| Dev | 8 vCPU, 16 GB RAM | Baseline testing |
+| Dev | 8 vCPU, 16 GB RAM | Baseline testing (March 2026) |
 | Prod | 16 vCPU, 32 GB RAM | Scale testing, 1M seeding |
 
-Both run the full DIGIT Docker Compose stack (~30 containers). Tests are driven by [k6](https://k6.io/) from a separate control machine.
+Both run the full DIGIT Docker Compose stack (~30 containers at the time of testing). Tests are driven by [k6](https://k6.io/) from a separate control machine.
+
+**Minimum deployment spec.** These are the machines used for testing, not a sizing recommendation. A DIGIT Complaints Management deployment requires a minimum of **16 vCPU / 32 GiB** — the stack holds roughly 26.8 GB of memory at rest and does not fit in anything smaller. See [Capacity Planning](./recommendations-transition-plan#the-hardware-floor-16-vcpu-32-gib).

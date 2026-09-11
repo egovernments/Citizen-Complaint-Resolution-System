@@ -45,6 +45,14 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
+  // var mapCenter = {{ map_center | default({'lat': 0, 'lng': 0}) | to_json }};
+  // COMPLAINT hierarchy pin (distinct from the boundary hierarchyType above):
+  // which RAINMAKER-PGR.ComplaintHierarchyDefinition the dashboard's per-widget
+  // "Group by" control enumerates. Optional — when empty the SPA resolves the
+  // definition whose hierarchyType actually has ComplaintHierarchy rows behind
+  // it. Set `complaint_hierarchy_type: PGR` in host_vars when the tenant
+  // carries multiple definitions (e.g. a live tree plus a test one).
+  var complaintHierarchyType = {{ complaint_hierarchy_type | default('') | to_json }};
   var mapCenter = {{ map_center | to_json }};
   // Tenant whose boundary tree the SPA's map/boundary code resolves
   // against (Turbopass/OSM boundary resolution). Mirrors the build-time
@@ -56,7 +64,33 @@ var globalConfigs = (function () {
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
+  // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
+  // already expresses length, starting-digit constraints, and alnum shapes
+  // in one place, so there's no separate length field that can drift out
+  // of sync with it. The UI derives both the accepted format AND the
+  // localized "valid N-digit postal code" error wording from this single
+  // pattern — see getPostalCodeErrorMessage() in
+  // digit-ui-esbuild/products/pgr/src/utils/postalCode.js.
   var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
+  // Client-side dashboard render-lag instrumentation (#1110). ON by default;
+  // kill switch = `dashboard_metrics_enabled: false` in the inventory + a
+  // re-render of this file (no rebuild). The emitter self-mutes when the
+  // /otel Kong ingest route is absent.
+  var dashboardMetricsEnabled = {{ dashboard_metrics_enabled | default(true) | to_json }};
+
+  // Analytics adapter registry (digit-ui-esbuild/public/analytics.js). The
+  // destinations themselves are MDMS rows in common-masters.AnalyticsProvider,
+  // edited in the Configurator — NOT config. These three are the ops-only knobs
+  // that MDMS deliberately cannot set, because they are the ones that decide
+  // whether a third-party script may run at all.
+  //
+  // Polarity is the OPPOSITE of dashboard_metrics_enabled above: analytics is
+  // OFF unless MDMS rows say otherwise, and the kill switch disables only on an
+  // explicit true. `| default(...)` keeps every existing inventory valid, so no
+  // host_vars edit is required to adopt this.
+  var analyticsKillSwitch = {{ analytics_kill_switch | default(false) | to_json }};
+  var analyticsScriptHosts = {{ analytics_script_hosts | default([]) | to_json }};
+  var analyticsCustomEnabled = {{ analytics_custom_enabled | default(false) | to_json }};
 
   // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
   // (which is the default). The auth-adapter inside digit-ui reads
@@ -129,10 +163,14 @@ var globalConfigs = (function () {
       return boundaryType;
     } else if (key === "HIERARCHY_TYPE") {
       return hierarchyType;
+    } else if (key === "COMPLAINT_HIERARCHY_TYPE") {
+      return complaintHierarchyType;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
     } else if (key === "CORE_POSTAL_CONFIGS") {
       return corePostalConfigs;
+    } else if (key === "DASHBOARD_METRICS_ENABLED") {
+      return dashboardMetricsEnabled;
     } else if (key === "KEYCLOAK_URL") {
       return keycloakUrl;
     } else if (key === "KEYCLOAK_REALM") {
@@ -141,6 +179,12 @@ var globalConfigs = (function () {
       return keycloakClientId;
     } else if (key === "TOKEN_EXCHANGE_URL") {
       return tokenExchangeUrl;
+    } else if (key === "ANALYTICS_KILL_SWITCH") {
+      return analyticsKillSwitch;
+    } else if (key === "ANALYTICS_SCRIPT_HOSTS") {
+      return analyticsScriptHosts;
+    } else if (key === "ANALYTICS_CUSTOM_ENABLED") {
+      return analyticsCustomEnabled;
     }
   };
 

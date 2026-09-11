@@ -1,0 +1,25 @@
+name: Nightly Develop Build
+run-name: Nightly develop build (${{ github.event_name }})
+
+on:
+  schedule:
+    - cron: '30 13 * * *'   # 7:00 PM IST (UTC+5:30). Cron is UTC-only.
+  workflow_dispatch: {}
+
+# NOTE: scheduled workflows fire only from the DEFAULT branch (master) and this
+# file must exist there. The reusable build checks out `develop` regardless of
+# which branch this file ran from, so the nightly always builds develop.
+
+concurrency:
+  group: nightly-develop
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-images.yml
+    with:
+      ref: develop
+      rolling_tag: nightly-develop        # rolling latest-develop pointer
+      staging_prefix: nightly-develop
+      prune_develop: true                 # keep the 5 most recent develop-<sha> per image
+    secrets: inherit

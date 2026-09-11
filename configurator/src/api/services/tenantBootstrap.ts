@@ -77,7 +77,8 @@ const ESSENTIAL_DATA_SCHEMAS = [
 ];
 
 // Roles the new state's ADMIN user needs. INTERNAL_MICROSERVICE_ROLE is non-negotiable —
-// inbox crashes at startup if no user has it on the state tenant.
+// inbox crashes at startup if no user has it on the state tenant. ACCOUNT_ADMIN is
+// required for the configurator's own bootstrapping/tenant-onboarding screens.
 const ADMIN_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
   { code: 'CITIZEN', name: 'Citizen' },
@@ -86,6 +87,7 @@ const ADMIN_ROLES = [
   { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
   { code: 'DGRO', name: 'Department GRO' },
   { code: 'SUPERUSER', name: 'Super User' },
+  { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
   { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
 ];
 
@@ -152,6 +154,55 @@ async function createData(record: MdmsRecordRaw): Promise<void> {
       isActive: true,
     },
   });
+}
+
+// --- Step 3.5: register the tenant with egov-enc-service -----------------
+
+export interface EncKeyResult {
+  tenantId: string;
+  /** true when this call inserted a new key; false when one already existed. */
+  created: boolean;
+  keyId?: number;
+}
+
+// egov-enc-service holds ONE symmetric key per tenant, and every PII column it
+// wrote is sealed with that key. Without a key row the tenant cannot accept any
+// encrypted write: egov-user's _create / HRMS employee create fail with
+// "Unknown error occurred in encryption process" (or "Tenant Id not found" for a
+// brand-new state root, because enc-service discovers tenants via an MDMS search
+// scoped to its own STATE_LEVEL_TENANT_ID env var and doesn't know the new root).
+//
+// POST /crypto/v1/_generatekey is CREATE-IF-MISSING, never a rotation:
+// re-calling it for a tenant that already has a key returns `created:false` with
+// the SAME keyId and leaves the stored secret untouched (verified against a
+// throwaway tenant — one row, unchanged key_id/secret_key across three calls).
+// That property is what makes it safe to call from the wizard: it can never
+// strand already-encrypted data. It is nonetheless only ever called on the
+// tenant-creation path, and the UI exposes no "regenerate key" affordance —
+// rotating a live tenant's key is a deliberate ops action, not a button.
+//
+// Throws on transport/API failure; callers decide how fatal that is.
+export async function ensureEncKey(tenantId: string): Promise<EncKeyResult> {
+  const response = await apiClient.post(ENDPOINTS.ENC_GENERATE_KEY, {
+    RequestInfo: apiClient.buildRequestInfo(),
+    tenantId,
+  });
+  return {
+    tenantId,
+    created: (response as { created?: boolean } | undefined)?.created === true,
+    keyId: (response as { keyId?: number } | undefined)?.keyId,
+  };
+}
+
+/** Bootstrap-path wrapper: non-fatal: swallow failures here and let Step 4
+ *  surface the real error if enc-service is genuinely unreachable. */
+async function registerEncKey(target: string): Promise<void> {
+  try {
+    await ensureEncKey(target);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[bootstrap] enc-service key generation for ${target} failed: ${msg}`);
+  }
 }
 
 // --- Step 4: ADMIN user at new tenant -----------------------------------
@@ -353,6 +404,10 @@ export async function bootstrapStateRoot(
     localization: { success: 0, failed: 0 },
   };
 
+  // Step 0: register the target with egov-enc-service before anything below
+  // needs to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
+  await registerEncKey(target);
+
   // Step 1: schemas
   const sourceSchemas = await searchSchemas(source);
   if (sourceSchemas.length === 0) {
@@ -363,8 +418,8 @@ export async function bootstrapStateRoot(
     // bootstrap exists to prevent. Fail fast with a message the operator can act on.
     throw new Error(
       `Bootstrap source tenant '${source}' has no schemas registered. ` +
-      `Pick a tenant that has been onboarded (e.g. 'pg' on personal-install, ` +
-      `'ke' on naipepea) via the source option.`
+      `Pick a tenant that has already been onboarded (one that has MDMS schemas ` +
+      `registered) via the source option.`
     );
   }
   onProgress({ step: 'schemas', current: 0, total: sourceSchemas.length });

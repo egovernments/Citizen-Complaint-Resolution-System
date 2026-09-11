@@ -35,8 +35,15 @@ public class MdmsServiceClient {
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
-    /** Cache: tenantId → country-code prefix (e.g. "+91") */
-    private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
+    /**
+     * Safety cap on the tenant→config cache. The key space is the set of provisioned
+     * tenants (a small, bounded set), but this guards against unbounded growth if a
+     * caller ever supplies arbitrary tenantIds.
+     */
+    private static final int MAX_CACHE_ENTRIES = 1000;
+
+    /** Cache: tenantId → resolved mobile-number validation config. */
+    private final Map<String, MobileValidationConfig> configCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -60,15 +67,32 @@ public class MdmsServiceClient {
             String tenantId,
             RequestInfo requestInfo) {
 
+        // Resolve the cache miss OUTSIDE the map so the blocking MDMS call never runs
+        // inside a ConcurrentHashMap bin lock (which would serialize unrelated keys).
+        MobileValidationConfig cached = configCache.get(tenantId);
+        if (cached != null) {
+            return cached;
+        }
+        MobileValidationConfig resolved = resolveMobileValidationConfig(tenantId, requestInfo);
+        if (configCache.size() < MAX_CACHE_ENTRIES) {
+            MobileValidationConfig existing = configCache.putIfAbsent(tenantId, resolved);
+            if (existing != null) {
+                return existing;
+            }
+        }
+        return resolved;
+    }
+
+    private MobileValidationConfig resolveMobileValidationConfig(String tenantId, RequestInfo requestInfo) {
         Map<String, Object> record = fetchDefaultRecord(tenantId, requestInfo);
 
         Map<String, Object> data = (Map<String, Object>) record.get("data");
 
-        MobileValidationConfig config = new MobileValidationConfig();
-        config.setCountryCode((String) data.get("countryCode"));
-        config.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
+        MobileValidationConfig resolved = new MobileValidationConfig();
+        resolved.setCountryCode((String) data.get("countryCode"));
+        resolved.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
 
-        return config;
+        return resolved;
     }
 
     // -------------------------------------------------------------------------

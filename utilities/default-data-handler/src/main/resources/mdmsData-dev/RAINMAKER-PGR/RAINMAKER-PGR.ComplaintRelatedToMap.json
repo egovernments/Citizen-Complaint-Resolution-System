@@ -1,0 +1,18 @@
+[
+  {
+    "code": "IGE",
+    "name": "Institutions of Governance and Education",
+    "active": true,
+    "shortName": "IGE",
+    "displayOrder": 1,
+    "tenantId": "me"
+  },
+  {
+    "code": "IGSAE",
+    "name": "Institutions of Governance, Services, and Economic Activity",
+    "active": true,
+    "shortName": "IGSAE",
+    "displayOrder": 2,
+    "tenantId": "me"
+  }
+]

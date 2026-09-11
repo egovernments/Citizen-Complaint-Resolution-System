@@ -57,6 +57,11 @@ const SearchComponent = ({ uiConfig, header = "", screenType = "search", fullCon
     clearErrors,
     unregister,
   } = useForm({
+    // mode: "onChange" — without it RHF v6 defaults to "onSubmit", so
+    // `errors` (and therefore errorStyle/red-border on fields like the PGR
+    // inbox mobile number search) stays empty until the first Enter/Search
+    // submit attempt, even while the typed value already fails validation.
+    mode: "onChange",
     defaultValues: uiConfig?.defaultValues,
     // defaultValues: {...uiConfig?.defaultValues,...defValuesFromSession}
     // defaultValues:defaultValuesFromSession

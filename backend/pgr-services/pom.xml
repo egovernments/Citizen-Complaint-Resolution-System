@@ -98,6 +98,10 @@
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
@@ -117,11 +121,42 @@
             <version>2.9.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
+        <!-- #1110: analytics query metrics. API-only — the OTEL javaagent (v2.11.0, see
+             otel/download-agent.sh) bridges GlobalOpenTelemetry to its SDK at runtime;
+             without the agent every call is a no-op (tests/CI safe). Version pinned to
+             the SDK bundled by javaagent 2.11.0. Boot 3.2.2 manages an older otel BOM,
+             so the explicit version here is required. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.45.0</version>
+        </dependency>
+        <!-- SDK + in-memory reader, tests only: lets AnalyticsMetricsTest assert the
+             exact instrument names/units the collector's prometheus exporter surfaces. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <version>1.45.0</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>
             <scope>test</scope>
+        </dependency>
+        <!-- Without this, Surefire's auto-detected JUnit Platform provider (pulled in
+             transitively by spring-boot-starter-test) silently runs zero of this module's
+             JUnit 4 (org.junit.Test/@RunWith) tests, e.g. ComplaintsEventsTest. -->
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jamsesso</groupId>
+            <artifactId>json-logic-java</artifactId>
+            <version>1.1.0</version>
         </dependency>
     </dependencies>
     <repositories>

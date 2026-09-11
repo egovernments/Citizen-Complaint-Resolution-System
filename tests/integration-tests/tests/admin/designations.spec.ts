@@ -19,8 +19,11 @@ import {
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const DESIG_SCHEMA = 'common-masters.Designation';
 const DEPT_SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/designations';
@@ -45,10 +48,13 @@ test.beforeAll(async () => {
 
   for (const code of [DEPT_A, DEPT_B, DEPT_C]) {
     createdDeptCodes.add(code);
+    // NB: the Department schema is additionalProperties:false and only
+    // permits {code, name, active} — sending `description` is rejected with
+    // "extraneous key [description]" on every tenant (see
+    // configurator-mdms-fixes-2026-04-29.spec.ts, which asserts exactly that).
     await mdmsCreate(auth, TENANT_CODE, DEPT_SCHEMA, code, {
       code,
       name: `PW Dept for designation tests (${code})`,
-      description: 'Seeded by designations.spec.ts',
       active: true,
     });
   }
@@ -173,7 +179,15 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     // Open edit, add a third chip.
     await page.getByRole('button', { name: /^Edit$/i }).click();
     await pickDepartmentChips(page, [DEPT_C]);
-    await page.getByRole('button', { name: /^Save$/i }).click();
+    // Wait for the edit to actually land before re-reading. DigitEdit
+    // redirects to the list only inside onSuccess (after the _update HTTP
+    // response resolves), so the redirect back to LIST_PATH is a reliable
+    // "write committed" signal — a bare click returns immediately and a
+    // straight API read would race the write and see the pre-edit value.
+    await Promise.all([
+      page.waitForURL(LIST_PATH, { timeout: 30_000 }),
+      page.getByRole('button', { name: /^Save$/i }).click(),
+    ]);
 
     // Re-read; should now be 3 entries.
     let records = await mdmsSearch(auth, TENANT_CODE, DESIG_SCHEMA, {
@@ -184,10 +198,20 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     expect(dept.length).toBe(3);
     expect(dept).toEqual(expect.arrayContaining([DEPT_A, DEPT_B, DEPT_C]));
 
-    // Now remove one chip via the UI and resave.
+    // Now remove one chip via the UI and resave. The first Save redirected
+    // back to the list (DigitEdit default redirect='list'), clearing the
+    // search filter — so re-open the record before the second edit rather
+    // than assuming we're still on its show view.
+    await page.goto(LIST_PATH);
+    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
     await removeDepartmentChip(page, DEPT_C);
-    await page.getByRole('button', { name: /^Save$/i }).click();
+    await Promise.all([
+      page.waitForURL(LIST_PATH, { timeout: 30_000 }),
+      page.getByRole('button', { name: /^Save$/i }).click(),
+    ]);
 
     records = await mdmsSearch(auth, TENANT_CODE, DESIG_SCHEMA, {
       uniqueIdentifiers: [code],
@@ -198,60 +222,16 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     expect(dept).toEqual(expect.arrayContaining([DEPT_A, DEPT_B]));
   });
 
-  test('3. legacy single-string department is coerced to array on save', {
-    annotation: {
-      type: 'description',
-      description: `Handles legacy data: a record with department as a bare string (pre-PR-5 shape) must coerce to a single-element array when the form loads, AND saving without changes must persist the array shape. Critical for migrating in-place data without manual cleanup.
-
-Steps:
-1. Generate a unique code; track for cleanup.
-2. Seed via mdmsCreate with department: DEPT_A (bare string, NOT array).
-3. Navigate to LIST_PATH; search; click row; click Edit.
-4. Assert exactly one chip rendering DEPT_A is visible (legacy string coerced into a one-chip array on form load).
-5. Click Save (no changes).
-6. mdmsSearch; assert dept is now Array.isArray and equals [DEPT_A].
-
-The bare-string seed is required for this test — if the schema later rejects bare strings server-side, this test can't run without bypass and should be migrated.`,
-    },
-    tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
-    page,
-  }, testInfo) => {
-    const code = testCode(testInfo, 'DESIG_LEGACY');
-    createdDesigCodes.add(code);
-
-    const auth = loadAuth();
-    // Pre-PR-5 shape: department is a bare string, not an array.
-    await mdmsCreate(auth, TENANT_CODE, DESIG_SCHEMA, code, {
-      code,
-      name: `PW Legacy ${code}`,
-      description: 'Legacy single-string department',
-      department: DEPT_A,
-      active: true,
-    } as Record<string, unknown>);
-
-    await page.goto(LIST_PATH);
-    await page.getByPlaceholder(/search/i).first().fill(code);
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.getByRole('row').filter({ hasText: code }).click();
-
-    await page.getByRole('button', { name: /^Edit$/i }).click();
-
-    // Exactly one chip should render — the legacy string coerced into
-    // a one-element array on load.
-    const chip = page.getByText(DEPT_A, { exact: true });
-    await expect(chip).toBeVisible();
-
-    // Save without changes.
-    await page.getByRole('button', { name: /^Save$/i }).click();
-
-    // Re-read — now stored as ["DEPT_A"], not "DEPT_A".
-    const records = await mdmsSearch(auth, TENANT_CODE, DESIG_SCHEMA, {
-      uniqueIdentifiers: [code],
-    });
-    const dept = (records[0].data as Record<string, unknown>).department;
-    expect(Array.isArray(dept)).toBe(true);
-    expect(dept).toEqual([DEPT_A]);
-  });
+  // Removed (2026-07-27): test '3. legacy single-string department is coerced
+  // to array on save'. The scenario is unstageable — the live Designation
+  // schema declares `department` as a JSONArray and rejects a bare string at
+  // _create with "expected type: JSONArray, found: String", so the legacy
+  // record it needed cannot be seeded without bypassing the schema. The
+  // pre-migration world it guarded no longer exists. The forward-facing
+  // contract it also happened to cover ("the UI always writes string[]")
+  // remains covered non-vacuously by tests 1 (UI create), 2 (UI edit,
+  // add + remove), 5b (show-page read path) and 6 (bulk import), each of
+  // which asserts Array.isArray on the persisted value.
 
   test('4. department filter narrows list to designations referencing that code', {
     annotation: {
@@ -262,13 +242,14 @@ Steps:
 1. Generate two unique codes (codeA matching DEPT_A, codeOther matching DEPT_C); track for cleanup.
 2. mdmsCreate both designations with the appropriate department arrays.
 3. Navigate to LIST_PATH.
-4. Locate Department filter; test.skip if absent.
-5. Click filter, click DEPT_A option (fall back to typeahead if click fails).
-6. Wait networkidle; type 'PW_' in the search to scope to seeded rows.
-7. Assert codeA row is visible.
-8. Assert codeOther row count === 0.
+4. The Department filter is NOT alwaysOn in DesignationList — open the "Add filter" popover and pick "Department" so the control mounts.
+5. Locate the trigger via getByRole('combobox').filter({ hasText: /department/i }) and open it.
+6. Click the option whose label carries DEPT_A (ReferenceFilterInput labels options by department NAME, which embeds the code).
+7. Type 'PW_' in the search to scope to seeded rows.
+8. Assert codeA row becomes visible (auto-retrying — the grid debounces).
+9. Assert codeOther row count === 0.
 
-Filter-by-array logic — confirms the dataProvider sends the right query for chip values.`,
+Filter-by-array logic — confirms the dataProvider sends the right query for chip values. Previously this used getByLabel(/^Department/i), which matched NOTHING (ReferenceFilterInput renders a Radix SelectTrigger with an id but no <label for>) and additionally never opened "Add filter", so the test self-skipped on every deployment.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -292,26 +273,35 @@ Filter-by-array logic — confirms the dataProvider sends the right query for ch
 
     await page.goto(LIST_PATH);
 
-    // Filter by DEPT_A. The departments filter is a select; if it's
-    // missing on this build, the test logs and short-circuits — the
-    // filter UI is part of the regression net but a missing widget is a
-    // separate failure surface.
-    const filter = page.getByLabel(/^Department/i).first();
+    // Filter by DEPT_A. The Department filter is NOT `alwaysOn` in
+    // DesignationList's `filters` array, so it doesn't exist in the DOM until
+    // it's picked out of the "Add filter" popover (FilterBar/AddFilterButton).
+    // ReferenceFilterInput then renders a Radix <SelectTrigger id={id}> with no
+    // <label for> anywhere — getByLabel(/^Department/i) matched NOTHING, which
+    // is why the old guard skipped this test on every deployment. Target the
+    // combobox by the placeholder text the trigger renders instead.
+    const filter = page.getByRole('combobox').filter({ hasText: /department/i }).first();
     if (!(await filter.isVisible().catch(() => false))) {
-      test.skip(true, 'Department filter not present on this build');
+      await page.getByRole('button', { name: /^Add filter$/i }).click();
+      await page.getByRole('button', { name: 'Department', exact: true }).click();
     }
+    await expect(filter).toBeVisible();
     await filter.click();
-    await page.getByRole('option', { name: DEPT_A }).click().catch(async () => {
-      // Some builds use a typeahead — fall back to keyboard input.
-      await page.keyboard.type(DEPT_A);
-      await page.getByRole('option', { name: DEPT_A }).click();
-    });
-    await page.waitForLoadState('networkidle').catch(() => {});
 
-    // codeA should appear; codeOther should not.
+    // Options are labelled with the department NAME (ReferenceFilterInput's
+    // displayField), and the seeded names embed the code.
+    const option = page.getByRole('option', { name: new RegExp(DEPT_A) }).first();
+    await option.waitFor({ state: 'visible', timeout: 15_000 });
+    await option.click();
+
+    // codeA should appear; codeOther should not. Scope to the seeded rows.
     await page.getByPlaceholder(/search/i).first().fill('PW_');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await expect(page.getByRole('row').filter({ hasText: codeA })).toBeVisible();
+    // The grid debounces (setFilters(..., undefined, true)) and neither the
+    // option click nor the keystrokes navigate, so waitForLoadState('networkidle')
+    // resolves in ~0.2 ms. Auto-retrying expect is the honest wait.
+    await expect(
+      page.getByRole('row').filter({ hasText: codeA }),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('row').filter({ hasText: codeOther })).toHaveCount(0);
   });
 
@@ -565,7 +555,11 @@ Critical for tenant onboarding workflows that use comma-list xlsx as their canon
     await page.getByRole('button', {
       name: /Create\s+\d+\s+(designation|row)s?/i,
     }).click();
-    await expect(page.getByText(/1\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 1 designations" (number AFTER the
+    // word), not "1 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+1|1\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
 
@@ -596,19 +590,31 @@ async function pickDepartmentChips(
   page: import('@playwright/test').Page,
   codes: string[],
 ): Promise<void> {
-  const combobox = page.getByRole('combobox').filter({
-    has: page.locator(':scope'),
-  }).first();
-  // Above is overcautious; fall back to the labeled control.
-  const input = (await combobox.count())
-    ? combobox
+  // The Departments control is a role=combobox input carrying the
+  // "Search departments…" placeholder (DepartmentChipInput). A bare
+  // getByRole('combobox').first() wrongly matched the header language
+  // switcher (also role=combobox), so target the placeholder directly and
+  // fall back to the labeled control.
+  const byPlaceholder = page.getByPlaceholder(/search departments/i);
+  const input = (await byPlaceholder.count())
+    ? byPlaceholder.first()
     : page.getByLabel(/^Departments?/i);
 
   for (const code of codes) {
     await input.click();
     await input.fill(code);
-    // The listbox option matches code text exactly.
-    await page.getByRole('option', { name: new RegExp(code) }).first().click();
+    // The listbox option matches code text exactly. Wait for it to render
+    // (the departments reference list can still be fetching right after an
+    // edit-form mount) before clicking, else the click races an empty list.
+    const option = page.getByRole('option', { name: new RegExp(code) }).first();
+    await option.waitFor({ state: 'visible', timeout: 15_000 });
+    await option.click();
+    // Confirm the chip actually landed — each selected chip renders a
+    // remove button labelled `remove <code>` — before moving on. Guards
+    // against a silently-dropped selection (the add-then-Save race).
+    await expect(
+      page.getByRole('button', { name: `remove ${code}` }),
+    ).toBeVisible({ timeout: 10_000 });
     // Clear the input ready for the next pick.
     await input.fill('');
   }
@@ -618,17 +624,13 @@ async function removeDepartmentChip(
   page: import('@playwright/test').Page,
   code: string,
 ): Promise<void> {
-  // Each chip renders the code text followed by a remove button. Match
-  // a remove button (× or "Remove") sibling within the chip.
-  const chip = page.locator('[role="listitem"], li, span').filter({ hasText: code }).first();
-  // The chip's remove control is usually a button or icon nested inside.
-  const removeBtn = chip.getByRole('button').first();
-  if (await removeBtn.count()) {
-    await removeBtn.click();
-  } else {
-    // Fall back to clicking an × character close to the chip.
-    await page.locator('button').filter({ hasText: /^×$/ }).first().click();
-  }
+  // Each selected chip renders a remove button labelled `remove <code>`
+  // (DepartmentChipInput uses an <X> lucide icon + aria-label, NOT a "×"
+  // text glyph — so a text-based fallback never matches). Target the
+  // accessible name directly and wait for the chip to actually disappear.
+  const removeBtn = page.getByRole('button', { name: `remove ${code}` });
+  await removeBtn.click();
+  await expect(removeBtn).toHaveCount(0, { timeout: 10_000 });
 }
 
 async function buildDesignationXlsx(

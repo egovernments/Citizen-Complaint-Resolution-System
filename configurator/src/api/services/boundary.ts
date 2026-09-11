@@ -106,14 +106,22 @@ export const boundaryService = {
     const boundaries: Boundary[] = [];
     const seen = new Set<string>();
 
-    for (const tb of tenantBoundaries as { boundary: Boundary | Boundary[]; hierarchyType?: string }[]) {
+    for (const tb of tenantBoundaries as { tenantId?: string; boundary: Boundary | Boundary[]; hierarchyType?: string }[]) {
       if (!tb.boundary) continue;
       const items = Array.isArray(tb.boundary) ? tb.boundary : [tb.boundary];
       for (const root of items) {
         // Prefer the wrapper's hierarchyType; fall back to the caller's
         // options.hierarchyType because the API often returns null in the
-        // wrapper even when the filter was supplied.
-        this.flattenBoundaries(root, boundaries, seen, tb.hierarchyType ?? options?.hierarchyType);
+        // wrapper even when the filter was supplied. Carry tenantId for the
+        // same reason: relationship nodes may omit it even though their
+        // TenantBoundary wrapper and the exact-tenant request both know it.
+        this.flattenBoundaries(
+          root,
+          boundaries,
+          seen,
+          tb.hierarchyType ?? options?.hierarchyType,
+          tb.tenantId ?? tenantId,
+        );
       }
     }
 
@@ -130,6 +138,7 @@ export const boundaryService = {
     result: Boundary[],
     seen?: Set<string>,
     hierarchyType?: string,
+    tenantId?: string,
   ): void {
     const code = boundary.code;
     if (seen && code) {
@@ -138,7 +147,7 @@ export const boundaryService = {
     }
     result.push({
       id: boundary.id,
-      tenantId: boundary.tenantId,
+      tenantId: boundary.tenantId ?? tenantId,
       code: boundary.code,
       name: boundary.name,
       boundaryType: boundary.boundaryType,
@@ -150,7 +159,7 @@ export const boundaryService = {
 
     if (boundary.children) {
       for (const child of boundary.children) {
-        this.flattenBoundaries(child, result, seen, hierarchyType);
+        this.flattenBoundaries(child, result, seen, hierarchyType, tenantId);
       }
     }
   },

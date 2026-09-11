@@ -5,6 +5,7 @@ export const ENDPOINTS = {
   USER_CREATE: '/user/users/_createnovalidate',
   USER_UPDATE: '/user/users/_updatenovalidate',
   MDMS_SEARCH: '/mdms-v2/v2/_search',
+  MDMS_COUNT: '/mdms-v2/v2/_count',
   MDMS_CREATE: '/mdms-v2/v2/_create',
   MDMS_UPDATE: '/mdms-v2/v2/_update',
   MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
@@ -41,6 +42,7 @@ export const ENDPOINTS = {
 
   ENC_ENCRYPT: '/egov-enc-service/crypto/v1/_encrypt',
   ENC_DECRYPT: '/egov-enc-service/crypto/v1/_decrypt',
+  ENC_GENERATE_KEY: '/egov-enc-service/crypto/v1/_generatekey',
   BNDRY_MGMT_PROCESS: '/egov-bndry-mgmnt/v1/_process',
   BNDRY_MGMT_GENERATE: '/egov-bndry-mgmnt/v1/_generate',
   BNDRY_MGMT_PROCESS_SEARCH: '/egov-bndry-mgmnt/v1/_process-search',

@@ -165,16 +165,23 @@ jobs:
           # Check if repo exists
           HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
             -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$DOCKER_USERNAME/$SERVICE_NAME/")
+            "https://hub.docker.com/v2/repositories/egovio/$SERVICE_NAME/")
 
           if [ "$HTTP_CODE" -ne 200 ]; then
             NEXT_TAG="${BRANCH}-${COMMIT_HASH}"
           else
             EXISTING_TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
-              "https://hub.docker.com/v2/repositories/$DOCKER_USERNAME/$SERVICE_NAME/tags?page_size=100" \
+              "https://hub.docker.com/v2/repositories/egovio/$SERVICE_NAME/tags?page_size=100" \
               | jq -r '.results[].name')
-            LATEST_TAG=$(echo "$EXISTING_TAGS" \
-              | grep "^${BRANCH}-${COMMIT_HASH}" || true \
+            # `grep … || true | sort | tail` parses as `grep … || (true | sort |
+            # tail)`, so the sort/tail never saw grep's output and LATEST_TAG
+            # came back multi-line — which then wrote bare lines into
+            # $GITHUB_OUTPUT and failed the step with "Invalid format". Group the
+            # grep so the pipeline applies to its output, and drop the per-arch
+            # staging suffixes so only the real tag can match.
+            LATEST_TAG=$({ echo "$EXISTING_TAGS" \
+              | grep -E "^${BRANCH}-${COMMIT_HASH}([._-][A-Za-z0-9._-]*)?$" \
+              | grep -Ev -- '-(amd64|arm64)$' || true; } \
               | sort -V \
               | tail -n 1)
             NEXT_TAG="${LATEST_TAG:-${BRANCH}-${COMMIT_HASH}}"

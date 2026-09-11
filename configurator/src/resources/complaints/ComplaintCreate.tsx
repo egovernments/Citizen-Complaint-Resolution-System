@@ -2,6 +2,7 @@ import { DigitCreate, DigitFormInput, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
 import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
+import { usePostalRule } from '@/admin/usePostalRule';
 import { ComplaintHierarchyCascade } from './ComplaintHierarchyCascade';
 import { useApp } from '../../App';
 
@@ -9,6 +10,9 @@ export function ComplaintCreate() {
   const { state } = useApp();
   const tenantId = state.tenant;
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  // Publishes the tenant's MDMS postal rule (FormValidations fieldType
+  // postalCode, when authored) to the channel v.postalCodeKE reads.
+  usePostalRule(tenantId);
 
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {
     // Citizen must be stamped at the state tenant (user-service upserts
@@ -30,7 +34,7 @@ export function ComplaintCreate() {
   };
 
   return (
-    <DigitCreate title="File Complaint" record={{}} transform={transform}>
+    <DigitCreate title="File Complaint" record={{}} transform={transform} redirect="show">
       <FieldSection title="Complaint">
         <div className="space-y-4">
           <ComplaintHierarchyCascade

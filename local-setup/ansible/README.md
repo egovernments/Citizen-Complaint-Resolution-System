@@ -5,6 +5,13 @@ fully independent stack (~35 containers) on its own machine — same
 playbook, different `host_vars/<tenant>.yml`. Today: `nairobi`, `bomet`,
 plus `mh-iterations` (sandbox).
 
+> **Deploying from Windows?** Follow the
+> [Windows Quickstart (WSL2)](../../WINDOWS-QUICKSTART.md) — it walks the
+> same `./deploy.sh` flow end-to-end inside WSL2, including the
+> `localhost-slim` / `localhost-full` sizing templates for 16 GB and
+> 32 GB machines. On macOS, the equivalent is the
+> [macOS Quickstart (OrbStack)](../../MAC-QUICKSTART.md).
+
 ## Layout
 
 ```
@@ -45,7 +52,7 @@ git submodule update --init --recursive local-setup/ansible/nairobi-mdms
 | What | When you need it | Default if missing |
 |---|---|---|
 | **This repo** (`Citizen-Complaint-Resolution-System`) | always — `deploy.sh` runs from `ansible/` inside it | required |
-| `digit-ui-esbuild` | auto-cloned on the target from `theflywheel/digit-ui-esbuild` (no controller-side clone needed) | playbook handles it |
+| `digit-ui-esbuild` | nothing to clone — the SPA source is in this monorepo and CI publishes it as `egovio/digit-ui-esbuild`, which `digit_ui_bundle_image` pulls and unpacks on the target | playbook handles it |
 | `digit-ui-fix` (sibling clone next to CCRS) | only when `run_ci_tests: true` — Playwright + XLSX dataloader suite | task block skipped |
 | `digit-configurator` | `nginx_features.configurator: true` — with `build_configurator: true` the deploy clones + `vite build`s it from source (`files/configurator-build.sh`); or point `configurator_build:` at a pre-built `dist/` | sync task ignored, nginx renders without `/configurator/` location |
 | `DIGIT-MCP` | `enable_mcp: true` — with `build_mcp: true` the deploy clones + `docker build`s the image locally (`files/mcp-build.sh`, tagged `digit-mcp:local`), no registry pull; else pulls `{{ docker_registry }}/digit-mcp:latest` | MCP not deployed |
@@ -61,9 +68,6 @@ cd ansible
 
 # Full deploy
 ./deploy.sh nairobi
-
-# Dry-run first (no changes, show diff of every templated file)
-./deploy.sh nairobi --check --diff
 
 # Subset — only re-render nginx + reload it
 ./deploy.sh nairobi --tags nginx
@@ -119,7 +123,7 @@ their own. End-to-end:
 The first deploy:
 - installs Docker + Compose, configures insecure-registries if needed
 - creates `/opt/digit/`, syncs configs (`otel/`, `nginx/`, `kong/`,
-  `db/`, `seeds/`, `gatus/`, `jupyter/`, `configs/`, `docker/`,
+  `db/`, `seeds/`, `gatus/`, `dataloader/`, `configs/`, `docker/`,
   plus both compose files)
 - initialises + unseals OpenBao, seeds `bootstrap_secrets` (once)
 - writes per-tenant `/opt/digit/.env` from OpenBao
@@ -141,8 +145,8 @@ files trigger restarts.
 
 Some production tenants have hand-crafted `/etc/nginx/sites-enabled/<domain>`
 files with routing the templated `nginx-site.conf.j2` doesn't render
-(e.g. Bomet's `/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`,
-the `/digit-ui/` host-alias). Set `nginx_preserve_vhost: true` in their
+(e.g. Bomet's `/novu/`+`/novu-api/` routing and the `/digit-ui/` host-alias).
+Set `nginx_preserve_vhost: true` in their
 host_vars and the playbook will still install nginx, but will skip
 rendering/symlinking the site file — your hand-managed vhost is left
 ## Per-tenant overrides
@@ -185,8 +189,8 @@ so deploys on tenants without an overlay are unaffected.
 
 Set in host_vars when the tenant's `/etc/nginx/sites-enabled/<domain>`
 has routing the templated `nginx-site.conf.j2` doesn't render (Bomet's
-`/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`, the
-`/digit-ui/` host-alias). The playbook still installs nginx, but skips
+`/novu/`+`/novu-api/` routing and the `/digit-ui/` host-alias). The
+playbook still installs nginx, but skips
 templating + symlinking the site file — your hand-managed vhost is left
 alone across every redeploy.
 
@@ -280,7 +284,6 @@ below). Use `--start-at-task` and `--list-tasks` to slice work instead.
 
 | Goal | Command |
 |---|---|
-| See what would change without applying | `./deploy.sh <tenant> --check --diff` |
 | List every task name (so you can pick one to start from) | `./deploy.sh <tenant> --list-tasks` |
 | Resume from a specific task | `./deploy.sh <tenant> --start-at-task "Pull all images from VPC registry"` |
 | Pause after each task to review | `./deploy.sh <tenant> --step` |
@@ -517,8 +520,53 @@ flags. Setting back to `false` sweeps the running search containers.
 ### Just check that everything's wired up correctly
 
 ```bash
-./deploy.sh <tenant> --check --diff --tags compose-config
+./deploy.sh <tenant> --tags compose-config
 ```
+
+Re-renders the compose config and nothing else, so it converges quickly and
+shows which templated files changed.
+
+### Relocating Docker's storage to another partition — `docker_data_root`
+
+`docker_data_root` (see `inventory/group_vars/all.yml`) only takes effect on
+a box where Docker/containerd have never been started — the playbook fails
+the deploy instead of relocating a `/var/lib/docker` or `/var/lib/containerd`
+that already holds data, since pointing daemon.json/containerd's config at
+an empty directory would orphan every existing image and named volume
+(including the Postgres complaint database).
+
+To move an **already-populated** box's storage by hand first, then let the
+playbook take over:
+
+```bash
+# On the target host, as root:
+# Stop docker.socket too — leaving it active means any client that touches
+# /var/run/docker.sock during the copy (a stray `docker ps`, a monitoring
+# agent, a cron job) socket-activates dockerd again, which then writes into
+# /var/lib/docker while rsync is still reading it.
+systemctl stop docker.socket docker.service containerd
+
+mkdir -p /opt/docker /opt/containerd
+rsync -aHAX --info=progress2 /var/lib/docker/  /opt/docker/
+rsync -aHAX --info=progress2 /var/lib/containerd/ /opt/containerd/
+
+# RHEL family only (SELinux enforcing) — match the fcontext the playbook
+# would otherwise register, then relabel:
+semanage fcontext -a -e /var/lib/docker /opt/docker
+semanage fcontext -a -e /var/lib/containerd /opt/containerd
+restorecon -RF /opt/docker /opt/containerd
+
+# Once you've verified the copies (diff -rq old vs new, or just trust rsync),
+# reclaim the space. Remove the directories themselves rather than `rm -rf
+# .../*` — a bare `*` glob skips dotfiles (e.g. dockerd's own
+# .buildNodeID), which would otherwise survive and make the playbook's
+# emptiness guard see the "cleaned" path as still populated on the next run:
+rm -rf /var/lib/docker /var/lib/containerd
+```
+
+Then set `docker_data_root: "/opt/docker"` in the tenant's host_vars and
+run `./deploy.sh <tenant>` as usual — the playbook finds both directories
+already relocated (and now empty at their original path) and proceeds.
 
 ## Troubleshooting
 
@@ -575,9 +623,8 @@ state_tenant_id: ke                   # root tenant
 digit_ui_mode: static                 # default UI serving mode
 enable_search_stack: false            # search stack opt-in per host
 core_mobile_configs:                  # Kenya mobile validation defaults
-  mobilePrefix: "+254"
-  mobileNumberPattern: "^[17][0-9]{8}$"
-  mobileNumberLength: 9
+  countryCode: "+254"
+  mobileNumberRegex: "^[17][0-9]{8}$"
 # … plus auth, locale, boundary taxonomy, etc.
 
 # inventory/host_vars/<tenant>.yml — overrides + per-tenant data
@@ -602,7 +649,15 @@ shared belongs in `group_vars/digit.yml`.
 4. **digit-ui** — render `globalConfigs.js`, ship nginx config, optional `npm install` + esbuild rebuild for HMR
 5. **OpenBao bootstrap** (first run) + secret-pull for every run
 6. **Compose pull + start** (with profiles)
-7. **Health gates** — wait for kong / persister / hrms / ui / mcp / loki / grafana
+7. **Health gates** — wait for kong / persister / hrms / ui / mcp. The only
+   observability service waited on is **loki**, and non-fatally (`ignore_errors`):
+   dashboards are not a serving dependency, so an unhealthy one is reported and the
+   deploy continues. #1657 gates that wait on the logs tier actually being active, so a
+   `observability_level: metrics` tenant no longer spends two minutes retrying a
+   container it deliberately did not deploy. **grafana, prometheus, tempo,
+   otel-collector and node-exporter are not waited on at all** — and are not Gatus-checked
+   either, so nothing reports them either way (#1613). See
+   `docs/observability/enabling-monitoring.md`.
 8. **Host nginx site** — render `nginx-site.conf.j2`, validate, reload
 9. **CC + DataLoader + Playwright tests** — gates the deploy
 

@@ -9,12 +9,13 @@ import java.util.Map;
 import java.util.UUID;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class DispatchLogEntry {
     private UUID id;
     private String eventId;
+    private String transactionId;
     private String referenceNumber;
     private String module;
     private String eventName;

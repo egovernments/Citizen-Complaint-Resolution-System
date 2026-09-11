@@ -16,6 +16,7 @@ import { additionalDetails } from "../../citizen/Create/steps-config/additionalD
 import { locationDetails } from "../../citizen/Create/steps-config/locationDetails";
 import { useQueryClient } from "react-query";
 import { useHistory, useRouteMatch, useParams } from "react-router-dom";
+import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
 
 const configs = [
   createComplaint,
@@ -256,7 +257,15 @@ const FormExplorer = () => {
         }
         return !!data?.SelectAddress?.city?.code && !!data?.SelectAddress?.locality?.code;
       case "description":
-        return typeof data?.description === "string" && data.description.trim().length > 0;
+        // CCSD-1980 / #1226: reject numbers-only / whitespace-only descriptions
+        // (e.g. "000000000000") — require at least 3 letters (any language).
+        // Mirrors the employee-side rule in CreateComplaintConfig.js and the
+        // same fix in CreatePGRFlowV2 (this file is kept only as a one-release
+        // rollback target — see Module.js — so it must not regress either).
+        return (
+          typeof data?.description === "string" &&
+          /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u.test(data.description)
+        );
       case "SelectComplaintType":
         return data?.SelectComplaintType != null;
       case "GeoLocationsPoint":
@@ -289,15 +298,10 @@ const FormExplorer = () => {
     // egovernments/CCRS#478 — postal validation message.
     if (merged?.postalCode != null && String(merged.postalCode).trim().length > 0) {
       const pc = String(merged.postalCode).trim();
-      // Postal-code shape is per-country. Read from globalConfigs
-      // `CORE_POSTAL_CONFIGS` so each tenant can pin their own pattern
-      // (Kenya 5 digits, India 6, UK alnum, US 5/5+4, …). Falls back to
-      // the legacy hard default when the host hasn't configured it.
-      const postalCfg = window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-      const postalPattern = postalCfg.postalCodePattern || "^[0-9]{5}$";
-      const postalErrorKey = postalCfg.postalCodeErrorMessage || "CS_COMPLAINT_POSTALCODE_INVALID_ERROR";
-      if (!new RegExp(postalPattern).test(pc)) {
-        setToast({ label: t(postalErrorKey), type: "error" });
+      // Pattern + message are config-driven per tenant (CCRS#722) — see
+      // utils/postalCode.js.
+      if (!isPostalCodeValid(pc)) {
+        setToast({ label: getPostalCodeErrorMessage(t), type: "error" });
         return;
       }
     }

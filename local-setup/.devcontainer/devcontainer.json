@@ -15,7 +15,6 @@
   "forwardPorts": [
     18080,
     18000,
-    18888,
     18889,
     15432,
     19000,
@@ -29,10 +28,6 @@
     "18000": {
       "label": "Kong API Gateway",
       "onAutoForward": "silent"
-    },
-    "18888": {
-      "label": "Jupyter Lab",
-      "onAutoForward": "notify"
     },
     "18889": {
       "label": "Gatus Health Dashboard",

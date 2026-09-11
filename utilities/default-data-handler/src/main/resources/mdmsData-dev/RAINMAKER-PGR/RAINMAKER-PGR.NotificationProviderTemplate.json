@@ -1,0 +1,256 @@
+[
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
+    "locale": "en_IN",
+    "templateId": "HX67fae4a61c4f50db8a11ebac21c50a79",
+    "templateName": "complaints_apply_pendingforassignment_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
+    "locale": "hi_IN",
+    "templateId": "HX0f48a25c5dff81a1c5ee47a2cd122b36",
+    "templateName": "complaints_apply_pendingforassignment_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "locale": "en_IN",
+    "templateId": "HX9d0ab22fb14080bdfd3d4cb43d9bd6f7",
+    "templateName": "complaints_citizen_assign_pendingatlme_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name",
+      "emp_designation",
+      "emp_department"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "locale": "hi_IN",
+    "templateId": "HX0d5538241557b1b56a910b8a48fc6b48",
+    "templateName": "complaints_citizen_assign_pendingatlme_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name",
+      "emp_designation",
+      "emp_department"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "locale": "en_IN",
+    "templateId": "HXe6f34b83cc6e7179c0ede06472dd81fb",
+    "templateName": "complaints_citizen_resolve_resolved_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "locale": "hi_IN",
+    "templateId": "HX7676f0a4eb2f9da5b2f207b8a9202710",
+    "templateName": "complaints_citizen_resolve_resolved_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "locale": "en_IN",
+    "templateId": "HXea318abc741dd5c09555617a4ecad490",
+    "templateName": "complaints_citizen_reject_rejected_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "additional_comments"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "locale": "hi_IN",
+    "templateId": "HX38efc29e9d643f7e8717cbf11015c4aa",
+    "templateName": "complaints_citizen_reject_rejected_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "additional_comments"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "locale": "en_IN",
+    "templateId": "HXc7f239a0b267bbe208898c32bbd6034a",
+    "templateName": "complaints_citizen_reopen_pendingforassignment_sms_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "locale": "hi_IN",
+    "templateId": "HX04e739b1b1e115e4a54f062f044738ac",
+    "templateName": "complaints_citizen_reopen_pendingforassignment_sms_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "locale": "en_IN",
+    "templateId": "HX7dc390ab0a8cd7cd3bde32768278dbd7",
+    "templateName": "complaints_citizen_reassign_pendingatlme_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name",
+      "emp_designation",
+      "emp_department"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "locale": "hi_IN",
+    "templateId": "HX276d74eefa5ae90d2e0716a4cdc3c7ca",
+    "templateName": "complaints_citizen_reassign_pendingatlme_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date",
+      "emp_name",
+      "emp_designation",
+      "emp_department"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERRESOLUTION",
+    "locale": "en_IN",
+    "templateId": "HXa0ad0ef3f58903809464f1707a9347a8",
+    "templateName": "complaints_rate_english_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  },
+  {
+    "provider": "twilio",
+    "channel": "WHATSAPP",
+    "audience": "CITIZEN",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERRESOLUTION",
+    "locale": "hi_IN",
+    "templateId": "HX84ff2205a1ea72eaa1326fd93bb37368",
+    "templateName": "complaints_rate_english_message_new",
+    "variables": [
+      "complaint_type",
+      "id",
+      "date"
+    ],
+    "approvalStatus": "approved",
+    "active": true
+  }
+]

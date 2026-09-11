@@ -1,23 +1,44 @@
 # DIGIT CRS - Local Development Stack
 
-Run the DIGIT Citizen Complaint Resolution System locally with Docker Compose or Tilt. This stack includes all core DIGIT services, the PGR (Public Grievance Redressal) module, a web UI, and tools for loading master data.
+Run the DIGIT Citizen Complaint Resolution System: all core DIGIT services, the PGR
+(Public Grievance Redressal) module, the citizen and employee web apps, and the tools
+for creating a city and loading its data.
+
+Three ways to run it, from a laptop container stack to a full deployment. Pick one and
+follow it start to finish.
 
 ## Choose Your Setup Path
 
-There are **two independent ways** to run this stack. Pick one:
+There are **three independent ways** to run this stack. Pick one:
 
 | Path | Best for | What you need |
 |------|----------|---------------|
 | **[Option A: Docker Compose](#option-a-docker-compose)** | Quick setup, no extra tools | Docker only |
 | **[Option B: Tilt](#option-b-tilt)** | Dashboard, grouped services, dev buttons | Docker + Tilt |
+| **[Option C: Ansible](#option-c-ansible--the-whole-stack-one-command)** | A real deployment — web server, secret store, monitoring, onboarding wizard. This machine or a server. | Ansible (a script installs it) |
 
-| **[Option C: Ansible (Remote Server)](#option-c-ansible-remote-server)** | Deploy to a remote Ubuntu machine | Docker + Ansible |
+Options A and B are development stacks: containers on your machine, everything on
+`localhost:18xxx` ports, no web server. **Option C is a deployment** — one command builds
+the whole thing, on this machine or on a server, and serves it on the normal web ports.
+It is also the only option with the browser onboarding wizard.
 
-Options A and B run locally. Option C deploys to a remote server, pulling pre-built images from a public registry. **Pick one.**
+**Not sure?** Want to poke at the API or change some code — Option A. Setting the system
+up for someone to actually use — Option C.
+
+> **On Windows?** The full Ansible stack also runs locally via WSL2 — see
+> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) (validated end-to-end on a
+> 16 GB machine; the playbook self-heals the WSL-specific quirks). The macOS
+> equivalent is [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
 
 ---
 
 ## Prerequisites
+
+> **Going straight to Option C?** Skip this section. Its prerequisites are different
+> (Ansible, Node, Python — not Docker, which the playbook installs for you) and
+> [a script installs them](#step-2--install-the-prerequisites).
+
+For Options A and B:
 
 ### Required
 
@@ -33,11 +54,22 @@ Options A and B run locally. Option C deploys to a remote server, pulling pre-bu
 
 | Tool | Install Link | When you need it |
 |------|-------------|------------------|
-| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#installing-tilt) | Only if using Option B |
+| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#step-1-install-tilt) | Only if using Option B |
 | [Node.js 20+](https://nodejs.org/en/download/) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`) |
 | [Python 3.8+](https://www.python.org/downloads/) | [Download](https://www.python.org/downloads/) | Running the CI dataloader script |
+| **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (Tilt only) — see note below |
 | [Maven 3.9+](https://maven.apache.org/download.cgi) | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (Tilt only) |
 | [Yarn](https://yarnpkg.com/getting-started/install) | [Download](https://yarnpkg.com/) | Hot reload for DIGIT UI (Tilt only) |
+
+> **JDK version matters.** `backend/pgr-services` sets `<java.version>17</java.version>` and builds only on
+> **JDK 17 or 21**. JDK 23 and 25 fail: Lombok 1.18.30 (inherited from the Spring Boot 3.2.2 parent) cannot
+> run on their compiler internals, so every `@Builder`-generated method silently disappears and the build
+> dies with dozens of `cannot find symbol: method builder()` errors. The error never mentions Lombok or
+> your JDK, so it is easy to misread as broken source.
+>
+> Ubuntu's `default-jdk` may be newer than 21. Check with `mvn -version` (it reports the JDK Maven actually
+> uses, which is what matters — not `java -version`), and switch with
+> `sudo update-alternatives --config java` if needed.
 
 ---
 
@@ -81,7 +113,6 @@ Expected output: each service prints `OK` or `healthy`.
 | What | URL |
 |------|-----|
 | DIGIT UI (Employee login) | http://localhost:18000/digit-ui/employee |
-| Jupyter Lab (DataLoader) | http://localhost:18000/jupyter/lab?token=digit-crs-local |
 | Kong Gateway (API base) | http://localhost:18000 |
 | Gatus Health Dashboard | http://localhost:18889 |
 
@@ -106,20 +137,30 @@ Tilt wraps Docker Compose with a web dashboard showing live logs, service health
 
 ### Step 1: Install Tilt
 
-This project works best with a [patched version of Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for Docker Compose health checks. The upstream Tilt has a bug where it marks containers "ready" before they're healthy.
+Install upstream Tilt from https://docs.tilt.dev/install.html.
 
 ```bash
 # Linux amd64
-curl -fsSL https://github.com/ChakshuGautam/tilt/releases/download/v0.36.3-healthcheck/tilt-linux-amd64.gz \
-  | gunzip > /usr/local/bin/tilt
-chmod +x /usr/local/bin/tilt
+curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
 
 # Verify
 tilt version
 ```
 
-> PR to upstream: https://github.com/tilt-dev/tilt/pull/6682.
-> If using upstream Tilt, install from https://docs.tilt.dev/install.html.
+> **Do not use the `v0.36.3-healthcheck` fork.** We previously recommended a
+> [patched Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for
+> Docker Compose health checks, because upstream Tilt marks containers "ready" before they are healthy
+> (upstream PR: https://github.com/tilt-dev/tilt/pull/6682).
+>
+> That release is currently **broken and unusable**: the published binary ships without its web assets, so
+> `tilt up` exits immediately with `Could not find Tilt web static files`. Its version string is
+> `v0.36.3-dev`, and the `-dev` suffix makes Tilt serve the UI from the build machine's source tree
+> (`/root/code/tilt-fork/web`) instead of embedded assets. `--web-mode=prod` fails too, so there is no
+> workaround short of rebuilding and re-releasing the fork.
+>
+> Consequence of using upstream: Tilt may show a service as ready before its health check passes. The
+> stack still comes up — `docker-compose.yml` enforces ordering via `depends_on: service_healthy` — but
+> don't trust the dashboard's "ready" as "healthy". Check the `gatus` resource for real health.
 
 ### Step 2: Clone and start
 
@@ -156,7 +197,6 @@ Same URLs as Docker Compose:
 | What | URL |
 |------|-----|
 | DIGIT UI (Employee login) | http://localhost:18000/digit-ui/employee |
-| Jupyter Lab (DataLoader) | http://localhost:18000/jupyter/lab?token=digit-crs-local |
 | Tilt Dashboard | http://localhost:10350 |
 
 ### Step 5: Stop
@@ -186,516 +226,463 @@ tilt up    # uses the default Tiltfile with hot reload
 
 ---
 
-## Option C: Ansible (Remote Server)
+## Option C: Ansible — the whole stack, one command
 
-Deploy the full DIGIT stack to any fresh Ubuntu 24.04 machine using Ansible. Images are pulled from the public registry at `registry.preview.egov.theflywheel.in` — no VPC access or local builds needed.
+This is the path to a **real deployment**: every service, a web server in
+front of them, a secret store, monitoring, and a browser wizard for creating
+your city and loading its data. One command does all of it.
 
-### Prerequisites
+It works two ways, from the same files:
 
-On your **control machine** (laptop/CI server):
+- **on this machine** — nothing to SSH into, good for a demo, a pilot, or
+  learning how the system fits together;
+- **on a server** — a fresh Ubuntu box you have `root` SSH access to.
 
-| Tool | Install |
-|------|---------|
-| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pip install ansible` |
-| SSH access to the target machine | Key-based auth recommended |
+The instructions below are written for the first case. Where the second
+differs, it says so.
 
-The **target machine** needs:
-- Ubuntu 24.04 (fresh install)
-- At least 8 vCPU, 16 GB RAM, 50 GB disk
-- Root or sudo access
-- Internet access (to pull images from the public registry)
+> **New to this?** Read the six steps in order and do not skip ahead. Each one
+> takes a few minutes except the deploy itself, which takes 30–60 minutes the
+> first time. Every step ends with something you can check, so you find out
+> immediately if it did not work.
 
-### Step 1: Configure inventory
+<details>
+<summary><b>Under the hood — what "one command" actually runs</b></summary>
+
+`./deploy.sh <name>` is a thin wrapper. In order it:
+
+1. refuses to start if `ansible-playbook` is not on `PATH`;
+2. runs `ansible-lint` and `yamllint` over the playbook and your config
+   (skipped with a warning if they are not installed, or with `SKIP_LINT=1`);
+3. regenerates `inventory/hosts.yml` from every `host_vars/*.yml` on disk —
+   which is why there is no inventory file for you to edit;
+4. runs `scripts/preflight.py` against your config, a set of rules each of
+   which encodes a real incident (`SKIP_PREFLIGHT=1` bypasses it);
+5. hands everything else to `ansible-playbook playbook-deploy.yml`, forwarding
+   any extra flags you passed.
+
+The playbook itself installs Docker, creates `/opt/digit/`, syncs the compose
+files and configs, initialises and unseals OpenBao and seeds your secrets,
+pulls or builds images, starts the stack, waits on health gates, creates your
+tenants, and configures nginx. Re-running it is safe: only changed config
+causes a restart.
+
+The authoritative reference for all of it is
+[`ansible/README.md`](ansible/README.md).
+
+</details>
+
+### What you need
+
+**The machine you deploy to:**
+
+| | What the deploy expects | Comfortable |
+|---|---|---|
+| CPU | 8 vCPU | 8+ |
+| RAM | 16 GB | 32 GB |
+| Free disk | 60 GB | 100 GB |
+| OS | Ubuntu 22.04 or 24.04 | same |
+
+Fewer cores works — it is just slower, since most of a first deploy is
+downloading and building. 16 GB is the figure to take seriously: below it the
+JVM services start competing and containers get killed.
+
+Fedora, Rocky, Alma and Debian also work. Ubuntu is what gets tested on every
+change, so it is the one to pick if you have a choice.
+
+**If you are deploying to a separate server**, you also need `root` SSH access
+to it using a key (not a password), and the machine you run the command from
+needs the tools in Step 2.
+
+> **On Windows?** Use WSL2 and follow
+> [WINDOWS-QUICKSTART.md](../WINDOWS-QUICKSTART.md) — validated end to end on a
+> 16 GB machine. On a Mac, [MAC-QUICKSTART.md](../MAC-QUICKSTART.md).
+
+### Step 1 — Get the code
+
+**For a real deployment, use a release.** `master` is where development lands;
+a release tag is a set of versions that were tested together.
 
 ```bash
-cd local-setup/ansible
-cp inventory.ini.example inventory.ini
+# Newest release — check https://github.com/egovernments/Citizen-Complaint-Resolution-System/releases
+git clone --branch v2.12-beta --depth 1 \
+  https://github.com/egovernments/Citizen-Complaint-Resolution-System.git
+cd Citizen-Complaint-Resolution-System
 ```
 
-Edit `inventory.ini` and replace the placeholder IP with your target machine:
+`--depth 1` skips the history and downloads a lot less.
 
-```ini
-[targets]
-203.0.113.10 ansible_user=root
-```
-
-### Step 2: Run the playbook
+To find the newest tag without opening a browser:
 
 ```bash
-ansible-playbook -i inventory.ini playbook-deploy.yml
+git ls-remote --tags --refs --sort=-version:refname \
+  https://github.com/egovernments/Citizen-Complaint-Resolution-System.git | head -5
 ```
 
-The playbook will:
-1. Install Docker Engine and Docker Compose on the target
-2. Copy all config files (Kong, nginx, OTEL, DB seeds, etc.)
-3. Download the OpenTelemetry Java Agent (~21 MB)
-4. Pull ~30 container images from the public registry
-5. Start the DIGIT stack
-6. Wait for health checks (Kong, persister, HRMS, UI — up to 10 min)
-7. Run CI tests: XLSX-driven DataLoader (Bomet County) + Playwright E2E
-
-### Step 3: Access the application
-
-After the playbook completes, the stack is available on the target machine:
-
-| What | URL |
-|------|-----|
-| DIGIT UI (Employee login) | `http://<target-ip>:18000/digit-ui/employee` |
-| Kong Gateway (API base) | `http://<target-ip>:18000` |
-| Gatus Health Dashboard | `http://<target-ip>:18889` |
-| Grafana (Tracing) | `http://<target-ip>:13000` |
-
-### Customizing the deployment
-
-Override playbook variables to deploy with different tenant data:
+If you are working *on* DIGIT rather than deploying it, clone the default
+branch instead — just be aware you are getting whatever landed this morning:
 
 ```bash
-ansible-playbook -i inventory.ini playbook-deploy.yml \
-  -e boot_tenant=mz.lilongwe \
-  -e county_xlsx=/path/to/your-county-data.xlsx
+git clone https://github.com/egovernments/Citizen-Complaint-Resolution-System.git
 ```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `boot_tenant` | `ke.bomet` | City tenant ID for E2E tests |
-| `county_xlsx` | Bomet county XLSX (bundled) | Path to county data Excel file |
+**Check:** `ls local-setup/ansible/deploy.sh` prints the path.
 
-### Public Docker Registry
+### Step 2 — Install the prerequisites
 
-All images are hosted at `registry.preview.egov.theflywheel.in` — a read-only HTTPS proxy to the internal build registry. No authentication required for pulls.
+You need Ansible, Python, Node.js 20 and a few command-line tools on the
+machine you run the deploy **from**. There is a script for it:
 
 ```bash
-# Browse available images
-curl -s https://registry.preview.egov.theflywheel.in/v2/_catalog | jq .
-
-# Pull an image directly
-docker pull registry.preview.egov.theflywheel.in/egovio/pgr-services:latest
+cd local-setup/scripts
+./install-prereqs.sh
 ```
 
-The registry is read-only — push operations return `405 Method Not Allowed`.
+It works on Debian/Ubuntu, RHEL/Fedora/Rocky/Alma/CentOS, Arch and openSUSE,
+asks for `sudo` only if something is actually missing, and is safe to run
+again. Add `--check` to see what it would do without changing anything.
 
-### What the Ansible playbook deploys
+Docker is **not** in the list — the playbook installs Docker on the target
+itself, including when that is this same machine.
 
-The playbook uses `docker-compose.registry.yml` which includes:
+<details>
+<summary><b>Under the hood — what it installs and why</b></summary>
 
-| Category | Services |
-|----------|----------|
-| **Tracing** | OpenTelemetry Collector, Tempo, Grafana |
-| **Infrastructure** | PostgreSQL 16, PgBouncer, Redis, Redpanda (Kafka), MinIO, Elasticsearch |
-| **Core DIGIT** | MDMS v2, User, Workflow v2, Localization, Boundary, Access Control, IDGEN, Encryption, Persister, Filestore, HRMS, Indexer, Inbox |
-| **Application** | PGR Services, URL Shortening, Default Data Handler, Boundary Management |
-| **Frontend** | DIGIT UI (React), Kong API Gateway |
-| **Tools** | Jupyter Lab (DataLoader), Gatus (health monitoring) |
-| **Seeds** | Tenant data, security config, workflow config, localization, user accounts |
+| What | Why |
+|---|---|
+| `git`, `curl`, `rsync`, `unzip` | `rsync` is not optional: the playbook uses `ansible.posix.synchronize` to copy configs, which shells out to it on both ends |
+| `python3` + `venv` + `pip` | Ansible is Python, and `scripts/preflight.py` runs on every deploy |
+| Node.js 20 + npm | the browser apps are **built on the controller**, not on the target |
+| `ansible`, `ansible-lint`, `yamllint` | `deploy.sh` runs the two linters before touching anything |
+| the `ansible.posix` and `community.general` collections | `synchronize` and `ini_file` live there |
 
-### Files involved
+Two details that bite people:
 
-```
-local-setup/
-├── ansible/
-│   ├── playbook-deploy.yml         # Main deployment playbook
-│   └── inventory.ini.example       # Template inventory
-├── docker-compose.registry.yml     # Compose with public registry images
-├── kong/
-│   ├── kong.yml                    # API gateway routes + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: authToken → userInfo
-├── nginx/
-│   ├── digit-ui.conf               # UI + API proxy config
-│   ├── globalConfigs.js            # Runtime UI configuration
-│   ├── mdms-proxy.conf             # MDMS backward-compat proxy
-│   ├── user-proxy.conf             # User service load balancer
-│   ├── workflow-proxy.conf         # Workflow service load balancer
-├── otel/
-│   ├── download-agent.sh           # Downloads OTEL Java Agent (~21MB)
-│   ├── otel-collector-config.yaml  # Collector → Tempo pipeline
-│   ├── tempo-config.yaml           # Trace storage config
-│   └── grafana/provisioning/       # Grafana datasource for Tempo
-├── seeds/
-│   └── user-seed.sh                # Creates ADMIN + GRO users via API
-├── data/
-│   └── Bomet county...xlsx         # Sample county data for E2E tests
-├── configs/persister/              # Kafka consumer configs (9 YAML files)
-├── db/                             # SQL seeds + workflow JSON
-├── gatus/                          # Health monitoring config
-├── jupyter/                        # DataLoader library + notebook
-├── scripts/                        # CI dataloader scripts
-└── tests/                          # Playwright E2E + smoke tests
+- Ansible goes into a private virtualenv at `~/.local/share/digit-ansible`,
+  symlinked into `~/.local/bin`. Ubuntu 24.04, Debian 12+, Fedora 38+ and
+  Homebrew Python all refuse a plain `pip install` with
+  `error: externally-managed-environment` (PEP 668). A virtualenv sidesteps
+  that identically everywhere. If `~/.local/bin` is not on your `PATH`, the
+  script says so and tells you what to add.
+- Node comes from NodeSource on Debian and RHEL family, not from the distro.
+  Ubuntu's own `nodejs` package is version 18 **and ships no npm**, which
+  surfaces much later as a confusing `Cannot find module 'esbuild'`.
+
+On a distro the script does not recognise it prints the exact package list and
+stops rather than guessing.
+
+</details>
+
+**Check:**
+
+```bash
+ansible-playbook --version && node --version && python3 --version
 ```
 
-### Relationship to PR #318
+If `ansible-playbook` is missing right after a successful run, your shell has
+not picked up `~/.local/bin` yet — open a new terminal.
 
-This deployment setup builds on the work from [PR #318](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/318) (Local setup enhancements and fixes), which added:
+### Step 3 — Write your deployment config
 
-- **DataLoader v2** (`jupyter/dataloader/crs_loader.py`) — rewritten loader with XLSX-driven tenant setup, boundary management, and rollback support
-- **Native auth config** (`nginx/globalConfigs.js`) — switched from Keycloak to DIGIT native auth provider
-- **PGR inbox components** — DesktopInbox, MobileInbox, Filter, ComplaintCard, search components
-- **Inbox data hooks** (`useInboxData`, `useComplaintStatus`, `useComplaintStatusCount`) — new React hooks for inbox queries
-- **Employee PGR inbox rewrite** — simplified PGRInbox page using the new components
-- **Playwright E2E tests** — tenant setup smoke tests (`pgr-tenant.test.ts`)
+Everything specific to your deployment lives in one YAML file. Copy the
+quickstart template and name it after your deployment:
 
-This PR (#319) takes those local-setup enhancements and makes them deployable to any remote machine via Ansible, with:
-- A public Docker registry (no VPC access needed)
-- Full OTEL distributed tracing (Collector + Tempo + Grafana)
-- Kong auth enrichment (authToken → userInfo resolution)
-- Nginx reverse proxies for scaled services (user, workflow)
-- Automated CI test pipeline (XLSX DataLoader + Playwright)
+```bash
+cd ../ansible                 # local-setup/ansible
+cp inventory/host_vars/quickstart.yml.example inventory/host_vars/mycity.yml
+```
+
+**The file name is the deployment name.** `mycity.yml` means you will run
+`./deploy.sh mycity`. Real config files are gitignored — only the `.example`
+ones are tracked — so your passwords stay out of git.
+
+Now open `inventory/host_vars/mycity.yml` and change these. Everything else in
+the file is already correct for a first deployment.
+
+| Setting | What it is | Example |
+|---|---|---|
+| `state_root` | Your top-level tenant: the country or state. Lowercase, no dots. Creating it is what the deploy does. | `kenya` |
+| `state_tenant_id` | The tenant the browser apps authenticate against. Keep it the same as `state_root`. | `kenya` |
+| `tenant_id` | Your **city** tenant, where complaints actually live. Must start with `<state_root>.` | `kenya.nairobi` |
+| `boot_tenant` | Default tenant for the citizen app. Same as `tenant_id` is right. | `kenya.nairobi` |
+| `ui_state_tenant_id` | The tenant the app lands on after login. Point at the **city**. | `kenya.nairobi` |
+| `login_tenant_allowlist` | Which tenants appear in the login screen's City dropdown. List both. | `[kenya, kenya.nairobi]` |
+| `map_center` | Where the complaint map opens. **Required — the deploy fails without it.** | `{lat: -1.2864, lng: 36.8172}` |
+| `pgr_boundary_highest_level`<br>`pgr_boundary_lowest_level`<br>`boundary_type` | What your administrative areas are called, largest first. These are labels on the complaint form, so use the words your staff use. | `County`, `Ward`, `Ward` |
+| `core_mobile_configs` | Your country's phone-number rule. Get this wrong and every citizen signup is rejected. | `+254` / `^0?[17][0-9]{8}$` |
+| `core_postal_configs` | Your country's postcode rule. | `^[0-9]{5}$` |
+| `secrets_path` | Where this deployment's secrets are filed inside the secret store. Just a path. | `kv/digit/mycity` |
+| `bootstrap_secrets` | Your passwords. Change all of them **except** `elasticsearch_master_password`, which must stay as written. | — |
+
+**Deploying to a separate server instead of this machine?** Change two more
+lines: put the server's address in `ansible_host`, and delete the
+`ansible_connection: local` line. If it has a real domain name and
+certificates, set `domain:` to that name and `tls_enabled: true`.
+
+<details>
+<summary><b>Under the hood — why there are five tenant settings and not one</b></summary>
+
+Tenants are two levels: a **root** (`kenya`) and a **city** under it
+(`kenya.nairobi`). Five variables name them because different parts of the
+system need a different one, and they are genuinely not interchangeable:
+
+| Variable | Read by | Consequence of getting it wrong |
+|---|---|---|
+| `state_root` | the JVM services, as `STATE_LEVEL_TENANT_ID` — it decides which tenant's encryption keys and MDMS defaults they load at boot | pointing it at a tenant that does not exist yet crash-loops `egov-workflow-v2` and `egov-enc-service` |
+| `state_tenant_id` | the browser apps; the configurator takes its login-tenant default from the first segment of this | if it names a root the deploy never creates, there is no `ADMIN` there to log in as |
+| `tenant_id` | templates that need a single city value; also the city tenant the deploy bootstraps | data lands under a tenant nothing queries |
+| `boot_tenant` | only the opt-in CI suite, as `BOOT_TENANT`/`DIGIT_TENANT` | inert unless `run_ci_tests: true` — but preflight still checks it sits under `state_root` |
+| `ui_state_tenant_id` | the SPA, as the tenant it lands on | the wizard writes boundaries to the city; if the app reads the root instead, every location dropdown is empty |
+
+The tenant-creation step only runs when `state_root` is something other than
+`pg`, and it creates `state_root` and `tenant_id` — **not** `state_tenant_id`.
+(`pg` is the demo tenant that ships inside the database dump; leaving
+`state_root: pg` means "use the demo data as-is".) If `state_tenant_id` names a
+root that was never created, the playbook notices there is no `ADMIN` there,
+points the app at `pg` so you can still log in, and prints exactly that.
+
+The deploy does this in two phases on purpose: the stack boots against `pg`,
+your tenants are created through the API, and only then are the
+`STATE_LEVEL_TENANT_ID` values rewritten and the services restarted. That is
+why a first deploy restarts things partway through and why it takes as long as
+it does.
+
+</details>
+
+<details>
+<summary><b>Under the hood — the rest of the settings</b></summary>
+
+`quickstart.yml.example` is deliberately short.
+[`_example.yml`](ansible/inventory/host_vars/_example.yml) in the same
+directory is the full catalogue: every flag the playbook understands, what it
+does, what values it takes and what it pairs with. Highlights you are likely to
+want soon:
+
+- `enable_search_stack` — Elasticsearch, the indexer and the employee inbox.
+  Costs about 3 GB of RAM; without it the inbox screen returns 503, which is
+  why `employee_module_denylist: [IM]` hides it by default.
+- `enable_novu` — SMS, email and WhatsApp notifications. Eight more containers.
+  There is a turn-key installer, `scripts/enable-notifications.sh`, rather than
+  just the flag.
+- `enable_keycloak` — single sign-on. DIGIT's own OTP login works without it.
+- `enable_otp_services` — real SMS one-time passwords. Off means the citizen
+  login OTP is always `123456`, which is what you want while testing.
+- `observability_level` — `metrics`, `logs` or `traces` (the default, meaning
+  everything). Lowering it deploys fewer monitoring containers.
+- `enable_matomo` — self-hosted web analytics for the portal. Three more
+  containers, about 1 GB. The deploy installs Matomo for you — no browser
+  wizard — and stores the generated admin password in OpenBao. Standing it up
+  sends nothing anywhere: pointing the portal at it is a separate MDMS step, so
+  collection turns on and off without a redeploy. Pair it with
+  `nginx_features.matomo`. There is a turn-key installer,
+  `scripts/enable-matomo.sh`, and a full walkthrough in
+  [`docs/matomo-deployment.md`](../docs/matomo-deployment.md).
+- `run_ci_tests` — runs the Postman and Playwright suites at the end of every
+  deploy. Adds 5–10 minutes.
+
+Where a service has an `nginx_features.*` twin, you need **both**: the service
+flag runs it, the nginx flag makes it reachable from a browser. Keep every key
+in the `nginx_features` block — six of them are read without a fallback, so
+deleting a line fails the vhost render instead of turning that path off.
+
+</details>
+
+**Check:** the config is validated for you at the start of the next step, so
+there is nothing to run here.
+
+### Step 4 — Deploy
+
+```bash
+./deploy.sh mycity
+```
+
+That is the whole command. Expect **30–60 minutes** on a first run and a few
+minutes after that. Pulling the stack alone is around ten minutes on Linux, and
+the quickstart config additionally builds the onboarding wizard, the UI bundle
+and the tenant-creation service from source on top of that.
+
+Ansible prints nothing while a long task is running, which looks like a hang.
+It is not. Watch progress in a second terminal:
+
+```bash
+tail -f /opt/digit/digit-stack-up.mycity.progress
+watch -n5 "docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'healthy|Exited|Restart'"
+```
+
+**Two things to expect on the way through:**
+
+- **It asks for your sudo password, or fails saying it needs one.** The
+  playbook installs packages and writes nginx config, which needs root.
+  `deploy.sh` does not ask for the password itself, so on a local deployment
+  pass it through:
+
+  ```bash
+  ./deploy.sh mycity -K            # prompts for the sudo password
+  ```
+
+  Deploying to a remote server as `root` does not need this.
+
+- **A preflight warning about `configurator_build`.** Expected and harmless:
+  the value is produced by the build task later in the same run, so it cannot
+  be set in your config beforehand.
+
+<details>
+<summary><b>Under the hood — passing extra flags, and re-running</b></summary>
+
+`deploy.sh` forwards anything after the deployment name straight to
+`ansible-playbook`:
+
+```bash
+./deploy.sh mycity --tags=nginx        # only the nginx tasks
+./deploy.sh mycity --start-at-task="..."   # resume from a named task
+./deploy.sh mycity -vvv                # verbose, for debugging a failure
+```
+
+Two environment escape hatches, both for when you know what you are doing:
+`SKIP_LINT=1` skips the linters, `SKIP_PREFLIGHT=1` skips the config gate.
+
+Re-running the whole thing is the normal way to recover from a failure part
+way through. The playbook is idempotent: work already done is detected and
+skipped, and only changed config causes a restart. It is not a fresh start,
+though — set `force_clean: true` for that (it removes containers and networks
+but keeps the database).
+
+</details>
+
+### Step 5 — Check that it worked
+
+The last thing the deploy prints is a summary. Then, in a browser:
+
+| What | URL (local deployment) | URL (server with a domain) |
+|---|---|---|
+| Employee app | http://localhost/digit-ui/employee | `https://<domain>/digit-ui/employee` |
+| Citizen app | http://localhost/digit-ui/citizen | `https://<domain>/digit-ui/citizen` |
+| Onboarding wizard | http://localhost/configurator/ | `https://<domain>/configurator/` |
+| Health dashboard | http://localhost/status/ | `https://<domain>/status/` |
+| Dashboards (Grafana) | http://localhost/grafana/ | `https://<domain>/grafana/` |
+
+Unlike Options A and B, everything here is on the **normal web ports** (80, and
+443 with TLS) because a real web server is in front of the stack — there is no
+`:18000` in these URLs.
+
+From a terminal on the deployment machine:
+
+```bash
+# every container and its health
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+
+# the health dashboard's own view, as JSON
+curl -s http://localhost/status/api/v1/endpoints/statuses | head -40
+```
+
+`digit-gatus` never reports `healthy` — it declares no health check at all, so
+it sits at a plain `Up`. That is normal and not a failure.
+
+### Step 6 — Log in
+
+The deploy creates one administrator account per tenant. **On a stock config
+those credentials are `ADMIN` / `eGov@123`, which are published in this
+repository — change them before anyone else can reach the machine.**
+
+| Where | Username | Password | Which tenant |
+|---|---|---|---|
+| Onboarding wizard (`/configurator/`) | `ADMIN` | `eGov@123` | your **root** — the field is pre-filled from `state_tenant_id` |
+| Employee app (`/digit-ui/employee`) | `ADMIN` | `eGov@123` | pick from the City dropdown; only tenants in `login_tenant_allowlist` appear |
+| Employees you onboard later | their **employee code** | `eGov@123` | their city tenant |
+| Citizen app | a mobile number | OTP `123456` | — |
+| Grafana (`/grafana/`) | `admin` | generated — see below | — |
+
+To change the administrator credentials, set `bootstrap_user` and
+`bootstrap_password` in your config and redeploy. To change the default
+password every new employee gets, set
+`bootstrap_secrets.egov_hrms_default_password` — but only before the first
+deploy, because those secrets are written to the secret store once and then
+owned by it.
+
+Grafana's password is generated on the first deploy and stored in OpenBao.
+Read it back on the deployment machine:
+
+```bash
+sudo docker exec \
+  -e BAO_TOKEN="$(sudo jq -r .root_token /opt/digit/.openbao/init.json)" \
+  openbao bao kv get -field=grafana_admin_password kv/digit/mycity
+```
+
+<details>
+<summary><b>Under the hood — where these accounts come from</b></summary>
+
+The employee code overriding the username is not a typo: HRMS replaces the
+`userName` you supply with the employee code when it creates the record, and
+the employee code is what actually authenticates.
+
+The citizen OTP is fixed at `123456` because `enable_otp_services` is off and
+Kong answers `/user-otp/*` with a canned response — no SMS provider needed.
+Turning real OTP on takes more than the flag; see the notes in
+`kong/kong.yml`.
+
+Every other secret lives in OpenBao under your `secrets_path`, seeded from
+`bootstrap_secrets` on the **first** deploy only. Editing those values in your
+config afterwards does nothing; change them in OpenBao instead, and redeploy so
+services pick them up. The root token is at `/opt/digit/.openbao/init.json`
+(mode 0600) — **back that file up somewhere else**, because losing it means
+losing every secret in this deployment with no way to recover them.
+[`ansible/runbooks/01-openbao.md`](ansible/runbooks/01-openbao.md) covers
+reading, rotating and unsealing.
+
+</details>
+
+### When it does not work
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `ERROR: 'ansible-playbook' not found on PATH` | Step 2 has not run, or your shell has not picked up `~/.local/bin` | run `install-prereqs.sh`, then open a new terminal |
+| `preflight failed: db_fast_path: true requires db_fast_path_ack_data_wipe: true` | The database loader recreates the Postgres container, which destroys data held in an anonymous volume, so it wants that acknowledged | on a first deploy, set `db_fast_path_ack_data_wipe: true`. On a machine with data you care about, back it up first |
+| `preflight failed: enable_mcp: true requires docker_registry` | The tenant-creation service needs a registry name even when it is built locally | keep the `docker_registry` line from the template |
+| Ansible fails on an apt/dnf or nginx task with a permissions error | `deploy.sh` never prompts for `sudo` | re-run as `./deploy.sh mycity -K` |
+| A container keeps restarting | usually memory | `docker stats --no-stream`, then either free memory or turn off `enable_search_stack` / lower `observability_level` |
+| The login screen has no City dropdown entry for your tenant | `login_tenant_allowlist` | add the tenant and redeploy |
+| Login fails for `ADMIN` on your root tenant | that root was never created — see the tenant note in Step 3 | check the deploy output for the line naming the fallback to `pg` |
+
+Deeper diagnosis, including reading logs and metrics, is in the
+[operations handbook](../docs/2.12/operations/README.md).
+
+### Next: onboard a tenant
+
+The stack is running but has no city data in it yet — no wards, no
+departments, no complaint types, no staff. That comes next, in the browser:
+
+**→ [Onboarding & Add-ons guide](docs/ONBOARDING-AND-ADDONS.md)**
 
 ---
 
-## Setting Up a New Tenant (Jupyter DataLoader)
-
-After the stack is running, you can create a new city/tenant with all the master data needed for PGR complaints. The DataLoader notebook guides you through this step by step.
-
-> **Full documentation**: See the [DIGIT CRS Deployment Guide](https://docs.digit.org/complaints-resolution/deploy/setup/production-setup/deploy-crs/unified-approach/1.-login-and-add-tenant) for detailed instructions on the tenant setup flow.
-
-### Step 1: Open Jupyter Lab
-
-Open http://localhost:18000/jupyter/lab?token=digit-crs-local
-
-The default token is `digit-crs-local` (configurable via the `JUPYTER_TOKEN` env var in `docker-compose.yml`).
-
-### Step 2: Open the DataLoader notebook
-
-In the Jupyter file browser on the left, click **DataLoader_v2.ipynb** to open it.
-
-### Step 3: Configure variables
-
-The first code cell contains configuration. Edit these values:
-
-```python
-URL = "http://kong:8000"          # Kong gateway (inside Docker network) - don't change
-USERNAME = "ADMIN"                 # Superuser username - don't change
-PASSWORD = "eGov@123"             # Superuser password - don't change
-TENANT_ID = "pg"                   # Root tenant for login - don't change
-TARGET_TENANT = "pg.myorg"         # <-- Change this to your new tenant name
-```
-
-> **Naming convention**: Tenant IDs follow the pattern `<state>.<city>`. For example: `pg.mumbai`, `pg.bangalore`, `pg.citya`.
-
-### Step 4: Run each phase
-
-Run the notebook cells in order. Each phase has a header cell explaining what it does, followed by one or more code cells to execute.
-
-| Phase | What to do | What happens | Expected output |
-|-------|-----------|-------------|-----------------|
-| **Phase 1: Tenant & Branding** | Run the cell | Creates your new tenant in MDMS with UI branding config | `Tenant 'pg.myorg' created successfully!` |
-| **Phase 2a: Boundary Template** | Run the cell | Downloads an Excel template for defining your admin hierarchy | An `.xlsx` file appears in the file browser |
-| **Phase 2b: Load Boundaries** | Fill in the Excel template, then run the cell | Uploads your boundary hierarchy (State > District > Block > Ward) | `Boundaries loaded: X records` |
-| **Phase 3: Common Masters** | Run the cell | Loads departments, designations, complaint types from the Excel template | Summary showing created/existing/failed counts |
-| **Phase 4: Employees** | Run the cell | Creates employee accounts via HRMS with roles and department assignments | `Created: N employees` |
-| **Phase 5: Localizations** | Run the cell (optional) | Loads translations for Hindi, Tamil, etc. | `Uploaded N messages` |
-| **Phase 6: Workflow** | Run the cell | Configures the 11-state PGR complaint workflow | `Workflow already configured` or `Workflow updated` |
-
-**After all phases complete**, your new tenant is ready. You can log into the UI, select your city, and create complaints.
-
-### Rollback
-
-If something goes wrong, each phase has a rollback function:
-
-```python
-loader.full_reset(TARGET_TENANT)              # Reset everything for this tenant
-loader.rollback_common_masters(TARGET_TENANT)  # Just reset masters
-loader.delete_boundaries(TARGET_TENANT)        # Just reset boundaries
-```
-
----
-
-## Running Postman API Tests
-
-Two Postman collections validate the stack is working correctly.
-
-| Collection | File | What it tests |
-|-----------|------|--------------|
-| Core Validation | `postman/digit-core-validation.postman_collection.json` | All core DIGIT service APIs respond correctly |
-| Complaints Demo | `postman/complaints-demo.postman_collection.json` | Full PGR lifecycle: Create > Assign > Resolve > Rate & Close > Search |
-
-### Running with Newman (CLI)
-
-Install Newman (Postman's CLI runner) via npx (comes with Node.js):
-
-**Core validation** (no auth needed):
-
-```bash
-npx newman run postman/digit-core-validation.postman_collection.json \
-  --env-var "baseUrl=http://localhost"
-```
-
-**Expected output**: All requests show `200 OK`, no failures.
-
-**Complaints demo** (requires an HRMS employee user — see [CI DataLoader](#automated-setup-with-ci-dataloader) below):
-
-```bash
-npx newman run postman/complaints-demo.postman_collection.json \
-  --env-var "url=http://localhost:18000" \
-  --env-var "username=CI-ADMIN" \
-  --env-var "password=eGov@123" \
-  --env-var "cityTenant=pg.citest" \
-  --env-var "stateTenant=pg" \
-  --env-var "userType=EMPLOYEE" \
-  --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-  --env-var "serviceCode=RequestSprayingOrFoggingOperation"
-```
-
-**Expected output**: 7 requests, 0 failures, 1 assertion passed. The final search should show status `CLOSEDAFTERRESOLUTION`.
-
-### Complaints Demo Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `url` | Kong gateway URL | `http://localhost:18000` |
-| `username` | HRMS employee username | `CI-ADMIN` |
-| `password` | Employee password | `eGov@123` |
-| `cityTenant` | City-level tenant ID | `pg.citest` |
-| `stateTenant` | State-level tenant ID | `pg` |
-| `userType` | Must be `EMPLOYEE` | `EMPLOYEE` |
-| `authorization` | OAuth client credentials (base64) | `Basic ZWdvdi11c2VyLWNsaWVudDo=` |
-| `serviceCode` | (Optional) Specific complaint type | `RequestSprayingOrFoggingOperation` |
-
-If `serviceCode` is not set, the collection picks a random complaint type.
-
-### Automated Setup with CI DataLoader
-
-The CI dataloader script creates a complete tenant with an HRMS employee in one command. Use this before running the complaints demo:
-
-```bash
-# Install Python dependencies (one time)
-pip install requests openpyxl pandas python-dotenv
-
-# Run the dataloader
-DIGIT_URL=http://localhost:18000 \
-TARGET_TENANT=pg.citest \
-python3 scripts/ci-dataloader.py
-```
-
-**Expected output**:
-```
-[1/6] Login
-  Authentication successful!
-[2/6] Create tenant
-  Tenant 'pg.citest' created successfully!
-[3/6] Load common masters
-  Created: 4, Already existed: 0, Failed: 1
-[4/6] Look up ServiceDef department
-  Using: RequestSprayingOrFoggingOperation -> dept DEPT_3
-[5/6] Create HRMS employee
-  Creating HRMS employee 'CI-ADMIN' (dept=DEPT_3)
-  Password set for 'CI-ADMIN'
-[6/6] Load workflow
-  Workflow already configured
-
-CI_TENANT=pg.citest
-CI_USER=CI-ADMIN
-CI_SERVICE_CODE=RequestSprayingOrFoggingOperation
-```
-
-The last 3 lines are the values to pass to Newman.
-
----
-
-## What's Included
-
-### Infrastructure
-
-| Service | Host Port | Memory | Description |
-|---------|-----------|--------|-------------|
-| Postgres | 15432 | 768 MB | Database (with PgBouncer at 5432 internally) |
-| Redis | 16379 | 128 MB | Cache |
-| Redpanda | 19092 | 300 MB | Kafka-compatible event streaming |
-| MinIO | 19000 | 256 MB | S3-compatible file storage |
-
-### Core Services
-
-| Service | Host Port | Memory | Health Check |
-|---------|-----------|--------|--------------|
-| MDMS v2 | 18094 | 512 MB | `/mdms-v2/health` |
-| User | 18107 | 512 MB | `/user/health` |
-| Workflow v2 | 18109 | 320 MB | `/egov-workflow-v2/health` |
-| Localization | 18096 | 320 MB | `/localization/actuator/health` |
-| Boundary v2 | 18081 | 256 MB | `/boundary-service/actuator/health` |
-| Access Control | 18090 | 256 MB | `/access/health` |
-| IDGEN | 18088 | 256 MB | `/egov-idgen/health` |
-| ENC | 11234 | 300 MB | `/egov-enc-service/actuator/health` |
-| Persister | 18091 | 256 MB | `/common-persist/actuator/health` |
-| Filestore | - | 384 MB | `/filestore/health` |
-| HRMS | - | 256 MB | `/egov-hrms/health` |
-
-### Application
-
-| Service | Host Port | Memory | Description |
-|---------|-----------|--------|-------------|
-| PGR Services | 18083 | 300 MB | Complaint management API |
-| DIGIT UI | 18080 | 128 MB | React frontend (static) |
-| Kong Gateway | 18000 | 256 MB | API gateway (main entry point) |
-
-### Tools
-
-| Service | Port | Description |
-|---------|------|-------------|
-| Jupyter Lab | via Kong (:18000/jupyter) | DataLoader notebook for tenant setup |
-| Gatus | 18889 | Health monitoring dashboard |
-
-### Resource Usage
-
-| Component | Memory |
-|-----------|--------|
-| Infrastructure (Postgres, Redis, Redpanda, MinIO) | ~1.5 GB |
-| Core Services (11 Java/Node services) | ~3.0 GB |
-| Application (PGR, UI, Kong) | ~0.7 GB |
-| **Total** | **~3.8 GB** |
-
----
-
-## API Access
-
-All APIs go through Kong at `http://localhost:18000`:
-
-```bash
-# Authenticate
-curl -X POST "http://localhost:18000/user/oauth/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -H "Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-  -d "username=ADMIN&password=eGov@123&tenantId=pg&grant_type=password&scope=read&userType=EMPLOYEE"
-
-# MDMS search
-curl -X POST "http://localhost:18000/mdms-v2/v1/_search" \
-  -H "Content-Type: application/json" \
-  -d '{"MdmsCriteria":{"tenantId":"pg","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]},"RequestInfo":{"apiId":"Rainmaker"}}'
-
-# PGR search (replace YOUR_TOKEN with the authToken from the login response)
-curl -X POST "http://localhost:18000/pgr-services/v2/request/_search" \
-  -H "Content-Type: application/json" \
-  -d '{"RequestInfo":{"apiId":"Rainmaker","authToken":"YOUR_TOKEN"},"tenantId":"pg.citya"}'
-```
-
-## Database Access
-
-```bash
-docker exec -it docker-postgres psql -U egov -d egov
-```
-
----
-
-## Troubleshooting
-
-### Services not starting
-
-```bash
-docker compose logs <service-name>     # Check a specific service's logs
-docker compose restart <service-name>  # Restart a single service
-docker compose ps                      # See status of all services
-```
-
-### PGR Assign returns "DEPARTMENT_NOT_FOUND"
-
-The assignee must be an **HRMS employee** (not just a user) with a department that matches the complaint type's ServiceDef. Users created via `_createnovalidate` don't have HRMS records.
-
-**Fix**: Use the DataLoader notebook (Phase 4) or `ci-dataloader.py` to create proper HRMS employees with department assignments.
-
-### PGR Rate & Close returns "INVALID_ASSIGNEE"
-
-The RATE workflow action does not support assignees. If you're calling the API directly, set `"assignes": []` (empty array) in the Rate request body.
-
-### UI showing blank page
-
-```bash
-# Check if the UI config is serving
-curl http://localhost:18000/digit-ui/globalConfigs.js
-# Should return JavaScript config. If empty/404, restart digit-ui:
-docker compose restart digit-ui
-```
-
-### Jupyter not loading
-
-```bash
-# Check if Jupyter container is running
-docker compose ps jupyter
-
-# If it shows unhealthy or stopped:
-docker compose restart jupyter
-
-# Access directly (bypassing Kong) to test:
-# http://localhost:18888/jupyter/lab?token=digit-crs-local
-```
-
-### Out of memory / containers keep restarting
-
-Increase Docker's memory allocation to at least 8 GB. In Docker Desktop: Settings > Resources > Memory.
-
-```bash
-# Check which containers are using the most memory
-docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}" | sort -k2 -h -r
-```
-
-### Reset everything
-
-```bash
-docker compose down -v --remove-orphans    # Delete all data
-docker compose up -d                       # Fresh start
-```
-
----
-
-## Project Structure
-
-```
-local-setup/
-├── docker-compose.yml              # Main service definitions (~3.8GB RAM, local builds)
-├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
-├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
-├── docker-compose.db-migrations.yml # DB migrations variant
-├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
-├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
-├── ansible/
-│   ├── playbook-deploy.yml         # Ansible: install Docker, deploy stack, run CI tests
-│   └── inventory.ini.example       # Template inventory with placeholder IP
-├── kong/
-│   ├── kong.yml                    # API gateway routes + OTEL + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: resolve authToken → userInfo
-├── nginx/
-│   ├── digit-ui.conf               # UI serving + API proxy to Kong
-│   ├── globalConfigs.js            # Runtime UI config (auth provider, API endpoints)
-│   ├── mdms-proxy.conf             # MDMS v1→v2 backward-compat proxy
-│   ├── user-proxy.conf             # User service load balancer (scaled instances)
-│   └── workflow-proxy.conf         # Workflow service load balancer
-├── otel/
-│   ├── download-agent.sh           # Downloads OpenTelemetry Java Agent (~21MB)
-│   ├── otel-collector-config.yaml  # OTLP receiver → Tempo exporter pipeline
-│   ├── tempo-config.yaml           # Trace storage (local backend, 24h retention)
-│   └── grafana/provisioning/       # Grafana Tempo datasource auto-provisioning
-├── seeds/
-│   └── user-seed.sh                # Creates ADMIN, GRO, INTERNAL_USER via API
-├── data/
-│   └── Bomet county...xlsx         # Sample county data (47 types, 25 wards)
-├── db/
-│   ├── full-dump.sql               # Database seed (tenants, MDMS, users)
-│   ├── seed.sql                    # Core MDMS + access control data
-│   ├── tenant-seed.sql             # Root + city tenant records
-│   ├── localization-seed.sql       # UI label translations
-│   └── pgr-workflow-config.json    # PGR 11-state workflow definition
-├── configs/
-│   └── persister/                  # Persister YAML configs (9 files)
-├── jupyter/
-│   ├── Dockerfile                  # Jupyter container build
-│   └── dataloader/
-│       ├── DataLoader_v2.ipynb     # Interactive data loader notebook
-│       ├── crs_loader.py           # Loader library (used by notebook + CI)
-│       ├── unified_loader.py       # Low-level MDMS/HRMS API wrapper
-│       └── templates/              # Excel templates + bundled localisations
-├── scripts/
-│   ├── ci-dataloader-xlsx.py       # XLSX-driven county E2E (Bomet)
-│   ├── ci-dataloader-v2-regression.py  # DataLoader v2 regression tests
-│   ├── ci-dataloader.py            # Simple automated tenant + employee setup
-│   ├── health-check.sh             # Service health verification
-│   ├── smoke-tests.sh              # API smoke tests
-│   └── run-postman.sh              # Newman wrapper
-├── tests/
-│   ├── e2e/                        # Playwright E2E tests (login, PGR flow, citizen)
-│   └── smoke/                      # Smoke tests (pgr-workflow, pgr-tenant)
-├── postman/                        # Newman/Postman collections
-├── gatus/                          # Health monitoring dashboard config
-└── docs/                           # Additional documentation
-
-../backend/pgr-services/            # PGR Java source (hot reload target)
-../frontend/micro-ui/               # DIGIT UI React source (hot reload target)
-../configs/assets/                  # Runtime configs (globalConfigs.js)
-```
+## Reference
+
+Ports, memory budgets, what each service does, direct API and database access,
+the Postman collections, and general troubleshooting have moved to
+**[docs/STACK-REFERENCE.md](docs/STACK-REFERENCE.md)**, so this page stays a
+walkthrough.
+
+| Looking for | Go to |
+|---|---|
+| Every service, port and memory limit | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#whats-included) |
+| Calling the API by hand | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#api-access) |
+| Connecting to the database | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#database-access) |
+| Running the Postman collections | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#running-postman-api-tests) |
+| Loading master data from a script | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#loading-master-data-from-a-script) |
+| Troubleshooting a Compose or Tilt stack | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#troubleshooting) |
+| Repository layout | [STACK-REFERENCE.md](docs/STACK-REFERENCE.md#project-structure) |
+| Everything the Ansible playbook does | [ansible/README.md](ansible/README.md) |
+| Running the stack in production | [operations handbook](../docs/2.12/operations/README.md) |
+
+### Other guides in `docs/`
+
+| Guide | What it covers |
+|---|---|
+| [ONBOARDING-AND-ADDONS.md](docs/ONBOARDING-AND-ADDONS.md) | Create a city and load its data; turn on notifications, the dashboard and the other add-ons |
+| [STACK-REFERENCE.md](docs/STACK-REFERENCE.md) | Ports, memory, API and database access, Postman, troubleshooting |
+| [LOCALHOST-FULL-AND-SLIM.md](docs/LOCALHOST-FULL-AND-SLIM.md) | Two ready-made presets for deploying Option C to this machine |
+| [LOCAL-SETUP-GUIDE.md](docs/LOCAL-SETUP-GUIDE.md) | Running the Compose stack on a machine with about 4 GB of RAM |
+| [HYBRID-SETUP.md](docs/HYBRID-SETUP.md) | Some services local, the rest on a shared server |
+| [REMOTE-DEV-SETUP.md](docs/REMOTE-DEV-SETUP.md) | Developing against a remote stack |
+| [HOT-DEPLOY-GUIDE.md](docs/HOT-DEPLOY-GUIDE.md) | Pushing a code change into a running stack without a full redeploy |
+| [SERVICE-STARTUP-SEQUENCE.md](docs/SERVICE-STARTUP-SEQUENCE.md) | The order services come up in, and what waits on what |

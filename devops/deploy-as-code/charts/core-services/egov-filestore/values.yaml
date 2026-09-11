@@ -10,7 +10,7 @@ initContainers:
     schemaTable: "egov_filestore_schema"
     image:
       repository: "egov-filestore-db"
-      tag: v2.9.2-4a60f20
+      tag: "maven-jdk21-9f83afb"
 
 # Ingress Configs
 ingress:
@@ -21,7 +21,7 @@ ingress:
 # Container Configs
 image:
   repository: "egov-filestore"
-  tag: v2.9.2-4a60f20
+  tag: "maven-jdk21-9f83afb"
 replicas: "1"
 healthChecks:
   enabled: true

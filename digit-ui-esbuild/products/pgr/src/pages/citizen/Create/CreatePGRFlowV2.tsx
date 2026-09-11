@@ -21,6 +21,9 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
+import { serializeGeoLocation } from "../../../utils/geoLocation";
+import { trackEvent } from "../../../utils/analytics";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -53,51 +56,6 @@ function tr(t: (k: string) => string, key: string, fallback: string): string {
 }
 
 declare const Digit: any;
-
-// Postal-code validation is config-driven so the UI honours the same length the
-// backend does, per tenant (CCRS#722). The employee create form and the legacy
-// FormExplorer already read `CORE_POSTAL_CONFIGS.postalCodePattern`; this citizen
-// v2 flow previously had no postal validation at all, so a wrong (e.g. 6-digit
-// Nominatim) pincode auto-filled from the map could be submitted. Optional field
-// — only the format is enforced, and only when a value is present.
-function getPostalConfig(): { pattern: string; errorMessage?: string } {
-  const cfg = (window as any)?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-  return {
-    pattern: cfg.postalCodePattern || "^[0-9]{5}$",
-    errorMessage: cfg.postalCodeErrorMessage, // optional explicit tenant override
-  };
-}
-
-function isPostalCodeValid(v: unknown): boolean {
-  const s = String(v ?? "").trim();
-  if (s.length === 0) return true; // optional — validate format only when filled
-  try {
-    return new RegExp(getPostalConfig().pattern).test(s);
-  } catch {
-    return true; // a malformed configured pattern must never hard-block the form
-  }
-}
-
-// Build an error message that reflects the CONFIGURED length, not a hard-coded
-// count: the stock CS_COMPLAINT_POSTALCODE_INVALID_ERROR string is localized to
-// "…5 digit…", which is wrong for a 4-digit tenant (CCRS#722). A tenant may pin
-// its own message via CORE_POSTAL_CONFIGS.postalCodeErrorMessage; otherwise we
-// derive the digit count from the pattern and use a length-parameterized key
-// (falling back to a correct English string until that key is localized).
-function postalErrorText(t: (k: string, opts?: any) => string): string {
-  const { pattern, errorMessage } = getPostalConfig();
-  if (errorMessage) return t(errorMessage);
-  const m = String(pattern).match(/\{\s*(\d+)/); // ^[0-9]{4}$ -> "4"
-  const len = m ? m[1] : null;
-  if (len) {
-    const key = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN";
-    const out = t(key, { length: len });
-    return out === key ? `Please enter a valid ${len}-digit postal code` : out;
-  }
-  const gkey = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC";
-  const gout = t(gkey);
-  return gout === gkey ? "Please enter a valid postal code" : gout;
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -197,17 +155,6 @@ function validateString(v: unknown): string {
   return typeof v === "string" && v.trim().length > 0 ? v : "";
 }
 
-function validateGeoLocation(v: { latitude?: number | null; longitude?: number | null }) {
-  if (
-    v &&
-    typeof v.latitude === "number" &&
-    typeof v.longitude === "number"
-  ) {
-    return { latitude: v.latitude, longitude: v.longitude };
-  }
-  return {};
-}
-
 function getEffectiveServiceCode(
   mainType: ServiceDef | null | undefined,
   subType: ServiceDef | null | undefined
@@ -254,10 +201,7 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
             formData?.SelectedBoundary?.code ||
             "",
         },
-        geoLocation: validateGeoLocation({
-          latitude: geoLocation.lat ?? null,
-          longitude: geoLocation.lng ?? null,
-        }),
+        geoLocation: serializeGeoLocation(geoLocation),
       },
       additionalDetail: JSON.stringify(additionalDetail),
       auditDetails: {
@@ -295,7 +239,16 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
       return false;
     }
     case "description":
-      return typeof data.description === "string" && data.description.trim().length > 0;
+      // CCSD-1980 / #1226: reject numbers-only / whitespace-only descriptions
+      // (e.g. "000000000000") — require at least 3 letters (any language).
+      // Mirrors the employee-side rule in CreateComplaintConfig.js; this V2
+      // flow (and the legacy FormExplorer it was ported from) only checked
+      // non-empty, so a citizen could submit a numeric-only description even
+      // though the employee UI already rejected it.
+      return (
+        typeof data.description === "string" &&
+        /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u.test(data.description)
+      );
     case "SelectComplaintType":
       return data.SelectComplaintType != null;
     case "GeoLocationsPoint":
@@ -308,7 +261,7 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
 // Mandatory fields per step (zero-indexed).
 const MANDATORY_BY_STEP: ReadonlyArray<ReadonlyArray<keyof FormData>> = [
   ["SelectComplaintType"], // 0 — type (sub-type is conditionally required, see stepIsValid)
-  ["GeoLocationsPoint"], // 1 — map pin: lat/lng required; auto-seeded on first load so the user just confirms
+  [], // 1 — exact map pin is optional; the administrative boundary remains required on the next step
   ["SelectedBoundary"], // 2 — combined location step: ward must be selected (map auto-fills it; manual fallback if auto-fill missed)
   ["description"], // 3 — description
   [], // 4 — photos (optional)
@@ -349,6 +302,9 @@ interface StepBodyProps {
   hierarchyDef?: ComplaintHierarchyDef | null;
   nodes?: ClassificationNode[];
   t: (key: string) => string;
+  /** Tenant the complaint will be created under. Steps that read tenant-scoped
+   *  masters must use THIS, not a tenant re-derived from the session. */
+  tenantId?: string;
 }
 
 /**
@@ -658,7 +614,7 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
  * pincode missing from Nominatim) the affected control becomes
  * interactive so the user can fill the gap manually.
  */
-function Step2Location({ data, patch, t }: StepBodyProps) {
+function Step2Location({ data, patch, t, tenantId }: StepBodyProps) {
   const PGRBoundaryComponent = Digit?.ComponentRegistryService?.getComponent("PGRBoundaryComponent");
 
   // The map's resolveWard writes ward.{code, name} into
@@ -694,7 +650,13 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <PGRBoundaryComponent
             t={t}
             userType="citizen"
-            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "" }}
+            // Scope the cascade to the tenant the complaint FILES under, which is
+            // the same tenant the map resolves against. Without it the cascade
+            // falls back to ULBService.getCurrentTenantId(), which returns
+            // STATE_LEVEL_TENANT_ID for every citizen — so a citizen whose home
+            // city is set would pick boundaries out of the state root's tree and
+            // attach them to a complaint filed in their city.
+            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId }}
             formData={data}
             // Ask the cascade to render its dropdowns as disabled
             // wherever it has an auto-filled value. Levels left empty
@@ -711,17 +673,23 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
         <Field
           label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
           htmlFor="postal-code"
-          error={showPostalError ? postalErrorText(t) : undefined}
+          error={showPostalError ? getPostalCodeErrorMessage(t) : undefined}
         >
           <Input
             id="postal-code"
             type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={7}
+            // Numeric keyboard hint only when the configured pattern is
+            // digit-only (KE 5, MZ 4, IN 6 — every real deployment today);
+            // alnum/dash tenants (UK / US 5+4 examples in _example.yml) get
+            // the full keyboard their pattern needs. No keystroke filtering
+            // either way — the shared validator is the sole gate, so input
+            // is never mangled before it reaches isPostalCodeValid().
+            inputMode={isPostalCodeNumeric() ? "numeric" : "text"}
+            pattern={isPostalCodeNumeric() ? "[0-9]*" : undefined}
+            maxLength={16}
             invalid={showPostalError}
             value={effectivePincode}
-            onChange={(e) => patch({ postalCode: e.target.value.replace(/\D/g, "") })}
+            onChange={(e) => patch({ postalCode: e.target.value })}
           />
         </Field>
 
@@ -817,6 +785,14 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit.ULBService.getCurrentTenantId();
   const tenants: any = Digit.Hooks.pgr.useTenants();
+
+  // Mount the MDMS validation mirror: fetches common-masters.FormValidations
+  // (and MobileNumberValidation) and publishes the tenant's postalCode rule to
+  // window.__DIGIT_FORM_VALIDATIONS — the channel isPostalCodeValid() /
+  // getPostalCodeErrorMessage() read FIRST. Without this, the v2 flow would
+  // silently keep validating against the globalConfigs fallback while the
+  // employee form honours the (higher-precedence) MDMS row.
+  Digit.Hooks.pgr.useMobileValidation(tenantId);
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
@@ -928,7 +904,14 @@ const CreatePGRFlowV2: React.FC = () => {
       !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
     if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
     if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
-    const norm = (v: unknown) => String(v ?? "").trim().replace(/^0+/, "") || "0";
+    // Case-fold (postal codes may be alnum now, e.g. "sw1a 1aa" vs the
+    // seeded "SW1A 1AA") and strip leading zeros only for purely numeric
+    // values — "0100" ≡ "100" for a numeric pincode, but a leading zero in
+    // an alnum code is significant.
+    const norm = (v: unknown) => {
+      const s = String(v ?? "").trim().toUpperCase();
+      return /^[0-9]+$/.test(s) ? s.replace(/^0+/, "") || "0" : s;
+    };
     const list = norm(formData.postalCode);
     const configured =
       Array.isArray(tenants) &&
@@ -956,11 +939,16 @@ const CreatePGRFlowV2: React.FC = () => {
       const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
       createMutation(payload, {
         onError: () => {
+          // Outcome, not intent. The submit click is already tagged; whether the
+          // complaint was actually created happens later and a click listener
+          // cannot see it. Without this pair the funnel ends at "pressed submit".
+          trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
           history.push(`/digit-ui/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
+          trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
@@ -1023,6 +1011,7 @@ const CreatePGRFlowV2: React.FC = () => {
     hierarchyDef: hierData?.def ?? null,
     nodes: hierData?.nodes ?? [],
     t,
+    tenantId,
   };
 
   return (
@@ -1067,7 +1056,20 @@ const CreatePGRFlowV2: React.FC = () => {
         ) : null}
       </div>
       <FormFooter>
-        <Button variant="outline" onClick={handleBack} type="button">
+        {/* Analytics (CCRS#2007). Named from the step's stable STEPS id rather
+            than stepIndex, so inserting or reordering a step cannot silently
+            re-point an existing funnel step in the reports. The shim only emits
+            these when an admin has set trackClicks on the destination. */}
+        <Button
+          variant="outline"
+          onClick={handleBack}
+          type="button"
+          data-analytics-event={
+            stepIndex === 0
+              ? "pgr.file-complaint.cancel"
+              : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
+          }
+        >
           {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : t("BACK")}
         </Button>
         <Button
@@ -1076,6 +1078,11 @@ const CreatePGRFlowV2: React.FC = () => {
           loading={submitting}
           disabled={!stepIsValid}
           type="button"
+          data-analytics-event={
+            isLast
+              ? "pgr.file-complaint.submit"
+              : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`
+          }
         >
           {isLast ? t("SUBMIT") : t("NEXT")}
         </Button>

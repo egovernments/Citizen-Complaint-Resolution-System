@@ -22,6 +22,8 @@ const CODE_HINTS: Record<string, string> = {
     'This username is already taken. Change the Name (username auto-derives) or type a unique username.',
   ERR_HRMS_EMPLOYEE_EXIST:
     'An employee with this code already exists on the tenant.',
+  DUPLICATE_RECORD:
+    'A record with the same unique key already exists. Edit the existing record, or change one of the fields that make it unique (for a notification template: audience, action, target state, channel or locale).',
   INVALID_MOBILE_FORMAT:
     'Mobile does not match the tenant’s configured format.',
   INVALID_USER_NAME:
@@ -47,12 +49,17 @@ export function extractMutationError(err: unknown): MutationErrorInfo {
     const e = err as Record<string, unknown>;
     const errorsArr = Array.isArray(e.errors) ? (e.errors as Array<Record<string, unknown>>) : null;
     if (errorsArr && errorsArr[0]) {
-      const message =
+      let message =
         (typeof errorsArr[0].message === 'string' && errorsArr[0].message) ||
         (typeof errorsArr[0].code === 'string' && errorsArr[0].code) ||
         'Unknown error';
       const code = typeof errorsArr[0].code === 'string' ? errorsArr[0].code : undefined;
       const statusCode = typeof e.statusCode === 'number' ? e.statusCode : undefined;
+      // Duplicate is a common, benign case — swap the terse server text
+      // ("Duplicate record") for a clear, human message.
+      if (code === 'DUPLICATE_RECORD' || /duplicate record/i.test(message)) {
+        message = 'This record already exists.';
+      }
       return { message, code, statusCode, hint: codeHint(code) };
     }
     if (typeof e.message === 'string') {

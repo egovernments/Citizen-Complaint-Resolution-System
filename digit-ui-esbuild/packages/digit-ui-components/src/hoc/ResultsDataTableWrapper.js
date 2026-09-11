@@ -155,7 +155,11 @@ const ResultsDataTableWrapper = ({
     //test if accessor can take jsonPath value only and then check sort and global search work properly
     const mappedColumns = config?.columns?.map((column) => {
       const commonProps = {
-        id: column?.id,
+        // sortKey doubles as a stable column id (falling back to the
+        // config's own `id` if set) so `defaultSortFieldId` below can find
+        // this column again after a remount — see the sort-icon-direction
+        // comment near `defaultSortFieldId`/`defaultSortAsc`.
+        id: column?.sortKey || column?.id,
         name: t(column?.label) || t("ES_COMMON_NA"),
         format: column?.format,
         grow: column?.grow,
@@ -167,13 +171,25 @@ const ResultsDataTableWrapper = ({
         ignoreRowClick: column?.ignoreRowClick,
         wrap: column?.wrap,
         sortable: !column?.disableSortBy,
+        // Forwarded back verbatim as `selectedColumn` in the DataTable
+        // `onSort` callback below, so the handler knows which pgr-services
+        // `SortBy` value this header maps to (issue #922).
+        sortKey: column?.sortKey,
         headerAlign: column?.headerAlign,
         style: column?.style,
         conditionalCellStyles: column?.conditionalCellStyles,
+        // Deliberately omitted when the config doesn't provide a real
+        // comparator: react-data-table-component's decorateColumns does
+        // `sortable: column.sortable || !!column.sortFunction`, so a dummy
+        // `() => 0` placeholder here used to force `sortable: true` even on
+        // columns marked `disableSortBy` — the header looked clickable and
+        // toggled its icon, but rows never reordered (issue #922). Sorting
+        // is server-side now (see `sortServer` on ResultsDataTable below),
+        // so no column needs a client-side comparator in practice.
         sortFunction:
           typeof column?.sortFunction === "function"
             ? (rowA, rowB) => column.sortFunction(rowA, rowB)
-            : (rowA, rowB) => 0,
+            : undefined,
         selector: (row, index) => `${_.get(row, column?.jsonPath)}`,
       };
       if (column?.svg) {
@@ -440,6 +456,17 @@ const ResultsDataTableWrapper = ({
         config?.customDefaultPagination?.limit ||
         10
     );
+    // Tracked so a column-header sort (handleSort below) survives later
+    // pagination submits — handleSubmit(onSubmit) always resends whatever
+    // is currently registered, so an unregistered field would get dropped
+    // from tableForm the next time the operator changes page (issue #922).
+    // react-hook-form v6's second `register` argument is a validation-rules
+    // object, not a default value — restoring a prior sortBy/sortOrder from
+    // session storage is already handled by `defaultValuesFromSession`
+    // (spread into `useForm`'s `defaultValues` below), so no value belongs
+    // here.
+    register("sortBy");
+    register("sortOrder");
   });
 
   const handleDefaultPagination = (event) => {
@@ -543,6 +570,36 @@ const ResultsDataTableWrapper = ({
     handleSubmit(onSubmit)();
   };
 
+  // react-data-table-component calls this on header click with the column
+  // clicked and the direction to apply next (it toggles asc/desc itself on
+  // repeat clicks of the same column). `sortServer` (passed to
+  // ResultsDataTable below) tells the library not to sort `data` itself —
+  // ordering only current-page rows would be misleading since pagination is
+  // server-side (issue #432) — so this just forwards the request to the
+  // backend via tableForm and resets to page 1, same as a filter change.
+  const handleSort = (column, sortDirection) => {
+    if (!column?.sortKey) return;
+    setValue("sortBy", column.sortKey);
+    setValue("sortOrder", sortDirection === "desc" ? "DESC" : "ASC");
+    setValue("offset", 0);
+    setCurrentPage(1);
+    setLimitAndOffset({ ...limitAndOffset, offset: 0 });
+    handleSubmit(onSubmit)();
+  };
+
+  // react-data-table-component only reads defaultSortFieldId/defaultSortAsc
+  // to seed its OWN internal sortDirection/selectedColumn state once, on
+  // mount — later prop changes are ignored while it stays mounted. The
+  // isLoading/isFetching branch below unmounts <ResultsDataTable> (and with
+  // it <DataTable>) every time a sort click triggers a refetch, so the
+  // library's internal "which column, which direction" memory is wiped and
+  // re-seeded from scratch on every remount. Sourcing these two props from
+  // our own persisted tableForm.sortBy/sortOrder (rather than a static
+  // config default) means each remount re-seeds with the CURRENT sort, so
+  // the header's up/down icon reflects the real direction instead of
+  // resetting to "ascending" after every click (issue #922 follow-up).
+  const currentSortBy = state.tableForm.sortBy || config?.defaultSortBy;
+  const currentSortOrder = state.tableForm.sortOrder || config?.defaultSortOrder || "ASC";
 
   useEffect(() => {
     if (limitAndOffset) {
@@ -682,7 +739,10 @@ const ResultsDataTableWrapper = ({
       progressPending={config?.progressPending}
       conditionalRowStyles={conditionalRowStyles}
       tableClassName={config?.tableProps?.tableClassName ? config?.tableProps?.tableClassName : ""}
-      defaultSortAsc={config?.defaultSortAsc}
+      defaultSortFieldId={currentSortBy}
+      defaultSortAsc={currentSortOrder !== "DESC"}
+      sortServer={true}
+      onSort={handleSort}
       pagination={config.isPaginationRequired}
       paginationTotalRows={
         data?.[TotalCount] ||

@@ -45,6 +45,13 @@ public class ComplaintDomainEventService {
             return;
         }
 
+        // When config-driven notifications are on, NotificationService publishes per-recipient
+        // pre-rendered events to the same topic. Skip the coarse stakeholders[] event to avoid a
+        // double-emit / mixed event shapes on complaints.domain.events.
+        if (Boolean.TRUE.equals(config.getNotificationConfigDriven())) {
+            return;
+        }
+
         String tenantId = request.getService().getTenantId();
         String action = request.getWorkflow() != null ? request.getWorkflow().getAction() : null;
         if (!StringUtils.hasText(action)) {

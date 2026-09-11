@@ -9,7 +9,13 @@
 
 import Urls from "../utils/urls";
 
-const PGRSearchInboxConfig = () => {
+/**
+ * @param {boolean} visibilityEnabled — RAINMAKER-PGR.InboxVisibilityConfig
+ *   feature flag (Visibility V1 My/All tabs). When OFF the legacy
+ *   assigned-to-me / assigned-to-all radio is restored in the filter card,
+ *   since the tabs that replaced it are not rendered.
+ */
+const PGRSearchInboxConfig = (visibilityEnabled = true) => {
     const tenantId = Digit.ULBService.getCurrentTenantId();
     return {
         label: "CS_COMMON_INBOX",
@@ -88,18 +94,25 @@ const PGRSearchInboxConfig = () => {
             searchResult: {
                 label: "",
                 uiConfig: {
-                    // Column header sort is client-side react-table, which only
-                    // reorders the CURRENT page while pagination is server-side —
-                    // so it misleads operators (issue #432). Every column sets
-                    // `disableSortBy: true`; ordering is done server-side in
-                    // PGRInboxConfig.preProcess (sortBy=sla, most urgent first).
+                    // Column header sort is server-side (issue #922 / #432): each
+                    // sortable column declares `sortKey`, the pgr-services
+                    // `RequestSearchCriteria.SortBy` value it maps to.
+                    // ResultsDataTableWrapper's onSort handler writes that key +
+                    // the clicked direction into tableForm, and
+                    // PGRInboxConfig.preProcess (UICustomizations.js) forwards it
+                    // as sortBy/sortOrder on the search request — so ordering is
+                    // consistent across the FULL paginated result set, not just
+                    // the current page. `disableSortBy: true` is reserved for
+                    // columns pgr-services can't order by yet (only "owner",
+                    // whose values are a per-row assignee array, not a sortable
+                    // scalar column).
                     columns: [
                         {
                             label: "CS_COMMON_COMPLAINT_NO",
                             jsonPath: "businessObject.service.serviceRequestId",
                             key: "complaintNumber",
                             additionalCustomization: true,
-                            disableSortBy: true,
+                            sortKey: "serviceRequestId",
                             // #432.4: react-data-table ellipsis-truncates the
                             // full serviceRequestId by default. wrap lets the
                             // complaint number render in full; minWidth keeps
@@ -111,22 +124,21 @@ const PGRSearchInboxConfig = () => {
                             label: "WF_INBOX_HEADER_LOCALITY",
                             jsonPath: "businessObject.service.address.locality.code",
                             additionalCustomization: true,
-                            disableSortBy: true,
+                            sortKey: "locality",
                         },
                         {
                             label: "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
                             jsonPath: "businessObject.service.applicationStatus",
                             additionalCustomization: true,
-                            // Client-side header sort only reorders the current
-                            // page (server pagination), so it misleads operators.
-                            // The inbox is ordered server-side by SLA (#432).
-                            disableSortBy: true,
+                            sortKey: "applicationStatus",
                         },
                         {
                             label: "WF_INBOX_HEADER_CURRENT_OWNER",
                             jsonPath: "ProcessInstance.assignes",
                             additionalCustomization: true,
                             key: "assignee",
+                            // pgr-services' RequestSearchCriteria.SortBy has no
+                            // assignee/owner value to order by server-side.
                             disableSortBy: true,
                         },
                         {
@@ -134,18 +146,19 @@ const PGRSearchInboxConfig = () => {
                             jsonPath: "businessObject.serviceSla",
                             additionalCustomization: true,
                             key: "state",
-                            // #432.2: the inbox is now ordered by SLA remaining
-                            // server-side (sortBy=sla, ASC — most urgent first;
-                            // see PGRInboxConfig.preProcess + PGRQueryBuilder).
-                            // The previous per-column client sortFunction only
-                            // reordered the CURRENT page, so rows dropped in/out
-                            // of view as page size changed. disableSortBy hides
-                            // the misleading per-page sort icon.
-                            disableSortBy: true,
+                            // Default sort (see PGRInboxConfig.preProcess): most
+                            // urgent (least SLA remaining) first.
+                            sortKey: "sla",
                         },
                     ],
                     enableGlobalSearch: false,
                     enableColumnSort: true,
+                    // Must match PGRInboxConfig.preProcess's own fallback
+                    // (UICustomizations.js) — lets the table seed its sort
+                    // header icon correctly on first load, before the
+                    // operator has clicked anything.
+                    defaultSortBy: "sla",
+                    defaultSortOrder: "ASC",
                     resultsJsonPath: "items",
                     totalCountJsonPath: "totalCount",
                 },
@@ -181,38 +194,49 @@ const PGRSearchInboxConfig = () => {
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,
-                        assignedToMe: {
-                            "code": "ASSIGNED_TO_ALL",
-                            "name": "ASSIGNED_TO_ALL"
-                        },
+                        // Legacy radio default only exists when the visibility
+                        // tabs are OFF (the tabs replaced it).
+                        ...(visibilityEnabled
+                            ? {}
+                            : {
+                                  assignedToMe: {
+                                      "code": "ASSIGNED_TO_ALL",
+                                      "name": "ASSIGNED_TO_ALL"
+                                  },
+                              }),
                         status: null,
                         complaintType: null,
                         serviceCode:null,
 
                     },
                     fields: [
-                        {
-                            label: "",
-                            type: "radio",
-                            isMandatory: false,
-                            disable: false,
-                            populators: {
-                                name: "assignedToMe",
-                                options: [
-                                    { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
-                                    { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
-                                ],
-                                optionsKey: "name",
-                                styles: {
-                                    "gap": "1rem",
-                                    "flexDirection": "column"
-                                },
-                                innerStyles: {
-                                    "display": "flex"
-                                }
-                            },
-
-                        },
+                        // Legacy assigned-to-me / assigned-to-all radio,
+                        // restored only when the visibility tabs are OFF.
+                        ...(visibilityEnabled
+                            ? []
+                            : [
+                                  {
+                                      label: "",
+                                      type: "radio",
+                                      isMandatory: false,
+                                      disable: false,
+                                      populators: {
+                                          name: "assignedToMe",
+                                          options: [
+                                              { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
+                                              { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
+                                          ],
+                                          optionsKey: "name",
+                                          styles: {
+                                              "gap": "1rem",
+                                              "flexDirection": "column"
+                                          },
+                                          innerStyles: {
+                                              "display": "flex"
+                                          }
+                                      },
+                                  },
+                              ]),
                         {
 
                             label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",

@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { ToolMetadata, MdmsRecord } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
+import { digitDb } from '../services/digit-db.js';
 import { emitProgress } from '../services/progress.js';
 import { ENVIRONMENTS } from '../config/environments.js';
 import { autoPaginate, PAGINATION_SCHEMA_PROPERTIES } from '../utils/pagination.js';
@@ -12,6 +14,19 @@ import { applyFieldMask } from '../utils/field-mask.js';
 import { probeServices } from '../utils/probe.js';
 import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
+import { DASHBOARD_L10N_PACKS } from './dashboard-l10n-seed.js';
+import {
+  DASHBOARD_CATALOG_SCHEMAS,
+  DASHBOARD_KPI_DEFINITIONS,
+  DASHBOARD_PACKS,
+} from './dashboard-catalog-seed.js';
+import {
+  DASHBOARD_ACCESS_ACTIONS,
+  PGR_SEARCH_SCOPE_RESOURCE,
+  buildDashboardConfig,
+  buildDashboardRoleAction,
+  normalizeDashboardRoles,
+} from './dashboard-bootstrap-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -39,17 +54,16 @@ export function isDuplicateError(msg: string): boolean {
 /**
  * Evict egov-user's Redis-backed ValidationRulesCache entry for a tenant.
  *
- * egov-user caches UserValidation rules in a Redis hash:
+ * egov-user caches MobileNumberValidation rules in a Redis hash:
  *   key: validationRules   field: validation:<tenantId>
  *
- * The default-data-handler seeds India UserValidation for the target tenant
- * at stack startup (before bootstrap). egov-user's first mz request (from
- * the data-handler's own MDMS calls which carry mz in the JWT userInfo)
- * triggers a Cache MISS → reads India from MDMS → caches India in Redis with
+ * The default-data-handler seeds the MobileNumberValidation record for the
+ * target tenant at stack startup (before bootstrap). egov-user's first mz
+ * request triggers a Cache MISS → reads from MDMS → caches in Redis with
  * TTL=3600s. MCP bootstrap then corrects MDMS to the country pattern but
- * Redis still holds India. Evicting the key forces egov-user to re-read from
- * MDMS on the next _createnovalidate call and find the correct pattern.
- * Non-fatal — bootstrap continues if Redis is unreachable.
+ * Redis still holds the stale record. Evicting the key forces egov-user to
+ * re-read from MDMS on the next _createnovalidate call and find the correct
+ * pattern. Non-fatal — bootstrap continues if Redis is unreachable.
  */
 async function evictValidationCache(tenantId: string): Promise<void> {
   const host = process.env.EGOV_REDIS_HOST || 'redis';
@@ -80,21 +94,61 @@ async function evictValidationCache(tenantId: string): Promise<void> {
  * Returns `preferred` if it already matches; else the first-valid-lead-digit +
  * a repeated tail padded to `length` that the regex accepts; else best-effort.
  */
+/**
+ * Rotate '0123456789' to start at seed's leading digit.
+ *
+ * Two calls deriving a fallback mobile for the same regex with different
+ * `preferred` values (e.g. ADMIN's '8888888888' vs an HRMS employee's
+ * '9999999999') should diverge instead of both walking the exhaustive lead x
+ * fill sweep in the same 0..9 order and returning the same first match.
+ * Seeding the order from `preferred` makes them diverge whenever the regex
+ * admits more than one lead/fill combination at a given length; regexes with
+ * a fixed multi-character literal prefix (e.g. `^77[0-9]{6}$`) admit exactly
+ * one combination regardless of search order, so those still collide.
+ */
+function seededDigitOrder(seed?: string): string {
+  const digits = '0123456789';
+  if (!seed || !digits.includes(seed[0])) return digits;
+  const i = digits.indexOf(seed[0]);
+  return digits.slice(i) + digits.slice(0, i);
+}
+
 export function deriveValidMobile(regex: string, length: number, preferred?: string): string {
   let re: RegExp | null = null;
   try { re = new RegExp(regex); } catch { re = null; }
   const matches = (s?: string): s is string => !!s && (!re || re.test(s));
+  const preferredFill = preferred ? preferred[preferred.length - 1] : undefined;
   if (matches(preferred)) return preferred;
   const n = length && length > 0 ? length : 10;
   // Try every lead digit x fill digit at length n (and n+1 / n-1, since
   // patterns like ^0?[17][0-9]{8}$ accept 9 OR 10 digits). Looping the lead
   // digit instead of parsing it handles optional prefixes like `0?` and
   // character classes uniformly.
-  for (const len of [n, n + 1, n - 1]) {
+  //
+  // Search a wide window around n, closest lengths first, so a tenant whose
+  // mobileNumberRegex requires a length far from the hinted default (e.g. 8
+  // for `^77[0-9]{6}$`, vs the default n=10) still derives a match instead of
+  // exhausting n-1/n/n+1 and falling through to an unmatched placeholder.
+  const lengths = Array.from(new Set([...Array.from({ length: 10 }, (_, i) => i + 6), n, n + 1, n - 1]))
+    .sort((a, b) => Math.abs(a - n) - Math.abs(b - n));
+
+  // Within each length, try the caller's own fill digit first (e.g. '9' for
+  // '9999999999', '8' for '8888888888') before the rest of digitOrder, so
+  // several distinct users on the same target tenant (ADMIN, HRMS employee,
+  // ...) with different `preferred` values diverge instead of both landing
+  // on the same lead x fill candidate. This must stay a single pass over
+  // `lengths` — trying preferredFill across *every* length before the
+  // fallback fill sweep gets a turn would let a farther length "win" over a
+  // closer one that only works with a different fill, breaking the
+  // closest-length-first guarantee documented above.
+  const digitOrder = seededDigitOrder(preferred);
+  const fills = [...(preferredFill ? [preferredFill] : []), ...digitOrder.split('').filter((d) => d !== preferredFill)];
+
+  for (const len of lengths) {
     if (len <= 0) continue;
-    for (const f of '0123456789') {
-      for (const d of '0123456789') {
-        const cand = f + d.repeat(len - 1);
+    for (const f of fills) {
+      for (const d of digitOrder) {
+        const cand = d + f.repeat(len - 1);
         if (cand.length === len && matches(cand)) return cand;
       }
     }
@@ -121,6 +175,121 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
     .filter((p) => p.length > 0)
     .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p));
   return cleaned.length > 0 ? cleaned : null;
+}
+
+/** Minimal shape of an mdms-v2 record this module needs to read a master's code + name. */
+interface MasterRowLike {
+  uniqueIdentifier?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * #1590: derive `COMMON_MASTERS_DEPARTMENT_<CODE>` / `COMMON_MASTERS_DESIGNATION_<CODE>`
+ * messages from the department/designation MASTERS a bootstrap just copied.
+ *
+ * tenant_bootstrap's localization step can only carry a message that already
+ * exists on some source tenant, while the MDMS data copy carries the masters
+ * unconditionally. A master the source dump never localized therefore lands on
+ * the target with no message and renders as its raw code — the canned
+ * `pg.citya` / `india.citya` `PMC_*` departments are the live example, and the
+ * dashboard's department tiles show `PMC_ELEC` because the dimensionLabel
+ * contract deliberately has no humaniser
+ * (digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+ *
+ * The message text is the master's own `name` — DATA-OWNED text an operator
+ * authored, which is exactly what that contract sanctions as fallback. A
+ * master with no `name` yields nothing: the gap stays visible rather than
+ * being papered over with a label invented from the code.
+ *
+ * Callers apply this as a FLOOR (a real copied message always wins) and for
+ * the primary locale only — writing an English master name into a pt_PT pack
+ * would hide a genuine translation gap.
+ */
+export function deriveMasterLocalizations(
+  departments: MasterRowLike[],
+  designations: MasterRowLike[],
+): { code: string; message: string; module: string }[] {
+  const out: { code: string; message: string; module: string }[] = [];
+  const seen = new Set<string>();
+  const derive = (rows: MasterRowLike[], prefix: string) => {
+    for (const row of rows || []) {
+      const data = row?.data || {};
+      // Both fields are typed loosely enough to arrive non-string from a
+      // hand-edited or dump-imported record. Guard before trim(): a throw
+      // here escapes into the caller's catch and drops the WHOLE derived
+      // floor, not just the malformed row.
+      const identifier = typeof row?.uniqueIdentifier === 'string' ? row.uniqueIdentifier.trim() : '';
+      const dataCode = typeof data.code === 'string' ? data.code.trim() : '';
+      const code = identifier || dataCode;
+      const name = typeof data.name === 'string' ? data.name.trim() : '';
+      if (!code || !name) continue;
+      const key = `${prefix}${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ code: key, message: name, module: 'rainmaker-common' });
+    }
+  };
+  derive(departments, 'COMMON_MASTERS_DEPARTMENT_');
+  derive(designations, 'COMMON_MASTERS_DESIGNATION_');
+  return out;
+}
+
+/**
+ * Schemas where copying ZERO records from the source is a defect, not a no-op.
+ *
+ * The bootstrap copy is silent about an empty source: no records to iterate
+ * means nothing lands in `copied`, `skipped` OR `failed`, so the run reports
+ * success and the operator finds out weeks later that a feature renders blank.
+ * These schemas carry platform-level definitions that every root needs and
+ * that no other step seeds, so an empty source gets an explicit warning.
+ *
+ * Deliberately NOT in this list: tenant-specific masters (ComplaintHierarchy,
+ * ServiceDefs) whose emptiness at the source is the correct, expected state —
+ * they are operator-owned and loaded via the configurator.
+ */
+const SCHEMAS_EMPTY_IS_A_PROBLEM = new Map<string, { impact: string; remedy: string }>([
+  // dss.KpiDefinition / dss.DashboardPack are intentionally NOT here: they are
+  // backfilled from the repo by the catalog floor (Step 2b), so an empty source
+  // is no longer a problem for them. The remaining entries have no floor yet.
+  [
+    'INBOX.InboxQueryConfiguration',
+    {
+      impact: 'employee inbox searches will fail to resolve their query config',
+      remedy: 'copy the master from a populated root (no installer script covers this one)',
+    },
+  ],
+  [
+    'ACCESSCONTROL-ROLEACTIONS.roleactions',
+    {
+      impact: 'no role will have any action grants, so every sidebar renders empty',
+      remedy: 'seed ACCESSCONTROL-ROLEACTIONS from the ansible seed files',
+    },
+  ],
+]);
+
+/**
+ * True when an MDMS data payload is actually a JSON Schema document.
+ *
+ * Posting a schema body to `/v2/_create/<schema>` instead of
+ * `/schema/v1/_create` produces a data row whose payload is the schema itself.
+ * mdms-v2 accepts it, it occupies the uniqueIdentifier that the real record
+ * needs, and every later seed of that record is rejected as a duplicate — so
+ * the master stays permanently broken while looking populated. Observed live
+ * on `mz` for dss.KpiDefinition and dss.DashboardPack.
+ *
+ * Both markers are required, and both must be at the TOP level. Masters that
+ * legitimately carry a JSON Schema as part of their data (e.g.
+ * RAINMAKER-PGR.ComplaintExtendedAttributeSchema) nest it under a field —
+ * verified live on `mz`, where those rows have neither `$schema` nor
+ * `properties` as a top-level key.
+ */
+function isSchemaDocument(data: Record<string, unknown> | undefined): boolean {
+  if (!data || typeof data !== 'object') return false;
+  return (
+    typeof data['$schema'] === 'string' &&
+    typeof data['properties'] === 'object' &&
+    data['properties'] !== null
+  );
 }
 
 /**
@@ -450,7 +619,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               existingRoles.filter((r) => r.tenantId === explicitRoot).map((r) => r.code),
             );
 
-            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER'];
+            const standardRoles = ['CITIZEN', 'EMPLOYEE', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN'];
             const newRoles = standardRoles
               .filter((code) => !existingForTarget.has(code))
               .map((code) => ({ code, name: code, tenantId: explicitRoot }));
@@ -955,6 +1124,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       'Bootstrap a new state-level tenant root by copying ALL schemas and essential MDMS data from an existing tenant (e.g. "pg"). ' +
       'This is REQUIRED before creating employees, PGR complaints, or any service under a new tenant root. ' +
       'Copies: all schema definitions, IdFormat records, Department records, Designation records, StateInfo, and InboxQueryConfiguration. ' +
+      'Seeds the current employee dashboard catalog and create-if-absent access floor for a small explicit role set. ' +
       'Also provisions an ADMIN user on the new tenant and copies workflow definitions (PGR, etc.) from source. ' +
       'After bootstrap, use city_setup to create city-level tenants. ' +
       'Call this ONCE when you create a new tenant root (e.g. "tenant", "ke") before doing anything else under it.',
@@ -972,50 +1142,39 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         mobile_regex: {
           type: 'string',
           description:
-            'Mobile-number regex for the synthesized common-masters.UserValidation "mobile" rule ' +
-            '(citizen register). Source tenants (pg/statea) ship no UserValidation, so it must ' +
-            'be synthesized, not copied. Default "^[6-9][0-9]{9}$" (India 10-digit). ' +
+            'Mobile-number regex stored as mobileNumberRegex in the synthesized ' +
+            'common-masters.MobileNumberValidation record. Inherited from the source tenant\'s ' +
+            'MobileNumberValidation when omitted. Default "^[6-9][0-9]{9}$" (India 10-digit). ' +
             'Kenya: "^[17][0-9]{8}$". Mozambique: "^8[0-9]{8}$".',
         },
         mobile_length: {
           type: 'integer',
           description:
-            'Mobile-number length (min=max) for the back-compat "mobile" UserValidation rule. ' +
-            'Default 10 (India). Kenya/Mozambique: 9. Ignored when user_validation is supplied.',
+            'Mobile-number length used to generate a conforming ADMIN mobile number when ' +
+            'admin_mobile is not supplied. Default 10 (India). Kenya/Mozambique: 9. ' +
+            'Ignored when user_validation is supplied.',
         },
         mobile_prefix: {
           type: 'string',
           description:
-            'Country dialling prefix for the "mobile" UserValidation rule (e.g. "+258" for ' +
-            'Mozambique, "+254" for Kenya). Stored in attributes.prefix so useMobileValidation.js ' +
-            'can read it via mdmsConfig?.attributes?.prefix. Ignored when user_validation is supplied.',
-        },
-        mobile_allowed_starting_characters: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Allowed leading digit(s) for the mobile field (e.g. ["8"] for Mozambique, ' +
-            '["1","7"] for Kenya). Stored in rules.allowedStartingCharacters on the MDMS record. ' +
+            'Country dialling prefix (e.g. "+258" for Mozambique, "+254" for Kenya). ' +
+            'Used as the countryCode field and x-unique key in the MobileNumberValidation record. ' +
+            'Inherited from the source tenant\'s MobileNumberValidation when omitted. ' +
             'Ignored when user_validation is supplied.',
-        },
-        mobile_error_message: {
-          type: 'string',
-          description: 'Error message (or localization key) for the back-compat "mobile" rule.',
         },
         mobile_zone: {
           type: 'string',
           description:
-            'Zone/country label for the new UserValidation record (e.g. "Mozambique", "Kenya"). ' +
-            'Stored in the "zone" field so the country-specific record coexists with the India ' +
-            'record (pg) without violating x-unique:[\'zone\']. Defaults to the state-level tenant id.',
+            'Deprecated — superseded by mobile_prefix. Accepted for backwards compatibility ' +
+            'but ignored when mobile_prefix is also provided.',
         },
         admin_mobile: {
           type: 'string',
           description:
             'Mobile number for the provisioned ADMIN user on the target tenant. Optional — ' +
             'if omitted, a value conforming to mobile_regex is generated (the source country\'s ' +
-            'mobile would fail the target tenant\'s UserValidation, e.g. India 10-digit vs ' +
-            'Mozambique ^8[0-9]{8}$). Set it to pin a specific number.',
+            'mobile would fail the target tenant\'s MobileNumberValidation pattern). ' +
+            'Set it to pin a specific number.',
         },
         pincode_allowlist: {
           type: 'array',
@@ -1028,59 +1187,160 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
             'rejects pincode: [] on update; absence is the off state.',
         },
+        dashboard_roles: {
+          type: 'array',
+          minItems: 1,
+          uniqueItems: true,
+          items: { type: 'string' },
+          description:
+            'Employee roles that receive the dashboard navigation action and base API capabilities on a fresh ' +
+            'tenant. Defaults to SUPERVISOR, GRO, DGRO, and SUPERUSER. Existing tenant ' +
+            'DashboardConfig, actions, and role-action records are never overwritten.',
+        },
         user_validation: {
           type: 'array',
           description:
-            'Config-driven user-field validation rules — one entry per field. Fully declarative: ' +
-            'a new country/field is config, not code. Each entry maps to a common-masters.UserValidation ' +
-            'record (egov-user ValidationData). When supplied, supersedes mobile_regex/mobile_length.',
+            'Mobile validation rules — one entry per country. Each entry maps to a ' +
+            'common-masters.MobileNumberValidation record (x-unique: countryCode). ' +
+            'When supplied, supersedes mobile_regex/mobile_prefix.',
           items: {
             type: 'object',
             properties: {
-              fieldType: { type: 'string', description: 'e.g. "mobile", "userName", "email", "name"' },
-              zone: { type: 'string', description: 'Country/zone label (e.g. "Mozambique"). Used as x-unique key so records with different zones coexist. Defaults to state-level tenant id.' },
-              prefix: { type: 'string', description: 'Country dialling prefix (e.g. "+258"). Stored in attributes.prefix on the MDMS record.' },
-              allowedStartingCharacters: { type: 'array', items: { type: 'string' }, description: 'Allowed leading digits (e.g. ["8"]). Stored in rules.allowedStartingCharacters.' },
-              pattern: { type: 'string', description: 'regex the field value must match' },
-              minLength: { type: 'integer' },
-              maxLength: { type: 'integer' },
-              errorMessage: { type: 'string', description: 'message or localization key' },
+              countryCode: { type: 'string', description: 'Country dialling prefix, used as x-unique key (e.g. "+254" for Kenya, "+258" for Mozambique, "+91" for India).' },
+              mobileNumberRegex: { type: 'string', description: 'regex the mobile number must match (e.g. "^[17][0-9]{8}$")' },
+              default: { type: 'boolean', description: 'Whether this is the default validation rule for the tenant (default: true).' },
             },
-            required: ['fieldType', 'pattern'],
+            required: ['countryCode', 'mobileNumberRegex'],
           },
         },
       },
+        user_only: {
+          type: 'boolean',
+          description:
+            'When true, skip all MDMS copy steps and only re-create the ADMIN user on ' +
+            'target_tenant. Called after post-bootstrap changes STATE_LEVEL_TENANT_ID ' +
+            'from pg to the real state root so the user is stored with the correct enc key.',
+        },
       required: ['target_tenant'],
     },
     handler: async (args) => {
       validateTenantId(args.target_tenant, 'target_tenant');
       if (args.source_tenant) validateTenantId(args.source_tenant, 'source_tenant');
 
-      await ensureAuthenticated();
-
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
-      if (!args.mobile_regex) {
-        // When no explicit regex is passed (e.g. the bootstrap wizard, which
-        // only sends target_tenant + source_tenant), inherit the SOURCE
-        // tenant's own mobile rule from common-masters.UserValidation so the
-        // derived ADMIN mobile validates against the same egov-user rule the
-        // target inherits (e.g. Kenya ^0?[17][0-9]{8}$) instead of a hardcoded
-        // India default. Tenant-specific values stay in MDMS, not in code.
+      const dashboardRoles = normalizeDashboardRoles(args.dashboard_roles);
+
+      // Register the target with egov-enc-service BEFORE anything below needs
+      // to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
+      // egov-enc-service only knows tenants discovered via an MDMS search
+      // scoped to its own STATE_LEVEL_TENANT_ID — a brand-new root is invisible
+      // to it otherwise, and encrypt/decrypt throws "Tenant Id not found".
+      // Non-fatal: if enc-service is unreachable, let the rest of bootstrap
+      // proceed and surface the real error at whichever step needs it.
+      try {
+        await digitApi.generateEncKey(target);
+      } catch (e) {
+        console.error(`[tenant_bootstrap] enc-service key generation failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      if (args.user_only) {
+        const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
+        const stateTenantForEviction = target.includes('.') ? target.split('.')[0] : target;
+        await evictValidationCache(stateTenantForEviction);
+
+        let userProvisioned: { username: string; tenantId: string; roles: string[] } | null = null;
+        let userProvisionError: string | null = null;
         try {
-          const uv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.UserValidation', { limit: 50 });
-          const mob = (uv || []).find(
-            (r: any) => (r && r.data && r.data.fieldType === 'mobile') || (r && r.uniqueIdentifier === 'mobile'),
+          // Prefer the authenticated session's identity + password (the
+          // operator's bootstrap credentials when the caller passed body.auth)
+          // over the container's CRS_* env. Falling back to env here used to
+          // re-provision the env-default ADMIN while the operator's custom
+          // bootstrap user kept a password they never set — every later token
+          // mint as that user 400'd "Invalid login credentials".
+          const authInfo = digitApi.getAuthInfo();
+          const currentUsername = authInfo.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
+          const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
+          const mobileNumber = deriveValidMobile(
+            mobileRegex,
+            Number(args.mobile_length) || 10,
+            (args.admin_mobile as string) || undefined,
           );
-          const rules = (mob && mob.data && (mob.data as any).rules) as any;
-          if (rules && rules.pattern) {
-            (args as any).mobile_regex = rules.pattern;
-            if (!args.mobile_length && rules.minLength) {
-              (args as any).mobile_length = rules.minLength;
+          const standardRoles = [
+            { code: 'EMPLOYEE', name: 'Employee' },
+            { code: 'CITIZEN', name: 'Citizen' },
+            { code: 'CSR', name: 'CSR' },
+            { code: 'GRO', name: 'Grievance Routing Officer' },
+            { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
+            { code: 'DGRO', name: 'Department GRO' },
+            { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+            { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+            // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the
+            // configurator; this re-provision path replaces the user's role list wholesale
+            // (see updateUser below), so omitting it here would silently strip it on every
+            // post-bootstrap re-provision.
+            { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
+            { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
+          ].map((r) => ({ ...r, tenantId: target }));
+          const newUser = {
+            name: 'Admin',
+            mobileNumber,
+            userName: currentUsername,
+            password: currentPassword,
+            type: 'EMPLOYEE',
+            active: true,
+            // Re-provisioning is the recovery path after credential drift —
+            // repeated failed logins may have tripped egov-user's account
+            // lockout on this row; clear it along with resetting the password.
+            accountLocked: false,
+            roles: standardRoles,
+            tenantId: target,
+          };
+          // user_only is only ever called after a full bootstrap already created
+          // this user (see the ansible "post-bootstrap — re-provision ADMIN"
+          // tasks) — it always exists here, so update in place to re-encrypt
+          // password/mobileNumber under whichever enc key is currently active,
+          // rather than attempting userCreate and string-matching the resulting
+          // error to detect the duplicate it will always be.
+          const existing = await digitApi.userSearch(target, { userName: currentUsername, limit: 1 });
+          if (existing[0]) {
+            await digitApi.userUpdate({ ...existing[0], ...newUser });
+          } else {
+            await digitApi.userCreate(newUser, target);
+          }
+          userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
+        } catch (error) {
+          userProvisionError = error instanceof Error ? error.message : String(error);
+        }
+        return JSON.stringify({
+          success: true,
+          user_only: true,
+          admin_user_provisioned: !!userProvisioned,
+          admin_user_provisioned_details: userProvisioned,
+          admin_user_provision_error: userProvisionError || undefined,
+        }, null, 2);
+      }
+
+      await ensureAuthenticated();
+      if (!args.mobile_regex || !args.mobile_prefix) {
+        // When regex or prefix are not explicit (e.g. the bootstrap wizard only
+        // sends target_tenant + source_tenant), inherit from the SOURCE tenant's
+        // common-masters.MobileNumberValidation so the derived ADMIN mobile and
+        // the seeded rule match what the target will enforce.
+        try {
+          const mnv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.MobileNumberValidation', { limit: 50 });
+          const defaultRecord = (mnv || []).find((r: any) => r?.data?.default === true) || (mnv || [])[0];
+          if (defaultRecord?.data) {
+            if (!args.mobile_regex && (defaultRecord.data as any).mobileNumberRegex) {
+              (args as any).mobile_regex = (defaultRecord.data as any).mobileNumberRegex;
+            }
+            if (!args.mobile_prefix && (defaultRecord.data as any).countryCode) {
+              (args as any).mobile_prefix = (defaultRecord.data as any).countryCode;
             }
           }
         } catch (e) {
-          /* no UserValidation at source -> fall through to the generic default */
+          /* no MobileNumberValidation at source -> fall through to the generic default */
         }
       }
       const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
@@ -1088,12 +1348,72 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const results: {
         schemas: { copied: string[]; skipped: string[]; failed: string[] };
         data: { copied: string[]; skipped: string[]; failed: string[] };
+        warnings: string[];
       } = {
         schemas: { copied: [], skipped: [], failed: [] },
         data: { copied: [], skipped: [], failed: [] },
+        warnings: [],
       };
 
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
+
+      // Step 0: RBAC floor — seed ACCESSCONTROL-ROLEACTIONS.roleactions and
+      // ACCESSCONTROL-ACTIONS-TEST.actions-test directly into the target's
+      // mdms-v2 storage, bypassing the mdms-v2 write API.
+      //
+      // Every write below — including Step 1's own copy of these exact two
+      // schemas — goes through mdms-v2, which egov-accesscontrol authorizes
+      // by looking up the CALLING role's roleaction grants on the TARGET
+      // tenant (ActionService#isAuthorizedOnGivenTenantLevel). On a target
+      // with zero roleaction rows — any brand-new state_root, not just a
+      // fresh city under an established one — that check can never pass:
+      // the only way to grant a role write access is to write a roleaction
+      // record, which itself needs write access. Direct SQL is the one path
+      // around that circle. See CCRS#1928 for the failure this fixes (a
+      // from-scratch bootstrap died with AccessDeniedException on all 42
+      // schemas, `source`'s own roleactions included).
+      //
+      // Idempotent and additive only: skipped entirely once target already
+      // has roleaction rows (a re-run, or a target that inherited them some
+      // other way), and Step 1's normal per-record copy loop below no-ops on
+      // any uid this already created (create-if-absent).
+      try {
+        const already = await digitDb.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = 'ACCESSCONTROL-ROLEACTIONS.roleactions'`,
+          [target],
+        );
+        if (Number(already[0]?.count || 0) === 0) {
+          const floorSchemas = ['ACCESSCONTROL-ROLEACTIONS.roleactions', 'ACCESSCONTROL-ACTIONS-TEST.actions-test'];
+          const sourceRows = await digitDb.query<{ uniqueidentifier: string; schemacode: string; data: Record<string, unknown>; isactive: boolean }>(
+            `SELECT uniqueidentifier, schemacode, data, isactive FROM eg_mdms_data WHERE tenantid = $1 AND schemacode = ANY($2)`,
+            [source, floorSchemas],
+          );
+          const now = Date.now();
+          for (const row of sourceRows) {
+            // roleactions.roleactions carries its own tenantId inside `data` —
+            // rewrite it to match; actions-test rows are tenant-agnostic (no
+            // `tenantId` field) and copy across untouched.
+            const data = row.schemacode === 'ACCESSCONTROL-ROLEACTIONS.roleactions'
+              ? { ...row.data, tenantId: target }
+              : row.data;
+            await digitDb.execute(
+              `INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+               VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'system-mdms-seed-rbac-floor', 'system-mdms-seed-rbac-floor', $7, $7)
+               ON CONFLICT (tenantid, schemacode, uniqueidentifier) DO NOTHING`,
+              [randomUUID(), target, row.uniqueidentifier, row.schemacode, JSON.stringify(data), row.isactive, now],
+            );
+          }
+          if (sourceRows.length > 0) {
+            results.warnings.push(`RBAC floor: seeded ${sourceRows.length} roleaction/action rows for "${target}" directly from "${source}" (target had none — see CCRS#1928)`);
+          }
+          emitProgress({ phase: 'bootstrap:rbac-floor', message: `Seeded ${sourceRows.length} RBAC floor rows for ${target}`, data: { target, source, seeded: sourceRows.length }, pct: 1 });
+        }
+      } catch (e) {
+        // Non-fatal by design: on failure, Step 1 below fails loudly on the
+        // SAME schemas with the SAME AccessDeniedException as before this
+        // fix existed — no worse off, and the real error still surfaces.
+        console.error(`[tenant_bootstrap] RBAC floor seed failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       // Step 1: Copy ALL schemas from source to target
       //
@@ -1111,6 +1431,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const sourceSchemas = await digitApi.mdmsSchemaSearch(source);
       for (const schema of sourceSchemas) {
         const code = schema.code as string;
+        // The dss.* catalog schemas are registered from the repo in Step 1b.
+        // If we copied the source's copy here first, Step 1b would only ever
+        // see a duplicate and the source's (possibly stale) definition would
+        // win — schema code is immutable, so whichever registers first stays.
+        // Skip them here so the canonical definition is the one that lands.
+        if (code in DASHBOARD_CATALOG_SCHEMAS) {
+          continue;
+        }
         const definition = schema.definition as Record<string, unknown>;
         const description = (schema.description as string) || code;
         const xUnique = (definition as { 'x-unique'?: unknown })['x-unique'];
@@ -1121,6 +1449,31 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         try {
           await digitApi.mdmsSchemaCreate(target, code, description, definition);
           results.schemas.copied.push(code);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (isDuplicateError(msg)) {
+            results.schemas.skipped.push(code);
+          } else {
+            results.schemas.failed.push(`${code}: ${msg}`);
+          }
+        }
+      }
+
+      // Step 1b: ensure the canonical dss schemas are registered.
+      //
+      // The dashboard catalog masters (dss.KpiDefinition / dss.DashboardPack /
+      // dss.DashboardConfig) are tenant-invariant platform definitions. Copying
+      // them from the source (Step 1 above) only works if the source carries
+      // them, and copies whatever the source has — including a stale schema.
+      // Register the canonical definitions from the repo instead, create-if-
+      // absent (schema code is immutable; mdms-v2 _update is 501, so an already-
+      // registered schema is left as-is — reconciling a stale one is a separate
+      // DB-level op, out of scope here). This guarantees the schema exists
+      // before Step 2b seeds the catalog data.
+      for (const [code, definition] of Object.entries(DASHBOARD_CATALOG_SCHEMAS)) {
+        try {
+          await digitApi.mdmsSchemaCreate(target, code, code, definition);
+          results.schemas.copied.push(`${code} (canonical)`);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (isDuplicateError(msg)) {
@@ -1266,6 +1619,18 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        // ── dashboard analytics catalog ──
+        // KPI defs and packs are platform-level definitions (queries + viz +
+        // role visibility) with no tenant identity inside — without them a new
+        // root gets a working dashboard shell but an empty catalog ("no tiles
+        // in the catalog pack for this role"). Complaint-type–specific data
+        // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
+        'dss.KpiDefinition',
+        'dss.DashboardPack',
+        // dss.DashboardConfig is deliberately not copied from the source: its
+        // role gate is tenant-owned, so inheriting pg's broad fallback set is
+        // not a safe 0→1 default. The create-if-absent floor below seeds the
+        // explicit install role set and preserves an existing target record.
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
@@ -1300,6 +1665,108 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           }
         }
         throw lastErr;
+      }
+
+      // A newly-created action reaches the reference validator through Kafka.
+      // The immediately-following roleaction write can therefore see the
+      // action/role schemas but not their rows yet. Retry only reference errors;
+      // a genuinely missing role still fails loudly after the bounded wait.
+      async function mdmsCreateWithReferenceWait(
+        tenant: string,
+        schemaCode: string,
+        uniqueIdentifier: string,
+        data: Record<string, unknown>,
+      ): Promise<void> {
+        const maxAttempts = 5;
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            await mdmsCreateWithSchemaWait(tenant, schemaCode, uniqueIdentifier, data);
+            return;
+          } catch (error) {
+            lastErr = error;
+            const msg = error instanceof Error ? error.message : String(error);
+            const isReferenceRace =
+              msg.includes('REFERENCE_VALIDATION_ERR') ||
+              msg.toLowerCase().includes('reference validation');
+            if (!isReferenceRace || attempt === maxAttempts - 1) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 500 * (1 << attempt)));
+          }
+        }
+        throw lastErr;
+      }
+
+      // Pages through mdmsV2SearchRaw until a page comes back shorter than PAGE_SIZE — a single
+      // capped fetch (the previous behavior) silently truncated any schema with more rows than
+      // the limit. ACCESSCONTROL-ACTIONS-TEST.actions-test routinely has 500+ rows on a real
+      // source tenant, so a `{ limit: 500 }` one-shot call was dropping whichever action records
+      // happened to fall past the 500th — including, on at least one deployment, the
+      // common-masters.Department/Designation create/update actions, leaving MDMS_ADMIN unable
+      // to edit those masters in the configurator despite being correctly role-mapped.
+      //
+      // mdms-v2 orders results by createdtime DESC with no tiebreaker, and a bulk-seeded schema
+      // (e.g. ACCESSCONTROL-ACTIONS-TEST.actions-test, where ~329/330 rows share one
+      // createdtime from a single default-data-handler insert) has an unstable sort order across
+      // that tie — offset-based pages can then return the same row twice and skip another,
+      // silently dropping it from `all` even though total row count matched expectations. Dedup
+      // by uniqueIdentifier (mdms-v2's actual identity key) closes that gap; the count cross-check
+      // below is a hard signal that something was still missed if it ever fires.
+      //
+      // MAX_PAGES bounds this at 100k rows — comfortably above any real MDMS schema. If a
+      // schema's result order isn't stable across separate offset-based requests, an unbounded
+      // loop would hang tenant_bootstrap forever; hitting the cap instead throws a loud,
+      // debuggable error.
+      async function fetchAllMdmsV2Raw(tenant: string, schemaCode: string): Promise<MdmsRecord[]> {
+        const PAGE_SIZE = 500;
+        const MAX_PAGES = 200;
+        const seen = new Map<string, MdmsRecord>();
+        let offset = 0;
+        let page: MdmsRecord[] = [];
+        for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
+          try {
+            page = await digitApi.mdmsV2SearchRaw(tenant, schemaCode, { limit: PAGE_SIZE, offset });
+          } catch (err) {
+            // Nothing fetched yet — propagate so the caller's own failure handling (fail the
+            // schema / `.catch(() => [])`) applies, same as before this dedup/partial-fetch logic
+            // existed. Once we've already accumulated real rows, though, a later page failing must
+            // NOT discard them — that's the "page 1 succeeds, page 2 fails, whole thing becomes []"
+            // bug this loop used to have (#1826 review finding #5).
+            if (seen.size === 0) throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: page at offset ${offset} failed (${msg}) — ` +
+              `returning the ${seen.size} row(s) already fetched instead of discarding them.`
+            );
+            page = [];
+            break;
+          }
+          for (const record of page) {
+            const key = record.uniqueIdentifier ?? `${schemaCode}#${offset}#${seen.size}`;
+            seen.set(key, record);
+          }
+          if (page.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        if (page.length === PAGE_SIZE) {
+          throw new Error(
+            `fetchAllMdmsV2Raw: ${schemaCode} on "${tenant}" exceeded ${MAX_PAGES * PAGE_SIZE} rows ` +
+            `without a short page — aborting instead of paging indefinitely.`,
+          );
+        }
+        const all = [...seen.values()];
+        try {
+          const expected = await digitApi.mdmsV2Count(tenant, schemaCode);
+          if (expected > 0 && all.length < expected) {
+            console.error(
+              `[fetchAllMdmsV2Raw] ${tenant}/${schemaCode}: fetched ${all.length} unique rows but ` +
+              `_count reports ${expected} — pagination may have skipped rows under an unstable sort tie.`
+            );
+          }
+        } catch {
+          // Best-effort diagnostic only — an unreachable/unsupported _count endpoint must not
+          // fail the (already-successful) fetch itself.
+        }
+        return all;
       }
 
       // ────────────────────────────────────────────────────────────────
@@ -1420,19 +1887,72 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // ThemeConfig when querying mz). Without the filter, the bootstrap
           // falsely sees the record as already present and skips copying it,
           // leaving the target tenant without its own copy.
-          const sourceRecords = await digitApi.mdmsV2SearchRaw(source, schemaCode, { limit: 500 });
-          const targetRecords = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+          const [sourceRecords, targetRecords] = await Promise.all([
+            fetchAllMdmsV2Raw(source, schemaCode),
+            fetchAllMdmsV2Raw(target, schemaCode),
+          ]);
           const targetByUid = new Map(
             targetRecords
               .filter((r) => (r as { tenantId?: string }).tenantId === target)
               .map((r) => [r.uniqueIdentifier, r]),
           );
 
+          // An empty source is not the same as "nothing to do". For schemas
+          // whose whole purpose is to carry platform-level definitions, a
+          // source root with no rows means the target gets a working shell
+          // with an empty catalog — which is indistinguishable from success in
+          // the copied/skipped/failed counters. This is exactly how `mz` was
+          // bootstrapped to a dashboard with zero KPIs. Say so out loud.
+          const emptyImpact = SCHEMAS_EMPTY_IS_A_PROBLEM.get(schemaCode);
+          if (sourceRecords.length === 0 && emptyImpact) {
+            const warning =
+              `Source tenant "${source}" has no ${schemaCode} records — nothing was copied to ` +
+              `"${target}", so ${emptyImpact.impact}. Seed it from the repo files: ` +
+              `${emptyImpact.remedy} (tenant "${target}").`;
+            results.warnings.push(warning);
+            console.warn(`[tenant_bootstrap] ${warning}`);
+            emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode } });
+          }
+
           for (const record of sourceRecords) {
             const existing = targetByUid.get(record.uniqueIdentifier);
             try {
+              // A record whose payload is a JSON Schema document is the result
+              // of POSTing a schema body to /v2/_create/<schema> instead of
+              // /schema/v1/_create. It is not data, it occupies the uid a real
+              // record needs, and copying it propagates the corruption to every
+              // tenant bootstrapped from this source. Found live on `mz`.
+              if (isSchemaDocument(record.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at source "${source}": the ` +
+                  `record payload is a JSON Schema document, not data. Deactivate it at the ` +
+                  `source (mdms-v2 _update with isActive:false) — it also shadows the real record there.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (schema-as-data, not copied)`);
+                continue;
+              }
+              // A valid source record colliding with an active schema-as-data
+              // row on the TARGET must be surfaced, not swallowed by the
+              // generic active-record skip below — otherwise the target's
+              // corruption is invisible and the good record never lands, while
+              // bootstrap reports success. The copy can't repair it (an active
+              // row is not overwritten), so point the operator at the fix.
+              if (existing?.isActive && isSchemaDocument(existing.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at target "${target}": the ` +
+                  `existing record is a JSON Schema document, not data, and shadows the real record. ` +
+                  `Deactivate it (mdms-v2 _update with isActive:false), then re-run — or repair it ` +
+                  `with local-setup/scripts/enable-dashboard.sh --repair.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (target schema-as-data, not copied)`);
+                continue;
+              }
               if (existing && existing.isActive) {
-                // Already active — skip
+                // Already active — skip.
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
               } else if (existing && !existing.isActive) {
                 // Inactive (from cleanup) — re-activate via update.
@@ -1469,8 +1989,189 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             }
           }
         } catch (schemaErr) {
-          // Schema might not have data in source — that's OK
-          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+          // fetchAllMdmsV2Raw only throws on a genuine fetch failure (network/HTTP error, or the
+          // MAX_PAGES safety cap) — a schema that's simply empty at the source resolves to `[]`,
+          // not a rejection, so every path through here is a real failure. Recording it in
+          // results.data.failed (not just logging) is what makes `overallSuccess` correctly turn
+          // false instead of a bootstrap reporting success after silently skipping the schema.
+          const msg = schemaErr instanceof Error ? schemaErr.message : String(schemaErr);
+          console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy failed: ${msg}`);
+          results.data.failed.push(`${schemaCode} (schema-level fetch failure): ${msg}`);
+        }
+      }
+
+      // Step 2b: seed the canonical dashboard catalog as a floor.
+      //
+      // Mirrors the l10n floor below (DASHBOARD_L10N_PACKS): the copy-from-
+      // source above fills dss.KpiDefinition / dss.DashboardPack only when the
+      // source carries them, and a source without a catalog yields an empty one
+      // (#1394). These are tenant-invariant platform definitions with no tenant
+      // identity, so seed them from the repo, create-if-absent — a live record
+      // from the source copy (or a prior run) wins; a fresh/empty root gets the
+      // full canonical catalog. Tenant-specific DashboardConfig/access floors
+      // are handled immediately afterwards and remain create-if-absent.
+      {
+        const catalogFloor: Array<[string, Record<string, unknown>[]]> = [
+          ['dss.KpiDefinition', DASHBOARD_KPI_DEFINITIONS],
+          ['dss.DashboardPack', DASHBOARD_PACKS],
+        ];
+        for (const [schemaCode, records] of catalogFloor) {
+          let existingUids = new Set<string>();
+          try {
+            const rows = await fetchAllMdmsV2Raw(target, schemaCode);
+            existingUids = new Set(
+              (rows || [])
+                .filter((r) => (r as { tenantId?: string }).tenantId === target)
+                .map((r) => r.uniqueIdentifier as string),
+            );
+          } catch {
+            // No rows yet (fresh tenant) — the floor fills everything.
+          }
+          for (const data of records) {
+            // The uid is derived server-side from x-unique (["id"]); a record
+            // already present under that id — copied from source or seeded on a
+            // prior run — is left untouched (first-writer-wins).
+            const id = (data as { id?: string }).id;
+            if (id && existingUids.has(id)) {
+              results.data.skipped.push(`${schemaCode}/${id} (catalog floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithSchemaWait(target, schemaCode, id ?? '', { ...data });
+              results.data.copied.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+              } else {
+                results.data.failed.push(`${schemaCode}/${id ?? '?'} (catalog floor): ${msg}`);
+              }
+            }
+          }
+        }
+      }
+
+      // Step 2c: make the employee dashboard discoverable on a true 0→1 install.
+      //
+      // Catalog records alone only render a dashboard after navigation and route
+      // authorization have admitted the employee. Seed all three parts as a
+      // create-if-absent floor: tenant config, action 4557 plus base analytics
+      // capabilities 2640-2644, and the matching role→action grants.
+      // A target record always wins, so re-running bootstrap never broadens or
+      // narrows an operator-managed deployment.
+      {
+        const configSchema = 'dss.DashboardConfig';
+        const actionsSchema = 'ACCESSCONTROL-ACTIONS-TEST.actions-test';
+        const roleActionsSchema = 'ACCESSCONTROL-ROLEACTIONS.roleactions';
+
+        const [configs, actions, roleActions] = await Promise.all([
+          fetchAllMdmsV2Raw(target, configSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, actionsSchema).catch(() => []),
+          fetchAllMdmsV2Raw(target, roleActionsSchema).catch(() => []),
+        ]);
+        const exactTenant = (record: MdmsRecord) => record.tenantId === target && record.isActive;
+
+        // A fresh tenant copied from an older live source can inherit a bare action 2008. In
+        // compatibility mode that means unrestricted rows, so attach #1441's canonical scope
+        // only when the target has no authored scope of its own. Existing authored policy wins.
+        const searchAction = actions.find((record) =>
+          exactTenant(record) && Number((record.data as { id?: number })?.id) === 2008);
+        if (searchAction) {
+          const searchData = searchAction.data as Record<string, unknown>;
+          const complaint = (searchData.resource as { complaint?: { scope?: unknown } } | undefined)?.complaint;
+          if (complaint?.scope) {
+            results.data.skipped.push(`${actionsSchema}/2008 (ABAC scope already authored)`);
+          } else {
+            try {
+              await digitApi.mdmsV2UpdateData(searchAction, {
+                ...searchData,
+                method: 'POST',
+                resource: PGR_SEARCH_SCOPE_RESOURCE,
+              });
+              results.data.copied.push(`${actionsSchema}/2008 (ABAC scope floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): ${msg}`);
+            }
+          }
+        } else {
+          results.data.failed.push(`${actionsSchema}/2008 (ABAC scope floor): action is missing`);
+        }
+
+        const haveConfig = configs.some((record) =>
+          exactTenant(record) && (record.data as { id?: string })?.id === 'default');
+        if (haveConfig) {
+          results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+        } else {
+          try {
+            await mdmsCreateWithSchemaWait(
+              target,
+              configSchema,
+              'default',
+              buildDashboardConfig(),
+            );
+            results.data.copied.push(`${configSchema}/default (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${configSchema}/default (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${configSchema}/default (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const action of DASHBOARD_ACCESS_ACTIONS) {
+          const actionId = Number(action.id);
+          const haveAction = actions.some((record) =>
+            exactTenant(record) && Number((record.data as { id?: number })?.id) === actionId);
+          if (haveAction) {
+            results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            continue;
+          }
+          try {
+            await mdmsCreateWithSchemaWait(target, actionsSchema, String(actionId), { ...action });
+            results.data.copied.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (isDuplicateError(msg)) {
+              results.data.skipped.push(`${actionsSchema}/${actionId} (dashboard access floor)`);
+            } else {
+              results.data.failed.push(`${actionsSchema}/${actionId} (dashboard access floor): ${msg}`);
+            }
+          }
+        }
+
+        for (const role of dashboardRoles) {
+          for (const action of DASHBOARD_ACCESS_ACTIONS) {
+            const actionId = Number(action.id);
+            const haveGrant = roleActions.some((record) => {
+              if (!exactTenant(record)) return false;
+              const data = record.data as { actionid?: number; rolecode?: string };
+              return Number(data?.actionid) === actionId && data?.rolecode === role;
+            });
+            const uid = `${actionId}.${role}`;
+            if (haveGrant) {
+              results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithReferenceWait(
+                target,
+                roleActionsSchema,
+                uid,
+                buildDashboardRoleAction(actionId, role, target),
+              );
+              results.data.copied.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${roleActionsSchema}/${uid} (dashboard access floor)`);
+              } else {
+                results.data.failed.push(`${roleActionsSchema}/${uid} (dashboard access floor): ${msg}`);
+              }
+            }
+          }
         }
       }
 
@@ -1500,11 +2201,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let appendedTo = 0;
         let alreadyIn = 0;
         try {
-          const cityModuleRecords = await digitApi.mdmsV2SearchRaw(
-            tenantsScope,
-            'tenant.citymodule',
-            { limit: 100 },
-          );
+          const cityModuleRecords = await fetchAllMdmsV2Raw(tenantsScope, 'tenant.citymodule');
           for (const rec of cityModuleRecords) {
             const data = rec.data as Record<string, unknown>;
             const tenants = Array.isArray(data.tenants)
@@ -1544,32 +2241,21 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       }
 
-      // ── Step 3b: INSERT country-specific common-masters.UserValidation ──────
-      // Schema + India record (zone:'India') are seeded by default-data-handler
-      // at pg and copied to new root tenants via TenantConsumer. MCP only INSERTs
-      // the country-specific record identified by zone. x-unique:['zone'] allows
-      // both records to coexist; egov-user fetches all active mobile rules.
-      //
-      // FULLY CONFIG-DRIVEN: the caller passes `user_validation` — a list of
-      // { fieldType, zone, pattern, minLength, maxLength, errorMessage } — so a
-      // new country/field is pure config, no code. `mobile_regex`/`mobile_length`/
-      // `mobile_zone` are a back-compat shorthand that builds a single entry.
-      const stateRoot = (target as string).includes('.') ? (target as string).split('.')[0] : (target as string);
-      const mobileZone = (args.mobile_zone as string) || 'mobile';
-      const validationRules: Array<{ fieldType: string; zone: string; prefix?: string; allowedStartingCharacters?: string[]; pattern: string; minLength?: number; maxLength?: number; errorMessage?: string }> =
+      // ── Step 3b: INSERT country-specific common-masters.MobileNumberValidation ──
+      // Schema is seeded by default-data-handler at pg and copied to new root tenants
+      // via TenantConsumer. MCP INSERTs the target-country record identified by
+      // countryCode (the x-unique key). `mobile_regex`/`mobile_prefix` are a
+      // back-compat shorthand; `user_validation` is the fully declarative form.
+      const mobileCountryCode = (args.mobile_prefix as string) || '+91';
+      const validationRules: Array<{ countryCode: string; mobileNumberRegex: string; default?: boolean }> =
         Array.isArray(args.user_validation) && (args.user_validation as unknown[]).length > 0
           ? (args.user_validation as typeof validationRules)
           : [{
-              fieldType: 'mobile',
-              zone: mobileZone,
-              prefix: (args.mobile_prefix as string) || undefined,
-              allowedStartingCharacters: (args.mobile_allowed_starting_characters as string[]) || undefined,
-              pattern: mobileRegex,
-              minLength: Number(args.mobile_length) || 10,
-              maxLength: Number(args.mobile_length) || 10,
-              errorMessage: (args.mobile_error_message as string) || undefined,
+              countryCode: mobileCountryCode,
+              mobileNumberRegex: mobileRegex,
+              default: true,
             }];
-      emitProgress({ phase: 'uservalidation:start', message: `Synthesizing ${validationRules.length} UserValidation rule(s)`, pct: 76 });
+      emitProgress({ phase: 'mobilevalidation:start', message: `Synthesizing ${validationRules.length} MobileNumberValidation rule(s)`, pct: 76 });
       let uvNewlySeeded = false;
       try {
         // data-handler seeds the schema at pg and TenantConsumer copies it to the
@@ -1580,55 +2266,46 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           const schemaMaxAttempts = 20; // up to 60 s
           let schemaReady = false;
           for (let i = 0; i < schemaMaxAttempts; i++) {
-            const schemas = await digitApi.mdmsSchemaSearch(target, ['common-masters.UserValidation']).catch(() => []);
+            const schemas = await digitApi.mdmsSchemaSearch(target, ['common-masters.MobileNumberValidation']).catch(() => []);
             if (schemas && schemas.length > 0) { schemaReady = true; break; }
-            emitProgress({ phase: 'uservalidation:wait', message: `Waiting for common-masters.UserValidation schema at "${target}" (attempt ${i + 1}/${schemaMaxAttempts})…` });
+            emitProgress({ phase: 'mobilevalidation:wait', message: `Waiting for common-masters.MobileNumberValidation schema at "${target}" (attempt ${i + 1}/${schemaMaxAttempts})…` });
             await new Promise(res => setTimeout(res, schemaWaitMs));
           }
           if (!schemaReady) {
-            throw new Error(`common-masters.UserValidation schema not found at "${target}" after ${schemaMaxAttempts * schemaWaitMs / 1000}s — default-data-handler may not have seeded it yet`);
+            throw new Error(`common-masters.MobileNumberValidation schema not found at "${target}" after ${schemaMaxAttempts * schemaWaitMs / 1000}s — default-data-handler may not have seeded it yet`);
           }
         }
         // mdms-v2 search is HIERARCHICAL — filter to exact-tenant rows only,
-        // keyed by zone (the x-unique field).
-        const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 50 });
-        const getExistingByZone = (zone: string) => existingUVraw.find(
+        // keyed by countryCode (the x-unique field).
+        const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.MobileNumberValidation', { limit: 50 });
+        const getExistingByCountryCode = (countryCode: string) => existingUVraw.find(
           (r) => (r as { tenantId?: string }).tenantId === target
-            && (r as { data?: { zone?: string } }).data?.zone === zone,
+            && (r as { data?: { countryCode?: string } }).data?.countryCode === countryCode,
         );
         for (const rule of validationRules) {
-          if (getExistingByZone(rule.zone)) {
-            results.data.skipped.push(`common-masters.UserValidation/${rule.zone}`);
+          if (getExistingByCountryCode(rule.countryCode)) {
+            results.data.skipped.push(`common-masters.MobileNumberValidation/${rule.countryCode}`);
             continue;
           }
           try {
-            await mdmsCreateWithSchemaWait(target, 'common-masters.UserValidation', rule.zone, {
-              fieldType: rule.fieldType,
-              zone: rule.zone,
-              isActive: true,
-              default: true,
-              ...(rule.prefix ? { attributes: { prefix: rule.prefix } } : {}),
-              rules: {
-                pattern: rule.pattern,
-                minLength: rule.minLength ?? undefined,
-                maxLength: rule.maxLength ?? undefined,
-                ...(rule.allowedStartingCharacters ? { allowedStartingCharacters: rule.allowedStartingCharacters } : {}),
-                errorMessage: rule.errorMessage ?? `Invalid ${rule.fieldType}`,
-              },
+            await mdmsCreateWithSchemaWait(target, 'common-masters.MobileNumberValidation', rule.countryCode, {
+              countryCode: rule.countryCode,
+              mobileNumberRegex: rule.mobileNumberRegex,
+              default: rule.default ?? true,
             });
           } catch (e) {
             const m = e instanceof Error ? e.message : String(e);
             if (isDuplicateError(m)) {
-              results.data.skipped.push(`common-masters.UserValidation/${rule.zone} (already exists)`);
+              results.data.skipped.push(`common-masters.MobileNumberValidation/${rule.countryCode} (already exists)`);
               continue;
             }
             throw e;
           }
-          results.data.copied.push(`common-masters.UserValidation/${rule.zone} (inserted, pattern=${rule.pattern})`);
+          results.data.copied.push(`common-masters.MobileNumberValidation/${rule.countryCode} (inserted, pattern=${rule.mobileNumberRegex})`);
           uvNewlySeeded = true;
         }
       } catch (e) {
-        results.data.failed.push(`common-masters.UserValidation: ${e instanceof Error ? e.message : String(e)}`);
+        results.data.failed.push(`common-masters.MobileNumberValidation: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Poll until the inserted record is readable before Step 4 creates the ADMIN user.
@@ -1638,12 +2315,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let uvReady = false;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
-            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 10 });
+            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.MobileNumberValidation', { limit: 10 });
             const allCorrect = validationRules.every(rule =>
               uvRows.some(r =>
                 (r as { tenantId?: string }).tenantId === target &&
-                (r as { data?: { zone?: string } }).data?.zone === rule.zone &&
-                (r as { data?: { rules?: { pattern?: string } } }).data?.rules?.pattern === rule.pattern,
+                (r as { data?: { countryCode?: string } }).data?.countryCode === rule.countryCode &&
+                (r as { data?: { mobileNumberRegex?: string } }).data?.mobileNumberRegex === rule.mobileNumberRegex,
               ),
             );
             if (allCorrect) { uvReady = true; break; }
@@ -1651,7 +2328,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           await new Promise(res => setTimeout(res, pollIntervalMs));
         }
         if (!uvReady) {
-          console.warn(`[tenant_bootstrap] UserValidation not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
+          console.warn(`[tenant_bootstrap] MobileNumberValidation not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
         }
       }
 
@@ -1675,8 +2352,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               });
           }
         }
-        const testRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test', { limit: 500 });
-        const haveRows = await digitApi.mdmsV2SearchRaw(target, 'ACCESSCONTROL-ACTIONS.actions', { limit: 500 });
+        const [testRows, haveRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS-TEST.actions-test'),
+          fetchAllMdmsV2Raw(target, 'ACCESSCONTROL-ACTIONS.actions'),
+        ]);
         const haveUid = new Set(haveRows.map((r) => r.uniqueIdentifier));
         let bridged = 0;
         for (const r of testRows) {
@@ -1716,7 +2395,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        // The session's login password, so the provisioned admin carries the
+        // operator's actual credentials (CRS_PASSWORD only as a fallback for
+        // token-only auth, where the password is unknown).
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
         // Get full user details from source tenant
         const sourceTenantForSearch = auth.user?.tenantId || source;
@@ -1746,6 +2428,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
           { code: 'DGRO', name: 'Department GRO' },
           { code: 'SUPERUSER', name: 'Super User' },
+          // MDMS_ADMIN/LOC_ADMIN — needed for the bootstrap ADMIN to edit MDMS-v2-backed masters
+          // and localization messages through the configurator (its access-policy check gates
+          // create/update on these roles specifically; without them ADMIN is stuck view-only).
+          { code: 'MDMS_ADMIN', name: 'MDMS Admin' },
+          { code: 'LOC_ADMIN', name: 'Localisation Admin' },
+          // ACCOUNT_ADMIN — needed for bootstrapping/tenant onboarding through the configurator
+          // and its other admin screens.
+          { code: 'ACCOUNT_ADMIN', name: 'Account Admin' },
           // INTERNAL_MICROSERVICE_ROLE — required by services that do inter-service user lookups
           // (e.g. inbox's ElasticSearchService.initializeSystemuser() searches for a user with this
           // role on the state tenant). Without it, inbox crashes: "Service returned null while fetching user".
@@ -1848,7 +2538,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // ────────────────────────────────────────────────────────────────
       emitProgress({ phase: 'localizations:start', message: 'Copying localization messages (this can take a while for the full set)', pct: 95 });
 
-      const localizationResults: { locale: string; copied: number; failed: number; error?: string }[] = [];
+      const localizationResults: { locale: string; copied: number; failed: number; derived?: number; error?: string }[] = [];
       const UPSERT_BATCH = 500;
 
       // Discover locales — read source's StateInfo, pull `.languages[].value`.
@@ -1874,6 +2564,43 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const localeSourceTenants = Array.from(
         new Set([source, 'statea', 'statea.g', 'pg', 'pg.citest', 'ke', 'ke.nairobi']),
       );
+
+      // #1590: the copy loop can only carry a message that already exists on
+      // SOME source tenant. Step 2 copies the department/designation MASTERS
+      // regardless — so a master the source dump never localized (the canned
+      // `pg.citya`/`india.citya` PMC_* departments are the live example) lands
+      // on the target with no `COMMON_MASTERS_DEPARTMENT_<CODE>` message and
+      // renders as the raw code wherever a code is displayed: HRMS forms, the
+      // employee filters, and the dashboard's department tiles (which have no
+      // humaniser by design — see the dimensionLabel contract in
+      // digit-ui-esbuild/products/dashboard/src/i18n/dimensionLabel.js).
+      //
+      // Derive the missing keys from the master's own `name`. That is the
+      // DATA-OWNED display text an operator authored, which is exactly what
+      // the dimensionLabel contract sanctions as fallback — not a code-owned
+      // English guess. Copied messages still win (added below only when the
+      // union has no entry for the key).
+      //
+      // PRIMARY LOCALE ONLY — and the primary locale is StateInfo.languages[0],
+      // the deployment's own default, NOT en_IN. The master `name` is authored
+      // in whatever language the operator onboarded in ("Obras Públicas" on mz),
+      // so it belongs in that deployment's default pack. Copying it into the
+      // *other* packs would paper over a real translation gap and defeat the
+      // locale-strict resolution added for #1108 — an untranslated department
+      // must stay visibly untranslated in the locales nobody translated it into.
+      const primaryLocale = locales[0];
+      let derivedMasterMessages: { code: string; message: string; module: string }[] = [];
+      try {
+        const [deptRows, desigRows] = await Promise.all([
+          fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
+          fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
+        ]);
+        derivedMasterMessages = deriveMasterLocalizations(deptRows, desigRows);
+      } catch (e) {
+        // Non-fatal: the copy loop below still runs. A master read failure
+        // just means no derived floor for this run.
+        console.error(`[tenant_bootstrap] master-derived localization skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
       for (const locale of locales) {
         emitProgress({
@@ -1922,6 +2649,40 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             } catch {
               // Tenant may not have this locale — that's expected. Skip.
+            }
+          }
+          // Static floor: the dashboard's repo-shipped message packs. Fresh
+          // installs have no source tenant carrying rainmaker-dashboard yet
+          // (the module was introduced with the dashboard localization work),
+          // so without this a from-scratch bootstrap renders raw DASHBOARD_*
+          // keys. Applied per locale for every locale that has a pack
+          // (en_IN, pt_PT, ...). Live-tenant copies win (first-writer-wins,
+          // same as above).
+          const dashboardPack = DASHBOARD_L10N_PACKS[locale];
+          if (dashboardPack) {
+            for (const m of dashboardPack) {
+              const key = `${m.module}::${m.code}`;
+              if (!byKey.has(key)) byKey.set(key, m);
+            }
+          }
+          // #1590 floor: department/designation labels derived from the masters
+          // Step 2 copied, for codes no source tenant localized. Primary locale
+          // only, and only where the union has nothing — a real translation
+          // always wins over the master name.
+          let derivedCount = 0;
+          if (locale === primaryLocale) {
+            for (const m of derivedMasterMessages) {
+              const key = `${m.module}::${m.code}`;
+              if (byKey.has(key)) continue;
+              byKey.set(key, m);
+              derivedCount++;
+            }
+            if (derivedCount > 0) {
+              emitProgress({
+                phase: 'localizations:derived',
+                message: `${locale}: derived ${derivedCount} department/designation label(s) from MDMS masters (no source tenant localized them)`,
+                data: { locale, derived: derivedCount },
+              });
             }
           }
           const messages = Array.from(byKey.values());
@@ -1982,13 +2743,59 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             }
           }
-          localizationResults.push({ locale, copied, failed });
+          localizationResults.push({ locale, copied, failed, ...(derivedCount > 0 ? { derived: derivedCount } : {}) });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           localizationResults.push({ locale, copied: 0, failed: 0, error: msg.slice(0, 200) });
         }
       }
 
+      // The derived floor also has to land on the ROOT tenant, not just the
+      // city. egov-localization `_search` resolves a tenant's OWN rows only —
+      // verified on bomet: a `_search` at `ke.india` returns its 9 rows and no
+      // `ke` row, and a `_search` at `ke` never sees a `ke.india` row. The
+      // dashboard (like the rest of the employee shell) loads its packs for
+      // `stateTenantId`, so a message written only to `ke.india` is invisible
+      // exactly where #1590 was reported — the root dashboard aggregating that
+      // city's complaints. Same reason, same shape as the TENANT_TENANTS_*
+      // push below. Duplicate-tolerant: the root usually already has most of
+      // these, and the upsert treats a repeat as a no-op.
+      if (derivedMasterMessages.length > 0 && target.includes('.')) {
+        const rootTenant = target.split('.')[0];
+        let rootDerived = 0;
+        let rootExisting = 0;
+        let rootFailed = 0;
+        for (const m of derivedMasterMessages) {
+          try {
+            await digitApi.localizationUpsert(rootTenant, primaryLocale, [m]);
+            rootDerived++;
+          } catch (e) {
+            const em = e instanceof Error ? e.message : String(e);
+            if (isDuplicateError(em)) {
+              // Already present at the root (the common case) — a no-op.
+              rootExisting++;
+            } else {
+              // A service/auth/validation failure leaves the root without the
+              // label, which is the whole point of this push. Count it so the
+              // run cannot report clean while a state-level UI still renders
+              // the raw code.
+              rootFailed++;
+              console.error(`[tenant_bootstrap] derived label ${m.code} → root "${rootTenant}": ${em.slice(0, 200)}`);
+            }
+          }
+        }
+        if (rootFailed > 0) {
+          localizationResults.push({ locale: primaryLocale, copied: 0, failed: rootFailed, error: `derived-label push to root "${rootTenant}" failed for ${rootFailed} message(s)` });
+        }
+        emitProgress({
+          phase: 'localizations:derived_root',
+          message: `${primaryLocale}: pushed ${rootDerived} derived master label(s) to root "${rootTenant}" (${rootExisting} already present, ${rootFailed} failed) so state-level UIs resolve them`,
+          data: { locale: primaryLocale, tenant: rootTenant, pushed: rootDerived, existing: rootExisting, failed: rootFailed },
+        });
+      }
+
+      // Totalled AFTER the root push so its failures reach both the reported
+      // counts and the run's success condition.
       const localizationsCopied = localizationResults.reduce((a, r) => a + r.copied, 0);
       const localizationsFailed = localizationResults.reduce((a, r) => a + r.failed, 0);
 
@@ -2111,14 +2918,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // city-scoped rows and misses root depts. Query BOTH and union
           // by code so ADMIN's assignments cover every PGR dept.
           const [cityDepts, rootDepts, cityDesigs, rootDesigs] = await Promise.all([
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Department', { limit: 100 }).catch(() => []),
+            fetchAllMdmsV2Raw(target, 'common-masters.Department').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Department', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
-            digitApi.mdmsV2SearchRaw(target, 'common-masters.Designation', { limit: 100 }).catch(() => []),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Department').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
+            fetchAllMdmsV2Raw(target, 'common-masters.Designation').catch(() => []),
             target !== targetRoot
-              ? digitApi.mdmsV2SearchRaw(targetRoot, 'common-masters.Designation', { limit: 100 }).catch(() => [])
-              : Promise.resolve([] as Record<string, unknown>[]),
+              ? fetchAllMdmsV2Raw(targetRoot, 'common-masters.Designation').catch(() => [])
+              : Promise.resolve([] as MdmsRecord[]),
           ]);
 
           // City must have its own MDMS row for every dept it wants to
@@ -2407,7 +3214,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // gates auth.
           admin_user_provisioned: !!userProvisioned,
           admin_employee_provisioned: adminEmployee.provisioned,
+          warnings: results.warnings.length,
         },
+        // Surfaced at the top level on purpose. These are cases the copy
+        // cannot fix and that no counter reflects — an empty source master, a
+        // corrupt source record. Buried in `results` they read as success.
+        ...(results.warnings.length > 0 && { warnings: results.warnings }),
         localizations: localizationResults,
         adminEmployee,
         ...(userProvisioned && {
@@ -2497,6 +3309,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }, null, 2);
       }
 
+      // Register the city tenant with egov-enc-service before Step 3 creates its
+      // dual-scoped ADMIN user — each tenantId needs its own key (the root's key,
+      // provisioned by tenant_bootstrap, doesn't cover a distinct city tenantId).
+      // See tenant_bootstrap's identical call above for the full rationale.
+      // Non-fatal: if enc-service is unreachable, let Step 3 surface the real error.
+      try {
+        await digitApi.generateEncKey(tenantId);
+      } catch (e) {
+        console.error(`[city_setup] enc-service key generation failed for "${tenantId}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       const root = tenantId.split('.')[0];
       const cityCode = tenantId.split('.').slice(1).join('.').toUpperCase().replace(/\./g, '_');
 
@@ -2579,9 +3402,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       try {
         const auth = digitApi.getAuthInfo();
         const currentUsername = auth.user?.userName || process.env.CRS_USERNAME || 'ADMIN';
-        const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+        const currentPassword = digitApi.getLoginPassword() || process.env.CRS_PASSWORD || 'eGov@123';
 
-        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'INTERNAL_MICROSERVICE_ROLE'];
+        const standardRoles = ['EMPLOYEE', 'CITIZEN', 'CSR', 'GRO', 'PGR_LME', 'DGRO', 'SUPERUSER', 'MDMS_ADMIN', 'LOC_ADMIN', 'ACCOUNT_ADMIN', 'INTERNAL_MICROSERVICE_ROLE'];
 
         // Build dual-scoped roles (both root and city)
         const dualRoles = standardRoles.flatMap(code => [
@@ -3358,7 +4181,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           type: 'string',
           description: 'Tenant ID the record lives on (must match record.tenantId exactly — inherited records cannot be updated from a child tenant).',
         },
-        schema_code: { type: 'string', description: 'MDMS schema code, e.g. "common-masters.UserValidation".' },
+        schema_code: { type: 'string', description: 'MDMS schema code, e.g. "common-masters.MobileNumberValidation".' },
         unique_identifier: { type: 'string', description: 'The record\'s uniqueIdentifier.' },
         data: { type: 'object', description: 'Optional. Full replacement for the record\'s `data` block. Mutually exclusive with `patch`.' },
         patch: { type: 'object', description: 'Optional. Top-level keys to merge into existing data. Mutually exclusive with `data`.' },

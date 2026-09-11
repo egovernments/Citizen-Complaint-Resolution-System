@@ -1,0 +1,290 @@
+{
+  "title": "DIGIT Kafka Consumer Lag",
+  "uid": "kafka-consumer-lag",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": [
+    "digit",
+    "kafka",
+    "redpanda"
+  ],
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "group",
+        "label": "Consumer group",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "query": {
+          "query": "label_values(redpanda_kafka_consumer_group_committed_offset, redpanda_group)",
+          "refId": "grp"
+        },
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total lag by consumer group",
+      "description": "Messages produced but not yet committed by each group. This is the number that matters: when it climbs and stays up, records are being accepted and never processed.\n\nRedpanda does not export lag directly -- it is derived as max_offset - committed_offset, joined on topic and partition. The join uses group_right() because committed_offset carries redpanda_group and max_offset does not.\n\nNegative values are possible and are diagnostic, not noise: they are left un-clamped on purpose. Both series come from the SAME Prometheus target and scrape (job \"redpanda\", redpanda:9644/public_metrics), so they are mutually consistent within a scrape and cannot skew against each other. A committed offset AHEAD of the partition high-water mark therefore means something real -- an offset reset, a topic truncation/recreate, or a series that has gone stale on one side. clamp_min(..., 0) would render exactly that condition as 0, i.e. as \"caught up\", which is the misreading it would be meant to prevent.\n\nmax_offset is collapsed with max by (namespace, topic, partition) before the join. On this single-broker, --smp 1 stack it is a no-op (one series per partition), but on a multi-broker cluster the same partition is exported by every replica and the on(topic, partition) join would fail with \"multiple matches for labels: many-to-one matching must be explicit\". max, not sum: the high-water mark of a partition is not the sum of its replicas' views of it.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (redpanda_group) (max by (redpanda_namespace, redpanda_topic, redpanda_partition) (redpanda_kafka_max_offset{redpanda_namespace=\"kafka\"}) - on(redpanda_topic, redpanda_partition) group_right() redpanda_kafka_consumer_group_committed_offset{redpanda_group=~\"$group\"})",
+          "legendFormat": "{{redpanda_group}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Current lag by group",
+      "description": "Same figure, right now. Green under 1k, amber past 1k, red past 10k -- deliberately wide bands: a healthy consumer often sits a few hundred behind during a burst, so a tighter threshold would mostly measure normal operation.\n\nNegative values are possible and are diagnostic, not noise: they are left un-clamped on purpose. Both series come from the SAME Prometheus target and scrape (job \"redpanda\", redpanda:9644/public_metrics), so they are mutually consistent within a scrape and cannot skew against each other. A committed offset AHEAD of the partition high-water mark therefore means something real -- an offset reset, a topic truncation/recreate, or a series that has gone stale on one side. clamp_min(..., 0) would render exactly that condition as 0, i.e. as \"caught up\", which is the misreading it would be meant to prevent.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 10,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum by (redpanda_group) (max by (redpanda_namespace, redpanda_topic, redpanda_partition) (redpanda_kafka_max_offset{redpanda_namespace=\"kafka\"}) - on(redpanda_topic, redpanda_partition) group_right() redpanda_kafka_consumer_group_committed_offset{redpanda_group=~\"$group\"})",
+          "legendFormat": "{{redpanda_group}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Lag by topic and partition",
+      "description": "Where the lag actually is. A single hot partition behind while the rest keep up usually means a poison record or an uneven partition key, not an undersized consumer -- and the two need opposite responses.\n\nmax_offset is collapsed with max by (namespace, topic, partition) before the join. On this single-broker, --smp 1 stack it is a no-op (one series per partition), but on a multi-broker cluster the same partition is exported by every replica and the on(topic, partition) join would fail with \"multiple matches for labels: many-to-one matching must be explicit\". max, not sum: the high-water mark of a partition is not the sum of its replicas' views of it.",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 14,
+        "x": 10,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "format": "table",
+          "expr": "max by (redpanda_namespace, redpanda_topic, redpanda_partition) (redpanda_kafka_max_offset{redpanda_namespace=\"kafka\"}) - on(redpanda_topic, redpanda_partition) group_right() redpanda_kafka_consumer_group_committed_offset{redpanda_group=~\"$group\"}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "redpanda_namespace": true
+            },
+            "renameByName": {
+              "redpanda_group": "Group",
+              "redpanda_topic": "Topic",
+              "redpanda_partition": "Partition",
+              "Value": "Lag"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Consumers per group",
+      "description": "Members currently joined. Lag climbing while this reads 0 means the consumer is gone, not slow -- a different problem with a different fix.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redpanda_kafka_consumer_group_consumers{redpanda_group=~\"$group\"}",
+          "legendFormat": "{{redpanda_group}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    }
+  ]
+}

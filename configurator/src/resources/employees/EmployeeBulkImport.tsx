@@ -82,10 +82,11 @@ function buildTemplate(
     ['Employee bulk import template'],
     [`Tenant: ${tenant}`],
     [''],
-    ['Required columns: employeeCode, name, mobileNumber (10-digit Kenya), dob (YYYY-MM-DD),'],
+    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule),'],
     ['department (from Codes), designation (from Codes).'],
-    ['Optional: userName (auto-derives), emailId, gender, roles (comma-separated),'],
-    ['jurisdictions (comma-separated boundary codes), dateOfAppointment (YYYY-MM-DD).'],
+    ['Optional: userName (auto-derives), emailId, gender, dob (YYYY-MM-DD),'],
+    ['roles (comma-separated), jurisdictions (comma-separated boundary codes),'],
+    ['dateOfAppointment (YYYY-MM-DD).'],
     [''],
     ['Password defaults to eGov@123; employees rotate on first login.'],
   ]);
@@ -106,10 +107,11 @@ export function EmployeeBulkImport() {
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [boundaries, setBoundaries] = useState<Boundary[]>([]);
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
+  // Mirrors what mdmsService.getMobileValidation actually returns. It has never
+  // carried minLength/maxLength; declaring them optional here is what let the
+  // validator silently read `undefined` and fall back to a hardcoded 9.
   const [mobileRules, setMobileRules] = useState<{
     pattern: string;
-    minLength?: number;
-    maxLength?: number;
     errorMessage: string;
   } | null>(null);
   const [refsLoading, setRefsLoading] = useState(false);
@@ -205,16 +207,27 @@ export function EmployeeBulkImport() {
         // to MDMS via egov-user's MobileNumberValidator. Trust the rule
         // returned by `mdmsService.getMobileValidation` exactly. Closes the
         // bulk-import side of the CCRS#484/#540 BLOCKER.
-        const minLen = mobileRules?.minLength ?? 9;
-        const maxLen = mobileRules?.maxLength ?? 9;
+        //
+        // The regex IS the length rule — `^[6-9][0-9]{9}$` already pins ten
+        // digits. There used to be a separate length window here reading
+        // `minLength`/`maxLength` off the rule, but getMobileValidation returns
+        // only { mobileNumberRegex, pattern, countryCode, prefix, errorMessage }
+        // and never those two, so both collapsed to their `?? 9` default. Every
+        // tenant on a 10-digit rule therefore had EVERY row rejected as "does
+        // not match the configured format" — against a format the number did
+        // match. Length now comes from the pattern alone.
         const msg = mobileRules?.errorMessage ?? 'Please enter a valid mobile number';
-        const len = row.mobileNumber.length;
-        if (len < minLen || len > maxLen || (compiled && !compiled.test(row.mobileNumber))) {
-          errors.push(msg);
-        }
+        // No rule reachable (MDMS down, or a tenant with no row): keep
+        // excelParser's own 9-or-10-digit floor rather than accepting anything.
+        const ok = compiled
+          ? compiled.test(row.mobileNumber)
+          : /^\d{9,10}$/.test(row.mobileNumber);
+        if (!ok) errors.push(msg);
       }
-      if (!row.dob || !/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) {
-        errors.push('Date of birth missing or malformed (expected YYYY-MM-DD)');
+      // dob is optional (egovernments/CCRS#1949) — a blank cell is fine, but a
+      // filled one still has to be a real YYYY-MM-DD date.
+      if (row.dob && !/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) {
+        errors.push('Date of birth malformed (expected YYYY-MM-DD)');
       }
       return errors;
     },
@@ -257,7 +270,7 @@ export function EmployeeBulkImport() {
         mobileNumber: row.mobileNumber,
         emailId: row.emailId,
         gender: row.gender,
-        dob: new Date(row.dob).getTime(),
+        dob: row.dob ? new Date(row.dob).getTime() : undefined,
         department: row.department,
         designation: row.designation,
         roles: empRoles,

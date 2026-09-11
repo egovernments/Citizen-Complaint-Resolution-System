@@ -18,6 +18,7 @@
  * exactly what a fresh operator sees.
  */
 import { test, expect } from '@playwright/test';
+import { ROOT_TENANT } from '../utils/env';
 
 // Opt out of the storageState written by auth.setup.ts — we need the
 // unauthenticated login form, not the post-login /manage surface.
@@ -34,7 +35,7 @@ Steps:
 2. Navigate to /configurator/login.
 3. Locate input#username, input#password, input#tenantCode.
 4. Assert all three are visible.
-5. Assert toHaveValue('') for all three — DOM value is literally empty.
+5. Assert username + password toHaveValue('') — DOM value is literally empty. The tenant field is intentionally PRE-FILLED with the deployment's configured root tenant (an empty tenantCode silently sends an empty tenantId to /user/oauth/token), so it must equal the configured code ('' only on unconfigured dev builds).
 
 Browser autofill writes into .value, so a regression would trip this assertion even when the React state is clean.`,
     },
@@ -54,7 +55,12 @@ Browser autofill writes into .value, so a regression would trip this assertion e
     // this even when the React state is clean.
     await expect(username).toHaveValue('');
     await expect(password).toHaveValue('');
-    await expect(tenant).toHaveValue('');
+    // Tenant is intentionally pre-filled with the configured root tenant
+    // (build-time VITE_STATE_TENANT_ID): an empty tenantCode silently sends
+    // an empty tenantId to /user/oauth/token. Accept the configured code, or
+    // '' on unconfigured dev builds. Stale-credential autofill (the #412
+    // regression) is still caught by the username/password asserts above.
+    await expect(tenant).toHaveValue(new RegExp(`^(?:${ROOT_TENANT}|)$`));
   });
 
   test('form + password input carry autocomplete-off attributes', {

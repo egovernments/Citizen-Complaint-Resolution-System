@@ -25,8 +25,10 @@ server {
   # do it explicitly.
   location = /configurator { return 302 /configurator/; }
 
+{% if build_configurator | default(false) %}
 {% if nginx_features.configurator_caching %}
-  # Configurator SPA — long-cache the hashed assets/, no-cache index.
+  # Configurator SPA — host-built dist (build_configurator: true).
+  # Long-cache the hashed assets/, no-cache index.
   location /configurator/assets/ {
     alias /var/www/configurator/assets/;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
@@ -39,18 +41,32 @@ server {
     add_header Cache-Control "no-cache, must-revalidate" always;
   }
 {% else %}
-  # Configurator SPA (no asset-level caching).
+  # Configurator SPA — host-built dist (build_configurator: true), no
+  # asset-level caching.
   location /configurator/ {
     alias /var/www/configurator/;
     try_files $uri $uri/ /configurator/index.html;
   }
 {% endif %}
+{% else %}
+  # Configurator SPA — proxied to the CI-built container image
+  # (egovio/configurator, `configurator` service in the compose stack).
+  # This is the default path when build_configurator is false: no on-box
+  # vite build, the SPA and the platform APIs share this origin so login
+  # works on any host/domain this server answers for.
+  location /configurator/ {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_configurator_port | default(18890) }}/configurator/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+{% endif %}
 
 {% endif %}
 {% if nginx_features.digit_ui_v2 | default(false) %}
-  # digit-ui-v2 — Vite + React 19 citizen SPA. Built from
-  # {{ digit_ui_v2_branch | default('feat/digit-ui-v2-keycloak') }} on the
-  # target ({{ digit_ui_v2_repo | default('digit-ui-v2 repo') }}) and
+  # digit-ui-v2 — Vite + React 19 citizen SPA. Built on the target from
+  # {{ (digit_ui_v2_repo | default('')) | ternary(digit_ui_v2_repo | default('') ~ '@' ~ (digit_ui_v2_branch | default('HEAD')), 'the vendored in-tree digit-ui-v2/ source') }} and
   # synced to /var/www/citizen/ by the ansible deploy. Hashed assets get
   # the long immutable cache; index.html stays no-cache so a redeploy
   # propagates without operators forcing a hard refresh.
@@ -107,7 +123,14 @@ server {
 {% endif %}
 
 {% endif %}
-  # Grafana dashboard
+{# `| default(true)` is load-bearing: host_vars override nginx_features as a
+   whole dict (hash_behaviour=replace), so every tenant file written before
+   this key existed has no `grafana` member. Without the default those deploys
+   would fail rendering this template. Same reason as digit_ui_v2 below. #}
+{% if nginx_features.grafana | default(true) %}
+  # Grafana dashboard. This is the ONLY public path to Grafana — the Kong
+  # /grafana route was removed in #1604, so turning this flag off makes the
+  # UI genuinely unreachable from outside rather than merely unlinked.
   location /grafana/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_grafana_port }};
     proxy_set_header Host $host;
@@ -119,6 +142,7 @@ server {
     proxy_set_header Connection "upgrade";
   }
 
+{% endif %}
 {% if nginx_features.status %}
   # Gatus health page — public path /status/, SPA assets rewritten on the fly.
   # Gatus's index.html / JS reference assets and the API as absolute paths
@@ -200,21 +224,112 @@ server {
   }
 
 {% endif %}
+{# `| default(false)` is load-bearing here for the same reason as grafana
+   above: host_vars replace nginx_features as a whole dict, so every tenant
+   file written before this key existed has no `matomo` member. #}
+{% if nginx_features.matomo | default(false) %}
+  # Self-hosted Matomo — TRACKING ENDPOINTS ONLY (#1254).
+  #
+  # Two exact-match locations, and exact-match on purpose: `location /matomo/`
+  # would proxy the whole application, and the Matomo admin UI must not be
+  # public. It is bound to 127.0.0.1 by docker-compose.matomo.yml; reach it
+  # over an SSH tunnel to 127.0.0.1:{{ upstream_matomo_port }}.
+  #
+  # These two paths are what the portal's analytics shim is pointed at (Script
+  # URL /matomo/matomo.js, Endpoint URL /matomo/matomo.php in the configurator).
+  # Same-origin is the point: no TLS of its own, no entry in the ops host
+  # allowlist, and it works where the portal is served over plain http. A path
+  # under /digit-ui/ would NOT work — nginx answers anything there with the SPA
+  # shell, so the browser would try to execute HTML.
+  location = /matomo/matomo.js {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.js;
+    # Matomo's own origin, NOT $host — the origin its installer recorded in
+    # General.trusted_hosts, so Matomo's view of where it lives stays consistent
+    # with what it was installed as.
+    #
+    # MEASURED, because the widely-repeated version of this is wrong: on Matomo
+    # 5.13 the TRACKER does not enforce trusted_hosts. A hit sent through a
+    # `proxy_set_header Host $host;` block with Host: evil.example.org was
+    # recorded normally, with the correct visitor IP. The trusted-host check
+    # guards the UI and API — where a poisoned Host would end up in generated
+    # links and password-reset mails — not matomo.php. So this line is defence
+    # and consistency, not a fix for a live tracking failure; do not "simplify"
+    # it to $host, but do not expect breakage if someone already has.
+    #
+    # Nothing is lost by overriding it either way: the tracked page URL travels
+    # in the payload's `url=` parameter, not in this header.
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  location = /matomo/matomo.php {
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }}/matomo.php;
+    proxy_set_header Host {{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_matomo_port }};
+    proxy_set_header X-Real-IP $remote_addr;
+    # Matomo reads REMOTE_ADDR by default, which behind this proxy is nginx
+    # itself — every visit would be attributed to one IP and geolocation would
+    # report a single city. The deploy sets General.proxy_client_headers to
+    # HTTP_X_FORWARDED_FOR so this header is what Matomo actually uses; see the
+    # "Matomo — apply proxy + trusted-host settings" task in playbook-deploy.yml.
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+{% endif %}
 {% if enable_novu | default(false) %}
-  # Novu dashboard (SPA). The official ghcr.io/novuhq/novu/dashboard
-  # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu
-  # being set at runtime (only API/WS hostnames are honored at
-  # runtime; the asset paths bake at build time). That means the
-  # dashboard HTML references /assets/, /images/, /manifest.json,
-  # /favicon-*, /auth/ — all UNPREFIXED. Below we proxy `/novu/`
+{% if build_novu_dashboard | default(false) %}
+  # Novu dashboard (SPA) — REBASED image (backend/novu-dashboard/Dockerfile,
+  # built when `build_novu_dashboard: true`). The dist is baked to base=/novu, so the
+  # served HTML/JS reference /novu/assets, /novu/manifest.json, /novu/favicon-*
+  # consistently. The files still live at the container ROOT, so the trailing
+  # slash on proxy_pass strips the /novu prefix and hits them. One /novu/ block
+  # therefore covers shell + assets + manifest + favicons + SPA fallback.
+  #
+  # Two residues still surface at the root and are handled below:
+  #   - Novu's auth shim navigates to /auth/sign-in|sign-up|organization-list
+  #     and ignores the router basename (can't be moved under /novu).
+  #   - A few decorative logos/background are fetched at /images/* at runtime.
+  location = /novu { return 302 /novu/; }
+  location /novu/ {
+    proxy_pass http://127.0.0.1:14000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  # Novu's auth shim uses these three ROOT paths regardless of base. They do
+  # NOT overlap Keycloak (which serves /auth/realms|admin|resources/*), so scope
+  # exactly these to the dashboard and let everything else under /auth/ fall
+  # through to the keycloak vhost block. `^~` stops regex-location evaluation;
+  # being a longer prefix than a generic `/auth/`, these win for these paths.
+  location ^~ /auth/sign-in           { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+  location ^~ /auth/sign-up           { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+  location ^~ /auth/organization-list { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+
+  # Decorative dashboard logos/background, fetched unprefixed at runtime.
+  location /images/ {
+    proxy_pass http://127.0.0.1:14000/images/;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+{% else %}
+  # Novu dashboard (SPA) — STOCK image. The official ghcr.io/novuhq/novu/dashboard
+  # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu being set at
+  # runtime (only API/WS hostnames are honored at runtime; the asset paths bake
+  # at build time). That means the dashboard HTML references /assets/, /images/,
+  # /manifest.json, /favicon-*, /auth/ — all UNPREFIXED. Below we proxy `/novu/`
   # plus those root-level paths.
   #
-  # ⚠ WORKAROUND. Proper fix: rebuild the dashboard image with
-  # `VITE_BASE_PATH=/novu` at build time so the served HTML uses
-  # `/novu/assets/…` consistently. Then most of the unprefixed
-  # locations below can be removed (only /novu/ and /novu-api/ would
-  # remain). Tracked in the dashboard image build pipeline — not
-  # something we can fix from this repo without forking the image.
+  # ⚠ WORKAROUND. Proper fix: set `build_novu_dashboard: true` to build the
+  # subpath-rebased image (build/novu-dashboard/Dockerfile); then this branch is
+  # replaced by the tidy one above. The stock branch ALSO hijacks the entire
+  # `/auth/` prefix, so it is unsafe to combine with Keycloak on the same domain.
   location = /novu { return 302 /novu/; }
   location /novu/ {
     proxy_pass http://127.0.0.1:14000/novu/;
@@ -223,32 +338,6 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_http_version 1.1;
-  }
-
-  # Novu API (REST) — used by the dashboard SPA running in the
-  # browser. Exposed on the host so VITE_API_HOSTNAME can resolve.
-  location /novu-api/ {
-    proxy_pass http://127.0.0.1:14002/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Authorization $http_authorization;
-    proxy_http_version 1.1;
-  }
-
-  # Novu websocket — used by the dashboard for live notification
-  # status updates. Proxy upgrades the connection to WS.
-  location /novu-ws/ {
-    proxy_pass http://127.0.0.1:14003/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 24h;
   }
 
   # ⚠ WORKAROUND for the upstream Vite base=/ bug. These root-level
@@ -285,8 +374,23 @@ server {
   # route from Kong (e.g. the keycloak-route in kong.yml). Without
   # this proxy, hard-refreshes at /auth/* fall through to Kong's
   # /auth → keycloak upstream and 500 with a DNS resolve failure
-  # when keycloak isn't deployed.
+  # when keycloak isn't deployed. ⚠ This shadows ALL of /auth/, so do
+  # not enable the stock branch on a domain that also runs Keycloak —
+  # use build_novu_dashboard: true (rebased branch) there instead.
   location /auth/ {
+    proxy_pass http://127.0.0.1:14000;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+
+  # React Router deep links — /env/<envId>/activity-feed, /env/<envId>/workflows,
+  # etc. Same class as /auth/ above: the dashboard is Vite base=/, so these are
+  # root-absolute. A direct load / hard-refresh must serve the container's
+  # index.html (the dashboard's http-server does SPA fallback) — otherwise it
+  # falls through `location /` to Kong and 404s ("no Route matched with those
+  # values"). Client-side nav from the dashboard home works either way; this is
+  # only needed for deep-link / refresh.
+  location /env/ {
     proxy_pass http://127.0.0.1:14000;
     proxy_set_header Host $host;
     proxy_http_version 1.1;
@@ -304,15 +408,55 @@ server {
     proxy_pass http://127.0.0.1:14000/favicon.ico;
     proxy_set_header Host $host;
   }
+{% endif %}
 
-  # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,
-  # _test-trigger) are NOT exposed via host nginx by default. The
-  # bridge lives inside the egov-network and is reachable from kong,
-  # from MCP, and from any pod in the same compose. Operators who
-  # need to curl it can `docker exec novu-bridge curl ...` or open a
-  # shell into kong. Add a `location /novu-bridge/` block here if
-  # you want public access — but the diagnostic endpoints can leak
-  # subscriber info, so think before doing it.
+  # Novu API (REST) — used by the dashboard SPA running in the
+  # browser. Exposed on the host so VITE_API_HOSTNAME can resolve.
+  location /novu-api/ {
+    proxy_pass http://127.0.0.1:14002/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+    proxy_http_version 1.1;
+  }
+
+  # Novu websocket — used by the dashboard for live notification
+  # status updates. Proxy upgrades the connection to WS.
+  location /novu-ws/ {
+    proxy_pass http://127.0.0.1:14003/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
+  # Novu 2.3.0 uses Socket.IO's default root transport path. The dashboard
+  # ignores a /novu-ws suffix in VITE_WEBSOCKET_HOSTNAME and connects here.
+  location /socket.io/ {
+    proxy_pass http://127.0.0.1:14003/socket.io/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
+  }
+
+  # novu-bridge: the read-only configurator proxy endpoints
+  # (GET /novu-bridge/novu-adapter/v1/logs|integrations) are routed by Kong
+  # (see local-setup/kong/kong.yml) and auth-gated INSIDE novu-bridge by
+  # validating the DIGIT bearer token against egov-user /user/_details.
+  # The POST diagnostic endpoints (_validate/_dry-run/_test-trigger) are
+  # deliberately NOT routed publicly. Do NOT hand-wire an unauthenticated
+  # location block for them.
 
 {% endif %}
 {% if enable_turbopass | default(false) %}
@@ -349,6 +493,25 @@ server {
   }
 
 {% endif %}
+  # Friendly URL for the PUBLIC (unauthenticated) dashboard. The page itself is
+  # a second esbuild entry living in the same /digit-ui/ docroot as the employee
+  # app (so hashed assets resolve against one publicPath), which means this only
+  # needs to be a redirect and works in BOTH digit_ui_mode branches below.
+  #
+  # Its analytics read paths are explicitly auth-optional on Kong, so the page
+  # keeps working when ENFORCE_UNAUTH is flipped on. The Spring mixed-mode
+  # gateway is deliberately not opened because it does not normalize spoofed
+  # anonymous userInfo. The real data boundary remains server-side.
+  location = /digit-ui/public-dashboard {
+    return 302 /digit-ui/public-dashboard.html;
+  }
+
+  # Backwards-compatible alias for the first public-dashboard preview. The
+  # explicit digit-ui path is canonical and is what the configurator exposes.
+  location = /dashboard {
+    return 302 /digit-ui/public-dashboard;
+  }
+
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
@@ -417,25 +580,6 @@ server {
     client_max_body_size 25M;
     proxy_buffering off;
   }
-
-{% if nginx_features.minio_egov_rainmaker_alias | default(false) %}
-  # Legacy /egov-rainmaker/ MinIO passthrough. Used when egov-filestore
-  # signs presigned URLs with the public domain (MINIO_URL=https://<domain>)
-  # under the `egov-rainmaker` bucket instead of the internal minio:9000.
-  # Host is preserved so the AWS4 signature ($host) keeps validating.
-  # ^~ prefix beats the Kong catch-all below.
-  location ^~ /egov-rainmaker/ {
-    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }};
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-    proxy_request_buffering off;
-    client_max_body_size 100m;
-    proxy_read_timeout 120s;
-  }
-{% endif %}
 
 {% if nginx_features.root_to_digit_ui | default(false) %}
   # Bare domain -> citizen app login. Lands users in the digit-ui SPA

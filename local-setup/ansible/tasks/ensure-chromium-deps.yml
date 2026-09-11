@@ -1,0 +1,50 @@
+# Playwright's `--with-deps` OS-dependency installer only knows how to
+# drive apt (Ubuntu/Debian) — on RHEL family it no-ops with a warning and
+# leaves Chromium's shared libs (and fonts) missing, so the browser fails
+# to launch later with a cryptic "error while loading shared libraries",
+# or launches with every page rendering blank/tofu glyphs. Install the
+# equivalent RPM packages ourselves, then have callers run
+# `playwright install chromium` WITHOUT --with-deps on this family.
+#
+# The list mirrors Playwright's published Chromium dependency set for the
+# RPM family — every runtime lib is named explicitly rather than relying
+# on transitive RPM pulls (e.g. cairo→libX11), which differ between
+# minimal cloud images. Revisit on Playwright version bumps: only apt
+# targets get Playwright's auto-resolved list.
+#
+# Shared by both Playwright call sites (e2e-tests CI stage and the
+# integration-tests runner) so a future dependency bump only needs to
+# happen once.
+- name: "Install Chromium runtime dependencies (RHEL family, Playwright has no dnf support)"
+  ansible.builtin.dnf:
+    name:
+      - nss
+      - atk
+      - at-spi2-atk
+      - at-spi2-core
+      - cups-libs
+      - dbus-libs
+      - libdrm
+      - libxkbcommon
+      - libX11
+      - libXcomposite
+      - libXdamage
+      - libXext
+      - libXfixes
+      - libXrandr
+      - libXrender
+      - libXtst
+      - libxshmfence
+      - mesa-libgbm
+      - alsa-lib
+      - pango
+      - cairo
+      - liberation-fonts
+      # EL9 ships the color-emoji font as google-noto-emoji-color-fonts;
+      # EL10 renamed it google-noto-color-emoji-fonts (the old name has no
+      # match on Rocky/Alma 10 AppStream and would hard-fail the task).
+      - "{{ 'google-noto-color-emoji-fonts'
+            if (ansible_distribution_major_version | int) >= 10
+            else 'google-noto-emoji-color-fonts' }}"
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'

@@ -1,0 +1,72 @@
+# db-seed — loads db/full-dump.sql into Postgres before services migrate.
+#
+# This is the K8s counterpart of compose's db_fast_path overlay. Compose gets
+# the dump for free: it mounts it into Postgres' /docker-entrypoint-initdb.d/,
+# which runs exactly once on an empty PGDATA. K8s has no equivalent, because
+# deploy-as-code does not run Postgres in-cluster at all (the `postgresql`
+# release is installed: false — the DB is managed/external). So the dump has
+# to be pushed in by a Job instead.
+#
+# DEFAULT OFF, deliberately. Compose defaults db_fast_path to false on every
+# tenant because loading the dump over a populated DB destroys tenant state.
+# That risk is strictly worse here, where the target is a managed database
+# that may be shared. Opt in per environment, never globally.
+#
+# There is ONE switch: `installed:` on the db-seed release in
+# backboneservices-helmfile.yaml, the same flag every sibling release uses.
+# An earlier revision also gated the templates on a chart-level `enabled` key,
+# which meant flipping `installed: true` alone produced a release reporting
+# STATUS deployed with zero resources rendered — a silent no-op that looked
+# like a successful seed while core-services then migrated an unseeded DB.
+
+namespace: egov
+
+# How long the Job waits for Postgres to accept connections before failing.
+# Bounded so a wrong host fails loudly instead of spinning until the deadline.
+pgWaitSeconds: 120
+
+# Ceiling on the whole Job including retries. The dump is ~500KB uncompressed
+# and loads in seconds; this only exists to stop a wedged run hanging forever.
+activeDeadlineSeconds: 1800
+
+# Connection details.
+#
+# These are resolved at RENDER time, not looked up at run time. db-seed runs in
+# the backbone tier, which helmfile applies BEFORE core-services — and the
+# `egov-config` ConfigMap and `db` Secret are created by core-services'
+# `configmaps` chart. Referencing those objects with configMapKeyRef /
+# secretKeyRef would work on a cluster that had already been applied once, and
+# fail with CreateContainerConfigError on a genuinely fresh one, which is the
+# exact scenario this chart exists to serve.
+#
+# Leave these empty to inherit from the shared environment values that helmfile
+# merges in (environments/env.yaml and env-secrets.yaml) — the same source
+# `configmaps` renders from, so the values agree without the runtime coupling.
+# Set them explicitly to point db-seed at a different database.
+db:
+  host: ""      # falls back to configmaps.egov-config.data.db-host
+  name: ""      # falls back to configmaps.egov-config.data.db-name
+  user: ""      # falls back to secrets.db.flywayUsername
+  password: ""  # falls back to secrets.db.flywayPassword
+
+# Guard table. The Job checks for this relation first and exits 0 without
+# touching anything if it already exists, so a re-run on a seeded DB is a
+# no-op rather than a partial re-apply. eg_user is in the dump and is not
+# created by any Flyway migration, which makes it a reliable "dump has been
+# loaded" marker.
+guardTable: public.eg_user
+
+# psql + gunzip. Pinned rather than :latest so a re-run months from now
+# behaves the same way.
+image:
+  repository: postgres
+  tag: "15-alpine"
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

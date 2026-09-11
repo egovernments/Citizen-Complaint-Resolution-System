@@ -15,6 +15,19 @@
 set -uo pipefail
 
 IT_DIR="$1"
+# Normalize IT_DIR before anything consumes it. The playbook's default is
+# `{{ playbook_dir }}/../../tests/integration-tests`, which carries `..` segments.
+# That is harmless for cd/rsync, but this value is echoed back on the last line,
+# captured as `integration_tests_dir`, and rendered verbatim into
+# templates/integration-tests-runner.service.j2 — and systemd REFUSES to load a
+# unit whose WorkingDirectory= is not normalized:
+#   WorkingDirectory= path is not normalized: /opt/ccrs/local-setup/ansible/../../tests/integration-tests
+#   Unit configuration has fatal error, unit will not be started.
+# The failing task then ABORTS the play, so every later task — tenant bootstrap
+# seeding, INTERNAL_USER, configurator-i18n, novu — silently never runs.
+# Resolve once, here, so every consumer gets a clean absolute path.
+IT_DIR="$(cd "$IT_DIR" 2>/dev/null && pwd -P)" \
+  || { echo "ERROR: integration tests dir not found: $1" >&2; exit 2; }
 DASHBOARD_BASE="${2:-/tests-v2/}"
 NEED_NODE="20.0.0"
 

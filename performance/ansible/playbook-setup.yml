@@ -79,7 +79,7 @@
         - db
         - seeds
         - gatus
-        - jupyter
+        - dataloader
 
     - name: Copy local images tarball
       copy:

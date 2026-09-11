@@ -109,11 +109,11 @@ const SERVICE_PROBES: ServiceProbe[] = [
   },
   {
     name: 'Location',
-    service: 'egov-location',
-    endpointKey: 'LOCATION_BOUNDARY_SEARCH',
+    service: 'boundary-service',
+    endpointKey: 'BOUNDARY_RELATIONSHIP_SEARCH',
     method: 'POST',
     buildProbe: (tenantId) => ({
-      body: { tenantId },
+      params: { tenantId, hierarchyType: 'ADMIN', includeChildren: 'true' },
     }),
     requiresAuth: true,
   },

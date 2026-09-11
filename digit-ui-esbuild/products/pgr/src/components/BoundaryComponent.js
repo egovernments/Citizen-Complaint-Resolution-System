@@ -2,10 +2,29 @@ import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { sameLevelName } from "../utils/boundaryLevels";
+
+// Humanize a boundary-type code for use as a graceful fallback when its
+// localization key isn't seeded: "SUB_COUNTY" -> "Sub County", "bairro" ->
+// "Bairro". Accent-preserving so "Município" survives intact.
+const humanizeBoundaryType = (raw) =>
+  String(raw || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }) => {
 
-  const tenantId = Digit.ULBService.getCurrentTenantId();
+  // Callers that know which tenant the record belongs to pass it explicitly.
+  // The fallback is only a default, and a poor one for citizens:
+  // ULBService.getCurrentTenantId() returns the user's own tenant for EMPLOYEE
+  // but STATE_LEVEL_TENANT_ID for everyone else, so a citizen always lands on
+  // the state root regardless of the city they are filing in. A state root
+  // commonly carries no boundary tree of its own, which renders the cascade
+  // empty; worse, where it does, the citizen picks boundaries from one tenant
+  // and the complaint is created in another.
+  const tenantId = config?.tenantId || Digit.ULBService.getCurrentTenantId();
 
   // Employee jurisdiction gate (egovernments/CCRS#496).
   //
@@ -50,6 +69,28 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
 
   const { data: rawChildrenData, isLoading: isBoundaryLoading } = Digit.Hooks.pgr.useFetchBoundaries(tenantId);
 
+  // Hierarchy type + highest/lowest level are configured per-state on
+  // CMS-BOUNDARY.HierarchySchema (written by the onboarding tooling — see
+  // utilities/crs_dataloader/unified_loader_v1.py's update_hierarchy_schema)
+  // and take priority over the ansible-templated globalConfigs values, which
+  // are a deploy-time fallback for tenants where this MDMS master hasn't
+  // been seeded yet. Mirrors the established pattern already used on the
+  // citizen/employee create-complaint pages in frontend/micro-ui.
+  const stateId = Digit.ULBService.getStateId();
+  const { data: hierarchySchema } = Digit.Hooks.useCustomMDMS(
+    stateId,
+    "CMS-BOUNDARY",
+    [{ name: "HierarchySchema" }],
+    {
+      select: (data) => {
+        const rows = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        return Array.isArray(rows) ? rows.find((row) => row.moduleName === "CMS") : null;
+      },
+      retry: false,
+      enabled: !!stateId,
+    }
+  );
+
   const childrenData = useMemo(() => {
     if (!rawChildrenData || !allowedRoots) return rawChildrenData;
     const filterTree = (nodes) =>
@@ -90,7 +131,63 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
     return Array.isArray(order) ? order.map((item) => item.code) : [];
   }, [tenantId]);
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+  const hierarchyType =
+    hierarchySchema?.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+
+  // Respect the tenant's configured highest AND lowest boundary levels.
+  // PGR_BOUNDARY_LOWEST_LEVEL caps the bottom: a tenant whose boundary tree
+  // is shallower than the declared hierarchy (Maputo: many bairros have no
+  // Quarteirão) otherwise leaves the deepest declared level with no options
+  // — the required leaf dropdown never renders and the citizen can't
+  // submit. PGR_BOUNDARY_HIGHEST_LEVEL caps the top: previously this config
+  // was written to globalConfigs by ansible but never actually read here,
+  // so the cascade always started at whatever level the boundary-service
+  // happened to return as root, regardless of the configured highest level
+  // (egovernments/CCRS#721).
+  //
+  // CMS-BOUNDARY.HierarchySchema (fetched above) is the primary source for
+  // both levels — it's the master an operator actually edits post-deploy —
+  // with the ansible-templated globalConfigs value used only as a fallback
+  // for tenants where that MDMS record hasn't been seeded yet.
+  //
+  // Neither source is trusted blindly: `findIndex` below returns -1 for a
+  // configured level that doesn't exist in this tenant's hierarchy at all
+  // (typo'd MDMS value, or a level declared for another tenant), in which
+  // case the corresponding cap is silently skipped rather than collapsing
+  // the whole cascade. Separately, a level that's only MISSING on some
+  // branches (e.g. a handful of bairros with no Quarteirão child) is not
+  // a findIndex concern at all — `lowestLevelCapped` only records whether
+  // the cap was configured and matched in the hierarchy's type list; the
+  // childless-node-is-leaf fallback below (keyed off it) is what actually
+  // tolerates a specific branch running out of children before reaching
+  // the configured lowest level.
+  // `lowestLevelCapped` records whether PGR_BOUNDARY_LOWEST_LEVEL was BOTH
+  // configured AND matched in this tree (the cap actually applied). The
+  // childless-node-is-leaf fallback keys off it: only a deployment that
+  // declared a lowest level treats a childless mid-tree node as fileable.
+  // Unconfigured deployments keep strict deepest-level-only leaf semantics so a
+  // County seeded without children can't become fileable (egovernments/CCRS#478).
+  const { effectiveHierarchy, lowestLevelCapped } = useMemo(() => {
+    const configuredHighest =
+      hierarchySchema?.highestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_HIGHEST_LEVEL");
+    const configuredLowest =
+      hierarchySchema?.lowestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+
+    const highestIdx = configuredHighest
+      ? boundaryHierarchy.findIndex((k) => String(k).toLowerCase() === String(configuredHighest).toLowerCase())
+      : -1;
+    const startIdx = highestIdx >= 0 ? highestIdx : 0;
+
+    if (!configuredLowest) {
+      return { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
+    }
+    const lowestIdx = boundaryHierarchy.findIndex(
+      (k) => String(k).toLowerCase() === String(configuredLowest).toLowerCase()
+    );
+    return lowestIdx >= startIdx
+      ? { effectiveHierarchy: boundaryHierarchy.slice(startIdx, lowestIdx + 1), lowestLevelCapped: true }
+      : { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
+  }, [boundaryHierarchy, hierarchySchema]);
 
   // State to manage selected values and dropdown options
   const [selectedValues, setSelectedValues] = useState({});
@@ -159,10 +256,19 @@ useEffect(() => {
     // value directly as a fallback so auto-fill recovers once init
     // lands. Skip only when BOTH are empty; the effect re-runs when
     // childrenData settles.
-    let hierarchy = boundaryHierarchy;
+    // Match the hint at the level the cascade actually files at — the CAPPED
+    // hierarchy. Using the raw tree depth here made the map and the cascade
+    // disagree whenever PGR_BOUNDARY_LOWEST_LEVEL sits above the deepest seeded
+    // level: the map resolved a pin to the deeper level, findWardPath looked for
+    // a node of that deeper type, and on a tenant that seeds it only patchily the
+    // lookup found nothing and auto-fill silently no-opped.
+    let hierarchy = effectiveHierarchy;
     if (hierarchy.length === 0) {
       const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
       hierarchy = Array.isArray(order) ? order.map((item) => item.code) : [];
+      const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+      const idx = configuredLowest ? hierarchy.findIndex((k) => sameLevelName(k, configuredLowest)) : -1;
+      if (idx >= 0) hierarchy = hierarchy.slice(0, idx + 1);
     }
     if (hierarchy.length === 0) return;
     const targetType = hierarchy[hierarchy.length - 1];
@@ -193,9 +299,18 @@ useEffect(() => {
     // locality validation was firing only when children happened to
     // be attached, so County-level selections silently passed).
     const deepest = path[path.length - 1];
+    // Use the *effective* (capped) hierarchy's deepest level, not the raw
+    // `hierarchy` — otherwise a map-pin that auto-fills only to the configured
+    // lowest level (e.g. Bairro, when the tree has no Quarteirão below it) is
+    // tagged isLeaf:false and the citizen can never advance past Location.
+    // Mirrors handleSelection's leaf logic so both paths agree.
+    const lastLevel = effectiveHierarchy[effectiveHierarchy.length - 1];
+    // Childless-node-is-leaf only when a lowest level was configured AND capped
+    // this tree — otherwise strict deepest-level-only (preserves CCRS#478).
     const isDeepestLevel =
-      deepest?.boundaryType === hierarchy[hierarchy.length - 1];
-    onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
+      deepest?.boundaryType === lastLevel ||
+      (lowestLevelCapped && !(deepest?.children && deepest.children.length > 0));
+    onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel }, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
 
@@ -236,8 +351,21 @@ useEffect(() => {
     // `isLeaf` so validators can trust hierarchy depth instead of the
     // `.children` array (which isn't reliably preserved on the picked
     // node and let County-level selections pass — egovernments/CCRS#478).
-    const isDeepestLevel = index === boundaryHierarchy.length - 1;
-    onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel });
+    // A selection is a leaf when it's the configured deepest level OR the
+    // node has no children (the branch stops early — common on tenants whose
+    // boundary tree is shallower than the declared hierarchy). Either way the
+    // submit pipeline treats it as the fileable leaf so the citizen isn't
+    // blocked waiting on a deeper level that doesn't exist for this branch.
+    const lastLevel = effectiveHierarchy[effectiveHierarchy.length - 1];
+    const nodeHasChildren = selectedBoundary.children && selectedBoundary.children.length > 0;
+    // Childless-node-is-leaf only when a lowest level was configured AND capped
+    // this tree — otherwise strict deepest-level-only (preserves CCRS#478 on
+    // unconfigured deployments; a County missing children stays non-fileable).
+    const isDeepestLevel = boundaryType === lastLevel || (lowestLevelCapped && !nodeHasChildren);
+    // onSelect is RHF's setValue (FieldV1 wires component onSelect -> setValue).
+    // Pass shouldValidate so the `required` rule re-runs and formState.isValid
+    // (which gates the disabled NEXT/SubmitBar) flips true on selection.
+    onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel }, { shouldValidate: true, shouldDirty: true, shouldTouch: true });
 
     // Load child boundaries
     if (selectedBoundary.children && selectedBoundary.children.length > 0) {
@@ -256,7 +384,7 @@ useEffect(() => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {boundaryHierarchy.map((key, idx) => {
+        {effectiveHierarchy.map((key, idx) => {
           // Gate child dropdowns by parent selection so the user can't
           // pick a Ward without first picking County → Sub-County. The
           // init effect above pre-populates `value` for every level
@@ -266,17 +394,27 @@ useEffect(() => {
           // could select a Ward of a different sub-county than the one
           // they actually meant — closes egovernments/CCRS#477.
           if (idx > 0) {
-            const parentKey = boundaryHierarchy[idx - 1];
+            const parentKey = effectiveHierarchy[idx - 1];
             if (!selectedValues[parentKey]) return null;
           }
           if (value[key]?.length > 0) {
             const selectedAtLevel =
               formData?.locality || formData?.SelectedBoundary ? selectedValues[key] : null;
+            // Localized level header, with a humanized fallback when the
+            // `${HIERARCHY_TYPE}_${TYPE}` key isn't seeded — react-i18next
+            // otherwise echoes the raw key (e.g. "ADMIN_MUNICÍPIO") into the
+            // UI. Mirrors the wizard's tOr() graceful-degradation.
+            const levelKey = `${hierarchyType}_${key?.toUpperCase()}`;
+            const translatedLevel = t(levelKey);
+            const levelLabel =
+              translatedLevel && translatedLevel !== levelKey
+                ? translatedLevel
+                : humanizeBoundaryType(key);
             return (
               <BoundaryDropdown
                 key={key}
                 fieldKey={key}
-                label={`${t(`${hierarchyType}_${key?.toUpperCase()}`)}`}
+                label={levelLabel}
                 data={value[key]}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}

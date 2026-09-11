@@ -1,4 +1,5 @@
 import _ from "lodash";
+import Urls from "../utils/urls";
 import { complaintLabel } from "../utils/complaintLabel";
 import { useLocation, useHistory, Link, useParams } from "react-router-dom";
 import React, { useState, Fragment } from "react";
@@ -1571,24 +1572,38 @@ export const UICustomizations = {
     test: "yes",
   },
   PGRInboxConfig: {
-    preProcess: (data) => {
+    preProcess: (data, additionalDetails) => {
       const clonedData = _.cloneDeep(data);
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
+
+      // Visibility V1 tab context (passed from PGRInbox via additionalDetails;
+      // absent when the visibility feature flag is off -> legacy behaviour).
+      const activeTab = additionalDetails?.activeTab;
+      const allStates = additionalDetails?.allStates || [];
 
       // Build clean params from form state
       const params = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
         limit: clonedData?.state?.tableForm?.limit || 10,
         offset: clonedData?.state?.tableForm?.offset ?? 0,
-        // Order by SLA remaining (most urgent first) server-side, so the order
-        // is consistent across the FULL paginated result set. The table's
-        // column-header sort is client-side react-table — it only reorders the
-        // current page, so rows appeared to drop in/out as page size changed
-        // (issue #432). pgr-services now supports sortBy=sla; see
+        // Order server-side, so the order is consistent across the FULL
+        // paginated result set (a client-side sort only reorders the current
+        // page — issue #432). Default to SLA remaining, most urgent first;
+        // ResultsDataTableWrapper's onSort handler overrides sortBy/sortOrder
+        // in tableForm when the operator clicks a sortable column header
+        // (issue #922). pgr-services supports both; see
         // PGRQueryBuilder.addOrderByClause.
-        sortBy: "sla",
-        sortOrder: "ASC",
+        //
+        // sortOrder is uppercased defensively: SearchComponent's own
+        // clearSearch()/onSubmit (unrelated "sort" toggle in the
+        // search/filter form, not the table header click this issue is
+        // about) writes a lowercase "asc"/"desc" into this same tableForm
+        // slot on mount. pgr-services' SortOrder enum match is case-exact,
+        // so a stray lowercase value 400s every search — regardless of
+        // whether the operator ever touched a column header.
+        sortBy: clonedData?.state?.tableForm?.sortBy || "sla",
+        sortOrder: (clonedData?.state?.tableForm?.sortOrder || "ASC").toUpperCase(),
       };
 
       // Search form fields
@@ -1638,15 +1653,57 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      params.applicationStatus = statuses.length > 0 ? statuses : OPEN_STATES;
+      // CCRS#1367: an exact complaint-number lookup (not mobile number or
+      // date range — those are broad, multi-result searches) must ignore
+      // every inbox default, not just status: it needs to find that one
+      // complaint no matter who it's assigned to or what state it's in.
+      const isComplaintLookup = Boolean(params.serviceRequestId);
+      if (statuses.length > 0) {
+        params.applicationStatus = statuses;
+      } else if (!isComplaintLookup) {
+        params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
+      }
 
-      // Filter: assigned to me
-      const assignedFilter = filterForm.assignedToMe;
-      if (assignedFilter?.code === "ASSIGNED_TO_ME") {
-        const userInfo = Digit.UserService.getUser()?.info;
-        if (userInfo?.uuid) {
-          params.assignee = [userInfo.uuid];
+      // My = complaints whose workflow assignee is me. The tabs replaced the
+      // assigned-to-me radio, so "My" keeps the radio's person semantics
+      // (this is the design matrix's V2 "My", pulled forward — see design §3).
+      // All = every open complaint; a GRO's unassigned assignment queue
+      // therefore lives in All, not My (accepted tradeoff).
+      //
+      // Server mode (InboxVisibilityConfig.serverSide): pgr-services resolves
+      // visibility from the `scope` filter param — MINE = assignee-me, TEAM =
+      // reportee subtree + unassigned queues — so the client sends no
+      // assignee. MY/ALL stay UI tab ids; MINE/TEAM are the API semantics.
+      //
+      // A complaint-number lookup skips assignee/scope too — same reasoning
+      // as the status default above.
+      if (!isComplaintLookup) {
+        if (additionalDetails?.serverSide) {
+          if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
+        } else if (activeTab === "MY") {
+          const userInfo = Digit.UserService.getUser()?.info;
+          if (userInfo?.uuid) {
+            params.assignee = [userInfo.uuid];
+          }
         }
+
+        // Legacy assigned-to-me radio (only present in the filter form when
+        // the visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
+        const assignedFilter = filterForm.assignedToMe;
+        if (assignedFilter?.code === "ASSIGNED_TO_ME") {
+          const userInfo = Digit.UserService.getUser()?.info;
+          if (userInfo?.uuid) {
+            params.assignee = [userInfo.uuid];
+          }
+        }
+      } else if (additionalDetails?.serverSide) {
+        // The visibility-aware endpoint (Urls.pgr.visibilitySearch) requires
+        // `scope` server-side (RequestsApiController defaults it to MINE) and
+        // TEAM only matches team-assigned/unassigned-queue rows — there's no
+        // scope value that returns an arbitrary known complaint (checked
+        // VisibilityService.resolve directly). Route the lookup through the
+        // plain, unscoped search/count endpoints instead.
+        clonedData.url = Urls.pgr.search;
       }
 
       clonedData.params = params;
@@ -1694,6 +1751,9 @@ export const UICustomizations = {
           return value ? <span>{value?.[0]?.name}</span> : <span>{t("NA")}</span>;
 
         case "WF_INBOX_HEADER_SLA_DAYS_REMAINING":
+          // slaDays is null only when the record has no createdTime; render NA
+          // rather than an empty error Tag. 0 or negative = SLA breached (error).
+          if (value == null) return <span>{t("ES_COMMON_NA")}</span>;
           return value > 0 ? <Tag label={value} showIcon={false} type="success" /> : <Tag label={value} showIcon={false} type="error" />;
 
         default:

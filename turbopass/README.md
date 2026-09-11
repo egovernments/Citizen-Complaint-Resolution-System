@@ -14,6 +14,14 @@ The rest of this README covers the **Overture offline path** — the recommended
 
 > The `scraper/` (Overpass) directory and `data/` hierarchies are vendored from [dhruv-1001/osm-mapped-data](https://github.com/dhruv-1001/osm-mapped-data) at the commit in [`.vendored-from`](.vendored-from). Keep diffs against those minimal.
 
+**Why a bespoke service rather than Nominatim:** the public Nominatim usage policy
+explicitly forbids client-side autocomplete ("you must not implement such a service on
+the client side using the API"), and debouncing does not make it compliant — the pattern
+is barred, not just the rate. A bounded, pre-fetched, self-hosted gazetteer is the
+compliant answer for a search space that is a known set of administrative places. See
+[`docs/openstreetmap/20-services.md`](../docs/openstreetmap/20-services.md) for the policy and the
+alternatives (Photon, Pelias, commercial providers).
+
 ## Layout
 
 | Path | What it is |

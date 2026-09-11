@@ -10,7 +10,8 @@
  *   3. POST /token to exchange code for tokens.
  *   4. Save tokens to localStorage (keys in KC_STORAGE_KEYS).
  *   5. (Best-effort) fetch /userinfo via the overlay to seed AppContext.
- *   6. Navigate to /dashboard on success, /login?error=... on failure.
+ *   6. Navigate to the flag-selected citizen home on success, or
+ *      /login?error=... on failure.
  *
  * The page renders only a tiny status string — it's expected to live for
  * about one round-trip then redirect away. If something goes wrong we send
@@ -29,6 +30,7 @@ import {
 } from '@/api/keycloak';
 import { apiClient, getApiBaseUrl } from '@/api';
 import { useApp } from '@/App';
+import { CITIZEN_HOME_PATH } from '@/config/featureFlags';
 
 const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'ke.nairobi';
 const REDIRECT_PATH = '/citizen/auth/callback';
@@ -129,7 +131,7 @@ export default function CitizenKcCallback() {
           },
           CITY_TENANT,
         );
-        navigate('/dashboard', { replace: true });
+        navigate(CITIZEN_HOME_PATH, { replace: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Sign-in failed.';
         clearKcTokens();

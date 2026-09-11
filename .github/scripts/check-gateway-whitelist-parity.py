@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""CI guard: the compose Kong gateway's shared auth-optional whitelist must match
+the K8s Spring gateway's open + mixed-mode whitelists (deployment-parity item #5,
+Phase 3), apart from explicitly reviewed Kong-only exceptions.
+
+Both stacks classify a request as auth-optional (anonymous, and not action-RBAC'd)
+by EXACT path membership. If the two lists drift, an endpoint could be anonymous on
+one stack and protected on the other — a security-critical inconsistency. This
+asserts the shared paths are identical sets, and separately asserts that each
+Kong-only exception remains anonymous on Kong and protected on Spring.
+
+The public-dashboard aliases are intentionally Kong-only. Kong removes
+client-supplied RequestInfo.userInfo from anonymous bodies before proxying; the
+Spring gateway does not provide that normalization. Opening these aliases there
+would therefore turn caller-controlled roles into a security principal.
+
+Sources of truth:
+  - Kong:  local-setup/kong/kong.yml            -> the AUTH_OPTIONAL Lua set
+  - K8s:   devops/deploy-as-code/charts/environments/env.yaml
+             -> egov-open-endpoints-whitelist + egov-mixed-mode-endpoints-whitelist
+
+Run with --self-test to verify the comparison logic itself catches drift.
+"""
+import re
+import sys
+import pathlib
+
+import yaml  # robust YAML parsing (handles block scalars / reformatting)
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+KONG = ROOT / "local-setup/kong/kong.yml"
+ENV = ROOT / "devops/deploy-as-code/charts/environments/env.yaml"
+
+_ENTRY = re.compile(r'\["(/[^"]+)"\]\s*=\s*true')
+
+# Reviewed exceptions to gateway parity. These paths MUST exist in Kong's
+# AUTH_OPTIONAL set and MUST NOT appear in either Spring whitelist.
+KONG_ONLY_AUTH_OPTIONAL = {
+    "/pgr-services/v2/analytics/public/packs",
+    "/pgr-services/v2/analytics/public/_query",
+    "/pgr-services/v2/analytics/public/catalog/_search",
+    "/pgr-services/v2/analytics/public/_options",
+    # novu-bridge configurator-proxy POSTs: authenticated inside novu-bridge
+    # (ProxyAuthFilter, Bearer token), no RequestInfo.authToken in the body.
+    # The bridge is not routed by the Spring gateway tier at all.
+    "/novu-bridge/novu-adapter/v1/providers",
+    "/novu-bridge/novu-adapter/v1/providers/verify",
+    "/novu-bridge/novu-adapter/v1/providers/test-send",
+}
+
+
+def _find_value(node, key):
+    """First value for `key` anywhere in a nested dict/list, else None."""
+    if isinstance(node, dict):
+        if key in node:
+            return node[key]
+        for v in node.values():
+            r = _find_value(v, key)
+            if r is not None:
+                return r
+    elif isinstance(node, list):
+        for v in node:
+            r = _find_value(v, key)
+            if r is not None:
+                return r
+    return None
+
+
+def _find_lua(node, marker):
+    """First string value containing `marker` anywhere in the tree, else None."""
+    if isinstance(node, str):
+        return node if marker in node else None
+    if isinstance(node, dict):
+        for v in node.values():
+            r = _find_lua(v, marker)
+            if r:
+                return r
+    if isinstance(node, list):
+        for v in node:
+            r = _find_lua(v, marker)
+            if r:
+                return r
+    return None
+
+
+def kong_whitelist(text: str) -> set:
+    lua = _find_lua(yaml.safe_load(text), "AUTH_OPTIONAL")
+    if not lua:
+        sys.exit("ERROR: AUTH_OPTIONAL pre-function not found in local-setup/kong/kong.yml")
+    # Only the exact-match set keys are extracted, so nested Lua tables can't confuse it.
+    return set(_ENTRY.findall(lua))
+
+
+def env_whitelist(text: str) -> set:
+    data = yaml.safe_load(text)
+    paths = set()
+    for key in ("egov-open-endpoints-whitelist", "egov-mixed-mode-endpoints-whitelist"):
+        val = _find_value(data, key)
+        if val is None:
+            sys.exit(f"ERROR: {key} not found in env.yaml")
+        paths |= {p.strip() for p in str(val).split(",") if p.strip()}
+    return paths
+
+
+def diff(kong: set, env: set, kong_only=KONG_ONLY_AUTH_OPTIONAL):
+    shared_kong = kong - kong_only
+    return sorted(shared_kong - env), sorted(env - shared_kong)
+
+
+def report(kong: set, env: set) -> int:
+    only_kong, only_env = diff(kong, env)
+    missing_kong_only = sorted(KONG_ONLY_AUTH_OPTIONAL - kong)
+    opened_on_spring = sorted(KONG_ONLY_AUTH_OPTIONAL & env)
+    if only_kong or only_env or missing_kong_only or opened_on_spring:
+        print("Gateway auth-optional whitelist MISMATCH (Kong vs Spring gateway):\n")
+        for p in only_kong:
+            print(f"  + only in Kong (local-setup/kong/kong.yml):        {p}")
+        for p in only_env:
+            print(f"  - only in K8s  (env.yaml open+mixed whitelists):   {p}")
+        for p in missing_kong_only:
+            print(f"  ! missing required Kong-only exception:           {p}")
+        for p in opened_on_spring:
+            print(f"  ! Kong-only exception was opened on Spring:        {p}")
+        print(
+            "\nShared paths must exist in BOTH files. KONG_ONLY_AUTH_OPTIONAL paths must "
+            "exist only in Kong because Spring does not normalize anonymous userInfo."
+        )
+        return 1
+    print(
+        f"OK: gateway auth-optional shared whitelists match "
+        f"({len(kong) - len(KONG_ONLY_AUTH_OPTIONAL)} shared; "
+        f"{len(KONG_ONLY_AUTH_OPTIONAL)} reviewed Kong-only)."
+    )
+    return 0
+
+
+def self_test() -> int:
+    base = {"/a", "/b", "/c"}
+    assert diff(base, base, set()) == ([], []), "identical sets must not diff"
+    assert diff(base | {"/x"}, base, set()) == (["/x"], []), "extra-in-kong not detected"
+    assert diff(base, base | {"/y"}, set()) == ([], ["/y"]), "extra-in-env not detected"
+    assert diff(base | {"/x"}, base, {"/x"}) == ([], []), "Kong-only path must be excluded"
+    assert diff(base | {"/x"}, base | {"/x"}, {"/x"}) == ([], ["/x"]), \
+        "Kong-only path opened on Spring must be detected"
+    print("self-test OK: drift is detected in both directions.")
+    return 0
+
+
+def main() -> int:
+    if "--self-test" in sys.argv:
+        return self_test()
+    return report(kong_whitelist(KONG.read_text()), env_whitelist(ENV.read_text()))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

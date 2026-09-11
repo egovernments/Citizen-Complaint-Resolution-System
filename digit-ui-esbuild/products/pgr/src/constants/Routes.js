@@ -6,7 +6,6 @@ const REOPEN_COMPLAINT_PATH = "/reopen/";
 export const PgrRoutes = {
   ComplaintsPage: "/complaints",
   RatingAndFeedBack: "/rate/:id*",
-  ComplaintDetailsPage: "/complaint/details/:id",
   ReasonPage: `/:id`,
   UploadPhoto: `/upload-photo/:id`,
   AddtionalDetails: `/addional-details/:id`,

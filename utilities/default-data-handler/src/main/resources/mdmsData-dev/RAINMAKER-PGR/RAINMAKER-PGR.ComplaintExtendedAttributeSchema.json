@@ -1,0 +1,40 @@
+[
+  {
+    "schemaRef": "IgeComplaintExtendedAttributes",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "IgeComplaintExtendedAttributes",
+      "title": "IGE Complaint Extended Attributes",
+      "type": "object",
+      "required": ["instituteName"],
+      "x-security": ["instituteName", "witnessName", "witnessAddress", "witnessNote"],
+      "properties": {
+        "instituteName":  { "type": "string", "maxLength": 300,  "x-order": 1, "x-label-key": "PGR_EXT_INSTITUTE_NAME_LABEL" },
+        "witnessName":    { "type": "string", "maxLength": 200,  "x-order": 2, "x-label-key": "PGR_EXT_WITNESS_NAME_LABEL" },
+        "witnessAddress": { "type": "string", "maxLength": 1000, "x-order": 3, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_ADDRESS_LABEL" },
+        "witnessNote":    { "type": "string", "maxLength": 1000, "x-order": 4, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_NOTE_LABEL" }
+      },
+      "additionalProperties": true
+    }
+  },
+  {
+    "schemaRef": "IgsaeComplaintExtendedAttributes",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "IgsaeComplaintExtendedAttributes",
+      "title": "IGSAE Complaint Extended Attributes",
+      "type": "object",
+      "required": ["dateOfFact", "entityName", "entityAddress"],
+      "x-security": ["dateOfFact", "entityName", "entityAddress", "witnessName", "witnessAddress", "witnessNote"],
+      "properties": {
+        "dateOfFact":     { "type": "string", "format": "date", "x-order": 1, "x-label-key": "PGR_EXT_DATE_OF_FACT_LABEL" },
+        "entityName":     { "type": "string", "maxLength": 300,  "x-order": 2, "x-label-key": "PGR_EXT_ENTITY_NAME_LABEL" },
+        "entityAddress":  { "type": "string", "maxLength": 1000, "x-order": 3, "x-widget": "textarea", "x-label-key": "PGR_EXT_ENTITY_ADDRESS_LABEL" },
+        "witnessName":    { "type": "string", "maxLength": 200,  "x-order": 4, "x-label-key": "PGR_EXT_WITNESS_NAME_LABEL" },
+        "witnessAddress": { "type": "string", "maxLength": 1000, "x-order": 5, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_ADDRESS_LABEL" },
+        "witnessNote":    { "type": "string", "maxLength": 1000, "x-order": 6, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_NOTE_LABEL" }
+      },
+      "additionalProperties": true
+    }
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "default",
+      "numberFormat": {
+        "en_IN": "#,##0.00",
+        "pt_PT": "#.##0,00",
+        "fr_FR": "# ##0,00",
+        "default": "#,##0.00"
+      },
+      "publicDashboardEnabled": true,
+      "timeZone": "Africa/Nairobi"
+    }
+  }
+]

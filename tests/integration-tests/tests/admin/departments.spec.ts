@@ -14,17 +14,39 @@ import {
   mdmsCreate,
   mdmsSearch,
   type AuthInfo,
+  type MdmsRecord,
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/departments';
 
 const createdCodes = new Set<string>();
 
-test.describe.configure({ mode: 'serial' });
+// Scratch records this suite (and every previous run) created are prefixed
+// PW_ / *_PW* by utils/manage/codes. A long-lived deployment accumulates
+// thousands of them, so "pick a real record" has to exclude them explicitly —
+// the same pattern the rest of the suite uses.
+const SCRATCH_CODE = /(^|_)PW[A-Z_]/i;
+
+/** First active, non-scratch record — i.e. real tenant data, not our litter. */
+function findRealRecord(records: MdmsRecord[]): MdmsRecord | undefined {
+  return records.find(
+    (r) =>
+      r.isActive !== false &&
+      !SCRATCH_CODE.test(String(r.uniqueIdentifier)) &&
+      !SCRATCH_CODE.test(String((r.data as Record<string, unknown>)?.code ?? '')),
+  );
+}
+
+// Default mode (not serial): workers=1 keeps file order, but a failure no longer
+// cascade-skips the rest — each test self-seeds its own department code.
+test.describe.configure({ mode: 'default' });
 
 test.afterAll(async () => {
   if (createdCodes.size === 0) return;
@@ -47,26 +69,42 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/departments', () => {
-  test('1. list renders with header columns and filter narrows results', {
+  test('1. list renders with header columns and filters narrow to the expected rows', {
     annotation: {
       type: 'description',
-      description: `Asserts /manage/departments renders with the four expected columns (Code, Name, Status, Description), has data, the search filter narrows the row count, and the Status filter switch (if present) doesn't crash. Multi-purpose smoke that exercises the major surface in one pass.
+      description: `Asserts /manage/departments renders with the four expected columns (Code, Name, Status, Description) and that BOTH list filters actually narrow the rendered rows — not merely "don't increase the count".
 
 Steps:
-1. Navigate to /configurator/manage/departments.
-2. Assert role=table is visible.
-3. For each header in ['Code','Name','Status','Description'], assert the matching role=columnheader is visible.
-4. Read initial row count; assert > 1.
-5. Type 'zzz_no_such_dept_string' in the search input; wait networkidle.
-6. Read filtered count; assert filtered <= initial.
-7. Clear search; wait networkidle.
-8. If Status filter exists, click it, pick Inactive option, wait networkidle, assert count >= 0.
+1. Resolve a real active department via mdmsSearch(isActive:true), preferring a non-scratch (non-PW_) code. Skip only if the deployment has no active department at all.
+2. Navigate to /configurator/manage/departments.
+3. Assert role=table is visible and each of ['Code','Name','Status','Description'] renders as a columnheader.
+4. Count DATA rows (rows containing role=cell — excludes the header row); assert > 0.
+5. Search a term that cannot match: assert data rows go to EXACTLY 0 and the empty-state ("No records") renders.
+6. Search the real department's code: assert its row is present AND every rendered row matches the term; when the unfiltered list had more than one row, assert the count strictly dropped.
+7. Clear the search and assert the original row count is restored.
+8. Status filter → Active: assert the list is non-empty and EVERY row is marked Active.
+9. Status filter → Inactive: assert ZERO rows marked Active survive.
 
-Filters should compose; the test resets search before testing status to keep them independent.`,
+Every count read is an auto-retrying expect()/expect.poll() — the grid debounces filter changes (DigitList setFilters(..., undefined, true)), so a bare count() immediately after typing reads the PRE-filter list.
+
+Prior version was vacuous: expect(filteredCount).toBeLessThanOrEqual(initialCount) can never fail (a narrowing filter cannot increase a count) and, thanks to the debounce race, filteredCount === initialCount anyway; expect(inactiveCount).toBeGreaterThanOrEqual(0) is a pure tautology. The Status branch was additionally dead code — getByLabel(/^Status$/i) never matches, because SelectFilterInput renders a Radix trigger with no associated <label>, so the whole if-block was skipped on every run.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
+    // Resolve the search term from live data rather than hardcoding a
+    // deployment literal. isActive:true is load-bearing: this tenant carries
+    // 147 department records of which only 3 are active, so an unfiltered page
+    // is entirely soft-deleted scratch rows.
+    const auth = loadAuth();
+    const activeDepts = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
+      limit: 200,
+      isActive: true,
+    });
+    const probe = findRealRecord(activeDepts) ?? activeDepts[0];
+    test.skip(!probe, 'No active department on this deployment to filter for');
+    const probeCode = String(probe!.uniqueIdentifier);
+
     await page.goto(LIST_PATH);
 
     // Header columns — Code / Name / Status / Description.
@@ -79,52 +117,97 @@ Filters should compose; the test resets search before testing status to keep the
       ).toBeVisible();
     }
 
-    // At least one data row should render on a healthy tenant.
-    const dataRows = page.getByRole('row');
+    // DATA rows only. getByRole('row') also matches the header row (whose
+    // children are columnheaders, not cells), which is what forced the old
+    // `> 1` / `<= initial` fudge factors. Filtering on `has: cell` gives a
+    // locator whose count is the real record count, so exact assertions work.
+    const dataRows = page.getByRole('row').filter({ has: page.getByRole('cell') });
+    await expect(dataRows.first()).toBeVisible();
     const initialCount = await dataRows.count();
-    expect(initialCount).toBeGreaterThan(1); // header + at least 1
+    expect(initialCount, 'list should render at least one department').toBeGreaterThan(0);
 
-    // Type into the search input — debounced server-side filter narrows.
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
+
+    // --- Search that matches nothing must empty the table ---
     await search.fill('zzz_no_such_dept_string');
-    // Wait for the list to settle after the debounce (~300ms typical).
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // toHaveCount auto-retries, so this rides out the grid's debounce instead
+    // of racing it.
+    await expect(dataRows).toHaveCount(0);
+    await expect(page.getByText(/no records/i).first()).toBeVisible();
 
-    const filteredCount = await dataRows.count();
-    // Either the row count drops or an empty-state replaces the table.
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
-
-    // Reset search before status filter so the two filters compose
-    // predictably.
-    await search.fill('');
-    await page.waitForLoadState('networkidle').catch(() => {});
-
-    // Toggle Status filter to Inactive — count should change (or empty
-    // state appears).
-    const statusFilter = page.getByLabel(/^Status$/i);
-    if (await statusFilter.isVisible().catch(() => false)) {
-      await statusFilter.click();
-      await page.getByRole('option', { name: /Inactive/i }).click();
-      await page.waitForLoadState('networkidle').catch(() => {});
-      // Just assert the filter applied — we don't know the tenant's
-      // active/inactive split.
-      const inactiveCount = await dataRows.count();
-      expect(inactiveCount).toBeGreaterThanOrEqual(0);
+    // --- Search for a real code must leave ONLY rows that match it ---
+    await search.fill(probeCode);
+    await expect(dataRows.filter({ hasText: probeCode }).first()).toBeVisible();
+    await expect
+      .poll(
+        async () => {
+          const texts = await dataRows.allTextContents();
+          return (
+            texts.length > 0 &&
+            texts.every((t) => t.toLowerCase().includes(probeCode.toLowerCase()))
+          );
+        },
+        { message: `every row left after searching "${probeCode}" should match it` },
+      )
+      .toBe(true);
+    if (initialCount > 1) {
+      // Strict narrowing — a code search cannot leave the full list behind.
+      await expect
+        .poll(() => dataRows.count(), { message: 'search should strictly narrow the list' })
+        .toBeLessThan(initialCount);
     }
+
+    // Reset search before the status filter so the two compose predictably.
+    await search.fill('');
+    await expect(dataRows).toHaveCount(initialCount);
+
+    // --- Status filter ---
+    // SelectFilterInput renders a Radix trigger whose only label is the
+    // SelectValue placeholder, so there is no <label> to target and no
+    // accessible name — getByLabel(/^Status$/i) matched nothing, which is why
+    // the old assertions never ran. Match the trigger by the text it shows in
+    // each of its states instead.
+    const statusFilter = page
+      .getByRole('combobox')
+      .filter({ hasText: /^(Status|Active|Inactive)$/ })
+      .first();
+    await expect(statusFilter).toBeVisible();
+    const rowsMarkedActive = dataRows.filter({
+      has: page.getByRole('cell', { name: /^Active$/ }),
+    });
+
+    // Status = Active → non-empty, and every row is marked Active.
+    await statusFilter.click();
+    await page.getByRole('option', { name: /^Active$/i }).click();
+    await expect(rowsMarkedActive.first()).toBeVisible();
+    await expect
+      .poll(
+        async () => (await dataRows.count()) - (await rowsMarkedActive.count()),
+        { message: 'Status=Active should leave no non-Active rows' },
+      )
+      .toBe(0);
+    const activeCount = await dataRows.count();
+    expect(activeCount).toBeGreaterThan(0);
+
+    // Status = Inactive → not one of those Active rows survives. This is the
+    // assertion the old `inactiveCount >= 0` tautology should have been.
+    await statusFilter.click();
+    await page.getByRole('option', { name: /^Inactive$/i }).click();
+    await expect(rowsMarkedActive).toHaveCount(0);
   });
 
   test('2. single create → edit → deactivate round-trip', {
     annotation: {
       type: 'description',
-      description: `Drives a full UI lifecycle on a Department record: create → show → edit description → deactivate (with DeactivationGuard banner check) → confirm row appears under the Inactive status filter. Catches regressions in any of the four CRUD-ish surfaces in one walk.
+      description: `Drives a full UI lifecycle on a Department record: create → show → edit name → deactivate (with DeactivationGuard banner check) → confirm row appears under the Inactive status filter. Catches regressions in any of the four CRUD-ish surfaces in one walk. The Department schema only allows {code, name, active} (additionalProperties:false), so the form has no Description field — the edit round-trip mutates the name instead.
 
 Steps:
 1. Generate a unique code + name; track for cleanup.
-2. Create: navigate to /create; fill Name + Code (force PW_ value) + Description; click Create; wait for navigation back to LIST_PATH.
+2. Create: navigate to /create; fill Name + Code (force PW_ value); click Create; wait for navigation back to LIST_PATH.
 3. Verify in list: search for code, click matching row.
-4. Show: assert text 'Created by Playwright' is visible.
-5. Edit: click Edit; fill Description with 'Edited by Playwright'; Save; assert new text is visible.
+4. Show: assert the created name is visible.
+5. Edit: click Edit; change Name to "<name> edited"; Save; assert new name is visible.
 6. Deactivate: click Edit again; uncheck Active; assert a deactivation banner matching /depend|in use|will affect/i is visible within 10s; click Save.
 7. Back at the list, if Status filter exists, switch to Inactive; search for code; assert the row is visible.
 
@@ -143,7 +226,8 @@ Guard banner check is loose because exact wording depends on dependency type and
     const codeInput = page.getByLabel(/^Code/i);
     await codeInput.fill('');
     await codeInput.fill(code);
-    await page.getByLabel(/^Description/i).fill('Created by Playwright');
+    // No Description field — the Department schema only allows {code, name,
+    // active} (additionalProperties:false), so the form dropped it.
 
     await Promise.all([
       page.waitForURL(LIST_PATH, { timeout: 30_000 }),
@@ -157,16 +241,25 @@ Guard banner check is loose because exact wording depends on dependency type and
     await expect(row).toBeVisible();
     await row.click();
 
-    // Show page — verify the description we wrote.
-    await expect(page.getByText('Created by Playwright')).toBeVisible();
+    // Show page — verify the name we created. The list row that led us here
+    // stays mounted, so the name can resolve to >1 node; assert on the first.
+    await expect(page.getByText(name).first()).toBeVisible();
 
-    // --- Edit description ---
+    // --- Edit the name (the only editable free-text field) ---
+    const editedName = `${name} edited`;
     await page.getByRole('button', { name: /^Edit$/i }).click();
-    const desc = page.getByLabel(/^Description/i);
-    await desc.fill('Edited by Playwright');
+    const nameInput = page.getByLabel(/^Name/i);
+    await nameInput.fill(editedName);
 
     await page.getByRole('button', { name: /^Save$/i }).click();
-    await expect(page.getByText('Edited by Playwright')).toBeVisible();
+    await expect(page.getByText(editedName).first()).toBeVisible();
+
+    // After Save the edit form returns to the LIST (DigitEdit redirect default),
+    // so reopen the record's Show page before the deactivate edit — otherwise the
+    // top-level "Edit" button doesn't exist on the list and the click hangs.
+    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.getByRole('row').filter({ hasText: code }).first().click();
 
     // --- Deactivate ---
     await page.getByRole('button', { name: /^Edit$/i }).click();
@@ -252,7 +345,11 @@ Loose regex on "department|row" tolerates UI label changes between Create-N-depa
     await createBtn.click();
 
     // Complete screen — should report 5 created / 0 failed.
-    await expect(page.getByText(/5\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 5 departments" (number AFTER the
+    // word), not "5 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+5|5\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
 
@@ -286,10 +383,11 @@ Catches a regression where the dup detection fails and all 3 rows would be sent 
     const auth = loadAuth();
     const existingCode = testCode(testInfo, 'DEPT_EXIST');
     createdCodes.add(existingCode);
+    // Department schema is additionalProperties:false — no `description` key
+    // (the sibling configurator-mdms-fixes spec asserts that rejection).
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, existingCode, {
       code: existingCode,
       name: 'PW Existing',
-      description: 'Pre-existing for duplicate test',
       active: true,
     });
 
@@ -343,24 +441,41 @@ Doesn't assert what's INSIDE the related lists — that depends on tenant conten
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }) => {
-    // Seeded `ke` tenant has DEPT_7 with employees + complaint-types
-    // pointing at it (Gurjeet Singh's assignment references DEPT_7). Use
-    // that as the fixture — avoids seeding our own reverse-ref graph.
+    // Probe whichever real (non-scratch) department the deployment seeded —
+    // avoids depending on any specific code.
+    //
+    // This used to page the schema unfiltered (`{ limit: 20 }`). On a
+    // deployment polluted with soft-deleted PW_ scratch departments (measured
+    // 147 rows, only 3 active) the first 20 rows are ALL inactive, so the
+    // find() returned undefined and the test skipped permanently — the data
+    // was present, just unreachable behind a page of junk. Push isActive to
+    // the server so pagination runs over the ACTIVE set.
     const auth = loadAuth();
     const deptCandidates = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-      limit: 20,
+      limit: 200,
+      isActive: true,
     });
-    const realDept = deptCandidates.find(
-      (r) => r.isActive !== false && !String(r.uniqueIdentifier).startsWith('PW_'),
-    );
+    const realDept = findRealRecord(deptCandidates);
     test.skip(!realDept, 'No seeded department to probe reverse references on');
 
     await page.goto(`${LIST_PATH}/${encodeURIComponent(realDept!.uniqueIdentifier)}/show`);
 
-    // The "Related" section headers; both lists render even when empty.
+    // The "Related" section and both of its sub-lists.
+    //
+    // ReverseReferenceList renders EITHER "<Label>" + a count badge (when the
+    // reverse lookup found rows) OR the sentence "No <label> found" (when it
+    // didn't) — it never renders the bare label in the empty case. The old
+    // assertion anchored on /^Employees$/i, which therefore could not match a
+    // department with no employees assigned to it; it was unreachable rather
+    // than wrong about the feature. Accept either rendering, which is what
+    // "the section structure renders even when empty" actually means.
     await expect(page.getByText(/^Related$/i).first()).toBeVisible();
-    await expect(page.getByText(/Complaint Types/i).first()).toBeVisible();
-    await expect(page.getByText(/^Employees$/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/^(Complaint Types|No complaint types found)$/i).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/^(Employees|No employees found)$/i).first(),
+    ).toBeVisible();
   });
 
   test('5b. deactivation guard probes designation + employee APIs', {
@@ -388,10 +503,10 @@ Tests both halves of the guard's data dependencies in one walk.`,
     const auth = loadAuth();
     const deptCode = testCode(testInfo, 'DEPT_GUARD');
     createdCodes.add(deptCode);
+    // No `description` — Department schema is additionalProperties:false.
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, deptCode, {
       code: deptCode,
       name: `PW Guard Dept ${deptCode}`,
-      description: 'For guard probe',
       active: true,
     });
     const desigCode = testCode(testInfo, 'DEPT_GUARD_DESIG');
@@ -435,29 +550,29 @@ Tests both halves of the guard's data dependencies in one walk.`,
 
 Steps:
 1. Generate a unique code; track for cleanup.
-2. mdmsCreate a Department with description 'Initial description'.
+2. mdmsCreate a Department with name 'PW Audit <code>' (schema only allows {code, name, active}).
 3. mdmsSearch for [code]; capture pre record.
 4. Assert pre.auditDetails is truthy.
-5. Dynamically import mdmsUpdate; mutate pre.data.description to 'Edited description via API'.
+5. Dynamically import mdmsUpdate; mutate pre.data.name to 'PW Audit Edited via API'.
 6. mdmsUpdate(auth, pre, true); capture updated.
-7. Assert updated.data.description === 'Edited description via API'.
+7. Assert updated.data.name === 'PW Audit Edited via API'.
 8. If both lastModifiedTime and createdTime are present, assert lastModifiedTime >= createdTime.
 
-Pure-API — exercises the dataProvider logic the UI uses for save without going through the form.`,
+Pure-API — exercises the dataProvider logic the UI uses for save without going through the form. Uses the name field (not the dropped description) as the mutated field.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const auth = loadAuth();
     const code = testCode(testInfo, 'DEPT_AUDIT');
     createdCodes.add(code);
 
+    // No `description` — Department schema is additionalProperties:false.
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, code, {
       code,
       name: `PW Audit ${code}`,
-      description: 'Initial description',
       active: true,
     });
 
-    // Fetch — bump description via the UI-equivalent update path.
+    // Fetch — bump the name via the UI-equivalent update path.
     const pre = (
       await mdmsSearch(auth, TENANT_CODE, SCHEMA, { uniqueIdentifiers: [code] })
     )[0];
@@ -466,10 +581,10 @@ Pure-API — exercises the dataProvider logic the UI uses for save without going
 
     // Import on demand — keeps top-level imports tidy.
     const { mdmsUpdate } = await import('../utils/manage/api');
-    pre.data = { ...pre.data, description: 'Edited description via API' };
+    pre.data = { ...pre.data, name: 'PW Audit Edited via API' };
     const updated = await mdmsUpdate(auth, pre, true);
-    expect((updated.data as Record<string, unknown>).description).toBe(
-      'Edited description via API',
+    expect((updated.data as Record<string, unknown>).name).toBe(
+      'PW Audit Edited via API',
     );
     // lastModifiedTime should advance (>= previous createdTime).
     const audit = updated.auditDetails as Record<string, number> | undefined;

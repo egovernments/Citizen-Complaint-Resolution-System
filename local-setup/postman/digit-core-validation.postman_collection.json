@@ -150,9 +150,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 }\n}"
+              "raw": "{\n  \"RequestInfo\": { \"apiId\": \"digit\", \"ver\": \"1.0\", \"ts\": 0 },\n  \"BoundaryTypeHierarchySearchCriteria\": { \"tenantId\": \"pg\" }\n}"
             },
-            "url": "{{baseUrl}}/boundary-service/boundary-hierarchy-definition/_search?tenantId=pg",
+            "url": "{{baseUrl}}/boundary-service/boundary-hierarchy-definition/_search",
             "description": "Fetches boundary hierarchy definitions from boundary-service v2."
           }
         }

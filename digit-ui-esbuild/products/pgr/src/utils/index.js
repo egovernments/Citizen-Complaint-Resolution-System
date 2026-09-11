@@ -2,6 +2,7 @@ import _ from "lodash";
 import axios from "axios";
 import { CustomisedHooks } from "../hooks";
 import { UICustomizations } from "../configs/UICustomizations";
+import { serializeGeoLocation } from "./geoLocation";
 
 export const overrideHooks = () => {
   Object.keys(CustomisedHooks).map((ele) => {
@@ -199,7 +200,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
         "locality": {
           "code": formData?.SelectedBoundary?.code || formData?.SelectLocality?.code,
         },
-        "geoLocation": {}
+        "geoLocation": serializeGeoLocation(formData?.GeoLocationsPoint)
       },
       "additionalDetail": JSON.stringify(additionalDetail),
       "auditDetails": {

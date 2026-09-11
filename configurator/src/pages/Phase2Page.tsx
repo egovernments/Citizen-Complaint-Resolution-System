@@ -28,11 +28,13 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
-import { apiClient, boundaryService, localizationService, ApiClientError } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
+import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step =
@@ -93,9 +95,25 @@ const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass
 // set VITE_TURBOPASS_SOURCE=overture to run fully offline.
 const TURBOPASS_SOURCE: string = import.meta.env.VITE_TURBOPASS_SOURCE || 'geoapify';
 
-// The OSM path always writes the ADMIN hierarchy (the Excel path lets the
-// operator name it).
-const OSM_HIERARCHY_TYPE = 'ADMIN';
+// Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
+// configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
+// from host_vars `hierarchy_type`) so the hierarchy created here matches what
+// the citizen/PGR UI later resolves boundaries against — otherwise the citizen
+// complaint form's boundary picker 400s (HIERARCHY_DEFINITION_DOES_NOT_EXIST).
+// Falls back to DIGIT's default 'ADMIN' when globalConfigs isn't present, so a
+// deployment that doesn't override HIERARCHY_TYPE keeps the previous behaviour.
+// globalConfigs.js is injected as a <script> before this bundle, so the read
+// resolves at module-eval time in the built app.
+function getConfiguredHierarchyType(): string {
+  if (typeof window !== 'undefined') {
+    const gc = (
+      window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } }
+    ).globalConfigs?.getConfig?.('HIERARCHY_TYPE');
+    if (typeof gc === 'string' && gc) return gc;
+  }
+  return 'ADMIN';
+}
+const OSM_HIERARCHY_TYPE = getConfiguredHierarchyType();
 
 // Post-create pipeline shared by BOTH paths after createBoundaries succeeds:
 // localizations (boundary names are required for the citizen UI; the rest is
@@ -112,23 +130,59 @@ async function runPostCreatePipeline(
     name: b.name,
   }));
 
-  await localizationService.uploadBoundaryLocalizations(
-    tenantId,
-    boundaryData,
-    hierarchyType,
-    'en_IN'
-  );
+  // Seed under every locale the tenant actually serves (StateInfo.languages),
+  // not a hardcoded en_IN — the digit-ui citizen app reads boundary names under
+  // its ACTIVE locale (e.g. en_KE / sw_KE for Kenya), so seeding only en_IN left
+  // the create-complaint locality dropdown AND the OSM map ward tooltips showing
+  // raw boundary codes. Fall back to en_IN when StateInfo has no languages so an
+  // India tenant behaves exactly as before.
+  const configuredLocales = await mdmsService.getStateInfoLocales(tenantId).catch(() => []);
+  const locales = configuredLocales.length > 0 ? configuredLocales : ['en_IN'];
 
-  // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
-  // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
-  await localizationService.uploadHierarchyLevelLocalizations(
-    tenantId,
-    hierarchyType,
-    levels,
-    'en_IN'
-  ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
+  for (const locale of locales) {
+    await localizationService.uploadBoundaryLocalizations(
+      tenantId,
+      boundaryData,
+      hierarchyType,
+      locale
+    );
+
+    // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
+    // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
+    await localizationService.uploadHierarchyLevelLocalizations(
+      tenantId,
+      hierarchyType,
+      levels,
+      locale
+    ).catch(e => console.warn(`hierarchy-level localization failed (non-fatal) for ${locale}`, e));
+  }
 
   await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+  // The boundaries just onboarded describe exactly the area this tenant serves,
+  // so they already answer where the citizen map should open, how far in, and
+  // which extent the address search may return results from. Derive all three
+  // rather than asking an admin to type eight numbers they cannot sanity-check
+  // without a map in front of them — and note a wrong search extent is not
+  // cosmetic: Nominatim's bounded search DISCARDS anything outside the box.
+  //
+  // Best-effort. Boundaries are the operator's real work here; failing Phase 2
+  // over a map default would be a poor trade. An unwritten MapConfig just means
+  // the map keeps its built-in defaults.
+  try {
+    const derived = deriveMapPosition(created);
+    if (derived) {
+      await mdmsService.upsertMapConfig(tenantId, {
+        ...derived,
+        // The wards the map draws are the ones we just created, for this tenant.
+        boundaryTenantId: tenantId,
+      });
+    } else {
+      console.warn('[Phase 2] no boundary geometry — leaving MapConfig at its defaults');
+    }
+  } catch (e) {
+    console.warn('[Phase 2] map position not written (non-fatal)', e);
+  }
 
   // Clear ancestralmaterializedpath so boundary-service includeChildren=true
   // doesn't combine two overlapping queries and return each node twice in the
@@ -1530,7 +1584,7 @@ export default function Phase2Page() {
             <SubmitBar
               label="Continue to Common Masters"
               onSubmit={handleContinue}
-              icon={<ChevronRight className="w-5 h-5 ml-2" />}
+              icon={<ChevronRight className="w-4 h-4" />}
             />
           </div>
         </DigitCard>

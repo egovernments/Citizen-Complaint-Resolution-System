@@ -8,6 +8,7 @@ import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
 import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
+import { hasUsableGeoLocation } from "../utils/geoLocation";
 
 // Fix default icon issue in React builds
 delete L.Icon.Default.prototype._getIconUrl;
@@ -30,7 +31,19 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
   // base tile theme (defaults to the light voyager basemap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
-  const { tileUrl, tileAttribution, wardHighlightColor: WARD_COLOR } = useMapConfig();
+  const {
+    tileUrl,
+    tileAttribution,
+    wardHighlightColor: WARD_COLOR,
+    minZoom,
+    maxZoom,
+    geocodeCountryCodes,
+  } = useMapConfig();
+
+  // This map always opens on a known complaint, so the starting position is the
+  // complaint itself rather than the tenant's configured centre. Only the zoom
+  // is a presentation choice: 15 is street level, clamped to the tenant bounds.
+  const DETAIL_ZOOM = Math.min(Math.max(15, minZoom), maxZoom);
 
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
@@ -43,15 +56,16 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // Null while the fetch is in flight; empty collection when the tenant has
   // no usable geometry (no overlay — never another tenant's static wards).
   const tenantBoundaries = useTenantBoundaries();
+  const hasLocation = hasUsableGeoLocation({ latitude, longitude });
 
   const matchedWard = useMemo(() => {
     const wardCollection = tenantBoundaries;
-    if (!latitude || !longitude || !wardCollection?.features?.length) return null;
+    if (!hasLocation || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
     return wardCollection.features.find((f) => {
       try { return booleanPointInPolygon(pt, f); } catch { return false; }
     }) || null;
-  }, [latitude, longitude, tenantBoundaries]);
+  }, [hasLocation, latitude, longitude, tenantBoundaries]);
 
   const wardLayerStyle = (feature) => {
     const isMatch = matchedWard && feature?.properties?.code === matchedWard.properties.code;
@@ -62,13 +76,13 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
 
   // Fetch address details based on lat/lng using reverse geocoding
   useEffect(() => {
-    if (!latitude || !longitude) return;
+    if (!hasLocation) return;
 
     const fetchAddressFromCoordinates = async () => {
       setIsLoadingAddress(true);
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&countrycodes=ke`,
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1${geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""}`,
           {
             headers: {
               'Accept-Language': nominatimLang
@@ -129,10 +143,10 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
     };
 
     fetchAddressFromCoordinates();
-  }, [latitude, longitude]);
+  }, [hasLocation, latitude, longitude]);
 
   // If no coordinates provided, don't render the map
-  if (!latitude || !longitude) {
+  if (!hasLocation) {
     return null;
   }
 
@@ -163,7 +177,9 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
         }}>
           <MapContainer
             center={[latitude, longitude]}
-            zoom={15}
+            zoom={DETAIL_ZOOM}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={true}
             dragging={true}

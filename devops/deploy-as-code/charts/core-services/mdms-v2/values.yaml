@@ -14,13 +14,31 @@ initContainers:
     enabled: true
     schemaTable: "mdms_v2_schema"
     image:
-      repository: "mdms-v2-db"
-      tag: "v2.9.2-4a60f20"
+      # PARITY: repo normalized to egovio/ to match the app image below (was bare
+      # "mdms-v2-db", which relied on a local containerd import — ImagePullBackOff
+      # on a fresh cluster). Tag intentionally stays on maven-jdk21-9f83afb: the
+      # app's mdms-count-api-3ac4f8e tag only adds POST /v2/_count on top of this
+      # base with zero SQL delta, so this migrator is still the correct one to run.
+      repository: "egovio/mdms-v2-db"
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
+# PARITY / IMAGE NOTE — why this is NOT the chart-default v2.9.2 tag:
+#   v2.9.2 STRICTLY rejects string-valued RequestInfo.userInfo.roles (e.g. ["DGRO"])
+#   with a 500 (Cannot construct Role from String) — which the configurator SPA sends
+#   — so configurator writes fail on k8s. The maven-jdk21-9f83afb build (and its
+#   mdms-count-api-3ac4f8e descendant, below) tolerates it. Image drift, not app logic.
+#   PARITY: Compose pins the SAME image (egovio/mdms-v2:mdms-count-api-3ac4f8e,
+#   local-setup/docker-compose.deploy.yaml) — reverting to v2.9.2 would make k8s
+#   diverge from Compose. Keep both on this tag.
+#   Repo normalized to egovio/ so k8s pulls the same published image Compose does
+#   (was bare "mdms-v2", which relied on a local containerd import during the parity run).
+#   mdms-count-api-3ac4f8e adds POST /v2/_count (issue #953: real totals for the
+#   configurator's MDMS list pagination), built on top of the maven-jdk21-9f83afb base.
 image:
-  repository: "mdms-v2"
-  tag: "v2.9.2-4a60f20"
+  repository: "egovio/mdms-v2"
+  tag: "mdms-count-api-3ac4f8e"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -28,7 +46,7 @@ healthChecks:
   readinessProbePath: "/mdms-v2/health"
 appType: "java-spring"
 tracing-enabled: true
-memory_limits: 512Mi
+memory_limits: 1024Mi
 heap: "-Xmx512m -Xms512m"
 java-args: "-Dspring.profiles.active=monitoring"
 egov-mdms-schema-definition-save-topic: "save-mdms-schema-definition"

@@ -132,10 +132,44 @@ describe('resourceRegistry', () => {
     assert.strictEqual(getResourceConfig('mobile-validation'), undefined, 'mobile-validation alias must be removed');
   });
 
+  it('never keys a master on a value operators edit (#1252)', () => {
+    // pgr-ui-constants used to declare idField: 'REOPENSLA' — the record's only
+    // value doubling as its key. mdms-v2 rejects updates that change an x-unique
+    // field, so Save on the reopen window always returned 400
+    // UNIQUE_KEY_UPDATE_ERR and the window could not be changed by any route.
+    const uiConstants = getResourceConfig('pgr-ui-constants');
+    assert.ok(uiConstants);
+    assert.strictEqual(uiConstants.idField, 'code');
+    // Same defect, same fix, one master earlier — keep both honest.
+    assert.strictEqual(getResourceConfig('map-config')?.idField, 'code');
+  });
+
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {
     // `tenant.branding` is not registered on `ke` — the previous `branding`
     // entry 404'd. Keep this assertion until branding becomes a real schema.
     assert.strictEqual(getResourceBySchema('tenant.branding'), undefined);
     assert.strictEqual(getResourceConfig('branding'), undefined);
+  });
+});
+
+// Analytics destinations must stay OUT of the generic MDMS resources: that is the
+// single switch keeping the auto-generated CRUD routes, the Advanced nav sub-list
+// and the /manage/advanced card grid from exposing a screen whose generic
+// update/delete would rewrite or deactivate rows owned by the parent tenant.
+describe('analytics providers', () => {
+  it('is a dedicated resource, never a generic one', () => {
+    const config = getResourceConfig('analytics-providers');
+    assert.ok(config, 'analytics-providers must be registered');
+    assert.equal(config!.schema, 'common-masters.AnalyticsProvider');
+    assert.equal(config!.type, 'mdms');
+    assert.equal(config!.idField, 'code');
+    assert.equal(config!.dedicated, true);
+    assert.ok(getDedicatedResources()['analytics-providers'], 'must appear in the dedicated set');
+    assert.equal(
+    getGenericMdmsResources()['analytics-providers'],
+    undefined,
+    'must NOT appear in the generic set — the generic CRUD is unsafe for this master'
+  );
+    assert.equal(getResourceBySchema('common-masters.AnalyticsProvider'), 'analytics-providers');
   });
 });

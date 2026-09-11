@@ -1,0 +1,99 @@
+# Host-level metrics for the compose tier (issue #1335).
+#
+# The base stack's Prometheus scrapes only otel-collector:8889 (JVM/runtime
+# metrics via OTLP) — it has no view of the host the containers run on. This
+# overlay adds prom/node-exporter so CPU, memory, disk, filesystem and network
+# metrics for the DIGIT box land in the same Prometheus, matching the k8s tier
+# (kube-prometheus-stack already ships node_exporter as a DaemonSet).
+#
+# Layered ALWAYS by the Ansible deploy (see playbook-deploy.yml "Compute
+# compose -f flags"), like the migrations overlay. "Always layered" is about the
+# -f flag, NOT about the service starting: since #1657 node-exporter carries
+# `profiles: [obs-metrics]` and so starts only at observability_level metrics or
+# above, exactly like prometheus and grafana. The two are easy to conflate —
+# `docker compose -f docker-compose.monitoring.yml config --services` prints
+# nothing without the profile and `node-exporter` with it.
+#
+# The scrape job lives in otel/prometheus.yml (job_name: node ->
+# node-exporter:9100); Prometheus reaches this container by its DNS name over
+# egov-network, so no host port is published.
+#
+# NOTE (macOS thin path): node-exporter reports the Docker VM, not the Mac —
+# harmless but not meaningful. The real targets are the Linux VPS boxes.
+services:
+  node-exporter:
+    # Official Docker Hub image (same source as the base stack's
+    # prom/prometheus) — not the registry.preview mirror.
+    image: prom/node-exporter:v1.8.2
+    container_name: digit-node-exporter
+    # host metrics — part of the metrics tier (#1657)
+    profiles: [obs-metrics]
+    restart: unless-stopped
+    # A containerised node-exporter sees only the container's namespaces
+    # unless pointed at the host's. pid:host + the read-only /proc, /sys and /
+    # mounts (rebased via --path.*) give it a true host view.
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      # Drop pseudo/virtual mounts and Docker's overlay layers so the
+      # filesystem panels show real volumes, not per-container churn.
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|rootfs/var/lib/docker/.+)($|/)
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      # rslave (node_exporter's documented recommendation) so mount points that
+      # appear on the host AFTER the container starts propagate in and show up
+      # in the filesystem panels. Docker's default rprivate hides them. The
+      # Ubuntu deploy targets mount / as `shared` by default, so rslave binds
+      # cleanly there.
+      - /:/rootfs:ro,rslave
+    # Memory ceiling (#1612) — see the note on otel-collector in
+    # docker-compose.egov-digit.yaml. node-exporter is a thin reader of /proc
+    # and /sys; 64m is generous for it.
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    networks:
+      - egov-network
+
+  # Database metrics (#1615). Postgres is under every complaint, user lookup
+  # and workflow transition, and the only thing we knew about it was whether a
+  # TCP connect succeeded — which stays green while the connection pool is
+  # saturated and every service queues behind it.
+  #
+  # Same conventions as node-exporter above: official Docker Hub image, no
+  # published host port (Prometheus reaches it by DNS over egov-network), and
+  # always layered by the Ansible deploy.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: digit-postgres-exporter
+    restart: unless-stopped
+    environment:
+      # IMPORTANT: postgres-db, NOT postgres.
+      # `postgres` is a network alias for PgBouncer in this stack; the database
+      # itself is postgres-db (the gatus config carries the same warning: "a
+      # dead database cannot hide behind a healthy pooler"). Pointing this at
+      # the pooler would report PgBouncer's view of connections rather than the
+      # database's — misleading on the exact metric this exists for.
+      #
+      # Credentials match postgres-db's own POSTGRES_USER/DB (egov/egov), with
+      # the password coming from the same ${POSTGRES_PASSWORD} the deploy
+      # writes into .env from OpenBao. No new secret is introduced.
+      #
+      # Least privilege: `egov` is the stack's superuser, and postgres_exporter
+      # only needs pg_monitor. Reusing it is not a new grant — every backend
+      # service already connects as `egov` through PgBouncer — but a dedicated
+      # role would be tighter. It is deliberately not done here: the only place
+      # this stack creates roles is postgres-db's /docker-entrypoint-initdb.d
+      # (db/full-dump.sql), which Postgres runs ONLY on an empty data
+      # directory. Adding the role there would take effect on fresh volumes
+      # only, so every existing deploy would come up with an exporter that
+      # cannot authenticate — a blank dashboard, which is the failure mode this
+      # work exists to remove. Doing it properly needs a migration that runs
+      # against live databases; tracked as follow-up, not smuggled in here.
+      DATA_SOURCE_NAME: "postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres-db:5432/egov?sslmode=disable"
+    networks:
+      - egov-network

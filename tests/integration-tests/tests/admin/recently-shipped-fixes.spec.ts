@@ -21,7 +21,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { getDigitToken, loginViaApi } from '../utils/auth';
-import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
 
 const HRMS_SEARCH = `${BASE_URL}/egov-hrms/employees/_search`;
 const PGR_SEARCH = `${BASE_URL}/pgr-services/v2/request/_search`;
@@ -36,6 +36,60 @@ async function adminToken(): Promise<string> {
     password: ADMIN_PASS,
   });
   return t.access_token;
+}
+
+// swKeSeeded() lived here: a "does this deployment have the Kenya-rollout sw_KE
+// bundle?" guard, used to self-skip the CCRS#44 block everywhere but Kenya. Gone
+// because the #44 tests no longer pin sw_KE — they read the deployment's own
+// advertised locales, so there is nothing left to gate on.
+
+/**
+ * The `COMPLAINT_HIERARCHY.<code>` localization keys this deployment should carry
+ * — derived from its own hierarchy rather than pinned to one rollout's codes.
+ *
+ * RAINMAKER-PGR.ComplaintHierarchy is a single adjacency list holding both the
+ * interior CATEGORY nodes and the leaf complaint types. A leaf carries
+ * `department`/`slaHours`; an interior node carries neither. It's the interior
+ * nodes that render as the dropdown's group headings, which is exactly what
+ * CCRS#42 saw come out blank.
+ */
+async function categoryCodes(): Promise<string[]> {
+  try {
+    const token = await adminToken();
+    const r = await fetch(
+      `${BASE_URL}/mdms-v2/v2/_search?tenantId=${ROOT_TENANT}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: { authToken: token },
+          MdmsCriteria: {
+            tenantId: ROOT_TENANT,
+            schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy',
+            limit: 500,
+            isActive: true,
+          },
+        }),
+      },
+    );
+    const json = await r.json();
+    const rows: Array<{ data?: Record<string, unknown> }> = json.mdms ?? [];
+    const interior = rows
+      .map((row) => row.data ?? {})
+      .filter((d) => d.department === undefined && d.slaHours === undefined)
+      .map((d) => String(d.code ?? ''))
+      // Exclude the suite's OWN leftovers. complaint-types.spec.ts creates
+      // `PWAUTHORITYTYPE…` / `PWMAINCATEGORY…` / `PWSECTOR…` nodes and they are
+      // never torn down, so on a long-lived box they outnumber the real tree by
+      // 150:1. They have no localization and never will — asserting on them would
+      // fail this test forever, and the sheer count also blew the localization
+      // query past nginx's URL limit (10 kB of codes → a 414 HTML page).
+      .filter((c) => c && !/(^|_)PW[A-Z_]/i.test(c));
+    // Codes are seeded upper-cased into the localization key namespace.
+    return Array.from(new Set(interior.map((c) => `COMPLAINT_HIERARCHY.${c.toUpperCase()}`)));
+  } catch {
+    return [];
+  }
 }
 
 function adminRequestInfo(token: string) {
@@ -131,24 +185,40 @@ Tests the upstream data — without it, the UI's statusMap fix is moot.`,
     }
   });
 
-  test('API: pgr-services rejects non-applicationStatus sortBy values', {
+  test('API: pgr-services SortBy accepts `sla` but rejects unknown literals like `serviceSla`', {
     annotation: {
       type: 'description',
-      description: `Documents the platform constraint behind the SLA-sort-icon removal in the PGR inbox. pgr-services accepts only certain SortBy enum values. Sending sortBy=serviceSla returns a 400 with a typeMismatch error code — confirming the backend doesn't support sorting by SLA, hence the UI was right to remove the icon.
+      description: `Pins the pgr-services SortBy contract. The backend enum RequestSearchCriteria.SortBy is {locality, applicationStatus, serviceRequestId, createdTime, sla} — so sorting by SLA IS supported (sortBy=sla is accepted). What is NOT a valid enum value is the literal 'serviceSla'; sending it returns a typeMismatch error. This test asserts both halves: sla is accepted, serviceSla is rejected. (The earlier note claiming "the backend can't sort by SLA" is stale — sla was added to the enum.)
 
 Steps:
 1. Acquire admin token.
-2. POST to /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=serviceSla.
-3. Read response.Errors; assert length > 0.
-4. Assert Errors[0].code contains 'typeMismatch'.
+2. Positive: POST /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=sla; assert response.Errors is empty (sla is a valid enum value).
+3. Negative: POST the same with sortBy=serviceSla; assert response.Errors length > 0 and Errors[0].code contains 'typeMismatch'.
 
-If pgr-services later adds serviceSla to the SortBy enum, this test flips and the UI can re-enable the icon.`,
+Guards against a caller passing the wrong literal AND documents that SLA sorting is now available in the enum.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:432', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    // Documents the platform constraint behind the SLA-sort-icon removal.
-    // If pgr-services later adds `serviceSla` to the SortBy enum, this
-    // test flips and we can re-enable the sort icon in the UI config.
     const token = await adminToken();
+
+    // Positive — `sla` is a valid SortBy enum value (backend enum:
+    // {locality, applicationStatus, serviceRequestId, createdTime, sla}), so
+    // pgr-services accepts it without a typeMismatch.
+    const okRes = await fetch(
+      `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=sla`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: adminRequestInfo(token) }),
+      },
+    );
+    const okJson = await okRes.json();
+    expect(
+      okJson.Errors ?? [],
+      `sortBy=sla should be accepted, got ${JSON.stringify(okJson.Errors ?? [])}`,
+    ).toHaveLength(0);
+
+    // Negative — `serviceSla` is NOT a SortBy enum value, so it's rejected
+    // with a typeMismatch. (Guards a caller passing the wrong literal.)
     const r = await fetch(
       `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=serviceSla`,
       {
@@ -262,40 +332,60 @@ If this row goes missing or its copy changes, several PGR UI tests in this suite
 // /localization/messages with module=rainmaker-common,locale=sw_KE and
 // short-circuit if rows === 0) instead of asserting unconditionally.
 test.describe('CCRS#42 — Complaint Type category labels', () => {
-  test('API: 19 SERVICEDEFS.<categoryCode> rows exist in en_IN AND sw_KE', {
+  test('API: every COMPLAINT_HIERARCHY.<categoryCode> row is labelled in every advertised locale', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<CATEGORYCODE> localization rows must exist in BOTH en_IN and sw_KE locales. These category codes are the parentCode values of the leaf complaint types (interior category nodes of RAINMAKER-PGR.ComplaintHierarchy) — they replaced the legacy menuPath grouping key, but the localization key form SERVICEDEFS.<code> is unchanged. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank group options.
+      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). Every category node of RAINMAKER-PGR.ComplaintHierarchy must have a COMPLAINT_HIERARCHY.<CODE> localization row in every locale the deployment advertises. These category codes are the parentCode values of the leaf complaint types — they replaced the legacy menuPath grouping key (and the legacy SERVICEDEFS.<code> namespace). Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered blank group options.
 
 Steps:
-1. For each locale in [en_IN, sw_KE]:
-   - POST /localization/messages/v1/_search with codes for ADMINISTRATION, WATERRELATED, LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE.
-   - For each requested code, find the matching message in response.
-   - Assert message exists with non-empty text.
+1. Read RAINMAKER-PGR.ComplaintHierarchy from MDMS and keep the INTERIOR nodes — those carrying neither department nor slaHours. Leaves are complaint types, not categories.
+2. Drop the suite's own PW* leftovers (complaint-types.spec.ts creates and never removes them).
+3. Skip if the deployment has no category nodes at all.
+4. For each locale in LOCALES, POST /localization/messages/v1/_search in chunks of 40 codes and assert each code resolves to a non-empty message.
 
-Tests 5 representative codes across the 19 category (parentCode) values — fewer assertions but covers the full breadth via locale × multiple codes.`,
+Deployment-agnostic by construction: it asserts on whatever hierarchy the tenant
+actually has, in whatever locales it actually advertises. The previous version
+pinned Kenya's five rollout codes (ADMINISTRATION, WATERRELATED, LANDRATES,
+MOBILITYANDWORKS, FINANCEANDREVENUE) and the sw_KE locale, so it failed on the
+first locale of any non-Kenya tenant — and its skip-guard probed sw_KE row counts,
+which is unrelated to whether those codes exist.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     // Complaint-type labels moved off the legacy SERVICEDEFS.* namespace to
     // key-based COMPLAINT_HIERARCHY.<categoryCode> (seeded for every node).
-    const codes = [
-      'COMPLAINT_HIERARCHY.ADMINISTRATION',
-      'COMPLAINT_HIERARCHY.WATERRELATED',
-      'COMPLAINT_HIERARCHY.LANDRATES',
-      'COMPLAINT_HIERARCHY.MOBILITYANDWORKS',
-      'COMPLAINT_HIERARCHY.FINANCEANDREVENUE',
-    ];
-    for (const locale of ['en_IN', 'sw_KE']) {
-      const r = await fetch(
-        `${LOC_SEARCH}?codes=${codes.join(',')}&tenantId=${ROOT_TENANT}&locale=${locale}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-        },
-      );
-      const json = await r.json();
-      const messages: Array<{ code: string; message: string }> = json.messages ?? [];
+    //
+    // The category codes are read from THIS deployment's own hierarchy, not
+    // pinned to Kenya's rollout. The previous list (ADMINISTRATION, WATERRELATED,
+    // LANDRATES, MOBILITYANDWORKS, FINANCEANDREVENUE) exists only on ke, so on any
+    // other tenant this failed on the very first locale — and the since-removed
+    // `swKeSeeded()` guard could not have saved it, because it probed whether the
+    // sw_KE LOCALE had rows, which is unrelated to whether the Kenya HIERARCHY exists.
+    const codes = await categoryCodes();
+    test.skip(
+      codes.length === 0,
+      'deployment has no interior ComplaintHierarchy nodes to label',
+    );
+    // Only assert locales this deployment actually advertises — asserting sw_KE
+    // on a non-Kenya tenant is the same pinning mistake in a different field.
+    for (const locale of LOCALES) {
+      // Codes go in the query string, so request them in chunks — a deployment
+      // with a broad hierarchy would otherwise exceed nginx's request-line limit
+      // and get back an HTML 414 that fails as an opaque JSON parse error.
+      const messages: Array<{ code: string; message: string }> = [];
+      for (let i = 0; i < codes.length; i += 40) {
+        const chunk = codes.slice(i, i + 40);
+        const r = await fetch(
+          `${LOC_SEARCH}?codes=${chunk.join(',')}&tenantId=${ROOT_TENANT}&locale=${locale}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+          },
+        );
+        expect(r.ok, `localization _search failed for ${locale} (HTTP ${r.status})`).toBeTruthy();
+        const json = await r.json();
+        messages.push(...((json.messages ?? []) as Array<{ code: string; message: string }>));
+      }
       for (const code of codes) {
         const row = messages.find((m) => m.code === code);
         expect(row, `${code} missing in ${locale}`).toBeTruthy();
@@ -305,60 +395,85 @@ Tests 5 representative codes across the 19 category (parentCode) values — fewe
   });
 });
 
-// Tier-3 / deployment-pinned: sw_KE rows are seeded by the CCRS Kenya
-// rollout. TODO(Phase 7): skip-when-locale-not-seeded guard (see CCRS#42
-// describe block above).
+/**
+ * Row count for `module=rainmaker-common` at a given locale on this deployment.
+ * Local to this block so the two tests below bracket the same regression from
+ * the same read.
+ */
+async function commonRowCount(locale: string): Promise<number> {
+  const r = await fetch(
+    `${LOC_SEARCH}?module=rainmaker-common&locale=${encodeURIComponent(locale)}&tenantId=${ROOT_TENANT}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+    },
+  );
+  const json = await r.json();
+  return (json.messages ?? []).length;
+}
+
+/**
+ * The mangle CCRS#44 produced: `getLocale`/`updateResources` appended a
+ * hardcoded `IN` region to whatever locale was already region-qualified, turning
+ * `sw_KE` into `sw_KEIN`. The suffix is India's regardless of the locale, so the
+ * same bug turns `en_IN` into `en_ININ` — which is what makes this checkable on
+ * a single-locale Indian deployment too, rather than only on Kenya.
+ */
+const mangleLocale = (locale: string) => `${locale}IN`;
+
 test.describe('CCRS#44 — locale region-append regression', () => {
-  test('API: rainmaker-common sw_KE search returns rows (not the broken sw_KEIN)', {
+  test('API: every locale this deployment advertises resolves rainmaker-common rows', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#44 (locale region-append regression): the UI's getLocale/updateResources used to mangle 'sw_KE' into 'sw_KEIN', and the broken locale returned 0 messages — every Swahili UI string fell back to en_IN. Post-fix the locale stays clean.
+      description: `Catches CCRS#44 (locale region-append regression): the UI's getLocale/updateResources used to append a hardcoded 'IN' region, mangling 'sw_KE' into 'sw_KEIN'; the broken locale returned 0 messages, so every string in that language silently fell back to en_IN.
+
+Asserted against the locales the deployment ITSELF advertises (profile-discovered, LOCALES) rather than the hardcoded sw_KE this used to pin. Pinning sw_KE meant the test self-skipped on every non-Kenya deployment — including \`pg\`, where the identical bug would mangle en_IN into en_ININ and break the only language the tenant has.
 
 Steps:
-1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KE&tenantId=ke.
-2. Read response.messages.
-3. Assert messages.length > 100.
-
-Threshold of 100 is far above the empty-result case but below any realistic message count, so it cleanly distinguishes "broken" from "working".`,
+1. For each locale in LOCALES, POST /localization/messages/v1/_search?module=rainmaker-common&locale=<locale>&tenantId=<root>.
+2. Assert every advertised locale returns at least one row — a locale the deployment advertises but cannot resolve is the post-mangle symptom.
+3. Assert the richest advertised locale returns > 100 rows: far above the empty-result case, below any realistic count, so it cleanly separates "broken" from "working" without assuming how big the module is.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    const r = await fetch(
-      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-      },
-    );
-    const json = await r.json();
-    const messages = json.messages ?? [];
-    // Pre-fix the UI sent `?locale=sw_KEIN` and got 0; even if the
-    // server were asked directly for sw_KEIN it would also return 0.
-    expect(messages.length).toBeGreaterThan(100);
+    const counts: Record<string, number> = {};
+    for (const locale of LOCALES) counts[locale] = await commonRowCount(locale);
+
+    for (const locale of LOCALES) {
+      expect(
+        counts[locale],
+        `${locale} is advertised by this deployment but resolves 0 rainmaker-common rows: ${JSON.stringify(counts)}`,
+      ).toBeGreaterThan(0);
+    }
+    // Threshold applied to the richest locale only. Every advertised locale is
+    // already within 25% of the richest (that is discoverLocales' own floor), so
+    // a per-locale >100 would be asserting the seed's absolute size rather than
+    // the regression — and would fail on a legitimately sparse secondary language.
+    expect(
+      Math.max(...Object.values(counts)),
+      `no advertised locale carries a real rainmaker-common bundle: ${JSON.stringify(counts)}`,
+    ).toBeGreaterThan(100);
   });
 
-  test('API: rainmaker-common sw_KEIN (the buggy mangle) is empty — proves the dataset itself is clean', {
+  test('API: the region-appended mangle of each advertised locale is empty — proves the dataset itself is clean', {
     annotation: {
       type: 'description',
-      description: `Companion test to the sw_KE check: confirms the buggy locale 'sw_KEIN' (what the UI used to send pre-fix) returns 0 rows. Proves the dataset itself doesn't contain mangled rows — pre-fix the bug was strictly client-side, not a stale upload.
+      description: `Companion to the test above: confirms the mangled locale the UI used to send pre-fix ('<locale>' + 'IN' — sw_KE -> sw_KEIN, en_IN -> en_ININ) returns 0 rows. Proves the dataset itself contains no mangled rows, i.e. pre-fix the bug was strictly client-side rather than a stale upload — and that the mangle is genuinely destructive, which is what made the regression invisible as anything but "everything is in English".
 
 Steps:
-1. POST /localization/messages/v1/_search?module=rainmaker-common&locale=sw_KEIN&tenantId=ke.
-2. Assert response.messages array has length === 0.
+1. For each locale in LOCALES, POST /localization/messages/v1/_search with locale=<locale>IN.
+2. Assert each returns exactly 0 messages.
 
-Pairs with the sw_KE test to bracket the regression — sw_KE must work, sw_KEIN must be empty.`,
+Pairs with the test above to bracket the regression: the clean locale must resolve, the mangled one must not.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    const r = await fetch(
-      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KEIN&tenantId=${ROOT_TENANT}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
-      },
-    );
-    const json = await r.json();
-    expect(json.messages ?? []).toHaveLength(0);
+    for (const locale of LOCALES) {
+      const mangled = mangleLocale(locale);
+      expect(
+        await commonRowCount(mangled),
+        `${mangled} must resolve nothing — a row set here would mean the mangled locale was actually uploaded`,
+      ).toBe(0);
+    }
   });
 });
 

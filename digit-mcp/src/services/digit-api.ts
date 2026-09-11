@@ -27,6 +27,12 @@ class DigitApiClient {
   private stateTenantOverride: string | null = null;
   private authToken: string | null = null;
   private userInfo: UserInfo | null = null;
+  // The password the current session logged in with (in-memory only, never
+  // logged or serialized to disk). Provisioning flows (tenant_bootstrap's
+  // admin user) need it so the admin they create on a new tenant carries the
+  // operator's actual credentials — falling back to CRS_PASSWORD provisions a
+  // user the operator cannot log in as when they moved off the default.
+  private loginPassword: string | null = null;
 
   constructor() {
     this.environment = getEnvironment();
@@ -44,6 +50,7 @@ class DigitApiClient {
     this.stateTenantOverride = null;
     this.authToken = null;
     this.userInfo = null;
+    this.loginPassword = null;
   }
 
   setStateTenant(tenantId: string): void {
@@ -68,10 +75,17 @@ class DigitApiClient {
     this.stateTenantOverride = null;
     this.authToken = null;
     this.userInfo = null;
+    this.loginPassword = null;
   }
 
   isAuthenticated(): boolean {
     return this.authToken !== null;
+  }
+
+  /** Password of the current session's login, when known (null for
+   *  token-only auth). In-memory only — callers must never log it. */
+  getLoginPassword(): string | null {
+    return this.loginPassword;
   }
 
   getAuthInfo(): { authenticated: boolean; user: UserInfo | null; stateTenantId: string; token: string | null } {
@@ -89,18 +103,20 @@ class DigitApiClient {
    * Combined with a single-flight mutex this is safe even though the
    * underlying client is a process-level singleton.
    */
-  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null } {
+  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null } {
     return {
       token: this.authToken,
       user: this.userInfo,
       stateTenantOverride: this.stateTenantOverride,
+      loginPassword: this.loginPassword,
     };
   }
 
-  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null }): void {
+  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null }): void {
     this.authToken = snap.token;
     this.userInfo = snap.user;
     this.stateTenantOverride = snap.stateTenantOverride;
+    this.loginPassword = snap.loginPassword ?? null;
   }
 
   /**
@@ -112,6 +128,8 @@ class DigitApiClient {
     this.authToken = token;
     this.userInfo = user;
     this.stateTenantOverride = stateTenantOverride;
+    // Token came from upstream — the password is unknown here.
+    this.loginPassword = null;
   }
 
   // Resolve endpoint path, applying environment overrides if present
@@ -164,6 +182,7 @@ class DigitApiClient {
     const data = await response.json() as { access_token: string; UserRequest: UserInfo };
     this.authToken = data.access_token;
     this.userInfo = data.UserRequest;
+    this.loginPassword = password;
 
     // Auto-detect state tenant from login tenant ID
     // e.g. "statea.f" → "statea", "pg.citya" → "pg", "pg" → "pg"
@@ -342,6 +361,17 @@ class DigitApiClient {
     });
 
     return data.mdms || [];
+  }
+
+  // MDMS v2 Count — used to cross-check that pagination in mdmsV2SearchRaw
+  // callers collected every row for a schema, independent of page-ordering.
+  async mdmsV2Count(tenantId: string, schemaCode: string): Promise<number> {
+    const data = await this.request<{ totalCount?: number }>(this.endpoint('MDMS_COUNT'), {
+      RequestInfo: this.buildRequestInfo(),
+      MdmsCriteria: { tenantId, schemaCode },
+    });
+
+    return data.totalCount ?? 0;
   }
 
   // MDMS v2 Create
@@ -894,25 +924,64 @@ class DigitApiClient {
     return data.idResponses || [];
   }
 
-  // Location — search boundaries via egov-location service
+  // Location — boundary search.
+  // The legacy /egov-location boundarys API is not served on the Kubernetes stack
+  // (only the compose stack fakes it via a Kong adapter). We call the modern
+  // /boundary-service/boundary-relationships API and reshape its response back into
+  // the legacy TenantBoundary shape (mirroring the compose Kong adapter) so the
+  // location_search tool returns the same structure on both stacks. Like the Kong
+  // adapter, the legacy boundaryType filter is dropped — the full tree is returned.
   async locationBoundarySearch(
     tenantId: string,
     boundaryType?: string,
     hierarchyType?: string
   ): Promise<Record<string, unknown>[]> {
-    const body: Record<string, unknown> = {
-      RequestInfo: this.buildRequestInfo(),
-      tenantId,
-    };
-    if (boundaryType) body.boundaryType = boundaryType;
-    if (hierarchyType) body.hierarchyType = hierarchyType;
+    const hier = hierarchyType || 'ADMIN';
+    const params = new URLSearchParams({ tenantId, hierarchyType: hier, includeChildren: 'true' });
 
     const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
-      this.endpoint('LOCATION_BOUNDARY_SEARCH'),
-      body
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${params.toString()}`,
+      { RequestInfo: this.buildRequestInfo() }
     );
 
-    return data.TenantBoundary || [];
+    return this.reshapeTenantBoundary(data.TenantBoundary || [], hier);
+  }
+
+  // Reshape a boundary-relationships TenantBoundary tree into the legacy
+  // egov-location shape (mirrors the compose Kong adapter): wrap the hierarchyType
+  // string into { code, name }; recursively add name/localname/label to each
+  // boundary node and normalize missing/empty children to [].
+  private reshapeTenantBoundary(
+    tenantBoundaries: Record<string, unknown>[],
+    hierarchyType: string
+  ): Record<string, unknown>[] {
+    const enrich = (nodes: Record<string, unknown>[]): void => {
+      for (const node of nodes) {
+        if (!node.name) node.name = node.code;
+        if (!node.localname) node.localname = node.code;
+        if (!node.label) node.label = node.boundaryType || '';
+        const children = node.children;
+        if (!Array.isArray(children) || children.length === 0) {
+          node.children = [];
+        } else {
+          enrich(children as Record<string, unknown>[]);
+        }
+      }
+    };
+    for (const tb of tenantBoundaries) {
+      if (typeof tb.hierarchyType === 'string') {
+        tb.hierarchyType = { code: tb.hierarchyType, name: tb.hierarchyType };
+      } else if (tb.hierarchyType == null) {
+        tb.hierarchyType = { code: hierarchyType, name: hierarchyType };
+      }
+      const boundary = tb.boundary;
+      if (!Array.isArray(boundary) || boundary.length === 0) {
+        tb.boundary = [];
+      } else {
+        enrich(boundary as Record<string, unknown>[]);
+      }
+    }
+    return tenantBoundaries;
   }
 
   // Encryption — encrypt values (no RequestInfo needed)
@@ -941,6 +1010,31 @@ class DigitApiClient {
 
     const data = await response.json();
     return Array.isArray(data) ? data : [];
+  }
+
+  // Encryption — register a tenant with egov-enc-service (no RequestInfo needed).
+  // egov-enc-service discovers tenants via an MDMS search scoped to its own
+  // STATE_LEVEL_TENANT_ID env var, so a brand-new tenant root is invisible to
+  // it until this is called — every encrypt/decrypt for that tenant (e.g. the
+  // ADMIN user creation below) otherwise fails with "Tenant Id not found".
+  // Idempotent: returns created:false when a key already exists.
+  async generateEncKey(tenantId: string): Promise<boolean> {
+    const url = `${this.environment.url}${this.endpoint('ENC_GENERATE_KEY')}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { apiId: 'Citizen', ver: '.01', ts: null },
+        tenantId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`enc-service key generation failed for "${tenantId}": HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return !!(data as { created?: boolean }).created;
   }
 
   // Decryption — decrypt encrypted values (no RequestInfo needed)

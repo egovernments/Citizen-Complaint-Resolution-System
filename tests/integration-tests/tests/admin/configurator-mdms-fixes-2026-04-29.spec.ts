@@ -2,7 +2,7 @@
 // tests where we can — the configurator just shells out to mdms-v2 with
 // the same payload shape we're checking here.
 import { test, expect } from '@playwright/test';
-import { loginEmployee, mdmsCreate, mdmsSearch, mdmsUpdate } from '../utils/launch-fixes/api.js';
+import { loginEmployee, mdmsCreate, mdmsUpdate } from '../utils/launch-fixes/api.js';
 import { TENANT, ROOT_TENANT, BASE_URL } from '../utils/env';
 
 test.describe('01-configurator-mdms: Department CRUD (#472 + follow-ups)', () => {
@@ -73,37 +73,57 @@ Teardown is API-only because there's no UI flow inside this spec — it's pure M
 
 Steps:
 1. Log in as the test employee.
-2. mdmsSearch for common-masters.Department; pick the first isActive record.
+2. mdmsCreate a fresh, self-owned active common-masters.Department record (uid DEPT_PW_LEAK_<ts>).
 3. Build a polluted record: spread existing + add data.id, _isActive, _uniqueIdentifier, _auditDetails, _schemaCode, _mdmsId.
 4. mdmsUpdate with the polluted record.
 5. Read response.Errors codes; assert at least one starts with 'INVALID_REQUEST_ADDITIONALPROPERTIES'.
+6. finally: soft-delete the seeded record (isActive=false + mdmsUpdate).
 
-Test relies on at least one active Department existing on the deployment — assert is on existing being truthy.`,
+Hermetic: self-seeds its own active Department record rather than fishing one out of the tenant, so it doesn't depend on any pre-existing active row (deployments with no active common-masters.Department — e.g. bomet's ke — used to fail here with "existing" undefined).`,
     },
     tag: ['@area:configurator-manage', '@area:mdms-schema', '@ccrs:472', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     // Reproduces what the old dataProvider was sending. PR #40 strips
     // these client-side; this test guards against a regression that
     // re-introduces the leak (or a future change to the configurator's
     // form payload that includes new `_*` fields).
+    //
+    // B4: self-seed the record we pollute-update instead of fishing an
+    // active Department out of the tenant — some deployments (bomet's ke)
+    // have no active common-masters.Department, which used to fail this
+    // test with "existing" undefined. Soft-delete in `finally` so the
+    // probe record doesn't linger.
     const auth = await loginEmployee();
-    const search = await mdmsSearch(auth, TENANT, 'common-masters.Department');
-    const existing = search.mdms?.find((r: any) => r.isActive);
+    const uid = `DEPT_PW_LEAK_${Date.now()}`;
+    const seeded = await mdmsCreate(auth, 'common-masters.Department', {
+      tenantId: TENANT,
+      schemaCode: 'common-masters.Department',
+      uniqueIdentifier: uid,
+      isActive: true,
+      data: { code: uid, name: 'pw leak probe', active: true },
+    });
+    expect(seeded.Errors).toBeUndefined();
+    const existing = seeded.mdms?.[0];
     expect(existing).toBeTruthy();
-    const polluted = {
-      ...existing,
-      data: {
-        ...existing.data,
-        id: existing.id,
-        _isActive: existing.isActive,
-        _uniqueIdentifier: existing.uniqueIdentifier,
-        _auditDetails: existing.auditDetails,
-        _schemaCode: existing.schemaCode,
-        _mdmsId: existing.id,
-      },
-    };
-    const r = await mdmsUpdate(auth, 'common-masters.Department', polluted);
-    const codes = (r.Errors ?? []).map((e: any) => e.code);
-    expect(codes.some((c: string) => c?.startsWith('INVALID_REQUEST_ADDITIONALPROPERTIES'))).toBe(true);
+    try {
+      const polluted = {
+        ...existing,
+        data: {
+          ...existing.data,
+          id: existing.id,
+          _isActive: existing.isActive,
+          _uniqueIdentifier: existing.uniqueIdentifier,
+          _auditDetails: existing.auditDetails,
+          _schemaCode: existing.schemaCode,
+          _mdmsId: existing.id,
+        },
+      };
+      const r = await mdmsUpdate(auth, 'common-masters.Department', polluted);
+      const codes = (r.Errors ?? []).map((e: any) => e.code);
+      expect(codes.some((c: string) => c?.startsWith('INVALID_REQUEST_ADDITIONALPROPERTIES'))).toBe(true);
+    } finally {
+      const m = { ...existing, isActive: false };
+      await mdmsUpdate(auth, 'common-masters.Department', m);
+    }
   });
 });
 

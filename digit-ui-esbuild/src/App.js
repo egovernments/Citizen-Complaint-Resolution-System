@@ -4,6 +4,7 @@ import { UICustomizations } from "./Customisations/UICustomizations";
 import { initUtilitiesComponents } from "@egovernments/digit-ui-module-utilities";
 import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-pgr";
 import { Loader } from "@egovernments/digit-ui-components";
+import { initDashboardComponents } from "../products/dashboard/Module";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
 window.globalPath = window.contextPath;
@@ -22,6 +23,7 @@ const DigitUI = React.lazy(() =>
 const enabledModules = [
   "Utilities",
   "PGR",
+  "Dashboard",
 ];
 
 initLibraries().then(() => {
@@ -41,6 +43,7 @@ const initDigitUI = () => {
 
   initUtilitiesComponents();
   initPGRComponents();
+  initDashboardComponents();
 };
 
 function App() {
@@ -53,6 +56,7 @@ function App() {
   if (!stateCode) {
     return <h1>stateCode is not defined</h1>;
   }
+
   return (
     <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
       <DigitUI

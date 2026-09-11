@@ -2,6 +2,7 @@ package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
+import org.egov.pgr.policy.PgrSearchScope;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -19,9 +20,9 @@ import java.util.stream.Collectors;
 @Component
 public class AnalyticsPlanner {
 
-    private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");           // UTC+3
     private static final Pattern ALIAS = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]{0,63}$");
     private static final Set<String> BUCKETS = new HashSet<>(Arrays.asList("day","week","month","quarter","year"));
+    private static final Pattern LAST_N_DAYS = Pattern.compile("^last_(\\d+)d$");
     private static final int MAX_LIMIT = 1000;
 
     private final AnalyticsCatalog catalog;
@@ -35,7 +36,7 @@ public class AnalyticsPlanner {
         }
     }
 
-    public Planned plan(JsonNode q, AnalyticsScope scope){
+    public Planned plan(JsonNode q, PgrSearchScope scope, BusinessCalendar calendar){
         String grainName = q.hasNonNull("grain") ? q.get("grain").asText() : inferGrain(q);
         Grain g = catalog.grain(grainName);
         if (g == null) throw new IllegalArgumentException("unknown_grain: " + grainName);
@@ -55,6 +56,17 @@ public class AnalyticsPlanner {
 
         // ---- dimensions ----
         if (q.has("dimensions")) for (JsonNode d : q.get("dimensions")) {
+            if (d.isObject()) {
+                // #1111/R1: the ONLY object dimension the grammar accepts is the composer-emitted
+                // hierarchy-level marker (nonce-gated; unreachable from request/MDMS JSON). It is
+                // aliased AS service_code so viz/sort/columns keep working unchanged, and grouped
+                // by ordinal below, so an expression dimension is safe.
+                String expr = hierLevelDimExpr(d, grainName);
+                selectExprs.add(expr + " AS service_code");
+                groupExprs.add(expr);
+                columns.add("service_code");
+                continue;
+            }
             String col = d.asText();
             if (!g.groupable.contains(col)) throw new IllegalArgumentException("unknown_column: dimension '" + col + "' not groupable on " + grainName);
             selectExprs.add(col + " AS " + col);
@@ -65,9 +77,13 @@ public class AnalyticsPlanner {
         if (window != null && window.hasNonNull("timeBucket")) {
             String unit = window.get("timeBucket").asText();
             if (!BUCKETS.contains(unit)) throw new IllegalArgumentException("invalid_param: timeBucket '" + unit + "'");
+            // The resolved tenant zone rides a JDBC-bound param (never string-concatenated) — the
+            // value is already ZoneId.of-validated by KpiCatalogService.resolveTimeZone, but binding
+            // it keeps this expression safe even if that validation is ever bypassed.
             String expr = g.isEpochMs(timeCol)
-                ? "date_trunc('" + unit + "', to_timestamp(" + timeCol + "/1000) AT TIME ZONE 'Etc/GMT-3')::date"
+                ? "date_trunc('" + unit + "', to_timestamp(" + timeCol + "/1000) AT TIME ZONE ?::text)::date"
                 : "date_trunc('" + unit + "', " + timeCol + ")::date";
+            if (g.isEpochMs(timeCol)) selectParams.add(calendar.zoneId.getId());
             String alias = "bucket";
             selectExprs.add(expr + " AS " + alias);
             groupExprs.add(expr);
@@ -95,7 +111,7 @@ public class AnalyticsPlanner {
                 conj.add(predicate(g, e.getKey(), e.getValue(), whereParams));
             }
         }
-        applyWindow(window, g, timeCol, conj, whereParams);
+        applyWindow(window, g, timeCol, conj, whereParams, calendar);
         applyScope(scope, g, conj, whereParams);
 
         // ---- assemble ----
@@ -114,6 +130,31 @@ public class AnalyticsPlanner {
         List<Object> params = new ArrayList<>(selectParams);   // SELECT params precede WHERE params
         params.addAll(whereParams);
         return new Planned(sb.toString(), params, columns, grainName);
+    }
+
+    // ---------- #1111: hierarchy-level derived dimension (composer-internal) ----------
+
+    /**
+     * Validate a composer-emitted hierarchy-level dimension marker and return the fixed SQL
+     * expression from {@link AnalyticsCatalog#hierLevelExpr}. Rejects any object dimension whose
+     * {@code __token} is not this JVM's {@link AnalyticsCatalog#HIER_DIM_TOKEN} — external JSON
+     * (inline queries, MDMS defs) can never carry the nonce, so object dimensions remain outside
+     * the public grammar. The level must strictly parse to an int in 1..{@code MAX_HIER_LEVEL};
+     * it is interpolated by the catalog as a bare int, never string-concatenated raw input.
+     */
+    private String hierLevelDimExpr(JsonNode d, String grainName){
+        String token = d.path(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD).asText(null);
+        if (!AnalyticsCatalog.HIER_DIM_TOKEN.equals(token))
+            throw new IllegalArgumentException("unknown_column: object dimensions are not part of the query grammar");
+        JsonNode lvl = d.get(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD);
+        int level;
+        try {
+            level = Integer.parseInt(lvl == null ? "" : lvl.asText());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "invalid_param: hierLevel must be an integer in 1.." + AnalyticsCatalog.MAX_HIER_LEVEL);
+        }
+        return catalog.hierLevelExpr(grainName, level);
     }
 
     // ---------- measures ----------
@@ -172,14 +213,46 @@ public class AnalyticsPlanner {
 
     // ---------- predicates (filterable whitelist + bound params) ----------
     private String predicate(Grain g, String colKey, JsonNode spec, List<Object> params){
-        if (!g.filterable.contains(colKey))
+        // #1079: a column may be plain-filterable, prefix-filterable (starts_with only), or both.
+        boolean plainFilterable  = g.filterable.contains(colKey);
+        boolean prefixFilterable = g.prefixFilterable.contains(colKey);
+        if (!plainFilterable && !prefixFilterable)
             throw new IllegalArgumentException("op_not_allowed: column '" + colKey + "' is not filterable on " + g.name);
-        if (!spec.isObject()) { params.add(value(spec)); return colKey + " = ?"; }      // shorthand: eq
+        if (!spec.isObject()) {
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
+            params.add(value(spec)); return colKey + " = ?";      // shorthand: eq
+        }
         List<String> parts = new ArrayList<>();
         Iterator<Map.Entry<String,JsonNode>> it = spec.fields();
         while (it.hasNext()) {
             Map.Entry<String,JsonNode> e = it.next();
             String op = e.getKey(); JsonNode v = e.getValue();
+            // #1079: starts_with is ONLY valid on the per-column prefix allowlist (materialized
+            // paths); every other op needs plain filterability. Both rejections are explicit.
+            if ("starts_with".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'starts_with' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(escapeLike(v.asText()));
+                parts.add(colKey + " LIKE ? || '%'");
+                continue;
+            }
+            // subtree: delimiter-guarded subtree membership on a materialized dot-path column —
+            // the node itself OR any dot-descendant. Unlike a bare starts_with, the '.' guard
+            // prevents sibling-prefix collisions ('PGR' must not match 'PGRX.…'), and the eq arm
+            // keeps mixed interior+serviceable nodes (a complaint filed AT the node) in the
+            // subtree. Same allowlist as starts_with (prefix-filterable path columns only), same
+            // bound-param + LIKE-escape mechanics.
+            if ("subtree".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'subtree' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(v.asText());
+                params.add(escapeLike(v.asText()));
+                parts.add("(" + colKey + " = ? OR " + colKey + " LIKE ? || '.%')");
+                continue;
+            }
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
             switch (op) {
                 case "eq":  params.add(value(v)); parts.add(colKey + " = ?"); break;
                 case "ne":  params.add(value(v)); parts.add(colKey + " <> ?"); break;
@@ -201,6 +274,11 @@ public class AnalyticsPlanner {
         return parts.size()==1 ? parts.get(0) : "(" + String.join(" AND ", parts) + ")";
     }
 
+    /** Escape LIKE metacharacters (backslash default escape) so a starts_with value is a literal prefix. */
+    private String escapeLike(String s){
+        return s.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
+    }
+
     private Object value(JsonNode v){
         if (v.isBoolean()) return v.asBoolean();
         if (v.isInt() || v.isLong()) return v.asLong();
@@ -209,7 +287,37 @@ public class AnalyticsPlanner {
     }
 
     // ---------- window ----------
-    private void applyWindow(JsonNode window, Grain g, String timeCol, List<String> conj, List<Object> params){
+
+    /**
+     * Resolve a named window to its inclusive start instant (epoch-ms) in {@code zone}. Every window
+     * ends at {@code now}, so the name alone fixes the interval {@code [start, now)}.
+     *
+     * <p>Returns {@code null} for the boundless names ({@code all}) and for {@code live}, which is a
+     * state predicate rather than a time interval — callers handle those before asking.
+     *
+     * <p>Shared with {@link KpiQueryComposer}, which needs the same start instant to decide whether a
+     * pinned window overlaps the dashboard's selected date range. Keeping one implementation means a
+     * window can never mean one thing when planned and another when range-checked.
+     */
+    static Long windowStartMs(String name, long now, ZoneId zone){
+        if (name == null || name.equals("all") || name.equals("live")) return null;
+        ZonedDateTime nowZ = Instant.ofEpochMilli(now).atZone(zone);
+        java.util.regex.Matcher lastN = LAST_N_DAYS.matcher(name);
+        if (lastN.matches()) return now - Long.parseLong(lastN.group(1)) * 86400000L;
+        switch (name) {
+            // dtd — day-to-date: the CALENDAR day in the resolved zone, i.e. "today". Distinct from
+            // last_1d, which is a rolling 24h and drifts across midnight (#1462).
+            case "dtd": return nowZ.toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "wtd": return nowZ.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "mtd": return nowZ.withDayOfMonth(1).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            case "qtd": return nowZ.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L).atStartOfDay(zone).toInstant().toEpochMilli();
+            case "ytd": return nowZ.withDayOfYear(1).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli();
+            default: throw new IllegalArgumentException("invalid_param: unknown window '" + name + "'");
+        }
+    }
+
+    private void applyWindow(JsonNode window, Grain g, String timeCol, List<String> conj, List<Object> params,
+                             BusinessCalendar calendar){
         if (window == null || !window.hasNonNull("name")) return;
         String name = window.get("name").asText();
         if (name.equals("all")) return;
@@ -217,56 +325,85 @@ public class AnalyticsPlanner {
             if (g.filterable.contains("is_open")) conj.add("is_open = ?"); else return;
             params.add(true); return;
         }
-        long now = System.currentTimeMillis();
-        ZonedDateTime nowEat = Instant.ofEpochMilli(now).atZone(EAT);
-        Long fromMs;
-        java.util.regex.Matcher lastN = Pattern.compile("^last_(\\d+)d$").matcher(name);
-        if (lastN.matches()) {
-            fromMs = now - Long.parseLong(lastN.group(1)) * 86400000L;
-        } else switch (name) {
-            case "wtd": fromMs = nowEat.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            case "mtd": fromMs = nowEat.withDayOfMonth(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            case "qtd": { LocalDate d = nowEat.toLocalDate().with(IsoFields.DAY_OF_QUARTER, 1L); fromMs = d.atStartOfDay(EAT).toInstant().toEpochMilli(); break; }
-            case "ytd": fromMs = nowEat.withDayOfYear(1).toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli(); break;
-            default: throw new IllegalArgumentException("invalid_param: unknown window '" + name + "'");
-        }
+        long now = calendar.nowMs;
+        Long fromMs = windowStartMs(name, now, calendar.zoneId);
+        if (fromMs == null) return;
         if (g.isEpochMs(timeCol)) {
             conj.add(timeCol + " >= ?"); params.add(fromMs);
             conj.add(timeCol + " < ?");  params.add(now);
         } else { // sql date column (daily.snapshot_date)
-            conj.add(timeCol + " >= ?"); params.add(java.sql.Date.valueOf(Instant.ofEpochMilli(fromMs).atZone(EAT).toLocalDate()));
+            conj.add(timeCol + " >= ?"); params.add(java.sql.Date.valueOf(Instant.ofEpochMilli(fromMs).atZone(calendar.zoneId).toLocalDate()));
         }
     }
 
-    // ---------- RBAC scope (server-injected) ----------
-    private void applyScope(AnalyticsScope scope, Grain g, List<String> conj, List<Object> params){
+    // ---------- row scope (authored on action 2008, resolved by the ABAC engine) ----------
+
+    /**
+     * Turns the policy-resolved scope into WHERE predicates. Every value is a bind parameter.
+     *
+     * <p>An axis the caller is restricted on but the grain cannot express is a hard failure, not a
+     * dropped predicate — the events and daily grains lack some of these columns, and quietly
+     * omitting the constraint is how a department-scoped user reads every department.
+     */
+    private void applyScope(PgrSearchScope scope, Grain g, List<String> conj, List<Object> params){
         if (scope.tenantId != null) {
-            if (scope.tenantStateLevel) { conj.add(g.tenantColumn + " LIKE ?"); params.add(scope.tenantId + "%"); }
+            if (scope.tenantStateLevel) {
+                // The tenant itself, plus everything under a '.' beneath it. A bare prefix LIKE
+                // also matches a sibling whose id merely starts the same way — `ke` matching
+                // `kenya` — which is a cross-tenant read.
+                conj.add("(" + g.tenantColumn + " = ? OR " + g.tenantColumn + " LIKE ?)");
+                params.add(scope.tenantId);
+                params.add(escapeLikeLiteral(scope.tenantId) + ".%");
+            }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
-        // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
-        // must NOT have the constraint silently dropped (that leaked cross-department / cross-citizen
-        // data on the events & daily grains, which lack these columns). Reject instead.
+
         if (scope.citizenUuid != null) {
             if (g.citizenColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce citizen self-scope");
             conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid);
         }
-        if (scope.boundaryPrefix != null) {
-            if (g.boundaryColumn == null)
-                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
-            conj.add(g.boundaryColumn + " LIKE ?");
-            params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
-        }
-        // department scope: restrict to the union of the principal's HRMS assignment departments.
-        // NULL department_code rows won't match an IN list → correctly excluded.
-        if (scope.departmentCodes != null && !scope.departmentCodes.isEmpty()) {
+
+        // null = the axis is unrestricted. A non-null EMPTY list is the engine's deny-all sentinel
+        // and must select nothing — dropping the predicate because the list is empty would turn
+        // the most restrictive scope there is into no scope at all.
+        if (scope.departmentCodes != null) {
             if (g.departmentColumn == null)
                 throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce department scope");
-            String placeholders = scope.departmentCodes.stream().map(x -> "?").collect(Collectors.joining(", "));
-            conj.add(g.departmentColumn + " IN (" + placeholders + ")");
-            params.addAll(scope.departmentCodes);
+            if (scope.departmentCodes.isEmpty()) {
+                conj.add("1 = 0");
+            } else {
+                // A NULL department_code never matches an IN list, so unclassified rows stay out.
+                conj.add(g.departmentColumn + " IN (" + placeholders(scope.departmentCodes.size()) + ")");
+                params.addAll(scope.departmentCodes);
+            }
         }
+
+        if (scope.jurisdictionCodes != null) {
+            if (g.boundaryColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
+            if (scope.jurisdictionCodes.isEmpty()) {
+                conj.add("1 = 0");
+            } else {
+                // PGR search matches a complaint's locality exactly. Analytics carries the whole
+                // ancestor chain in boundary_path, '|'-joined, so the equivalent test is "is this
+                // jurisdiction one of the path's SEGMENTS" — which also makes it delimiter-safe by
+                // construction. A prefix LIKE would let WARD_1 swallow WARD_10, and a substring
+                // match would let it swallow anything merely containing it.
+                conj.add("EXISTS (SELECT 1 FROM unnest(string_to_array(" + g.boundaryColumn
+                        + ", '|')) AS seg WHERE seg IN (" + placeholders(scope.jurisdictionCodes.size()) + "))");
+                params.addAll(scope.jurisdictionCodes);
+            }
+        }
+    }
+
+    private static String placeholders(int count) {
+        return String.join(", ", Collections.nCopies(count, "?"));
+    }
+
+    /** Escape server-derived text before appending a SQL LIKE wildcard. */
+    static String escapeLikeLiteral(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     // ---------- sort ----------

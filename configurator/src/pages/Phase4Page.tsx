@@ -86,6 +86,12 @@ export default function Phase4Page() {
   const [createdCount, setCreatedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
+  // Per-row failure reasons. The loop below creates employees one at a time and
+  // keeps going past a failure, so the enclosing try/catch never sees those
+  // errors — without this the complete screen could only say "0 created, 1
+  // failed" and the actual API message (e.g. "Unknown error occurred in
+  // encryption process") was console-only.
+  const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
 
   useEffect(() => {
     async function fetchReferenceData() {
@@ -255,9 +261,11 @@ export default function Phase4Page() {
         }
       }
 
-      // Validate DOB (parser guarantees string, but double-check here)
-      if (!emp.dob || !/^\d{4}-\d{2}-\d{2}$/.test(emp.dob)) {
-        errors.push('Date of birth missing or malformed (expected YYYY-MM-DD)');
+      // DOB is optional (egovernments/CCRS#1949) — only a filled-in value has
+      // to be well-formed. The parser already normalizes every supported cell
+      // shape to YYYY-MM-DD, so this stays a defensive double-check.
+      if (emp.dob && !/^\d{4}-\d{2}-\d{2}$/.test(emp.dob)) {
+        errors.push('Date of birth malformed (expected YYYY-MM-DD)');
       }
 
       return {
@@ -275,6 +283,7 @@ export default function Phase4Page() {
     setProgress(0);
     setCreatedCount(0);
     setFailedCount(0);
+    setFailures([]);
     setCreatedEmployees([]);
 
     const validEmployees = employees.filter((e) => e.status === 'valid');
@@ -337,7 +346,7 @@ export default function Phase4Page() {
             mobileNumber: emp.mobileNumber,
             emailId: emp.emailId,
             gender: emp.gender,
-            dob: new Date(emp.dob).getTime(),
+            dob: emp.dob ? new Date(emp.dob).getTime() : undefined,
             department: emp.department,
             designation: emp.designation,
             roles: empRoles,
@@ -353,6 +362,15 @@ export default function Phase4Page() {
           setCreatedCount((prev) => prev + 1);
         } catch (err) {
           console.error(`Failed to create employee ${emp.name}:`, err);
+          // Surface the reason, don't just count it. ApiClientError.firstError
+          // carries the DIGIT error message ("Unknown error occurred in
+          // encryption process", "INVALID_ROLE", …) — that string is the whole
+          // difference between an operator who can fix the row and one staring
+          // at "1 failed".
+          const reason = err instanceof ApiClientError
+            ? err.firstError
+            : (err instanceof Error ? err.message : String(err));
+          setFailures((prev) => [...prev, { name: emp.name, reason }]);
           setFailedCount((prev) => prev + 1);
         }
 
@@ -578,9 +596,6 @@ export default function Phase4Page() {
                   : 'mobile number (validated against the tenant rule)'}
               </li>
               <li>
-                • <strong>dob</strong> - Date of birth (YYYY-MM-DD)
-              </li>
-              <li>
                 • <strong>department</strong> - Department code
               </li>
               <li>
@@ -591,6 +606,10 @@ export default function Phase4Page() {
               </li>
               <li>
                 • <strong>jurisdictions</strong> - Comma-separated boundary codes
+              </li>
+              <li>
+                • <strong>dob</strong> - Date of birth (YYYY-MM-DD),{' '}
+                <em>optional</em>
               </li>
             </ul>
 
@@ -881,6 +900,26 @@ export default function Phase4Page() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Why each row failed. The Banner above already promises a
+              "failure list below" — this is it. */}
+          {failures.length > 0 && (
+            <Alert variant="destructive" className="text-left mt-4 sm:mt-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs sm:text-sm">
+                <p className="mb-2">
+                  <strong>Failed rows:</strong>
+                </p>
+                <ul className="space-y-1">
+                  {failures.map((f, idx) => (
+                    <li key={`${f.name}-${idx}`}>
+                      <span className="font-medium">{f.name}</span>: {f.reason}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Alert variant="info" className="text-left mt-4 sm:mt-6 max-w-md mx-auto">
             <AlertDescription className="text-xs sm:text-sm">

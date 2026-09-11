@@ -407,7 +407,7 @@ def boundary_ui(state: State):
                 schema_r = uploader.update_hierarchy_schema(
                     tenant_id=tenant,
                     hierarchy_type=htype,
-                    highest_hierarchy=levels[-1],
+                    highest_hierarchy=levels[0],
                     lowest_hierarchy=levels[-1],
                 )
                 if schema_r["updated"] > 0:
@@ -533,7 +533,7 @@ def boundary_ui(state: State):
                     schema_r = uploader.update_hierarchy_schema(
                         tenant_id=state.boundary_tenant,
                         hierarchy_type=state.boundary_hierarchy_type,
-                        highest_hierarchy=bh[-1]["boundaryType"],
+                        highest_hierarchy=bh[0]["boundaryType"],
                         lowest_hierarchy=bh[-1]["boundaryType"],
                     )
                     if schema_r["updated"] > 0:

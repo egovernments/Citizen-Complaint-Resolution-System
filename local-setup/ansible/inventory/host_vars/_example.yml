@@ -1,33 +1,45 @@
 # ═══════════════════════════════════════════════════════════════════
-# Example host_vars file — tracked in git as the template.
+# Example host_vars file — the full catalogue of settings, tracked in
+# git as the template.
 #
-# Real per-tenant files (e.g. mytenant.yml) are gitignored, so this is
-# the ONLY host_vars file that lives in the repo. Workflow:
+# Real per-tenant files (e.g. mytenant.yml) are gitignored, so the
+# `.example` files are the only host_vars in the repo. Workflow:
 #
 #   1. cp inventory/host_vars/_example.yml \
 #         inventory/host_vars/mytenant.yml
 #   2. Fill in the values below for your environment.
-#   3. Add `mytenant:` under `digit:` in inventory/hosts.yml.
-#   4. Make sure the controller can SSH to ansible_host as root.
-#   5. ./deploy.sh mytenant
+#   3. Make sure the controller can SSH to ansible_host as root
+#      (not needed when ansible_connection: local).
+#   4. ./deploy.sh mytenant
 #
-# Comments below explain every field. Anything marked "REQUIRED" must
-# be set; everything else has a sensible default in group_vars/digit.yml
-# and can be omitted.
+# There is no step for editing inventory/hosts.yml: deploy.sh regenerates
+# it from whatever host_vars/*.yml exist on disk, on every run.
+#
+# **Want the short version?** `quickstart.yml.example` is a complete
+# single-machine config with only the settings you need on day one. Come
+# here when you need a knob it does not cover.
+#
+# Comments below explain every field. Anything marked "REQUIRED" must be
+# set. Most other settings default in group_vars/digit.yml or
+# group_vars/all.yml, but several default at the point of use inside the
+# playbook or a Jinja template instead — where that matters, the comment
+# says so. `map_center` below has no default anywhere and fails the
+# deploy if omitted, despite not being listed as REQUIRED historically.
 # ═══════════════════════════════════════════════════════════════════
 
 # ────────── Networking ──────────
 
 # REQUIRED. IP or hostname Ansible SSHes into. Can be a Tailscale IP
 # (100.x.x.x), a Hetzner VPC IP (10.0.0.x), or a public address.
-ansible_host: 10.0.0.10
+ansible_host: localhost
+ansible_connection: local
 
 # REQUIRED. Public hostname for the deployment. Used in:
 #   - nginx `server_name`
 #   - Grafana root URL (so dashboard links use the real domain)
 #   - Let's Encrypt certificate
 #   - Citizen-facing URLs the UI generates
-domain: digit.example.com  
+domain: digit.example.com
 
 # Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
 # redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
@@ -35,6 +47,19 @@ domain: digit.example.com
 # listens on plain HTTP and the playbook's validate-* tasks switch to
 # 127.0.0.1 with `Host:` header.
 tls_enabled: true
+
+# Optional. Default empty (Docker's own default: /var/lib/docker, on the
+# root filesystem). Set to a path on a larger/dedicated partition, e.g.
+# "/opt/docker", when `/` is small — a fresh box pulling the ~30 images in
+# this stack onto a small `/` reliably fills it mid-deploy with "no space
+# left on device". Setting this ALSO relocates containerd's own image-layer
+# store (a separate config that Docker's data-root does not control) to a
+# sibling directory, e.g. "/opt/containerd" — both are relabeled for SELinux
+# automatically on RHEL-family targets. Only takes effect on a box where
+# Docker/containerd have never been started before; an already-populated
+# /var/lib/docker needs a manual stop+rsync+relabel migration first (see
+# local-setup/ansible/README.md).
+docker_data_root: ""
 
 # ────────── DIGIT tenancy ──────────
 
@@ -48,17 +73,49 @@ tls_enabled: true
 #   state_tenant_id  — root tenant the citizen UI binds to. Usually the
 #                       city tenant (e.g. ke.nairobi) when the SPA is
 #                       pinned to a single city.
-#   boot_tenant      — tenant the citizen-side citizen-current-tenant
-#                       resolves to (usually same as state_tenant_id)
+#   boot_tenant      — the tenant the opt-in CI suite runs against. It is
+#                       exported as BOOT_TENANT/DIGIT_TENANT for those
+#                       tests and nothing else reads it, so it is inert
+#                       unless run_ci_tests: true. preflight still checks
+#                       it is state_root or sits under it.
 #   tenant_id        — city/operating tenant used in templates that
-#                       need a single value (e.g. ke.nairobi)
+#                       need a single value (e.g. ke.nairobi). This is
+#                       ALSO the city tenant the deploy bootstraps when
+#                       state_root is not `pg`.
+#
+# The MCP tenant bootstrap that creates these from scratch only runs when
+# state_root is something other than `pg`, and it targets state_root and
+# tenant_id — NOT state_tenant_id. Setting state_tenant_id to a root the
+# deploy never creates leaves it without an ADMIN user; the playbook
+# detects that and points the SPA at `pg` instead, printing why.
 state_root: ke
 state_tenant_id: ke.mycity
 boot_tenant: ke.mycity
 tenant_id: ke.mycity
 
-# Default map centre — UI map starts here when no GPS / no complaint
-# location. Pick something inside your service area.
+# Optional override for the authenticated employee dashboard's initial access
+# floor. Defaults are SUPERVISOR, GRO, DGRO, and SUPERUSER. These roles receive
+# the current employee route plus its base analytics capabilities. The legacy
+# /dashboard path is outside this bootstrap contract.
+# dashboard_allowed_roles:
+#   - SUPERVISOR
+#   - GRO
+#   - DGRO
+#   - SUPERUSER
+
+# Tenant the admin/citizen SPA lands on. Rendered into globalConfigs as
+# STATE_LEVEL_TENANT_ID (see templates/globalConfigs.js.j2). The configurator
+# login screen also derives its tenant-code placeholder from this, and the
+# app's pre-login default tenant collapses it to its root segment — so set it
+# to your city tenant to keep the UI deployment-agnostic (no hardcoded code).
+# Defaults to `pg` (the dump's always-seeded tenant) when unset.
+ui_state_tenant_id: ke.mycity
+
+# REQUIRED — and, unlike the other UI settings, it has NO default in
+# group_vars and none at the point of use: globalConfigs.js.j2 renders it
+# bare, so omitting it aborts the deploy with an undefined-variable error.
+# Default map centre — the UI map starts here when there is no GPS fix and
+# no complaint location. Pick somewhere inside your service area.
 map_center:
   lat: 0.0
   lng: 0.0
@@ -86,27 +143,60 @@ pgr_boundary_highest_level: "County"
 pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
 
+# Boundary hierarchy name. Rendered into globalConfigs as HIERARCHY_TYPE; the
+# citizen/PGR UI (and the configurator's OSM onboarding path) resolve boundaries
+# against it. MUST match the hierarchy actually created for this tenant —
+# city_setup_from_xlsx auto-creates "<CITY>_ADMIN" (e.g. mycity → MYCITY_ADMIN),
+# so leaving the default 'ADMIN' makes the complaint form's boundary picker 400
+# (HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR). Defaults to 'ADMIN' when unset.
+hierarchy_type: "ADMIN"
+
 # Mobile-number validation rules used by the citizen-side UI on signup.
 # Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: "+254"
-  mobileNumberPattern: "^0?[17][0-9]{8}$"
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["1", "7"]
-  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+  countryCode: "+254"
+  mobileNumberRegex: "^0?[17][0-9]{8}$"
 
 # Postal-code validation. The SPA reads this via globalConfigs key
 # `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
 # employee PGR create-complaint flows. Empty/absent → the legacy hard
-# default (^[0-9]{5}$ / Kenya) is used as a fallback. Examples:
-#   Kenya:   ^[0-9]{5}$              (5 digits)
-#   India:   ^[0-9]{6}$              (6 digits)
-#   UK:      ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
-#   US:      ^[0-9]{5}(-[0-9]{4})?$  (5 or 5+4)
+# default (^[0-9]{5}$ / Kenya) is used as a fallback.
+#
+# `postalCodePattern` is the ONLY knob — a regex already expresses length,
+# starting-digit constraints, and alnum shapes in one place, so there's no
+# separate length field that can silently drift out of sync with it
+# (CCRS#722 — a stale hand-maintained length field kept enforcing an old
+# digit count after the pattern, or vice versa, was updated).
+#   Kenya:      ^[0-9]{5}$                                            (5 digits)
+#   India:      ^[0-9]{6}$                                            (6 digits)
+#   Mozambique: ^[0-9]{4}$                                            (4 digits)
+#   UK:         ^[A-Z]{1,2}[0-9R][0-9A-Z]? ?[0-9][A-Z-[CIKMOV]]{2}$  (alnum)
+#   US:         ^[0-9]{5}(-[0-9]{4})?$                                (5 or 5+4)
+#
+# All three PGR create-complaint surfaces (employee form, legacy citizen
+# flow, citizen v2 flow) render the postal field as a free-text input and
+# validate against this pattern, so alnum/dash shapes are enterable
+# everywhere; digit-only patterns additionally hint a numeric mobile
+# keyboard on the citizen v2 flow.
+#
+# The error message is always derived dynamically from this pattern (the
+# digit count, when the pattern is a plain ^[0-9]{N}$ shape) and resolved
+# through the standard localization pipeline (module `rainmaker-pgr`, key
+# `CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN`), so it's correct in every
+# locale the tenant ships without any per-tenant message override field.
+#
+# MDMS is the PRIMARY knob: the `fieldType: "postalCode"` row in the
+# `common-masters.FormValidations` master outranks this pattern (same
+# precedence as the mobile/name/email rules), in DIGIT Studio and the PGR
+# create-complaint flows alike. DDH seeds a default 5-digit row at tenant
+# creation — change a tenant's postal rule by editing that row (DIGIT
+# Studio > FormValidations), not just this file. This host_vars pattern is
+# the fallback for tenants without the row (dump-booted stacks, tenants
+# created before FormValidations existed).
 core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
-  postalCodeLength: 5
-  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
 
 # Postal-code serviceability allowlist, passed to the MCP tenant
 # bootstrap as `pincode_allowlist` and seeded as `pincode` on every
@@ -119,17 +209,21 @@ core_postal_configs:
 #   - "00100"
 #   - "00200"
 
-# S3 bucket name used by egov-filestore as the asset bucket (sees
-# `asset_s3_bucket` in globalConfigs.js).
+# Bucket name surfaced to the browser apps as globalConfigs `S3BUCKET`.
+# It does NOT change where files are stored: egov-filestore is pinned to a
+# fixed bucket in the compose file (IS_BUCKET_FIXED: 'true',
+# FIXED_BUCKETNAME: egov-rainmaker), so uploads land there whatever this
+# says. Treat it as a label, not as storage configuration.
 asset_s3_bucket: "mytenant-egov-assets"
 
 # ────────── Branding ──────────
 
-# Footer logos shown in citizen + employee UI. Use absolute URLs;
-# the playbook copies brand assets to /var/www/brand/ when
-# nginx_features.brand_assets: true.
-footer_logo_url: ""
-footer_bw_logo_url: ""
+# Rebrand the "Powered by DIGIT" footer. Commented out = the stock DIGIT
+# attribution committed under digit-ui-esbuild/public/brand/. Absolute URLs
+# work too; the playbook mirrors brand assets under /var/www/brand/ when
+# nginx_features.brand_assets is on. Note "" means NO footer, not default.
+# footer_logo_url: "https://cdn.example.org/my-footer.png"      # unset = stock DIGIT attribution
+# footer_bw_logo_url: "https://cdn.example.org/my-footer-bw.png"  # unset = stock DIGIT attribution
 
 # ────────── digit-ui serving mode ──────────
 
@@ -159,7 +253,7 @@ digit_ui_mode: static
 #
 # New citizen-facing SPA served at /citizen/ (separate from the
 # legacy /digit-ui/ esbuild bundle). When true, the playbook:
-#   1. Clones {{ digit_ui_v2_repo }}@{{ digit_ui_v2_branch }} to
+#   1. Copies the VENDORED in-tree source (digit-ui-v2/ + ui-shared/) to
 #      /opt/digit-ui-v2 on the target.
 #   2. `npm install` + `npm run build` (Vite) with the VITE_* env-var
 #      contract baked into the bundle.
@@ -169,11 +263,21 @@ digit_ui_mode: static
 # leave the bundle on disk but unreachable.
 enable_digit_ui_v2: false
 
-# Git source for the citizen SPA. Cloned on the TARGET (not the
-# controller) so native Vite binaries (esbuild, lightningcss) match
-# the runtime arch.
-digit_ui_v2_repo: "https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System.git"
-digit_ui_v2_branch: "feat/digit-ui-v2-keycloak"
+# Rollback-only switch for the pre-catalog PGR dashboard copied into both the
+# Configurator and citizen SPA. Keep false: navigation and direct routes are
+# hidden, while the code and /pgr-services/v2/dashboard API remain intact.
+enable_legacy_pgr_dashboard: false
+
+# Optional external git source for the citizen SPA, for transitional or
+# standalone use. LEAVE UNSET on normal deploys: the default builds the
+# vendored in-tree digit-ui-v2/ (with ui-shared/) so the deployed bundle
+# matches this checkout — including build-time contracts such as
+# VITE_ENABLE_LEGACY_PGR_DASHBOARD, which an older external revision would
+# not read. When set, the repo is cloned on the TARGET (not the controller)
+# so native Vite binaries (esbuild, lightningcss) match the runtime arch, and
+# the deploy fails fast if that revision lacks the feature-flag modules.
+# digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+# digit_ui_v2_branch: "develop"
 
 # digit-integration-tests dashboards. Builds the react-admin catalog dashboard
 # from the VENDORED in-tree source (tests/integration-tests/) and serves both
@@ -208,24 +312,61 @@ enable_integration_tests_runner: false
 
 # Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
 # send/validate), egov-notification-sms (delivers via SMS gateway).
-# Default true — real OTP services run by default.
-# Set false before deploying if you want to skip the OTP stack (lean/offline
-# environments); egov-user's fixed OTP (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE=123456)
-# still allows login, but /user-otp/* requests will fail without a mock in kong.yml.
-enable_otp_services: true
+# Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
+# 200 response so login/register work via the fixed OTP (123456, see
+# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
+# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
+# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
+# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
+# defaults to Console, which only logs OTP SMS instead of sending it).
+enable_otp_services: false
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
 enable_search_stack: false
 
+# ────────── Self-hosted Matomo (web analytics) ──────────
+# Bring up Matomo + its own MariaDB + a report archiver (~1 GB RAM extra;
+# #1254). Matomo is PHP + MySQL and cannot use the platform's Postgres, so it
+# brings its own database; nothing the platform depends on touches it.
+#
+# Turning this on stands up an EMPTY, self-contained analytics server and
+# sends nothing anywhere. Pointing the portal at it is a separate step done
+# through MDMS (configurator → System → Analytics Providers), so collection
+# can be switched on and off without a redeploy.
+#
+# MUST be paired with `nginx_features.matomo: true` below — preflight refuses
+# either half on its own. The admin UI is bound to 127.0.0.1 and is reached
+# over an SSH tunnel; only the two tracking endpoints are public.
+#
+# The deploy INSTALLS Matomo for you (matomo_auto_install, default true) — no
+# browser wizard. The superuser password is generated and kept in OpenBao:
+#   bao kv get -field=matomo_admin_password <secrets_path>
+# Reach the UI over a tunnel: ssh -L 18081:127.0.0.1:18081 <host>
+#
+# See docs/matomo-deployment.md for the full walkthrough.
+# enable_matomo: false
+# matomo_auto_install: true       # false = click through the wizard yourself
+# matomo_admin_user: admin        # the Matomo superuser login
+# matomo_admin_email: ""          # defaults to admin@<domain>
+# matomo_site_name: ""            # defaults to <domain>; the label on reports
+# matomo_archive_interval: 3600   # seconds between report-archiving passes
+# upstream_matomo_port: 18081     # loopback bind + the Host header nginx sends
+
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
-# the configurator/frontend uses for tenant onboarding. The image lives
-# in the Hetzner VPC registry (10.0.0.4:5000) — only Hetzner-internal
-# hosts can reach it. Compose validates every image before starting any
-# service, so a public-internet box with this on would fail at
-# `docker compose up`. Flip to false (or override `docker_registry` to
-# a public mirror) if you're not on the VPC.
+# the configurator/frontend uses for tenant onboarding. Serving that shim
+# through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
+#
+# Image source: unless `build_mcp: true` (local build) or `mcp_image:` is set
+# here, the playbook leaves MCP_IMAGE empty and Compose's own
+# `${MCP_IMAGE:-egovio/digit-mcp:<tag>}` fallback in docker-compose.egov-digit.yaml
+# pulls the PUBLIC pin — so a public-internet box works out of the box with no
+# `docker_registry` prefix needed. Set `build_mcp: true` to build from the
+# vendored in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
+# Hetzner VPC registry (10.0.0.4:5000) the target must be VPC-internal:
+# compose validates every image before starting any service, so an
+# unreachable one fails the whole `docker compose up`.
 enable_mcp: true
 
 # ────────── Turbopass (OSM location autocomplete) ──────────
@@ -259,9 +400,10 @@ enable_overpass: false
 # overpass_planet_file: /opt/overpass/data/boundaries.osm.bz2  # prepared extract
 
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
-# Turn on the `notifications` compose profile — adds 8 containers:
+# Turn on the `notifications` compose profile — adds 9 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,
-#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo.
+#   novu-api, novu-worker, novu-ws, novu-dashboard, novu-mongo,
+#   otp-publisher (see build_otp_publisher below).
 # Roughly +1GB RAM + ~5min slower first boot.
 #
 # Workflow when enable_novu: true:
@@ -278,6 +420,25 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
+# under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
+# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
+# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
+# When false, the stock image is pulled and the legacy root-path nginx workaround
+# is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
+build_novu_dashboard: false
+# novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
+# novu_base_path: "/novu"           # subpath to bake into the rebased dist
+# novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
+
+# otp-publisher is the 9th container in the notifications profile: it replaces
+# Kong's mock /user-otp termination with a real OTP generator (Redis + Kafka ->
+# novu-bridge -> Twilio SMS). Leave false to pull the published multi-arch image
+# (egovio/otp-publisher:2.12-81fc6be); set true to build the vendored Node service
+# at utilities/otp-publisher on the box instead (tag otp-publisher:local).
+build_otp_publisher: false
+# otp_publisher_image: ""           # override to pin a different published tag
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -286,9 +447,115 @@ novu_api_key: ""
 # SMS integration with Novu. The "FROM" must be a WhatsApp-enabled
 # number — for testing, use the Twilio Sandbox number after enrolling
 # your test phone via the `join <code>` SMS dance.
+#
+# These two go together. The playbook reads twilio_auth_token bare (no
+# default), so setting the SID while leaving the token empty is fine, but
+# REMOVING the token line while the SID is set fails the deploy with an
+# undefined-variable error rather than skipping the integration.
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+
+# ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
+# For deployments that cannot use Twilio for SMS — e.g. the account has no SMS
+# compliance registration — the bridge can route the SMS leg through another
+# gateway using Novu's built-in "generic-sms" provider. WhatsApp is unaffected
+# and keeps using Twilio.
+#
+# Novu has no built-in provider for most regional gateways: setting an
+# integration's providerId to the gateway's own name fails at trigger time with
+# "Sms handler for provider <name> is not found". So the integration is created
+# in Novu with providerId "generic-sms", pointed at the gateway's REST endpoint
+# with its auth, and the bridge supplies the gateway-specific request body.
+#
+# Leave blank for Twilio SMS (the default). Set to "ozeki" (a gateway you run) or
+# "smscountry" (a bulk provider). The bootstrap does NOT create this integration —
+# add it in Novu or the Configurator first, then name its identifier here.
+# novu_bridge_sms_sender_id is used by smscountry only; Ozeki takes the sender
+# from its own gateway configuration.
+novu_bridge_sms_provider: ""
+novu_bridge_sms_sender_id: ""
+
+# SMSCountry only. Its legacy bulk API authenticates with the SMSCountry PANEL
+# LOGIN — that account type issues no API key — and the bridge posts to it
+# directly, so no Novu integration is needed for this gateway.
+novu_bridge_smscountry_user: ""
+novu_bridge_smscountry_password: ""
+
+# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
+# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
+# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
+# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
+# complaints.domain.events. novu-bridge becomes a thin pass-through that
+# identifies the Novu subscriber and delivers renderedBody. Requires
+# enable_novu: true + the seeded MDMS masters + the pass-through
+# novu_bridge_image (below).
+
+# Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
+# legacy hardcoded notification path. Cut over one tenant at a time after the
+# golden-output test + MDMS seed land. (docker-compose.<tenant>.yml may also
+# hard-set PGR_NOTIFICATION_CONFIG_DRIVEN — see docker-compose.bomet.yml.)
+pgr_notification_config_driven: false
+
+# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
+# Leave unset to keep the published preview / local-build defaults.
+# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+
+# NOTE: `build_novu_bridge` and `build_pgr_services` used to be listed here.
+# Neither has ever had a playbook task behind it — the images come only from
+# `novu_bridge_image` / `pgr_services_image` above — so they have been
+# removed rather than left as knobs that quietly do nothing.
+
+# Channels the bridge actually delivers (comma-separated). WHATSAPP is
+# intentionally omitted until a legitimate provider is onboarded as a Novu
+# integration; then add it here. Default SMS,EMAIL.
+# novu_bridge_channels_enabled: "SMS,EMAIL"
+
+# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
+# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
+# routing edits. Default sms.
+novu_bridge_channel: "sms"
+
+# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
+# payload.body — the workflow is just the delivery shell). Defaults match the
+# CI bootstrap-created workflows.
+# novu_bridge_workflow_id_sms:      "complaints-sms"
+# novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
+# novu_bridge_workflow_id_email:    "complaints-email"
+
+# Novu integration identifier to explicitly target for WHATSAPP triggers. Twilio
+# WhatsApp is modeled in Novu as an "sms"-channel step, so a second, dedicated
+# WhatsApp-registered Twilio integration living alongside the primary (plain
+# SMS) integration is silently ignored unless named here — every WHATSAPP send
+# would otherwise resolve to the primary SMS sender and be rejected by Twilio.
+# Leave unset until that dedicated integration has been created in Novu
+# (Integrations tab) for this tenant; must match its exact identifier.
+# novu_bridge_integration_id_whatsapp: "twilio-whatsapp"
+
+# Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
+# novu_bridge_identify_cache_ttl_ms: 300000
+
+# Browser-facing origin for the Novu dashboard SPA (scheme + host, no trailing
+# slash). The dashboard runs in the OPERATOR's browser, so these URLs must name
+# a host the browser can reach — not an in-cluster or loopback address.
+#
+# Defaults to this tenant's own `domain` + `tls_enabled` scheme, which is
+# correct whenever the ansible-managed vhost is the one the browser hits.
+# Set this only when TLS terminates on a vhost whose hostname differs from
+# `domain` — e.g. `domain: localhost` for the internal vhost, with a
+# separately-managed public vhost proxying /novu/, /novu-api/ and /novu-ws/.
+# novu_public_base_url: "https://pilot.example.org"
+
+# Escape hatch for the rare case where the API / WS / dashboard live on
+# DIFFERENT hosts. Prefer novu_public_base_url above — it sets all four at
+# once and keeps the paths aligned with the nginx location blocks.
+# novu_api_public_url:  "https://pilot.example.org/novu-api"
+# novu_ws_public_url:   "https://ws.pilot.example.org" # origin only; Socket.IO uses /socket.io
+# novu_api_root_url:    "https://pilot.example.org/novu-api"
+# novu_front_base_url:  "https://pilot.example.org/novu"
+# novu_node_env: "production"
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host
@@ -352,18 +619,212 @@ requires_nairobi_mdms: false
 # volume — the overlay also corrects the named-volume mount path,
 # which forces container recreation and wipes the existing data.
 db_fast_path: true
+# scripts/preflight.py refuses db_fast_path without this explicit ack —
+# it encodes the data-wipe trap above. Set it only after confirming the
+# target box has no anonymous-volume postgres data worth keeping.
+db_fast_path_ack_data_wipe: true
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
 # Off by default — production deploys skip CI tests.
 run_ci_tests: false
 
+# Tear down the running stack before re-deploying. Stops + removes all
+# containers and orphaned networks, then re-deploys from scratch.
+# Volumes (Postgres data, Minio objects) are preserved — only containers
+# and compose-managed networks are removed.
+#
+# Use on CI boxes or when you deliberately want a clean redeploy.
+# NEVER enable on a tenant with live data you cannot afford to interrupt.
+force_clean: false
+
 # Install Claude Code CLI + sync controller's ~/.claude config to the
 # target. Hard-codes /root/.claude paths; only safe when the controller
 # is a Linux box running as root.
 install_claude_code: false
 
+# Let logged-out visitors read Grafana at https://<domain>/grafana/ with the
+# Viewer role (never Admin — the role is pinned in the compose file).
+#
+# READ THIS BEFORE ENABLING. Viewer is not a safe role on this stack, because
+# Grafana is not just dashboards:
+#   * the Loki datasource is provisioned with `access: proxy`, so Grafana's
+#     backend runs any Loki query a Viewer asks for;
+#   * promtail ships every container's stdout into Loki, including
+#     egov-user-proxy's nginx access log;
+#   * Kong's auth-enrichment calls that proxy as
+#     /user/_details?access_token=<live session token>, so those tokens are
+#     sitting in Loki as plain log text.
+# A logged-out visitor with Viewer can therefore harvest live bearer tokens and
+# replay them against the API. That is the same credential disclosure the login
+# form was turned on to stop; it just costs an extra query. Leave this false on
+# anything reachable from the internet unless you have first scrubbed
+# access_token out of the log pipeline.
+#
+# Set it here, not in /opt/digit/.env — the playbook regenerates that file from
+# templates/digit.env.j2 on every deploy, so a hand-edit there silently reverts.
+grafana_anonymous_enabled: false
+
+# ────────── Less-common knobs (all optional, all commented out) ──────────
+#
+# Everything below is read from inventory scope with a fallback, so leaving
+# it out is always safe. Listed because the fallback is not always the one
+# you want, and a setting you cannot see is a setting you cannot use.
+
+# ── Build from source instead of pulling an image ──
+# Each of these clones/builds on the TARGET at deploy time. Slower deploys,
+# but no dependency on a registry and you get the current source.
+# build_configurator: false     # DIGIT Studio SPA — also needs nginx_features.configurator
+# build_digit_ui: false         # digit-ui-esbuild bundle, built into the container
+# build_mcp: false              # digit-mcp from the vendored in-tree source
+# build_otp_publisher: false    # the vendored otp-publisher image
+
+# Where the configurator source comes from when build_configurator is on.
+# Defaults: a sibling ../../configurator checkout, no clone, repo default branch.
+# configurator_repo: "../../configurator"
+# configurator_repo_url: "https://github.com/<org>/<repo>.git"   # "-" = build in place
+# configurator_ref: "main"
+
+# ── Pin a specific image instead of the compose-file default ──
+# Each maps to an env var consumed by docker-compose.egov-digit.yaml.
+# Useful for testing one service's build without touching the others.
+# accesscontrol_image: ""
+# egov_user_image: ""
+# digit_ui_image: ""
+# configurator_image: ""
+# otp_publisher_image: ""
+# mcp_image: ""                 # ignored when build_mcp: true
+
+# ── Ports ──
+# Host port nginx proxies /configurator/ to. The only upstream_*_port that
+# is NOT already defaulted in group_vars/digit.yml.
+# upstream_configurator_port: 18890
+
+# ── Brand colours ──
+# Injected into the SPA by nginx sub_filter, so they apply without a rebuild.
+# Omit them and DIGIT's own palette is used. `theme_primary_color` alone is
+# enough; the other two refine it.
+# theme_primary_color: "#0b4b3f"        # dark accent — hover, links
+# theme_primary_color_2: "#137a63"      # light accent — buttons, focus rings
+# theme_sidebar_selected_bg: "#e6f2ef"  # selected nav row background
+
+# ── Accounts the deploy uses for its own API calls ──
+# Change bootstrap_user/bootstrap_password to move OFF the well-known
+# defaults. They are used for every bootstrap call the playbook makes AND
+# are the credentials you log into the configurator with.
+# On a fresh box the user is created by the compose user-seed step (full
+# admin roles on every seed tenant; the stock ADMIN/eGov@123 is still seeded
+# alongside a custom name — CI collections hardcode it). Caveat for EXISTING
+# boxes: seeding never rewrites passwords, so changing bootstrap_password
+# after the user exists fails the deploy's auth validate until you reset the
+# password via the user API (or revert the var).
+# bootstrap_user: "ADMIN"
+# bootstrap_password: "eGov@123"
+# bootstrap_tenant: "pg"                # tenant those calls authenticate against
+# notif_seed_user: "ADMIN"              # notification seeder, same defaults
+# notif_seed_pass: "eGov@123"
+# token_exchange_system_username: "ADMIN"    # account the Keycloak token exchange impersonates
+# token_exchange_system_user_type: "EMPLOYEE"
+#   (its password is bootstrap_secrets.token_exchange_system_password, below)
+# novu_admin_email: "admin@digit.local"      # Novu's own first-run account
+# novu_admin_password: "Digit@12345"
+# novu_org_name: "DIGIT"
+
+# ── Host / platform ──
+# deploy_become: true                   # false = macOS thin path, no sudo
+# docker_default_platform: ""           # "linux/amd64" to pull x86 images under Rosetta
+# docker_rhel_releasever_override: ""   # pin the Docker RHEL repo releasever
+
+# ── Deploy behaviour ──
+# run_playwright_tests: false           # browser E2E; ANDed with run_ci_tests
+# seed_notifications: false             # defaults to whatever pgr_notification_config_driven is
+# tolerate_bootstrap_failures: false    # true = keep going past a failed tenant bootstrap.
+#                                       # Leaves a half-seeded tenant; use only to get
+#                                       # past a known-benign failure you have diagnosed.
+
+# ── Extra UI settings ──
+# city_tenant: ""                # the tenant the citizen map falls back to when a
+#                                # citizen has no home city. Beware the two different
+#                                # fallbacks: globalConfigs uses ui_state_tenant_id,
+#                                # the CI env uses "<state_tenant_id>.citya". Set it
+#                                # explicitly if you rely on either.
+# complaint_hierarchy_type: ""   # complaint-classification hierarchy name; "PGR" on
+#                                # tenants using the configurable hierarchy
+# keycloak_url: ""               # SPA auth endpoints; empty = same origin
+# keycloak_realm: ""             # defaults to state_tenant_id
+# token_exchange_url: ""
+
+# ── Health dashboard ──
+# gatus_tls_check: true                 # defaults to tls_enabled; force off where the
+#                                       # cert is terminated somewhere Gatus cannot see
+# gatus_observability_checks: true      # include the Prometheus/Loki/Tempo probes
+
+# ── Paths and fixtures (sensible in-tree defaults) ──
+# digit_ui_esbuild_repo_dir: ""  # local digit-ui-esbuild checkout to build from
+# integration_tests_src: ""      # source tree for the dashboards
+# county_xlsx: ""                # input spreadsheet for the CI dataloader
+# redis_container: ""            # container to bounce for a cache-bust
+# user_validation: {}            # MDMS validation payload passed to the tenant bootstrap
+
+# ────────── Analytics (portal usage + error tracking) ──────────
+#
+# WHICH DESTINATIONS RUN IS **DATA, NOT CONFIG**. One MDMS row per
+# destination in `common-masters.AnalyticsProvider`, managed in the
+# Configurator under System → Analytics Providers. With no rows — the state
+# of a fresh environment — the portal loads its analytics shim, finds
+# nothing, and sends nowhere. Nothing below turns analytics ON.
+#
+# So why are these three here at all? Because they are the knobs MDMS must
+# NOT be able to set: they decide whether third-party script may run in a
+# citizen's browser at all, and MDMS is writable from the Configurator UI.
+# Ops keeps them; admins get the harmless ones.
+#
+# ALL THREE ARE OPTIONAL. Every one has a `| default(...)` in
+# templates/globalConfigs.js.j2, so an inventory that never mentions them
+# renders exactly as before — no edit is required to adopt the feature.
+#
+# Full guide: docs/analytics-guide/  (start with 10-setup.md; the complete
+# self-hosted Matomo walkthrough is 50-self-hosted-matomo.md)
+
+# Hard off switch. `true` disables the shim entirely, whatever MDMS says —
+# the environment-wide panic button when a destination misbehaves. Note the
+# polarity: ONLY an explicit `true` disables. That is deliberate, and the
+# opposite of dashboard_metrics_enabled, which is on-by-default.
+# analytics_kill_switch: false
+
+# Extra hostnames a destination's scriptUrl may load from, ON TOP of the
+# built-in vendor list (www.googletagmanager.com, js.sentry-cdn.com,
+# browser.sentry-cdn.com, *.sentry.io, *.posthog.com).
+#
+# Needed for a SELF-HOSTED collector, whose hostname is specific to your
+# environment and therefore cannot be baked into the code. MDMS cannot widen
+# this list — that is the whole point of it living here.
+#
+# Exact hostnames, or a dot-boundary wildcard like "*.example.gov.mz".
+# There is no prefix wildcard: "matomo.*" would have accepted
+# matomo.<anything-an-attacker-registers>.com.
+#
+# NOT needed if your collector is same-origin (e.g. scriptUrl
+# "/matomo/matomo.js" proxied by your own nginx) — that form needs no
+# allowlist entry at all, and is the only one that works on an
+# http-only environment.
+# analytics_script_hosts:
+#   - matomo.example.gov.mz
+#   - stats.example.gov.mz
+
+# Allow `type: "CUSTOM"` destinations to initialise. CUSTOM is the one type
+# where an MDMS row names the script that gets loaded, so it stays off unless
+# ops opts in — on an environment where any employee token can write MDMS,
+# that write access is effectively script-injection access.
+# analytics_custom_enabled: false
+
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
+#
+# Keep every key below present. nginx-site.conf.j2 reads six of them
+# (brand_assets, configurator, configurator_caching, status, api_pgr, mcp)
+# WITHOUT a `| default(...)`, so a hand-trimmed dict that drops one fails
+# the vhost render with an undefined-variable error instead of falling
+# back to off.
 
 nginx_features:
   brand_assets: false        # /brand/ — local logo/banner mirror
@@ -376,16 +837,54 @@ nginx_features:
   digit_ui_v2: false         # /citizen/ — Vite + React 19 SPA (requires enable_digit_ui_v2: true)
   integration_tests: false   # /tests/ + -v2/ — test dashboards (requires enable_integration_tests: true)
   integration_tests_runner: false  # /tests/api/ — RUN-button daemon proxy (requires enable_integration_tests_runner: true)
+  matomo: false              # /matomo/matomo.js + .php — the two Matomo TRACKING endpoints only
+                             # (requires enable_matomo: true). The Matomo admin UI is NOT proxied:
+                             # it emits absolute asset URLs that break under a path prefix, and it
+                             # has no business being public. Tunnel to 127.0.0.1:18081 instead.
+  # Deliberately DEFAULTS TO TRUE (group_vars/digit.yml, #1604): Grafana
+  # carries a real login since #1602, and /grafana/ is its only public
+  # path. Listed here so the knob is visible — set false to take Grafana
+  # off the internet entirely and reach it over an SSH tunnel to
+  # 127.0.0.1:13000 instead. See also `grafana_anonymous_enabled` above,
+  # which is what actually makes it readable without logging in.
+  grafana: true              # /grafana/ — Grafana dashboards
+  root_to_digit_ui: false    # serve / (the bare domain) from digit-ui instead of the default landing
 
 # If true, the playbook will NOT render `templates/nginx-site.conf.j2` into
 # /etc/nginx/sites-available/ and will NOT touch /etc/nginx/sites-enabled/.
 # nginx still gets installed (apt task is unconditional) but the operator's
 # hand-managed vhost is left as-is. Use for tenants whose production vhost
 # has hand-crafted routing the template can't (yet) render — e.g. Bomet's
-# /egov-rainmaker/ filestore passthrough, /novu/+/novu-api/ routing, the
-# /digit-ui/ host-alias. Default false so new tenants get the standard
-# templated vhost.
+# /novu/+/novu-api/ routing and the /digit-ui/ host-alias. Default false so
+# new tenants get the standard templated vhost.
 nginx_preserve_vhost: false
+
+# ────────── Monitoring alerts (Gatus → Slack) ──────────
+
+# Where this tenant's outage alerts go. Empty (the group_vars default) means
+# alerting is OFF: Gatus logs `Ignoring provider=slack`, keeps serving the
+# dashboard, and nobody is paged. That is a real choice, not a safe fallback —
+# an unmonitored tenant fails silently, so leave it empty only deliberately.
+#
+# Before setting this, answer all three. An alert stream with no named owner
+# gets muted within a week, and a muted channel is worse than no alerting
+# because it looks like coverage:
+#
+#   1. WHICH CHANNEL  a dedicated one per environment, not a busy team channel.
+#                     Gatus alerts on every endpoint transition, so a shared
+#                     channel trains people to skim past them.
+#   2. WHO TRIAGES    a named person or rota that reads it during working hours
+#                     and owns deciding "act or ignore". Not "the team".
+#   3. WHO MINTS IT   whoever administers the Slack workspace creates the
+#                     incoming webhook and puts the URL in OpenBao. Record who,
+#                     so it can be rotated when they leave.
+#
+# SECRET: anyone holding this URL can post into the channel. Do not commit a
+# real one — this file is tracked. Store it in OpenBao under this tenant's
+# secrets_path and reference it from there, the same as bootstrap_secrets.
+#
+# Rationale and the opt-in design: #1609. Alerting runbook: #1681.
+# gatus_slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xxxx"
 
 # ────────── OpenBao (per-tenant secrets backend) ──────────
 
@@ -407,6 +906,14 @@ bootstrap_secrets:
   minio_root_password: change-me-strong
   elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
   egov_hrms_default_password: "eGov@123"
+  # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
+  # playbook generates a 24-char password on first deploy and stores it here
+  # in OpenBao. Read it back with:
+  #   bao kv get -field=grafana_admin_password {{ secrets_path }}
+  # grafana_admin_password: ""
+  #
+  # (Anonymous/logged-out Grafana access is a separate, top-level knob —
+  #  `grafana_anonymous_enabled`, documented further down. It is not a secret.)
   # Keycloak secrets — only consumed when enable_keycloak: true.
   # Leave empty on tenants without Keycloak; the playbook only resolves
   # these via `| mandatory` inside the digit.env.j2 keycloak block,

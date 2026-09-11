@@ -82,6 +82,7 @@ export function EditableCell({
   };
 
   const handleSave = async () => {
+    if (saving) return;
     const validationError = validate(editValue);
     if (validationError) {
       setError(validationError);

@@ -62,7 +62,7 @@ projects pick up `storageState: 'auth.json'`. `auth.json` is gitignored.
 | `WARD_CSR_BOUNDARY` / `FORBIDDEN_WARDS` | bomet wards | Leaf ward the CSR is scoped to / sibling wards that must be hidden |
 | `CITY_TENANT` | `ke.nairobi` | A real city tenant in the configurator list (tenants-search test) |
 | `TENANT_LABEL` | `Bomet County` | Tenant label shown on the login City combobox |
-| `SCREENSHOT_DIR` | `/tmp/pgr-lifecycle-ui-screenshots` | Directory for UI test screenshots |
+| `SCREENSHOT_DIR` | `/tmp/full-complaint-lifecycle-ui-screenshots` | Directory for UI test screenshots |
 
 See `.env.example` for a complete template, and `deploy/bomet.env` for a
 worked per-deployment override file.
@@ -138,17 +138,17 @@ existing persona spec, not a new dated tree.
 
 ### `tests/citizen/`
 
-- `login.spec.ts` — OTP login (auto-register + fixed OTP)
-- `logout.spec.ts` — logout flow ends on the login page
-- `complaint-details.spec.ts` — detail page loads without crashing
-- `complaint-type-labels.spec.ts` — translated category names
-- `pgr-fixes.spec.ts` — citizen-side regression smoke (CCRS#421/#422/#441)
-- `create-fixes-2026-04-29.spec.ts` — pincode + AddressOne/Two populators
-- `timeline-fixes-2026-04-29.spec.ts` — rating + timeline localization
+- `citizen-otp-login.spec.ts` — OTP login (auto-register + fixed OTP)
+- `citizen-logout.spec.ts` — logout flow ends on the login page
+- `complaint-detail-page.spec.ts` — detail page loads without crashing
+- `complaint-type-dropdown-labels.spec.ts` — translated category names
+- `pgr-home-layout-and-scroll.spec.ts` — citizen-side regression smoke (CCRS#421/#422/#441)
+- `complaint-create-payload-contract.spec.ts` — pincode + AddressOne/Two populators
+- `complaint-timeline-and-rating-display.spec.ts` — rating + timeline localization
 
 ### `tests/employee/`
 
-- `login.spec.ts` — token + UI session injection
+- `citizen-otp-login.spec.ts` — token + UI session injection
 - `pgr-fixes-2026-04-29.spec.ts` — assign workflow, role filter, REJECT reasons
 
 ### `tests/admin/`

@@ -10,12 +10,18 @@ ingress:
   context: "access"
 
 # Init Containers Configs
-initContainers: {}
+initContainers:
+  dbMigration:
+    enabled: true
+    schemaTable: "accesscontrol_schema_version"
+    image:
+      repository: "egov-accesscontrol-db"
+      tag: v2.9.2-4a60f20
 
 # Container Configs
 image:
   repository: "egov-accesscontrol"
-  tag: v2.9.2-4a60f20
+  tag: "maven-jdk21-9f83afb"
 replicas: "1"
 healthChecks:
   enabled: true

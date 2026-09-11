@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseDepartmentExcel, parseDesignationExcel, parseComplaintTypeExcel, parseBoundaryExcel } from './excelParser';
+import {
+  parseDepartmentExcel,
+  parseDesignationExcel,
+  parseComplaintTypeExcel,
+  parseBoundaryExcel,
+  parseTenantExcel,
+  parseEmployeeExcel,
+} from './excelParser';
 
 // LibreOffice / Google Sheets convert TRUE / FALSE cells to JS booleans
 // when xlsx parses them. Before the ?? fix the parser used `||` for the
@@ -78,5 +85,106 @@ describe('Boundary coordinate parsing', () => {
     expect(eq?.longitude).toBe(0);
     expect(na?.latitude).toBeUndefined();
     expect(na?.longitude).toBeUndefined();
+  });
+});
+
+describe('Tenant code validation (egovernments/CCRS#1847)', () => {
+  // egov-user enforces `Pattern.createUserRequest.user.tenantId` =
+  // `^[a-zA-Z. ]*$` server-side (letters, dots, spaces — no digits). A
+  // tenant code that violates this passes tenant creation in Phase 1 but
+  // breaks employee creation in Phase 4, so the Excel parser must reject
+  // it up front at upload time.
+  it('rejects an alphanumeric tenant code', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'testcity001', tenantName: 'Test City' },
+    ]);
+    const { data, validation } = parseTenantExcel(wb);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'tenantCode', code: 'INVALID_FORMAT' })
+    );
+    expect(data).toBeNull();
+  });
+
+  it('accepts a letters-only tenant code', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'testcity', tenantName: 'Test City' },
+    ]);
+    const { data, validation } = parseTenantExcel(wb);
+    expect(validation.errors).toEqual([]);
+    expect(data?.tenant.tenantCode).toBe('testcity');
+  });
+
+  it('accepts letters with dots and spaces (e.g. sub-tenant codes)', () => {
+    const wb = makeWorkbook('Tenant Info', [
+      { tenantCode: 'ke.testcity', tenantName: 'Test City' },
+    ]);
+    const { validation } = parseTenantExcel(wb);
+    expect(validation.errors).toEqual([]);
+  });
+});
+
+describe('Employee dob is optional (egovernments/CCRS#1949)', () => {
+  // The Employee EDIT screen has always let an operator clear Date of Birth and
+  // save, and egov-hrms guards every DOB rule with a null check. The bulk /
+  // Phase-4 import paths used to disagree: a blank `dob` cell dropped the whole
+  // row with a REQUIRED_FIELD error.
+  const baseRow = {
+    employeeCode: 'EMP_001',
+    name: 'Jane Kamau',
+    mobileNumber: '712345678',
+    department: 'DEPT_07',
+    designation: 'DESIG_1004',
+    roles: 'PGR_LME',
+    jurisdictions: 'NAIROBI_CITY_VIWANDANI',
+  };
+
+  it('imports a row with no dob column at all', () => {
+    const { data, validation } = parseEmployeeExcel(makeWorkbook('Employee', [baseRow]));
+    expect(validation.errors).toEqual([]);
+    expect(validation.valid).toBe(true);
+    expect(data).toHaveLength(1);
+    expect(data[0].dob).toBeUndefined();
+  });
+
+  it('imports a row whose dob cell is blank or whitespace', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [
+        { ...baseRow, dob: '' },
+        { ...baseRow, employeeCode: 'EMP_002', dob: '   ' },
+      ])
+    );
+    expect(validation.errors).toEqual([]);
+    expect(data.map((e) => e.dob)).toEqual([undefined, undefined]);
+  });
+
+  it('still parses a supplied dob', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: '1990-05-14' }])
+    );
+    expect(validation.errors).toEqual([]);
+    expect(data[0].dob).toBe('1990-05-14');
+  });
+
+  it('still rejects a malformed dob', () => {
+    const { data, validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: '14/05/1990' }])
+    );
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
+    );
+    expect(data).toHaveLength(0);
+  });
+
+  it('still rejects a dob that leaves the employee under 18', () => {
+    const thisYear = new Date().getFullYear();
+    const { validation } = parseEmployeeExcel(
+      makeWorkbook('Employee', [{ ...baseRow, dob: `${thisYear - 5}-05-14` }])
+    );
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'dob', code: 'INVALID_FORMAT' })
+    );
   });
 });

@@ -5,6 +5,7 @@ export const ENDPOINTS = {
   USER_CREATE: '/user/users/_createnovalidate',
   USER_UPDATE: '/user/users/_updatenovalidate',
   MDMS_SEARCH: '/mdms-v2/v2/_search',
+  MDMS_COUNT: '/mdms-v2/v2/_count',
   MDMS_CREATE: '/mdms-v2/v2/_create',
   MDMS_UPDATE: '/mdms-v2/v2/_update',
   MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
@@ -37,7 +38,6 @@ export const ENDPOINTS = {
   ACCESS_ROLES_SEARCH: '/access/v1/roles/_search',
   ACCESS_ACTIONS_SEARCH: '/access/v1/actions/_search',
   IDGEN_GENERATE: '/egov-idgen/id/_generate',
-  LOCATION_BOUNDARY_SEARCH: '/egov-location/location/v11/boundarys/_search',
 
   ENC_ENCRYPT: '/egov-enc-service/crypto/v1/_encrypt',
   ENC_DECRYPT: '/egov-enc-service/crypto/v1/_decrypt',

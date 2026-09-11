@@ -165,6 +165,11 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
       ...mobileNumber,
       tenantId: stateCode,
       userType: getUserType(),
+      // Pass the country code on OTP send. The user record stores the mobile
+      // with its country code (+258 for MZ); omitting it here left the SMS
+      // gateway without a routable prefix. Sourced from the same
+      // MobileNumberValidation / CORE_MOBILE_CONFIGS the field validation uses.
+      ...(validationConfig.countryCode ? { countryCode: validationConfig.countryCode } : {}),
     };
 
     if (isUserRegistered) {
@@ -271,6 +276,8 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
         tenantId: stateCode,
         userType: getUserType(),
         ...name,
+        // Same country-code fix as selectMobileNumber / resendOtp.
+        ...(validationConfig.countryCode ? { countryCode: validationConfig.countryCode } : {}),
       };
       const [res, err] = await sendOtp({ otp: { ...data, ...TYPE_REGISTER } });
       if (res) {
@@ -369,6 +376,8 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
       userName,
       tenantId: stateCode,
       userType: getUserType(),
+      // Same country-code fix as the initial send (see selectMobileNumber).
+      ...(validationConfig.countryCode ? { countryCode: validationConfig.countryCode } : {}),
     };
 
     if (!isUserRegistered && individualServicePath) {

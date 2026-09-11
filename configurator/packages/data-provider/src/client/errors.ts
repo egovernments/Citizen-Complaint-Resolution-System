@@ -6,6 +6,15 @@ function deriveErrorCategory(statusCode: number): ErrorCategory {
   return 'api';
 }
 
+/** True when the gateway/service rejected the session, not the payload. */
+export function isSessionExpired(statusCode: number, errors: ApiError[]): boolean {
+  if (statusCode === 401) return true;
+  return errors.some((e) =>
+    /invalid.?access.?token|access token.*(expired|invalid)/i.test(`${e?.code || ''} ${e?.message || ''}`)
+    || /userinfo[\s\S]*must not be null/i.test(e?.message || ''),
+  );
+}
+
 export class ApiClientError extends Error {
   public errors: ApiError[];
   public statusCode: number;

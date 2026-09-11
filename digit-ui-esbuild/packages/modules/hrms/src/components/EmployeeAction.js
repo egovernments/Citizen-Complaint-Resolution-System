@@ -131,6 +131,7 @@ const EmployeeAction = ({ t, action, tenantId, closeModal, submitAction, applica
       set(Employees[0], 'deactivationDetails[0].remarks', data?.remarks);
 
       Employees[0].isActive = false;
+      Employees[0].reActivateEmployee = false;
       mutationUpdate.mutate(
         {
           Employees: Employees,
@@ -163,6 +164,7 @@ const EmployeeAction = ({ t, action, tenantId, closeModal, submitAction, applica
       set(Employees[0], 'reactivationDetails[0].reasonForDeactivation', data?.reasonForDeactivation);
       set(Employees[0], 'reactivationDetails[0].remarks', data?.remarks);
       Employees[0].isActive = true;
+      Employees[0].reActivateEmployee = true;
 
       mutationUpdate.mutate(
         {

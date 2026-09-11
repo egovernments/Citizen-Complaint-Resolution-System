@@ -74,6 +74,20 @@ export interface BulkImportPanelProps<Row extends BulkRow = BulkRow> {
   acceptExtensions?: string;
   /** Optional post-creation extras (e.g. credentials CSV download). */
   completionExtras?: (createdCount: number) => ReactNode;
+  /**
+   * Whether the current role may actually run this import — defaults to
+   * true so callers that don't pass it (or whose underlying resource isn't
+   * a masters-visibility-gated MDMS schema, e.g. HRMS employees) are
+   * unaffected. Callers backed by a real MDMS schemaCode should pass
+   * `useMastersCapability().canEditResource(resourceName)`. When false,
+   * renders the same "view-only" notice DigitEdit/DigitCreate use instead
+   * of the upload UI — this is presentation only, matching every other
+   * masters-visibility check in this app (§1.1 of the design doc); real
+   * write security is the gateway's RoleAction mapping, which a role
+   * without this action id already gets a 401 from on the actual import
+   * calls regardless of this flag.
+   */
+  canImport?: boolean;
 }
 
 export function BulkImportPanel<Row extends BulkRow>({
@@ -91,6 +105,7 @@ export function BulkImportPanel<Row extends BulkRow>({
   entityLabel,
   acceptExtensions = '.xlsx,.xls,.csv',
   completionExtras,
+  canImport = true,
 }: BulkImportPanelProps<Row>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -186,6 +201,25 @@ export function BulkImportPanel<Row extends BulkRow>({
 
   const validCount = rows.filter((r) => r.status === 'valid').length;
   const errorCount = rows.length - validCount;
+
+  if (!canImport) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate(backTo)} className="gap-1.5">
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+          <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">{title}</h1>
+        </div>
+        <DigitCard className="max-w-none">
+          <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            Your role has view-only access to this master.
+          </div>
+        </DigitCard>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

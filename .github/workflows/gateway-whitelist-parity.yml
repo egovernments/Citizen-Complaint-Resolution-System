@@ -1,0 +1,39 @@
+name: Gateway whitelist parity
+
+# Deployment-parity item #5, Phase 3: shared auth-optional paths must stay
+# identical across compose Kong and the K8s Spring gateway. The check also pins
+# reviewed Kong-only exceptions that rely on Kong's anonymous-body normalization:
+# they must remain present on Kong and protected on Spring.
+
+on:
+  pull_request:
+    paths:
+      - 'local-setup/kong/kong.yml'
+      - 'devops/deploy-as-code/charts/environments/env.yaml'
+      - '.github/scripts/check-gateway-whitelist-parity.py'
+      - '.github/workflows/gateway-whitelist-parity.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'local-setup/kong/kong.yml'
+      - 'devops/deploy-as-code/charts/environments/env.yaml'
+      - '.github/scripts/check-gateway-whitelist-parity.py'
+      - '.github/workflows/gateway-whitelist-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  whitelist-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install deps
+        run: pip install pyyaml
+      - name: Self-test the parity check
+        run: python3 .github/scripts/check-gateway-whitelist-parity.py --self-test
+      - name: Check Kong ↔ Spring gateway whitelist parity
+        run: python3 .github/scripts/check-gateway-whitelist-parity.py

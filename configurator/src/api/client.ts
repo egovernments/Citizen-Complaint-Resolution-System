@@ -14,6 +14,16 @@ class DigitApiClient {
   private authToken: string | null = null;
   private userInfo: UserInfo | null = null;
   private tenantId: string = '';
+  // Invoked when a request fails because the session is no longer valid (see
+  // isSessionExpired). The app registers this to drop the dead session and
+  // bounce the operator to the login screen.
+  private onSessionExpired: (() => void) | null = null;
+
+  // Register a callback fired the first time a request is rejected for an
+  // expired/invalid session. Called before the SessionExpiredError is thrown.
+  setSessionExpiredHandler(handler: () => void): void {
+    this.onSessionExpired = handler;
+  }
 
   // Initialize the client with environment URL
   setEnvironment(url: string): void {
@@ -166,6 +176,20 @@ class DigitApiClient {
           description: data.description,
         },
       ];
+
+      // An expired/invalid token surfaces here in a way that's confusing to
+      // operators: read/search endpoints are open at the gateway and keep
+      // working, so the wizard looks fine right up until the first WRITE. The
+      // gateway then can't resolve a user from the dead token (it strips any
+      // client-sent userInfo to prevent identity spoofing, so we can't supply
+      // it ourselves) and a service like boundary-service throws a raw
+      // "UserInfo ... must not be null" NPE instead of a clean 401. Detect that
+      // shape, drop the dead session, and surface an actionable message.
+      if (isSessionExpired(response.status, errors)) {
+        this.onSessionExpired?.();
+        throw new SessionExpiredError(response.status);
+      }
+
       throw new ApiClientError(errors, response.status);
     }
 
@@ -245,6 +269,40 @@ export class ApiClientError extends Error {
   // Get all error messages
   get allErrors(): string[] {
     return this.errors.map((e) => e.message);
+  }
+}
+
+// Friendly message shown whenever the session has expired or the token is
+// otherwise no longer accepted. firstError feeds straight into the existing
+// error banners, so callers need no special handling to get a clear message.
+const SESSION_EXPIRED_MESSAGE =
+  'Your session has expired. Please log in again to continue.';
+
+// Decide whether an error response means "the session is no longer valid"
+// rather than a genuine data/validation problem. Two signals:
+//   - HTTP 401 from the gateway (the clean case, on auth-enforced routes);
+//   - the gateway forwarded a dead token to an open route, so a downstream
+//     service NPEs on the missing userInfo. boundary-service's message is the
+//     canonical example: "UserInfo present inside RequestInfo being sent to
+//     enrichAuditDetails method must not be null".
+function isSessionExpired(status: number, errors: ApiError[]): boolean {
+  if (status === 401) return true;
+  return errors.some(
+    (e) =>
+      /userinfo[\s\S]*must not be null/i.test(e?.message || '') ||
+      /invalid.?access.?token|access token.*(expired|invalid)/i.test(
+        `${e?.code || ''} ${e?.message || ''}`
+      )
+  );
+}
+
+// Thrown when isSessionExpired matches. Extends ApiClientError so existing
+// `instanceof ApiClientError` catches keep working and `firstError` already
+// carries the friendly message.
+export class SessionExpiredError extends ApiClientError {
+  constructor(statusCode: number) {
+    super([{ code: 'SESSION_EXPIRED', message: SESSION_EXPIRED_MESSAGE }], statusCode);
+    this.name = 'SessionExpiredError';
   }
 }
 
