@@ -5,10 +5,12 @@ import { useTranslation } from "react-i18next";
 import { useHistory, Redirect } from "react-router-dom";
 import Background from "../../../components/Background";
 import ImageComponent from "../../../components/ImageComponent";
+import { languageLabel } from "../../../components/utils";
 
 const DEFAULT_LOCALE=Digit?.Utils?.getDefaultLanguage?.();
 
 const defaultLanguage = { label: "English", value:  DEFAULT_LOCALE};
+
 const LanguageSelection = () => {
   const { data: storeData, isLoading } = Digit.Hooks.useStore.getInitData();
   const { t } = useTranslation();
@@ -68,7 +70,7 @@ const LanguageSelection = () => {
             <div className="language-button-container" key={index}>
               <CustomButton
                 selected={language.value === selected}
-                text={t(language.label)}
+                text={languageLabel(t, language)}
                 onClick={() => handleChangeLanguage(language)}
               ></CustomButton>
             </div>
