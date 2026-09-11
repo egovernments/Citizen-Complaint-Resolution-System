@@ -6493,3 +6493,70 @@ header.digit-header .digit-dropdown-master {
   opacity: 1;
   max-width: 100%;
 }
+
+/* ----------------------------------------------------------------------
+ * 51. Language selection (#2038) — the last pre-auth screen still wearing
+ *     the legacy card: 4px corners, a hairline, and square language
+ *     buttons that read as disabled tiles rather than choices. Bring it
+ *     onto the same shape language as the modernised login card so the
+ *     two screens a user sees back to back match.
+ *
+ *     Radii are deliberately the v2 Button's `rounded-md` (6px) and the
+ *     login card's 14px, not new values.
+ * -------------------------------------------------------------------- */
+.employee .languageSelection {
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+  padding: 32px !important;
+}
+
+/* The row is three buttons inside a 420px card, so it has to be allowed to
+ * wrap — otherwise the widest label (PORTUGUÊS) is clipped by the card. */
+.employee .languageSelection .language-selector {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+.employee .languageSelection .language-button-container {
+  margin: 0 !important;
+}
+
+.employee .languageSelection .customBtn,
+.employee .languageSelection .customBtn-selected {
+  border-radius: 6px !important;
+  min-height: 40px;
+  padding: 0 14px !important;
+  width: auto !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+
+/* Unselected: a real, clickable outline rather than the grey 1px box. */
+.employee .languageSelection .customBtn {
+  border: 1px solid var(--color-input-border-default, var(--color-border, #E1E6EF)) !important;
+  background: var(--color-input-bg, #ffffff) !important;
+  color: var(--color-text-primary, #1D2433) !important;
+}
+.employee .languageSelection .customBtn:hover {
+  border-color: var(--color-button-primary-bg-default, #2563EB) !important;
+  background: var(--color-primary-1-bg, #EFF6FF) !important;
+}
+
+/* Selected: the same fill + white label as every other primary action. */
+.employee .languageSelection .customBtn-selected {
+  background: var(--color-button-primary-bg-default, var(--color-primary-2, #2563EB)) !important;
+  border: 1px solid var(--color-button-primary-border, var(--color-button-primary-bg-default, #2563EB)) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+}
+
+.employee .languageSelection .digit-submit-bar,
+.employee .languageSelection button[class*="submit-bar"] {
+  border-radius: 6px !important;
+  min-height: 44px;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+}
