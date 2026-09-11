@@ -6555,11 +6555,24 @@ header.digit-header .digit-dropdown-master {
 
 /* Same type as the login CTA and the language buttons — 0.875rem / 500.
  * A heavier, larger label here made this one button look like a different
- * component from every other primary action in the flow. */
+ * component from every other primary action in the flow.
+ *
+ * SubmitBar renders its label as an inner <h2 class="digit-button-label">
+ * carrying its own 20px, so sizing the <button> alone changes nothing you
+ * can see — the h2 has to be targeted too. */
 .employee .languageSelection .digit-submit-bar,
 .employee .languageSelection button[class*="submit-bar"] {
   border-radius: 6px !important;
   min-height: 40px;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
+}
+.employee .languageSelection .digit-submit-bar .digit-button-label,
+.employee .languageSelection button[class*="submit-bar"] .digit-button-label,
+.employee .languageSelection .digit-submit-bar .icon-label-container,
+.employee .languageSelection button[class*="submit-bar"] .icon-label-container {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  margin: 0 !important;
 }
