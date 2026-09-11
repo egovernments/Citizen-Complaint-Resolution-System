@@ -23,7 +23,7 @@ var GH_TOKEN     = "PASTE_GITHUB_FINE_GRAINED_PAT"; // fine-grained PAT, Content
 var DRIVE_ROOT = "CMS-Security-Scan";
 var PAGES_DIR  = "security_scan";                 // gh-pages path that serves the dashboard
 var GH_BRANCH  = "gh-pages";
-var INDEX_RAW  = "https://raw.githubusercontent.com/%REPO%/master/security-scan/dashboard-index.html";
+var INDEX_RAW  = "https://raw.githubusercontent.com/%REPO%/master/security_scan/dashboard-index.html";
 
 // Domains allowed to open the exported audit workbook (with the link, view-only). The owner's
 // own domain is shared via DriveApp; any EXTRA domains are added via the Drive API and require
@@ -80,28 +80,46 @@ function _publishToPages(b, xlsxUrl) {
   var run  = JSON.parse(Utilities.newBlob(Utilities.base64Decode(b.runJsonBase64)).getDataAsString());
   var m = run.meta || {}, s = run.summary || {};
   var safe = (b.base || ("run-" + Date.now())).replace(/[^A-Za-z0-9._-]+/g, "-");
-  var dataPath = PAGES_DIR + "/data/" + safe + ".json";
+
+  // Per-module gh-pages namespace: ansible runs -> security_scan/ansible/, source-code
+  // runs -> security_scan/code/. Each subdir is a self-contained dashboard (app + data).
+  var isCode = (b.kind === "source-code") || (m.kind === "source-code");
+  var sub    = isCode ? "code" : "ansible";
+  var base   = PAGES_DIR + "/" + sub;
+  var dataPath = base + "/data/" + safe + ".json";
 
   // 2a) write the run json (b.runJsonBase64 is already base64 of the file bytes)
-  _ghPut(repo, dataPath, ghTok, b.runJsonBase64, "security-scan: add " + safe);
+  _ghPut(repo, dataPath, ghTok, b.runJsonBase64, "security_scan: add " + safe + " (" + sub + ")");
 
-  // 2b) seed index.html once (from the repo's committed dashboard variant)
-  if (!_ghGet(repo, PAGES_DIR + "/index.html", ghTok)) {
+  // 2b) seed this module's dashboard app once (same template for every module)
+  if (!_ghGet(repo, base + "/index.html", ghTok)) {
     try {
-      var html = UrlFetchApp.fetch(INDEX_RAW.replace("%REPO%", repo), { muteHttpExceptions:true }).getContentText();
+      var html = UrlFetchApp.fetch(INDEX_RAW.replace("%REPO%", repo), { muteHttpExceptions:true }).getContentText("UTF-8");
       if (html && html.indexOf("<html") >= 0)
-        _ghPut(repo, PAGES_DIR + "/index.html", ghTok, Utilities.base64Encode(html), "security-scan: seed dashboard");
+        // encode the bytes as UTF-8 so non-ASCII glyphs (dashes, arrows, emoji) survive the seed
+        _ghPut(repo, base + "/index.html", ghTok, Utilities.base64Encode(html, Utilities.Charset.UTF_8), "security_scan: seed " + sub + " dashboard");
     } catch (e) {}
   }
+  // 2b') seed the root redirect once: /security_scan/ -> /security_scan/ansible/
+  if (!_ghGet(repo, PAGES_DIR + "/index.html", ghTok)) {
+    var redir = '<!doctype html><html><head><meta charset="utf-8">'
+      + '<meta http-equiv="refresh" content="0; url=ansible/"><link rel="canonical" href="ansible/">'
+      + '<title>Security Dashboard</title></head><body><a href="ansible/">Security Dashboard</a></body></html>';
+    _ghPut(repo, PAGES_DIR + "/index.html", ghTok, Utilities.base64Encode(redir), "security_scan: root redirect -> ansible");
+  }
 
-  // 2c) read-modify-write manifest.json (retry on race)
+  // 2c) read-modify-write the module's manifest.json (retry on race). The entry shape adapts:
+  // the dashboard's run selector + trend read occurrences / typesBySeverity for BOTH modules.
   var entry = {
     file: "data/" + safe + ".json", label: b.base, repo: repo, runner: (b.base.split(" - ")[0] || ""),
     branch: b.branch || m.branch || "", ts: m.ts || "", date: m.date || "", shaShort: m.shaShort || "", pr: null,
-    occurrences: s.occurrences || 0, types: s.types || 0,
-    occBySeverity: s.occBySeverity || {}, typesBySeverity: s.typesBySeverity || {}, xlsxUrl: xlsxUrl
+    occurrences: isCode ? (s.cveAll || s.cve || 0) : (s.occurrences || 0),
+    types:       isCode ? (s.cve || 0)            : (s.types || 0),
+    occBySeverity:   isCode ? (s.bySeverity || {}) : (s.occBySeverity || {}),
+    typesBySeverity: isCode ? (s.bySeverity || {}) : (s.typesBySeverity || {}),
+    xlsxUrl: xlsxUrl
   };
-  var mpath = PAGES_DIR + "/manifest.json";
+  var mpath = base + "/manifest.json";
   for (var attempt = 0; attempt < 4; attempt++) {
     var cur = _ghGet(repo, mpath, ghTok);
     var manifest = { runs: [] }, sha = null;
@@ -110,9 +128,9 @@ function _publishToPages(b, xlsxUrl) {
     manifest.runs.unshift(entry);
     manifest.runs.sort(function (a, c) { return (c.ts || "") < (a.ts || "") ? -1 : 1; });
     var res = _ghPut(repo, mpath, ghTok, Utilities.base64Encode(JSON.stringify(manifest, null, 1)),
-                     "security-scan: manifest " + safe, sha, true);
+                     "security_scan: manifest " + safe + " (" + sub + ")", sha, true);
     if (res.code < 300) return { ok:true, url:"https://" + repo.split("/")[0].toLowerCase() +
-                                 ".github.io/" + repo.split("/")[1] + "/" + PAGES_DIR + "/" };
+                                 ".github.io/" + repo.split("/")[1] + "/" + PAGES_DIR + "/" + sub + "/" };
     if (res.code !== 409) return { ok:false, error:"manifest PUT " + res.code + " " + res.body.slice(0,120) };
     Utilities.sleep(400 + attempt * 300);             // 409 conflict -> re-read and retry
   }

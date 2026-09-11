@@ -8,15 +8,9 @@ README.md).
 
 Create a **fine-grained PAT**: GitHub → Settings → Developer settings → Fine-grained tokens →
 - Resource owner: `egovernments`
-- Repository access: `Citizen-Complaint-Resolution-System`
+- Repository access: the CMS repos you'll publish to (e.g. `Citizen-Complaint-Resolution-System`)
 - Permissions: **Contents → Read and write**
 Copy the token.
-
-> **Multi-org note.** A fine-grained PAT is tied to **one** resource owner. If the same Apps Script
-> deployment also publishes to repos in another org, one fine-grained PAT cannot cover both — either
-> use a **classic** PAT with `repo` scope (spans every org you can access) as `GH_TOKEN`, or run a
-> separate Apps Script deployment per org. For CCRS on its own, the fine-grained PAT above is
-> sufficient.
 
 ## 2. Enable GitHub Pages (per repo)
 
@@ -25,7 +19,7 @@ Repo → Settings → Pages → Source = **Deploy from a branch**, Branch = **gh
 
 ## 3. Deploy the Apps Script
 
-1. https://script.google.com → New project → paste **`apps-script.gs`** (in this folder).
+1. https://script.google.com → New project → paste **`security_scan/apps-script.gs`** (the shared publisher, one level up at the `security_scan/` root).
 2. Set the two secrets — **either** edit the config vars at the top of the script:
    ```js
    var SHARED_TOKEN = "eDyz05i…";                 // runners pass this as SECSCAN_TOKEN
@@ -38,7 +32,7 @@ Repo → Settings → Pages → Source = **Deploy from a branch**, Branch = **gh
    external service" — the latter (`.../auth/script.external_request`) is what lets the script write
    to GitHub. If it is missing, scans upload to Drive but the dashboard step fails with
    *"You do not have permission to call UrlFetchApp.fetch"* — fix it via **Re-authorizing** below.
-5. Copy the `/exec` URL and paste it into `scan.py` → `WEBAPP_URL` (it's public/safe to commit).
+5. Copy the `/exec` URL and paste it into **both** scanners: `ansible/scan.py` and `code-base/scan.py` → `WEBAPP_URL` (it is public/safe to commit).
 
 ### Re-authorizing (external-requests permission)
 
@@ -62,32 +56,22 @@ scope and redeploy:
    required for the added scope to take effect).
 5. Re-run a scan; the dashboard should publish.
 
-## 4. Give runners the token
+## 4. Give the token to runners and CI
 
-Distribute `SHARED_TOKEN` to runners through a secure channel (e.g. a shared password manager).
-Each runner sets `export SECSCAN_TOKEN='<that value>'` before running. **Never commit it.**
+`SHARED_TOKEN` is the shared upload gate, distributed through a secure channel (e.g. a shared
+password manager). **Never commit it.** Two consumers:
 
-## 5. Seed the dashboard `index.html` (branch install)
+- **Ansible runners** — each person sets `export SECSCAN_TOKEN='<that value>'` before running `run.sh`.
+- **Code Base workflow** — add it as a **repo secret** named `SECSCAN_TOKEN`
+  (Settings → Secrets and variables → Actions). The `code-scan.yml` workflow reads it there.
 
-The Apps Script's auto-seed fetches the dashboard from `…/<repo>/master/security-scan/dashboard-index.html`.
-On CCRS this tool lives on the **`security/vulnerability-scan`** branch, not `master`, so the auto-seed
-404s and must be done once by hand. On the `gh-pages` branch, create **`security_scan/index.html`** with
-the contents of [`security-scan/dashboard-index.html`](dashboard-index.html) from the
-`security/vulnerability-scan` branch. Example with the API:
+## 5. First run
 
-```bash
-gh api -X PUT repos/egovernments/Citizen-Complaint-Resolution-System/contents/security_scan/index.html \
-  -f message="security-scan: seed dashboard" -f branch=gh-pages \
-  --field content="$(base64 -i security-scan/dashboard-index.html | tr -d '\n')"
-```
-
-Also create `security_scan/manifest.json` = `{"runs":[]}` on `gh-pages` if it does not exist. (Once
-`index.html` is present the Apps Script leaves it alone — it only seeds when missing.)
-
-## 6. First run
-
-Run a scan from any branch and confirm it appears at
-`https://egovernments.github.io/Citizen-Complaint-Resolution-System/security_scan/`.
+- If the repo's `gh-pages:/security_scan/` already has an old (CI-pipeline) dashboard, clear
+  `security_scan/manifest.json` and `security_scan/data/` once so the Claude runs start clean.
+  (The Apps Script seeds a fresh `index.html` from this repo's `security_scan/dashboard-index.html`.)
+- Run a scan from any branch and confirm it appears at
+  `https://egovernments.github.io/Citizen-Complaint-Resolution-System/security_scan/`.
 
 ## Notes
 
