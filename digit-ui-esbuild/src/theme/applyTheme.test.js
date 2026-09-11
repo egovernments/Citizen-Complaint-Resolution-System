@@ -477,12 +477,13 @@ test("v3 backfill: record's own button background wins over any derived one", ()
     });
     // v3 path applied the record's own value, not a backfilled one
     assert.equal(props["--color-button-primary-bg-default"], "#E6B800");
-    // Hover WAS left out of the record, and is now filled from the palette.
-    // This assertion used to expect `undefined`: leaving it unset meant CSS
-    // fell through to the vendored :root orange, because a `var(--token, …)`
-    // chain can never reach its fallback once :root defines the token. A
-    // deeper shade from the tenant's own palette is the lesser wrong.
-    assert.equal(props["--color-button-primary-bg-hover"], "#204F37");
+    // Hover WAS left out of the record, and is now filled. It used to expect
+    // `undefined`: leaving it unset meant CSS fell through to the vendored
+    // :root orange, because a `var(--token, …)` chain cannot reach its fallback
+    // once :root defines the token. It is filled from the BUTTON's own surface,
+    // not from primary-1 (#204F37 here) — primary-1 is a separate brand colour
+    // and using it would change the button's hue on hover.
+    assert.equal(props["--color-button-primary-bg-hover"], "#E6B800");
   } finally { restore(); }
 });
 
@@ -547,12 +548,51 @@ test("button foreground: light brand with no stated text colour gets near-black"
   const { props, restore } = stubDocument();
   try {
     const applyTheme = freshApply();
-    // kenya-yellow as the button surface: white would be ~1.5:1.
+    // kenya-yellow button on a green-primary-1 palette: white would be ~1.5:1.
     applyTheme({
       version: "3",
       colors: { "primary-1": "#204F37", "button-primary-bg-default": "#FEC931" },
     });
     assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+    // primary-1 is a second brand colour, not a shade of the button. Inventing
+    // hover/pressed from it turned the button green under the cursor, where
+    // near-black reads 2.08:1. The generated states keep the button's hue.
+    assert.equal(props["--color-button-primary-bg-hover"], "#FEC931");
+    assert.equal(props["--color-button-primary-bg-pressed"], "#FEC931");
+  } finally { restore(); }
+});
+
+test("button states: a stated text colour is never made invisible by a generated hover", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // Nairobi-shaped: yellow button, green text, green primary-1, no hover.
+    // Deriving hover from primary-1 made hover === text, i.e. 1.00:1.
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#204F37",
+        "button-primary-bg-default": "#FEC931",
+        "button-primary-text": "#204F37",
+      },
+    });
+    assert.equal(props["--color-button-primary-text"], "#204F37");
+    assert.notEqual(props["--color-button-primary-bg-hover"], props["--color-button-primary-text"]);
+    assert.equal(props["--color-button-primary-bg-hover"], "#FEC931");
+    assert.equal(props["--color-button-primary-bg-pressed"], "#FEC931");
+  } finally { restore(); }
+});
+
+test("button foreground: AA is judged on #0B0C0C, not on pure black", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // #777777 is the boundary: pure black scores 4.69:1 and looks like an AA
+    // pass, but the colour actually returned (#0B0C0C) renders 4.37:1. Neither
+    // candidate clears AA here, so the better worst case wins — white at
+    // 4.48:1 rather than a near-black that only appeared compliant.
+    applyTheme({ version: "3", colors: { "primary-1": "#333333", "button-primary-bg-default": "#777777" } });
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
   } finally { restore(); }
 });
 

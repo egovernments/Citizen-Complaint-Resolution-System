@@ -320,8 +320,12 @@ function readableForegroundAcross(hexes) {
   const lums = hexes.map(relativeLuminance).filter((l) => l !== null);
   if (!lums.length) return null;
   const worst = (fgLum) => Math.min(...lums.map((l) => contrastWithLuminance(fgLum, l)));
-  const white = worst(1);
-  const black = worst(0);
+  // Score the colours actually returned. NEAR_BLACK is #0B0C0C, not #000000,
+  // and scoring it as pure black overstates its contrast by ~7.2% — enough to
+  // wave through a pair that misses AA, e.g. on #777777 it reports 4.69:1 while
+  // the rendered ratio is 4.37:1.
+  const white = worst(relativeLuminance(WHITE));
+  const black = worst(relativeLuminance(NEAR_BLACK));
   if (white >= AA_NORMAL_TEXT) return WHITE;
   if (black >= AA_NORMAL_TEXT) return NEAR_BLACK;
   return white >= black ? WHITE : NEAR_BLACK;
@@ -472,13 +476,15 @@ function applyTheme(config) {
     vars["--color-primary-2"] ||
     vars["--color-primary-main"];
   if (brandSurface) {
-    // A deeper shade for hover/pressed if the palette offers one, else the
-    // brand itself — flat is fine, wrong-hue is not.
-    const deeper =
-      vars["--color-button-primary-bg-hover"] ||
-      vars["--color-primary-1"] ||
-      vars["--color-primary-dark"] ||
-      brandSurface;
+    // Fall back to the brand surface itself, NOT to primary-1. In the v3
+    // taxonomy primary-1 is a second dominant brand colour, not a darker shade
+    // of the button: on a yellow-button/green-primary-1 palette it would make
+    // hover green, and if that palette also states green button text the label
+    // hits 1.00:1 and vanishes. A flat hover keeps the button's hue and keeps
+    // whatever foreground was chosen for the resting state valid. A stated
+    // hover still wins, so a record like Bomet's keeps its real one and lets
+    // pressed derive from that.
+    const deeper = vars["--color-button-primary-bg-hover"] || brandSurface;
     const states = {
       "--color-button-primary-bg-default": brandSurface,
       "--color-button-primary-bg-hover": deeper,
