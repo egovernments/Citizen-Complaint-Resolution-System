@@ -52,12 +52,10 @@ import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
  *    audit mode still forwards them — absent identity must map to the LEAST
  *    privileged view, never to the internal passthrough.
  *  - the COMPLAINANT (and only on their own complaint): their own steps stay
- *    whole; steps whose content is addressed to the citizen — the closing
- *    entry (RESOLVE / REJECT) and a request for information
- *    (AWAITINGINFORMATION, the officer's question the citizen must be able
- *    to read to answer) — keep comment and attachments but lose
- *    the employee identity; every other employee step is status-only (no
- *    comment, no documents, no assigner/assignes).
+ *    whole; the closing entry (RESOLVE / REJECT) keeps comment and
+ *    attachments but loses the employee identity; every other employee step
+ *    — the request for information (AWAITINGINFORMATION) included — is
+ *    status-only (no comment, no documents, no assigner/assignes).
  *  - any other CITIZEN: an empty list — a citizen has no business reading
  *    another complaint's chronology, and this endpoint must not become an
  *    existence oracle for it.
@@ -75,19 +73,21 @@ public class ChronologyService {
 
     /**
      * Actions whose comment/attachments are addressed TO the citizen and so
-     * survive the citizen filter (identity still never does): the CRQ closure
-     * exception (RESOLVE / REJECT) and the CMS workflow's request for
-     * information: the AWAITINGINFORMATION comment IS the question put to the
-     * citizen (INVESTIGATION --AWAITINGINFORMATION--> INFOFROMCITIZEN), their
-     * timeline is the one reliable channel for it, and staff record the answer
-     * (INFOFROMCITIZEN --COMMENT--> is a staff transition). Flow-checked
-     * against CmsPgrWorkflowConfig. RESOLVEBYSUPERVISOR is deliberately NOT
-     * here: the citizen UI has never shown its comment, so passing it would
-     * be a behaviour change, not parity — revisit with product if the CRQ's
-     * closure rule should extend to it.
+     * survive the citizen filter (identity still never does): exactly the CRQ
+     * closure exception (RESOLVE / REJECT), nothing else.
+     *
+     * AWAITINGINFORMATION is deliberately NOT here (product decision on
+     * issue #94, 2026-09-10): the officer's request for information is an
+     * internal step like any other, so the citizen sees THAT the complaint is
+     * waiting on them but not the officer's text. The question reaches the
+     * citizen out of band (the Reception Officer relays it; staff record the
+     * answer via INFOFROMCITIZEN --COMMENT-->, a staff transition), so
+     * stripping it does not deadlock the workflow.
+     * RESOLVEBYSUPERVISOR is NOT here either: the citizen UI has never shown
+     * its comment, so passing it would be a behaviour change, not parity —
+     * revisit with product if the CRQ's closure rule should extend to it.
      */
-    private static final Set<String> CITIZEN_CONTENT_ACTIONS =
-            Set.of("RESOLVE", "REJECT", "AWAITINGINFORMATION");
+    private static final Set<String> CITIZEN_CONTENT_ACTIONS = Set.of("RESOLVE", "REJECT");
 
     private final ServiceRequestRepository repository;
     private final PGRRepository pgrRepository;
@@ -297,10 +297,9 @@ public class ChronologyService {
     }
 
     /**
-     * CRQ §3 for the complainant's own view: own steps stay whole; steps whose
-     * content is addressed to the citizen (closure, request for information)
-     * keep comment + documents but drop the employee identity; every other
-     * employee step becomes status-only. nextActions / state / dates are
+     * CRQ §3 for the complainant's own view: own steps stay whole; the closing
+     * entry keeps comment + documents but drops the employee identity; every
+     * other employee step becomes status-only. nextActions / state / dates are
      * always preserved — the citizen sees THAT the complaint moved.
      */
     private static void filterInstanceForComplainant(ObjectNode pi, String accountId) {
