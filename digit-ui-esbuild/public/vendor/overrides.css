@@ -4019,10 +4019,14 @@ button[class*="toast-close"] svg,
   box-shadow: none !important;
   transform: none !important;
 }
+/* Scoped to the submit bar: `.v2-employee-create-complaint
+ * .digit-button-label` on its own also caught secondary and tertiary
+ * buttons on the page, which must not wear the primary-button foreground. */
 .v2-employee-create-complaint .digit-submit-bar h2,
-.v2-employee-create-complaint .digit-button-label,
+.v2-employee-create-complaint .digit-submit-bar .digit-button-label,
+.v2-employee-create-complaint [class*="submit-bar"] .digit-button-label,
 .v2-employee-create-complaint button[class*="submit-bar"] h2 {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -6764,4 +6768,29 @@ header.digit-header .digit-dropdown-master {
 }
 .error-boundary .error-container button * {
   color: var(--color-button-primary-text, #ffffff) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 56. Create Complaint — form card and action bar (#2038)
+ *
+ *     The page container paints white edge to edge, and the action bar is
+ *     a transparent 52px strip *outside* the form card. So once the card's
+ *     hard border stopped, the submit button sat on a bare white slab with
+ *     nothing tying it to the form above it.
+ *
+ *     Let the page ground show instead, and give the card the same chrome
+ *     as the landing and login cards. The action bar then reads as a
+ *     footer belonging to the form rather than a leftover white band.
+ * -------------------------------------------------------------------- */
+.employee .v2-employee-create-complaint {
+  background-color: transparent !important;
+}
+.employee .v2-employee-create-complaint > form.custom-form > .digit-card-component {
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
+.employee .v2-employee-create-complaint .digit-action-bar-wrap {
+  padding: 16px 0 24px !important;
+  margin: 0 !important;
 }
