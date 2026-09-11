@@ -66,7 +66,9 @@ const ChangePasswordComponent = ({ config: propsConfig, t }) => {
         type: getUserType().toUpperCase(),
       };
 
-      const response = await Digit.UserService.changePassword(requestData, tenantId);
+      // Always the OTP (no-login) endpoint: this screen only exists for a user
+      // who cannot sign in, whatever stale session the browser may still hold.
+      await Digit.UserService.changePasswordNoLogin(requestData, tenantId);
       navigateToLogin();
     } catch (err) {
       setShowToast(err?.response?.data?.error?.fields?.[0]?.message || t("ES_SOMETHING_WRONG"));

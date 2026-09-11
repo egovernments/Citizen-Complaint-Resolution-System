@@ -169,6 +169,23 @@ export const UserService = {
       auth: true,
       params: { tenantId: stateCode },
     }),
+  // Forgot-password reset. The OTP-based endpoint is the only one that fits a
+  // user who cannot log in, so it must not depend on session state: a browser
+  // that held an earlier (often expired) employee session still carries a
+  // `User.info` after boot recovery, which made `changePassword` above pick
+  // the logged-in `/user/password/_update` and fail with 400 on UAT. No auth
+  // token is attached — the route is on the gateway's open whitelist and the
+  // service authenticates the caller with the OTP.
+  changePasswordNoLogin: (details, stateCode) =>
+    ServiceRequest({
+      serviceName: "changePasswordNoLogin",
+      url: Urls.ChangePassword,
+      data: {
+        ...details,
+      },
+      auth: false,
+      params: { tenantId: stateCode },
+    }),
 
   employeeSearch: (tenantId, filters) => {
     return Request({
