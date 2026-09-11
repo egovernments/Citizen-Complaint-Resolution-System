@@ -9,6 +9,32 @@ import ImageComponent from "../../../components/ImageComponent";
 const DEFAULT_LOCALE=Digit?.Utils?.getDefaultLanguage?.();
 
 const defaultLanguage = { label: "English", value:  DEFAULT_LOCALE};
+
+/**
+ * MDMS StateInfo stores each language's label as a shouted endonym
+ * ("ENGLISH", "FRANÇAIS", "PORTUGUÊS") and the UI runs it through t(). Only
+ * ENGLISH happens to be seeded in localization, so it renders "English"
+ * while every other language echoes its own key and shows up in caps. The
+ * result is one language cased differently from the rest.
+ *
+ * Rather than depend on someone seeding a key per language per tenant, fall
+ * back to the endonym in title case when the translation is missing. Casing
+ * is locale-aware so İ/i and ß behave, and the separators cover names like
+ * "KISWAHILI" and hyphenated or apostrophised forms.
+ */
+const titleCaseEndonym = (raw, locale) =>
+  String(raw)
+    .toLocaleLowerCase(locale)
+    .replace(/(^|[\s\-'’])(\p{L})/gu, (_, sep, ch) => sep + ch.toLocaleUpperCase(locale));
+
+const languageLabel = (t, language) => {
+  const raw = language?.label;
+  if (!raw) return "";
+  const translated = t(raw);
+  // i18next echoes the key when there is no entry for it.
+  if (translated && translated !== raw) return translated;
+  return titleCaseEndonym(raw, language?.value?.replace("_", "-"));
+};
 const LanguageSelection = () => {
   const { data: storeData, isLoading } = Digit.Hooks.useStore.getInitData();
   const { t } = useTranslation();
@@ -68,7 +94,7 @@ const LanguageSelection = () => {
             <div className="language-button-container" key={index}>
               <CustomButton
                 selected={language.value === selected}
-                text={t(language.label)}
+                text={languageLabel(t, language)}
                 onClick={() => handleChangeLanguage(language)}
               ></CustomButton>
             </div>

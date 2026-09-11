@@ -6553,10 +6553,13 @@ header.digit-header .digit-dropdown-master {
   color: var(--color-button-primary-text, #ffffff) !important;
 }
 
+/* Same type as the login CTA and the language buttons — 0.875rem / 500.
+ * A heavier, larger label here made this one button look like a different
+ * component from every other primary action in the flow. */
 .employee .languageSelection .digit-submit-bar,
 .employee .languageSelection button[class*="submit-bar"] {
   border-radius: 6px !important;
-  min-height: 44px;
-  font-size: 0.9375rem !important;
-  font-weight: 600 !important;
+  min-height: 40px;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
 }
