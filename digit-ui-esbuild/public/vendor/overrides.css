@@ -6915,3 +6915,24 @@ header.digit-header .digit-dropdown-master {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
+
+/* Results table: one scroll, not two (#2038).
+ *
+ * `.digit-data-table` is capped at 780px and scrolls its rows — that is the
+ * scroll you want. `.digit-results-table-wrapper` around it was also
+ * `overflow: auto`, and its content ran ~50px past its box, so the card got
+ * a second scrollbar that moved the whole table including its header. The
+ * wrapper has no reason to clip: let it size to its content and leave the
+ * scrolling to the rows. The inner element keeps overflow-x for narrow
+ * viewports. */
+.employee .v2-pgr-inbox .digit-results-table-wrapper {
+  overflow: visible !important;
+}
+
+/* The pagination strip drew a full border around itself, so the foot of the
+ * results card looked like a separate boxed element sitting inside another
+ * box. The rows above it already end in a rule. */
+.employee .v2-pgr-inbox .rdt_Pagination {
+  border: 0 !important;
+  background: transparent !important;
+}
