@@ -3013,7 +3013,23 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-results-table-wrapper > .digit-card-component,
 .v2-pgr-inbox .digit-results-table-wrapper > .digit-table-card {
   flex: 1 1 auto;
-  min-height: 100%;
+  /* #2038: was `min-height: 100%`, i.e. at least the full wrapper height —
+   * but the wrapper also holds the My/All tab strip above the card, so the
+   * column's content came out ~42px taller than the column itself and the
+   * card got a second scrollbar wrapped around the table's own one. `0`
+   * lets the card take the space that is actually left. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The row list keeps its own cap and its own scrollbar — that is the scroll
+ * that belongs here. With the card no longer forced to a full-column
+ * minimum, the column simply grows to fit tabs + card, so nothing overflows
+ * and the second scrollbar never appears. */
+.v2-pgr-inbox .digit-results-table-wrapper .digit-data-table {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* My/All visibility tabs (Visibility V1, PR #1052). Rendered inside the
@@ -6861,8 +6877,11 @@ header.digit-header .digit-dropdown-master {
 /* Header: a plain heading row on the card surface, separated by a single
  * rule, rather than a tinted band with a border above and below. The tint
  * lives on .rdt_TableHead (the wrapper), not on the row. */
+/* Opaque, not transparent: this header is sticky over a scrolling row list,
+ * so a see-through ground lets the rows slide visibly through the labels.
+ * The card surface reads as "no tint" while still hiding what passes under. */
 .employee .v2-pgr-inbox .rdt_TableHead {
-  background-color: transparent !important;
+  background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
 }
 .employee .v2-pgr-inbox .rdt_TableHeadRow {
   background-color: transparent !important;
@@ -6914,19 +6933,6 @@ header.digit-header .digit-dropdown-master {
 .employee .v2-pgr-inbox [class*="tertiary"] .digit-button-label {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
-}
-
-/* Results table: one scroll, not two (#2038).
- *
- * `.digit-data-table` is capped at 780px and scrolls its rows — that is the
- * scroll you want. `.digit-results-table-wrapper` around it was also
- * `overflow: auto`, and its content ran ~50px past its box, so the card got
- * a second scrollbar that moved the whole table including its header. The
- * wrapper has no reason to clip: let it size to its content and leave the
- * scrolling to the rows. The inner element keeps overflow-x for narrow
- * viewports. */
-.employee .v2-pgr-inbox .digit-results-table-wrapper {
-  overflow: visible !important;
 }
 
 /* The pagination strip drew a full border around itself, so the foot of the
