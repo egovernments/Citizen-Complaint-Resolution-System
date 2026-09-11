@@ -16,10 +16,15 @@ export function registerDiscoverTools(registry: ToolRegistry): void {
     },
     handler: async () => {
       const summary = registry.getSummary();
+      const readOnly = registry.isReadOnly();
       return JSON.stringify(
         {
           success: true,
-          message: `${summary.enabledTools} of ${summary.totalTools} tools enabled`,
+          readOnly,
+          message: `${summary.enabledTools} of ${summary.totalTools} tools enabled`
+            + (readOnly
+              ? ' — READ-ONLY instance: write tools are not registered. The group descriptions below still name write capabilities (create/update/decrypt/...), but those tools are absent here; do not call them.'
+              : ''),
           groups: summary.groups,
           usage:
             'Call enable_tools with group names to load more tools. Groups: mdms (tenant validation + MDMS CRUD + tenant bootstrap/cleanup), boundary (boundary hierarchy + boundary management), masters (departments, designations, complaint types), employees (HRMS employee create/update/validate), localization (UI labels), pgr (complaints + workflow), admin (filestore upload/download + access control + user search/create), idgen (ID generation), location (geographic boundaries), encryption (encrypt/decrypt data), docs (search DIGIT documentation + full OpenAPI 3.0 API catalog), monitoring (persister health, Kafka lag, DB counts, E2E parity), tracing (distributed trace search, debug API failures, find slow operations), snapshot (capture + diff system state across two setups: image/compose drift, config diffs, data/seed gaps + enc-key canary).',
@@ -60,14 +65,19 @@ export function registerDiscoverTools(registry: ToolRegistry): void {
       const disableResult = disable.length > 0 ? registry.disableGroups(disable) : null;
 
       const summary = registry.getSummary();
+      const readOnly = registry.isReadOnly();
 
       return JSON.stringify(
         {
           success: true,
+          readOnly,
           enabled: enableResult,
           disabled: disableResult,
           activeGroups: registry.getEnabledGroups(),
           toolCount: `${summary.enabledTools} of ${summary.totalTools} tools now enabled`,
+          ...(readOnly
+            ? { note: 'READ-ONLY instance: enabling a group does NOT add its write tools — they are not registered here, so a group can report as active with only its read tools (or none).' }
+            : {}),
         },
         null,
         2

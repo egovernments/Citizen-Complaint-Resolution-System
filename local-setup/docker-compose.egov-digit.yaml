@@ -2025,7 +2025,13 @@ services:
       DIGIT_DB_USER: egov
       DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
-      - "13102:3000"
+      # 127.0.0.1 only: this is the public-facing read-only instance, and its
+      # only auth is the nginx basic-auth in front. Binding all interfaces
+      # (like the sibling digit-mcp does) would let a caller hit :13102/mcp
+      # directly and walk around that auth — and exfiltrate CRS_PASSWORD via
+      # the configure base_url path. nginx proxies to 127.0.0.1, so this is
+      # the only way in and costs nothing.
+      - "127.0.0.1:13102:3000"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/healthz"]
       interval: 15s

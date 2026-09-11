@@ -1,5 +1,20 @@
 import type { ToolGroup, ToolMetadata } from '../types/index.js';
 
+/**
+ * Resolve read-only mode from MCP_READ_ONLY, FAIL-CLOSED. Unset/empty, or an
+ * explicit falsey word (false/0/no/off), is the ONLY way to get a full instance;
+ * any other non-empty value — including near-misses like "TRUE", "yes", "on", or
+ * a stray-space "1 " out of a ConfigMap/--set — resolves to read-only. Strict
+ * equality would fail OPEN (full admin) on exactly those typos, which for a
+ * security control is the wrong direction. Exported so tool handlers (which do
+ * not hold a registry) can consult the same rule.
+ */
+export function readOnlyFromEnv(): boolean {
+  const v = String(process.env.MCP_READ_ONLY ?? '').trim().toLowerCase();
+  if (v === '') return false;
+  return !['false', '0', 'no', 'off'].includes(v);
+}
+
 export class ToolRegistry {
   private tools: Map<string, ToolMetadata> = new Map();
   private enabledGroups: Set<ToolGroup> = new Set(['core', 'docs']);
@@ -15,9 +30,7 @@ export class ToolRegistry {
   private readonly readOnly: boolean;
 
   constructor(options?: { readOnly?: boolean }) {
-    this.readOnly =
-      options?.readOnly ??
-      (process.env.MCP_READ_ONLY === 'true' || process.env.MCP_READ_ONLY === '1');
+    this.readOnly = options?.readOnly ?? readOnlyFromEnv();
   }
 
   isReadOnly(): boolean {
@@ -30,11 +43,17 @@ export class ToolRegistry {
 
   register(tool: ToolMetadata): void {
     // Read-only mode drops every write-risk tool so it can never be called.
-    // `core` is exempt: its only writes are session bookkeeping (`init`,
-    // `session_checkpoint`) that touch local session state, not DIGIT data, and
-    // dropping them would break the session-hint flow. Every data-mutating tool
-    // (tenant_destroy, decrypt_data, *_create/_update, workflow_create, ...)
-    // lives in a non-core group and is therefore excluded.
+    // `core` is exempt from the drop because its only write tools are session
+    // bookkeeping (`init`, `session_checkpoint`) that touch local session state,
+    // not DIGIT data, and dropping them would break the session-hint flow.
+    //
+    // `configure` is the one core tool that CAN mutate DIGIT (it self-grants
+    // roles via userUpdate, and its `base_url` arg can be pointed anywhere): it
+    // is `risk: read` and kept, because a read-only instance still needs it to
+    // connect — so those two behaviours are refused inside its handler when
+    // read-only (see mdms-tenant.ts). Everything else that mutates DIGIT data
+    // (tenant_destroy, decrypt_data, snapshot_capture, *_create/_update,
+    // workflow_create, ...) is `risk: write` in a non-core group and dropped here.
     if (this.readOnly && tool.risk === 'write' && tool.group !== 'core') {
       return;
     }

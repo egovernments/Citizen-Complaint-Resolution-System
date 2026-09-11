@@ -1,4 +1,7 @@
 {{- if .Values.ingress.enabled }}
+{{- if and (not .Values.ingress.basicAuthSecret) (not .Values.ingress.allowSourceRange) }}
+{{- fail "digit-mcp: ingress.enabled requires ingress.basicAuthSecret and/or ingress.allowSourceRange. /mcp has no app-level auth, so a public ingress with neither would expose the MCP unauthenticated." }}
+{{- end }}
 {{- $fullName := include "digit-mcp.fullname" . -}}
 # Public ingress for digit-mcp. The MCP is a platform-admin surface, so this is
 # OPT-IN (ingress.enabled=false by default) and is meant to front a READ-ONLY

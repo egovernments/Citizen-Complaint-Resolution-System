@@ -287,6 +287,24 @@
     # names doesn't error — it silently falls back to the India defaults,
     # which is wrong on every non-India tenant and was previously caught only
     # by a live HRMS crash-loop. Fail fast instead.
+    - name: "preflight — read-only MCP flags must be consistent (fail-closed)"
+      ansible.builtin.assert:
+        that:
+          # Both nginx blocks define /mcp + /v1/. Enabling both would leave the
+          # INTERNAL admin /mcp (no auth) serving while the operator believes
+          # they've moved to the read-only instance behind basic auth.
+          - not (nginx_features.mcp | default(false) and nginx_features.mcp_readonly | default(false))
+          # The container flag (enable_mcp_readonly) and the nginx flag
+          # (nginx_features.mcp_readonly) must move together: only the container
+          # → it's published with no front and no auth; only nginx → 502.
+          - (enable_mcp_readonly | default(false)) == (nginx_features.mcp_readonly | default(false))
+        fail_msg: >-
+          Inconsistent read-only MCP config on {{ inventory_hostname }}: set
+          enable_mcp_readonly and nginx_features.mcp_readonly TOGETHER, and do not
+          enable nginx_features.mcp alongside nginx_features.mcp_readonly (both serve
+          /mcp; the internal one has no auth). See host_vars/_example.yml.
+      when: (enable_mcp_readonly | default(false)) or (nginx_features.mcp_readonly | default(false))
+
     - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
       vars:
         # `| default(...)` in the mobile-number tasks below only substitutes
@@ -3458,9 +3476,11 @@
         - mcp_readonly_basic_auth_password is defined
         - ansible_facts['os_family'] == 'RedHat'
 
-    # Idempotent via `creates`: rotate by deleting the file and re-running. Skips
-    # if the password is unset (the read-only MCP routes would 401 with no valid
-    # user — set mcp_readonly_basic_auth_password in vault/host_vars).
+    # Idempotent via `creates`: rotate by deleting the file and re-running (so a
+    # changed password in host_vars does NOT rotate on its own). Skips if the
+    # password is unset — nginx then returns 500 (no auth_basic_user_file to
+    # read), which still fails closed; set mcp_readonly_basic_auth_password in
+    # vault/host_vars so the routes actually serve.
     - name: "mcp-readonly — basic-auth user in /etc/nginx/.htpasswd-mcp-readonly"
       ansible.builtin.command: >-
         htpasswd -bBc /etc/nginx/.htpasswd-mcp-readonly

@@ -895,8 +895,12 @@ if (transportMode === 'stdio') {
   });
 
   httpServer.listen(port, '0.0.0.0', () => {
-    mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath });
+    const readOnly = restRegistry.isReadOnly();
+    mcpLogger.log({ event: 'startup', port, logPath: mcpLogger.logPath, readOnly, tools: restRegistry.getAllTools().length });
     console.error(`DIGIT MCP server listening on http://0.0.0.0:${port}/mcp`);
+    // Log the resolved mode explicitly: an operator who typo'd MCP_READ_ONLY
+    // otherwise has no way to notice a dropped-tool instance short of a 404.
+    console.error(`[digit-mcp] read-only mode: ${readOnly} (MCP_READ_ONLY=${JSON.stringify(process.env.MCP_READ_ONLY ?? '')}); ${restRegistry.getAllTools().length} tools registered`);
     console.error(`Session viewer: http://0.0.0.0:${port}/`);
     console.error(`Health check: http://0.0.0.0:${port}/healthz`);
     console.error(`Logging to: ${mcpLogger.logPath}`);

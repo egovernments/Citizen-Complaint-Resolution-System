@@ -330,7 +330,7 @@ getResourceBySchema('RAINMAKER-PGR.ServiceDefs');  // → complaint-types config
 | `CRS_PASSWORD` | — | DIGIT admin password |
 | `CRS_TENANT_ID` | from env config | Tenant for authentication |
 | `MCP_ENABLE_ALL_GROUPS` | — | Set to `1` to enable all tool groups on startup |
-| `MCP_READ_ONLY` | — | Set to `1`/`true` to start a **read-only** instance: every write-risk tool is dropped at registration (absent, not just disabled) so it can't be listed, enabled, or dispatched — on `/mcp` or any `/v1` route. Read tools remain; `core` session tools (`init`, `session_checkpoint`) are exempt. Intended for a publicly-exposable instance; still gate it with auth/allowlist since some reads expose data. |
+| `MCP_READ_ONLY` | — | Any non-empty value except `false`/`0`/`no`/`off` starts a **read-only** instance (fail-closed): every write-risk tool is dropped at registration (absent, not just disabled) so it can't be listed, enabled, or dispatched — on `/mcp`, `/v1/tools/*`, or the `/v1/tenant/*` routes (all resolve tools through `getTool`). `core` session tools (`init`, `session_checkpoint`) are exempt as local bookkeeping; `configure` stays a read tool (needed to connect) but refuses `base_url` and the role self-grant in this mode. **Not covered:** the `/api/sessions/*` routes don't go through the registry, so this flag doesn't gate them — a public instance must sit behind edge auth (basic-auth/allowlist) regardless, which also matters because some reads (`user_search`, `pgr_search`) expose data. |
 
 ## Environments
 
