@@ -8300,7 +8300,7 @@
     },
     {
         "code": "PGR_RECEIPT_DOWNLOAD",
-        "message": "Download Receipt",
+        "message": "Download Application",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

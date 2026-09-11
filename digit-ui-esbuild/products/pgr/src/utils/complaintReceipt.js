@@ -90,7 +90,7 @@ const DASH = "—";
 const isBlank = (s) => !S(s);
 
 export const RECEIPT_FALLBACKS = {
-  downloadLabel: "Download Receipt",
+  downloadLabel: "Download Application",
   nextTitle: "What happens next",
   nextTrack: "Keep this complaint number — you need it to ask about your complaint.",
   nextUpdate: "You can track the status any time under My Complaints.",
