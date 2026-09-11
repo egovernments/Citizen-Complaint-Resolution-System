@@ -757,6 +757,19 @@ if (transportMode === 'stdio') {
       return;
     }
 
+    // Read-only instances refuse the session-viewer data routes outright. They
+    // live OUTSIDE the tool registry (so the read-only tool filter never reaches
+    // them), and they are both a write surface (POST /api/sessions/:id/messages
+    // does unbounded INSERTs) and a data-exposure surface (GET .../events returns
+    // stored tool args, user_name, client_ip). authenticateRest is not the gate
+    // here — it falls back to the CRS_* env creds, which are always present, so it
+    // would auto-pass. A publicly-exposed read-only instance must not offer these
+    // at all; the internal (full) instance keeps its session viewer.
+    if (restRegistry.isReadOnly() && pathname.startsWith('/api/sessions')) {
+      jsonResponse(res, 403, { error: 'The session API is disabled on a read-only MCP instance.' });
+      return;
+    }
+
     // Events endpoint (must be before /api/sessions to avoid prefix match)
     const eventsMatch = pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/events$/);
     if (req.method === 'GET' && eventsMatch) {
