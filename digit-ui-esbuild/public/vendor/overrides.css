@@ -6576,3 +6576,59 @@ header.digit-header .digit-dropdown-master {
   line-height: 1.25rem !important;
   margin: 0 !important;
 }
+
+/* ----------------------------------------------------------------------
+ * 52. Employee top bar (#2038)
+ * -------------------------------------------------------------------- */
+
+/* The far-right brand mark is the *same* image already sitting next to the
+ * eGov wordmark on the left (Header renders `img` a second time at the end
+ * of the action row). One tenant crest per bar is enough. The element is
+ * hidden rather than removed because Header is shared with other products,
+ * and passing no `img` makes it fall back to the DIGIT mark instead. */
+.digit-employee-header .digit-header-action-fields > .digit-header-img {
+  display: none !important;
+}
+
+/* One type scale across the bar. It was carrying three: the working
+ * context at 12px/400, the tenant and language dropdowns at 16px/400, and
+ * the profile initial at 16px/700. Everything is 0.875rem/500 now; the
+ * "+N" counters keep a heavier weight because they are a distinct datum
+ * rather than a label, and they are the one thing in the bar that has to
+ * survive being skimmed. */
+.digit-employee-header .digit-header-action-fields,
+.digit-employee-header .digit-header-action-fields .cp,
+.digit-employee-header .digit-working-context-summary,
+.digit-employee-header .digit-working-context-summary span,
+.digit-employee-header .header-dropdown-profile {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  letter-spacing: normal !important;
+}
+.digit-employee-header .digit-working-context-summary .digit-working-context-more {
+  font-weight: 600 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 53. Employee home footer (#2038) — "Powered by DIGIT" floated ~32px
+ *     above the bottom of the window because `.main` wraps to its content
+ *     instead of filling the viewport. Make the column full height and let
+ *     the footer be pushed to the end of it, so the mark sits on the
+ *     bottom edge on a short page and still follows the content on a long
+ *     one.
+ * -------------------------------------------------------------------- */
+.employee .main.digit-home-main {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.employee .main.digit-home-main > .digit-home-app-wrapper {
+  flex: 1 1 auto;
+}
+.employee .main.digit-home-main > .employee-home-footer {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding-bottom: 10px;
+}
