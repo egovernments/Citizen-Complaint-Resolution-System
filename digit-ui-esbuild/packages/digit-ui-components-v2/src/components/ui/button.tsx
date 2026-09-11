@@ -73,7 +73,12 @@ export interface ButtonProps
 const PRIMARY_INLINE_STYLE: React.CSSProperties = {
   backgroundColor:
     "var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931))",
-  color: "var(--color-text-primary, #0B0C0C)",
+  // The label follows the theme's own button-text token. It used to be
+  // --color-text-primary, which only read correctly while the brand surface
+  // was light (naipepea's yellow); on a dark brand like Bomet's #2563EB that
+  // put near-black on blue. Falling back to the old value keeps every tenant
+  // that never set button-primary-text exactly where it was.
+  color: "var(--color-button-primary-text, var(--color-text-primary, #0B0C0C))",
 };
 const PRIMARY_HOVER_BG =
   "var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800))";

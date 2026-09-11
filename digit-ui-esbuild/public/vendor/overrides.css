@@ -247,9 +247,14 @@ button[class*="submit-bar"]:active {
 /* Foreground (text + svg) on primary-2 surfaces. Vendor hardcodes
  * `color: rgba(255,255,255,…)` inside `.digit-button-primary h2` /
  * `.digit-submit-bar h2`, which fails WCAG once MDMS swaps the primary
- * surface to a light brand colour (Nairobi yellow #FEC931). Route through
- * --color-text-primary (kenya-green sets it to #0B0C0C ≈ black) so the
- * contrast colour stays theme-configurable without introducing a new var. */
+ * surface to a light brand colour (Nairobi yellow #FEC931).
+ *
+ * #2038: --color-text-primary was the stand-in for "whatever reads on the
+ * brand colour", which only held while the brand was light. Bomet's blue
+ * (#2563EB) needs white. Prefer the dedicated --color-button-primary-text
+ * (already in the ThemeConfig schema, and already #FFFFFF on the live
+ * record) and keep the old body-text value as the fallback, so a theme
+ * that never set it behaves exactly as before. */
 .digit-button-primary,
 .digit-button-primary h2,
 .digit-button.primary,
@@ -257,7 +262,7 @@ button[class*="submit-bar"]:active {
 button.digit-submit-bar,
 button[class*="submit-bar"],
 .digit-submit-bar h2 {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 .digit-button-primary svg,
 .digit-button-primary svg path,
@@ -267,8 +272,8 @@ button.digit-submit-bar svg,
 button.digit-submit-bar svg path,
 button[class*="submit-bar"] svg,
 button[class*="submit-bar"] svg path {
-  fill: var(--color-text-primary, #0B0C0C) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  fill: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Input focus border — designer's "Inputs / Border Focus" (Nairobi: #204F37,
@@ -1151,7 +1156,9 @@ button[class*="submit-bar"],
 button[class*="submit-bar"] *,
 .digit-formcomposer-submitbar,
 .digit-formcomposer-submitbar * {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* #2038: same swap as the block above — the label on a primary button
+   * follows --color-button-primary-text, not the page's body-text colour. */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Sidebar rows in the v2 CitizenSidebar (Edit Profile / Logout / Helpline
@@ -1681,7 +1688,8 @@ button[class*="toast-close"] svg,
 .v2-scope .digit-privacy-checkbox label,
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container,
 .v2-scope .digit-privacy-checkbox .label {
-  font-size: 0.8125rem !important;
+  /* Same 0.875rem as the field labels and "Forgot password?" (#2038). */
+  font-size: 0.875rem !important;
   color: var(--color-text-secondary, #6B7280) !important;
   line-height: 1.4 !important;
   margin: 0 !important;
@@ -1692,19 +1700,36 @@ button[class*="toast-close"] svg,
   align-items: center;
   gap: 8px;
 }
+/* The real <input> is opacity:0 but still in flow, so it reserves a ~16px
+ * slot ahead of the drawn box and the checkbox lands 16px right of the
+ * field column. Take it out of flow (still on top of the box, so it stays
+ * the click target) and the box starts on the same left edge as every
+ * input, the submit button and "Forgot password?" (#2038). */
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container > input[type="checkbox"],
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container .input-emp[type="checkbox"] {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 24px !important;
+  height: 24px !important;
   margin: 0 !important;
   vertical-align: middle;
+}
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox,
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox-emp {
+  margin-left: 0 !important;
 }
 .v2-scope .digit-privacy-checkbox button.digit-button-link,
 .v2-scope .digit-privacy-checkbox .digit-button-link,
 .v2-scope .digit-privacy-checkbox button[class*="link"] {
   margin: 0 !important;
   padding: 0 !important;
-  font-size: 0.8125rem !important;
-  font-weight: 600 !important;
-  color: var(--color-primary-1, var(--color-primary-main, #c84c0e)) !important;
+  /* #2038: one size for every piece of text on this row, and the link wears
+   * the clickable colour rather than primary-1 (which is now the navy the
+   * top bar uses, and must never be a text colour). */
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
   background: transparent !important;
   box-shadow: none !important;
   height: auto !important;
@@ -5296,13 +5321,18 @@ html .citizen-home-footer {
 
 /* 49. Login banner — drop the citizen-banner.svg illustration which
  *     contains a partial tagline ("...the resolution") that peeks out
- *     beside the login card and looks like leaked draft copy. Solid
- *     teal background reads cleaner. Tenant-neutral (uses upstream's
- *     existing teal value, no hardcoded brand). */
+ *     beside the login card and looks like leaked draft copy. A solid
+ *     field reads cleaner.
+ *
+ *     #2038: the field was a literal #0B4B66, so the pre-auth pages kept
+ *     upstream's teal no matter what the tenant theme said. Route it
+ *     through the header token (the same navy the top bar wears once you
+ *     are inside) and keep the old teal as the fallback, so a deployment
+ *     with no ThemeConfig looks exactly as it does today. */
 .banner, .banner-container,
 [class*="banner-container"]:not([class*="banner-text"]) {
-  background-image: linear-gradient(rgba(11, 75, 102, 0.85), rgba(11, 75, 102, 0.85)) !important;
-  background-color: #0B4B66 !important;
+  background-image: none !important;
+  background-color: var(--color-header-bg, var(--color-digitv2-header-sidenav, #0B4B66)) !important;
 }
 
 /* 50b. Tertiary action labels (.primary-label-btn, .link-label) — upstream
