@@ -3299,12 +3299,15 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-checkbox-container {
   position: relative;
 }
+/* #2038: was a 1px near-black outline with square corners, which drew a box
+ * around every panel and made the page read as a spreadsheet. Hairline plus
+ * a soft lift, same as the landing, login and create-complaint cards. */
 .v2-pgr-inbox .digit-inbox-search-wrapper > div:first-child,
 .v2-pgr-inbox .digit-card-component {
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
 }
 .v2-pgr-inbox .card-label,
 .v2-pgr-inbox h2.card-label {
@@ -3382,10 +3385,15 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
 }
+/* Scoped to filled buttons: `.v2-pgr-inbox .digit-button-label` alone also
+ * caught the tertiary/link labels on this page, which must not take the
+ * primary-button foreground. */
 .v2-pgr-inbox button.submit-bar h2,
 .v2-pgr-inbox button[class*="submit-bar"] h2,
-.v2-pgr-inbox .digit-button-label {
-  color: var(--color-text-primary, #0B0C0C) !important;
+.v2-pgr-inbox button[class*="submit-bar"] .digit-button-label,
+.v2-pgr-inbox button.digit-button-primary .digit-button-label,
+.v2-pgr-inbox .digit-button-primary .digit-button-label {
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -6793,4 +6801,117 @@ header.digit-header .digit-dropdown-master {
 .employee .v2-employee-create-complaint .digit-action-bar-wrap {
   padding: 16px 0 24px !important;
   margin: 0 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 57. Search Complaints / inbox (#2038)
+ *
+ *     Against the reference the page read as a spreadsheet rather than a
+ *     set of panels, for three reasons:
+ *       - the page scope painted white edge to edge, so the cards had no
+ *         ground to sit on and every panel ran into its neighbour;
+ *       - every table CELL carried a left and right border, drawing a full
+ *         grid instead of letting the row separators do the work;
+ *       - the header row was a tinted band rather than a plain heading.
+ * -------------------------------------------------------------------- */
+
+/* Let the page ground show, so the panels read as cards (same fix as the
+ * create-complaint container). */
+.employee .v2-pgr-inbox {
+  background-color: transparent !important;
+}
+
+/* One card treatment for the link, search, filter and results panels. */
+.employee .v2-pgr-inbox .digit-section,
+.employee .v2-pgr-inbox .digit-card-component.digit-table-card {
+  background-color: var(--color-page-bg, #ffffff) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
+
+/* The strip under the page title is an empty 2px element that happens to be
+ * the search wrapper's first child, so the panel-chrome rule above boxed it
+ * and the two borders collapsed into a hard black rule under the heading.
+ * It holds no content, so it should draw nothing. Specificity has to clear
+ * `.v2-pgr-inbox .digit-inbox-search-wrapper > div:first-child`. */
+.employee .v2-pgr-inbox .digit-inbox-search-wrapper > div.digit-inbox-search-composer-header-action-wrapper {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Rows carry the separation; cells should not draw columns. */
+.employee .v2-pgr-inbox .rdt_TableCell {
+  border-left: 0 !important;
+  border-right: 0 !important;
+  font-size: 0.875rem !important;
+  color: var(--color-table-row-text, #363636) !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow {
+  border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow:last-of-type {
+  border-bottom: 0 !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow:hover {
+  background-color: var(--color-table-hover, #EFF6FF) !important;
+}
+
+/* Header: a plain heading row on the card surface, separated by a single
+ * rule, rather than a tinted band with a border above and below. The tint
+ * lives on .rdt_TableHead (the wrapper), not on the row. */
+.employee .v2-pgr-inbox .rdt_TableHead {
+  background-color: transparent !important;
+}
+.employee .v2-pgr-inbox .rdt_TableHeadRow {
+  background-color: transparent !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
+  min-height: 48px !important;
+}
+.employee .v2-pgr-inbox .rdt_TableCol,
+.employee .v2-pgr-inbox .rdt_TableCol div {
+  color: var(--color-table-header-text, #1D2433) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+}
+
+/* The links panel was shouting: a 24px navy card title over a 20px
+ * underlined link, both far larger than anything else on the page. Bring
+ * them onto the same scale as the filter panel beside them, and let the
+ * title be a title (near-black) with the action in the link colour. */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-text,
+.employee .v2-pgr-inbox .digit-section.links .digit-inbox-search-links-heading,
+.employee .v2-pgr-inbox .digit-section.links h1,
+.employee .v2-pgr-inbox .digit-section.links h2,
+.employee .v2-pgr-inbox .digit-section.links h3 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  color: var(--color-text-heading, #1D2433) !important;
+  margin: 0 0 10px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-contents,
+.employee .v2-pgr-inbox .digit-inbox-search-link,
+.employee .v2-pgr-inbox .digit-inbox-search-link * {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
+  text-decoration: none !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-link:hover,
+.employee .v2-pgr-inbox .digit-inbox-search-link:hover * {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+
+/* "Clear search" is a tertiary action next to the Search button; it was a
+ * size larger than the button it sits beside. */
+.employee .v2-pgr-inbox .digit-button-teritiary .digit-button-label,
+.employee .v2-pgr-inbox [class*="teritiary"] .digit-button-label,
+.employee .v2-pgr-inbox [class*="tertiary"] .digit-button-label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
 }
