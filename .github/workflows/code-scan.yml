@@ -5,8 +5,6 @@ name: Code-Base Security Scan
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '30 2 * * 1'          # weekly, Monday 02:30 UTC
   push:
     branches: [ "master" ]
     paths:
