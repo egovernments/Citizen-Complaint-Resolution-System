@@ -322,6 +322,20 @@ plugins:
           return p == "/egov-enc-service/crypto/v1/_encrypt"
               or p == "/egov-enc-service/crypto/v1/_generatekey"
               or p:find("/common-persist", 1, true) == 1  -- persister HTTP sink, internal
+              -- /user/_search is a MIXED-MODE path in DIGIT: egov-user scopes the
+              -- search to the caller's own context, so it is not gateway
+              -- action-RBAC'd (master ships it in the Spring mixed-mode whitelist,
+              -- with NO actiontest rows). #23 removed it from AUTH_OPTIONAL to
+              -- close ANONYMOUS enumeration — correct — but that also made it
+              -- action-RBAC'd, which 403'd every role without coverage (citizen
+              -- provisioning, admin user-edit; found by the bomet integration
+              -- suite). Keep it PROTECTED (a token is required now — anonymous is
+              -- still closed) but action-RBAC-exempt: authn-required + service-
+              -- authorized, i.e. mixed-mode minus the anonymous access. This does
+              -- NOT relax RBAC anywhere else; it restores this one path's DIGIT
+              -- classification and is strictly stricter than master (which allowed
+              -- anonymous).
+              or p == "/user/_search"
         end
 
         local function enforce_rbac(resolved, token)

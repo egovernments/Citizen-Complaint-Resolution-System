@@ -249,23 +249,31 @@ upstream_matomo_port: 18081
 # enable_mcp: false if they don't need digit-mcp at all.
 docker_registry: 10.0.0.4:5000
 
-# Hosts to add to Docker daemon.json `insecure-registries`. Defaults to
-# the docker_registry above (matches the historical Hetzner-VPC behaviour
-# of writing 10.0.0.4:5000 as insecure). Override to `[]` when using a
-# public TLS registry like ghcr.io — Docker rejects a path-bearing or
-# TLS hostname in `insecure-registries` and refuses to start, taking the
-# whole stack down. Each entry must be `host` or `host:port`, never with
-# a path component.
-# EMPTY by default. This list is written into /etc/docker/daemon.json, and an
-# entry there tells the daemon to pull over plain HTTP and to skip TLS
-# verification for that host — every image layer then arrives unauthenticated
-# and unencrypted, so anyone on the path can swap what runs on the box.
+# Hosts written into Docker daemon.json `insecure-registries` (pull over plain
+# HTTP, skip TLS verification for that host). Defaults to the docker_registry
+# above — the Hetzner VPC-internal registry (private 10.0.0.x, not reachable
+# from the public internet), which is the registry the on-box build+push and
+# every image pull actually use.
 #
-# It defaulted to the configured docker_registry, so a stock deploy trusted
-# 10.0.0.4:5000 over HTTP. Serve the registry over TLS instead. If you must
-# temporarily keep an HTTP registry, set this in that tenant's host_vars — a
-# conscious, per-tenant exception rather than the default for everyone.
-insecure_registries: []
+# Why this is the default rather than `[]`:
+#   * It is VPC-INTERNAL. The layers never leave the private network, so the
+#     plain-HTTP transport is not exposed to an off-VPC attacker.
+#   * Images are DIGEST-PINNED (name@sha256:… across the compose files), so
+#     content integrity is verified by the daemon regardless of transport — a
+#     swapped layer fails the digest check. That is the real supply-chain
+#     control; the audit's "insecure HTTP registry" risk is mitigated by the
+#     pin, not by refusing HTTP to a private host.
+#   * Setting `[]` here does NOT harden anything on these boxes — it just wipes
+#     10.0.0.4:5000 out of daemon.json (combine list_merge=replace), so every
+#     pull/push then fails "server gave HTTP response to HTTPS client" and the
+#     stack/build breaks (found on bomet by the integration suite). Docker also
+#     refuses to start if this holds a TLS/path-bearing host.
+#
+# A registry reachable OUTSIDE the private network must use TLS instead — set
+# this to `[]` and point docker_registry at the TLS host in that tenant's
+# host_vars. Each entry is `host` or `host:port`, never with a path component.
+insecure_registries:
+  - "{{ docker_registry }}"
 
 # Docker log rotation (daemon.json log-opts). Without these the json-file
 # driver grows a container's log without bound; a chatty JVM service can fill
