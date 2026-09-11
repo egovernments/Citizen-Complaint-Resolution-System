@@ -45,7 +45,7 @@ GitHub `409` conflicts (up to 4 attempts). No action needed.
 `README.md` currently points at `master` (mutable). To make the piped script immutable:
 1. Cut a tag, e.g. `git tag security-scan-v1 && git push origin security-scan-v1`.
 2. In `README.md`/`run.sh`, change the URL/`REF` to the tag (or a full commit SHA — strongest).
-3. Optionally publish `shasum -a 256 security-scan/run.sh` in `README.md` for verify-before-run.
+3. Optionally publish `shasum -a 256 security_scan/ansible/run.sh` in `README.md` for verify-before-run.
 
 ## Common issues
 

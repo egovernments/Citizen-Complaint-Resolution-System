@@ -1,5 +1,7 @@
 # Architecture & flow
 
+![Architecture](architecture.png)
+
 ## What this is
 
 A self-contained, **per-repo** security scanner that lives inside the repo it audits. A runner
@@ -13,7 +15,7 @@ root Jupyter with an empty token, anonymous-admin Grafana), produce noisy occurr
 mislabel severities. One deliberative Claude pass that reads and verifies every in-scope file is
 far more accurate, and a deterministic scoring layer on top makes the labels reproducible.
 
-## Components (all in `security-scan/`)
+## Components (all in `security_scan/ansible/`)
 
 | File | Role |
 | --- | --- |
@@ -28,6 +30,10 @@ far more accurate, and a deterministic scoring layer on top makes the labels rep
 | `docs/` | this documentation set |
 
 ## End-to-end flow
+
+![Workflow](workflow.png)
+
+The same nine steps in detail:
 
 ```
  runner's terminal

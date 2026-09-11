@@ -3,7 +3,7 @@
 # DIGIT Security Scan bootstrap for egovernments/Citizen-Complaint-Resolution-System.
 #
 #   export SECSCAN_TOKEN='<token>'   # obtain from your administrator
-#   curl -fsSL https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/security/vulnerability-scan/security-scan/run.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/security/vulnerability-scan/security_scan/ansible/run.sh | bash
 #
 # It sets up an isolated, timestamped virtualenv, installs the Python deps into it,
 # fetches + runs the scanner, then tears the venv down. See README.md for prerequisites.
@@ -14,7 +14,7 @@ set -euo pipefail
 REPO_FULL="egovernments/Citizen-Complaint-Resolution-System"
 REPO_URL="https://github.com/${REPO_FULL}"
 REF="${SECSCAN_REF:-security/vulnerability-scan}"                 # override: SECSCAN_REF=<tag|sha> ... | bash
-RAW="https://raw.githubusercontent.com/${REPO_FULL}/${REF}/security-scan"
+RAW="https://raw.githubusercontent.com/${REPO_FULL}/${REF}/security_scan/ansible"
 
 grn(){ printf '\033[38;5;42m%s\033[0m\n' "$*"; }
 gry(){ printf '\033[38;5;244m%s\033[0m\n' "$*"; }
