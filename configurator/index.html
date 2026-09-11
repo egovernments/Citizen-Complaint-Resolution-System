@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DIGIT Complaints Management</title>
+    <!-- Ops kill switch for this app's own telemetry. A CLASSIC script, loaded
+         before the module below, so the flag exists before main.tsx decides
+         whether to initialise PostHog and Sentry. Shipped in dist alongside this
+         file, so the two can never skew. See src/lib/telemetryGate.ts. -->
+    <!-- %BASE_URL%, not "./". vite.config.ts sets base '/configurator/', and a
+         DOCUMENT-relative src resolves against the current route: deep-linking
+         /configurator/manage/tenants asks for
+         /configurator/manage/telemetry-config.js, which nginx answers from the
+         SPA try_files fallback with index.html — 200 text/html, parsed as JS,
+         SyntaxError, and no global. A missing global makes isTelemetryKilled()
+         return false, so the ops kill switch would fail OPEN on every route
+         except the root. %BASE_URL% is substituted at build time and always
+         resolves to /configurator/telemetry-config.js. -->
+    <script src="%BASE_URL%telemetry-config.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -14,6 +14,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
+import { trackEvent } from "../../utils/analytics";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -791,6 +792,10 @@ const PGRDetails = () => {
           actionFields={[
             <Button
               className="custom-class"
+              // Analytics (CCRS#2007): opening the action menu. The action the
+              // operator then picks is emitted separately from onOptionSelect
+              // below, because a click listener cannot see inside the menu.
+              data-analytics-event="pgr.complaint.take-action"
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
@@ -804,6 +809,9 @@ const PGRDetails = () => {
                 if (selected.action === "REOPEN") {
                   const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
                   if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+                    // A refusal is a drop-off worth seeing: it tells us the reopen
+                    // window is set too tight, which no click event would reveal.
+                    trackEvent("pgr.complaint.reopen-blocked", { category: "pgr" });
                     setToast({
                       show: true,
                       type: "error",
@@ -812,6 +820,10 @@ const PGRDetails = () => {
                     return;
                   }
                 }
+                // The chosen action arrives here, not on the click, so the
+                // declarative tag on the button cannot capture it. The code goes
+                // in `label` so the event name stays stable as actions are added.
+                trackEvent("pgr.complaint.action-selected", { category: "pgr", label: selected?.action });
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}

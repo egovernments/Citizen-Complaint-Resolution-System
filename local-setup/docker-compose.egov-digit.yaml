@@ -1515,7 +1515,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-3c3d9fa}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1681,9 +1681,9 @@ services:
   digit-ui:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
-    # the SPA Build Pipeline, multi-arch); the bundle lives at
+    # the Container Build Pipeline, multi-arch); the bundle lives at
     # /var/web/digit-ui, matching the mounted digit-ui.conf root.
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-3c3d9fa}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1708,12 +1708,12 @@ services:
   # ===========================================================================
   # Configurator (DIGIT Studio) — tenant onboarding admin console
   # Static Vite SPA served by the image's nginx under /configurator/.
-  # Tenant-neutral (no VITE_* baked); CI-built by the SPA Build Pipeline.
+  # Tenant-neutral (no VITE_* baked); CI-built by the Container Build Pipeline.
   # Ansible deploys may instead serve a host-built dist via host nginx
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
-    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:master-3c3d9fa}
+    image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
     container_name: configurator
     ports:
       - "18890:80"
@@ -1932,7 +1932,7 @@ services:
     # below pulls a public, pinned build from ghcr.io — no VPC access or
     # insecure-registries trust required. Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-egovio/digit-mcp:master-b4f0eeb8d}
+    image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -2244,7 +2244,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: egovio/digit-config-service:master-7c91934
+    image: egovio/digit-config-service:2.12-5137119
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2299,7 +2299,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: egovio/digit-user-preferences-service:master-7c91934
+    image: egovio/digit-user-preferences-service:2.12-5137119
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2337,7 +2337,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
     # egovio Docker Hub build; override via NOVU_BRIDGE_IMAGE if needed.
-    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:master-7c91934}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:2.12-5137119}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2409,11 +2409,23 @@ services:
       # silently resolves to the PRIMARY sms integration (the plain SMS sender)
       # instead. Leave unset until that dedicated integration is onboarded.
       NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP: ${NOVU_BRIDGE_INTEGRATION_ID_WHATSAPP:-}
+      # Ordinary SMS gateway. Blank = SMS goes through Novu. "smscountry" makes
+      # the SMS leg bypass Novu entirely (SmsCountryClient posts form-encoded to
+      # SMSCountry's legacy bulk API, which no Novu provider can express).
+      # These MUST be declared here, not merely written to /opt/digit/.env:
+      # Compose reads .env for ${...} interpolation only, so a variable absent
+      # from this block never reaches the container and the bridge silently
+      # falls back to the Novu path.
+      NOVU_BRIDGE_SMS_PROVIDER: ${NOVU_BRIDGE_SMS_PROVIDER:-}
+      NOVU_BRIDGE_SMS_SENDER_ID: ${NOVU_BRIDGE_SMS_SENDER_ID:-}
+      NOVU_BRIDGE_SMSCOUNTRY_URL: ${NOVU_BRIDGE_SMSCOUNTRY_URL:-http://api.smscountry.com/SMSCwebservice_bulk.aspx}
+      NOVU_BRIDGE_SMSCOUNTRY_USER: ${NOVU_BRIDGE_SMSCOUNTRY_USER:-}
+      NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
-      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
       # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
       # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
       # configurator's own provider/template screens are not 403'd.
@@ -2647,7 +2659,7 @@ services:
   # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
   # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
-    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:v2.12-beta}
+    image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
     container_name: otp-publisher
     restart: unless-stopped
     profiles: ["notifications"]

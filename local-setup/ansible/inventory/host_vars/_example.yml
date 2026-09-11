@@ -434,7 +434,7 @@ build_novu_dashboard: false
 # otp-publisher is the 9th container in the notifications profile: it replaces
 # Kong's mock /user-otp termination with a real OTP generator (Redis + Kafka ->
 # novu-bridge -> Twilio SMS). Leave false to pull the published multi-arch image
-# (egovio/otp-publisher:v2.12-beta); set true to build the vendored Node service
+# (egovio/otp-publisher:2.12-81fc6be); set true to build the vendored Node service
 # at utilities/otp-publisher on the box instead (tag otp-publisher:local).
 build_otp_publisher: false
 # otp_publisher_image: ""           # override to pin a different published tag
@@ -455,6 +455,33 @@ novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+
+# ────────── Ordinary SMS through a NON-Twilio gateway (optional) ──────────
+# For deployments that cannot use Twilio for SMS — e.g. the account has no SMS
+# compliance registration — the bridge can route the SMS leg through another
+# gateway using Novu's built-in "generic-sms" provider. WhatsApp is unaffected
+# and keeps using Twilio.
+#
+# Novu has no built-in provider for most regional gateways: setting an
+# integration's providerId to the gateway's own name fails at trigger time with
+# "Sms handler for provider <name> is not found". So the integration is created
+# in Novu with providerId "generic-sms", pointed at the gateway's REST endpoint
+# with its auth, and the bridge supplies the gateway-specific request body.
+#
+# Leave blank for Twilio SMS (the default). Set to "ozeki" (a gateway you run) or
+# "smscountry" (a bulk provider). The bootstrap does NOT create this integration —
+# add it in Novu or the Configurator first, then name its identifier here.
+# novu_bridge_sms_sender_id is used by smscountry only; Ozeki takes the sender
+# from its own gateway configuration.
+novu_bridge_sms_provider: ""
+novu_bridge_sms_sender_id: ""
+
+# SMSCountry only. Its legacy bulk API authenticates with the SMSCountry PANEL
+# LOGIN — that account type issues no API key — and the bridge posts to it
+# directly, so no Novu integration is needed for this gateway.
+novu_bridge_smscountry_user: ""
+novu_bridge_smscountry_password: ""
 
 # ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
 # The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
@@ -738,6 +765,58 @@ grafana_anonymous_enabled: false
 # county_xlsx: ""                # input spreadsheet for the CI dataloader
 # redis_container: ""            # container to bounce for a cache-bust
 # user_validation: {}            # MDMS validation payload passed to the tenant bootstrap
+
+# ────────── Analytics (portal usage + error tracking) ──────────
+#
+# WHICH DESTINATIONS RUN IS **DATA, NOT CONFIG**. One MDMS row per
+# destination in `common-masters.AnalyticsProvider`, managed in the
+# Configurator under System → Analytics Providers. With no rows — the state
+# of a fresh environment — the portal loads its analytics shim, finds
+# nothing, and sends nowhere. Nothing below turns analytics ON.
+#
+# So why are these three here at all? Because they are the knobs MDMS must
+# NOT be able to set: they decide whether third-party script may run in a
+# citizen's browser at all, and MDMS is writable from the Configurator UI.
+# Ops keeps them; admins get the harmless ones.
+#
+# ALL THREE ARE OPTIONAL. Every one has a `| default(...)` in
+# templates/globalConfigs.js.j2, so an inventory that never mentions them
+# renders exactly as before — no edit is required to adopt the feature.
+#
+# Full guide: docs/analytics-guide/  (start with 10-setup.md; the complete
+# self-hosted Matomo walkthrough is 50-self-hosted-matomo.md)
+
+# Hard off switch. `true` disables the shim entirely, whatever MDMS says —
+# the environment-wide panic button when a destination misbehaves. Note the
+# polarity: ONLY an explicit `true` disables. That is deliberate, and the
+# opposite of dashboard_metrics_enabled, which is on-by-default.
+# analytics_kill_switch: false
+
+# Extra hostnames a destination's scriptUrl may load from, ON TOP of the
+# built-in vendor list (www.googletagmanager.com, js.sentry-cdn.com,
+# browser.sentry-cdn.com, *.sentry.io, *.posthog.com).
+#
+# Needed for a SELF-HOSTED collector, whose hostname is specific to your
+# environment and therefore cannot be baked into the code. MDMS cannot widen
+# this list — that is the whole point of it living here.
+#
+# Exact hostnames, or a dot-boundary wildcard like "*.example.gov.mz".
+# There is no prefix wildcard: "matomo.*" would have accepted
+# matomo.<anything-an-attacker-registers>.com.
+#
+# NOT needed if your collector is same-origin (e.g. scriptUrl
+# "/matomo/matomo.js" proxied by your own nginx) — that form needs no
+# allowlist entry at all, and is the only one that works on an
+# http-only environment.
+# analytics_script_hosts:
+#   - matomo.example.gov.mz
+#   - stats.example.gov.mz
+
+# Allow `type: "CUSTOM"` destinations to initialise. CUSTOM is the one type
+# where an MDMS row names the script that gets loaded, so it stays off unless
+# ops opts in — on an environment where any employee token can write MDMS,
+# that write access is effectively script-injection access.
+# analytics_custom_enabled: false
 
 # ────────── nginx features (location blocks rendered into the host nginx site) ──────────
 #

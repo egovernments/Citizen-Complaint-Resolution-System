@@ -5,6 +5,19 @@ import { makeRequestInfo } from './auth.js';
 const HEADERS = { 'Content-Type': 'application/json' };
 const HTTP_TIMEOUT = '120s';
 
+function requestTags(name, context = {}) {
+  const inferredStep = name.replace(/^PGR_/, '').toLowerCase();
+  return {
+    name,
+    service: 'pgr-services',
+    run_id: context.runId || __ENV.RUN_ID || 'unlabelled',
+    workload_profile: context.profile || __ENV.WORKLOAD_PROFILE || 'legacy-scenario',
+    workload_step: context.step || inferredStep,
+    principal: context.principal || __ENV.PRINCIPAL || 'employee',
+    dataset_tier: context.datasetTier || __ENV.DATASET_TIER || 'unspecified',
+  };
+}
+
 /**
  * Check if response is a 401 auth error.
  */
@@ -18,14 +31,20 @@ export function isAuthError(res) {
  */
 // `locality` and `city` default to the full-dump.sql seed values so that callers
 // which predate these parameters keep their original behaviour.
-export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName, locality = 'JLC477', city = 'City A') {
+export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode, citizenPhone, citizenName, locality = 'JLC477', city = 'City A', context = {}) {
   const requestInfo = makeRequestInfo(token, userInfo);
+  const runId = context.runId || __ENV.RUN_ID;
+  const workloadProfile = context.profile || __ENV.WORKLOAD_PROFILE || 'legacy-scenario';
   const payload = {
     service: {
       tenantId: tenantId,
       serviceCode: serviceCode,
       description: `Load test complaint - ${serviceCode} - VU ${citizenName}`,
-      additionalDetail: {},
+      additionalDetail: runId ? {
+        performanceFixture: 'k6-api-v1',
+        performanceRunId: runId,
+        performanceProfile: workloadProfile,
+      } : {},
       source: 'web',
       address: {
         landmark: 'Load Test Landmark',
@@ -61,7 +80,7 @@ export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode,
   const res = http.post(
     `${baseUrl}/pgr-services/v2/request/_create?tenantId=${tenantId}`,
     JSON.stringify(payload),
-    { headers: HEADERS, tags: { name: 'PGR_Create' }, timeout: HTTP_TIMEOUT }
+    { headers: HEADERS, tags: requestTags('PGR_Create', context), timeout: HTTP_TIMEOUT }
   );
 
   if (res.status !== 200) {
@@ -77,7 +96,7 @@ export function createComplaint(baseUrl, token, userInfo, tenantId, serviceCode,
  * Update a PGR complaint (Assign, Resolve, or Rate).
  * Retries up to 5 times with backoff on INVALID_UPDATE (async pipeline lag).
  */
-export function updateComplaint(baseUrl, token, userInfo, service, action, assignees, comment, rating) {
+export function updateComplaint(baseUrl, token, userInfo, service, action, assignees, comment, rating, context = {}) {
   const requestInfo = makeRequestInfo(token, userInfo);
   const workflow = {
     action: action,
@@ -102,7 +121,7 @@ export function updateComplaint(baseUrl, token, userInfo, service, action, assig
     const res = http.post(
       `${baseUrl}/pgr-services/v2/request/_update`,
       jsonPayload,
-      { headers: HEADERS, tags: { name: tagName }, timeout: HTTP_TIMEOUT }
+      { headers: HEADERS, tags: requestTags(tagName, context), timeout: HTTP_TIMEOUT }
     );
 
     if (res.status === 200) {
@@ -130,7 +149,7 @@ export function updateComplaint(baseUrl, token, userInfo, service, action, assig
  * Search for a PGR complaint by serviceRequestId.
  * Retries up to 3 times if the record isn't found yet.
  */
-export function searchComplaint(baseUrl, token, userInfo, tenantId, serviceRequestId) {
+export function searchComplaint(baseUrl, token, userInfo, tenantId, serviceRequestId, context = {}) {
   const requestInfo = makeRequestInfo(token, userInfo);
   const payload = { RequestInfo: requestInfo };
 
@@ -139,7 +158,7 @@ export function searchComplaint(baseUrl, token, userInfo, tenantId, serviceReque
     const res = http.post(
       `${baseUrl}/pgr-services/v2/request/_search?tenantId=${tenantId}&serviceRequestId=${serviceRequestId}`,
       JSON.stringify(payload),
-      { headers: HEADERS, tags: { name: 'PGR_Search' }, timeout: HTTP_TIMEOUT }
+      { headers: HEADERS, tags: requestTags('PGR_Search', context), timeout: HTTP_TIMEOUT }
     );
 
     if (res.status === 200) {

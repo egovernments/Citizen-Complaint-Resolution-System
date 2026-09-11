@@ -97,6 +97,10 @@ const navGroups = [
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
       { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
+      // Only useful to people who can change destinations; requiredRoles keeps it
+      // out of everyone else's sidebar (the route itself renders read-only for
+      // them, so this is a tidiness gate, not the security boundary).
+      { id: 'analytics-providers', nameKey: 'app.nav.analytics_providers', path: '/manage/analytics-providers', icon: BarChart3, requiredRoles: ['SUPERUSER', 'MDMS_ADMIN'] },
     ],
   },
 ];
@@ -110,6 +114,8 @@ const advancedResources = Object.keys(getGenericMdmsResources()).map((name) => (
 
 export function DigitLayout({ children }: { children?: ReactNode }) {
   const { state, logout, setMode, toggleHelp } = useApp();
+
+  const userRoles = state.user?.roles ?? [];
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
@@ -118,12 +124,25 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   // Masters the current role can't see (per resource.masters conditions on
   // the shared MDMS search action) drop out of nav entirely — UI-level only,
   // see docs/design/masters-configurator-access-policy-design.md §3.3.
+  // Two independent gates, and a nav item must clear BOTH. `canViewResource` is
+  // master's masters-capability gate; `requiredRoles` is #1584's tidiness gate for
+  // items that are only useful to a couple of roles. The rebase brought both in
+  // under the same name, which is why they are composed here rather than picked.
+  const roleKey = userRoles.join(',');
   const visibleNavGroups = useMemo(
     () =>
       navGroups
-        .map((group) => ({ ...group, items: group.items.filter((item) => canViewResource(item.id)) }))
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) =>
+              canViewResource(item.id) &&
+              (!('requiredRoles' in item) ||
+                !!(item as { requiredRoles?: string[] }).requiredRoles?.some((r) => roleKey.split(',').includes(r))),
+          ),
+        }))
         .filter((group) => group.items.length > 0),
-    [canViewResource],
+    [canViewResource, roleKey],
   );
   const visibleAdvancedResources = useMemo(
     () => advancedResources.filter((r) => canViewResource(r.id)),

@@ -25,3 +25,13 @@ Three method gaps were closed on the same deployment — see [Findings](./findin
 **Tail latency near saturation carries ±20% run-to-run variance**, so single-run p95 differences below about 40% at that level are not readable. Throughput is stable at ~2%.
 
 **The database is not the limit.** Slow-query logging during a full load run surfaced no PGR write-path query over 100ms; the only slow statements were periodic dashboard view refreshes.
+
+## Dashboard Read-Path Follow-Up, 2–3 September 2026
+
+The same Bomet deployment was measured with deterministic datasets from 20,000
+to 500,000 stored complaints and a 2–200 VU dashboard-load ladder. See the
+[dashboard scaling report](./dashboard-scaling-02-09-26.md) for the complete
+matrix, latency percentiles, realized RPS, saturation point, PostgreSQL wait
+evidence, cleanup verification, and real-user interpretation. The resulting
+deployment guidance is incorporated into
+[Capacity Planning](./recommendations-transition-plan.md#dashboard-read-capacity-at-500k-stored-complaints).

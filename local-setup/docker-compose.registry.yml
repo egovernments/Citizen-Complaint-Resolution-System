@@ -1449,7 +1449,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:master-3c3d9fa}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1565,7 +1565,7 @@ services:
   # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:master-3c3d9fa}
+    image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
       - "18080:80"
