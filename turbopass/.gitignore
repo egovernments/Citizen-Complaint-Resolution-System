@@ -1,6 +1,8 @@
 # Data directories
 overpass_data/
 overpass_db/
+overture-data/
+overture-scraper/venv/
 
 # Logs
 *.log

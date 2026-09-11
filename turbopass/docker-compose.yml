@@ -1,0 +1,55 @@
+# Turbopass — self-hosted boundary autocomplete + hierarchy service.
+#
+#   1. Build the offline Overture DB (India, Kenya, Mozambique by default):
+#        docker compose --profile bootstrap up --build bootstrap
+#      Writes ./overture-data/boundaries.sqlite (~1GB, gitignored). Retarget:
+#        TURBOPASS_COUNTRIES="IN,KE,MZ,ZA" docker compose --profile bootstrap up --build bootstrap
+#
+#   2. Start the API:
+#        docker compose up -d --build search-api
+#        curl "http://localhost:3000/boundary/search?q=Maputo&source=overture"
+#
+# The search-api also serves the committed Trie data (data/**/hierarchy.json)
+# on /search, and Geoapify passthrough on /boundary/*?source=geoapify when
+# GEOAPIFY_API_KEY is set.
+name: turbopass
+
+services:
+  # One-shot data pipeline. Guarded behind the `bootstrap` profile so a plain
+  # `docker compose up` never re-downloads gigabytes from Overture.
+  bootstrap:
+    build:
+      context: ./overture-scraper
+    image: turbopass-bootstrap:local
+    environment:
+      # ISO 3166-1 alpha-2 codes, comma-separated. Default = P0 set.
+      COUNTRIES: ${TURBOPASS_COUNTRIES:-IN,KE,MZ}
+      OVERTURE_RELEASE: ${OVERTURE_RELEASE:-2026-06-17.0}
+      OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
+    volumes:
+      - ./overture-data:/overture-data
+    profiles: ["bootstrap"]
+
+  search-api:
+    build:
+      context: ./search-api
+    image: turbopass-search:local
+    environment:
+      # Offline Overture DB produced by `bootstrap`.
+      OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
+      # Committed Trie hierarchies (data/**/hierarchy.json) for /search.
+      DATA_DIR: /data
+      # Optional: enables /boundary/*?source=geoapify passthrough.
+      GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+    ports:
+      - "${TURBOPASS_PORT:-3000}:3000"
+    volumes:
+      - ./overture-data:/overture-data:ro
+      - ./data:/data:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
