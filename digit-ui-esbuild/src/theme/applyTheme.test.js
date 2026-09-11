@@ -463,7 +463,7 @@ test("v3 backfill: v1 record feeds button + primary-N tokens from palette", () =
   } finally { restore(); }
 });
 
-test("v3 backfill: skipped entirely for real v3 records", () => {
+test("v3 backfill: record's own button background wins over any derived one", () => {
   const { props, restore } = stubDocument();
   try {
     const applyTheme = freshApply();
@@ -477,8 +477,12 @@ test("v3 backfill: skipped entirely for real v3 records", () => {
     });
     // v3 path applied the record's own value, not a backfilled one
     assert.equal(props["--color-button-primary-bg-default"], "#E6B800");
-    // hover wasn't in the record and must NOT be invented for v3 records
-    assert.equal(props["--color-button-primary-bg-hover"], undefined);
+    // Hover WAS left out of the record, and is now filled from the palette.
+    // This assertion used to expect `undefined`: leaving it unset meant CSS
+    // fell through to the vendored :root orange, because a `var(--token, …)`
+    // chain can never reach its fallback once :root defines the token. A
+    // deeper shade from the tenant's own palette is the lesser wrong.
+    assert.equal(props["--color-button-primary-bg-hover"], "#204F37");
   } finally { restore(); }
 });
 
@@ -492,22 +496,49 @@ test("v3 backfill: no primary in record → nothing invented", () => {
   } finally { restore(); }
 });
 
-// --- Pass 5: primary-button foreground -------------------------------------
-// The vendored :root hard-defines --color-button-primary-text: #FFFFFF, so a
-// CSS `var(--color-button-primary-text, <fallback>)` can never reach its
-// fallback. Any record omitting the token would silently get white, which is
-// unreadable on a light brand. Derive it from the resolved button background.
+// --- Pass 5: primary-button states + foreground -----------------------------
+// The vendored :root hard-defines the whole button group (bg default/hover/
+// pressed + text), so a CSS `var(--token, <fallback>)` can never reach its
+// fallback. A partial v3 record therefore inherits DIGIT orange for whichever
+// state it omitted. Backfill the backgrounds first, then pick a foreground
+// against what actually gets painted, across every state.
 
-test("button foreground: dark brand with no stated text colour gets white", () => {
+test("button states: partial v3 record gets its missing state, not vendored orange", () => {
   const { props, restore } = stubDocument();
   try {
     const applyTheme = freshApply();
-    // Bomet's live shape: v3, but button-primary-text is absent.
+    // Bomet's live shape: default + hover stated, pressed and text omitted.
     applyTheme({
       version: "3",
-      colors: { "primary-1": "#1565A8", "primary-2": "#1B85D2" },
+      colors: {
+        "primary-1": "#1565A8",
+        "primary-2": "#1B85D2",
+        "button-primary-bg-default": "#1B85D2",
+        "button-primary-bg-hover": "#1565A8",
+      },
     });
-    assert.equal(props["--color-button-primary-bg-default"], undefined);
+    assert.equal(props["--color-button-primary-bg-default"], "#1B85D2");
+    assert.equal(props["--color-button-primary-bg-hover"], "#1565A8");
+    // Previously fell through to :root #A03A0A — an orange flash on press.
+    assert.equal(props["--color-button-primary-bg-pressed"], "#1565A8");
+  } finally { restore(); }
+});
+
+test("button foreground: judged across all three states, not just the resting one", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#1565A8",
+        "primary-2": "#1B85D2",
+        "button-primary-bg-default": "#1B85D2",
+        "button-primary-bg-hover": "#1565A8",
+      },
+    });
+    // Neither candidate clears AA on every state here (white 3.94:1 on the
+    // default, black 3.50:1 on hover/pressed), so the better worst case wins.
     assert.equal(props["--color-button-primary-text"], "#FFFFFF");
   } finally { restore(); }
 });
@@ -522,6 +553,23 @@ test("button foreground: light brand with no stated text colour gets near-black"
       colors: { "primary-1": "#204F37", "button-primary-bg-default": "#FEC931" },
     });
     assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("button foreground: the ticket's #2563EB clears AA with white", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#0B1F3A",
+        "button-primary-bg-default": "#2563EB",
+        "button-primary-bg-hover": "#1D4FD8",
+        "button-primary-bg-pressed": "#1E40AF",
+      },
+    });
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
   } finally { restore(); }
 });
 
@@ -551,11 +599,13 @@ test("button foreground: v1 record derives from primary.main", () => {
   } finally { restore(); }
 });
 
-test("button foreground: nothing to derive from → token not invented", () => {
+test("button states: nothing to derive from → nothing invented", () => {
   const { props, restore } = stubDocument();
   try {
     const applyTheme = freshApply();
     applyTheme({ version: "1", colors: { secondary: "#123456" } });
     assert.equal(props["--color-button-primary-text"], undefined);
+    assert.equal(props["--color-button-primary-bg-default"], undefined);
+    assert.equal(props["--color-button-primary-bg-pressed"], undefined);
   } finally { restore(); }
 });

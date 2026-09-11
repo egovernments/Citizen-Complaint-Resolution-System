@@ -287,20 +287,44 @@ function hexChannels(hex) {
  * the button background the theme actually resolved to, keeps every record
  * legible without asking each tenant to state the pairing.
  */
-function readableForeground(hex) {
+const WHITE = "#FFFFFF";
+const NEAR_BLACK = "#0B0C0C";
+/** WCAG 2.2 AA for normal-sized text. Button labels here are 14px. */
+const AA_NORMAL_TEXT = 4.5;
+
+function relativeLuminance(hex) {
   const ch = hexChannels(hex);
   if (!ch) return null;
   const lin = ch.map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
-  const luminance = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
-  const whiteContrast = 1.05 / (luminance + 0.05);
-  // Deliberately a legibility floor, not "whichever contrasts most". Maximising
-  // contrast would flip mid-tone brands to a dark label — Bomet's #1B85D2 scores
-  // 5.34:1 black vs 3.93:1 white — silently restyling tenants that read fine
-  // today. White is the convention for a filled brand button, so keep it until
-  // it drops under 3:1, which is the case this backfill exists for
-  // (kenya-yellow #FEC931 is 1.54:1). Brand colours meant for white labels, the
-  // #2563EB in this ticket included, clear 4.5:1 with white anyway.
-  return whiteContrast >= 3 ? "#FFFFFF" : "#0B0C0C";
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+function contrastWithLuminance(l1, l2) {
+  const [hi, lo] = l1 >= l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * White or near-black, whichever stays legible across EVERY surface the label
+ * is painted on — default, hover and pressed, not just the resting state. A
+ * foreground chosen against one state can fail on another, which is how a
+ * button ends up readable until you hover it.
+ *
+ * Judged on the WORST case of each candidate: take AA (4.5:1, these labels are
+ * 14px) if a candidate clears it on all states, otherwise the one whose weakest
+ * state is strongest. Not every brand admits a compliant pair — a mid-tone blue
+ * has no perfect answer — and in that case the honest choice is the better of
+ * the two rather than a token that looks compliant on the state you measured.
+ */
+function readableForegroundAcross(hexes) {
+  const lums = hexes.map(relativeLuminance).filter((l) => l !== null);
+  if (!lums.length) return null;
+  const worst = (fgLum) => Math.min(...lums.map((l) => contrastWithLuminance(fgLum, l)));
+  const white = worst(1);
+  const black = worst(0);
+  if (white >= AA_NORMAL_TEXT) return WHITE;
+  if (black >= AA_NORMAL_TEXT) return NEAR_BLACK;
+  return white >= black ? WHITE : NEAR_BLACK;
 }
 
 function hexToHslTriplet(hex) {
@@ -433,17 +457,44 @@ function applyTheme(config) {
 
   // Pass 5: semantic tokens the vendored :root also defines, which means a CSS
   // fallback chain can never supply them — the var is always set, just not by
-  // the tenant. Any record that leaves these out would otherwise inherit a
-  // generic default that has nothing to do with its palette. Applies to every
-  // record shape, v3 included: `primary-1` marks a v3 record but says nothing
-  // about whether these particular keys were filled in.
-  if (!("--color-button-primary-text" in vars)) {
-    const fg = readableForeground(
-      vars["--color-button-primary-bg-default"] ||
-        vars["--color-primary-2"] ||
-        vars["--color-primary-main"]
-    );
-    if (fg) vars["--color-button-primary-text"] = fg;
+  // the tenant. Any record that leaves these out inherits a generic DIGIT
+  // default that has nothing to do with its palette. Applies to every record
+  // shape, v3 included: `primary-1` marks a record v3 but says nothing about
+  // whether these particular keys were filled in, and partial v3 records are
+  // the norm. Bomet states bg-default and bg-hover but not bg-pressed, so
+  // pressing a button flashed the vendored orange.
+  //
+  // Order matters: fill the button's BACKGROUND states first, then choose a
+  // foreground against what will actually be painted. Deriving the foreground
+  // from a palette colour the CSS never uses is how a mismatched pair happens.
+  const brandSurface =
+    vars["--color-button-primary-bg-default"] ||
+    vars["--color-primary-2"] ||
+    vars["--color-primary-main"];
+  if (brandSurface) {
+    // A deeper shade for hover/pressed if the palette offers one, else the
+    // brand itself — flat is fine, wrong-hue is not.
+    const deeper =
+      vars["--color-button-primary-bg-hover"] ||
+      vars["--color-primary-1"] ||
+      vars["--color-primary-dark"] ||
+      brandSurface;
+    const states = {
+      "--color-button-primary-bg-default": brandSurface,
+      "--color-button-primary-bg-hover": deeper,
+      "--color-button-primary-bg-pressed": deeper,
+    };
+    for (const [name, value] of Object.entries(states)) {
+      if (!(name in vars)) vars[name] = value;
+    }
+    if (!("--color-button-primary-text" in vars)) {
+      const fg = readableForegroundAcross([
+        vars["--color-button-primary-bg-default"],
+        vars["--color-button-primary-bg-hover"],
+        vars["--color-button-primary-bg-pressed"],
+      ]);
+      if (fg) vars["--color-button-primary-text"] = fg;
+    }
   }
 
   for (const name of Object.keys(vars)) {

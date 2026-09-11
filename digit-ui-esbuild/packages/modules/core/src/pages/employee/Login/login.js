@@ -59,10 +59,15 @@ const setEmployeeDetail = (userObject, token) => {
  * longer carry their own copy, so a shell branch that skipped this would drop
  * the attribution entirely — which is what the carousel layout did.
  */
-function PoweredByDigit() {
-  const src =
-    window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW") ||
-    window?.globalConfigs?.getConfig?.("DIGIT_FOOTER");
+function PoweredByDigit({ onDarkSurface = true }) {
+  // DIGIT_FOOTER_BW is a near-white wordmark on transparent — it only reads on
+  // a dark ground. The full-bleed banner is dark, but the carousel layout puts
+  // the form on a light column, where BW is white-on-white. Pick per surface,
+  // and keep the other as the fallback for tenants that configure only one.
+  const cfg = (key) => window?.globalConfigs?.getConfig?.(key);
+  const preferred = onDarkSurface ? "DIGIT_FOOTER_BW" : "DIGIT_FOOTER";
+  const other = onDarkSurface ? "DIGIT_FOOTER" : "DIGIT_FOOTER_BW";
+  const src = cfg(preferred) || cfg(other);
   if (!src) return null;
   return (
     <div className="EmployeeLoginFooter">
@@ -71,7 +76,7 @@ function PoweredByDigit() {
         src={src}
         style={{ cursor: "pointer" }}
         onClick={() => {
-          window.open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")?.focus();
+          window.open(cfg("DIGIT_HOME_URL"), "_blank")?.focus();
         }}
       />
     </div>
@@ -110,13 +115,16 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "24px",
+            // `position: relative` so the absolutely-positioned footer pins to
+            // this column rather than the whole grid. The extra bottom padding
+            // reserves its strip, so on a short viewport the mark cannot sit on
+            // top of the centred card.
+            padding: "24px 24px 64px",
           }}
         >
           {children}
-          {/* `position: relative` above so the absolutely-positioned footer
-              pins to the form column rather than the whole grid. */}
-          <PoweredByDigit />
+          {/* Light column, so the colour wordmark rather than the white one. */}
+          <PoweredByDigit onDarkSurface={false} />
         </div>
       </div>
     );
