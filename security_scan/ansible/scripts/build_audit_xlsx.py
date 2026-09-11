@@ -32,7 +32,8 @@ RUN = os.environ.get("RUN_JSON", "run.json")
 OUT = os.environ.get("OUT_XLSX", "security-audit.xlsx")
 
 try:
-    run = json.load(open(RUN))
+    with open(RUN) as f:
+        run = json.load(f)
 except Exception as e:
     print(f"cannot read {RUN}: {e}", file=sys.stderr); sys.exit(0)
 

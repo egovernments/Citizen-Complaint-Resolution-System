@@ -177,11 +177,13 @@ def upload(run, runfile):
     user = os.environ.get("SCAN_USER") or os.environ.get("GITHUB_ACTOR") or "code-scan"
     base = run_label(user)
     owner_repo = [x for x in run["meta"]["repo"].split("/") if x]
+    with open(runfile, "rb") as f:
+        run_json_b64 = base64.b64encode(f.read()).decode()
     payload = {
         "token": TOKEN, "repo": run["meta"]["repo"], "branch": run["meta"]["branch"],
         "base": base, "kind": "source-code",
         "folders": [DRIVE_ROOT] + owner_repo + ["source-code"],
-        "runJsonBase64": base64.b64encode(open(runfile, "rb").read()).decode(),
+        "runJsonBase64": run_json_b64,
         "xlsxBase64": "",
     }
     print(f"  uploading '{base}' (kind=source-code) to Drive + gh-pages...")
@@ -224,7 +226,8 @@ def main():
           f"[C {bs['CRITICAL']} · H {bs['HIGH']} · M {bs['MEDIUM']} · L {bs['LOW']}]")
 
     outfile = args.out or os.path.join(tempfile.mkdtemp(prefix="codescan-"), f"{meta['runId']}.json")
-    json.dump(run, open(outfile, "w"), indent=1)
+    with open(outfile, "w") as f:
+        json.dump(run, f, indent=1)
     print(f"run.json -> {outfile}")
 
     if not args.local:

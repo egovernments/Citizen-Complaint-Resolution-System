@@ -389,8 +389,8 @@ const cap=s=>s?s[0]+s.slice(1).toLowerCase():s;
 // "GMT+5:30" for timeZoneName:'short' in many zones, so derive the abbreviation ourselves.
 const tzAbbr=d=>{try{const nm=(new Intl.DateTimeFormat('en-US',{timeZoneName:'long'}).formatToParts(d).find(p=>p.type==='timeZoneName')||{}).value||"";if(nm==='Coordinated Universal Time')return 'UTC';const ini=nm.split(/\s+/).filter(w=>/^[A-Z]/.test(w)).map(w=>w[0]).join("");if(ini.length>=2&&!/[0-9+]/.test(nm))return ini;const s=new Intl.DateTimeFormat('en-US',{timeZoneName:'short'}).formatToParts(d).find(p=>p.type==='timeZoneName');return s?s.value:"";}catch(e){return "";}};
 // 24-hour local time with the zone abbreviation, e.g. "Sep 11, 2026, 01:30 IST".
-const fmtTime=ts=>{try{if(!ts)return "";const d=new Date(ts);const day=d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});const tm=d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hourCycle:'h23'});const z=tzAbbr(d);return `${day}, ${tm}${z?' '+z:''}`;}catch(e){return ts||"";}};
-const fmtShort=ts=>{try{return ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):"";}catch(e){return ts||"";}};
+const fmtTime=ts=>{try{if(!ts)return "";const d=new Date(ts);const day=d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});const tm=d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hourCycle:'h23'});const z=tzAbbr(d);return `${day}, ${tm}${z?' '+z:''}`;}catch(e){return ts;}};
+const fmtShort=ts=>{try{return ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):"";}catch(e){return ts;}};
 // Report label shown in the viewer's own timezone: derive the time from the ISO ts (like the
 // Scanned chip) rather than the frozen label string, whose zone is the scanner host's (UTC in CI).
 const runName=r=>r.runner||((r.label||"").split(" - ")[0])||"";

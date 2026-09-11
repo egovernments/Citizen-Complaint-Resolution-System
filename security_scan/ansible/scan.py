@@ -49,12 +49,14 @@ def _claude_user():
     """The display name of the Claude account this CLI is logged into (~/.claude.json)."""
     for p in (os.path.join(HOME, ".claude.json"), os.path.join(HOME, ".claude", "settings.json")):
         try:
-            acc = (json.load(open(p)).get("oauthAccount") or {})
+            with open(p) as f:
+                acc = (json.load(f).get("oauthAccount") or {})
             name = acc.get("displayName") or acc.get("fullName")
             if name: return name
             if acc.get("emailAddress"): return acc["emailAddress"].split("@")[0]
-        except Exception:
-            pass
+        except (OSError, ValueError):
+            # missing / unreadable / invalid JSON - try the next candidate file
+            continue
     return None
 
 # Who ran the scan (for the run label). Priority: SCAN_USER -> Claude account -> OS login.
@@ -388,8 +390,12 @@ def run_claude(prompt, workdir):
     # fall back to parsing the result text if the file is missing.
     data = None
     if os.path.isfile(findings_path):
-        try: data = json.load(open(findings_path))
-        except Exception: data = _extract_json(open(findings_path, errors="ignore").read())
+        try:
+            with open(findings_path) as f:
+                data = json.load(f)
+        except Exception:
+            with open(findings_path, errors="ignore") as f:
+                data = _extract_json(f.read())
     if not data:
         data = _extract_json(env.get("result", ""))
     if not data or "findings" not in data:
@@ -578,7 +584,8 @@ def prepare_artifacts(run, runid, clone_dir):
     Returns (runfile_path, xlsx_path_or_None)."""
     outdir = tempfile.mkdtemp(prefix="secscan-out-")
     runfile = os.path.join(outdir, f"{runid}.json")
-    json.dump(run, open(runfile, "w"), indent=1)
+    with open(runfile, "w") as f:
+        json.dump(run, f, indent=1)
     xlsx = os.path.join(outdir, f"{runid}.xlsx")
     builder = os.path.join(TOOL_HOME, "scripts", "build_audit_xlsx.py")   # bundled under scripts/
     if os.path.isfile(builder):
@@ -627,12 +634,17 @@ def upload_run(runfile, xlsx_path, branch):
         return None
     import base64
     base = run_label(USERNAME)
+    with open(runfile, "rb") as f:
+        run_b64 = base64.b64encode(f.read()).decode()
+    xlsx_b64 = ""
+    if xlsx_path and os.path.isfile(xlsx_path):
+        with open(xlsx_path, "rb") as f:
+            xlsx_b64 = base64.b64encode(f.read()).decode()
     payload = {
         "token": TOKEN, "repo": REPO_FULL, "branch": branch, "base": base,
         "folders": ["CMS-Security-Scan"] + [x for x in REPO_FULL.split("/") if x],
-        "runJsonBase64": base64.b64encode(open(runfile, "rb").read()).decode(),
-        "xlsxBase64": (base64.b64encode(open(xlsx_path, "rb").read()).decode()
-                       if xlsx_path and os.path.isfile(xlsx_path) else ""),
+        "runJsonBase64": run_b64,
+        "xlsxBase64": xlsx_b64,
     }
     print(f"  {C.grey}uploading '{base}' to Drive + gh-pages...{C.R}")
     try:
