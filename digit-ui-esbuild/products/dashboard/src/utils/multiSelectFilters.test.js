@@ -107,3 +107,25 @@ test("query plan preserves scalar wire shape for one value and uses plural param
     }
   );
 });
+
+test("held interior selections (empty codes) still emit path params", () => {
+  assert.deepEqual(
+    globalParams({
+      geographies: [
+        {
+          code: "katembe",
+          path: "mz|maputo_cidade|katembe",
+          leaf: false,
+          codes: [],
+        },
+      ],
+      complaintTypes: [
+        { code: "SANITATION", path: "SANITATION", leaf: false, codes: [] },
+      ],
+    }),
+    {
+      boundaryPath: "mz|maputo_cidade|katembe",
+      complaintPath: "SANITATION",
+    }
+  );
+});

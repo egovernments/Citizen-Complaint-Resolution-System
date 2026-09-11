@@ -1,7 +1,11 @@
 import { appliedHierLevel } from "./hierLevelGrouping";
 import { complaintTypeParams } from "./complaintTypeTree";
 import { geographyParams } from "./boundaryTree";
-import { normalizeStringList, selectedCodes } from "./multiSelectFilters";
+import {
+  normalizeHierarchySelections,
+  normalizeStringList,
+  selectedCodes,
+} from "./multiSelectFilters";
 
 /**
  * Query-plan helpers for the catalog dashboard (extracted from
@@ -93,6 +97,15 @@ export function globalParams(filters) {
     const wards = selectedCodes(filters.geographies);
     if (wards.length === 1) params.ward = wards[0];
     else if (wards.length > 1) params.wards = wards;
+    else {
+      // Held interior (tree not loaded yet / legacy migration with empty codes):
+      // keep narrowing via boundaryPath so the first query after reload is not
+      // silently unfiltered (#1455 review).
+      const interiors = normalizeHierarchySelections(filters.geographies).filter(
+        (selection) => selection.leaf === false && selection.path
+      );
+      if (interiors.length === 1) Object.assign(params, geographyParams(interiors[0]));
+    }
   } else {
     // One-release persisted-state compatibility for the v4 scalar selection.
     Object.assign(
@@ -109,6 +122,13 @@ export function globalParams(filters) {
     const serviceCodes = selectedCodes(filters.complaintTypes);
     if (serviceCodes.length === 1) params.serviceCode = serviceCodes[0];
     else if (serviceCodes.length > 1) params.serviceCodes = serviceCodes;
+    else {
+      const interiors = normalizeHierarchySelections(filters.complaintTypes).filter(
+        (selection) => selection.leaf === false && selection.path
+      );
+      if (interiors.length === 1)
+        Object.assign(params, complaintTypeParams(interiors[0]));
+    }
   } else {
     Object.assign(
       params,

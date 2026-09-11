@@ -42,11 +42,22 @@ export function buildBoundaryTree(rootNodes) {
   const walk = (raw, parent) => {
     const code = String(raw?.code ?? "").trim();
     if (!code || byCode.has(code)) return null; // dupes: first (shallowest) wins
+    // Prefer the API's ancestralmaterializedpath (ancestors only) when present so
+    // paths match the analytics MV byte-for-byte — including tenant/state roots
+    // (e.g. "mz|…") that may be omitted from the nested relationships tree.
+    const ancestral = String(
+      raw?.ancestralMaterializedPath ?? raw?.ancestralmaterializedpath ?? ""
+    ).trim();
+    const path = ancestral
+      ? `${ancestral}|${code}`
+      : parent
+        ? `${parent.path}|${code}`
+        : code;
     const node = {
       code,
       boundaryType: String(raw?.boundaryType ?? "").trim() || undefined,
       label: undefined,
-      path: parent ? `${parent.path}|${code}` : code,
+      path,
       parentCode: parent ? parent.code : null,
       children: [],
       isLeaf: true,

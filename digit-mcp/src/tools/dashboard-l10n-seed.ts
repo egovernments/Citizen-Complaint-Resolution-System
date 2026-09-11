@@ -585,11 +585,6 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Reset layout",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_HEADER_ROLE_SCOPE_TOOLTIP",
     "message": "Dashboard tiles are scoped to your role by the analytics catalog",
     "module": "rainmaker-dashboard"
@@ -2271,11 +2266,6 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_RESET",
     "message": "Repor",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_HEADER_RESET_LAYOUT",
-    "message": "Repor disposição",
     "module": "rainmaker-dashboard"
   },
   {

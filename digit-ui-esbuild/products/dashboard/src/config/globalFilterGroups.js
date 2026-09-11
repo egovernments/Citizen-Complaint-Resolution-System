@@ -236,12 +236,14 @@ function legacyGeographySelections(raw) {
     path: raw.geographyPath,
     leaf: raw.geographyLeaf,
   });
-  return legacy.code === ALL
-    ? []
-    : normalizeHierarchySelections({
-        ...legacy,
-        codes: legacy.leaf ? [legacy.code] : [],
-      });
+  if (legacy.code === ALL) return [];
+  // Interior nodes keep path + empty codes until the boundary tree arrives
+  // (sanitizeGeographySelections expands via geographyMultiSelectionFromCode).
+  // globalParams falls back to boundaryPath while codes are still empty.
+  return normalizeHierarchySelections({
+    ...legacy,
+    codes: legacy.leaf ? [legacy.code] : [],
+  });
 }
 
 function legacyComplaintTypeSelections(raw) {
@@ -252,12 +254,13 @@ function legacyComplaintTypeSelections(raw) {
     path: raw.complaintTypePath,
     leaf: raw.complaintTypeLeaf,
   });
-  return legacy.code === ALL
-    ? []
-    : normalizeHierarchySelections({
-        ...legacy,
-        codes: legacy.leaf ? [legacy.code] : [],
-      });
+  if (legacy.code === ALL) return [];
+  // Same hold-through-hiccup contract as geography: preserve path for interiors
+  // so globalParams can emit complaintPath before the taxonomy tree loads.
+  return normalizeHierarchySelections({
+    ...legacy,
+    codes: legacy.leaf ? [legacy.code] : [],
+  });
 }
 
 function sanitizeGeographySelections(raw, options) {

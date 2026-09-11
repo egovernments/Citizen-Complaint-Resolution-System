@@ -107,6 +107,39 @@ test("buildBoundaryTree derives pipe paths matching the analytics MV boundary_pa
   assert.equal(tree.byCode.get("MUNICIPIO_001").isLeaf, true);
 });
 
+test("buildBoundaryTree prefers ancestralMaterializedPath so tenant roots stay in the path", () => {
+  // Relationships API may omit the country/tenant root from the nested tree while still
+  // returning ancestralmaterializedpath that includes it — matching the MV's boundary_path.
+  const tree = buildBoundaryTree([
+    {
+      code: "maputo_cidade",
+      boundaryType: "Provincia",
+      ancestralMaterializedPath: "mz",
+      children: [
+        {
+          code: "katembe",
+          boundaryType: "Distrito",
+          ancestralMaterializedPath: "mz|maputo_cidade",
+          children: [
+            {
+              code: "municipio_maputo_katembe",
+              boundaryType: "Municipio",
+              ancestralMaterializedPath: "mz|maputo_cidade|katembe",
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  assert.equal(tree.byCode.get("maputo_cidade").path, "mz|maputo_cidade");
+  assert.equal(tree.byCode.get("katembe").path, "mz|maputo_cidade|katembe");
+  assert.equal(
+    tree.byCode.get("municipio_maputo_katembe").path,
+    "mz|maputo_cidade|katembe|municipio_maputo_katembe"
+  );
+});
+
 test("buildBoundaryTree handles empty/missing input", () => {
   assert.equal(buildBoundaryTree(null), null);
   assert.equal(buildBoundaryTree([]), null);
