@@ -66,10 +66,13 @@ Three other environment settings are easy to confuse:
 3. Compare the level SLA with `now - auditDetails.lastModifiedTime` (falling
    back to `createdTime`).
 4. Read each current assignee's HRMS `reportingTo`; use the first match.
-5. Submit `ESCALATE` as a workflow self-loop with that employee as assignee,
+5. Reassign the complaint upward by submitting `ESCALATE` as a workflow
+   self-loop: keep the same state, make that `reportingTo` employee the assignee,
    increment `additionalDetails.escalationLevel`, and publish the update/event.
 
-No `reportingTo` means no escalation. Neither a literal `SUPERVISOR` role nor a
+In this automatic path, **submitting `ESCALATE` means reassigning the complaint
+to the next higher employee**. It is not a state transition. No `reportingTo`
+means no escalation. Neither a literal `SUPERVISOR` role nor a
 `PENDINGATSUPERVISOR` state participates in this logic.
 
 ## Current gaps
