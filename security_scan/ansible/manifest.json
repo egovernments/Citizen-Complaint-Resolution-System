@@ -25,6 +25,32 @@
     "LOW": 1
    },
    "xlsxUrl": "https://docs.google.com/spreadsheets/d/1T1uCcjbeXWOwgbTkEyLuCX1C9iu0VBmE/edit?usp=drivesdk&ouid=110574755553160173172&rtpof=true&sd=true"
+  },
+  {
+   "file": "data/Vinoth---8th-Sep-2026-13-04-IST.json",
+   "label": "Vinoth - 8th Sep 2026, 13:04 IST",
+   "repo": "egovernments/Citizen-Complaint-Resolution-System",
+   "runner": "Vinoth",
+   "branch": "master",
+   "ts": "2026-09-08T07:34:39.599157+00:00",
+   "date": "2026-09-08 07:34 UTC",
+   "shaShort": "c2b16c4",
+   "pr": null,
+   "occurrences": 163,
+   "types": 35,
+   "occBySeverity": {
+    "CRITICAL": 47,
+    "HIGH": 92,
+    "MEDIUM": 21,
+    "LOW": 3
+   },
+   "typesBySeverity": {
+    "CRITICAL": 9,
+    "HIGH": 18,
+    "MEDIUM": 7,
+    "LOW": 1
+   },
+   "xlsxUrl": "https://docs.google.com/spreadsheets/d/1D5hLnSos7wPGUDliVmbLKXJAjEcDiOUX/edit?usp=drivesdk&ouid=110574755553160173172&rtpof=true&sd=true"
   }
  ]
 }
