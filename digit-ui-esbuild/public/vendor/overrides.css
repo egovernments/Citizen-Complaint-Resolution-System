@@ -6942,3 +6942,50 @@ header.digit-header .digit-dropdown-master {
   border: 0 !important;
   background: transparent !important;
 }
+
+/* ----------------------------------------------------------------------
+ * 58. Inbox search fields on mobile (#2038)
+ *
+ *     `.digit-search-field-wrapper` is a three-column grid with fixed
+ *     track widths, and it keeps all three columns at every viewport. On a
+ *     phone that squeezes Mobile No down to a ~24px input and pushes the
+ *     date field to the card's edge. Stack the fields instead, each full
+ *     width, with the actions on their own row underneath.
+ * -------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .v2-pgr-inbox .digit-search-field-wrapper {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .employee .v2-pgr-inbox .digit-search-field-wrapper > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  /* The inputs themselves are sized by the vendor's inline widths. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-label-field-pair .digit-field,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-text-input,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-text-input-field,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="text"],
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="date"],
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="number"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* Mobile number keeps its +254 prefix beside a field that can shrink. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-input-with-prefix,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-mobile-input {
+    display: flex !important;
+    width: 100% !important;
+  }
+  /* The actions are pinned to `grid-column: 3 / -1`. Left alone, that forces
+   * the grid to invent columns 2 and 3 even when the template is a single
+   * track, so the fields stayed side by side. Span the one column instead. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
