@@ -2319,32 +2319,33 @@ button[class*="toast-close"] svg,
 }
 .employee .digit-landing-page-card,
 .employee .digit-card-component.digit-landing-page-card {
-  /* Match the citizen ModuleCard chrome exactly: white surface, 1px
-   * dark border (the citizen card resolves to `rgb(54, 54, 54)` =
-   * `--color-text-heading`), no border-radius, same subtle drop
-   * shadow. Keep a transparent transition so hover doesn't lift.
-   * Vendor pins `min-height: 260px` and `padding: 24px` — release
-   * both so the card hugs its actual content (icon + title + 2-3
+  /* White surface. Vendor pins `min-height: 260px` and `padding: 24px` —
+   * release both so the card hugs its actual content (icon + title + 2-3
    * link rows, ~140px) rather than reserving space for a banner that
-   * doesn't exist on this surface. */
+   * doesn't exist on this surface.
+   *
+   * #2038: the 1px near-black outline and square corners were matched to
+   * the old citizen ModuleCard and read as a table cell. A hairline in the
+   * card-border token plus a soft lift gives the same separation without
+   * drawing a box around everything, and matches the login card. */
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
   transition: none !important;
   width: auto !important;
   min-width: 0 !important;
   min-height: 0 !important;
   height: auto !important;
-  padding: 16px 20px !important;
+  padding: 20px !important;
   gap: 8px !important;
 }
 /* No hover on the outer card — the row-level affordance below carries
  * the interaction signal. */
 .employee .digit-landing-page-card:hover,
 .employee .digit-card-component.digit-landing-page-card:hover {
-  border-color: var(--color-text-heading, #363636) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border-color: var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
 }
 .employee .digit-landing-page-card .digit-landingpagecard-icon,
 .employee .digit-card-component.digit-landing-page-card .digit-landingpagecard-icon {
@@ -6610,6 +6611,16 @@ header.digit-header .digit-dropdown-master {
   font-weight: 600 !important;
 }
 
+/* The profile initial sits on its own filled circle, so it is the one piece
+ * of text in the bar that must NOT take the bar's foreground colour —
+ * inheriting near-black put dark text on a dark disc. Give the disc the
+ * action colour and the initial white (5.17:1). */
+.digit-employee-header .header-dropdown-profile.text {
+  background: var(--color-button-primary-bg-default, #2563EB) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+  font-weight: 600 !important;
+}
+
 /* ----------------------------------------------------------------------
  * 53. Employee home footer (#2038) — "Powered by DIGIT" floated ~32px
  *     above the bottom of the window because `.main` wraps to its content
@@ -6631,4 +6642,113 @@ header.digit-header .digit-dropdown-master {
   margin-top: auto;
   margin-bottom: 0;
   padding-bottom: 10px;
+}
+
+/* ----------------------------------------------------------------------
+ * 54. Employee landing cards (#2038)
+ *
+ *     The module cards were a 1px hard-black rectangle with square
+ *     corners, and their actions were bare tertiary buttons — text with a
+ *     chevron and no ground, so nothing said "button" until you hovered
+ *     one. Give the card the same shape language as the login card, and
+ *     give each action a standing surface so the affordance is visible at
+ *     rest rather than on hover only.
+ *
+ *     Labels stay near-black: the tint and the chevron carry the
+ *     affordance here, so the row does not also need to be blue.
+ * -------------------------------------------------------------------- */
+/* Card chrome itself (border, radius, shadow, padding) lives in section 30
+ * above, which carries the higher-specificity selector. */
+
+/* Title reads as a title: near-black, never the navy or the action blue. */
+.employee .digit-landing-page-card .ladingcard-moduleName {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+.employee .digit-landing-page-card .digit-landingpage-divider {
+  margin: 14px 0 10px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--color-card-divider, #E5E7EB) !important;
+}
+
+/* Actions: a standing surface, not hover-only. */
+.employee .digit-landing-page-card button.digit-button-teritiary {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin: 0 0 8px !important;
+  padding: 10px 14px !important;
+  min-height: 42px !important;
+  background: var(--color-page-secondary-bg, #F4F6F9) !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  text-align: left !important;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+.employee .digit-landing-page-card button.digit-button-teritiary:last-of-type {
+  margin-bottom: 0 !important;
+}
+.employee .digit-landing-page-card button.digit-button-teritiary:hover {
+  background: var(--color-primary-1-bg, #EFF6FF) !important;
+  border-color: var(--color-button-primary-bg-default, #2563EB) !important;
+}
+
+/* One size for the action label, and near-black rather than the link blue —
+ * on a filled row the surface is already saying "clickable". */
+.employee .digit-landing-page-card button.digit-button-teritiary .digit-button-label,
+.employee .digit-landing-page-card button.digit-button-teritiary .icon-label-container {
+  color: var(--color-text-primary, #1D2433) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  margin: 0 !important;
+}
+
+/* The chevron is the affordance, so it takes the action colour. */
+.employee .digit-landing-page-card button.digit-button-teritiary svg,
+.employee .digit-landing-page-card button.digit-button-teritiary svg path {
+  fill: var(--color-button-tertiary-text, #2563EB) !important;
+  color: var(--color-button-tertiary-text, #2563EB) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 55. Error / not-found screen (#2038) — ErrorComponent renders a bare
+ *     <button>, so it picked up the generic button chrome: a blue fill
+ *     with a near-black label, parked off-centre under a centred heading.
+ * -------------------------------------------------------------------- */
+.error-boundary .error-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 16px !important;
+}
+.error-boundary .error-container h1 {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+}
+.error-boundary .error-container button {
+  align-self: center !important;
+  margin: 0 !important;
+  min-height: 40px !important;
+  padding: 0 20px !important;
+  border: 1px solid var(--color-button-primary-border, #2563EB) !important;
+  border-radius: 6px !important;
+  background: var(--color-button-primary-bg-default, #2563EB) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+.error-boundary .error-container button * {
+  color: var(--color-button-primary-text, #ffffff) !important;
 }

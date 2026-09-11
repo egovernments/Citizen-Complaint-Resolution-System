@@ -54,3 +54,26 @@ export const resolveProfilePhoto = async (photo, stateId) => {
   }
   return null;
 };
+/**
+ * MDMS StateInfo stores each language's label as a shouted endonym
+ * ("ENGLISH", "FRANÇAIS", "PORTUGUÊS") and the UI runs it through t(). Only
+ * the ones somebody seeded a localization key for come back title-cased;
+ * i18next echoes the key for the rest, so a language list ends up mixing
+ * "English" with "FRANÇAIS".
+ *
+ * Rather than depend on a key existing per language per tenant, fall back to
+ * the endonym in title case. Casing is locale-aware so İ/i and ß behave, and
+ * the separators cover hyphenated and apostrophised names.
+ */
+export const titleCaseEndonym = (raw, locale) =>
+  String(raw)
+    .toLocaleLowerCase(locale)
+    .replace(/(^|[\s\-'’])(\p{L})/gu, (_, sep, ch) => sep + ch.toLocaleUpperCase(locale));
+
+export const languageLabel = (t, language) => {
+  const raw = language?.label;
+  if (!raw) return "";
+  const translated = t(raw);
+  if (translated && translated !== raw) return translated;
+  return titleCaseEndonym(raw, language?.value?.replace("_", "-"));
+};
