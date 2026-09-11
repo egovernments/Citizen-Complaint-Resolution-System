@@ -6385,6 +6385,19 @@ header.digit-header .digit-dropdown-master {
   outline: 2px solid var(--color-primary-accent, #c84c0e);
   outline-offset: 2px;
 }
+/* The generic `button:hover` lift above treats this as a filled button and
+ * floats a card shadow behind a line of text in the bar (#2038). It is a
+ * disclosure, not a raised control: swap the shadow for a quiet tint so the
+ * row still reads as clickable without appearing to lift off the bar. */
+.employee .digit-working-context-trigger:hover,
+.employee .digit-working-context-trigger:active {
+  box-shadow: none !important;
+  transform: none !important;
+}
+.employee .digit-working-context-trigger:hover {
+  background: rgba(15, 23, 42, 0.06) !important;
+  border-radius: 6px;
+}
 /* Single line, truncated — the employee topbar is 56px and this sits beside
  * the city/language controls, so it must never wrap or push them off-screen.
  * block + nowrap (rather than flex) so text-overflow actually applies. */
