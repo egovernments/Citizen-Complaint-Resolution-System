@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-// "Download Receipt" — citizen surfaces only (complaint submitted screen and
+// "Download Application" — citizen surfaces only (complaint submitted screen and
 // the citizen complaint detail page).
 //
 // The PDF is drawn locally from data already in memory (see utils/complaintReceipt),

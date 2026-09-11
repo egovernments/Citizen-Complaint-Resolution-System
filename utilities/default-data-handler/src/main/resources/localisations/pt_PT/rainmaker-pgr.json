@@ -1736,7 +1736,7 @@
     },
     {
         "code": "PGR_RECEIPT_DOWNLOAD",
-        "message": "Descarregar comprovativo",
+        "message": "Descarregar manifestação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
