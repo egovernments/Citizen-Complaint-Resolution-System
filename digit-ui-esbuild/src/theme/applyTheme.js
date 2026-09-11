@@ -262,6 +262,47 @@ function flatten(obj, prefix, out) {
 // the MDMS record cleanly falls back to defaults on next load.
 const V2_BRIDGE_STYLE_ID = "mdms-theme-v2-bridge";
 
+/** sRGB channels 0..1, or null if `hex` isn't a 3/6-digit hex colour. */
+function hexChannels(hex) {
+  if (typeof hex !== "string") return null;
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const h6 = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
+  return [
+    parseInt(h6.slice(0, 2), 16) / 255,
+    parseInt(h6.slice(2, 4), 16) / 255,
+    parseInt(h6.slice(4, 6), 16) / 255,
+  ];
+}
+
+/**
+ * Which of black/white reads on `hex`, by WCAG relative luminance.
+ *
+ * Needed because the vendored `:root` hard-defines
+ * `--color-button-primary-text: #FFFFFF`. A CSS-level
+ * `var(--color-button-primary-text, <something sensible>)` can therefore never
+ * reach its fallback — the token is always "set", just not by the tenant — so
+ * any record that omits it silently gets white, which is unreadable the moment
+ * the brand surface is light (kenya-yellow is ~1.5:1). Deciding it here, from
+ * the button background the theme actually resolved to, keeps every record
+ * legible without asking each tenant to state the pairing.
+ */
+function readableForeground(hex) {
+  const ch = hexChannels(hex);
+  if (!ch) return null;
+  const lin = ch.map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+  const luminance = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  // Deliberately a legibility floor, not "whichever contrasts most". Maximising
+  // contrast would flip mid-tone brands to a dark label — Bomet's #1B85D2 scores
+  // 5.34:1 black vs 3.93:1 white — silently restyling tenants that read fine
+  // today. White is the convention for a filled brand button, so keep it until
+  // it drops under 3:1, which is the case this backfill exists for
+  // (kenya-yellow #FEC931 is 1.54:1). Brand colours meant for white labels, the
+  // #2563EB in this ticket included, clear 4.5:1 with white anyway.
+  return whiteContrast >= 3 ? "#FFFFFF" : "#0B0C0C";
+}
+
 function hexToHslTriplet(hex) {
   if (typeof hex !== "string") return null;
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
@@ -388,6 +429,21 @@ function applyTheme(config) {
     for (const [name, value] of Object.entries(backfill)) {
       if (typeof value === "string" && !(name in vars)) vars[name] = value;
     }
+  }
+
+  // Pass 5: semantic tokens the vendored :root also defines, which means a CSS
+  // fallback chain can never supply them — the var is always set, just not by
+  // the tenant. Any record that leaves these out would otherwise inherit a
+  // generic default that has nothing to do with its palette. Applies to every
+  // record shape, v3 included: `primary-1` marks a v3 record but says nothing
+  // about whether these particular keys were filled in.
+  if (!("--color-button-primary-text" in vars)) {
+    const fg = readableForeground(
+      vars["--color-button-primary-bg-default"] ||
+        vars["--color-primary-2"] ||
+        vars["--color-primary-main"]
+    );
+    if (fg) vars["--color-button-primary-text"] = fg;
   }
 
   for (const name of Object.keys(vars)) {

@@ -491,3 +491,71 @@ test("v3 backfill: no primary in record → nothing invented", () => {
     assert.equal(props["--color-primary-2"], undefined);
   } finally { restore(); }
 });
+
+// --- Pass 5: primary-button foreground -------------------------------------
+// The vendored :root hard-defines --color-button-primary-text: #FFFFFF, so a
+// CSS `var(--color-button-primary-text, <fallback>)` can never reach its
+// fallback. Any record omitting the token would silently get white, which is
+// unreadable on a light brand. Derive it from the resolved button background.
+
+test("button foreground: dark brand with no stated text colour gets white", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // Bomet's live shape: v3, but button-primary-text is absent.
+    applyTheme({
+      version: "3",
+      colors: { "primary-1": "#1565A8", "primary-2": "#1B85D2" },
+    });
+    assert.equal(props["--color-button-primary-bg-default"], undefined);
+    assert.equal(props["--color-button-primary-text"], "#FFFFFF");
+  } finally { restore(); }
+});
+
+test("button foreground: light brand with no stated text colour gets near-black", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // kenya-yellow as the button surface: white would be ~1.5:1.
+    applyTheme({
+      version: "3",
+      colors: { "primary-1": "#204F37", "button-primary-bg-default": "#FEC931" },
+    });
+    assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("button foreground: a record that states one is left alone", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    // naipepea's live shape: states its own pairing, which must win.
+    applyTheme({
+      version: "3",
+      colors: {
+        "primary-1": "#204F37",
+        "button-primary-bg-default": "#FEC931",
+        "button-primary-text": "#204F37",
+      },
+    });
+    assert.equal(props["--color-button-primary-text"], "#204F37");
+  } finally { restore(); }
+});
+
+test("button foreground: v1 record derives from primary.main", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { primary: { main: "#FEC931" } } });
+    assert.equal(props["--color-button-primary-text"], "#0B0C0C");
+  } finally { restore(); }
+});
+
+test("button foreground: nothing to derive from → token not invented", () => {
+  const { props, restore } = stubDocument();
+  try {
+    const applyTheme = freshApply();
+    applyTheme({ version: "1", colors: { secondary: "#123456" } });
+    assert.equal(props["--color-button-primary-text"], undefined);
+  } finally { restore(); }
+});

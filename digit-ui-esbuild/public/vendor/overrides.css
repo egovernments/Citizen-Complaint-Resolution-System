@@ -5372,7 +5372,21 @@ html .citizen-home-footer {
 .banner, .banner-container,
 [class*="banner-container"]:not([class*="banner-text"]) {
   background-image: none !important;
-  background-color: var(--color-header-bg, var(--color-digitv2-header-sidenav, #0B4B66)) !important;
+  /* Keyed on digitv2-header-sidenav, not header-bg. Two reasons.
+   *
+   * The vendored :root defines header-bg (#22394D), so a
+   * `var(--color-header-bg, …)` chain can never reach its fallback — a tenant
+   * that never set the token would silently take that generic value rather
+   * than anything of its own.
+   *
+   * And header-bg is the TOP BAR's surface, which a theme may legitimately set
+   * light: the navy palette in this ticket uses a white top bar, which would
+   * be a white login banner. digitv2-header-sidenav is the tenant's dark brand
+   * surface, which is what this full-bleed banner wants, and `primary-1` fans
+   * out to it, so every v3 record fills it in. Bomet resolves to its #1565A8
+   * rather than the old hardcoded teal — deliberate: the banner now follows
+   * the tenant instead of ignoring it. */
+  background-color: var(--color-digitv2-header-sidenav, #0B4B66) !important;
 }
 
 /* 50b. Tertiary action labels (.primary-label-btn, .link-label) — upstream

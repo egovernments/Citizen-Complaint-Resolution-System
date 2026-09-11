@@ -49,6 +49,35 @@ const setEmployeeDetail = (userObject, token) => {
   localStorage.setItem("Employee.user-info", JSON.stringify(userObject));
 };
 
+/**
+ * "Powered by DIGIT" belongs to the page, not to the card — the same placement
+ * the language-selection screen already uses, so the pre-auth screens read as
+ * one. `.EmployeeLoginFooter` pins it to the bottom of its positioned parent;
+ * the BW wordmark is the white one, which is what reads on a dark banner.
+ *
+ * Shared by BOTH shell branches. The login and forgot-password screens no
+ * longer carry their own copy, so a shell branch that skipped this would drop
+ * the attribution entirely — which is what the carousel layout did.
+ */
+function PoweredByDigit() {
+  const src =
+    window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW") ||
+    window?.globalConfigs?.getConfig?.("DIGIT_FOOTER");
+  if (!src) return null;
+  return (
+    <div className="EmployeeLoginFooter">
+      <ImageComponent
+        alt="Powered by DIGIT"
+        src={src}
+        style={{ cursor: "pointer" }}
+        onClick={() => {
+          window.open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")?.focus();
+        }}
+      />
+    </div>
+  );
+}
+
 export function V2LoginShell({ children, withCarousel, bannerImages }) {
   if (withCarousel) {
     return (
@@ -77,6 +106,7 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
         </div>
         <div
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -84,6 +114,9 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           }}
         >
           {children}
+          {/* `position: relative` above so the absolutely-positioned footer
+              pins to the form column rather than the whole grid. */}
+          <PoweredByDigit />
         </div>
       </div>
     );
@@ -115,26 +148,7 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
       >
         {children}
       </div>
-      {/* "Powered by DIGIT" belongs to the page, not to the card — the same
-          placement the language-selection screen already uses, so the two
-          pre-auth screens read as one. `.EmployeeLoginFooter` pins it to the
-          bottom of the banner; the BW wordmark is the white one, which is
-          what reads on the dark banner. */}
-      <div className="EmployeeLoginFooter">
-        <ImageComponent
-          alt="Powered by DIGIT"
-          src={
-            window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW") ||
-            window?.globalConfigs?.getConfig?.("DIGIT_FOOTER")
-          }
-          style={{ cursor: "pointer" }}
-          onClick={() => {
-            window
-              .open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")
-              ?.focus();
-          }}
-        />
-      </div>
+      <PoweredByDigit />
     </Background>
   );
 }
