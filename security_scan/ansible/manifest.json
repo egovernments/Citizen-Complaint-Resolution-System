@@ -1,0 +1,30 @@
+{
+ "runs": [
+  {
+   "file": "data/Vinoth---11th-Sep-2026-14-11-IST.json",
+   "label": "Vinoth - 11th Sep 2026, 14:11 IST",
+   "repo": "egovernments/Citizen-Complaint-Resolution-System",
+   "runner": "Vinoth",
+   "branch": "security/rework",
+   "ts": "2026-09-11T08:41:05.314237+00:00",
+   "date": "2026-09-11 08:41 UTC",
+   "shaShort": "8678adb",
+   "pr": null,
+   "occurrences": 56,
+   "types": 14,
+   "occBySeverity": {
+    "CRITICAL": 25,
+    "HIGH": 29,
+    "MEDIUM": 0,
+    "LOW": 2
+   },
+   "typesBySeverity": {
+    "CRITICAL": 5,
+    "HIGH": 8,
+    "MEDIUM": 0,
+    "LOW": 1
+   },
+   "xlsxUrl": "https://docs.google.com/spreadsheets/d/1T1uCcjbeXWOwgbTkEyLuCX1C9iu0VBmE/edit?usp=drivesdk&ouid=110574755553160173172&rtpof=true&sd=true"
+  }
+ ]
+}
