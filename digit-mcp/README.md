@@ -330,6 +330,7 @@ getResourceBySchema('RAINMAKER-PGR.ServiceDefs');  // → complaint-types config
 | `CRS_PASSWORD` | — | DIGIT admin password |
 | `CRS_TENANT_ID` | from env config | Tenant for authentication |
 | `MCP_ENABLE_ALL_GROUPS` | — | Set to `1` to enable all tool groups on startup |
+| `MCP_READ_ONLY` | — | Any non-empty value except `false`/`0`/`no`/`off` starts a **read-only** instance (fail-closed): every write-risk tool is dropped at registration (absent, not just disabled) so it can't be listed, enabled, or dispatched — on `/mcp`, `/v1/tools/*`, or the `/v1/tenant/*` routes (all resolve tools through `getTool`). `core` session tools (`init`, `session_checkpoint`) are exempt as local bookkeeping; `configure` stays a read tool (needed to connect) but refuses `base_url` and the role self-grant in this mode. The `/api/sessions/*` session-viewer routes are outside the tool registry, so read-only mode **refuses them with 403** (they're a write surface — unbounded INSERTs — and expose stored tool args / user info). A public instance should still sit behind edge auth (basic-auth/allowlist) regardless, since some reads (`user_search`, `pgr_search`) return data. |
 
 ## Environments
 

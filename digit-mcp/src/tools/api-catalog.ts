@@ -76,10 +76,15 @@ export function registerApiCatalogTools(registry: ToolRegistry): void {
             .slice(0, 5)
             .map((t) => t.name);
 
+          // On a read-only instance a "not found" is often a write tool that was
+          // dropped, not a typo — say so, so an agent stops retrying it.
+          const readOnly = registry.isReadOnly();
           return JSON.stringify(
             {
               success: false,
-              error: `Tool "${toolName}" not found.`,
+              readOnly,
+              error: `Tool "${toolName}" not found.`
+                + (readOnly ? ' This is a READ-ONLY instance; if this is a write tool (create/update/delete/decrypt/...), it is not registered here.' : ''),
               suggestions: suggestions.length > 0 ? suggestions : undefined,
               hint: 'Use discover_tools to list all available tools.',
             },

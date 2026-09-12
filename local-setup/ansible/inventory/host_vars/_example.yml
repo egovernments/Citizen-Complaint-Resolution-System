@@ -369,6 +369,17 @@ enable_search_stack: false
 # unreachable one fails the whole `docker compose up`.
 enable_mcp: true
 
+# ────────── digit-mcp read-only (public) ──────────
+# A SEPARATE, publicly-exposable read-only MCP (digit-mcp-readonly). With
+# MCP_READ_ONLY=1 every write-risk tool is absent (tenant_destroy, decrypt_data,
+# *_create/_update, ...) — safe to expose, unlike the full /mcp. To turn it on:
+#   1. enable_mcp_readonly: true            # starts the read-only container (profile mcp-readonly)
+#   2. nginx_features.mcp_readonly: true    # serves /mcp + /v1/ from it (mutually exclusive with nginx_features.mcp)
+#   3. mcp_readonly_basic_auth_password: "{{ vault_mcp_readonly_password }}"   # basic-auth gate (in vault; never commit)
+# Some reads (user_search, pgr_search) still return data, so keep the basic-auth on.
+# enable_mcp_readonly: false
+# mcp_readonly_basic_auth_user: "digit-mcp"
+
 # ────────── Turbopass (OSM location autocomplete) ──────────
 # Build + run the vendored turbopass search-api (turbopass/search-api/) as a
 # standalone on-box container (`turbopass-search`, loopback 127.0.0.1:13301)

@@ -16,7 +16,7 @@ import {
 } from './src/utils/validation.js';
 import { sanitizeUserContent, sanitizeFields } from './src/utils/sanitize.js';
 import { applyFieldMask } from './src/utils/field-mask.js';
-import { ToolRegistry } from './src/tools/registry.js';
+import { ToolRegistry, readOnlyFromEnv, setEffectiveReadOnly } from './src/tools/registry.js';
 import { registerAllTools } from './src/tools/index.js';
 
 // --- Test runner (same pattern as test-validator.ts) ---
@@ -230,7 +230,11 @@ await test('6.2 fail on first invalid input', () => {
 // =====================================================================
 
 // --- Tool registry for dry-run tests ---
-const registry = new ToolRegistry();
+// Explicit readOnly:false so suites 1-9 stay independent of the ambient
+// MCP_READ_ONLY env var (which would otherwise drop 27 tools and produce
+// confusing failures for a developer who exported it). Suite 10 constructs its
+// own read-only registries.
+const registry = new ToolRegistry({ readOnly: false });
 registerAllTools(registry);
 
 async function call(toolName: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -436,6 +440,108 @@ await test('9.7 empty fields array returns all fields', () => {
   const data = [{ id: '1', name: 'Alice' }];
   const { items } = applyFieldMask(data, []);
   assert(Object.keys(items[0]).length === 2, 'empty fields = no mask');
+});
+
+// =====================================================================
+// 10. Read-only mode (MCP_READ_ONLY): write tools are ABSENT, not disabled —
+//     they cannot be listed, enabled, or dispatched on /mcp or any /v1 route.
+// =====================================================================
+
+await test('10.1 read-only registry registers no non-core write tool', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const leaked = ro.getAllTools().filter((t) => t.risk === 'write' && t.group !== 'core');
+  assert(leaked.length === 0, `write tools leaked into read-only: ${leaked.map((t) => t.name).join(', ')}`);
+  assert(ro.isReadOnly(), 'isReadOnly() must be true');
+});
+
+await test('10.2 read-only drops the dangerous mutators', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  // snapshot_capture is included: it was reclassified read->write (writes files,
+  // returns raw env secrets), so it must be dropped too.
+  for (const name of ['tenant_destroy', 'tenant_bootstrap', 'decrypt_data', 'mdms_create', 'user_create', 'workflow_create', 'snapshot_capture']) {
+    assert(ro.getTool(name) === undefined, `${name} must be absent in read-only mode`);
+  }
+});
+
+await test('10.3 read-only keeps read tools', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  for (const name of ['mdms_search', 'user_search', 'pgr_search', 'health_check']) {
+    assert(ro.getTool(name) !== undefined, `${name} must remain available in read-only mode`);
+  }
+});
+
+await test('10.4 read-only exempts core session write tools', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const coreWrites = ro.getAllTools().filter((t) => t.group === 'core' && t.risk === 'write');
+  assert(coreWrites.length > 0, 'core session write tools (init/session_checkpoint) should remain');
+});
+
+await test('10.5 a normal registry keeps write tools and has strictly more tools', () => {
+  const full = new ToolRegistry({ readOnly: false });
+  registerAllTools(full);
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  assert(full.getTool('tenant_destroy') !== undefined, 'full registry must keep tenant_destroy');
+  assert(!full.isReadOnly(), 'isReadOnly() must be false on a normal registry');
+  assert(ro.getAllTools().length < full.getAllTools().length, 'read-only must expose fewer tools than full');
+});
+
+await test('10.6 configure stays in read-only (its writes are guarded in-handler, not by dropping it)', () => {
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  // configure is risk:read + core, needed to connect; base_url and the role
+  // self-grant are refused inside the handler when read-only.
+  assert(ro.getTool('configure') !== undefined, 'configure must remain available in read-only mode');
+});
+
+await test('10.6b configure refuses base_url when read-only (guard actually fires)', async () => {
+  // The handler consults isReadOnlyEffective(), which the server sets at startup
+  // from the dispatch registry — so a registry built { readOnly: true } is not
+  // enough on its own; publish the mode the way the server does, then assert the
+  // guard refuses rather than merely that configure is present. Env is left
+  // unset here on purpose: this proves the guard follows the registry's state,
+  // not process.env, closing the seam between the two.
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const orig = process.env.MCP_READ_ONLY;
+  delete process.env.MCP_READ_ONLY;
+  setEffectiveReadOnly(ro.isReadOnly());
+  try {
+    const configure = ro.getTool('configure')!;
+    const out = JSON.parse(await configure.handler({ base_url: 'https://attacker.example' }));
+    assert(out.success === false, 'configure must refuse base_url on a read-only instance');
+    assert(
+      typeof out.error === 'string' && out.error.includes('read-only'),
+      `refusal must name read-only, got: ${JSON.stringify(out.error)}`
+    );
+  } finally {
+    setEffectiveReadOnly(false);
+    if (orig === undefined) delete process.env.MCP_READ_ONLY;
+    else process.env.MCP_READ_ONLY = orig;
+  }
+});
+
+await test('10.7 MCP_READ_ONLY parses fail-closed (near-misses resolve to read-only)', () => {
+  const orig = process.env.MCP_READ_ONLY;
+  try {
+    const cases: [string, boolean][] = [
+      ['', false], ['false', false], ['0', false], ['no', false], ['OFF', false], ['  false ', false],
+      ['1', true], ['true', true], ['TRUE', true], ['True', true], ['yes', true], ['on', true], ['1 ', true], ['garbage', true],
+    ];
+    for (const [v, expected] of cases) {
+      process.env.MCP_READ_ONLY = v;
+      assert(readOnlyFromEnv() === expected, `MCP_READ_ONLY=${JSON.stringify(v)} should resolve to ${expected}`);
+    }
+    delete process.env.MCP_READ_ONLY;
+    assert(readOnlyFromEnv() === false, 'unset resolves to full');
+  } finally {
+    if (orig === undefined) delete process.env.MCP_READ_ONLY;
+    else process.env.MCP_READ_ONLY = orig;
+  }
 });
 
 // =====================================================================

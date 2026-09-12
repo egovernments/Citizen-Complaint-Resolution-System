@@ -50,7 +50,11 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     name: 'snapshot_capture',
     group: 'snapshot',
     category: 'snapshot',
-    risk: 'read',
+    // `write`, not `read`: `output_path` goes straight to writeFileSync (arbitrary
+    // file overwrite) and the `config` layer with redact:false returns raw
+    // container env — DB passwords, encryption keys, CRS_PASSWORD. That makes it
+    // a mutating / secret-exposing tool, so read-only instances must not carry it.
+    risk: 'write',
     description:
       'Capture a portable, deterministic system-state snapshot of the CURRENT DIGIT deployment, to diff against another setup and explain replication deviations. ' +
       'Layers: "images" (running container image refs+digests from docker, plus declared compose refs → catches compose drift; ON-BOX only), ' +

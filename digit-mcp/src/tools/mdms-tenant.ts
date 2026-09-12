@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ToolMetadata, MdmsRecord } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
+import { isReadOnlyEffective } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { digitDb } from '../services/digit-db.js';
 import { emitProgress } from '../services/progress.js';
@@ -496,6 +497,18 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const baseUrl = args.base_url as string | undefined;
       const envKey = (args.environment as string) || process.env.CRS_ENVIRONMENT || 'self-hosted';
 
+      // A read-only instance must not be steered to an arbitrary host: base_url
+      // flows to setAdHocEnvironment and, with the CRS_USERNAME/CRS_PASSWORD
+      // fallback below, would POST the admin credentials there and poison the
+      // process-wide client for every later read. Refuse it. (configure stays a
+      // read tool because a read-only instance still needs it to connect.)
+      if (isReadOnlyEffective() && baseUrl) {
+        return JSON.stringify({
+          success: false,
+          error: 'base_url is not allowed on a read-only MCP instance.',
+        }, null, 2);
+      }
+
       // Switch environment: ad-hoc URL or named environment
       if (baseUrl) {
         digitApi.setAdHocEnvironment(baseUrl);
@@ -606,7 +619,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       // the user lacks roles for the target root. Auto-add them so that direct API login
       // (e.g. from a frontend) also works for the target tenant.
       let rolesProvisioned: string[] | null = null;
-      if (explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId) {
+      // Skipped entirely on a read-only instance: this branch calls userUpdate to
+      // self-grant SUPERUSER (and eight other roles) on the target root, which is
+      // a write to the DIGIT user store — exactly what read-only must not do.
+      if (!isReadOnlyEffective() && explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId) {
         try {
           const auth = digitApi.getAuthInfo();
           const searchTenant = auth.user?.tenantId || usedLoginTenant;
