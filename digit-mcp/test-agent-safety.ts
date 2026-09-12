@@ -16,7 +16,7 @@ import {
 } from './src/utils/validation.js';
 import { sanitizeUserContent, sanitizeFields } from './src/utils/sanitize.js';
 import { applyFieldMask } from './src/utils/field-mask.js';
-import { ToolRegistry, readOnlyFromEnv } from './src/tools/registry.js';
+import { ToolRegistry, readOnlyFromEnv, setEffectiveReadOnly } from './src/tools/registry.js';
 import { registerAllTools } from './src/tools/index.js';
 
 // --- Test runner (same pattern as test-validator.ts) ---
@@ -496,6 +496,33 @@ await test('10.6 configure stays in read-only (its writes are guarded in-handler
   // configure is risk:read + core, needed to connect; base_url and the role
   // self-grant are refused inside the handler when read-only.
   assert(ro.getTool('configure') !== undefined, 'configure must remain available in read-only mode');
+});
+
+await test('10.6b configure refuses base_url when read-only (guard actually fires)', async () => {
+  // The handler consults isReadOnlyEffective(), which the server sets at startup
+  // from the dispatch registry — so a registry built { readOnly: true } is not
+  // enough on its own; publish the mode the way the server does, then assert the
+  // guard refuses rather than merely that configure is present. Env is left
+  // unset here on purpose: this proves the guard follows the registry's state,
+  // not process.env, closing the seam between the two.
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const orig = process.env.MCP_READ_ONLY;
+  delete process.env.MCP_READ_ONLY;
+  setEffectiveReadOnly(ro.isReadOnly());
+  try {
+    const configure = ro.getTool('configure')!;
+    const out = JSON.parse(await configure.handler({ base_url: 'https://attacker.example' }));
+    assert(out.success === false, 'configure must refuse base_url on a read-only instance');
+    assert(
+      typeof out.error === 'string' && out.error.includes('read-only'),
+      `refusal must name read-only, got: ${JSON.stringify(out.error)}`
+    );
+  } finally {
+    setEffectiveReadOnly(false);
+    if (orig === undefined) delete process.env.MCP_READ_ONLY;
+    else process.env.MCP_READ_ONLY = orig;
+  }
 });
 
 await test('10.7 MCP_READ_ONLY parses fail-closed (near-misses resolve to read-only)', () => {

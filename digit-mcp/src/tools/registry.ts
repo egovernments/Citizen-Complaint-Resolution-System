@@ -15,6 +15,27 @@ export function readOnlyFromEnv(): boolean {
   return !['false', '0', 'no', 'off'].includes(v);
 }
 
+/**
+ * Effective read-only mode for tool handlers, which do not hold a registry.
+ *
+ * The registry resolves read-only as `options.readOnly ?? readOnlyFromEnv()`, so
+ * a handler that consults `readOnlyFromEnv()` on its own can DISAGREE with the
+ * registry that dispatched it (e.g. a registry built `{ readOnly: true }` while
+ * MCP_READ_ONLY is unset). To keep one source of truth, the server calls
+ * `setEffectiveReadOnly(registry.isReadOnly())` once at startup and handlers read
+ * `isReadOnlyEffective()`. Until that call it falls back to the env — same
+ * fail-closed default as before, so nothing regresses if the setter is skipped.
+ */
+let effectiveReadOnly: boolean | undefined;
+
+export function setEffectiveReadOnly(value: boolean): void {
+  effectiveReadOnly = value;
+}
+
+export function isReadOnlyEffective(): boolean {
+  return effectiveReadOnly ?? readOnlyFromEnv();
+}
+
 export class ToolRegistry {
   private tools: Map<string, ToolMetadata> = new Map();
   private enabledGroups: Set<ToolGroup> = new Set(['core', 'docs']);

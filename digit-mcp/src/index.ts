@@ -5,7 +5,7 @@ import { sessionStore } from './services/session-store.js';
 import { db } from './services/db.js';
 import { digitDb } from './services/digit-db.js';
 import { handlePgrDashboard } from './api/pgr-dashboard.js';
-import { ToolRegistry } from './tools/registry.js';
+import { ToolRegistry, setEffectiveReadOnly } from './tools/registry.js';
 import { registerAllTools } from './tools/index.js';
 import { ALL_GROUPS } from './types/index.js';
 import { digitApi } from './services/digit-api.js';
@@ -107,6 +107,11 @@ if (transportMode === 'stdio') {
   const restRegistry = new ToolRegistry();
   registerAllTools(restRegistry);
   restRegistry.enableGroups(ALL_GROUPS);
+
+  // Single source of truth for read-only mode: publish the registry's resolved
+  // state so tool handlers (e.g. `configure`'s guards) consult the same value
+  // the dispatch registry filtered on, rather than re-deriving it from the env.
+  setEffectiveReadOnly(restRegistry.isReadOnly());
 
   // The DigitApiClient is a process-level singleton, so REST calls must
   // be serialized while we swap its auth state. For an admin-only
