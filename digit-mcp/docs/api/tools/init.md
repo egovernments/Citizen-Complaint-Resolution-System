@@ -34,7 +34,7 @@ Returns a JSON object with session metadata, enabled groups, and suggested next 
     "telemetry": true
   },
   "enabledGroups": ["core", "pgr", "masters", "admin", "boundary", "docs"],
-  "toolCount": "32 of 59 tools now enabled",
+  "toolCount": "32 of 70 tools now enabled",
   "suggestedNextSteps": [
     "Use configure to connect to the DIGIT environment",
     "Use validate_complaint_types to check available complaint types",

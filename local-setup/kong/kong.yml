@@ -20,7 +20,20 @@ plugins:
     header_type: w3c
 - name: cors
   config:
-    origins:
+    # ORIGINS — rewritten per tenant by the Ansible deploy.
+    #
+    # The marker below is what the playbook's "Kong — pin CORS origins to the
+    # tenant domain" task keys on; it replaces the '*' entry with the value of
+    # `kong_cors_origins` (defaulting to https://<domain>). Keep the marker
+    # comment and the single-entry list shape intact or that task no-ops and
+    # the deploy asserts.
+    #
+    # '*' is the LOCAL-DEV default only (Tilt / direct `docker compose up`,
+    # where the SPA runs on its own port). A real deployment serves the SPAs
+    # and Kong from one origin behind nginx, so it needs no wildcard at all.
+    #
+    # NOTE: `credentials` is deliberately absent — see below.
+    origins:  # kong-cors-origins-marker
     - '*'
     methods:
     - GET
@@ -46,7 +59,19 @@ plugins:
     - x-trace-id
     exposed_headers:
     - X-Auth-Token
-    credentials: true
+    # `credentials: true` REMOVED (was paired with origins '*').
+    #
+    # Kong's CORS plugin, given origins '*' AND credentials, does not send the
+    # literal `Access-Control-Allow-Origin: *` (browsers reject that pairing) —
+    # it echoes the caller's own Origin back and adds
+    # `Access-Control-Allow-Credentials: true`. The effect is the opposite of a
+    # wildcard's usual read-only weakness: EVERY origin becomes trusted for
+    # CREDENTIALED cross-origin requests, so any page a logged-in user visits
+    # could drive the DIGIT APIs as them and read the responses.
+    #
+    # Nothing here needs it. DIGIT authenticates with the `auth-token` request
+    # header (allowed above) and a Bearer Authorization header, not cookies or
+    # TLS client certs — which is all the credentials flag governs.
     max_age: 3600
 - name: request-size-limiting
   config:
@@ -101,17 +126,18 @@ plugins:
         -- docs/parity-item5-gateway-rbac-design.md.
         --
         -- ENFORCED (2026-08-21): unauthenticated hits on protected paths now get a real 401.
-        -- Known gap at flip time: /common-persist still has zero
-        -- ACCESSCONTROL-ACTIONS-TEST.actions-test coverage (see docs/parity-item5-gateway-rbac-design.md)
-        -- — accepted as-is for now; persister calls will 403 under ENFORCE_RBAC below until that
-        -- coverage is added. /novu-bridge/* is covered (actiontest + roleactions for
-        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME).
+        -- /novu-bridge/* is covered by accesscontrol (actiontest + roleactions for
+        -- ACCOUNT_ADMIN, SUPERUSER, MDMS_ADMIN, CSR, GRO, PGR_LME). Internal service
+        -- primitives that DIGIT does not action-RBAC (enc-service crypto/key,
+        -- /common-persist) are authn-required but RBAC-exempt — see RBAC_EXEMPT in
+        -- enforce_rbac below, where the reasoning lives.
         local ENFORCE_UNAUTH = true
         -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. ENFORCED
-        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. Known gap: PGR_ADMIN is
+        -- (2026-08-21) — 403 on deny. Independent of ENFORCE_UNAUTH. PGR_ADMIN was
         -- referenced in ACCESSCONTROL-ROLEACTIONS.roleactions but missing from
-        -- ACCESSCONTROL-ROLES.roles, and /common-persist has no actiontest rows at
-        -- all — both will deny until fixed separately.
+        -- ACCESSCONTROL-ROLES.roles (now added to the seed). Internal service
+        -- primitives with no user-facing action (enc-service, /common-persist) are
+        -- RBAC-exempt rather than covered — see RBAC_EXEMPT in enforce_rbac.
         local ENFORCE_RBAC = true
         local AUTH_OPTIONAL = {
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
@@ -139,7 +165,17 @@ plugins:
           ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
           ["/egov-url-shortening"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
-          ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- /user/_search REMOVED from auth-optional (audit: anonymous-user-search).
+          -- It is the user/employee directory: an unauthenticated caller could
+          -- enumerate every user on the tenant — names, mobile numbers, emails,
+          -- roles — which is both a privacy breach and a ready-made target list
+          -- for the credential-stuffing the fixed OTP already invites.
+          -- Its real callers (configurator org-chart, digit-ui-v2 citizen
+          -- profile) are all POST-LOGIN and carry a token, so they are
+          -- unaffected. If an anonymous lookup is ever genuinely needed, add a
+          -- narrow dedicated route with rate limiting and a response filter
+          -- rather than reopening the general search API.
+          ["/access/v1/actions/mdms/_get"]=true,
           -- Authenticated employees of every functional role may read their own HRMS-backed
           -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
           -- appropriate because HRMS employee creation does not guarantee a shared base role.
@@ -163,17 +199,26 @@ plugins:
           -- the options endpoint takes nothing but tenantId.
           ["/pgr-services/v2/analytics/public/catalog/_search"]=true,
           ["/pgr-services/v2/analytics/public/_options"]=true,
-          -- novu-bridge configurator-proxy POSTs: these endpoints authenticate
+          -- novu-bridge configurator-proxy calls: these endpoints authenticate
           -- INSIDE novu-bridge (ProxyAuthFilter introspects the Authorization:
           -- Bearer token against egov-user /user/_details and enforces
-          -- novu.bridge.proxy.allowed.roles). Their clients send NO
-          -- RequestInfo.authToken body, so without this whitelist the global
-          -- POST enrichment 401s every Configurator provider create/verify/
-          -- test-send before the bridge sees it. Kong-only: the bridge is not
-          -- routed by the Spring gateway tier.
+          -- novu.bridge.proxy.allowed.roles). Their clients send the token as a
+          -- Bearer header and NO RequestInfo.authToken body, so the global body
+          -- enrichment cannot authenticate them — whitelist so the bridge (the
+          -- real auth boundary) sees them. Kong-only: the bridge is not routed by
+          -- the Spring gateway tier. The GETs are here for the same reason as the
+          -- POSTs: master returned early on non-POST, but the non-POST gate now
+          -- enforces, so without these the Configurator's Notification Logs,
+          -- Providers and Preferences panels 401 (Bearer-only GETs, not in the
+          -- body-token flow).
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          ["/novu-bridge/novu-adapter/v1/logs"]=true,
+          ["/novu-bridge/novu-adapter/v1/integrations"]=true,
+          ["/novu-bridge/novu-adapter/v1/preferences"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/templates"]=true,
+          ["/novu-bridge/novu-adapter/v1/providers/twilio-templates"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -188,7 +233,179 @@ plugins:
           kong.log.warn("RBAC-audit(#5): unauthenticated request to protected path (would 401): ", uri)
         end
 
-        if kong.request.get_method() ~= "POST" then return end
+        -- Infrastructure routes Kong also fronts that are NOT DIGIT APIs and
+        -- carry no RequestInfo body token: the SPA bundle (/digit-ui), the
+        -- Keycloak auth server (/auth and its OIDC/login/resources), and Kong's
+        -- per-service liveness routes (/health/<svc>, */actuator/health). The
+        -- global pre-function runs on EVERY route, but the body-token enrichment
+        -- below must not apply to these — they stay publicly reachable on ALL
+        -- methods (the SPA login page, Keycloak's form POST, k8s/Gatus probes).
+        -- This scopes the auth gate to the DIGIT API routes it is meant to cover.
+        local function is_public_infra(p)
+          return p == "/digit-ui" or p:find("/digit-ui/", 1, true) == 1
+              or p == "/auth" or p:find("/auth/", 1, true) == 1
+              -- /kc is keycloak-api-route -> token-exchange-svc: the UI hits it
+              -- BEFORE the caller holds a DIGIT token (KeycloakAuthAdapter), and
+              -- /kc/healthz is a plain liveness probe that ends in "z" (so the
+              -- /health$ match below does not catch it). Same bucket as /auth.
+              or p == "/kc" or p:find("/kc/", 1, true) == 1
+              -- `/health$` (suffix) not `== "/health"`: the per-service liveness
+              -- endpoints are `/mdms-v2/health`, `/user/health`, `/access/health`,
+              -- `/egov-idgen/health`, `/egov-workflow-v2/health`, `/pgr-services/health`
+              -- — all ending in /health. The pre-existing gate matched them with
+              -- uri:match("/health$"); narrowing to an exact "/health" 401'd every
+              -- one (caught by the health-check.sh CI step). Keep the `/health/`
+              -- PREFIX too for Kong's own /health/<svc> proxy routes.
+              or p:match("/health$") or p:find("/health/", 1, true) == 1
+              or p:match("/actuator/health$") or p:match("/actuator/health/")
+        end
+        if is_public_infra(uri) then return end
+
+        -- Resolve a token against egov-user and return the server-vouched
+        -- principal (roles/tenantId/uuid), plus a status: "ok" | "rejected"
+        -- (invalid/expired) | "transient" (unreachable / 5xx / unparseable).
+        -- The token is URL-escaped before it becomes a query value, so a value
+        -- containing & = whitespace / CR / LF cannot inject extra introspection
+        -- parameters into the _details call.
+        local function resolve_principal(ntoken)
+          local c = http.new(); c:set_timeout(5000)
+          local r = c:request_uri(
+            "http://egov-user-proxy:8107/user/_details?access_token=" .. ngx.escape_uri(ntoken),
+            { method = "POST", headers = { ["Content-Type"] = "application/json" } })
+          if r and r.status == 200 then
+            local okd, u = pcall(cjson.decode, r.body)
+            if okd and type(u) == "table" and (u["uuid"] or u["userName"]) then return u, "ok" end
+            return nil, "transient"
+          elseif r and (r.status == 401 or r.status == 403
+                        or (r.body and r.body:find("InvalidAccessTokenException", 1, true))) then
+            return nil, "rejected"
+          end
+          return nil, "transient"
+        end
+
+        -- Action-level authorization (Phase 2, #5) against egov-accesscontrol
+        -- for a resolved principal on a protected path. SHARED by the POST and
+        -- non-POST paths so every method gets RBAC, not just authentication.
+        -- Ships in AUDIT mode; fails CLOSED (403) when ENFORCE_RBAC — a protected
+        -- action is denied unless accesscontrol returns an explicit allow.
+        -- Internal service primitives: authenticated (a valid token is required
+        -- by the caller paths above — a tokenless hit is 401'd, so these are NOT
+        -- anonymous oracles) but NOT action-RBAC'd at the gateway. DIGIT ships
+        -- their accesscontrol actions disabled/unmapped because internal services
+        -- call them service-to-service, not as user actions — so a gateway-routed
+        -- caller (the MCP) would 403 forever despite holding a valid admin token.
+        --   * /egov-enc-service/*  — PII crypto + key generation (_encrypt,
+        --     _decrypt, _generatekey). The token gates them; decrypt additionally
+        --     can only be invoked by the MCP's admin-tier tool. Granting blanket
+        --     anonymous access here is what would reopen the decrypt oracle — this
+        --     does not: it keeps authn and only skips the per-action role lookup.
+        --   * /common-persist      — the persister's HTTP sink, driven internally.
+        -- This replaces the "will 403 until accesscontrol coverage is added" gap
+        -- noted above for these paths: coverage is the wrong tool for an internal
+        -- primitive that has no user-facing action.
+        -- EXACT paths, not a prefix: exempt only the two enc endpoints the MCP
+        -- actually calls with a body token (_encrypt during provisioning,
+        -- _generatekey for a new tenant). A prefix exempted the whole
+        -- /egov-enc-service/ namespace — including any future endpoint (e.g. key
+        -- rotation) — and let any authenticated token, even a self-registered
+        -- CITIZEN, run _generatekey/_encrypt for an arbitrary tenantId.
+        -- _decrypt is deliberately NOT listed: it stays RBAC-gated, and its
+        -- bare-array body has no RequestInfo.authToken so the POST gate already
+        -- 401s it before RBAC — no need to exempt, and not exempting keeps it
+        -- maximally protected if the contract ever changes.
+        -- NB: plain `==` comparisons, deliberately NOT a Lua set/table keyed by
+        -- path string. The gateway-parity CI check scrapes the whole pre-function
+        -- for the bracketed exact-match entry syntax that AUTH_OPTIONAL uses, so a
+        -- table here would be misread as making these paths anonymous (they are
+        -- not — they stay authn-required, only the role lookup is skipped).
+        local RBAC_EXEMPT = function(p)
+          return p == "/egov-enc-service/crypto/v1/_encrypt"
+              or p == "/egov-enc-service/crypto/v1/_generatekey"
+              or p:find("/common-persist", 1, true) == 1  -- persister HTTP sink, internal
+              -- /user/_search is a MIXED-MODE path in DIGIT: egov-user scopes the
+              -- search to the caller's own context, so it is not gateway
+              -- action-RBAC'd (master ships it in the Spring mixed-mode whitelist,
+              -- with NO actiontest rows). #23 removed it from AUTH_OPTIONAL to
+              -- close ANONYMOUS enumeration — correct — but that also made it
+              -- action-RBAC'd, which 403'd every role without coverage (citizen
+              -- provisioning, admin user-edit; found by the bomet integration
+              -- suite). Keep it PROTECTED (a token is required now — anonymous is
+              -- still closed) but action-RBAC-exempt: authn-required + service-
+              -- authorized, i.e. mixed-mode minus the anonymous access. This does
+              -- NOT relax RBAC anywhere else; it restores this one path's DIGIT
+              -- classification and is strictly stricter than master (which allowed
+              -- anonymous).
+              or p == "/user/_search"
+        end
+
+        local function enforce_rbac(resolved, token)
+          if not (is_protected and resolved) then return end
+          if RBAC_EXEMPT(uri) then return end
+          local tid = resolved["tenantId"]
+          local az = http.new(); az:set_timeout(5000)
+          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
+            method = "POST",
+            headers = { ["Content-Type"] = "application/json" },
+            body = cjson.encode({
+              RequestInfo = { apiId = "Rainmaker", authToken = token },
+              AuthorizationRequest = {
+                roles = resolved["roles"] or cjson.empty_array,
+                uri = uri,
+                tenantIds = tid and { tid } or cjson.empty_array,
+              },
+            }),
+          })
+          if not (ares and ares.status == 200) then
+            if ENFORCE_RBAC then
+              return kong.response.exit(403, cjson.encode({
+                ResponseInfo = cjson.null,
+                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
+                            description = "You are not authorized to perform this action" }},
+              }), { ["Content-Type"] = "application/json" })
+            end
+            if ares then
+              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
+                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
+            else
+              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
+            end
+          end
+        end
+
+        -- Non-POST enforcement (audit: kong non-POST bypass).
+        -- DIGIT carries its authToken in the POST body (RequestInfo.authToken),
+        -- so the enrichment below only works for POST. The ORIGINAL code bailed
+        -- with a blanket `if method ~= POST then return end`, which skipped
+        -- authn AND RBAC for every GET/PUT/DELETE/PATCH — proven live: a
+        -- protected path that 401s on POST returned 400 (reached the backend)
+        -- on GET/PUT/DELETE. A protected path must be enforced on ALL methods.
+        --
+        -- A non-POST request has no body token to resolve/enrich, but DIGIT
+        -- also accepts a token out-of-band: the `auth-token` header or an
+        -- `access_token` query param. Honour those, verify against egov-user,
+        -- then run the SAME action-level RBAC as POST — authn alone is not
+        -- enough: a valid CITIZEN token must not pass a protected GET/PUT/DELETE
+        -- that its roles cannot authorize. Fail CLOSED on a protected path with
+        -- no resolvable token. (The SPA, Keycloak and health routes were already
+        -- returned above, so this reaches only DIGIT API routes.)
+        if kong.request.get_method() ~= "POST" then
+          if not is_protected then return end          -- auth-optional GETs (boundary, filestore dl, ...) pass
+          local hdr = kong.request.get_header("auth-token")
+          local q = kong.request.get_query()
+          local qtok = q and q["access_token"]
+          local ntoken = (type(hdr) == "string" and hdr ~= "" and hdr)
+                      or (type(qtok) == "string" and qtok ~= "" and qtok) or nil
+          if not ntoken then deny_unauth(); return end  -- protected, no token -> 401 (or audit-warn)
+          local resolved, status = resolve_principal(ntoken)
+          if status == "ok" then
+            return enforce_rbac(resolved, ntoken)       -- authn verified -> action-level RBAC
+          end
+          -- "rejected" (invalid/expired) and "transient" (egov-user unreachable
+          -- / 5xx) both fail CLOSED on a protected path: deny_unauth() 401s when
+          -- ENFORCE_UNAUTH, else audit-warns and falls through (parity with POST).
+          deny_unauth()
+          return
+        end
         local raw_body = kong.request.get_raw_body()
         if not raw_body or raw_body == "" then if is_protected then deny_unauth() end return end
         local ok, body = pcall(cjson.decode, raw_body)
@@ -205,7 +422,7 @@ plugins:
         -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
-        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
+        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. ngx.escape_uri(token), {
           method = "POST",
           headers = { ["Content-Type"] = "application/json" },
         })
@@ -282,53 +499,15 @@ plugins:
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
 
-        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization for protected paths =====
-        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol whether the
-        -- principal's roles may call this action (uri): 200 = allow, non-200 = deny. Mirrors the
-        -- Spring gateway's RBAC filter. Ships in AUDIT mode; when ENFORCE_RBAC it fails CLOSED (a
-        -- protected action is denied unless we get an explicit allow). See
-        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call per protected
-        -- request; response caching keyed by roles+uri+tenant is a documented follow-up.)
-        if is_protected and resolved then
-          -- Guard tenantIds: a principal without a tenantId (e.g. a freshly-created citizen
-          -- before city selection) must NOT serialize as tenantIds:[null], which accesscontrol
-          -- would reject as malformed — send an empty array instead.
-          local tid = resolved["tenantId"]
-          local az = http.new()
-          az:set_timeout(5000)
-          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
-            method = "POST",
-            headers = { ["Content-Type"] = "application/json" },
-            body = cjson.encode({
-              RequestInfo = { apiId = "Rainmaker", authToken = token },
-              AuthorizationRequest = {
-                -- cjson.empty_array so empty roles/tenantIds serialize as JSON [] (not {}),
-                -- which egov-accesscontrol expects for these fields.
-                roles = resolved["roles"] or cjson.empty_array,
-                uri = uri,
-                tenantIds = tid and { tid } or cjson.empty_array,
-              },
-            }),
-          })
-          if not (ares and ares.status == 200) then
-            if ENFORCE_RBAC then
-              -- fail CLOSED: deny on an explicit non-200 AND on an unreachable accesscontrol.
-              return kong.response.exit(403, cjson.encode({
-                ResponseInfo = cjson.null,
-                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
-                            description = "You are not authorized to perform this action" }},
-              }), { ["Content-Type"] = "application/json" })
-            end
-            -- AUDIT: separate a legitimate DENY (accesscontrol answered non-200) from a transient
-            -- infra failure (accesscontrol UNREACHABLE) so operators know which alerts to act on.
-            if ares then
-              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
-                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
-            else
-              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
-            end
-          end
-        end
+        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization =====
+        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol
+        -- whether the principal's roles may call this action. Same shared
+        -- enforce_rbac() the non-POST path uses, so GET/PUT/DELETE and POST are
+        -- authorized identically. Mirrors the Spring gateway's RBAC filter; see
+        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call
+        -- per protected request; response caching keyed by roles+uri+tenant is a
+        -- documented follow-up.)
+        return enforce_rbac(resolved, token)
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094

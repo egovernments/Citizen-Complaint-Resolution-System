@@ -143,6 +143,11 @@ export function registerHealthCheckTools(registry: ToolRegistry): void {
     name: 'health_check',
     group: 'core',
     category: 'discovery',
+    // Not 'public': this probes every platform service and reports which exist,
+    // how fast they answer and how they fail — infrastructure detail, which is
+    // exactly what ToolAccess says the public tier must not expose. Liveness
+    // for orchestrators is served unauthenticated by GET /healthz instead.
+    access: 'employee',
     risk: 'read',
     description:
       'Check the health of all DIGIT platform services by probing their API endpoints. Returns the status, response time, and any errors for each service. Requires authentication (call configure first) for most services. The encryption service is checked without auth.',

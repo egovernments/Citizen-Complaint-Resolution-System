@@ -125,7 +125,7 @@ own timings. What each one shows and which panels to read is
 > raise it with us: a Viewer can run arbitrary Loki queries, and the logs contain live
 > session tokens. See [alerts-setup.md § Before you start](alerts-setup.md#before-you-start).
 >
-> **Credentials.** The health dashboard needs no login; Grafana does, so the service desk
+> **Credentials.** The health dashboard and Grafana both need a login, so the service desk
 > needs accounts in advance — see above. For everything else — the Novu notification
 > dashboard, the SMS/WhatsApp provider console, or server access — **ask your system
 > administrator**. Never send credentials in a ticket or a chat message, including to us.

@@ -142,13 +142,23 @@ async function pushMessagesToViewer(prompt: string, messages: SDKMessage[]): Pro
   }
 
   try {
+    // /api/* requires an admin-tier DIGIT token when the viewer runs in token
+    // mode (the default for the HTTP transport). Unset => the push 401s and we
+    // just skip it, which is the same graceful degradation as "viewer not running".
+    const viewerToken = process.env.VIEWER_TOKEN || process.env.DIGIT_ACCESS_TOKEN;
     const res = await fetch(`${VIEWER_URL}/api/sessions/${viewerSessionId}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(viewerToken ? { Authorization: `Bearer ${viewerToken}` } : {}),
+      },
       body: JSON.stringify({ messages: viewerMessages, environment: "agent-test" }),
     });
     if (!res.ok) {
-      console.error(`[viewer] Failed to push messages: ${res.status}`);
+      const hint = res.status === 401 || res.status === 403
+        ? " — set VIEWER_TOKEN to an admin-role DIGIT access token"
+        : "";
+      console.error(`[viewer] Failed to push messages: ${res.status}${hint}`);
     }
   } catch {
     // Viewer might not be running — ignore silently

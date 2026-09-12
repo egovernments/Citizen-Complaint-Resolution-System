@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ENDPOINTS, OAUTH_CONFIG } from '../config/endpoints.js';
 import { getEnvironment } from '../config/environments.js';
 import type { RequestInfo, UserInfo, MdmsRecord, ApiError, Environment, ErrorCategory } from '../types/index.js';
@@ -6,6 +7,29 @@ function deriveErrorCategory(statusCode: number): ErrorCategory {
   if (statusCode === 401 || statusCode === 403) return 'auth';
   if (statusCode >= 400 && statusCode < 500) return 'validation';
   return 'api';
+}
+
+/** Full request-scoped client state. Restoring this must undo everything a tool can mutate. */
+export interface AuthSnapshot {
+  token: string | null;
+  user: UserInfo | null;
+  stateTenantOverride: string | null;
+  environment?: Environment;
+  // Master-side state, kept in the snapshot for the same reason as the rest:
+  // it is set by login() and must not survive into the next REST request.
+  loginPassword?: string | null;
+}
+
+/**
+ * Introspection could not be completed — as distinct from completing and
+ * rejecting the token. Surfaced as 503, so an egov-user outage does not look
+ * like every caller's credentials expiring at once.
+ */
+export class TokenIntrospectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TokenIntrospectionError';
+  }
 }
 
 export class ApiClientError extends Error {
@@ -79,7 +103,10 @@ class DigitApiClient {
   }
 
   isAuthenticated(): boolean {
-    return this.authToken !== null;
+    // An empty string is not a credential. Treating it as one meant a caller
+    // could be "authenticated" while every outbound request carried no token —
+    // authenticated to us, anonymous to DIGIT.
+    return !!this.authToken;
   }
 
   /** Password of the current session's login, when known (null for
@@ -103,20 +130,83 @@ class DigitApiClient {
    * Combined with a single-flight mutex this is safe even though the
    * underlying client is a process-level singleton.
    */
-  snapshotAuth(): { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null } {
+  snapshotAuth(): AuthSnapshot {
     return {
       token: this.authToken,
       user: this.userInfo,
       stateTenantOverride: this.stateTenantOverride,
       loginPassword: this.loginPassword,
+      // `environment` must be part of the snapshot. `configure`'s base_url
+      // writes it, and without it here a single call repointed the whole
+      // process at a caller-chosen host for every subsequent request.
+      environment: this.environment,
     };
   }
 
-  restoreAuth(snap: { token: string | null; user: UserInfo | null; stateTenantOverride: string | null; loginPassword?: string | null }): void {
+  restoreAuth(snap: AuthSnapshot): void {
     this.authToken = snap.token;
     this.userInfo = snap.user;
     this.stateTenantOverride = snap.stateTenantOverride;
     this.loginPassword = snap.loginPassword ?? null;
+    if (snap.environment) this.environment = snap.environment;
+  }
+
+  /**
+   * Resolve an access token to its user via egov-user token introspection.
+   * Returns null when the token is not valid.
+   *
+   * This is what makes a bearer token meaningful: without it, `applyToken`
+   * accepts any non-empty string, so "authenticated" meant nothing more than
+   * "sent a header".
+   */
+  async validateToken(token: string): Promise<UserInfo | null> {
+    // `?access_token=` is egov-user's contract for this endpoint — it reads a
+    // @RequestParam, which is also how the gateway calls it. That does put the
+    // token in egov-user's and the gateway's access logs on every
+    // introspection (once per 30s per active token, given the cache). Moving it
+    // to a header would need a verified egov-user change first: guessing wrong
+    // fails closed, i.e. every caller gets a 401.
+    const url = `${this.environment.url}${this.endpoint('USER_DETAILS')}?access_token=${encodeURIComponent(token)}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: {
+            apiId: 'Rainmaker',
+            ver: '1.0',
+            ts: Date.now(),
+            msgId: `${Date.now()}|en_IN`,
+            authToken: token,
+          },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      // A 4xx is egov-user telling us the token is no good. A 5xx is egov-user
+      // failing to answer — a different thing, and reporting it as "invalid
+      // token" sends the operator after credentials while the platform is down.
+      if (response.status >= 500) {
+        throw new TokenIntrospectionError(
+          `egov-user returned HTTP ${response.status} while validating the token.`,
+        );
+      }
+      if (!response.ok) return null;
+      // egov-user's /user/_details returns the UserInfo at the TOP LEVEL on this
+      // stack — {id,userName,name,roles,tenantId,uuid,...} — with NO UserRequest
+      // wrapper (verified live; Kong's own enrichment reads the same top-level
+      // shape). Some egov-user builds do wrap it as {UserRequest:{...}}. Accept
+      // either: reading only `data.UserRequest` treated every valid token as
+      // invalid and 401'd the entire REST shim against this deployment.
+      const data = (await response.json()) as { UserRequest?: UserInfo } & Partial<UserInfo>;
+      const user = (data?.UserRequest ?? data) as UserInfo | undefined;
+      return user && (user.uuid || user.userName) ? user : null;
+    } catch (err) {
+      if (err instanceof TokenIntrospectionError) throw err;
+      // Network error, DNS failure, or the 10s timeout. Also not a bad token.
+      throw new TokenIntrospectionError(
+        `Could not reach egov-user to validate the token: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**
@@ -179,9 +269,17 @@ class DigitApiClient {
       );
     }
 
-    const data = await response.json() as { access_token: string; UserRequest: UserInfo };
+    const data = await response.json() as { access_token?: string; UserRequest?: UserInfo };
+    // A 200 without an access_token happens during Kong/egov-user warmup (Kong
+    // can return a 200 error envelope before the upstream is ready). Silently
+    // accepting it left authToken undefined, so isAuthenticated() was false and
+    // callers threw a confusing AuthRequiredError with no way to retry. Treat a
+    // tokenless 200 as a failure so the caller (and its retry loop) sees it.
+    if (!data.access_token) {
+      throw new Error('Login returned no access_token (auth service not ready?)');
+    }
     this.authToken = data.access_token;
-    this.userInfo = data.UserRequest;
+    this.userInfo = data.UserRequest ?? null;
     this.loginPassword = password;
 
     // Auto-detect state tenant from login tenant ID
@@ -987,6 +1085,14 @@ class DigitApiClient {
   // Encryption — encrypt values (no RequestInfo needed)
   // Note: enc-service returns a flat JSON array, not the standard {Errors, ...} envelope.
   // We use raw fetch instead of this.request() to handle the non-standard response.
+  /**
+   * Headers for egov-enc-service calls.
+   *
+   * These previously went out with no Authorization header at all, which made
+   * decrypt_data an unauthenticated decryption oracle for citizen PII: the
+   * caller needed no credentials because none were forwarded. The token is now
+   * attached so the enc-service / gateway can authorise the request.
+   */
   async encryptData(
     tenantId: string,
     values: string[]
@@ -995,7 +1101,14 @@ class DigitApiClient {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // Carry RequestInfo.authToken in the BODY. /egov-enc-service is a
+      // Kong-protected path and the gateway authorizes POSTs from the body
+      // token, NOT an Authorization header — so the header these calls used to
+      // send was never read, and a tokenless body is 401'd at the gateway (same
+      // root cause generateEncKey was fixed for). The _encrypt endpoint ignores
+      // the extra RequestInfo field alongside encryptionRequests.
       body: JSON.stringify({
+        RequestInfo: this.buildRequestInfo(),
         encryptionRequests: values.map((value) => ({
           tenantId,
           type: 'Normal',
@@ -1012,19 +1125,24 @@ class DigitApiClient {
     return Array.isArray(data) ? data : [];
   }
 
-  // Encryption — register a tenant with egov-enc-service (no RequestInfo needed).
+  // Encryption — register a tenant with egov-enc-service.
   // egov-enc-service discovers tenants via an MDMS search scoped to its own
   // STATE_LEVEL_TENANT_ID env var, so a brand-new tenant root is invisible to
   // it until this is called — every encrypt/decrypt for that tenant (e.g. the
   // ADMIN user creation below) otherwise fails with "Tenant Id not found".
   // Idempotent: returns created:false when a key already exists.
+  //
+  // MUST carry the auth token: /egov-enc-service is a Kong-PROTECTED path, and
+  // with gateway enforcement on (ENFORCE_UNAUTH) a tokenless RequestInfo is
+  // rejected 401 at the gateway before it ever reaches enc-service. The old
+  // "no RequestInfo needed" stub predated gateway enforcement.
   async generateEncKey(tenantId: string): Promise<boolean> {
     const url = `${this.environment.url}${this.endpoint('ENC_GENERATE_KEY')}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        RequestInfo: { apiId: 'Citizen', ver: '.01', ts: null },
+        RequestInfo: this.buildRequestInfo(),
         tenantId,
       }),
     });
@@ -1043,8 +1161,19 @@ class DigitApiClient {
     tenantId: string,
     encryptedValues: string[]
   ): Promise<string[]> {
-    // The decrypt API expects a flat JSON array of encrypted strings, not an envelope
     const url = `${this.environment.url}${this.endpoint('ENC_DECRYPT')}`;
+    // egov-enc-service /_decrypt takes a BARE JSON array of ciphertext strings
+    // and returns a bare array of plaintext — verified against the live service:
+    // a wrapping envelope ({RequestInfo, ...}) returns HTTP 500. That contract
+    // leaves no place for RequestInfo.authToken, so unlike encryptData this call
+    // cannot carry a body token, and Kong's body-token gate therefore DENIES a
+    // tokenless decrypt on the protected /egov-enc-service path (it is not an
+    // anonymous oracle — a caller with no token is 401'd, not served). The
+    // functional gate is the tool's own access:'admin' tier; reaching decrypt
+    // through the gateway would require the enc-service to accept an
+    // authenticated envelope, or the caller to be on the internal network.
+    // (The Authorization header this used to send was never read by the gateway,
+    // so it is gone.)
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1052,6 +1181,19 @@ class DigitApiClient {
     });
 
     if (!response.ok) {
+      // The gateway denies this by design (see above): a tokenless bare-array
+      // POST on a protected enc path. Turn the bare 401/403 into an explanation
+      // so an operator gets the reason, not a naked gateway status.
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          `decrypt_data is not reachable through the API gateway (HTTP ${response.status}). ` +
+          `egov-enc-service /_decrypt takes a bare ciphertext array, which cannot carry the ` +
+          `RequestInfo.authToken the gateway requires on a protected path — so the gateway ` +
+          `denies it rather than exposing an anonymous decryption oracle. This tool works only ` +
+          `against an MCP with direct (internal-network) access to egov-enc-service; encryption ` +
+          `and key generation are unaffected.`,
+        );
+      }
       throw new Error(`Decryption failed: HTTP ${response.status}`);
     }
 
@@ -1196,4 +1338,37 @@ class DigitApiClient {
 }
 
 // Singleton
-export const digitApi = new DigitApiClient();
+/**
+ * Request isolation (H5).
+ *
+ * `digitApi` used to be a plain process-wide singleton holding the auth token,
+ * user and environment. Two concurrent requests therefore shared one identity:
+ * the REST path papered over it with a mutex plus snapshot/restore, but the MCP
+ * path mutated it with no lock at all, so one caller's tool could execute under
+ * another caller's token.
+ *
+ * Instead of threading a client through every call site, the export below is a
+ * proxy that resolves to the client bound to the current async context. Code
+ * that runs inside `runWithIsolatedClient()` gets its own instance; everything
+ * else keeps using the shared default, so stdio and the REST path behave
+ * exactly as before.
+ */
+const defaultClient = new DigitApiClient();
+const clientContext = new AsyncLocalStorage<DigitApiClient>();
+
+/** Run `fn` with a fresh DigitApiClient visible to everything it awaits. */
+export function runWithIsolatedClient<T>(fn: () => Promise<T>): Promise<T> {
+  return clientContext.run(new DigitApiClient(), fn);
+}
+
+export const digitApi: DigitApiClient = new Proxy(defaultClient, {
+  get(target, prop) {
+    const active = clientContext.getStore() ?? target;
+    const value = Reflect.get(active, prop, active);
+    return typeof value === 'function' ? value.bind(active) : value;
+  },
+  set(target, prop, value) {
+    const active = clientContext.getStore() ?? target;
+    return Reflect.set(active, prop, value, active);
+  },
+}) as DigitApiClient;

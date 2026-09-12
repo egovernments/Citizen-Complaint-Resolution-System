@@ -5,10 +5,82 @@
 # Usage: GF_ADMIN_PASSWORD=<something-strong> docker compose -f docker-compose.egov-digit.yaml up -d
 #        (or put GF_ADMIN_PASSWORD in ./.env). It has no default — see the
 #        grafana service below for why.
+#
+# ==================== BIND_IP: host publication address ====================
+# Every `ports:` entry below publishes through ${BIND_IP:-127.0.0.1}, so the
+# default binds the whole stack to host loopback only. Nothing here needs to be
+# reachable off-box: container-to-container traffic uses the egov-network DNS
+# names, and the only public entry point is host nginx, which proxies over
+# 127.0.0.1 (see ansible/templates/nginx-site.conf.j2, `nginx_upstream_host`).
+#
+# Publishing on 0.0.0.0 previously put Postgres, Redis, Redpanda, MinIO,
+# Elasticsearch, the Kong Admin API + Manager GUI and fourteen backend
+# microservices straight onto the internet on any box without a host firewall
+# — the gateway was trivially bypassable by hitting a service port directly.
+#
+# Same-host callers are unaffected: CI, local-setup/scripts/*, the Tiltfile
+# links, the dataloader and the documented `ssh -L <port>:localhost:<port>`
+# remote-dev tunnels all connect via localhost, which loopback binding serves.
+#
+# TWO variables, deliberately:
+#
+#   BIND_IP        — everything. ALWAYS loopback, on every platform.
+#   PROXY_BIND_IP  — only the handful host nginx actually proxies
+#                    (kong 18000, digit-ui 18080, configurator 18890,
+#                    grafana 13000, gatus 18889, mcp 13101, minio 19000).
+#
+# They differ only on the macOS thin deploy, where the playbook runs nginx as a
+# CONTAINER reaching the stack over host.docker.internal rather than loopback —
+# so those upstreams must accept a non-loopback connection there.
+#
+# The split matters: a single BIND_IP=0.0.0.0 on Darwin would also expose
+# Postgres, Redis, Redpanda, Elasticsearch, the Kong Admin API, the OTEL
+# collector, Prometheus, Loki, Tempo AND OpenBao (the secrets store) on every
+# interface of the developer's machine — ten ports that were loopback-only
+# before this change. Widening the whole stack to accommodate one proxy path
+# would have made macOS materially worse than it started.
+
+# ==================== Container hardening ====================
+# Every service below carries:
+#   security_opt: ["no-new-privileges:true"]   — a process can never gain
+#     privileges through a setuid/setgid binary, so a foothold inside a
+#     container cannot escalate within it. No functional cost: none of these
+#     images rely on setuid at runtime.
+#   cap_drop: [ALL]                            — start from zero Linux
+#     capabilities instead of Docker's default ~14, several of which
+#     (CAP_CHOWN, CAP_DAC_OVERRIDE, CAP_FOWNER, CAP_KILL, CAP_SETFCAP …) are
+#     useful primitives once an attacker is inside.
+#   cap_add: [...]                             — only where the image proved
+#     it needs one.
+#
+# The cap_add sets were MEASURED, not guessed: each image was started with
+# --cap-drop ALL and capabilities added back until it came up, then trimmed to
+# confirm each one is load-bearing. Findings:
+#   - JVM/Spring services, kong, minio/mc, redpanda, grafana, prometheus and
+#     the curl one-shots need NOTHING.
+#   - Images that start as root and drop to a service user need the
+#     privilege-dropping trio: nginx-based fronts (CHOWN, SETUID, SETGID,
+#     DAC_OVERRIDE, + NET_BIND_SERVICE since they bind :80 internally), redis
+#     (SETUID, SETGID), mongo (CHOWN, SETUID, SETGID, DAC_OVERRIDE).
+#   - postgres additionally needs DAC_OVERRIDE and FOWNER. This one matters:
+#     with only CHOWN/SETUID/SETGID it starts fine on an EMPTY volume and then
+#     fails on restart against an EXISTING data directory
+#     ("chmod: changing permissions of '/var/lib/postgresql/data': Operation
+#     not permitted"). A fresh-box test would have passed and every live
+#     tenant would have broken on redeploy.
+#   - openbao keeps IPC_LOCK (mlock, so secrets are not paged to disk).
+#   - promtail keeps DAC_READ_SEARCH to read /var/lib/docker/containers.
+#
+# elasticsearch (search profile, off by default) is the one set carried over by
+# analogy with postgres rather than measured — it is a large pull and opt-in.
+# Soak it before enabling that profile in production.
 
 services:
   # ==================== Tracing Infrastructure ====================
   otel-collector:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/opentelemetry-collector-contrib:0.114.0
     container_name: digit-otel-collector
     # Deliberately NOT profiled (#1657).
@@ -39,9 +111,9 @@ services:
     volumes:
       - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "127.0.0.1:14317:4317"
-      - "127.0.0.1:14318:4318"
-      - "127.0.0.1:13133:13133"
+      - "${BIND_IP:-127.0.0.1}:14317:4317"
+      - "${BIND_IP:-127.0.0.1}:14318:4318"
+      - "${BIND_IP:-127.0.0.1}:13133:13133"
     # Memory ceiling (#1612). Observability is overhead, not workload:
     # uncapped it competes with ~12.8 GB of JVM heap on 16 GB boxes that
     # have no swap, and the OOM killer takes the biggest process — a JVM
@@ -62,6 +134,9 @@ services:
       - egov-network
 
   tempo:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/tempo:2.6.1
     container_name: digit-tempo
     # trace store — the only traces-only component (#1657)
@@ -72,7 +147,7 @@ services:
       - ./otel/tempo-config.yaml:/etc/tempo/config.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "127.0.0.1:13200:3200"
+      - "${BIND_IP:-127.0.0.1}:13200:3200"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
       interval: 10s
@@ -93,6 +168,9 @@ services:
       - egov-network
 
   grafana:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/grafana:11.4.0
     container_name: digit-grafana
     # the only UI for any of it (#1657)
@@ -146,7 +224,7 @@ services:
       - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "127.0.0.1:13000:3000"
+      - "${PROXY_BIND_IP:-127.0.0.1}:13000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
       interval: 10s
@@ -178,6 +256,9 @@ services:
   # OTLP-received JVM/runtime metrics in Prometheus format). Single source of
   # truth for the Grafana JVM dashboard used for right-sizing DIGIT services.
   prometheus:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: prom/prometheus:v2.55.1
     container_name: digit-prometheus
     # metrics store (#1657)
@@ -195,7 +276,7 @@ services:
       - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "127.0.0.1:19090:9090"
+      - "${BIND_IP:-127.0.0.1}:19090:9090"
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
     deploy:
@@ -208,6 +289,10 @@ services:
   # ==================== Core Infrastructure ====================
   # Actual PostgreSQL - services should NOT connect directly to this
   postgres-db:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     image: egovio/postgres:16
     container_name: docker-postgres
     # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
@@ -227,7 +312,7 @@ services:
     volumes:
     - postgres_data:/var/lib/docker-postgresql/data
     ports:
-    - 15432:5432
+    - "${BIND_IP:-127.0.0.1}:15432:5432"
     healthcheck:
       test:
       - CMD-SHELL
@@ -240,7 +325,10 @@ services:
 
   # PgBouncer - transparent connection pooler, aliased as "postgres"
   pgbouncer:
-    image: egovio/pgbouncer:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: egovio/pgbouncer:latest@sha256:939a6974d41200d4d629afd4867614510c737e27d9575432a77b9fbfe81f4d0d
     container_name: digit-pgbouncer
     environment:
       DB_HOST: postgres-db
@@ -268,10 +356,14 @@ services:
           - postgres
 
   redis:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
     image: egovio/redis:7.2.4
     container_name: digit-redis
     ports:
-    - 16379:6379
+    - "${BIND_IP:-127.0.0.1}:16379:6379"
     healthcheck:
       test:
       - CMD
@@ -285,6 +377,9 @@ services:
 
   # Redpanda - Kafka-compatible streaming (keeping original for now, debugging separately)
   redpanda:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/redpanda:v24.1.1
     container_name: digit-redpanda
     command:
@@ -306,8 +401,8 @@ services:
       - --advertise-pandaproxy-addr
       - PLAINTEXT://redpanda:8082
     ports:
-      - 19092:9092
-      - 18082:8082
+      - "${BIND_IP:-127.0.0.1}:19092:9092"
+      - "${BIND_IP:-127.0.0.1}:18082:8082"
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
       interval: 10s
@@ -321,17 +416,23 @@ services:
 
   # MinIO - S3-compatible object storage for filestore
   minio:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/minio:RELEASE.2024-01-16T16-07-38Z
     container_name: digit-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # No default: a missing secret must abort the stack, not silently bring
+      # MinIO up on the published minioadmin/minioadmin pair. The Ansible
+      # deploy sources both from OpenBao into .env.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
     volumes:
       - minio_data:/data
     ports:
-      - 19000:9000
-      - 19001:9001
+      - "${PROXY_BIND_IP:-127.0.0.1}:19000:9000"
+      - "${BIND_IP:-127.0.0.1}:19001:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -342,37 +443,91 @@ services:
 
   # MinIO init - creates the bucket
   minio-init:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/mc:RELEASE.2024-01-16T16-06-34Z
     container_name: digit-minio-init
     depends_on:
       minio:
         condition: service_healthy
+    # NOTE (audit finding minio-anonymous-access, still OPEN): the
+    # `mc anonymous set download` below makes egov-rainmaker world-readable,
+    # and nginx proxies /file-store/ straight to it — every uploaded
+    # attachment is public to anyone who can guess or is given the URL.
+    #
+    # It is deliberately still here. egov-filestore has no presigned-URL
+    # support today, so dropping the policy on its own 404s every attachment
+    # in the UI. Removing this line MUST land together with that filestore
+    # change, not before it. Tracked separately.
+
+    # Authenticate with the REAL root credentials, not the literal defaults.
+    #
+    # This used to be `mc alias set myminio http://minio:9000 minioadmin
+    # minioadmin`, hardcoded — so on any box where MINIO_ROOT_PASSWORD had been
+    # rotated (OpenBao writes it into .env) this container silently failed to
+    # authenticate, and the trailing `exit 0` swallowed the failure and reported
+    # success. The bucket then either did not exist or kept whatever policy it
+    # had. Worse, it meant the deploy only worked as long as minioadmin was
+    # still valid, which quietly rewarded leaving the default in place.
+    #
+    # `:?` on both: an unset credential now aborts the container instead of
+    # falling back to a published default. The trailing `exit 0` is gone for the
+    # same reason — a failure here must surface, not be masked.
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+      # mc defaults its config to /root/.mc, but this image ships /root as
+      # dr-xr-x--- — writable by root ONLY via CAP_DAC_OVERRIDE, which
+      # cap_drop: [ALL] correctly removes. Point mc at a genuinely writable
+      # path instead of handing the container a capability back just so a CLI
+      # can drop a config file.
+      MC_CONFIG_DIR: /tmp/.mc
     entrypoint: >
       /bin/sh -c "
-      mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing myminio/egov-rainmaker;
-      mc anonymous set download myminio/egov-rainmaker;
-      exit 0;
+      set -e;
+      mc --config-dir /tmp/.mc alias set myminio http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\";
+      mc --config-dir /tmp/.mc mb --ignore-existing myminio/egov-rainmaker;
+      mc --config-dir /tmp/.mc anonymous set download myminio/egov-rainmaker;
       "
     networks:
       - egov-network
 
   elasticsearch:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     image: egovio/elasticsearch:8.10.3
     profiles: ["search"]
     container_name: digit-elasticsearch
     environment:
     - discovery.type=single-node
-    - xpack.security.enabled=false
+    # Authentication ON. With it off, anything that could reach the container
+    # had unauthenticated read/write over every index — and the port used to be
+    # published on 0.0.0.0 as well, so that was the whole internet on a box with
+    # no host firewall. The port is loopback-bound now; this closes the other
+    # half, so a compromised container on the shared network cannot read or
+    # tamper with the PGR index either.
+    #
+    # SOAK BEFORE RELYING ON IT: the `search` profile is opt-in and off by
+    # default, and the indexer/inbox round trip has not been exercised end to
+    # end with auth on. Set ELASTICSEARCH_PASSWORD, enable the profile on a
+    # staging tenant, and confirm egov-indexer writes and inbox reads.
+    - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-true}
+    - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme-elastic}
     - ES_JAVA_OPTS=-Xms256m -Xmx384m
     volumes:
     - es_data:/usr/share/elasticsearch/data
     ports:
-    - 19200:9200
+    - "${BIND_IP:-127.0.0.1}:19200:9200"
     healthcheck:
       test:
       - CMD-SHELL
-      - curl -f http://localhost:9200/_cluster/health || exit 1
+      # auth required now that xpack.security is on; without -u this 401s,
+      # ES stays "unhealthy", and every depends_on: service_healthy dependent
+      # (egov-indexer, inbox) never starts -> the whole deploy fails.
+      - curl -fsS -u "elastic:$$ELASTIC_PASSWORD" http://localhost:9200/_cluster/health || exit 1
       interval: 30s
       timeout: 10s
       retries: 5
@@ -383,6 +538,9 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-indexer:maven-jdk21-9f83afb
     profiles: ["search"]
     container_name: egov-indexer
@@ -415,9 +573,11 @@ services:
       EGOV_INDEXER_YML_REPO_PATH: "file:///indexer-config/pgr-services.yml,file:///indexer-config/pgr-inbox-indexer.yml"
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_STATELEVEL_TENANTID: pg
-      # No ES auth needed (xpack.security.enabled=false)
-      EGOV_INDEXER_ES_USERNAME: ""
-      EGOV_INDEXER_ES_PASSWORD: ""
+      # ES auth is ON (xpack.security.enabled). The built-in `elastic` superuser
+      # is used here because that is what the image bootstraps from
+      # ELASTIC_PASSWORD; a dedicated least-privilege role is the follow-up.
+      EGOV_INDEXER_ES_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      EGOV_INDEXER_ES_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
@@ -431,7 +591,7 @@ services:
       JAVA_OPTS: "-Xms192m -Xmx512m"
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18095:8080
+    - "${BIND_IP:-127.0.0.1}:18095:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/egov-indexer/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -445,6 +605,9 @@ services:
   # Inbox v2 - Queries Elasticsearch for inbox/search views
   # ===========================================================================
   inbox:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/inbox:state-tenant-fix
     profiles: ["search"]
     container_name: digit-inbox
@@ -471,9 +634,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SERVER_PORT: 8080
       SERVICES_ESINDEXER_HOST: http://elasticsearch:9200/
-      # No ES auth needed (xpack.security.enabled=false)
-      SERVICES_ESINDEXER_USERNAME: ""
-      SERVICES_ESINDEXER_PASSWORD: ""
+      # ES auth is ON (xpack.security.enabled) — see egov-indexer above.
+      SERVICES_ESINDEXER_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      SERVICES_ESINDEXER_PASSWORD: ${ELASTICSEARCH_PASSWORD:-changeme-elastic}
       WORKFLOW_HOST: http://egov-workflow-proxy:8109/
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
@@ -497,7 +660,7 @@ services:
       JAVA_OPTS: -Xms256m -Xmx256m
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18097:8080
+    - "${BIND_IP:-127.0.0.1}:18097:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/inbox/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -508,6 +671,9 @@ services:
     - egov-network
 
   egov-enc-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Bumped to the 2.12 core-services merge (87e13fe), which includes
     # the Digit-Core #1354 _generatekey fix previously carried via the
     # :generatekey-endpoint preview pin.
@@ -561,7 +727,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg.citya
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 11234:1234
+    - "${BIND_IP:-127.0.0.1}:11234:1234"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:1234/egov-enc-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -573,6 +739,9 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/mdms-v2:maven-jdk21-f3a7c13
     depends_on:
       pgbouncer:
@@ -619,6 +788,10 @@ services:
   # MDMS Proxy - handles path rewriting for backward compatibility
   # Rewrites /egov-mdms-service/* to /mdms-v2/* for older services
   egov-mdms-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     image: egovio/nginx:alpine
     container_name: egov-mdms-service
     depends_on:
@@ -627,7 +800,7 @@ services:
     volumes:
       - ./nginx/mdms-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-    - 18094:8094
+    - "${BIND_IP:-127.0.0.1}:18094:8094"
     healthcheck:
       # Simplified: just verify API responds (don't require tenant data)
       test: ["CMD-SHELL", "curl -sf -X POST 'http://localhost:8094/mdms-v2/v1/_search' -H 'Content-Type: application/json' -d '{\"RequestInfo\":{\"apiId\":\"health\"},\"MdmsCriteria\":{\"tenantId\":\"pg\",\"moduleDetails\":[{\"moduleName\":\"tenant\",\"masterDetails\":[{\"name\":\"tenants\"}]}]}}'"]
@@ -639,6 +812,9 @@ services:
     - egov-network
 
   egov-idgen:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
@@ -698,6 +874,9 @@ services:
   # container, declared with every other migrator in docker-compose.migrations.yml
   # (which the playbook always layers) — this file stays free of migration wiring.
   audit-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/audit-service:v2.9.2-4a60f20
     depends_on:
       pgbouncer:
@@ -745,6 +924,9 @@ services:
       - egov-network
 
   egov-user:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Bumped to the 2.12 core-services merge (87e13fe), which now
     # includes the Digit-Core#1044 fixes (tenant-aware encryption,
     # SafeHtmlValidator/CCRS#771, NPE fix) previously carried via the
@@ -814,6 +996,10 @@ services:
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     image: egovio/nginx:alpine
     container_name: egov-user-proxy
     depends_on:
@@ -831,6 +1017,9 @@ services:
     - egov-network
 
   egov-workflow-v2:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
@@ -896,6 +1085,10 @@ services:
   # scaled instances via Docker DNS round-robin. Without this, Java HTTP
   # keep-alive connections cause all traffic to stick to one instance.
   egov-workflow-proxy:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     image: egovio/nginx:alpine
     container_name: egov-workflow-proxy
     depends_on:
@@ -913,6 +1106,9 @@ services:
     - egov-network
 
   egov-localization:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
@@ -949,7 +1145,7 @@ services:
       SPRING_THREADS_VIRTUAL_ENABLED: 'true'
       JAVA_OPTS: -Xms128m -Xmx512m
     ports:
-    - 18096:8096
+    - "${BIND_IP:-127.0.0.1}:18096:8096"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8096/localization/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -960,6 +1156,9 @@ services:
     - egov-network
 
   boundary-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # NOT bumped to 2.12-87e13fe — that build changes the
     # /boundary-relationships/_search contract from query-param-bound
     # criteria (@ModelAttribute) to a body-only BoundaryRelationshipSearchRequest,
@@ -1008,7 +1207,7 @@ services:
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18081:8081
+    - "${BIND_IP:-127.0.0.1}:18081:8081"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/boundary-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1019,6 +1218,9 @@ services:
     - egov-network
 
   egov-accesscontrol:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Parameterized so deploys can pin a local ABAC-testing build via
     # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
     # the pgr-services image param below.
@@ -1064,7 +1266,7 @@ services:
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
     ports:
-    - 18090:8090
+    - "${BIND_IP:-127.0.0.1}:18090:8090"
     # No healthcheck: both the pinned default (egovio/egov-accesscontrol:abac-changes-cb6a372)
     # and the abac-local build are minimal/distroless images with no shell and no wget/curl —
     # confirmed by `docker exec`ing each of /bin/sh, wget, curl, ls, all of which fail with
@@ -1079,6 +1281,9 @@ services:
     - egov-network
 
   egov-persister:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
@@ -1115,7 +1320,7 @@ services:
     - ./configs/egov-persister:/persister-config:ro
     - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     ports:
-    - 18091:8091
+    - "${BIND_IP:-127.0.0.1}:18091:8091"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8091/common-persist/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1129,6 +1334,9 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
@@ -1167,15 +1375,18 @@ services:
       # MinIO/S3 storage (local S3-compatible storage for dev)
       ISS3ENABLED: 'true'
       MINIO_URL: http://minio:9000
-      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
-      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      # Falls back to the MinIO root credentials, which are themselves now
+      # required — so a missing secret aborts instead of quietly using
+      # minioadmin/minioadmin against a bucket holding citizen attachments.
+      AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}}
+      AWS_SECRETKEY: ${AWS_SECRETKEY:-${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}}
       IS_BUCKET_FIXED: 'true'
       FIXED_BUCKETNAME: egov-rainmaker
       # From CCRS env.yaml - complete MIME type mapping
       ALLOWED_FORMATS_MAP: "{jpg:{'image/jpg','image/jpeg'},jpeg:{'image/jpeg','image/jpg'},png:{'image/png'},pdf:{'application/pdf'},odt:{'application/vnd.oasis.opendocument.text'},ods:{'application/vnd.oasis.opendocument.spreadsheet'},docx:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},doc:{'application/x-tika-msoffice','application/x-tika-ooxml','application/vnd.oasis.opendocument.text','application/msword'},dxf:{'text/plain','application/dxf','application/octet-stream','image/vnd.dxf','image/vnd.dxf; format=ascii','image/vnd.dxf; format=binary','image/vnd.dxb'},csv:{'text/plain'},txt:{'text/plain'},xlsx:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'},xls:{'application/x-tika-ooxml','application/x-tika-msoffice','application/vnd.ms-excel','multipart/form-data'},zip:{'application/zip','application/octet-stream'},geojson:{'application/json','text/plain','application/geo+json','multipart/form-data'},json:{'application/json','text/plain'}}"
       EGOV_MDMS_HOST: http://egov-mdms-service:8094
     ports:
-      - 18084:8083
+      - "${BIND_IP:-127.0.0.1}:18084:8083"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/filestore/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1189,7 +1400,10 @@ services:
   # HRMS Prerequisites Gate - Verifies system user is queryable before HRMS starts
   # ===========================================================================
   hrms-prereq-gate:
-    image: egovio/curl:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: egovio/curl:latest@sha256:4940582f3591ca417f9e486a1cc2bfeef6cb3abb92b5a5c462655ceb8cff5115
     container_name: hrms-prereq-gate
     depends_on:
       egov-user:
@@ -1225,6 +1439,9 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # 2.12-beta-dd641a6: a released egovio/egov-hrms tag (repinned from the
     # preview-only 800-preview build). Its lineage relative to the previously
     # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
@@ -1232,9 +1449,18 @@ services:
     # breaking MDMS mobile validation) has not been re-verified — check for
     # regressions in those specific behaviors before relying on this tag in
     # a multi-tenant deploy.
-    # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
-    # password supplied in the request instead of overwriting with the
-    # default/auto-generated one.
+    # EGOV_HRMS_DEV_MODE makes enrichUser() respect the password supplied in
+    # an employee-create request instead of overwriting it with the
+    # auto-generated one. That is what the onboarding paths (configurator
+    # wizard, XLSX onboarding, MCP employee_create) rely on to set a known
+    # first password — but it also means any caller authorised to create
+    # employees picks their passwords directly, bypassing generation and the
+    # credential-delivery notification.
+    #
+    # It used to be hardcoded 'true' on every deployment. It is now off unless
+    # a tenant opts in with `hrms_dev_mode: true` in host_vars (rendered into
+    # .env by digit.env.j2). Turn it on for a box you are actively onboarding
+    # employees onto through those wizards; leave it off otherwise.
     image: egovio/egov-hrms:2.12-beta-dd641a6
     container_name: egov-hrms
     depends_on:
@@ -1287,9 +1513,9 @@ services:
       # Enables enrichUser() to honor passwords supplied in the create
       # request rather than overwriting with the default/auto-generated
       # one. Required by the CCRS#482 fix in :digit-common-boundary.
-      EGOV_HRMS_DEV_MODE: 'true'
+      EGOV_HRMS_DEV_MODE: ${EGOV_HRMS_DEV_MODE:-false}
     ports:
-      - 18092:8092
+      - "${BIND_IP:-127.0.0.1}:18092:8092"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8092/egov-hrms/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1303,6 +1529,9 @@ services:
   # Boundary Management Service - Boundary generation from Excel
   # ===========================================================================
   egov-bndry-mgmnt:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-bndry-mgmnt:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt
     depends_on:
@@ -1339,7 +1568,7 @@ services:
       STATE_LEVEL_TENANT_ID: pg
       KAFKAJS_NO_PARTITIONER_WARNING: 1
     ports:
-      - 18086:8080
+      - "${BIND_IP:-127.0.0.1}:18086:8080"
     healthcheck:
       # Service doesn't have a /health endpoint - use TCP check
       test: ["CMD-SHELL", "node -e \"require('net').connect(8080, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))\""]
@@ -1352,7 +1581,10 @@ services:
 
   # RE-ENABLED: Required for services to start (schema definitions)
   user-seed:
-    image: egovio/curl:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: egovio/curl:latest@sha256:4940582f3591ca417f9e486a1cc2bfeef6cb3abb92b5a5c462655ceb8cff5115
     container_name: user-seed-container
     depends_on:
       egov-user:
@@ -1391,6 +1623,9 @@ services:
   # ===========================================================================
 
   egov-otp:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-otp:v2.9.2-4a60f20
     container_name: egov-otp
     profiles: [otp]
@@ -1432,6 +1667,9 @@ services:
       - egov-network
 
   user-otp:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/user-otp:master-e22c7c5
     container_name: user-otp
     profiles: [otp]
@@ -1475,6 +1713,9 @@ services:
       - egov-network
 
   egov-notification-sms:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-notification-sms:master-e22c7c5
     container_name: egov-notification-sms
     profiles: [otp]
@@ -1513,6 +1754,9 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
     image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:2.12-5137119}
@@ -1645,6 +1889,9 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
@@ -1679,6 +1926,10 @@ services:
   # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
   # ===========================================================================
   digit-ui:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # DIGIT_UI_IMAGE. Default is the modern esbuild bundle image (CI-built by
     # the Container Build Pipeline, multi-arch); the bundle lives at
@@ -1686,7 +1937,7 @@ services:
     image: ${DIGIT_UI_IMAGE:-egovio/digit-ui-esbuild:2.12-5137119}
     container_name: digit-ui
     ports:
-      - "18080:80"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18080:80"
     volumes:
       # Custom nginx config with sub_filter to inject globalConfigs.js at runtime
       - ./nginx/digit-ui.conf:/etc/nginx/conf.d/default.conf:ro
@@ -1713,10 +1964,14 @@ services:
   # (build_configurator: true) — this container is the pull-based default.
   # ===========================================================================
   configurator:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     image: ${CONFIGURATOR_IMAGE:-egovio/configurator:2.12-5137119}
     container_name: configurator
     ports:
-      - "18890:80"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18890:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/configurator/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1731,6 +1986,9 @@ services:
   # Main entry point: http://localhost:18000/digit-ui/
   # ===========================================================================
   kong:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/kong:3.6
     container_name: kong-gateway
     environment:
@@ -1752,16 +2010,16 @@ services:
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
-      - "18000:8000"   # Proxy (HTTP)
-      - "18443:8443"   # Proxy (HTTPS)
-      - "18001:8001"   # Admin API
-      - "18002:8002"   # Kong Manager GUI
+      - "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
+      - "${BIND_IP:-127.0.0.1}:18443:8443"   # Proxy (HTTPS)
+      - "${BIND_IP:-127.0.0.1}:18001:8001"   # Admin API
+      - "${BIND_IP:-127.0.0.1}:18002:8002"   # Kong Manager GUI
       # Status listener. Bound to loopback (#1614): with the Kong prometheus
       # plugin enabled, /metrics on this port exposes route names, per-route
       # status-code counts and latency histograms unauthenticated (Kong's
       # status API does not run plugins, so key-auth cannot be applied).
       # Prometheus and Gatus both reach it as kong:8100 over egov-network.
-      - "127.0.0.1:18100:8100"   # Status endpoint (loopback only)
+      - "${BIND_IP:-127.0.0.1}:18100:8100"   # Status endpoint (loopback only)
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 30s
@@ -1778,7 +2036,10 @@ services:
 
   # ==================== Gatus Health Monitoring ====================
   gatus:
-    image: egovio/gatus:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: egovio/gatus:latest@sha256:2d97306b3fbc5dd2cc7c968084a4063677210b7bb28293ef0a2bae7651d5b9c2
     container_name: digit-gatus
     depends_on:
       pgbouncer:
@@ -1791,7 +2052,7 @@ services:
       # above is mounted read-only, so the database needs its own volume.
       - gatus_data:/data
     ports:
-      - "127.0.0.1:18889:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
       # Slack alerting (#1609). Unset = alerting off: gatus expands the
@@ -1841,6 +2102,9 @@ services:
 
   # ==================== Loki Log Aggregation ====================
   loki:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: grafana/loki:3.4.2
     container_name: digit-loki
     # log store (#1657)
@@ -1851,7 +2115,7 @@ services:
       - ./otel/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
     ports:
-      - "127.0.0.1:13100:3100"
+      - "${BIND_IP:-127.0.0.1}:13100:3100"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
       interval: 10s
@@ -1871,7 +2135,73 @@ services:
   # makes raw container logs (nginx fronts, Node.js services, MinIO, Kafka,
   # Postgres, etc.) queryable in Loki — OTLP-emitted Java logs are richer but
   # only cover the Java services. With Promtail, every container is in Loki.
+  # ==================== Docker socket proxy (#docker-socket-mount) ====================
+  # Promtail needs container METADATA (compose service/project name, container
+  # name, log stream) to label log lines — that is what docker_sd_configs is
+  # for, and it is the only scrape config, so simply unmounting the socket
+  # would stop log collection entirely rather than harden it.
+  #
+  # But a bind of /var/run/docker.sock hands the container the FULL daemon API,
+  # and `:ro` is theatre here: it makes the socket FILE read-only, not the API
+  # reachable through it. Anything that can talk to that socket can start a new
+  # container with the host root filesystem mounted — i.e. it is host root, and
+  # promtail is an internet-adjacent log shipper parsing untrusted log content.
+  #
+  # This proxy is the standard containment: it terminates the socket and
+  # forwards ONLY the endpoints explicitly enabled below. CONTAINERS=1 is all
+  # docker_sd_configs needs; every write path (POST, EXEC, container create)
+  # stays off, so a compromised promtail can enumerate containers and nothing
+  # else. It is the one component that still holds the socket, runs no
+  # user-supplied code, and is not reachable off the compose network.
+  docker-socket-proxy:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: digit-docker-socket-proxy
+    profiles: [obs-logs]
+    restart: unless-stopped
+    environment:
+      # Read-only container enumeration — exactly what promtail's
+      # docker_sd_configs calls (GET /containers/json, GET /containers/{id}/json).
+      CONTAINERS: "1"
+      # Everything else explicitly denied. POST=0 is the important one: it
+      # blocks every mutating call, including container create/start/exec.
+      POST: "0"
+      EXEC: "0"
+      IMAGES: "0"
+      VOLUMES: "0"
+      # NETWORKS=1 (read): promtail's docker_sd builds __meta_docker_network_*
+      # labels from GET /networks and aborts discovery on a 403 — CONTAINERS=1
+      # alone yields zero log targets. POST=0 still blocks network mutation.
+      NETWORKS: "1"
+      SERVICES: "0"
+      TASKS: "0"
+      SECRETS: "0"
+      CONFIGS: "0"
+      NODES: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      INFO: "0"
+      AUTH: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      DISTRIBUTION: "0"
+      PLUGINS: "0"
+      SESSION: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+    networks:
+      - egov-network
+
   promtail:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
     image: grafana/promtail:3.4.2
     container_name: digit-promtail
     # log shipper (#1657)
@@ -1881,11 +2211,15 @@ services:
     volumes:
       - ./otel/promtail-config.yaml:/etc/promtail/config.yaml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # /var/run/docker.sock is deliberately NOT mounted — see
+      # docker-socket-proxy below. Promtail reaches the daemon through that
+      # read-only proxy instead.
       - promtail_data:/tmp
     depends_on:
       loki:
         condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
     # Memory ceiling (#1612) — see the note on otel-collector at the top of
     # docker-compose.egov-digit.yaml.
     deploy:
@@ -1905,6 +2239,10 @@ services:
   # fresh public-internet box, the default deploy skips them entirely —
   # nothing tries to pull an image it can't reach.
   mcp-postgres:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     image: postgres:16-alpine
     container_name: digit-mcp-postgres
     restart: unless-stopped
@@ -1924,13 +2262,16 @@ services:
       - egov-network
 
   digit-mcp:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     profiles: ["mcp"]
     # MCP image source resolved at deploy time. The Ansible playbook
     # writes MCP_IMAGE={{ docker_registry }}/digit-mcp:latest into the
     # .env it generates per tenant (so compose picks it up here).
-    # When running compose directly without the playbook, the fallback
-    # below pulls a public, pinned build from ghcr.io — no VPC access or
-    # insecure-registries trust required. Override MCP_IMAGE to use a
+    # When running compose directly without the playbook, the fallback below
+    # pulls the public build published by this repo's own image pipeline
+    # (build/build-config.yml -> egovio/digit-mcp). Override MCP_IMAGE to use a
     # different registry/tag.
     image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
     container_name: digit-mcp
@@ -1943,6 +2284,12 @@ services:
     environment:
       MCP_TRANSPORT: http
       MCP_PORT: "3000"
+      # Token auth (the HTTP-transport default) is deliberately NOT relaxed
+      # here. nginx proxies /v1/ publicly (see ansible/templates/
+      # nginx-site.conf.j2), and its own comment says "Authentication is
+      # enforced inside the MCP server" — so `ambient` on this stack would put
+      # an anonymous ADMIN surface on the internet, which is the exact hole
+      # this hardening closes. Callers mint a token; see the onboarding skills.
       # `self-hosted` is the generic env entry — actual URL comes from
       # CRS_API_URL (kong service in this compose). CRS_ENV_NAME is what
       # /v1/version and get_environment_info display; keep it tenant-
@@ -1972,7 +2319,7 @@ services:
       DIGIT_DB_USER: egov
       DIGIT_DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
     ports:
-      - "13101:3000"
+      - "${PROXY_BIND_IP:-127.0.0.1}:13101:3000"
     healthcheck:
       # 127.0.0.1, not localhost: Alpine's wget resolves localhost to ::1
       # (IPv6) per /etc/hosts order; the MCP server binds IPv4-only, so
@@ -2003,11 +2350,13 @@ services:
   #   open http://localhost:18200/ui     (UI)
   #   bao login <root-token-from-init.json>
   openbao:
-    image: openbao/openbao:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [IPC_LOCK]
+    image: openbao/openbao:latest@sha256:11fd73a2102cda9c55d5d881a8c3210303146a7ec1e8ac76f526e175c6d24641
     container_name: openbao
     restart: unless-stopped
-    cap_add:
-      - IPC_LOCK
     environment:
       BAO_ADDR: http://127.0.0.1:8200
       BAO_API_ADDR: http://openbao:8200
@@ -2023,9 +2372,27 @@ services:
     volumes:
       - openbao_data:/openbao/file
     ports:
-      - "127.0.0.1:18200:8200"
+      - "${BIND_IP:-127.0.0.1}:18200:8200"
+    # Its OWN network, not egov-network.
+    #
+    # This holds every tenant secret, and it sat on the same flat bridge as ~50
+    # other containers — so any one of them (a JVM service parsing citizen input,
+    # a log shipper, a Node SPA front) could reach the vault API directly. The
+    # listener has tls_disable and speaks plain HTTP, so that reachability was
+    # the whole control.
+    #
+    # Nothing on egov-network is a legitimate client: the ONLY consumer is the
+    # Ansible playbook, which talks to 127.0.0.1:18200 on the HOST via the
+    # published port above (see the "OpenBao — ..." tasks). Isolating it costs
+    # nothing and removes the lateral path entirely.
+    #
+    # NOT fixed here: tls_disable is still true and the single unseal key plus
+    # root token still live on the same box in .openbao/init.json. Terminating
+    # TLS needs a cert the playbook and container both trust, and raising
+    # secret_shares above 1 is pointless while every share is stored next to the
+    # data — that wants KMS auto-unseal, or shares held off-box. Tracked.
     networks:
-      - egov-network
+      - openbao-network
     healthcheck:
       # 200 = unsealed+active, 429 = unsealed+standby, 472 = data-recovery
       # 473 = perf-standby, 501 = uninitialized, 503 = sealed.
@@ -2049,6 +2416,10 @@ services:
   # values; the Ansible playbook generates real per-tenant secrets
   # from OpenBao before bringing the stack up.
   novu-mongo:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     # docker.io/library/mongo:8.0.3 — not mirrored to registry.preview
     # (yet); ghcr.io/novuhq/* below also pulls direct from GHCR.
     image: mongo:8.0.3
@@ -2070,6 +2441,9 @@ services:
       - egov-network
 
   novu-api:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: ghcr.io/novuhq/novu/api:2.3.0
     container_name: novu-api
     restart: unless-stopped
@@ -2095,14 +2469,16 @@ services:
       STORE_ENCRYPTION_KEY: ${NOVU_STORE_ENCRYPTION_KEY:-change-this-key-32-characters!!!}
       NOVU_SECRET_KEY: ${NOVU_SECRET_KEY:-dev-novu-secret-key-change-in-production}
       API_CONTEXT_PATH: ''
-      DISABLE_USER_REGISTRATION: 'false'
+      # Open sign-up on a reachable Novu dashboard lets anyone create an
+      # account on the notification platform and read/send through it.
+      DISABLE_USER_REGISTRATION: ${NOVU_DISABLE_USER_REGISTRATION:-true}
       IS_API_IDEMPOTENCY_ENABLED: 'false'
       IS_API_RATE_LIMITING_ENABLED: 'false'
       IS_NEW_MESSAGES_API_RESPONSE_ENABLED: 'true'
       IS_V2_ENABLED: 'true'
       MONGO_AUTO_CREATE_INDEXES: 'true'
     ports:
-      - "14002:3000"
+      - "${BIND_IP:-127.0.0.1}:14002:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/v1/health-check >/dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -2113,6 +2489,9 @@ services:
       - egov-network
 
   novu-worker:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: ghcr.io/novuhq/novu/worker:2.3.0
     container_name: novu-worker
     restart: unless-stopped
@@ -2144,6 +2523,9 @@ services:
       - egov-network
 
   novu-ws:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: ghcr.io/novuhq/novu/ws:2.3.0
     container_name: novu-ws
     restart: unless-stopped
@@ -2163,11 +2545,15 @@ services:
       REDIS_DB_INDEX: '2'
       JWT_SECRET: ${NOVU_JWT_SECRET:-dev-jwt-secret-change-in-production-please}
     ports:
-      - "14003:3002"
+      - "${BIND_IP:-127.0.0.1}:14003:3002"
     networks:
       - egov-network
 
   novu-dashboard:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, NET_BIND_SERVICE]
     # Image ref is wired through .env (NOVU_DASHBOARD_IMAGE) so the deploy can
     # either use a locally-built, subpath-rebased image (built when
     # `build_novu_dashboard: true`, tagged `novu-dashboard:local`) or pull the
@@ -2189,7 +2575,7 @@ services:
       VITE_PUBLIC_PATH: /novu
       VITE_LEGACY_DASHBOARD_URL: ''
     ports:
-      - "14000:4000"
+      - "${BIND_IP:-127.0.0.1}:14000:4000"
     networks:
       - egov-network
 
@@ -2203,7 +2589,10 @@ services:
   # /backend/novu-bridge-endpoint/workflows.js — one per domain event
   # (OTP send + 6 complaint lifecycle events).
   novu-bridge-endpoint:
-    image: egovio/novu-bridge-endpoint:latest
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    image: egovio/novu-bridge-endpoint:latest@sha256:15ece70b86a7cdac29111d3a13c22e08f1337e985eb8417a06976baf98411b5d
     container_name: novu-bridge-endpoint
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2244,6 +2633,9 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/digit-config-service:2.12-5137119
     container_name: digit-config-service
     restart: unless-stopped
@@ -2299,6 +2691,9 @@ services:
       - egov-network
 
   digit-user-preferences-service:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/digit-user-preferences-service:2.12-5137119
     container_name: digit-user-preferences-service
     restart: unless-stopped
@@ -2333,6 +2728,9 @@ services:
       - egov-network
 
   novu-bridge:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Overridable so Bomet can pull the pass-through build (PGR pre-renders
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). Default is the multi-arch
@@ -2498,6 +2896,10 @@ services:
   # via kcadm.sh (the `--import-realm` start flag only handles the
   # static template that ships in the image).
   keycloak-postgres:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     image: postgres:16
     container_name: keycloak-postgres
     restart: unless-stopped
@@ -2517,6 +2919,9 @@ services:
       - egov-network
 
   keycloak:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: quay.io/keycloak/keycloak:24.0
     container_name: keycloak
     restart: unless-stopped
@@ -2542,7 +2947,7 @@ services:
       # playbook then re-applies the real KC_ADMIN_PASSWORD value.
       KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
     ports:
-      - 18180:8180
+      - "${BIND_IP:-127.0.0.1}:18180:8180"
     volumes:
       # Per-tenant rendered realm goes in here too (written by the
       # keycloak-bootstrap Ansible block). The shipped template stays
@@ -2578,6 +2983,9 @@ services:
   # need to rebuild locally, switch from `image:` to a `build:` block
   # pointing at the overlay repo path.
   token-exchange-svc:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     # Pinned to the keycloak-deploy tag on egovio; bump when a versioned
     # tag is published.
     image: egovio/token-exchange-svc:keycloak-deploy
@@ -2641,7 +3049,7 @@ services:
       # bomet/nairobi deployments — use 18300 instead. The nginx
       # /token-exchange/ location proxies to this port; if you change
       # it here, update the ansible nginx template too.
-      - 18300:3000
+      - "${BIND_IP:-127.0.0.1}:18300:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -2659,6 +3067,9 @@ services:
   # OTP_PUBLISHER_IMAGE. The fallback is the published multi-arch build, so a
   # bare `docker compose --profile notifications up` works without a local build.
   otp-publisher:
+    # Hardening: no capabilities, no privilege escalation (see file header).
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: ${OTP_PUBLISHER_IMAGE:-egovio/otp-publisher:2.12-81fc6be}
     container_name: otp-publisher
     restart: unless-stopped
@@ -2689,6 +3100,11 @@ services:
 
 networks:
   egov-network:
+    driver: bridge
+  # Isolated bridge for OpenBao only — see the openbao service for why. Nothing
+  # else joins it, so the vault API is reachable from the host's loopback
+  # (published port) and from nowhere else.
+  openbao-network:
     driver: bridge
 
 volumes:

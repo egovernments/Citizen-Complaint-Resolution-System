@@ -7,6 +7,7 @@ export function registerBoundaryTools(registry: ToolRegistry): void {
     name: 'fix_boundary_paths',
     group: 'boundary',
     category: 'boundary-mgmt',
+    access: 'admin',
     risk: 'write',
     description:
       'Recomputes the ancestralmaterializedpath column (the pipe-separated chain of ANCESTOR ' +

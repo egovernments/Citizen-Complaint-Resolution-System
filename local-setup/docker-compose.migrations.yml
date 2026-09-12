@@ -17,6 +17,9 @@ services:
   # deploy on anything it cannot prove safe.
   #   docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
   db-history-normalize:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     build:
       context: ./db/normalize
     container_name: db-history-normalize
@@ -37,6 +40,9 @@ services:
       - egov-network
 
   pgr-services-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/pgr-services-db:2.12-5137119
     container_name: pgr-services-migration
     depends_on:
@@ -82,6 +88,9 @@ services:
   # like every other migrator here (see the egov-user note below for why the
   # app/db tags must move in lockstep).
   novu-bridge-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/novu-bridge-db:2.12-5137119
     container_name: novu-bridge-migration
     profiles: ["notifications"]   # active exactly when novu-bridge is
@@ -111,6 +120,9 @@ services:
         condition: service_completed_successfully
 
   digit-config-service-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/digit-config-service-db:2.12-5137119
     container_name: digit-config-service-migration
     profiles: ["notifications"]   # active exactly when digit-config-service is
@@ -152,6 +164,9 @@ services:
   # SCHEMA_NAME (its migrate.sh does not read one); that is preserved from the
   # original, not an omission.
   audit-service-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/audit-service-db:v2.9.2-4a60f20
     container_name: audit-service-migration
     depends_on:
@@ -171,6 +186,9 @@ services:
     depends_on: { audit-service-migration: { condition: service_completed_successfully } }
 
   boundary-service-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/boundary-service-db:maven-jdk21-9f83afb
     container_name: boundary-service-migration
     depends_on:
@@ -205,6 +223,9 @@ services:
   # keep app and db tags identical in both compose and the chart, or this class of
   # bug recurs.
   egov-user-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-user-db:2.12-87e13fe
     container_name: egov-user-migration
     depends_on:
@@ -225,6 +246,9 @@ services:
     depends_on: { egov-user-migration: { condition: service_completed_successfully } }
 
   mdms-backend-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/mdms-v2-db:maven-jdk21-9f83afb
     container_name: mdms-backend-migration
     depends_on:
@@ -245,6 +269,9 @@ services:
     depends_on: { mdms-backend-migration: { condition: service_completed_successfully } }
 
   egov-idgen-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-idgen-db:maven-jdk21-9f83afb
     container_name: egov-idgen-migration
     depends_on:
@@ -265,6 +292,9 @@ services:
     depends_on: { egov-idgen-migration: { condition: service_completed_successfully } }
 
   egov-localization-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-localization-db:2.12-87e13fe
     container_name: egov-localization-migration
     depends_on:
@@ -285,6 +315,9 @@ services:
     depends_on: { egov-localization-migration: { condition: service_completed_successfully } }
 
   egov-enc-service-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-enc-service-db:2.12-87e13fe
     container_name: egov-enc-service-migration
     depends_on:
@@ -305,6 +338,9 @@ services:
     depends_on: { egov-enc-service-migration: { condition: service_completed_successfully } }
 
   egov-filestore-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-filestore-db:maven-jdk21-9f83afb
     container_name: egov-filestore-migration
     depends_on:
@@ -325,6 +361,9 @@ services:
     depends_on: { egov-filestore-migration: { condition: service_completed_successfully } }
 
   egov-workflow-v2-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-workflow-v2-db:2.12-87e13fe
     container_name: egov-workflow-v2-migration
     depends_on:
@@ -345,6 +384,9 @@ services:
     depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
 
   egov-hrms-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-hrms-db:2.12-beta-dd641a6
     container_name: egov-hrms-migration
     depends_on:
@@ -365,6 +407,9 @@ services:
     depends_on: { egov-hrms-migration: { condition: service_completed_successfully } }
 
   egov-url-shortening-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-url-shortening-db:maven-jdk21-983e8b2
     container_name: egov-url-shortening-migration
     depends_on:
@@ -386,6 +431,9 @@ services:
 
   # otp is [otp]-profile-gated; its migrator carries the same profile.
   egov-otp-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-otp-db:v2.9.2-4a60f20
     container_name: egov-otp-migration
     profiles: ["otp"]
@@ -417,6 +465,9 @@ services:
   # Compose was the outlier, so this closes a real divergence rather than adding
   # one. Nothing is in the dump for it (baseline_fresh) — it migrates from empty.
   egov-indexer-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-indexer-db:maven-jdk21-9f83afb
     container_name: egov-indexer-migration
     profiles: ["search"]
@@ -450,6 +501,9 @@ services:
   # and this migrator recreates them with a real history. If a deployment ever has
   # rows in them and no history, normalize ABORTs by design rather than guess.
   egov-bndry-mgmnt-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-bndry-mgmnt-db:bndry-mgmnt-3794b8c
     container_name: egov-bndry-mgmnt-migration
     depends_on:
@@ -480,6 +534,9 @@ services:
   # the last self-migrating service. Whether compose should create them at all is a
   # separate decision; see docs/db-migration-flow.md.
   egov-accesscontrol-migration:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     image: egovio/egov-accesscontrol-db:maven-jdk21-9f83afb
     container_name: egov-accesscontrol-migration
     depends_on:
@@ -528,6 +585,9 @@ services:
   #
   # Gates NOTHING: a data fix that fails must never black-hole the stack again.
   db-migrations:
+    # Hardening (review): match the base stack — no caps, no priv-escalation.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
     build:
       context: ./docker/db-migrations
     depends_on:

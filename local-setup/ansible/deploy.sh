@@ -114,6 +114,13 @@ fi
 # Regenerate inventory/hosts.yml from whatever host_vars exist on disk.
 # Every file (except _example.yml) becomes a host under `digit:`.
 # Group-wide vars are static here — matching hosts.yml.example.
+# Host-key verification is pinned in ansible.cfg, but Ansible's config
+# precedence puts these env vars ABOVE the ini file — an exported
+# ANSIBLE_HOST_KEY_CHECKING=False would silently reinstate
+# `-o StrictHostKeyChecking=no` and re-open the MITM window on a run that ships
+# root credentials and every bootstrap secret. Drop them for this process.
+unset ANSIBLE_HOST_KEY_CHECKING ANSIBLE_SSH_HOST_KEY_CHECKING
+
 TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
   | xargs -n1 basename \
   | sed 's/\.yml$//' \
@@ -130,8 +137,26 @@ TENANTS=$(ls inventory/host_vars/*.yml 2>/dev/null \
     echo "        ${t}:"
   done
   echo "      vars:"
-  echo "        ansible_user: root"
-  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'"
+  # Group-level default only. host_vars/<tenant>.yml wins over group vars in
+  # Ansible, so a tenant that sets `ansible_user: digit-deploy` (plus
+  # ansible_become_password, or NOPASSWD sudo) deploys unprivileged with no
+  # change here — the play already runs under
+  # `become: {{ deploy_become | default(true) }}` and the synchronize tasks
+  # already opt out with become: false, so that path works today.
+  #
+  # The default stays root because a freshly provisioned cloud box has root or
+  # the image's default user and nothing else; pointing every tenant at an
+  # account that does not exist yet would fail to connect rather than harden
+  # anything. Override per tenant, or set DIGIT_ANSIBLE_USER for all of them.
+  echo "        ansible_user: ${DIGIT_ANSIBLE_USER:-root}"
+  # accept-new, NOT no. `no` accepts a changed key silently on every
+  # connection, so a MITM between the controller and the box is invisible and
+  # the deploy hands it root plus every bootstrap secret. accept-new trusts
+  # the key on FIRST contact (same convenience for a fresh box) but then
+  # pins it — a later mismatch aborts loudly, which is the property that
+  # matters. Pre-seed instead with `ssh-keyscan -H <host> >> ~/.ssh/known_hosts`
+  # if you want to verify the fingerprint out of band before the first run.
+  echo "        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'"
 } > inventory/hosts.yml
 
 host="${1:-}"

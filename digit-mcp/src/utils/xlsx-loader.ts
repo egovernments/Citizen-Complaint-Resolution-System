@@ -1106,6 +1106,29 @@ export async function loadFromXlsx(options: XlsxLoadOptions): Promise<XlsxLoadRe
     }
   }
 
+  // Register the tenant's encryption key before the employee phase. Employees
+  // carry PII (mobile, name, email) that egov-user encrypts via egov-enc-service,
+  // which needs a key for THIS tenantId — a brand-new city tenant has none (the
+  // root's key, provisioned by tenant_bootstrap, does not cover a distinct city
+  // tenantId), so every employee create otherwise fails at enc-service with
+  // "<tenant> : Tenant Id not found". tenant_bootstrap and city_setup already do
+  // this for the paths they own; city_setup_from_xlsx did not, so an xlsx
+  // onboarding of a fresh city could load boundaries and masters and then fail
+  // every employee. Idempotent (created:false when the key already exists) and
+  // gated on employee_file so a boundaries/masters-only run does not need
+  // enc-service. Non-fatal: if enc-service is unreachable, let the employee phase
+  // surface the real error rather than aborting phases that already succeeded.
+  if (employee_file) {
+    try {
+      await digitApi.generateEncKey(tenant_id);
+    } catch (error) {
+      console.error(
+        `[city_setup_from_xlsx] enc-service key generation failed for "${tenant_id}": ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   // Phase 4: Employees
   if (employee_file) {
     try {

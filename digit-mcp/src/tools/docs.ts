@@ -1,10 +1,66 @@
 import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { lstatSync, realpathSync } from 'node:fs';
+import { isInside } from '../services/auth.js';
 import { fileURLToPath } from 'node:url';
+import { sanitizeUserContent } from '../utils/sanitize.js';
 
 const MCP_ENDPOINT = 'https://docs.digit.org/platform/~gitbook/mcp';
+
+/**
+ * Hosts `docs_get` may fetch from.
+ *
+ * The guard used to be `url.includes('docs.digit.org')` — a substring test on
+ * the WHOLE url, so `http://10.0.0.1/x?docs.digit.org` passed it. Combined with
+ * redirect-following and a verbatim body, that made a read-only documentation
+ * tool into an in-cluster HTTP fetch primitive: arbitrary internal GETs and a
+ * port scanner, reachable at the lowest access tier.
+ *
+ * Compare `url.hostname` — never the string — against this list.
+ */
+const ALLOWED_DOC_HOSTS = new Set(['docs.digit.org']);
+
+/** Cap on a fetched page, so a hostile or huge target can't exhaust memory. */
+const MAX_DOC_BYTES = 2 * 1024 * 1024;
+
+/** Read a response body up to `limit` bytes, abandoning the rest. */
+async function readCapped(response: Response, limit: number): Promise<{ text: string; truncated: boolean }> {
+  const body = response.body;
+  if (!body) return { text: '', truncated: false };
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.length;
+      if (total > limit) {
+        chunks.push(value.subarray(0, value.length - (total - limit)));
+        truncated = true;
+        break;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return { text: Buffer.concat(chunks).toString('utf-8'), truncated };
+}
+
+function isAllowedDocHost(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    return ALLOWED_DOC_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 const LOCAL_URL_PREFIX = 'local://';
 const ENGRAM_URL_PREFIX = 'engram://';
 
@@ -76,15 +132,48 @@ async function searchLocalDocs(query: string): Promise<Array<{ title: string; li
 }
 
 /**
+ * Resolve a caller-supplied filename inside `baseDir`, following symlinks.
+ *
+ * The blacklist this replaces (`includes('..') || includes('/')`) rejects the
+ * spellings of traversal but not the mechanism: a single path segment with no
+ * slash can still be a symlink pointing out of the directory, and `readFile`
+ * follows it. That matters most for the engram directory, whose contents are
+ * written by the agent from earlier sessions.
+ *
+ * Same shape as `resolveArtifactPath` — compare real paths on both sides, and
+ * refuse a symlink at the destination outright.
+ */
+function resolveDocPath(baseDir: string, filename: string): string | null {
+  if (!filename || filename.includes('/') || filename.includes('\\')) return null;
+  const base = realpathOrSelf(resolve(baseDir));
+  const candidate = resolve(base, filename);
+  if (!isInside(candidate, base)) return null;
+  try {
+    if (lstatSync(candidate).isSymbolicLink()) return null;
+  } catch {
+    return null; // does not exist
+  }
+  return realpathOrSelf(candidate) === candidate && isInside(candidate, base) ? candidate : null;
+}
+
+function realpathOrSelf(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
+/**
  * Read a local doc file by its local:// URL.
  */
 async function getLocalDoc(localUrl: string): Promise<{ title: string; content: string } | null> {
   const filename = localUrl.replace(LOCAL_URL_PREFIX, '');
-  // Prevent path traversal
-  if (filename.includes('..') || filename.includes('/')) return null;
+  const path = resolveDocPath(DOCS_DIR, filename);
+  if (!path) return null;
 
   try {
-    const content = await readFile(join(DOCS_DIR, filename), 'utf-8');
+    const content = await readFile(path, 'utf-8');
     const titleMatch = content.match(/^#\s+(.+)/m);
     return {
       title: titleMatch ? titleMatch[1] : filename.replace('.md', ''),
@@ -138,7 +227,10 @@ async function searchEngramDocs(query: string): Promise<Array<{ title: string; l
       results.push({
         title: `[Engram] ${title}`,
         link: `${ENGRAM_URL_PREFIX}${file}`,
-        content: snippet.slice(0, 500),
+        // Engram files are written by the agent from prior sessions, so hostile
+        // text captured once would otherwise be replayed into every later
+        // session's context. Local docs/ are in-repo and left as authored.
+        content: sanitizeUserContent(snippet.slice(0, 500)),
       });
     } catch {
       // Skip unreadable files
@@ -153,14 +245,15 @@ async function searchEngramDocs(query: string): Promise<Array<{ title: string; l
  */
 async function getEngramDoc(engramUrl: string): Promise<{ title: string; content: string } | null> {
   const filename = engramUrl.replace(ENGRAM_URL_PREFIX, '');
-  if (filename.includes('..') || filename.includes('/')) return null;
+  const path = resolveDocPath(ENGRAMS_DIR, filename);
+  if (!path) return null;
 
   try {
-    const content = await readFile(join(ENGRAMS_DIR, filename), 'utf-8');
+    const content = await readFile(path, 'utf-8');
     const titleMatch = content.match(/^#\s+(.+)/m);
     return {
       title: titleMatch ? titleMatch[1] : filename.replace('.md', ''),
-      content,
+      content: sanitizeUserContent(content),
     };
   } catch {
     return null;
@@ -183,9 +276,12 @@ async function searchDocs(query: string): Promise<Array<{ title: string; link: s
         arguments: { query },
       },
     }),
+    // Bounded like docs_get: a fixed host is not an unbounded one, and any
+    // authenticated caller can drive this.
+    signal: AbortSignal.timeout(15_000),
   });
 
-  const text = await response.text();
+  const { text } = await readCapped(response, MAX_DOC_BYTES);
   const results: Array<{ title: string; link: string; content: string }> = [];
 
   // Parse SSE response
@@ -209,7 +305,8 @@ async function searchDocs(query: string): Promise<Array<{ title: string; link: s
         results.push({
           title: titleLine?.replace('Title: ', '') || '(untitled)',
           link: linkLine?.replace('Link: ', '') || '',
-          content: contentText.slice(0, 500),
+          // Third-party content fetched over the network.
+          content: sanitizeUserContent(contentText.slice(0, 500)),
         });
       }
     } catch {
@@ -225,6 +322,7 @@ export function registerDocsTools(registry: ToolRegistry): void {
     name: 'docs_search',
     group: 'docs',
     category: 'docs',
+    access: 'public',
     risk: 'read',
     description:
       'Search the DIGIT documentation (docs.digit.org) for guides, API references, configuration details, architecture docs, and how-to articles. ' +
@@ -298,6 +396,10 @@ export function registerDocsTools(registry: ToolRegistry): void {
     name: 'docs_get',
     group: 'docs',
     category: 'docs',
+    // Not 'public'. Even with the host allow-list this performs an outbound
+    // fetch from inside the cluster on caller-supplied input; the lowest tier
+    // should not be able to drive egress at all.
+    access: 'employee',
     risk: 'read',
     description:
       'Fetch the full markdown content of a DIGIT documentation page. Use docs_search first to find the URL, then pass it here to read the complete page. ' +
@@ -354,11 +456,13 @@ export function registerDocsTools(registry: ToolRegistry): void {
         }, null, 2);
       }
 
-      // Ensure it's a docs.digit.org URL
-      if (!url.includes('docs.digit.org')) {
+      // Host must be allow-listed. Checked on the parsed hostname, not with a
+      // substring match on the url — see ALLOWED_DOC_HOSTS.
+      if (!isAllowedDocHost(url)) {
         return JSON.stringify({
           success: false,
-          error: 'URL must be a docs.digit.org page, a local:// URL, or an engram:// URL',
+          error: `URL host is not permitted. Allowed: ${[...ALLOWED_DOC_HOSTS].join(', ')}. ` +
+            'Pass a docs.digit.org page, a local:// URL, or an engram:// URL.',
           hint: 'Use docs_search to find valid documentation URLs.',
         });
       }
@@ -377,7 +481,20 @@ export function registerDocsTools(registry: ToolRegistry): void {
       }
 
       try {
-        const response = await fetch(mdUrl);
+        // `redirect: 'manual'` — following redirects would hand the allow-list
+        // straight back: one hop off docs.digit.org and we are fetching whatever
+        // the redirect names. A redirect is reported, not chased.
+        const response = await fetch(mdUrl, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          return JSON.stringify({
+            success: false,
+            error: `The documentation host redirected (HTTP ${response.status}). Redirects are not followed.`,
+            hint: 'Use docs_search to get a current URL.',
+          }, null, 2);
+        }
         if (!response.ok) {
           return JSON.stringify({
             success: false,
@@ -397,13 +514,22 @@ export function registerDocsTools(registry: ToolRegistry): void {
           }, null, 2);
         }
 
-        const markdown = await response.text();
+        // Read incrementally and stop at the cap. `await response.text()`
+        // buffers the whole body first, so slicing afterwards bounds only what
+        // is RETURNED — the memory was already spent, which is not what the
+        // limit is for.
+        const raw = await readCapped(response, MAX_DOC_BYTES);
+        const markdown = raw.text;
         // Return the original URL (not the .md one) so agents don't bypass docs_get
         const displayUrl = url.endsWith('.md') ? url.replace(/\.md$/, '') : url;
         return JSON.stringify({
           success: true,
           url: displayUrl,
-          content: markdown,
+          truncated: raw.truncated || undefined,
+          // Third-party content going straight into the agent's context. The
+          // search path already sanitized its snippets; this one did not, so
+          // the full page was an unfiltered injection channel.
+          content: sanitizeUserContent(markdown),
         }, null, 2);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

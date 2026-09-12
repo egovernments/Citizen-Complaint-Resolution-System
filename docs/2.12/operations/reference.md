@@ -74,7 +74,10 @@ You will only need this table if someone on the call refers to a port number.
 
 ## Credentials — who to ask
 
-**The health dashboard at `/status/` needs no login.** Open the URL and you are in.
+**The health dashboard at `/status/` is behind HTTP basic auth**, and is not published
+at all unless the tenant sets `nginx_features.status: true`. Credentials come from
+`status_basic_auth_user` / `status_basic_auth_password` in the tenant's host_vars.
+(It enumerates every internal component and its health, so it is no longer served open.)
 
 **Grafana does need one, and it should be an account of your own.**
 

@@ -2,6 +2,7 @@ import type { ToolMetadata } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
 import { rpkDescribeGroup, persisterLogs, psqlCountAll, psqlCountOne } from '../services/shell.js';
 import { digitApi } from '../services/digit-api.js';
+import { ensureAuthenticated } from '../services/auth.js';
 
 // ──────────────────────────────────────────
 // Module-level cache for db_counts deltas
@@ -269,6 +270,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'kafka_lag',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Check Kafka consumer group lag for egov-persister via Redpanda rpk. ' +
@@ -294,6 +296,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'persister_errors',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Scan egov-persister container logs for errors. ' +
@@ -327,6 +330,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'db_counts',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Get row counts for key DIGIT database tables via direct psql query. ' +
@@ -352,6 +356,7 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
     name: 'persister_monitor',
     group: 'monitoring',
     category: 'monitoring',
+    access: 'admin',
     risk: 'read',
     description:
       'Comprehensive persister health monitor. Runs all monitoring probes and cross-references results. ' +
@@ -436,14 +441,11 @@ export function registerMonitoringTools(registry: ToolRegistry): void {
       let parity: { status: string; pgrCount?: number; workflowCount?: number; missingInWorkflow?: string[]; detail?: string; error?: string } | null = null;
       if (!skipProbes.has('parity')) {
         try {
-          if (!digitApi.isAuthenticated()) {
-            const username = process.env.CRS_USERNAME;
-            const password = process.env.CRS_PASSWORD;
-            const loginTenant = process.env.CRS_TENANT_ID || tenantId;
-            if (username && password) {
-              await digitApi.login(username, password, loginTenant);
-            }
-          }
+          // Centralized helper, not a local re-implementation: this was a
+          // tenth copy of the "no credentials => act as the container's ADMIN"
+          // fallback, with no auth-mode check. `optional` preserves the probe's
+          // degrade-rather-than-fail contract.
+          await ensureAuthenticated({ optional: true });
 
           if (digitApi.isAuthenticated()) {
             const pgrResults = await digitApi.pgrSearch(tenantId, { limit: 100, offset: 0 });

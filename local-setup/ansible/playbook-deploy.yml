@@ -107,7 +107,13 @@
       # unresolvable variable. The value is irrelevant to `down`; feed it a
       # placeholder rather than let a missing secret block a teardown.
       environment:
+        # All three are ${VAR:?} in the compose file (no default). Compose
+        # interpolates the whole file for `down` too, so a box whose previous
+        # deploy aborted before .env was populated would fail teardown on an
+        # unresolvable variable. The values are irrelevant to `down`.
         GF_ADMIN_PASSWORD: unused-by-down
+        MINIO_ROOT_USER: unused-by-down
+        MINIO_ROOT_PASSWORD: unused-by-down
       register: clean_teardown
       changed_when: true
       when:
@@ -842,6 +848,63 @@
             state: started
             enabled: yes
 
+        # ==================== ufw (Debian/Ubuntu) ====================
+        # Ubuntu cloud images ship ufw INACTIVE, so a deploy used to leave the
+        # box with no host firewall at all while publishing ~38 container
+        # ports. Those are now loopback-bound (BIND_IP in the compose file),
+        # which is the control that actually contains them: Docker inserts its
+        # DNAT rules in PREROUTING/FORWARD and they BYPASS ufw's INPUT chain
+        # entirely, so ufw alone would never have protected a published port.
+        # This block is defence in depth for host-level services (sshd, host
+        # nginx, anything an operator installs later).
+        #
+        # ORDER IS LOAD-BEARING: allow SSH *before* enabling, or the enable
+        # task severs the control connection and the play dies mid-deploy on
+        # an unreachable host. ansible_port is allowed explicitly so a box on
+        # a non-22 SSH port is not locked out.
+        #
+        # Escape hatch: set `manage_host_firewall: false` in host_vars for
+        # boxes whose ingress is managed elsewhere (cloud security groups, a
+        # provider firewall) and should not have a second policy layered on.
+        - name: "ufw — host firewall (Debian/Ubuntu)"
+          when:
+            - ansible_facts['os_family'] == 'Debian'
+            - manage_host_firewall | default(true)
+          block:
+            - name: Install ufw
+              ansible.builtin.apt:
+                name: ufw
+                state: present
+
+            - name: "ufw — allow SSH BEFORE enabling (do not lock ourselves out)"
+              community.general.ufw:
+                rule: allow
+                port: "{{ item }}"
+                proto: tcp
+              loop: "{{ ([22, ansible_port | default(22)]) | unique }}"
+
+            # nginx_host_port is overridable (group_vars/all.yml). Hardcoding
+            # 80/443 here would let a tenant that moved its listener lock
+            # itself out of its own site the moment default-deny came on.
+            - name: "ufw — allow http/https for host nginx"
+              community.general.ufw:
+                rule: allow
+                port: "{{ item }}"
+                proto: tcp
+              loop: "{{ ([80, 443, (nginx_host_port | default(80) | int)]) | unique }}"
+
+            - name: "ufw — default deny incoming, allow outgoing"
+              community.general.ufw:
+                direction: "{{ item.direction }}"
+                policy: "{{ item.policy }}"
+              loop:
+                - { direction: incoming, policy: deny }
+                - { direction: outgoing, policy: allow }
+
+            - name: "ufw — enable"
+              community.general.ufw:
+                state: enabled
+
         # ==================== firewalld (RHEL family only) ====================
         # Ubuntu's ufw ships inactive by default on cloud images, so this
         # playbook never needed firewall tasks. Rocky/RHEL-family images
@@ -1202,11 +1265,14 @@
     # own existence check, so re-runs of the playbook are no-ops after the
     # first download.
     - name: Download OpenTelemetry Java Agent
+      # No `creates:` — the script self-guards (verifies an existing jar against
+      # the pinned digest and re-downloads on mismatch), so let it run every
+      # time. A `creates:` guard would skip re-verification of a stale/tampered
+      # jar left by an older unverified download.
       shell: bash {{ playbook_dir }}/../otel/download-agent.sh
-      args:
-        creates: "{{ playbook_dir }}/../otel/opentelemetry-javaagent.jar"
       delegate_to: localhost
       become: false
+      changed_when: false
 
     # ==================== nairobi-mdms submodule (fetched, not vendored) ====================
     # The Nairobi MDMS dump (~84k LOC of JSON for departments, designations,
@@ -1823,6 +1889,27 @@
         mode: '0600'
       no_log: true
 
+    # Same story as GF_ADMIN_PASSWORD: docker-compose.egov-digit.yaml resolves
+    # MINIO_ROOT_USER/PASSWORD (and egov-filestore's AWS_KEY/AWS_SECRETKEY, which
+    # default to them) from ${VAR:?} with no default, so `up -d openbao` — which
+    # interpolates the whole file — needs them present. "OpenBao — write tenant
+    # secrets into .env" below overwrites these placeholders with the real
+    # values before "Start DIGIT stack" brings MinIO up, so MinIO only ever sees
+    # the authoritative credentials.
+    - name: "Secrets prep — write placeholder MINIO_ROOT_USER/PASSWORD into .env (compose needs them to interpolate)"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: "^{{ item.k }}="
+        line: "{{ item.k }}={{ item.v }}"
+        create: true
+        mode: '0600'
+      loop:
+        - { k: 'MINIO_ROOT_USER', v: "placeholder-overwritten-by-openbao" }
+        - { k: 'MINIO_ROOT_PASSWORD', v: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}" }
+      loop_control:
+        label: "{{ item.k }}"
+      no_log: true
+
     - name: "Secrets prep — bring up OpenBao (+ keycloak-postgres when enable_keycloak) first"
       ansible.builtin.shell: >-
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }}
@@ -1946,6 +2033,43 @@
       register: bao_secrets
       no_log: true
 
+    # Refuse to deploy an opt-in stack on a secret that is published in this
+    # public repo. Runs HERE — right after the OpenBao read and before the .env
+    # is written / any app `docker compose up` — and asserts on the value that
+    # ACTUALLY reaches .env (bao_secrets, read back from OpenBao), NOT on
+    # bootstrap_secrets in host_vars. The two can diverge: the bootstrap seed is
+    # cas:0 (writes only when no version exists), so on a box whose OpenBao was
+    # initialised before a key was added, host_vars can hold a real value while
+    # OpenBao — and therefore .env — is empty and compose silently falls back to
+    # the published dev default. Checking the post-read value catches exactly
+    # that, and also lets a tenant that set the secret straight in OpenBao
+    # (`bao kv put`) with an empty host_vars pass.
+    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
+      ansible.builtin.assert:
+        that:
+          - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
+          - (bao_secrets.json.data.data[item.var] | default('')) != item.bad
+        fail_msg: >-
+          {{ item.feature }} is enabled but `{{ item.var }}` is unset or still
+          the published default in OpenBao — so .env gets an empty value and
+          compose falls back to the public default from
+          docker-compose.egov-digit.yaml. Set it with
+          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` (or put it in
+          bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
+          whose OpenBao has not been seeded yet). These values are in a public
+          repo, so the default is equivalent to no secret at all.
+      when: item.enabled
+      loop:
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
+        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
+        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
+        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+        - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
+
     # Grafana admin password. Tenants seeded BEFORE this key existed can't get
     # it from the bootstrap seed above (that write is cas:0 — it only fires when
     # no version exists yet), so generate one here and persist it. After the
@@ -2013,6 +2137,17 @@
           AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
+          ELASTICSEARCH_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_password | default('', true) }}
+          {# Opt-in Novu stack. default('') so a tenant without these keys writes
+             an empty value, which compose's ${NOVU_*:-dev-default} treats as
+             unset — the dev default only ever applies when the notifications
+             profile is off. When enable_novu is true the pre-flight assert
+             above requires real values, so these lines carry them. #}
+          NOVU_JWT_SECRET={{ bao_secrets.json.data.data.novu_jwt_secret | default('', true) }}
+          NOVU_STORE_ENCRYPTION_KEY={{ bao_secrets.json.data.data.novu_store_encryption_key | default('', true) }}
+          NOVU_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
+          NOVU_BRIDGE_SECRET_KEY={{ bao_secrets.json.data.data.novu_secret_key | default('', true) }}
+          NOVU_MONGO_PASSWORD={{ bao_secrets.json.data.data.novu_mongo_password | default('', true) }}
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
@@ -2414,6 +2549,100 @@
       delay: 10
       until: kong_health.stdout == 'healthy'
       changed_when: false
+
+    # ==================== Opt-in stack secrets ====================
+    # The Novu / Keycloak / MCP services ship dev-default secrets in
+    # docker-compose.egov-digit.yaml (novu's jwt secret, store encryption key,
+    # mongo password; KC_ADMIN_PASSWORD=admin; MCP_DB_PASSWORD=mcp123). Those
+    # defaults are DELIBERATELY still in the compose file: compose interpolates
+    # the whole file before it selects profiles, so a `${X:?}` on an opt-in
+    # service aborts even a default-profile `up` where that service is never
+    # started. Fail-fast there would break every deploy that does not run Novu.
+    #
+    # This is the layer that actually knows which profiles are enabled, so the
+    # enforcement lives here: if you turn a stack on, its secrets must be set
+    # and must not still be the published dev value.
+    # ==================== Kong CORS origins ====================
+    # The repo's kong.yml ships `origins: ['*']` so a local `docker compose up`
+    # or Tilt run (SPA on its own port) works without configuration. That
+    # wildcard must never reach a deployed box: paired with the credentials
+    # flag it used to make every origin trusted for CREDENTIALED calls, and
+    # even without credentials it lets any site read every auth-optional API
+    # cross-origin.
+    #
+    # A real deployment serves the SPAs and Kong from ONE origin behind nginx,
+    # so the correct value is just this tenant's domain. Override with
+    # `kong_cors_origins` in host_vars when a tenant genuinely needs more (a
+    # separate analytics host, say).
+    #
+    # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
+    # or the running container keeps reading the old one forever (#1683 — the
+    # same reason the config sync above uses rsync --inplace).
+    #
+    # `unsafe_writes: true` does NOT achieve that. An earlier revision of this
+    # task assumed it did. ansible.builtin.replace writes a temp file and calls
+    # atomic_move(), which tries os.rename() FIRST; on a plain host file that
+    # succeeds, so the unsafe_writes path is never reached and the inode is
+    # swapped regardless. Verified directly: os.rename over a file changes its
+    # inode; an open-for-write truncation does not.
+    #
+    # The failure was silent, and worse than not doing it at all: Kong would
+    # keep serving the un-pinned config, the host-side check below would read
+    # the correct file and report success, and every FUTURE kong.yml change
+    # would land on an inode the container no longer holds — freezing the
+    # gateway's config permanently.
+    #
+    # So: edit a staging copy, then `cat` it over the original. The redirect
+    # truncates the existing file in place, preserving the inode.
+    - name: "Kong — stage a copy to pin CORS origins into"
+      ansible.builtin.copy:
+        src: "{{ digit_dir }}/kong/kong.yml"
+        dest: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        remote_src: true
+        mode: '0644'
+
+    # `[ \t]*-` rather than `\s*-`: \s matches newlines, so the greedy form
+    # could run past a blank line and swallow the NEXT plugin's `- name:` entry.
+    - name: "Kong — pin CORS origins to the tenant domain (staging copy)"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
+        replace: "\\1{% for o in (kong_cors_origins | default(['https://' ~ domain])) %}    - '{{ o }}'\n{% endfor %}"
+      register: kong_cors_pin
+
+    - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cat "{{ digit_dir }}/kong/.kong.yml.pinned" > "{{ digit_dir }}/kong/kong.yml"
+        rm -f "{{ digit_dir }}/kong/.kong.yml.pinned"
+      changed_when: true
+
+    # Fail loudly rather than silently leaving '*' in place: if the marker ever
+    # drifts out of kong.yml the replace above is a no-op, and a green deploy
+    # would ship the wildcard to production.
+    # Read what the CONTAINER has, not the host path. A host-side check cannot
+    # detect the inode-orphaning failure described above: the file on disk looks
+    # correct while the gateway serves something else entirely. That is exactly
+    # the false-green this verification exists to prevent.
+    - name: "Kong — verify the CORS wildcard is gone (as the container sees it)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker exec kong-gateway cat /kong/kong.yml \
+          | awk '/origins:.*kong-cors-origins-marker/{f=1;next} f&&/^[[:space:]]*-/{print;next} f{exit}'
+      register: kong_cors_effective
+      changed_when: false
+
+    - name: "Kong — assert no wildcard CORS origin on a deployed box"
+      ansible.builtin.assert:
+        that:
+          - "\"'*'\" not in kong_cors_effective.stdout"
+          - kong_cors_effective.stdout | trim | length > 0
+        fail_msg: >-
+          kong.yml still has a wildcard (or empty) CORS origin list after
+          templating: {{ kong_cors_effective.stdout | default('<empty>') }}.
+          The 'origins:  # kong-cors-origins-marker' line must be present in
+          local-setup/kong/kong.yml immediately above the origins list.
+        success_msg: "Kong CORS origins: {{ kong_cors_effective.stdout | trim }}"
 
     # Kong is DB-less: it loads kong.yml once at startup and does not watch it.
     # So a changed kong.yml is PRESENT but not APPLIED until Kong re-reads it,
@@ -3058,6 +3287,202 @@
       changed_when: true
       when: ansible_system == "Darwin"
 
+    # ── MinIO ⇄ filestore credential reconciliation (cluster-2 guard) ────
+    #
+    # egov-filestore authenticates to MinIO with AWS_KEY/AWS_SECRETKEY; those
+    # MUST equal the MINIO_ROOT_USER/MINIO_ROOT_PASSWORD the *running* MinIO
+    # container serves, or every MinioRepository.push fails with
+    # InvalidAccessKeyId and attachment upload silently 500s.
+    #
+    # A running container freezes its environment at creation time, and MinIO
+    # adopts whatever root credentials its env carries at start-up — the
+    # volume's earlier credentials stop working (verified empirically on a
+    # throwaway container against a copy of a live data volume: the new env
+    # creds authenticated, the volume's original creds were rejected). So the
+    # two services diverge whenever a deploy recreates one but not the other:
+    # a targeted `up -d --force-recreate egov-filestore`/`restart` that skips
+    # MinIO, an incremental helper, or a stack first brought up on the
+    # placeholder creds and only partially recreated afterwards. On a fresh
+    # box the single `up -d` recreates both from the same .env and they match;
+    # on a box with history they can end on different credential sets. That is
+    # exactly the InvalidAccessKeyId failure seen in the integration-test
+    # cluster-2 regression.
+    #
+    # This reconciles them idempotently against TWO independent drift signals:
+    #   (1) MinIO not serving the .env creds — probe whether .env's
+    #       AWS_KEY/AWS_SECRETKEY authenticate against the live MinIO;
+    #   (2) filestore's *running container* froze a stale AWS_KEY/AWS_SECRETKEY
+    #       (a container's env is fixed at creation, so a filestore recreated
+    #       on an older .env keeps sending the old creds even after MinIO is
+    #       correct) — compare a hash of filestore's baked-in creds to .env.
+    # Signal (2) matters because (1) can read OK while filestore is still stale:
+    # MinIO already serves the .env creds, .env authenticates, yet the frozen
+    # filestore sends something else and every push 500s. Checking only (1)
+    # would silently miss that case.
+    #
+    # On drift: force-recreate MinIO so it adopts the authoritative .env creds
+    # (volume, bucket and anonymous policy persist), force-recreate filestore so
+    # it picks the .env creds up too, then re-assert both signals. A no-op on
+    # any box already aligned. Credential values are never printed — the
+    # comparison uses an md5 of the two lines, which is not reversible.
+    - name: "MinIO ⇄ filestore — is digit-minio running?"
+      ansible.builtin.shell:
+        cmd: docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-minio && echo YES || echo NO
+        executable: /bin/bash
+      register: minio_present
+      changed_when: false
+      failed_when: false
+      # macOS deploys converge via mac-stack-up.sh (down + up), which recreates
+      # MinIO and filestore together from the same .env — they cannot diverge
+      # there. This reconciliation targets the Linux partial-recreate paths.
+      when: ansible_system != "Darwin"
+
+    - name: "MinIO ⇄ filestore — probe filestore's .env credentials against the live MinIO"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          cd "{{ digit_dir }}"
+          AWS_KEY=$(grep -E '^AWS_KEY=' .env | head -1 | cut -d= -f2-)
+          AWS_SECRETKEY=$(grep -E '^AWS_SECRETKEY=' .env | head -1 | cut -d= -f2-)
+          if [ -z "${AWS_KEY}" ] || [ -z "${AWS_SECRETKEY}" ]; then echo NOKEYS; exit 0; fi
+          # Share MinIO's own network namespace so 127.0.0.1:9000 reaches it
+          # regardless of the compose network name; MC_HOST_ env avoids an
+          # on-disk alias and shell-quoting the secret.
+          if docker run --rm --network "container:digit-minio" \
+               -e "MC_HOST_chk=http://${AWS_KEY}:${AWS_SECRETKEY}@127.0.0.1:9000" \
+               --entrypoint mc egovio/mc:RELEASE.2024-01-16T16-06-34Z \
+               ls chk >/dev/null 2>&1; then
+            echo OK
+          else
+            echo MISMATCH
+          fi
+        executable: /bin/bash
+      register: minio_cred_probe
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system != "Darwin"
+        - "'YES' in (minio_present.stdout | default(''))"
+
+    - name: "MinIO ⇄ filestore — does the running filestore's baked-in AWS_KEY match .env?"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          cd "{{ digit_dir }}"
+          env_sig=$(grep -E '^AWS_KEY=|^AWS_SECRETKEY=' .env | sort | md5sum | cut -d' ' -f1)
+          fs_sig=$(docker inspect egov-filestore \
+                     --format '{{ "{{" }}range .Config.Env{{ "}}" }}{{ "{{" }}println .{{ "}}" }}{{ "{{" }}end{{ "}}" }}' 2>/dev/null \
+                   | grep -E '^AWS_KEY=|^AWS_SECRETKEY=' | sort | md5sum | cut -d' ' -f1)
+          if [ -z "${fs_sig}" ]; then echo NOFS; elif [ "${env_sig}" = "${fs_sig}" ]; then echo SAME; else echo DIFF; fi
+        executable: /bin/bash
+      register: filestore_cred_drift
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system != "Darwin"
+        - "'YES' in (minio_present.stdout | default(''))"
+
+    - name: "MinIO ⇄ filestore — decide whether reconciliation is needed"
+      ansible.builtin.set_fact:
+        _minio_needs_reconcile: >-
+          {{ ('MISMATCH' in (minio_cred_probe.stdout | default('')))
+             or ('DIFF' in (filestore_cred_drift.stdout | default(''))) }}
+      when: ansible_system != "Darwin"
+
+    - name: "MinIO — force-recreate so it adopts the authoritative .env credentials (only when MinIO drifted)"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate minio
+      args:
+        chdir: "{{ digit_dir }}"
+      register: minio_reconcile_recreate
+      changed_when: true
+      when:
+        - ansible_system != "Darwin"
+        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
+
+    - name: "MinIO — wait for the reconciled container to report healthy"
+      ansible.builtin.shell:
+        cmd: |
+          for i in $(seq 1 30); do
+            docker exec digit-minio mc ready local >/dev/null 2>&1 && { echo READY; exit 0; }
+            sleep 2
+          done
+          echo NOTREADY
+        executable: /bin/bash
+      register: minio_reconcile_ready
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system != "Darwin"
+        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
+
+    - name: "filestore — force-recreate so it picks up the .env credentials (when MinIO or filestore drifted)"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate egov-filestore
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when:
+        - ansible_system != "Darwin"
+        - _minio_needs_reconcile | default(false) | bool
+
+    - name: "MinIO ⇄ filestore — re-probe .env credentials against the live MinIO"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          cd "{{ digit_dir }}"
+          AWS_KEY=$(grep -E '^AWS_KEY=' .env | head -1 | cut -d= -f2-)
+          AWS_SECRETKEY=$(grep -E '^AWS_SECRETKEY=' .env | head -1 | cut -d= -f2-)
+          if docker run --rm --network "container:digit-minio" \
+               -e "MC_HOST_chk=http://${AWS_KEY}:${AWS_SECRETKEY}@127.0.0.1:9000" \
+               --entrypoint mc egovio/mc:RELEASE.2024-01-16T16-06-34Z \
+               ls chk >/dev/null 2>&1; then
+            echo OK
+          else
+            echo MISMATCH
+          fi
+        executable: /bin/bash
+      register: minio_cred_reprobe
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system != "Darwin"
+        - _minio_needs_reconcile | default(false) | bool
+
+    - name: "MinIO ⇄ filestore — re-check the filestore container now matches .env"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          cd "{{ digit_dir }}"
+          env_sig=$(grep -E '^AWS_KEY=|^AWS_SECRETKEY=' .env | sort | md5sum | cut -d' ' -f1)
+          fs_sig=$(docker inspect egov-filestore \
+                     --format '{{ "{{" }}range .Config.Env{{ "}}" }}{{ "{{" }}println .{{ "}}" }}{{ "{{" }}end{{ "}}" }}' 2>/dev/null \
+                   | grep -E '^AWS_KEY=|^AWS_SECRETKEY=' | sort | md5sum | cut -d' ' -f1)
+          [ "${env_sig}" = "${fs_sig}" ] && echo SAME || echo DIFF
+        executable: /bin/bash
+      register: filestore_cred_redrift
+      changed_when: false
+      failed_when: false
+      when:
+        - ansible_system != "Darwin"
+        - _minio_needs_reconcile | default(false) | bool
+
+    - name: "MinIO ⇄ filestore — fail loudly if credentials still do not reconcile"
+      ansible.builtin.assert:
+        that:
+          - "'OK' in (minio_cred_reprobe.stdout | default(''))"
+          - "'SAME' in (filestore_cred_redrift.stdout | default(''))"
+        fail_msg: >-
+          egov-filestore still cannot authenticate to MinIO after force-recreating
+          both from .env (probe={{ minio_cred_reprobe.stdout | default('') | trim }},
+          filestore-match={{ filestore_cred_redrift.stdout | default('') | trim }}).
+          MinIO could not adopt the .env credentials — inspect
+          `docker logs digit-minio` and confirm MINIO_ROOT_USER/MINIO_ROOT_PASSWORD
+          in {{ digit_dir }}/.env equal AWS_KEY/AWS_SECRETKEY.
+        success_msg: "MinIO ⇄ filestore credentials reconciled and verified."
+      when:
+        - ansible_system != "Darwin"
+        - _minio_needs_reconcile | default(false) | bool
+        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
+
     # Bringing the stack up recreated the openbao container, which comes back
     # SEALED — the earlier unseal ran before that recreate. Without
     # re-unsealing, the final "OpenBao unsealed" validation 503s
@@ -3404,27 +3829,84 @@
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
 
-    - name: "integration-tests — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
+    - name: "nginx — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
       ansible.builtin.apt:
         name: apache2-utils
         state: present
       when:
-        - enable_integration_tests | default(false)
-        - integration_tests_basic_auth_password is defined
+        # Two consumers now: the integration-tests dashboards and the Gatus
+        # status board. Either one needs htpasswd present.
+        - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
+          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
         - ansible_facts['os_family'] == 'Debian'
 
-    - name: "integration-tests — ensure htpasswd tooling for basic-auth (RHEL family)"
+    - name: "nginx — ensure htpasswd tooling for basic-auth (RHEL family)"
       ansible.builtin.dnf:
         name: httpd-tools
         state: present
       when:
-        - enable_integration_tests | default(false)
-        - integration_tests_basic_auth_password is defined
+        # Two consumers now: the integration-tests dashboards and the Gatus
+        # status board. Either one needs htpasswd present.
+        - (enable_integration_tests | default(false) and integration_tests_basic_auth_password is defined)
+          or (nginx_features.status | default(false) and status_basic_auth_password is defined)
         - ansible_facts['os_family'] == 'RedHat'
 
     # Idempotent via `creates`: rotate the password by deleting the file and
     # re-running. Password comes from vault/host_vars; the task skips entirely
     # if unset (dashboards would then 401 with no valid user — set it).
+    # ---- Gatus status board basic auth (nginx_features.status) ----
+    # Fail CLOSED rather than render an open board: the nginx template always
+    # emits auth_basic for /status/, so a deploy that enables the feature
+    # without a password would serve a 403 (missing .htpasswd-status) and the
+    # operator would have to guess why. Assert up front instead.
+    - name: "status board — require a basic-auth password when /status/ is enabled"
+      ansible.builtin.assert:
+        that:
+          - status_basic_auth_password is defined
+          - status_basic_auth_password | length > 0
+        fail_msg: >-
+          nginx_features.status is true but `status_basic_auth_password` is not set.
+          The Gatus board enumerates the internal service topology, so it is no
+          longer served unauthenticated. Set status_basic_auth_password (and
+          optionally status_basic_auth_user, default 'digit-status') in
+          host_vars/{{ inventory_hostname }}.yml, or set nginx_features.status
+          to false to stop publishing the board.
+      when:
+        - nginx_features.status | default(false)
+
+    # Idempotent via `creates`: rotate by deleting the file and re-running.
+    - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
+      ansible.builtin.command: >-
+        htpasswd -bBc /etc/nginx/.htpasswd-status
+        "{{ status_basic_auth_user | default('digit-status') }}"
+        "{{ status_basic_auth_password }}"
+      args:
+        creates: /etc/nginx/.htpasswd-status
+      no_log: true
+      when:
+        - nginx_features.status | default(false)
+        - status_basic_auth_password is defined
+        - ansible_system != "Darwin"
+
+    # macOS thin path: nginx runs as a CONTAINER and only gets the files that
+    # are bind-mounted into it, so the host's /etc/nginx/.htpasswd-status is
+    # invisible to it. Write the file into {{ digit_dir }}/nginx/ instead; the
+    # container task below mounts it at the path the vhost expects. Without
+    # this, auth_basic_user_file points at a file nginx cannot open and every
+    # /status/ request is a 500 rather than a 401.
+    - name: "status board — basic-auth user for the Mac nginx container"
+      ansible.builtin.command: >-
+        htpasswd -bBc {{ digit_dir }}/nginx/.htpasswd-status
+        "{{ status_basic_auth_user | default('digit-status') }}"
+        "{{ status_basic_auth_password }}"
+      args:
+        creates: "{{ digit_dir }}/nginx/.htpasswd-status"
+      no_log: true
+      when:
+        - nginx_features.status | default(false)
+        - status_basic_auth_password is defined
+        - ansible_system == "Darwin"
+
     - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
       ansible.builtin.command: >-
         htpasswd -bBc /etc/nginx/.htpasswd-tests
@@ -3474,7 +3956,58 @@
         chromium
       args:
         chdir: "{{ integration_tests_dir }}"
+      # Install into a SHARED path, not root's $HOME. This task runs as root, so
+      # without this Playwright drops the browsers in /root/.cache/ms-playwright,
+      # which the runner unit — running as digit-tests with ProtectHome=true —
+      # cannot read, and every RUN fails "Executable doesn't exist". The unit
+      # below sets the SAME PLAYWRIGHT_BROWSERS_PATH so it finds them here.
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: "{{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}"
       changed_when: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    # Playwright installs as root (0755 dirs), which is world-readable, but make
+    # it explicit so the digit-tests account can always read + execute the
+    # browser binaries from the shared path under the unit's ProtectSystem=strict
+    # (read-only) view of the filesystem.
+    - name: "integration-tests runner — make the shared Playwright browsers path readable"
+      ansible.builtin.file:
+        path: "{{ integration_tests_runner_browsers_path | default('/opt/ms-playwright') }}"
+        state: directory
+        mode: "0755"
+        recurse: true
+      when:
+        - enable_integration_tests_runner | default(false)
+        - integration_tests_dir is defined
+        - ansible_system != "Darwin"
+
+    # The unit now runs as an unprivileged account instead of root, so create
+    # it and hand it the two paths ReadWritePaths names. System account: no
+    # login shell, no home — it exists only to own the runner process.
+    - name: "integration-tests runner — unprivileged service account"
+      ansible.builtin.user:
+        name: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        system: true
+        shell: /usr/sbin/nologin
+        create_home: false
+        state: present
+      when:
+        - enable_integration_tests_runner | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "integration-tests runner — own its checkout and webroot"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        group: "{{ integration_tests_runner_user | default('digit-tests') }}"
+        recurse: true
+      loop:
+        - "{{ integration_tests_dir }}"
+        - /var/www/integration-tests
       when:
         - enable_integration_tests_runner | default(false)
         - integration_tests_dir is defined
@@ -3640,6 +4173,7 @@
               -p {{ nginx_host_port | default(80) }}:80 \
               -v {{ digit_dir }}/nginx/site.conf:/etc/nginx/conf.d/default.conf:ro \
               -v {{ configurator_www_dir }}:/var/www/configurator:ro \
+              {{ ('-v ' ~ digit_dir ~ '/nginx/.htpasswd-status:/etc/nginx/.htpasswd-status:ro \\') if (nginx_features.status | default(false)) else '\\' }}
               nginx:1.27-alpine
           register: mac_nginx
           changed_when: true
@@ -3745,6 +4279,10 @@
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
       when: nginx_features.configurator | default(false)
 
+    # /status/ is behind basic auth now, so this gate has to present the
+    # credential. Without it the task 401s and the deploy fails — meaning the
+    # only configuration that could complete a deploy would be the board turned
+    # OFF, which is the opposite of what the assert above asks for.
     - name: "validate — gatus /status/ returns 200 (when enabled)"
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/status/"
@@ -3752,13 +4290,21 @@
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
+        url_username: "{{ status_basic_auth_user | default('digit-status') }}"
+        url_password: "{{ status_basic_auth_password }}"
+        force_basic_auth: true
+      no_log: true
       when: nginx_features.status | default(false)
 
-    - name: "validate — MCP HTTP transport responds 405 to HEAD (proves /mcp routed)"
+    # An unauthenticated HEAD /mcp now returns 401 (token required — the MCP
+    # auth hardening), or 405 on an older image that only rejects the method.
+    # Either proves the route reaches the MCP server; a 404/502 would mean it
+    # is not routed. Accept both so the check works across image versions.
+    - name: "validate — MCP HTTP transport is routed (401 auth-required, or 405) "
       ansible.builtin.uri:
         url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/mcp"
         method: HEAD
-        status_code: [405]
+        status_code: [401, 405]
         timeout: 10
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
@@ -3908,6 +4454,19 @@
         status_code: [200]
         timeout: 600
       register: mcp_root_bootstrap
+      # MCP is recreated by "Recreate services with the new env" just above, so
+      # its DIGIT-API connection can need a few seconds even after /mcp/healthz
+      # is green. body.auth works once warm — retry the COLD-START window only.
+      # Retry until we get an HTTP 200 *response*, NOT until success=true:
+      # success=false is also the normal signal for a PARTIAL seed failure (one
+      # schema/data step), which the dedicated non-fatal handlers below report.
+      # Gating the retry on success would re-POST this full multi-minute tenant
+      # bootstrap 11× — replaying every write — on any partial failure. A 200
+      # (even success=false) means MCP is warm and answered; stop and let the
+      # handlers decide.
+      until: mcp_root_bootstrap.status | default(0) == 200
+      retries: 10
+      delay: 30
       when:
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
@@ -3933,6 +4492,12 @@
         status_code: [200]
         timeout: 600
       register: mcp_city_bootstrap
+      # Retry the cold-start window only — until an HTTP 200 response, not until
+      # success=true — so a partial seed failure is not replayed 11×. See the
+      # root-tenant task above.
+      until: mcp_city_bootstrap.status | default(0) == 200
+      retries: 10
+      delay: 30
       when:
         - state_root != 'pg'
         - mcp_reachability.status | default(0) == 200
@@ -4736,17 +5301,31 @@
       changed_when: false
       when: enable_keycloak | default(false)
 
+    # This kcadm update is what actually lands on the running realm (the realm
+    # import is first-run only). It MUST match the hardened template: no
+    # http://localhost:* redirect and no localhost webOrigins on a deployed
+    # box (audit: keycloak-loose-redirect). Local-dev entries come only from
+    # keycloak_dev_redirect_uris / keycloak_dev_web_origins (empty by default),
+    # built into JSON arrays below. Also pins sslRequired=external on the realm,
+    # since the one-shot import never updates an existing realm.
     - name: "keycloak-bootstrap — update digit-ui client redirect URIs in-place"
       ansible.builtin.shell: |
         SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
         BASE="${SCHEME}{{ domain }}"
+        REDIRECTS='{{ ([ "__BASE__/citizen/*", "__BASE__/digit-ui/*", "__BASE__/auth/callback*" ] + (keycloak_dev_redirect_uris | default([]))) | to_json }}'
+        ORIGINS='{{ ([ "__BASE__" ] + (keycloak_dev_web_origins | default([]))) | to_json }}'
+        REDIRECTS="${REDIRECTS//__BASE__/${BASE}}"
+        ORIGINS="${ORIGINS//__BASE__/${BASE}}"
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
           "clients/{{ kc_digit_ui_client_id.stdout | trim }}" \
           -r "{{ state_tenant_id }}" \
           -s "rootUrl=${BASE}" \
           -s 'baseUrl=/citizen/' \
-          -s "redirectUris=[\"${BASE}/citizen/*\",\"${BASE}/digit-ui/*\",\"${BASE}/auth/callback*\",\"http://localhost:*\"]" \
-          -s "webOrigins=[\"${BASE}\",\"http://localhost:3000\",\"http://localhost:5173\"]"
+          -s "redirectUris=${REDIRECTS}" \
+          -s "webOrigins=${ORIGINS}"
+        # existing realms never get re-imported, so enforce TLS here too
+        docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
+          -s 'sslRequired=external'
       when:
         - enable_keycloak | default(false)
         - kc_digit_ui_client_id is defined
