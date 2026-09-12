@@ -3,7 +3,7 @@
  *
  * Tests the manual escalation workflow using only API calls (no browser):
  *   1. Acquire an admin token
- *   2. Ensure ESCALATE action exists in PGR workflow (add if missing)
+ *   2. Read-only audit of the ESCALATE self-loop workflow contract
  *   3. Ensure employee hierarchy — at least one reportingTo relationship in HRMS
  *   4. Citizen creates complaint
  *   5. Admin assigns complaint to specific employee (one with a supervisor)
@@ -12,7 +12,8 @@
  *   8. Second ESCALATE — level 1→2 (skip if no second-level supervisor)
  *   9. Resolve the escalated complaint
  *
- * Prerequisites are auto-seeded (tests 2-3). The test suite is idempotent.
+ * The employee reportingTo prerequisite is auto-seeded; workflow configuration
+ * is never mutated by a test.
  *
  * Deployment-independence notes:
  *  - Complaints are always filed via seed.ts's seedComplaintAsCitizen(), which
@@ -21,19 +22,10 @@
  *    register its own throwaway citizen via the OTP flow; that's exactly what
  *    seedComplaintAsCitizen() already does (against the shared per-run fixture),
  *    so the bespoke registerCitizen() was pure duplication.
- *  - Every ASSIGN/ESCALATE payload below sets workflow.assignes, and PGR's
- *    ServiceRequestValidator.validateDepartment() checks EVERY one of those
- *    assignees — not just the first — against the complaint type's department
- *    (backend/pgr-services/.../ServiceRequestValidator.java:152-192). The old
- *    "first 3 non-ADMIN employees" hierarchy picked whoever HRMS happened to
- *    return first, with no department in common with SERVICE_CODE. That's
- *    exactly the bomet false-negative: "INVALID_ASSIGNMENT: cannot be assigned
- *    to employee of department [DEPT_3]". The hierarchy built in test 3 is now
- *    anchored on resolveSeedPlan()'s assignee (already proven department- and
- *    role-compatible) and requires every other link in the chain to share that
- *    same department — a deployment that can't supply 3 such employees
- *    genuinely can't exercise a 2-level escalation, and skips rather than
- *    faking a pass with an incompatible hierarchy.
+ *  - ASSIGN sets workflow.assignes. ESCALATE deliberately omits it: the backend
+ *    resolves reportingTo and owns the target and escalation metadata. The
+ *    hierarchy fixture uses employees in the complaint department so every hop
+ *    remains visible and actionable.
  *
  * Run: npx playwright test tests/api/pgr-escalation.spec.ts
  */
@@ -148,13 +140,7 @@ test.describe.serial('PGR escalation — API only', () => {
   let allEmployees: any[] = [];
   /** Set to true when prerequisites (workflow + hierarchy) are confirmed. */
   let prerequisitesMet = false;
-  /**
-   * The state ESCALATE@PENDINGATLME actually lands in on THIS deployment.
-   * Kenya wires ESCALATE as a self-loop (stays PENDINGATLME); a supervisor-tier
-   * deployment (maputo) wires it as a forward transition to PENDINGATSUPERVISOR.
-   * Resolved from the live workflow in test 2 so the escalate assertions stay
-   * deployment-agnostic instead of hardcoding the self-loop target.
-   */
+  /** ESCALATE is a self-loop, so the only valid landing state is PENDINGATLME. */
   let escalateNextStateFromLme = 'PENDINGATLME';
 
   test('1 — acquire admin token', {
@@ -180,21 +166,17 @@ First link in a serial chain — every later step is gated on prerequisitesMet, 
     console.log('Admin token acquired');
   });
 
-  test('2 — ensure PGR workflow config is correct (ESCALATE, role grants, nextState fix)', {
+  test('2 — ensure PGR workflow uses only ESCALATE self-loops', {
     annotation: {
       type: 'description',
-      description: `Idempotently patches the PGR workflow config so the rest of the escalation suite has the actions/roles/nextState wirings it expects. Verifies — and adds, if missing — the ESCALATE self-loops on PENDINGATLME and PENDINGFORASSIGNMENT, the GRO role on FORWARD and RESOLVEBYSUPERVISOR, and the corrected nextState (RESOLVED) for RESOLVEBYSUPERVISOR.
+      description: `Read-only audit of the deployed PGR workflow against the one-flow escalation contract.
 
 Steps:
-1. fetchPgrWorkflow() and assert the four canonical states (PENDINGATLME, PENDINGFORASSIGNMENT, PENDINGATSUPERVISOR, RESOLVED) all exist.
-2. If PENDINGATLME has no ESCALATE action, push a self-loop with roles GRO/PGR_LME/AUTO_ESCALATE/PGR_VIEWER.
-3. Same for PENDINGFORASSIGNMENT (ESCALATE self-loop with GRO/AUTO_ESCALATE/PGR_VIEWER).
-4. Ensure FORWARD on PENDINGATLME includes role GRO.
-5. Ensure RESOLVEBYSUPERVISOR on PENDINGATSUPERVISOR has nextState=RESOLVED and includes role GRO.
-6. If anything was dirtied, POST businessservice/_update; otherwise log "no update needed".
-7. Re-fetch and verify each patch was applied.
-
-Self-healing: safe to run many times. If the workflow seed gets re-applied between runs, this step quietly re-patches it.`,
+1. Assert ESCALATE is a self-loop on PENDINGATLME and PENDINGFORASSIGNMENT.
+2. Assert SYSTEM is authorized for both self-loops.
+3. Assert FORWARD and ASSIGNEDBYAUTOESCALATION actions are absent.
+4. Assert PENDINGATSUPERVISOR and RESOLVEDBYSUPERVISOR are absent.
+5. Fail on drift. Workflow migration is a deployment operation and this test never mutates live configuration.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
 
@@ -204,147 +186,31 @@ Self-healing: safe to run many times. If the workflow seed gets re-applied betwe
     const findState = (status: string) => biz.states.find((s: any) => s.applicationStatus === status);
     const pendingAtLme = findState('PENDINGATLME');
     const pendingForAssign = findState('PENDINGFORASSIGNMENT');
-    const pendingAtSup = findState('PENDINGATSUPERVISOR');
-    const resolved = findState('RESOLVED');
     expect(pendingAtLme).toBeTruthy();
     expect(pendingForAssign).toBeTruthy();
-    expect(pendingAtSup).toBeTruthy();
-    expect(resolved).toBeTruthy();
 
-    let dirty = false;
-    const allStateUuids = new Set<string>(biz.states.map((s: any) => s.uuid));
-
-    // (a) ESCALATE on PENDINGATLME → PENDINGATSUPERVISOR
-    //
-    // This block used to push `nextState: pendingAtLme.uuid` — a SELF-LOOP — and that
-    // is where mz.maputo's drift came from: the suite wrote it, then every escalate
-    // assertion re-derived its expectation from the config the suite itself had
-    // written, so nothing ever disagreed. The shipped seed
-    // (utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json,
-    // commit 8a5d6d9d / CCRS#521) wires PENDINGATLME --ESCALATE--> PENDINGATSUPERVISOR.
-    // Self-healing towards the seed rather than away from it is the whole point.
-    const escAtLme = (pendingAtLme.actions || []).find((a: any) => a.action === 'ESCALATE');
-    if (!escAtLme) {
-      pendingAtLme.actions.push({
-        tenantId: TENANT, currentState: pendingAtLme.uuid, action: 'ESCALATE',
-        nextState: pendingAtSup.uuid,
-        roles: ['GRO', 'PGR_LME', 'AUTO_ESCALATE', 'PGR_VIEWER'],
-        active: true,
-      });
-      dirty = true;
-      console.log('+ ESCALATE on PENDINGATLME -> PENDINGATSUPERVISOR');
-    } else if (escAtLme.nextState !== pendingAtSup.uuid) {
-      escAtLme.nextState = pendingAtSup.uuid;
-      dirty = true;
-      console.log('~ ESCALATE on PENDINGATLME retargeted -> PENDINGATSUPERVISOR (was drifted)');
-    }
-
-    // (b) ESCALATE self-loop on PENDINGFORASSIGNMENT
-    if (!(pendingForAssign.actions || []).some((a: any) => a.action === 'ESCALATE')) {
-      pendingForAssign.actions.push({
-        tenantId: TENANT, currentState: pendingForAssign.uuid, action: 'ESCALATE',
-        nextState: pendingForAssign.uuid,
-        roles: ['GRO', 'AUTO_ESCALATE', 'PGR_VIEWER'],
-        active: true,
-      });
-      dirty = true;
-      console.log('+ ESCALATE on PENDINGFORASSIGNMENT');
-    }
-
-    // (c) FORWARD on PENDINGATLME should allow GRO so admin can test supervisor-forward path
-    const forwardAction = (pendingAtLme.actions || []).find((a: any) => a.action === 'FORWARD');
-    if (forwardAction && !forwardAction.roles.includes('GRO')) {
-      forwardAction.roles = [...forwardAction.roles, 'GRO'];
-      dirty = true;
-      console.log('+ GRO role on FORWARD');
-    }
-    // (c2) FORWARD's target must be a state that exists.
-    //
-    // The seed hardcoded a state UUID here instead of a state NAME, and UUIDs are
-    // per-tenant — so on any tenant other than the one the seed was captured from,
-    // FORWARD pointed at nothing at all. (The seed has since been corrected to use
-    // "PENDINGATSUPERVISOR"; this repairs deployments already carrying the bad uuid.)
-    if (forwardAction && !allStateUuids.has(forwardAction.nextState)) {
-      console.log(`~ FORWARD nextState ${forwardAction.nextState} matches no state — retargeting`);
-      forwardAction.nextState = pendingAtSup.uuid;
-      dirty = true;
-    }
-
-    // (d) RESOLVEBYSUPERVISOR on PENDINGATSUPERVISOR should target RESOLVED (not orphaned RESOLVEDBYSUPERVISOR)
-    //     and allow GRO so admin can test supervisor-resolve path
-    const resolveBySup = (pendingAtSup.actions || []).find((a: any) => a.action === 'RESOLVEBYSUPERVISOR');
-    if (resolveBySup) {
-      if (resolveBySup.nextState !== resolved.uuid) {
-        resolveBySup.nextState = resolved.uuid;
-        dirty = true;
-        console.log('+ RESOLVEBYSUPERVISOR.nextState → RESOLVED');
-      }
-      if (!resolveBySup.roles.includes('GRO')) {
-        resolveBySup.roles = [...resolveBySup.roles, 'GRO'];
-        dirty = true;
-        console.log('+ GRO role on RESOLVEBYSUPERVISOR');
-      }
-    }
-
-    // Resolve where ESCALATE@PENDINGATLME actually lands on this deployment
-    // (self-loop vs forward-to-supervisor) from the patched config — used by
-    // the escalate assertions below instead of a hardcoded PENDINGATLME.
-    const escAtLmeNow = (pendingAtLme.actions || []).find((a: any) => a.action === 'ESCALATE');
-    const escTargetState = escAtLmeNow && biz.states.find((s: any) => s.uuid === escAtLmeNow.nextState);
-    escalateNextStateFromLme = escTargetState?.applicationStatus || 'PENDINGATLME';
-    console.log(`ESCALATE@PENDINGATLME lands in ${escalateNextStateFromLme}`);
-
-    // Push the update ONLY when something needed patching — but fall through to the
-    // verification block either way.
-    //
-    // This used to `return` early when `!dirty`, which meant that on every run after
-    // the first (i.e. always, in steady state) the test skipped its own seven
-    // verification assertions and its entire assertion surface collapsed to the four
-    // `findState(...)` truthiness checks above. A test named "ensure PGR workflow
-    // config is correct" that stops checking as soon as the config looks unchanged
-    // cannot detect the config being wrong.
-    if (!dirty) {
-      console.log('PGR workflow config already correct — no update needed');
-    } else {
-      const resp = await fetch(
-        `${BASE_URL}/egov-workflow-v2/egov-wf/businessservice/_update?tenantId=${TENANT}`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
-            BusinessServices: [biz],
-          }),
-        },
-      );
-      await assertOk(resp, 'Workflow _update');
-    }
-
-    // Re-fetch and verify everything we changed
-    const verifyBiz = await fetchPgrWorkflow(adminToken);
+    const verifyBiz = biz;
     const vFind = (status: string) => verifyBiz.states.find((s: any) => s.applicationStatus === status);
-    const vAtLme = vFind('PENDINGATLME');
-    const vForAssign = vFind('PENDINGFORASSIGNMENT');
-    const vAtSup = vFind('PENDINGATSUPERVISOR');
-    const vResolved = vFind('RESOLVED');
+    const vAtLme = pendingAtLme;
+    const vForAssign = pendingForAssign;
+    const vEscAtLme = (vAtLme.actions || []).find((a: any) => a.action === 'ESCALATE');
+    const vEscAtPfa = (vForAssign.actions || []).find((a: any) => a.action === 'ESCALATE');
+    expect(vEscAtLme?.nextState).toBe(vAtLme.uuid);
+    expect(vEscAtPfa?.nextState).toBe(vForAssign.uuid);
+    expect(vEscAtLme?.roles).toContain('SYSTEM');
+    expect(vEscAtPfa?.roles).toContain('SYSTEM');
+    expect((vAtLme.actions || []).some((a: any) => a.action === 'FORWARD')).toBe(false);
+    expect((vForAssign.actions || []).some((a: any) => a.action === 'ASSIGNEDBYAUTOESCALATION')).toBe(false);
+    expect(vFind('PENDINGATSUPERVISOR')).toBeFalsy();
+    expect(vFind('RESOLVEDBYSUPERVISOR')).toBeFalsy();
 
-    expect((vAtLme.actions || []).some((a: any) => a.action === 'ESCALATE')).toBe(true);
-    expect((vForAssign.actions || []).some((a: any) => a.action === 'ESCALATE')).toBe(true);
-
-    const vForward = (vAtLme.actions || []).find((a: any) => a.action === 'FORWARD');
-    expect(vForward?.roles).toContain('GRO');
-
-    const vResolveBySup = (vAtSup.actions || []).find((a: any) => a.action === 'RESOLVEBYSUPERVISOR');
-    expect(vResolveBySup?.nextState).toBe(vResolved.uuid);
-    expect(vResolveBySup?.roles).toContain('GRO');
-
-    console.log('PGR workflow config verified after update');
+    console.log('PGR workflow self-loop contract verified');
   });
 
   test('3 — ensure 2-level employee hierarchy (reportingTo) in HRMS', {
     annotation: {
       type: 'description',
-      description: `Builds (idempotently) the 2-level employee hierarchy that escalation walks: subordinate → supervisor → super-supervisor. Every ASSIGN/ESCALATE hop below sets workflow.assignes, and PGR checks EACH assignee's HRMS department against the complaint type's — so, unlike the old "first 3 non-ADMIN employees" picker, every link in the chain must hold the SAME department as resolveSeedPlan()'s chosen assignee, not just be a warm body. Sets prerequisitesMet so later tests can skip cleanly when the deployment can't supply enough same-department employees.
+      description: `Builds (idempotently) the 2-level employee hierarchy that escalation walks: subordinate → supervisor → super-supervisor. Every link uses the same department so the reporting chain remains operationally valid. Sets prerequisitesMet so later tests can skip cleanly when the deployment cannot supply enough employees.
 
 Steps:
 1. searchEmployees(adminToken, TENANT); assert count > 0.
@@ -530,28 +396,15 @@ Sets up the situation needed for the level 0→1 escalation in step 6.`,
 Steps:
 1. test.skip if !prerequisitesMet.
 2. fetchComplaint() to get the full service object.
-3. Merge escalationLevel: 1, lastEscalatedAt, escalatedFrom: [employeeUuid] into existing additionalDetail; delete any stray additionalDetails plural key.
-4. POST _update with workflow { action: 'ESCALATE', assignees: [supervisorUuid], comments }.
-5. Assert applicationStatus stays at PENDINGATLME (it's a self-loop).
-6. Assert response's additionalDetail.escalationLevel === 1.
+3. POST _update with workflow { action: 'ESCALATE', comments }; the server resolves reportingTo.
+4. Assert applicationStatus stays at PENDINGATLME (it's a self-loop).
+5. Assert the server wrote level, assignee, trigger, and assignment-clock metadata.
 
 Catches Jackson silently-dropped-key bugs and confirms the self-loop preserves status while updating assignee + metadata.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
-
-    // PGR POJO field is `additionalDetail` (singular). Jackson silently drops
-    // unknown keys, so plural `additionalDetails` would be lost. Preserve
-    // existing `department` key (required by PGR) and add escalation metadata.
-    const existingDetail = fullService.additionalDetail || {};
-    fullService.additionalDetail = {
-      ...existingDetail,
-      escalationLevel: 1,
-      lastEscalatedAt: Date.now(),
-      escalatedFrom: [employeeUuid],
-    };
-    delete fullService.additionalDetails;
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
@@ -561,19 +414,19 @@ Catches Jackson silently-dropped-key bugs and confirms the self-loop preserves s
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignes: [supervisorUuid],
           comments: 'Manual escalation test — level 0→1',
         },
       }),
     });
 
     const data = await assertOk(resp, 'PGR ESCALATE (level 0→1)');
-    // ESCALATE lands in this deployment's configured target — the self-loop
-    // PENDINGATLME (Kenya) or the forward PENDINGATSUPERVISOR (supervisor-tier).
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe(escalateNextStateFromLme);
-    // Verify escalation metadata persisted (singular `additionalDetail` field)
     const updatedDetail = data.ServiceWrappers[0].service.additionalDetail || {};
     expect(updatedDetail.escalationLevel).toBe(1);
+    expect(updatedDetail.escalatedFrom).toContain(employeeUuid);
+    expect(updatedDetail.escalatedTo).toBe(supervisorUuid);
+    expect(updatedDetail.escalationTrigger).toBe('MANUAL');
+    expect(updatedDetail.assignmentChangedAt).toBe(updatedDetail.lastEscalatedAt);
     console.log(`${serviceRequestId} → ESCALATED to ${supervisorUuid} (level 1)`);
   });
 
@@ -622,7 +475,7 @@ Loose-but-correct assertions because ESCALATE self-loops emit assignes inconsist
     // key (the Workflow POJO binds `assignes`, not `assignees`), at least one of
     // these MUST be populated and MUST contain the supervisor. Previously the
     // dropped key left both empty and this test soft-passed without asserting.
-    const wfAssignees = (wrapper.workflow?.assignes || []).map((a: any) => a.uuid);
+    const wfAssignees = (wrapper.workflow?.assignes || []).map((a: any) => typeof a === 'string' ? a : a.uuid);
     const piAssignees = (latest.assignes || []).map((a: any) => a.uuid);
     const allAssignees = [...wfAssignees, ...piAssignees];
     expect(
@@ -639,33 +492,15 @@ Loose-but-correct assertions because ESCALATE self-loops emit assignes inconsist
 
 Steps:
 1. test.skip if !prerequisitesMet.
-2. test.skip unless ESCALATE@PENDINGATLME is a SELF-LOOP — see below.
-3. Look up the supervisor in allEmployees; read their current assignment's reportingTo into secondSupervisorUuid.
-4. test.skip if reportingTo is null or the UUID is not in the employee list.
-5. fetchComplaint() and merge { escalationLevel: 2, lastEscalatedAt, escalatedFrom: [...prev, supervisorUuid] } into additionalDetail.
-6. POST _update with workflow { action: 'ESCALATE', assignees: [secondSupervisorUuid], comments }.
-7. Assert the landing state matches the configured ESCALATE target, and additionalDetail.escalationLevel === 2.
-
-DEPLOYMENT-MODEL GATED. A second consecutive ESCALATE is only reachable when
-ESCALATE is configured as a self-loop on PENDINGATLME (the Kenya model), because the
-complaint is still in PENDINGATLME after the first hop. On the supervisor-tier model
-that the shipped seed configures — PENDINGATLME --ESCALATE--> PENDINGATSUPERVISOR —
-test 6 leaves the complaint in PENDINGATSUPERVISOR, a state on which ESCALATE is not
-defined at all, so the second call correctly 400s with "INVALID ACTION". That is the
-workflow behaving properly, not a defect, so this test self-skips there. This mirrors
-the contract in docs/TEST-PREREQUISITES.md §3: multi-level self-loop assertions
-self-skip on the forward model. Escalating further from PENDINGATSUPERVISOR is what
-FORWARD/RESOLVEBYSUPERVISOR cover.
+2. Look up the supervisor in allEmployees; read their current assignment's reportingTo into secondSupervisorUuid.
+3. test.skip if reportingTo is null or the UUID is not in the employee list.
+4. POST _update with workflow { action: 'ESCALATE', comments }; the server resolves the second hop.
+5. Assert the state is unchanged and server-managed escalationLevel is 2.
 
 The skip cases are first-class outcomes — the suite is designed to pass on a 2-level OR 3+ level hierarchy.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(
-      escalateNextStateFromLme !== 'PENDINGATLME',
-      `ESCALATE forwards to ${escalateNextStateFromLme} on this deployment, so a second ` +
-        'consecutive ESCALATE is not reachable — multi-level chaining is the self-loop model only',
-    );
 
     // Look up the supervisor's reportingTo
     const supervisorEmp = allEmployees.find((e: any) => e.uuid === supervisorUuid);
@@ -686,16 +521,6 @@ The skip cases are first-class outcomes — the suite is designed to pass on a 2
     }
 
     const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
-    // Use singular `additionalDetail` (PGR POJO field name) and preserve department
-    const existingDetail = fullService.additionalDetail || {};
-    fullService.additionalDetail = {
-      ...existingDetail,
-      escalationLevel: 2,
-      lastEscalatedAt: Date.now(),
-      escalatedFrom: [...(existingDetail.escalatedFrom || []), supervisorUuid],
-    };
-    delete fullService.additionalDetails;
-
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
@@ -704,19 +529,13 @@ The skip cases are first-class outcomes — the suite is designed to pass on a 2
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignes: [secondSupervisorUuid],
           comments: 'Manual escalation test — level 1→2',
         },
       }),
     });
 
     const data = await assertOk(resp, 'PGR ESCALATE (level 1→2)');
-    // Read the target from the deployment's own config, as test 6 does.
-    //
-    // This was hardcoded to 'PENDINGATLME', which PINNED the self-loop drift: the
-    // shipped seed (PgrWorkflowConfig.json) wires PENDINGATLME --ESCALATE-->
-    // PENDINGATSUPERVISOR, so repairing the deployment to match the seed would have
-    // turned THIS test red and looked like the repair broke something.
+    // Every hop is the same PENDINGATLME self-loop.
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe(escalateNextStateFromLme);
     // Verify escalation metadata persisted through _update (singular field)
     const updatedDetail = data.ServiceWrappers[0].service.additionalDetail || {};
@@ -742,15 +561,8 @@ Catches a regression where a transition implementation overwrites or strips addi
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
 
-    // Which action closes an escalated complaint depends on where ESCALATE left it.
-    //
-    // Self-loop model: still PENDINGATLME, so RESOLVE applies. Forward model (the
-    // shipped seed): the complaint is in PENDINGATSUPERVISOR, where RESOLVE is not
-    // configured at all and the supervisor's action is RESOLVEBYSUPERVISOR — a plain
-    // RESOLVE there 400s with "INVALID ACTION", which is the workflow being correct.
-    // Resolve the action from the live state rather than assuming one model.
     const currentState = fullService.applicationStatus as string;
-    const closeAction = currentState === 'PENDINGATSUPERVISOR' ? 'RESOLVEBYSUPERVISOR' : 'RESOLVE';
+    const closeAction = 'RESOLVE';
     console.log(`closing from ${currentState} via ${closeAction}`);
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
@@ -776,24 +588,16 @@ Catches a regression where a transition implementation overwrites or strips addi
   });
 
   // -----------------------------------------------------------------------
-  // PENDINGFORASSIGNMENT escalation path (tests 10–12)
-  //
-  // Exercises the ESCALATE self-loop on PENDINGFORASSIGNMENT — an early-stage
-  // escalation before anyone has been assigned. Used when the initial
-  // assignment is stuck and a human supervisor wants to re-route the
-  // complaint pre-assignment.
-  //
-  // v2 note: the supervisor-jump path (FORWARD → PENDINGATSUPERVISOR →
-  // RESOLVEBYSUPERVISOR) has been removed. Both manual (ESCALATE) and
-  // scheduler-triggered (SLA_ESCALATE) escalations are now self-loops on
-  // PENDINGFORASSIGNMENT and PENDINGATLME.
+  // Unassigned complaint behavior (tests 10–12). ESCALATE may exist as a
+  // self-loop on the state, but the domain operation requires a current
+  // assignee. Initial routing is ASSIGN, never escalation.
   // -----------------------------------------------------------------------
   let pfaComplaintId: string;
 
-  test('10 — citizen creates complaint for PENDINGFORASSIGNMENT escalation', {
+  test('10 — citizen creates an unassigned PENDINGFORASSIGNMENT complaint', {
     annotation: {
       type: 'description',
-      description: `Creates a fresh third complaint to exercise the early-stage escalation path: ESCALATE on PENDINGFORASSIGNMENT (before anyone has been assigned). Used when the initial assign is stuck and a supervisor needs to re-route pre-assignment. Filed via seedComplaintAsCitizen() so it lands on the same resolveSeedPlan() service/department as the rest of this suite.
+      description: `Creates a fresh complaint for the explicit no-assignee case. Unassigned complaints must use ASSIGN and cannot be escalated.
 
 Steps:
 1. test.skip if !prerequisitesMet.
@@ -810,32 +614,19 @@ Stashes pfaComplaintId for the PFA-escalate + cleanup steps (11 and 12).`,
     console.log(`Third complaint created: ${pfaComplaintId} → PENDINGFORASSIGNMENT`);
   });
 
-  test('11 — ESCALATE from PENDINGFORASSIGNMENT (self-loop, pre-assignment)', {
+  test('11 — ESCALATE rejects an unassigned complaint', {
     annotation: {
       type: 'description',
-      description: `Drives the early-stage ESCALATE self-loop: status stays PENDINGFORASSIGNMENT but escalation metadata is recorded and the complaint can be re-routed before formal assignment. Asserts the v2 PGR contract — both manual and scheduler-triggered escalations are now self-loops on the pre-assignment state.
+      description: `Asserts the domain guard behind the workflow self-loop: without a current workflow assignee there is no reportingTo edge to follow.
 
 Steps:
 1. test.skip if !prerequisitesMet.
-2. fetchComplaint(pfaComplaintId) and merge { escalationLevel: 1, lastEscalatedAt, preAssignmentEscalation: true } into additionalDetail; delete additionalDetails plural.
-3. POST _update with workflow { action: 'ESCALATE', assignees: [employeeUuid], comments }.
-4. Assert applicationStatus stays PENDINGFORASSIGNMENT (self-loop).
-5. Assert additionalDetail.escalationLevel === 1.
-
-Documents the v2 design: there is no FORWARD → PENDINGATSUPERVISOR detour anymore.`,
+2. POST _update with workflow { action: 'ESCALATE', comments }.
+3. Assert the request is rejected and the complaint remains PENDINGFORASSIGNMENT at depth 0.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     const fullService = await fetchComplaint(adminToken, adminUserInfo, pfaComplaintId);
-    const existingDetail = fullService.additionalDetail || {};
-    fullService.additionalDetail = {
-      ...existingDetail,
-      escalationLevel: 1,
-      lastEscalatedAt: Date.now(),
-      preAssignmentEscalation: true,
-    };
-    delete fullService.additionalDetails;
-
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
@@ -844,28 +635,26 @@ Documents the v2 design: there is no FORWARD → PENDINGATSUPERVISOR detour anym
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignes: [employeeUuid],
-          comments: 'Pre-assignment escalation — level 1',
+          comments: 'This must fail because the complaint is unassigned',
         },
       }),
     });
-    const data = await assertOk(resp, 'PGR ESCALATE (PENDINGFORASSIGNMENT)');
-    // Self-loop: status stays in PENDINGFORASSIGNMENT
-    expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGFORASSIGNMENT');
-    expect(data.ServiceWrappers[0].service.additionalDetail?.escalationLevel).toBe(1);
-    console.log(`${pfaComplaintId} → PENDINGFORASSIGNMENT (ESCALATE self-loop, escalationLevel=1)`);
+    expect(resp.ok).toBe(false);
+    const after = await fetchComplaint(adminToken, adminUserInfo, pfaComplaintId);
+    expect(after.applicationStatus).toBe('PENDINGFORASSIGNMENT');
+    expect(after.additionalDetail?.escalationLevel || 0).toBe(0);
   });
 
-  test('12 — cleanup: assign and resolve the PFA-escalated complaint', {
+  test('12 — cleanup: assign and resolve the unassigned-case complaint', {
     annotation: {
       type: 'description',
-      description: `Drains the third complaint to RESOLVED so the test doesn't leave a dangling PENDINGFORASSIGNMENT in the database. Also acts as a regression check that escalation metadata survives both ASSIGN and RESOLVE transitions.
+      description: `Drains the unassigned-case complaint to RESOLVED and verifies ASSIGN establishes the assignment clock and hierarchy baseline.
 
 Steps:
 1. test.skip if !prerequisitesMet.
 2. fetchComplaint(pfaComplaintId), POST _update with workflow { action: 'ASSIGN', assignees: [employeeUuid], comments }; assert applicationStatus === 'PENDINGATLME'.
 3. fetchComplaint again, POST _update with workflow { action: 'RESOLVE', comments: 'Cleanup resolve' }; assert applicationStatus === 'RESOLVED'.
-4. Assert additionalDetail.escalationLevel === 1 — the level set by step 11 must persist end-to-end.
+4. Assert additionalDetail.escalationLevel === 0 and assignmentChangedAt is present.
 
 Teardown is API-only because PGR has no UI delete affordance — the cleanup is by transitioning to terminal state.`,
     },
@@ -879,7 +668,7 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
       body: JSON.stringify({
         RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
         service: fullService,
-        workflow: { action: 'ASSIGN', assignes: [employeeUuid], comments: 'Assigning after PFA-escalate' },
+        workflow: { action: 'ASSIGN', assignes: [employeeUuid], comments: 'Assigning unassigned-case complaint' },
       }),
     });
     let data = await assertOk(resp, 'PGR ASSIGN (pfa cleanup)');
@@ -898,9 +687,9 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
     });
     data = await assertOk(resp, 'PGR RESOLVE (pfa cleanup)');
     expect(data.ServiceWrappers[0].service.applicationStatus).toBe('RESOLVED');
-    // Escalation metadata from the PFA self-loop should have survived through ASSIGN and RESOLVE
-    expect(data.ServiceWrappers[0].service.additionalDetail?.escalationLevel).toBe(1);
-    console.log(`${pfaComplaintId} → RESOLVED (PFA ESCALATE metadata preserved end-to-end)`);
+    expect(data.ServiceWrappers[0].service.additionalDetail?.escalationLevel).toBe(0);
+    expect(data.ServiceWrappers[0].service.additionalDetail?.assignmentChangedAt).toBeTruthy();
+    console.log(`${pfaComplaintId} → RESOLVED after ordinary ASSIGN`);
   });
 
   // -----------------------------------------------------------------------
@@ -912,9 +701,8 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
   //   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (30s SLA so complaints ripen fast)
   // and the workflow ESCALATE action must permit role SYSTEM at tenant `ke`.
   //
-  // Test takes ~3 min: complaint creation, ASSIGN via raw workflow API to
-  // populate workflow process_instance.assignes (PGR _update doesn't
-  // populate this for self-loops), wait for SLA to breach + scheduler tick,
+  // Test takes ~3 min: complaint creation, ASSIGN through PGR, wait for the
+  // SLA to breach plus a scheduler tick,
   // verify auto-escalation reached level 1.
   // -----------------------------------------------------------------------
   test('13 — auto-escalation: SLA breach triggers scheduler', {
@@ -925,7 +713,7 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
 Steps:
 1. test.skip if !prerequisitesMet; setTimeout 240s.
 2. seedComplaintAsCitizen() to file as CITIZEN on resolveSeedPlan()'s serviceCode; capture autoSrid.
-3. ASSIGN via raw /egov-wf/process/_transition (NOT PGR _update) — this is the only path that populates ProcessInstance.assignes for self-loops, which the scheduler reads to find escalation targets.
+3. ASSIGN through PGR _update so the shared assignment path starts assignmentChangedAt.
 4. Loop with 15s polls, fetching workflow history with history=true, until any ProcessInstance with action=ESCALATE and comment starting "Auto-escalated" appears, or 200s elapse.
 5. Assert escalated === true and the level (count of auto-escalates) >= 1.
 6. fetchComplaint(autoSrid) and assert additionalDetail.escalationLevel >= 1.
@@ -954,25 +742,18 @@ Long-running (240s) because it depends on a real scheduler tick + real SLA breac
     const autoSrid = created.srid;
     console.log(`Auto-escalation test complaint: ${autoSrid}`);
 
-    // ASSIGN via raw workflow /process/_transition so workflow process_instance.assignes is populated
-    const assignResp = await fetch(`${BASE_URL}/egov-workflow-v2/egov-wf/process/_transition`, {
+    const autoService = await fetchComplaint(adminToken, adminUserInfo, autoSrid);
+    const assignResp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
-        ProcessInstances: [{
-          tenantId: TENANT,
-          businessService: 'PGR',
-          businessId: autoSrid,
-          moduleName: 'PGR',
-          action: 'ASSIGN',
-          comment: 'auto-escalation test setup',
-          assignes: [{ uuid: employeeUuid }],
-        }],
+        service: autoService,
+        workflow: { action: 'ASSIGN', assignes: [employeeUuid], comments: 'auto-escalation test setup' },
       }),
     });
-    await assertOk(assignResp, 'WF ASSIGN (raw)');
-    console.log(`${autoSrid} assigned to employee ${employeeUuid} via raw workflow API`);
+    const assigned = await assertOk(assignResp, 'PGR ASSIGN');
+    expect(assigned.ServiceWrappers[0].service.additionalDetail?.assignmentChangedAt).toBeTruthy();
 
     // Poll for auto-escalation. With INTERVAL_MS=60000 and SLA_MS=30000,
     // the next tick (≤60s away) should breach (after 30s) and trigger ESCALATE.
@@ -1007,20 +788,23 @@ Long-running (240s) because it depends on a real scheduler tick + real SLA breac
     // Verify additionalDetail.escalationLevel was incremented
     const final = await fetchComplaint(adminToken, adminUserInfo, autoSrid);
     expect(final.additionalDetail?.escalationLevel).toBeGreaterThanOrEqual(1);
+    expect(final.additionalDetail?.escalationTrigger).toBe('AUTOMATIC');
+    expect(final.additionalDetail?.assignmentChangedAt).toBe(final.additionalDetail?.lastEscalatedAt);
     console.log(`Final additionalDetail.escalationLevel=${final.additionalDetail?.escalationLevel}`);
   });
 
   test('14 — audit: PGR workflow config matches the shipped seed', {
     annotation: {
       type: 'description',
-      description: `Audits the deployed PGR businessService against the shipped seed (utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json). Two checks nothing in this suite previously made:
+      description: `Audits the deployed PGR businessService against the single-flow seed:
 
-1. Every action's nextState resolves to a state that actually exists. The seed hardcodes state UUIDs for FORWARD and RESOLVEBYSUPERVISOR rather than state NAMES, and those UUIDs do not survive being re-seeded into a new tenant — leaving transitions pointing at nothing.
-2. ESCALATE on PENDINGATLME forwards to PENDINGATSUPERVISOR, per the seed (commit 8a5d6d9d, CCRS#521).
+1. Every action's nextState resolves to a state that exists.
+2. ESCALATE is a self-loop on both supported states.
+3. No active supervisor-tier state or legacy auto-escalation action remains.
 
 Deliberately LAST in this serial block, and deliberately separate from test 2. These are audits of the deployment's configuration, not preconditions for the escalation chain — gating tests 3-13 on them would trade 11 tests' worth of real coverage for a finding that blocks nothing.
 
-Why #2 needs its own assertion: pgr-services never decides the state (EscalationService only builds the Workflow; the transition is 100% businessService config). Every other escalate assertion in this file reads its expected landing state out of the SAME live config the engine executes, so the suite agrees with itself by construction and cannot see drift. This test is the only place the config is compared against the product's intent.`,
+This is the final guard against workflow/source drift.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:api', '@persona:cross'] }, async () => {
     const biz = await fetchPgrWorkflow(adminToken);
@@ -1040,13 +824,16 @@ Why #2 needs its own assertion: pgr-services never decides the state (Escalation
     ).toEqual([]);
 
     const atLme = biz.states.find((s: any) => s.applicationStatus === 'PENDINGATLME');
+    const forAssignment = biz.states.find((s: any) => s.applicationStatus === 'PENDINGFORASSIGNMENT');
     const escAtLme = (atLme?.actions || []).find((a: any) => a.action === 'ESCALATE');
+    const escAtPfa = (forAssignment?.actions || []).find((a: any) => a.action === 'ESCALATE');
     const escTarget = biz.states.find((s: any) => s.uuid === escAtLme?.nextState);
-    expect(
-      escTarget?.applicationStatus,
-      'ESCALATE on PENDINGATLME should forward to PENDINGATSUPERVISOR per the shipped ' +
-        'PgrWorkflowConfig.json seed. A self-loop here means the deployment has drifted — ' +
-        "historically written by test 2's own 'add ESCALATE if missing' self-heal.",
-    ).toBe('PENDINGATSUPERVISOR');
+    const pfaTarget = biz.states.find((s: any) => s.uuid === escAtPfa?.nextState);
+    expect(escTarget?.applicationStatus).toBe('PENDINGATLME');
+    expect(pfaTarget?.applicationStatus).toBe('PENDINGFORASSIGNMENT');
+    expect(biz.states.some((s: any) => s.applicationStatus === 'PENDINGATSUPERVISOR')).toBe(false);
+    expect(biz.states.some((s: any) => s.applicationStatus === 'RESOLVEDBYSUPERVISOR')).toBe(false);
+    expect((atLme.actions || []).some((a: any) => a.action === 'FORWARD')).toBe(false);
+    expect((forAssignment.actions || []).some((a: any) => a.action === 'ASSIGNEDBYAUTOESCALATION')).toBe(false);
   });
 });

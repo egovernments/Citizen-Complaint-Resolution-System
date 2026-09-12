@@ -126,11 +126,6 @@ export const OPEN_COMPLAINT_WORKFLOW_SERIES = [
     label: "Pending reassignment",
     color: "var(--chart-3)",
   },
-  {
-    key: "PENDINGATSUPERVISOR",
-    label: "Pending at supervisor",
-    color: "var(--chart-4)",
-  },
 ];
 
 export const OPEN_COMPLAINT_WORKFLOW_STAGE_KEYS = new Set(

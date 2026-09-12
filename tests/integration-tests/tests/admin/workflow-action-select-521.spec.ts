@@ -24,12 +24,8 @@ test.describe('admin Workflow Action — Escalate visible #521', () => {
     page,
   }) => {
     // The dropdown can only offer Escalate if the tenant's PGR workflow defines
-    // the action at all, and the two shipped deployments disagree: bomet's `ke`
-    // has it, while any tenant bootstrapped from the `pg` demo workflow (e.g.
-    // mz.maputo) reaches PENDINGATSUPERVISOR only via FORWARD/AUTO_ESCALATE and
-    // has no manual ESCALATE. Without this gate the spec fails on the latter for
-    // a workflow-config gap, which reads as a #521 regression and is not one.
-    // Declared per deployment in deploy/expectations/*.json.
+    // the canonical self-loop. Capability expectations make rollout drift fail
+    // explicitly instead of silently patching the live workflow from a test.
     requires(test, 'workflow.pgr.actions.ESCALATE', 'admin #521 Escalate option');
 
     // Onboarding-data gap: the Escalate-at-PENDINGATLME assertion needs a

@@ -96,10 +96,12 @@
             {
               "tenantId": "{tenantid}",
               "currentState": "PENDINGFORASSIGNMENT",
-              "action": "ASSIGNEDBYAUTOESCALATION",
-              "nextState": "PENDINGATLME",
+              "action": "ESCALATE",
+              "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
-                "AUTO_ESCALATE"
+                "GRO",
+                "PGR_VIEWER",
+                "SYSTEM"
               ],
               "active": true
             },
@@ -272,23 +274,12 @@
             {
               "tenantId": "{tenantid}",
               "currentState": "PENDINGATLME",
-              "action": "FORWARD",
-              "nextState": "PENDINGATSUPERVISOR",
-              "roles": [
-                "AUTO_ESCALATE"
-              ],
-              "active": true
-            },
-            {
-              "tenantId": "{tenantid}",
-              "currentState": "PENDINGATLME",
               "action": "ESCALATE",
-              "nextState": "PENDINGATSUPERVISOR",
+              "nextState": "PENDINGATLME",
               "roles": [
                 "PGR_LME",
                 "PGR_VIEWER",
-                "SYSTEM",
-                "AUTO_ESCALATE"
+                "SYSTEM"
               ],
               "active": true
             }
@@ -402,39 +393,6 @@
           "sla": null,
           "state": "CLOSEDAFTERRESOLUTION",
           "applicationStatus": "CLOSEDAFTERRESOLUTION",
-          "docUploadRequired": false,
-          "isStartState": false,
-          "isTerminateState": true,
-          "isStateUpdatable": false,
-          "actions": null
-        },
-        {
-          "tenantId": "{tenantid}",
-          "sla": 300000,
-          "state": "PENDINGATSUPERVISOR",
-          "applicationStatus": "PENDINGATSUPERVISOR",
-          "docUploadRequired": false,
-          "isStartState": false,
-          "isTerminateState": false,
-          "isStateUpdatable": false,
-          "actions": [
-            {
-              "tenantId": "{tenantid}",
-              "currentState": "PENDINGATSUPERVISOR",
-              "action": "RESOLVEBYSUPERVISOR",
-              "nextState": "RESOLVED",
-              "roles": [
-                "SUPERVISOR"
-              ],
-              "active": true
-            }
-          ]
-        },
-        {
-          "tenantId": "{tenantid}",
-          "sla": null,
-          "state": "RESOLVEDBYSUPERVISOR",
-          "applicationStatus": "RESOLVEDBYSUPERVISOR",
           "docUploadRequired": false,
           "isStartState": false,
           "isTerminateState": true,

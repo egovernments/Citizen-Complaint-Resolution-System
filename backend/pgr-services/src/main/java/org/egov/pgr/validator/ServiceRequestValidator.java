@@ -73,7 +73,7 @@ public class ServiceRequestValidator {
      * @param request The request to update complaint
      * @param mdmsData The master data for pgr
      */
-    public void validateUpdate(ServiceRequest request, Object mdmsData){
+    public Service validateUpdate(ServiceRequest request, Object mdmsData){
 
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
@@ -89,9 +89,12 @@ public class ServiceRequestValidator {
 
         // Re-open eligibility (authorization + deadline) must be checked against the
         // persisted record, so fetch it first and pass it in — never trust the request body.
-        validateReOpen(request, serviceWrappers.get(0).getService());
+        Service persistedService = serviceWrappers.get(0).getService();
+        validateReOpen(request, persistedService);
 
         // TO DO
+
+        return persistedService;
 
     }
 

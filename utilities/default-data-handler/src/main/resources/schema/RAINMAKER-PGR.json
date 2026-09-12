@@ -32,7 +32,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.EscalationConfig",
-    "description": "Per-tenant auto-escalation config consumed by pgr-services EscalationScheduler. defaultSlaByLevel is SLA windows in ms (one per escalation depth); overrides keys by serviceCode for per-complaint-type SLA; maxDepth caps how many times a complaint auto-escalates. enabledByLevel opts in per level. Without a record pgr-services uses its 5-day default SLA (issue #585).",
+    "description": "Per-tenant escalation config consumed by pgr-services for both manual and automatic escalation. defaultSlaByLevel is the assignment-window SLA in ms at each reporting-hierarchy depth; overrides are keyed by the exact leaf serviceCode; maxDepth caps total upward escalations regardless of trigger. enabledByLevel controls automatic triggering only. Without a record pgr-services uses its service defaults (issue #2048).",
     "isActive": true,
     "definition": {
       "type": "object",
@@ -58,7 +58,7 @@
         },
         "enabledByLevel": {
           "type": "array",
-          "description": "Optional per-level enablement flags. Same length as defaultSlaByLevel. Missing or empty = all levels enabled (current behaviour). Per @vinothrallapalli-eGov review on PR #692 — keeps the door open for tenants that want escalation only at level N without rewriting the schema.",
+          "description": "Optional automatic-escalation enablement flags by hierarchy depth. Missing or empty means every level is enabled. Manual escalation remains available up to maxDepth.",
           "items": {
             "type": "boolean"
           }

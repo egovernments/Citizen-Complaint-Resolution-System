@@ -15,6 +15,8 @@ import org.egov.pgr.web.models.AuditDetails;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.Workflow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +27,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,16 +62,17 @@ class PGRServiceTest {
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
     @Mock private SearchAccessPolicyService searchAccessPolicyService;
     @Mock private FieldVisibilityService fieldVisibilityService;
+    @Mock private EscalationService escalationService;
 
     private PGRService pgrService;
 
     @BeforeEach
     void setup() {
         when(config.getStateLevelTenantIdLength()).thenReturn(2);
-        pgrService = new PGRService(enrichmentService, userService, workflowService, validator, validator, producer,
+        pgrService = new PGRService(enrichmentService, userService, workflowService, validator, producer,
                 config, repository, mdmsUtils, complaintDomainEventService, pgrUtils,
                 extendedAttributesValidationService, encryptionDecryptionService, searchAccessPolicyService,
-                fieldVisibilityService);
+                fieldVisibilityService, escalationService);
     }
 
     @Test
@@ -120,6 +124,51 @@ class PGRServiceTest {
 
         assertEquals(3, count);
         verify(repository).getCount(criteria, scope);
+    }
+
+    @Test
+    void escalationUsesTheNormalUpdatePipelineAndPublishesOneEscalationEvent() {
+        RequestInfo requestInfo = requestInfo("employee-1", "EMPLOYEE", "ke.bomet");
+        Service incoming = Service.builder()
+                .id("id-1")
+                .tenantId("ke.bomet")
+                .serviceCode("ROAD.POTHOLE")
+                .serviceRequestId("PGR-1")
+                .source("web")
+                .additionalDetail(Map.of("department", "ROADS"))
+                .build();
+        Service persisted = Service.builder()
+                .id("id-1")
+                .tenantId("ke.bomet")
+                .serviceCode("ROAD.POTHOLE")
+                .serviceRequestId("PGR-1")
+                .applicationStatus("PENDINGATLME")
+                .additionalDetail(Map.of("department", "ROADS"))
+                .build();
+        ServiceRequest request = ServiceRequest.builder()
+                .requestInfo(requestInfo)
+                .service(incoming)
+                .workflow(Workflow.builder().action("ESCALATE").build())
+                .build();
+
+        when(mdmsUtils.mDMSCall(request)).thenReturn(Map.of());
+        when(validator.validateUpdate(request, Map.of())).thenReturn(persisted);
+        when(pgrUtils.extractAdditionalDetails(any())).thenReturn(Map.of("department", "ROADS"));
+        when(pgrUtils.deepMerge(any(), any())).thenReturn(Map.of("department", "ROADS"));
+        when(config.getUpdateTopic()).thenReturn("pgr-update");
+        when(config.getInboxUpdateTopic()).thenReturn("pgr-inbox-update");
+        when(config.getEscalationKafkaTopic()).thenReturn("pgr-escalation-events");
+        when(escalationService.buildEscalationEvent(request)).thenReturn(Map.of("serviceRequestId", "PGR-1"));
+
+        pgrService.update(request);
+
+        verify(escalationService).prepareUpdate(request, persisted);
+        verify(enrichmentService).enrichUpdateRequest(request);
+        verify(workflowService).updateWorkflowStatus(request);
+        verify(complaintDomainEventService).publishWorkflowTransitionEvent(request, "PENDINGATLME");
+        verify(producer).push("ke.bomet", "pgr-update", request);
+        verify(producer).push("ke.bomet", "pgr-inbox-update", request);
+        verify(producer).push(eq("ke.bomet"), eq("pgr-escalation-events"), any());
     }
 
     private RequestInfo requestInfo(String uuid, String type, String tenantId) {

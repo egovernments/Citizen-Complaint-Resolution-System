@@ -22,9 +22,8 @@ import { test, expect } from '@playwright/test';
  *
  * The ESCALATE option appearing here is the #521 fix surface:
  *   - FE: ACTION_CONFIGS in PGRDetails.js (commit 54946902)
- *   - Workflow: PENDINGATLME -> ESCALATE -> PENDINGATSUPERVISOR for
- *     roles [PGR_LME, PGR_VIEWER] (seed PgrWorkflowConfig.json +
- *     live businessservice/_update on bomet)
+ *   - Workflow: PENDINGATLME -> ESCALATE -> PENDINGATLME; the assignee moves
+ *     to the current employee's HRMS reportingTo.
  *   - Localization: ES_COMMON_TAKE_ACTION -> "Take action" reachable
  *     for tenant ke, module rainmaker-common, locale en_IN.
  */
@@ -121,7 +120,7 @@ test.describe('Demo: #521 manual ESCALATE on bomet', () => {
     await submitBtn.click();
     await page.waitForTimeout(4_500);
 
-    // --- 13. Verify state moved PENDINGATLME -> PENDINGATSUPERVISOR
+    // --- 13. Verify ESCALATE kept the complaint in PENDINGATLME
     // via the workflow API. The token comes from the OAuth call we made
     // in setup-less mode — Playwright doesn't carry one, so probe via
     // the public proxy with the cookie session the page already has. ---
@@ -140,6 +139,6 @@ test.describe('Demo: #521 manual ESCALATE on bomet', () => {
     const stateStr = typeof latestState === 'string'
       ? latestState
       : wfBody?.ProcessInstances?.[0]?.state;
-    expect(String(stateStr)).toContain('PENDINGATSUPERVISOR');
+    expect(String(stateStr)).toContain('PENDINGATLME');
   });
 });
