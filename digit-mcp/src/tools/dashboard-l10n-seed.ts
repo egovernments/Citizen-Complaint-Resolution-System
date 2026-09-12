@@ -450,6 +450,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_SEARCH_KPIS",
+    "message": "Search KPIs",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPI_MATCHES",
+    "message": "No KPIs match your search",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_EXPORT",
     "message": "Export",
     "module": "rainmaker-dashboard"
@@ -2071,6 +2081,16 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_AVAILABLE_KPIS",
     "message": "KPIs disponíveis",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_SEARCH_KPIS",
+    "message": "Pesquisar KPIs",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPI_MATCHES",
+    "message": "Nenhum KPI corresponde à pesquisa",
     "module": "rainmaker-dashboard"
   },
   {

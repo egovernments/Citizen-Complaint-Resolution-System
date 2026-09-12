@@ -435,6 +435,16 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_SEARCH_KPIS",
+    "message": "Pesquisar KPIs",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPI_MATCHES",
+    "message": "Nenhum KPI corresponde à pesquisa",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_EXPORT",
     "message": "Exportar",
     "module": "rainmaker-dashboard"

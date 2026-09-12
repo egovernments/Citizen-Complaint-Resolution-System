@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import AddKpiPreview from "./AddKpiPreview";
 import useDashboardT from "../i18n/useDashboardT";
+import { buildAvailableKpis } from "../utils/addKpiPicker";
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
 
@@ -90,22 +91,30 @@ const AddKpiDropdown = ({
 }) => {
   const { t } = useDashboardT();
   const panelRef = useRef(null);
+  const searchRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoverRect, setHoverRect] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const availableItems = useMemo(() => {
-    // Offer every role-visible catalog tile not already on the grid. The catalog
-    // is role-filtered server-side, so no extra allowedWidgetIds gate is needed.
-    // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
-    return (catalogItems || []).filter((it) => !visibleLayoutIds.includes(it.id));
-  }, [visibleLayoutIds, catalogItems]);
+  // Offer every role-visible catalog tile not already on the grid, sorted A→Z
+  // and filtered by the search box (#1755). Catalog is role-filtered server-side.
+  // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
+  const availableItems = useMemo(
+    () => buildAvailableKpis(catalogItems, visibleLayoutIds, searchQuery),
+    [visibleLayoutIds, catalogItems, searchQuery]
+  );
+  const unplacedCount = useMemo(
+    () => buildAvailableKpis(catalogItems, visibleLayoutIds, "").length,
+    [visibleLayoutIds, catalogItems]
+  );
 
   useLayoutEffect(() => {
     if (!open) {
       setPanelPosition(null);
       setHoveredItem(null);
       setHoverRect(null);
+      setSearchQuery("");
       return undefined;
     }
 
@@ -120,6 +129,8 @@ const AddKpiDropdown = ({
     };
 
     syncPosition();
+    // Focus search so users can type immediately when the picker opens.
+    requestAnimationFrame(() => searchRef.current?.focus());
     window.addEventListener("resize", syncPosition);
     window.addEventListener("scroll", syncPosition, true);
     return () => {
@@ -186,18 +197,38 @@ const AddKpiDropdown = ({
       role="menu"
     >
       <p className="dashboard-add-kpi-header">{t("DASHBOARD_HEADER_AVAILABLE_KPIS", "Available KPIs")}</p>
+      <div className="dashboard-add-kpi-search-wrap">
+        <input
+          ref={searchRef}
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          onKeyDown={(event) => {
+            // Keep Escape for the panel-level close handler; stop other keys
+            // from bubbling into grid shortcuts.
+            if (event.key !== "Escape") event.stopPropagation();
+          }}
+          placeholder={t("DASHBOARD_HEADER_SEARCH_KPIS", "Search KPIs")}
+          aria-label={t("DASHBOARD_HEADER_SEARCH_KPIS", "Search KPIs")}
+          className="dashboard-add-kpi-search"
+          autoComplete="off"
+        />
+      </div>
       <ul className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain">
         {availableItems.length === 0 ? (
           <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
             {(catalogItems || []).length === 0
               ? // Role-filtered catalog is empty — nothing this user could ever add.
                 t("DASHBOARD_HEADER_NO_KPIS_FOR_ROLE", "No KPIs available for your role")
-              : // Catalog has tiles but every one is already placed — not a bug,
-                // but indistinguishable from one without saying so.
-                t(
-                  "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-                  "All available KPIs are already on your dashboard"
-                )}
+              : unplacedCount === 0
+                ? // Catalog has tiles but every one is already placed — not a bug,
+                  // but indistinguishable from one without saying so.
+                  t(
+                    "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
+                    "All available KPIs are already on your dashboard"
+                  )
+                : // Search narrowed the list to nothing.
+                  t("DASHBOARD_HEADER_NO_KPI_MATCHES", "No KPIs match your search")}
           </li>
         ) : (
           availableItems.map((item) => (
