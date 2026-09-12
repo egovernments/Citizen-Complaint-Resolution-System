@@ -247,7 +247,7 @@ test.describe('employee digit-ui shell bundle', () => {
     );
 
     // sub-1: rows in OPEN states only
-    const OPEN_STATES = /PENDINGFORASSIGNMENT|PENDINGFORREASSIGNMENT|PENDINGATLME|PENDINGATSUPERVISOR|PENDINGFORWORK|OPEN/i;
+    const OPEN_STATES = /PENDINGFORASSIGNMENT|PENDINGFORREASSIGNMENT|PENDINGATLME|PENDINGFORWORK|OPEN/i;
     const CLOSED_STATES = /RESOLVED|REJECTED|CLOSED/i;
     const rowCount = await page.locator('tbody tr').count();
     if (rowCount > 0) {

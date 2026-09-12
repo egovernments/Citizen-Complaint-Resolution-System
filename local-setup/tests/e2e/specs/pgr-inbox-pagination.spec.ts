@@ -28,7 +28,7 @@ const USERNAME  = process.env.DIGIT_USERNAME || 'ADMIN';
 const PASSWORD  = process.env.DIGIT_PASSWORD || 'eGov@123';
 
 // Same default status filter the employee inbox queries on load.
-const INBOX_STATUSES = ['PENDINGFORASSIGNMENT', 'PENDINGFORREASSIGNMENT', 'PENDINGATLME', 'PENDINGATSUPERVISOR'];
+const INBOX_STATUSES = ['PENDINGFORASSIGNMENT', 'PENDINGFORREASSIGNMENT', 'PENDINGATLME'];
 
 /**
  * Ground-truth total via the _count API directly, bypassing the UI entirely.

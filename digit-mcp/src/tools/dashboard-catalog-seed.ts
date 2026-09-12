@@ -1529,12 +1529,6 @@ export const DASHBOARD_KPI_DEFINITIONS: Record<string, unknown>[] = [
           "label": "Pending reassignment",
           "labelKey": "DASHBOARD_WF_STAGE_PENDINGFORREASSIGNMENT",
           "color": "var(--chart-3)"
-        },
-        {
-          "key": "PENDINGATSUPERVISOR",
-          "label": "Pending at supervisor",
-          "labelKey": "DASHBOARD_WF_STAGE_PENDINGATSUPERVISOR",
-          "color": "var(--chart-4)"
         }
       ],
       "limit": 300,

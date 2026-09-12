@@ -1649,7 +1649,6 @@ export const UICustomizations = {
         "PENDINGFORASSIGNMENT",
         "PENDINGFORREASSIGNMENT",
         "PENDINGATLME",
-        "PENDINGATSUPERVISOR",
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);

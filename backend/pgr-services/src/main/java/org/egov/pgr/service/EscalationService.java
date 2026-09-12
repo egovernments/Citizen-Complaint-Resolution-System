@@ -4,213 +4,257 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.config.PGRConfiguration;
-import org.egov.pgr.producer.Producer;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
-import org.egov.pgr.web.models.*;
+import org.egov.pgr.web.models.RequestInfoWrapper;
+import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.ServiceRequest;
+import org.egov.pgr.web.models.Workflow;
 import org.egov.pgr.web.models.workflow.ProcessInstance;
 import org.egov.pgr.web.models.workflow.ProcessInstanceResponse;
+import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.egov.pgr.util.PGRConstants.*;
+import static org.egov.pgr.util.PGRConstants.ESCALATE;
 
+/**
+ * The shared escalation domain operation. Manual and automatic callers both
+ * enter here through {@link PGRService#update(ServiceRequest)}.
+ */
 @Component
 @Slf4j
 public class EscalationService {
 
+    public static final String ASSIGNMENT_CHANGED_AT = "assignmentChangedAt";
+    public static final String ASSIGNMENT_CHANGE_SOURCE = "assignmentChangeSource";
+    public static final String ESCALATION_LEVEL = "escalationLevel";
+    public static final String LAST_ESCALATED_AT = "lastEscalatedAt";
+    public static final String ESCALATED_FROM = "escalatedFrom";
+    public static final String ESCALATED_TO = "escalatedTo";
+    public static final String ESCALATION_TRIGGER = "escalationTrigger";
+
+    private static final Set<String> SERVER_MANAGED_METADATA = Set.of(
+            ASSIGNMENT_CHANGED_AT,
+            ASSIGNMENT_CHANGE_SOURCE,
+            ESCALATION_LEVEL,
+            LAST_ESCALATED_AT,
+            ESCALATED_FROM,
+            ESCALATED_TO,
+            ESCALATION_TRIGGER
+    );
+
     private final HRMSUtil hrmsUtil;
     private final WorkflowService workflowService;
-    private final PGRConfiguration config;
-    private final Producer producer;
     private final ServiceRequestRepository serviceRequestRepository;
+    private final EscalationConfigurationService configurationService;
     private final ObjectMapper mapper;
 
     @Autowired
-    public EscalationService(HRMSUtil hrmsUtil, WorkflowService workflowService,
-                             PGRConfiguration config, Producer producer,
+    public EscalationService(HRMSUtil hrmsUtil,
+                             WorkflowService workflowService,
                              ServiceRequestRepository serviceRequestRepository,
+                             EscalationConfigurationService configurationService,
                              ObjectMapper mapper) {
         this.hrmsUtil = hrmsUtil;
         this.workflowService = workflowService;
-        this.config = config;
-        this.producer = producer;
         this.serviceRequestRepository = serviceRequestRepository;
+        this.configurationService = configurationService;
         this.mapper = mapper;
     }
 
     /**
-     * Escalates a single complaint by finding the supervisor of the current assignee
-     * and transitioning the workflow with the ESCALATE action (self-loop).
-     *
-     * @param complaint       the PGR service record
-     * @param currentWorkflow the current workflow state (with assignees)
-     * @param requestInfo     system RequestInfo for internal calls
-     * @return true if escalation was performed, false if skipped
+     * Preserves server-managed assignment metadata for every update and, for
+     * ESCALATE, resolves the next reportingTo employee and advances the shared
+     * hierarchy/clock metadata exactly once.
      */
-    public boolean escalateComplaint(Service complaint, Workflow currentWorkflow, RequestInfo requestInfo) {
-
-        String serviceRequestId = complaint.getServiceRequestId();
-        String tenantId = complaint.getTenantId();
-
-        // 1. Get current escalation level from additionalDetails
-        int currentLevel = getEscalationLevel(complaint);
-
-        // 2. Check max depth
-        if (currentLevel >= config.getEscalationMaxDepth()) {
-            log.info("Complaint {} already at max escalation depth {}, skipping", serviceRequestId, currentLevel);
-            return false;
+    public void prepareUpdate(ServiceRequest request, Service persistedService) {
+        if (request == null || request.getService() == null || request.getWorkflow() == null) {
+            return;
         }
 
-        // 3. Get current assignee UUIDs from workflow
-        List<String> currentAssignees = currentWorkflow.getAssignes();
-        if (CollectionUtils.isEmpty(currentAssignees)) {
-            log.warn("Complaint {} has no current assignees, skipping escalation", serviceRequestId);
-            return false;
+        Map<String, Object> incoming = details(request.getService());
+        Map<String, Object> persisted = details(persistedService);
+        preserveServerMetadata(incoming, persisted);
+
+        String action = request.getWorkflow().getAction();
+        if (action != null && ESCALATE.equalsIgnoreCase(action)) {
+            prepareEscalation(request, persistedService, incoming);
+        } else if (changesAssignment(action, request.getWorkflow())) {
+            long now = System.currentTimeMillis();
+            incoming.put(ASSIGNMENT_CHANGED_AT, now);
+            incoming.put(ASSIGNMENT_CHANGE_SOURCE, action.toUpperCase());
+            // An ordinary assignment establishes a new reporting-hierarchy baseline.
+            incoming.put(ESCALATION_LEVEL, 0);
         }
 
-        // 4. Find supervisor for the first assignee
-        String supervisorUuid = null;
-        for (String assigneeUuid : currentAssignees) {
-            supervisorUuid = hrmsUtil.getSupervisorUuid(assigneeUuid, requestInfo, tenantId);
-            if (supervisorUuid != null) {
-                break;
-            }
+        request.getService().setAdditionalDetail(incoming);
+    }
+
+    private void prepareEscalation(ServiceRequest request, Service persistedService,
+                                   Map<String, Object> details) {
+        String tenantId = persistedService.getTenantId();
+        String complaintId = persistedService.getServiceRequestId();
+        RequestInfo requestInfo = request.getRequestInfo();
+        int currentLevel = escalationLevel(persistedService);
+        int maxDepth = configurationService.resolve(requestInfo, tenantId).getMaxDepth();
+
+        if (currentLevel >= maxDepth) {
+            throw new CustomException("ESCALATION_MAX_DEPTH",
+                    "Complaint " + complaintId + " is already at maximum escalation depth");
         }
 
-        if (supervisorUuid == null) {
-            log.warn("No supervisor found for any assignee of complaint {}, skipping escalation", serviceRequestId);
-            return false;
+        List<String> currentAssignees = getCurrentAssignees(complaintId, tenantId, requestInfo);
+        if (currentAssignees.isEmpty()) {
+            throw new CustomException("ESCALATION_NO_ASSIGNEE",
+                    "An unassigned complaint cannot be escalated; use ASSIGN");
         }
 
-        // 5. Build the escalation workflow
-        Workflow escalationWorkflow = Workflow.builder()
-                .action(ESCALATE)
-                .assignes(Collections.singletonList(supervisorUuid))
-                .comments("Auto-escalated: SLA breach at level " + currentLevel)
-                .build();
-
-        // 6. Update additionalDetails with escalation metadata
-        Map<String, Object> additionalDetails = getAdditionalDetailsMap(complaint);
-        additionalDetails.put("escalationLevel", currentLevel + 1);
-        additionalDetails.put("lastEscalatedAt", System.currentTimeMillis());
-        additionalDetails.put("escalatedFrom", currentAssignees);
-        complaint.setAdditionalDetail(additionalDetails);
-
-        // 7. Build ServiceRequest and transition workflow
-        ServiceRequest serviceRequest = ServiceRequest.builder()
-                .requestInfo(requestInfo)
-                .service(complaint)
-                .workflow(escalationWorkflow)
-                .build();
-
-        try {
-            workflowService.updateWorkflowStatus(serviceRequest);
-        } catch (Exception e) {
-            log.error("Failed to transition workflow for complaint {} during escalation", serviceRequestId, e);
-            return false;
+        String expectedAssignee = resolveNextAssignee(currentAssignees, requestInfo, tenantId);
+        if (expectedAssignee == null) {
+            throw new CustomException("ESCALATION_TOP_OF_HIERARCHY",
+                    "No reportingTo employee exists for the current assignee");
         }
 
-        // 8. Publish to update topic so persister saves the updated additionalDetails
-        producer.push(tenantId, config.getUpdateTopic(), serviceRequest);
+        List<String> requestedAssignees = request.getWorkflow().getAssignes();
+        if (!CollectionUtils.isEmpty(requestedAssignees)
+                && (requestedAssignees.size() != 1 || !expectedAssignee.equals(requestedAssignees.get(0)))) {
+            throw new CustomException("INVALID_ESCALATION_ASSIGNEE",
+                    "ESCALATE can only assign the current employee's reportingTo; use REASSIGN otherwise");
+        }
 
-        // 9. Publish escalation event for future notification listeners
-        Map<String, Object> escalationEvent = new HashMap<>();
-        escalationEvent.put("serviceRequestId", serviceRequestId);
-        escalationEvent.put("tenantId", tenantId);
-        escalationEvent.put("escalationLevel", currentLevel + 1);
-        escalationEvent.put("previousAssignees", currentAssignees);
-        escalationEvent.put("newAssignee", supervisorUuid);
-        escalationEvent.put("timestamp", System.currentTimeMillis());
-        producer.push(tenantId, config.getEscalationKafkaTopic(), escalationEvent);
+        request.getWorkflow().setAssignes(Collections.singletonList(expectedAssignee));
+        long now = System.currentTimeMillis();
+        String trigger = isAutomatic(requestInfo) ? "AUTOMATIC" : "MANUAL";
+        details.put(ESCALATION_LEVEL, currentLevel + 1);
+        details.put(LAST_ESCALATED_AT, now);
+        details.put(ASSIGNMENT_CHANGED_AT, now);
+        details.put(ASSIGNMENT_CHANGE_SOURCE, trigger + "_ESCALATION");
+        details.put(ESCALATED_FROM, new ArrayList<>(currentAssignees));
+        details.put(ESCALATED_TO, expectedAssignee);
+        details.put(ESCALATION_TRIGGER, trigger);
+    }
 
-        log.info("Escalated complaint {} from level {} to {} (assignee: {} -> {})",
-                serviceRequestId, currentLevel, currentLevel + 1, currentAssignees, supervisorUuid);
-
-        return true;
+    public Map<String, Object> buildEscalationEvent(ServiceRequest request) {
+        Service service = request.getService();
+        Map<String, Object> details = details(service);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("serviceRequestId", service.getServiceRequestId());
+        event.put("tenantId", service.getTenantId());
+        event.put(ESCALATION_LEVEL, details.get(ESCALATION_LEVEL));
+        event.put("previousAssignees", details.get(ESCALATED_FROM));
+        event.put("newAssignee", details.get(ESCALATED_TO));
+        event.put("trigger", details.get(ESCALATION_TRIGGER));
+        event.put("timestamp", details.get(LAST_ESCALATED_AT));
+        return event;
     }
 
     /**
-     * Gets current assignee UUIDs from workflow process instance search.
+     * The dedicated clock. Audit timestamps are only a migration fallback for
+     * complaints created before assignmentChangedAt existed.
      */
-    public List<String> getCurrentAssignees(String serviceRequestId, String tenantId, RequestInfo requestInfo) {
+    public long escalationWindowStartedAt(Service complaint) {
+        Object value = details(complaint).get(ASSIGNMENT_CHANGED_AT);
+        if (value instanceof Number number && number.longValue() > 0) {
+            return number.longValue();
+        }
+        if (complaint.getAuditDetails() == null) {
+            return 0L;
+        }
+        Long modified = complaint.getAuditDetails().getLastModifiedTime();
+        if (modified != null && modified > 0) {
+            return modified;
+        }
+        Long created = complaint.getAuditDetails().getCreatedTime();
+        return created == null ? 0L : created;
+    }
 
+    public int escalationLevel(Service complaint) {
+        Object level = details(complaint).get(ESCALATION_LEVEL);
+        return level instanceof Number number ? Math.max(number.intValue(), 0) : 0;
+    }
+
+    /** Gets current assignees from the workflow process-instance source of truth. */
+    public List<String> getCurrentAssignees(String serviceRequestId, String tenantId,
+                                            RequestInfo requestInfo) {
         StringBuilder url = workflowService.getprocessInstanceSearchURL(tenantId, serviceRequestId);
-        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
-
-        Object result = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+        RequestInfoWrapper wrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+        Object result = serviceRequestRepository.fetchResult(url, wrapper);
 
         try {
             ProcessInstanceResponse response = mapper.convertValue(result, ProcessInstanceResponse.class);
             if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
                 return Collections.emptyList();
             }
-
-            ProcessInstance processInstance = response.getProcessInstances().get(0);
-            if (CollectionUtils.isEmpty(processInstance.getAssignes())) {
+            ProcessInstance instance = response.getProcessInstances().get(0);
+            if (CollectionUtils.isEmpty(instance.getAssignes())) {
                 return Collections.emptyList();
             }
-
-            return processInstance.getAssignes().stream()
+            return instance.getAssignes().stream()
                     .map(User::getUuid)
+                    .filter(uuid -> uuid != null && !uuid.isBlank())
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("Failed to get assignees for complaint {}", serviceRequestId, e);
+            log.error("Failed to read workflow assignees for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
         }
     }
 
-    /**
-     * Extracts escalation level from complaint additionalDetails. Defaults to 0.
-     */
-    @SuppressWarnings("unchecked")
-    private int getEscalationLevel(Service complaint) {
-        Object additionalDetail = complaint.getAdditionalDetail();
-        if (additionalDetail == null) {
-            return 0;
-        }
-
-        try {
-            Map<String, Object> details;
-            if (additionalDetail instanceof Map) {
-                details = (Map<String, Object>) additionalDetail;
-            } else {
-                details = mapper.convertValue(additionalDetail, Map.class);
+    private String resolveNextAssignee(List<String> currentAssignees, RequestInfo requestInfo,
+                                       String tenantId) {
+        for (String assignee : currentAssignees) {
+            String reportingTo = hrmsUtil.getSupervisorUuid(assignee, requestInfo, tenantId);
+            if (reportingTo != null && !reportingTo.isBlank()) {
+                return reportingTo;
             }
-
-            Object level = details.get("escalationLevel");
-            if (level instanceof Number) {
-                return ((Number) level).intValue();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read escalationLevel from additionalDetails", e);
         }
-        return 0;
+        return null;
     }
 
-    /**
-     * Gets additionalDetails as a mutable Map, creating one if needed.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> getAdditionalDetailsMap(Service complaint) {
-        Object additionalDetail = complaint.getAdditionalDetail();
-        if (additionalDetail == null) {
-            return new HashMap<>();
-        }
+    private boolean changesAssignment(String action, Workflow workflow) {
+        return action != null
+                && ("ASSIGN".equalsIgnoreCase(action) || "REASSIGN".equalsIgnoreCase(action))
+                && !CollectionUtils.isEmpty(workflow.getAssignes());
+    }
 
-        try {
-            if (additionalDetail instanceof Map) {
-                return new HashMap<>((Map<String, Object>) additionalDetail);
+    private boolean isAutomatic(RequestInfo requestInfo) {
+        return requestInfo != null && requestInfo.getUserInfo() != null
+                && "SYSTEM".equalsIgnoreCase(requestInfo.getUserInfo().getType());
+    }
+
+    private void preserveServerMetadata(Map<String, Object> incoming, Map<String, Object> persisted) {
+        for (String key : SERVER_MANAGED_METADATA) {
+            if (persisted.containsKey(key)) {
+                incoming.put(key, persisted.get(key));
+            } else {
+                incoming.remove(key);
             }
-            return mapper.convertValue(additionalDetail, HashMap.class);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> details(Service service) {
+        if (service == null || service.getAdditionalDetail() == null) {
+            return new LinkedHashMap<>();
+        }
+        Object raw = service.getAdditionalDetail();
+        try {
+            if (raw instanceof Map<?, ?> map) {
+                return new LinkedHashMap<>((Map<String, Object>) map);
+            }
+            return mapper.convertValue(raw, LinkedHashMap.class);
         } catch (Exception e) {
-            log.warn("Failed to convert additionalDetails to Map, creating new", e);
-            return new HashMap<>();
+            log.warn("Failed to read complaint additionalDetails; using an empty object", e);
+            return new LinkedHashMap<>();
         }
     }
 }
