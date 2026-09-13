@@ -116,6 +116,13 @@ public class NotificationService {
                 ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
                 employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
             }
+            else if (applicationStatus.equalsIgnoreCase(RESOLVED) && action.equalsIgnoreCase(PGR_WF_RESOLVE_BY_SUPERVISOR)) {
+                // No employee-side message, and deliberately no ASSIGN lookup: a GRO can escalate
+                // straight from PENDINGFORASSIGNMENT, so the complaint may never have been
+                // ASSIGNed and the branch above would throw on getAssignes().get(0). The citizen
+                // half is what mattered here (#1956 review).
+                employeeMobileNumber = null;
+            }
             else  if ((applicationStatus.equalsIgnoreCase(CLOSED_AFTER_RESOLUTION) || applicationStatus.equalsIgnoreCase(CLOSED_AFTER_REJECTION)) && action.equalsIgnoreCase(RATE)) {
                 ProcessInstance processInstance = getEmployeeName(serviceWrapper.getService().getTenantId(),serviceWrapper.getService().getServiceRequestId(),request.getRequestInfo(),ASSIGN);
                 employeeMobileNumber = buildMobileWithCountryCode(processInstance.getAssignes().get(0).getMobileNumber(), citizenCountryCode);
@@ -405,7 +412,7 @@ public class NotificationService {
         /**
          * SMS to citizens, when complaint got resolved
          */
-        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(RESOLVED) && serviceWrapper.getWorkflow().getAction().equalsIgnoreCase(PGR_WF_RESOLVE)) {
+        if(serviceWrapper.getService().getApplicationStatus().equalsIgnoreCase(RESOLVED) && closesComplaintForCitizen(serviceWrapper.getWorkflow().getAction())) {
             messageForCitizen = notificationUtil.getCustomizedMsg(request.getWorkflow().getAction(), applicationStatus, CITIZEN, localizationMessage);
             if (messageForCitizen == null) {
                 log.info("No message Found For Citizen On Topic : " + topic);
@@ -776,7 +783,7 @@ public class NotificationService {
         toUsers.add(mapOfPhoneNoAndUUIDs.get(mobileNumber));
 
         Action action = null;
-        if(request.getWorkflow().getAction().equals("RESOLVE")) {
+        if(closesComplaintForCitizen(request.getWorkflow().getAction())) {
 
             List<ActionItem> items = new ArrayList<>();
             String rateLink = "";
@@ -859,6 +866,20 @@ public class NotificationService {
     {
         String stateLevelTenantId = centralInstanceUtil.getStateLevelTenant(tenantId);
         return config.getUiAppHostMap().get(stateLevelTenantId);
+    }
+
+    /**
+     * Does this action close the complaint from the citizen's point of view?
+     *
+     * <p>RESOLVE is the last-mile employee's close; RESOLVEBYSUPERVISOR is the supervisor's close
+     * of an escalated complaint. Both land the complaint on RESOLVED and are indistinguishable to
+     * the person who filed it, so both must send the "resolved" message and both must carry the
+     * Rate / Reopen action links. Gating on the RESOLVE literal alone meant an escalated complaint
+     * was closed in total silence (#1956 review).
+     */
+    private boolean closesComplaintForCitizen(String action) {
+        return action != null
+                && (action.equalsIgnoreCase(PGR_WF_RESOLVE) || action.equalsIgnoreCase(PGR_WF_RESOLVE_BY_SUPERVISOR));
     }
 
     private String buildMobileWithCountryCode(String mobileNumber, String countryCode) {

@@ -46,7 +46,7 @@
           "actions": [
             {
               "tenantId": "{tenantid}",
-              "currentState": "ce08d758-1788-4b56-b1ec-91db449d41a4",
+              "currentState": null,
               "action": "APPLY",
               "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
@@ -149,6 +149,18 @@
                   "assigneeOnly": false
                 }
               ]
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ESCALATE",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "GRO",
+                "PGR_VIEWER",
+                "AUTO_ESCALATE"
+              ],
+              "active": true
             },
             {
               "tenantId": "{tenantid}",
@@ -275,9 +287,18 @@
               "action": "FORWARD",
               "nextState": "PENDINGATSUPERVISOR",
               "roles": [
-                "AUTO_ESCALATE"
+                "AUTO_ESCALATE",
+                "GRO"
               ],
-              "active": true
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "SUPERVISOR",
+                  "channel": "SMS",
+                  "templateRef": "supervisor_forwarded",
+                  "assigneeOnly": true
+                }
+              ]
             },
             {
               "tenantId": "{tenantid}",
@@ -290,7 +311,21 @@
                 "SYSTEM",
                 "AUTO_ESCALATE"
               ],
-              "active": true
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "SUPERVISOR",
+                  "channel": "SMS",
+                  "templateRef": "supervisor_escalated",
+                  "assigneeOnly": true
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "SMS",
+                  "templateRef": "citizen_escalated",
+                  "assigneeOnly": false
+                }
+              ]
             }
           ]
         },
@@ -426,6 +461,46 @@
               "roles": [
                 "SUPERVISOR"
               ],
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "CITIZEN",
+                  "channel": "SMS",
+                  "templateRef": "citizen_resolved_by_supervisor",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "WHATSAPP",
+                  "templateRef": "citizen_resolved_by_supervisor",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "EMAIL",
+                  "templateRef": "citizen_resolved_by_supervisor",
+                  "assigneeOnly": false
+                }
+              ]
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "COMMENT",
+              "nextState": "PENDINGATSUPERVISOR",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGATSUPERVISOR",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "SUPERVISOR"
+              ],
               "active": true
             }
           ]
@@ -551,6 +626,69 @@
           "locale": "en_IN",
           "subject": "Complaint {id} resolved",
           "body": "Dear citizen, your complaint {id} for {complaint_type} has been resolved. Current status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "citizen_resolved_by_supervisor",
+      "audience": "CITIZEN",
+      "action": "RESOLVEBYSUPERVISOR",
+      "toState": "RESOLVED",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been reviewed and closed by the supervisor. Current status: {status}."
+        },
+        {
+          "channel": "WHATSAPP",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been reviewed and closed by the supervisor. Current status: {status}."
+        },
+        {
+          "channel": "EMAIL",
+          "locale": "en_IN",
+          "subject": "Complaint {id} closed by supervisor",
+          "body": "Your complaint {id} ({complaint_type}) has been reviewed and closed by the supervisor. Current status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "citizen_escalated",
+      "audience": "CITIZEN",
+      "action": "ESCALATE",
+      "toState": "PENDINGATSUPERVISOR",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been escalated to a supervisor for review. Current status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "supervisor_escalated",
+      "audience": "SUPERVISOR",
+      "action": "ESCALATE",
+      "toState": "PENDINGATSUPERVISOR",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Complaint {id} ({complaint_type}) has been escalated to you for review. Status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "supervisor_forwarded",
+      "audience": "SUPERVISOR",
+      "action": "FORWARD",
+      "toState": "PENDINGATSUPERVISOR",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Complaint {id} ({complaint_type}) has been escalated to you for review. Status: {status}."
         }
       ]
     }

@@ -2,8 +2,16 @@ import { EmployeeModuleCard, SVG } from "@egovernments/digit-ui-react-components
 import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+// Every role that is an ACTOR in the PGR BusinessService must be listed here,
+// otherwise `didEmployeeHasAtleastOneRole` below returns false and the whole
+// module card — including the "Search Complaint" link — is hidden, leaving that
+// role with no way into the module at all (issue #1956: a SUPERVISOR could not
+// reach an escalated complaint because SUPERVISOR was missing from this list).
+// SUPERVISOR owns the PENDINGATSUPERVISOR state (RESOLVEBYSUPERVISOR), so it
+// belongs with the other PGR actors. Keep this in sync with the workflow's role
+// set when a new state/actor is added.
 const ROLES = {
-  PGR: ["GRO", "PGR_LME", "CSR"],
+  PGR: ["GRO", "PGR_LME", "CSR", "SUPERVISOR"],
 };
 
 const PGRCard = () => {

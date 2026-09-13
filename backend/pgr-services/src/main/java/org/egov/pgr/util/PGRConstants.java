@@ -58,6 +58,12 @@ public class PGRConstants {
 
     public static final String RESOLVE_RESOLVED = "RESOLVE_RESOLVED";
 
+    // The NOTIFICATION_ENABLE_FOR_STATUS gate below is keyed on "<action>_<applicationStatus>".
+    // Without this entry the notifier early-returns for a supervisor's close, so the citizen was
+    // never told their escalated complaint had been resolved and never got the rating prompt —
+    // while an LME RESOLVE on the same complaint sent three messages (#1956 review).
+    public static final String RESOLVEBYSUPERVISOR_RESOLVED = "RESOLVEBYSUPERVISOR_RESOLVED";
+
     public static final String REOPEN_PENDING_FOR_ASSIGNMENT = "REOPEN_PENDINGFORASSIGNMENT";
 
     public static final String REASSIGN_PENDINGATLME = "REASSIGN_PENDINGATLME";
@@ -129,7 +135,8 @@ public class PGRConstants {
                     REJECT_REJECTED,ASSIGN_CITIZEN_PENDINGATLME,ASSIGN_EMPLOYEE_PENDINGATLME,CLOSE_EMPLOYEE_CLOSED_AFTER_RESOLUTION,
                     REASSIGN_CITIZEN_PENDINGATLME,REASSIGN_EMPLOYEE_PENDINGATLME,REJECT_CITIZEN_REJECTED,REOPEN_CITIZEN_PENDINGFORASSIGNMENT,
                     REOPEN_EMPLOYEE_PENDINGFORASSIGNMENT,RESOLVE_CITIZEN_RESOLVED,APPLY_PENDINGFORASSIGNMENT,COMMENT, COMMENT_DEFAULT, DEFAULT,
-                    REASSIGN_PENDING_FOR_REASSIGNMENT, ASSIGN_PENDING_AT_LME, RATE_CLOSED_AFTER_REJECTION, RATE_CLOSED_AFTER_RESOLUTION));
+                    REASSIGN_PENDING_FOR_REASSIGNMENT, ASSIGN_PENDING_AT_LME, RATE_CLOSED_AFTER_REJECTION, RATE_CLOSED_AFTER_RESOLUTION,
+                    RESOLVEBYSUPERVISOR_RESOLVED));
 
     public static final String NOTIFICATION_LOCALE = "en_IN";
 
@@ -140,6 +147,9 @@ public class PGRConstants {
     public static final String DATE_PATTERN = "dd/MM/yyyy";
 
     public static final String PGR_WF_RESOLVE = "RESOLVE";
+
+    /** The supervisor's close of an escalated complaint (PENDINGATSUPERVISOR -> RESOLVED). */
+    public static final String PGR_WF_RESOLVE_BY_SUPERVISOR = "RESOLVEBYSUPERVISOR";
 
     public static final String USREVENTS_EVENT_TYPE = "SYSTEMGENERATED";
 
