@@ -7257,3 +7257,35 @@ html .digit-popup-wrapper [class*="popup-footer"] {
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
 }
+
+/* ----------------------------------------------------------------------
+ * 63. Edit Profile (#2038 review round 2)
+ *
+ *     `.grounded-container` is the user-profile route's shell (see
+ *     employee/index.js). Three things put it out of step with the rest of
+ *     the employee UI:
+ *
+ *       - its v2 scope painted white edge to edge, so the cards had no
+ *         ground and the page read as one undifferentiated sheet — the
+ *         same thing already fixed on create-complaint and the inbox;
+ *       - its cards use Tailwind's `rounded-lg` (8px) rather than the 12px
+ *         every other card in this UI uses;
+ *       - nothing capped the column, so a single-column form stretched its
+ *         inputs to ~1360px on a desktop window.
+ * -------------------------------------------------------------------- */
+.employee .grounded-container > .v2-scope {
+  background-color: transparent !important;
+}
+
+/* One column, readable width, centred — a name field does not need 1360px. */
+.employee .grounded-container > .v2-scope > * {
+  max-width: 880px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.employee .grounded-container > .v2-scope .rounded-lg {
+  border-radius: 12px !important;
+  border-color: var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
