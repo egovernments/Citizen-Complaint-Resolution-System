@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import { Card, Loader } from "../atoms";
@@ -10,6 +10,22 @@ import { SVG } from "../atoms";
 import CardLabel from "../atoms/CardLabel";
 import Button from "../atoms/Button";
 import TextInput from "../atoms/TextInput";
+
+// Matches the `47.99rem` breakpoint the employee overrides use.
+const MOBILE_BREAKPOINT = 767;
+
+// react-data-table-component calls `cell(row, rowIndex, column, id)` and falls
+// back to `selector(row, rowIndex)`; mirror that so a card shows exactly what
+// the table cell would have shown.
+const renderCellContent = (column, row, index) => {
+  if (typeof column?.cell === "function") {
+    return column.cell(row, index, column, column?.id);
+  }
+  if (typeof column?.selector === "function") {
+    return column.selector(row, index);
+  }
+  return null;
+};
 
 const ResultsDataTable = ({
   data,
@@ -51,11 +67,74 @@ const ResultsDataTable = ({
   paginationComponentOptions
 }) => {
   const { t } = useTranslation();
+
+  // A five-column inbox cannot fit a phone. Below the breakpoint the same rows
+  // render as stacked cards instead — one synthetic column holding the whole
+  // record, so react-data-table-component keeps owning pagination, the pending
+  // state, row selection and row clicks. Labels come from the column configs
+  // themselves, which are already translated (`name: t(column.label)` in
+  // ResultsDataTableWrapper), so the cards stay localised for free.
+  const [isMobileView, setIsMobileView] = useState(
+    () => typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT
+  );
+  useEffect(() => {
+    const onResize = () =>
+      setIsMobileView(window.innerWidth <= MOBILE_BREAKPOINT);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const mobileColumns = useMemo(
+    () => [
+      {
+        id: "digit-results-mobile-card",
+        name: "",
+        grow: 1,
+        cell: (row, index) => (
+          <div className="digit-results-mobile-card">
+            {(columns || []).map((column, columnIndex) => {
+              const content = renderCellContent(column, row, index);
+              if (content === null || content === undefined || content === "")
+                return null;
+              // The first column is the record's identity (the complaint
+              // number here), so it leads the card instead of taking a label.
+              if (columnIndex === 0) {
+                return (
+                  <div
+                    className="digit-results-mobile-card-title"
+                    key={column?.id || columnIndex}
+                  >
+                    {content}
+                  </div>
+                );
+              }
+              return (
+                <div
+                  className="digit-results-mobile-card-row"
+                  key={column?.id || columnIndex}
+                >
+                  <span className="digit-results-mobile-card-label">
+                    {column?.name}
+                  </span>
+                  <span className="digit-results-mobile-card-value">
+                    {content}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ),
+      },
+    ],
+    [columns]
+  );
+
   const renderTable = () => {
     return (
       <DataTable
         data={data}
-        columns={columns}
+        columns={isMobileView ? mobileColumns : columns}
+        noTableHead={isMobileView}
         responsive={true}
         sortIcon={
           <CustomSVG.SortUp width={"16px"} height={"16px"} fill={"#0b4b66"} />
