@@ -7003,3 +7003,100 @@ header.digit-header .digit-dropdown-master {
     gap: 12px;
   }
 }
+
+/* ----------------------------------------------------------------------
+ * 59. Working context: pill + assignments panel (#2038 review round 2)
+ *
+ *     The summary used to spend the bar on one of eight department names
+ *     plus a "+7". It is a pill of counts now, and the panel carries the
+ *     detail as chips.
+ * -------------------------------------------------------------------- */
+.employee .digit-working-context-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--color-header-pill-border, rgba(255, 255, 255, 0.22)) !important;
+  background: var(--color-header-pill-bg, rgba(255, 255, 255, 0.08)) !important;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+.employee .digit-working-context-trigger:hover {
+  background: var(--color-header-pill-bg-hover, rgba(255, 255, 255, 0.16)) !important;
+  border-color: var(--color-header-pill-border-hover, rgba(255, 255, 255, 0.34)) !important;
+}
+/* The place is the anchor of the pill; the counts sit back from it. */
+.employee .digit-working-context-summary .digit-working-context-place {
+  font-weight: 600;
+}
+.employee .digit-working-context-summary .digit-working-context-count,
+.employee .digit-working-context-summary .digit-working-context-sep {
+  opacity: 0.78;
+}
+
+/* Panel */
+.employee .digit-working-context-panel {
+  min-width: 280px;
+  padding: 16px 18px 18px !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+}
+.employee .digit-working-context-place-block {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
+}
+.employee .digit-working-context-place-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text-heading, #1D2433);
+}
+.employee .digit-working-context-subtitle {
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary, #5F5C62);
+}
+.employee .digit-working-context-group + .digit-working-context-group {
+  margin-top: 12px;
+}
+.employee .digit-working-context-group-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #5F5C62);
+  margin-bottom: 6px;
+}
+/* NOT "...-chips": a broad `[class*="chip"]` rule earlier in this file paints
+ * anything whose class contains "chip" as a filter pill, which caught the
+ * container and drew a tinted lozenge behind each row. */
+.employee .digit-working-context-grouprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.employee .digit-working-context-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--color-page-secondary-bg, #F4F6F9);
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--color-text-primary, #1D2433);
+}
+
+/* ----------------------------------------------------------------------
+ * 60. Navy top bar, separated from the navy sidebar (#2038 review round 2)
+ *
+ *     Rahul asked for a navy bar. The sidebar is the same navy, so without
+ *     a seam the two read as one L-shaped slab and the sidebar loses its
+ *     edge. A hairline at the boundary is enough — it keeps both surfaces
+ *     the tenant's navy rather than inventing a second shade.
+ * -------------------------------------------------------------------- */
+.employee .digit-topbar.digit-employee-header {
+  border-bottom: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
+}
+.employee .digit-sidebar {
+  border-right: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
+}
