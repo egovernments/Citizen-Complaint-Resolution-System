@@ -4641,9 +4641,15 @@ label .required, label sup,
   box-shadow: 0 20px 25px -5px rgba(16, 24, 40, 0.10),
               0 10px 10px -5px rgba(16, 24, 40, 0.04);
 }
+/* The divider belongs to the header ROW. `[class*="popup-heading"]` also
+ * matched `.digit-popup-heading`, which is the title TEXT, so the rule drew a
+ * short rule under the word itself — the stray underline beneath "Logout"
+ * (#2038). Colour still applies to both; only the border is row-scoped. */
+.digit-popup-header, .digit-modal-header, .digit-dialog-header {
+  border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
+}
 .digit-popup-header, .digit-modal-header, .digit-dialog-header,
 [class*="popup-heading"] {
-  border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
   color: var(--color-text-heading, var(--color-primary-1, #204F37));
 }
 .digit-popup-close, .digit-modal-close,
@@ -7214,4 +7220,40 @@ header.digit-header .digit-dropdown-master {
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--color-button-primary-bg-default, #2563EB);
+}
+
+/* ----------------------------------------------------------------------
+ * 62. Confirmation dialogs — logout and friends (#2038 review round 2)
+ *
+ *     The logout confirm was the odd one out: its buttons were square
+ *     while every other button in the employee UI is 6px, its shell was
+ *     10px against the 12px every card uses, and its labels were 13.33px
+ *     against 14px. Three near-misses in one dialog, which is exactly the
+ *     "corner radius inconsistency" the review points at.
+ * -------------------------------------------------------------------- */
+html .digit-popup-overlay .digit-popup-wrapper,
+html .digit-popup-wrapper,
+html .digit-popup-wrapper.digit-logout-popup-wrapper.default {
+  border-radius: 12px !important;
+}
+.digit-popup-wrapper button,
+.digit-popup-wrapper [class*="popup-footer"] button {
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+.digit-popup-wrapper button .digit-button-label,
+.digit-popup-wrapper [class*="popup-footer"] button .digit-button-label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* The dialog's footer carries no ground of its own in vendor CSS, so it shows
+ * whatever is behind the card. Paint it with the card surface so the action
+ * row is unambiguously part of the dialog (#2038). */
+html .digit-popup-wrapper .digit-popup-footer,
+html .digit-popup-wrapper [class*="popup-footer"] {
+  background: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
