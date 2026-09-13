@@ -7102,3 +7102,116 @@ header.digit-header .digit-dropdown-master {
 .employee .digit-sidebar {
   border-right: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
 }
+
+/* ----------------------------------------------------------------------
+ * 61. Inbox panels (#2038 review round 2)
+ * -------------------------------------------------------------------- */
+
+/* "Filters" belongs at the head of the section. The markup already carries a
+ * `.filter-header` (funnel glyph + label) but it was hidden, so the panel
+ * opened straight into "Complaint Subtype" with nothing saying what the
+ * column was for. */
+.employee .v2-pgr-inbox .filter-card .filter-header {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.employee .v2-pgr-inbox .filter-card .filter-header .title-container,
+.employee .v2-pgr-inbox .filter-card .filter-header .filter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-heading, #1D2433) !important;
+}
+.employee .v2-pgr-inbox .filter-card .filter-header svg {
+  width: 20px !important;
+  height: 20px !important;
+  fill: var(--color-button-tertiary-text, #2563EB);
+}
+
+/* One box, not a box inside a box. `.filter-card` carried its own 4px radius
+ * and white ground inside the 12px section card — which is the corner
+ * mismatch the review spotted on the filters panel specifically. The section
+ * is the card; this is just its content. */
+.employee .v2-pgr-inbox .digit-section.filter {
+  padding: 20px !important;
+}
+.employee .v2-pgr-inbox .filter-card,
+.employee .v2-pgr-inbox .filter-card.filter-card-vertical {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* The links panel's title sat ~30px right of the link beneath it: the header
+ * is a flex row whose first child is a logo slot, and MDMS supplies no logo
+ * for this module, so the slot rendered 22px of nothing and shunted the title
+ * across. Rather than hide it, give it the module's own icon — the same
+ * filled speech-bubble the home card now uses — so the panel is headed the
+ * way the reference is, and the icon column explains the indent instead of
+ * being an accident. */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-logo:empty {
+  width: 20px !important;
+  height: 20px !important;
+  flex: 0 0 20px;
+  background-color: var(--color-button-tertiary-text, #2563EB);
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 2H4C2.9 2 2.01 2.9 2.01 4L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 2H4C2.9 2 2.01 2.9 2.01 4L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z'/></svg>");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+/* Title and the links beneath it share one left edge. The icon sits in its
+ * own 20px gutter, so the links are indented by the icon width plus the row
+ * gap to line up with the title text rather than with the icon (#2038). */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header {
+  align-items: center;
+  gap: 8px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-contents {
+  padding-left: 28px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-text {
+  text-align: left !important;
+}
+
+/* Tabs need to look like tabs. The inactive one takes the clickable colour,
+ * the active one keeps the heading colour and owns the rule beneath it, and
+ * both respond to hover — at rest they were two pieces of dark text with a
+ * hairline under the row. */
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab {
+  position: relative;
+  padding: 8px 2px 10px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transition: color 0.15s ease-out;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab:hover {
+  color: var(--color-link-hover, #1D4FD8) !important;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab.active {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-weight: 600 !important;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-button-primary-bg-default, #2563EB);
+}
