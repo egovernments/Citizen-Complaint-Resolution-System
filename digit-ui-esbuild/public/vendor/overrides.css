@@ -6755,11 +6755,13 @@ header.digit-header .digit-dropdown-master {
   border-color: var(--color-button-primary-bg-default, #2563EB) !important;
 }
 
-/* One size for the action label, and near-black rather than the link blue —
- * on a filled row the surface is already saying "clickable". */
+/* The action label takes the clickable colour (#2038 review round 2). It was
+ * near-black on the grounds that the filled row already signalled "clickable",
+ * but the review asked for one colour across everything you can click, and a
+ * blue label plus the tinted row is a stronger affordance than either alone. */
 .employee .digit-landing-page-card button.digit-button-teritiary .digit-button-label,
 .employee .digit-landing-page-card button.digit-button-teritiary .icon-label-container {
-  color: var(--color-text-primary, #1D2433) !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   line-height: 1.25rem !important;
