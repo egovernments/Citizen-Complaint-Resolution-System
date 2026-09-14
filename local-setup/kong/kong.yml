@@ -676,6 +676,19 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
     strip_path: false
+- name: xstate-chatbot
+  url: http://xstate-chatbot:8080
+  tags:
+  - chatbot
+  routes:
+  # Twilio's inbound webhook. Deliberately NOT behind a DIGIT auth plugin -- Twilio
+  # cannot present a DIGIT token. Authentication is the X-Twilio-Signature check inside
+  # the service (TWILIO_VALIDATE_SIGNATURE). Only reachable when the `chatbot` compose
+  # profile is on; otherwise the upstream simply does not resolve.
+  - name: xstate-chatbot-route
+    paths:
+    - /xstate-chatbot
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:

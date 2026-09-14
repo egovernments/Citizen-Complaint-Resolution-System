@@ -1504,6 +1504,116 @@ services:
       - egov-network
 
   # ===========================================================================
+  # Inbound WhatsApp (xstate-chatbot) -- opt-in via the `chatbot` profile
+  # ===========================================================================
+  # The OTHER half of bidirectional WhatsApp. Novu/novu-bridge is outbound only:
+  # it has no webhook receiver, so a citizen's reply reaches nothing. This service
+  # is what Twilio calls directly when someone messages the business number, and it
+  # drives an XState dialog that files and tracks complaints against pgr-services
+  # (source: "whatsapp").
+  #
+  # Off by default. Ansible turns the profile on when `enable_chatbot: true`.
+  # Read docs/2.12/notifications/inbound-whatsapp.md before enabling: the webhook is
+  # necessarily public and unauthenticated at the network layer, so it relies on
+  # Twilio signature validation (TWILIO_VALIDATE_SIGNATURE, on by default).
+  xstate-chatbot-db:
+    image: ${XSTATE_CHATBOT_DB_IMAGE:-egovio/xstate-chatbot-db:nightly-develop}
+    container_name: xstate-chatbot-db
+    profiles: ["chatbot"]
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      # Flyway talks to postgres directly, not through pgbouncer (same convention
+      # as the other *-db migration containers in this file).
+      DB_URL: jdbc:postgresql://postgres:5432/egov
+      SCHEMA_TABLE: xstate_chatbot_schema
+      FLYWAY_USER: ${POSTGRES_USER:-egov}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql/main
+    networks:
+      - egov-network
+
+  xstate-chatbot:
+    image: ${XSTATE_CHATBOT_IMAGE:-egovio/xstate-chatbot:nightly-develop}
+    container_name: xstate-chatbot
+    restart: unless-stopped
+    profiles: ["chatbot"]
+    depends_on:
+      xstate-chatbot-db:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      pgr-services:
+        condition: service_healthy
+      egov-mdms-service:
+        condition: service_healthy
+      egov-localization:
+        condition: service_healthy
+    environment:
+      SERVICE_PORT: '8080'
+      CONTEXT_PATH: /xstate-chatbot
+      WHATSAPP_PROVIDER: ${CHATBOT_WHATSAPP_PROVIDER:-Twilio}
+      # Sessions MUST be in Postgres. The code default is InMemory, which loses every
+      # in-flight conversation on restart and breaks outright with >1 replica -- while
+      # still running the migration above and leaving the table unused.
+      REPO_PROVIDER: Postgres
+      # The chatbot ships a SECOND, independent outbound notifier that consumes
+      # update-pgr-request and sends its own templates through ValueFirst. Leaving it on
+      # double-sends every status update (once via Novu, once here) over a provider this
+      # stack does not have. Novu owns outbound; this stays off.
+      KAFKA_CONSUMER_ENABLED: 'false'
+      # Sandbox mode resolves the tenant by emailing tenant-management, which does not
+      # exist in CCRS. Non-sandbox uses ROOT_TENANTID below.
+      ENABLE_SANDBOX_MODE: 'false'
+      ROOT_TENANTID: ${CHATBOT_ROOT_TENANT:-pg}
+      SUPPORTED_LOCALES: ${CHATBOT_SUPPORTED_LOCALES:-en_IN}
+      WHATSAPP_BUSINESS_NUMBER: ${CHATBOT_WHATSAPP_BUSINESS_NUMBER:-}
+      # false keeps location on the MDMS/boundary city -> locality pick-lists. true needs
+      # nlp-engine (NOT deployed in this stack) and a Google Maps key.
+      GEO_SEARCH: ${CHATBOT_GEO_SEARCH:-false}
+      BOUNDARY_HIERARCHY_TYPE: ${CHATBOT_BOUNDARY_HIERARCHY_TYPE:-ADMIN}
+      # Twilio inbound webhook authentication. The endpoint is public by necessity;
+      # the signature is the only thing distinguishing a real citizen from anyone who
+      # guessed the URL. TWILIO_WEBHOOK_BASE_URL pins the origin so a forged
+      # Host/X-Forwarded-Host cannot steer the check.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_FROM:-}
+      TWILIO_VALIDATE_SIGNATURE: ${CHATBOT_VALIDATE_SIGNATURE:-true}
+      TWILIO_WEBHOOK_BASE_URL: ${CHATBOT_WEBHOOK_BASE_URL:-}
+      # Shared secret for POST /reminder (fans out to every active session). Unset
+      # disables the route rather than leaving it open.
+      REMINDER_AUTH_TOKEN: ${CHATBOT_REMINDER_TOKEN:-}
+      # Catch-all dev proxy stays OFF: with it on, every unmatched path is forwarded to
+      # the DIGIT services host, making this publicly-reachable container an open proxy.
+      DEV_PROXY_ENABLED: 'false'
+      EGOV_SERVICES_HOST: http://kong:8000/
+      EXTERNAL_HOST: ${CHATBOT_EXTERNAL_HOST:-http://kong:8000/}
+      USER_SERVICE_HOST: http://kong:8000/
+      LOCALIZATION_SERVICE_HOST: http://kong:8000/
+      MDMS_V2_SEARCH_PATH: mdms-v2/v2/_search
+      # Must equal egov-user's CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE or every citizen
+      # login fails; both default to 123456 on this stack.
+      USER_SERVICE_HARDCODED_PASSWORD: ${CITIZEN_OTP_FIXED_VALUE:-123456}
+      DB_HOST: pgbouncer
+      DB_PORT: '5432'
+      DB_NAME: ${POSTGRES_DB:-egov}
+      DB_USER: ${POSTGRES_USER:-egov}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      KAFKA_BOOTSTRAP_SERVER: redpanda:9092
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/xstate-chatbot/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - egov-network
+
+  # ===========================================================================
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
@@ -1656,6 +1766,7 @@ services:
       GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
       GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
       GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
+      GATUS_PROFILE_CHATBOT: ${GATUS_PROFILE_CHATBOT:-false}
       GATUS_AUDIT: "true"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8005"

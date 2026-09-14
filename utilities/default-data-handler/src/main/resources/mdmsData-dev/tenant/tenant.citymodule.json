@@ -19,7 +19,21 @@
     "active": true,
     "module": "PGR",
     "tenants": [
-    {
+      {
+        "code": "{tenantid}"
+      },
+      {
+        "code": "{tenantid}.citya"
+      }
+    ]
+  },
+  {
+    "code": "PGR.WHATSAPP",
+    "order": 3,
+    "active": true,
+    "module": "PGR.WHATSAPP",
+    "tenants": [
+      {
         "code": "{tenantid}"
       },
       {
