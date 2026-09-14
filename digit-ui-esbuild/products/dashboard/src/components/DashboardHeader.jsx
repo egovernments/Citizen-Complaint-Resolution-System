@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import useDashboardT from "../i18n/useDashboardT";
+import { toBcp47Locale } from "../i18n/localeRuntime";
 import { normalizeHierarchySelections } from "../utils/multiSelectFilters";
 import AddKpiDropdown from "./AddKpiDropdown";
 import LanguageMenu from "./LanguageMenu";
@@ -52,7 +53,7 @@ function formatDisplayDate(iso, language) {
   if (Number.isNaN(date.getTime())) return iso;
   const opts = { day: "2-digit", month: "2-digit", year: "numeric" };
   try {
-    return date.toLocaleDateString(language?.replace("_", "-"), opts);
+    return date.toLocaleDateString(toBcp47Locale(language), opts);
   } catch (e) {
     // Malformed stored locale tag — let the browser default decide.
     return date.toLocaleDateString(undefined, opts);

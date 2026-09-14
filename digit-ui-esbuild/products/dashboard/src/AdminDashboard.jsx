@@ -28,6 +28,7 @@ import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberForm
 import { isValidTimeZone, resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
 import useDashboardT from "./i18n/useDashboardT";
+import { toBcp47Locale } from "./i18n/localeRuntime";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
@@ -826,24 +827,28 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     // Prefer the batch-echoed zone, but only if Intl accepts it — a bad
     // calendar.timeZone from an older/misconfigured backend used to throw
     // RangeError here and trip the route ErrorBoundary ("Something went wrong")
-    // after the analytics calls had already succeeded.
+    // after the analytics calls had already succeeded. Same for language:
+    // en_IN_IN (doubled region) → en-IN_IN is not a valid BCP 47 tag.
     const echoed = batch.calendar?.timeZone;
     const zone = isValidTimeZone(echoed) ? echoed.trim() : timeZone;
+    const locale = toBcp47Locale(language);
+    const opts = {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    };
     try {
-      return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
+      return new Date(batch.asOf).toLocaleString(locale, {
+        ...opts,
         ...(isValidTimeZone(zone) ? { timeZone: zone.trim() } : {}),
       });
     } catch {
-      return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      });
+      try {
+        return new Date(batch.asOf).toLocaleString(locale, opts);
+      } catch {
+        return new Date(batch.asOf).toLocaleString(undefined, opts);
+      }
     }
   }, [batch.asOf, batch.calendar, timeZone, language]);
 
