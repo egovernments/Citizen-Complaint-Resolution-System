@@ -1601,6 +1601,11 @@ services:
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
       # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
+      # Founder onboarding (#1999) authenticates through the identity BFF's
+      # session-introspection endpoint. Unset keeps the onboarding routes
+      # failing closed with 503; the token is the introspection-only credential.
+      PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-}
+      PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
