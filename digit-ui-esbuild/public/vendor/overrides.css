@@ -247,9 +247,14 @@ button[class*="submit-bar"]:active {
 /* Foreground (text + svg) on primary-2 surfaces. Vendor hardcodes
  * `color: rgba(255,255,255,…)` inside `.digit-button-primary h2` /
  * `.digit-submit-bar h2`, which fails WCAG once MDMS swaps the primary
- * surface to a light brand colour (Nairobi yellow #FEC931). Route through
- * --color-text-primary (kenya-green sets it to #0B0C0C ≈ black) so the
- * contrast colour stays theme-configurable without introducing a new var. */
+ * surface to a light brand colour (Nairobi yellow #FEC931).
+ *
+ * #2038: --color-text-primary was the stand-in for "whatever reads on the
+ * brand colour", which only held while the brand was light. Bomet's blue
+ * (#2563EB) needs white. Prefer the dedicated --color-button-primary-text
+ * (already in the ThemeConfig schema, and already #FFFFFF on the live
+ * record) and keep the old body-text value as the fallback, so a theme
+ * that never set it behaves exactly as before. */
 .digit-button-primary,
 .digit-button-primary h2,
 .digit-button.primary,
@@ -257,7 +262,7 @@ button[class*="submit-bar"]:active {
 button.digit-submit-bar,
 button[class*="submit-bar"],
 .digit-submit-bar h2 {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 .digit-button-primary svg,
 .digit-button-primary svg path,
@@ -267,8 +272,8 @@ button.digit-submit-bar svg,
 button.digit-submit-bar svg path,
 button[class*="submit-bar"] svg,
 button[class*="submit-bar"] svg path {
-  fill: var(--color-text-primary, #0B0C0C) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  fill: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Input focus border — designer's "Inputs / Border Focus" (Nairobi: #204F37,
@@ -1151,7 +1156,9 @@ button[class*="submit-bar"],
 button[class*="submit-bar"] *,
 .digit-formcomposer-submitbar,
 .digit-formcomposer-submitbar * {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  /* #2038: same swap as the block above — the label on a primary button
+   * follows --color-button-primary-text, not the page's body-text colour. */
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
 }
 
 /* Sidebar rows in the v2 CitizenSidebar (Edit Profile / Logout / Helpline
@@ -1681,7 +1688,8 @@ button[class*="toast-close"] svg,
 .v2-scope .digit-privacy-checkbox label,
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container,
 .v2-scope .digit-privacy-checkbox .label {
-  font-size: 0.8125rem !important;
+  /* Same 0.875rem as the field labels and "Forgot password?" (#2038). */
+  font-size: 0.875rem !important;
   color: var(--color-text-secondary, #6B7280) !important;
   line-height: 1.4 !important;
   margin: 0 !important;
@@ -1692,19 +1700,47 @@ button[class*="toast-close"] svg,
   align-items: center;
   gap: 8px;
 }
+/* The real <input> is opacity:0 but still in flow, so it reserves a ~16px
+ * slot ahead of the drawn box and the checkbox lands 16px right of the
+ * field column. Take it out of flow (still on top of the box, so it stays
+ * the click target) and the box starts on the same left edge as every
+ * input, the submit button and "Forgot password?" (#2038). */
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container > input[type="checkbox"],
 .v2-scope .digit-privacy-checkbox .digit-checkbox-container .input-emp[type="checkbox"] {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
   margin: 0 !important;
   vertical-align: middle;
+}
+/* 24px is a tick the size of the sentence next to it. 18px sits with the
+ * 0.875rem label instead of shouting over it. */
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox,
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox-emp {
+  margin-left: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  flex: 0 0 18px !important;
+}
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox svg,
+.v2-scope .digit-privacy-checkbox .digit-custom-checkbox-emp svg {
+  width: 18px !important;
+  height: 18px !important;
 }
 .v2-scope .digit-privacy-checkbox button.digit-button-link,
 .v2-scope .digit-privacy-checkbox .digit-button-link,
 .v2-scope .digit-privacy-checkbox button[class*="link"] {
   margin: 0 !important;
   padding: 0 !important;
-  font-size: 0.8125rem !important;
-  font-weight: 600 !important;
-  color: var(--color-primary-1, var(--color-primary-main, #c84c0e)) !important;
+  /* #2038: one size for every piece of text on this row, and the link wears
+   * the clickable colour rather than primary-1 (which is now the navy the
+   * top bar uses, and must never be a text colour). */
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
   background: transparent !important;
   box-shadow: none !important;
   height: auto !important;
@@ -2283,32 +2319,33 @@ button[class*="toast-close"] svg,
 }
 .employee .digit-landing-page-card,
 .employee .digit-card-component.digit-landing-page-card {
-  /* Match the citizen ModuleCard chrome exactly: white surface, 1px
-   * dark border (the citizen card resolves to `rgb(54, 54, 54)` =
-   * `--color-text-heading`), no border-radius, same subtle drop
-   * shadow. Keep a transparent transition so hover doesn't lift.
-   * Vendor pins `min-height: 260px` and `padding: 24px` — release
-   * both so the card hugs its actual content (icon + title + 2-3
+  /* White surface. Vendor pins `min-height: 260px` and `padding: 24px` —
+   * release both so the card hugs its actual content (icon + title + 2-3
    * link rows, ~140px) rather than reserving space for a banner that
-   * doesn't exist on this surface. */
+   * doesn't exist on this surface.
+   *
+   * #2038: the 1px near-black outline and square corners were matched to
+   * the old citizen ModuleCard and read as a table cell. A hairline in the
+   * card-border token plus a soft lift gives the same separation without
+   * drawing a box around everything, and matches the login card. */
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
   transition: none !important;
   width: auto !important;
   min-width: 0 !important;
   min-height: 0 !important;
   height: auto !important;
-  padding: 16px 20px !important;
+  padding: 20px !important;
   gap: 8px !important;
 }
 /* No hover on the outer card — the row-level affordance below carries
  * the interaction signal. */
 .employee .digit-landing-page-card:hover,
 .employee .digit-card-component.digit-landing-page-card:hover {
-  border-color: var(--color-text-heading, #363636) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border-color: var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
 }
 .employee .digit-landing-page-card .digit-landingpagecard-icon,
 .employee .digit-card-component.digit-landing-page-card .digit-landingpagecard-icon {
@@ -2976,7 +3013,23 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-results-table-wrapper > .digit-card-component,
 .v2-pgr-inbox .digit-results-table-wrapper > .digit-table-card {
   flex: 1 1 auto;
-  min-height: 100%;
+  /* #2038: was `min-height: 100%`, i.e. at least the full wrapper height —
+   * but the wrapper also holds the My/All tab strip above the card, so the
+   * column's content came out ~42px taller than the column itself and the
+   * card got a second scrollbar wrapped around the table's own one. `0`
+   * lets the card take the space that is actually left. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The row list keeps its own cap and its own scrollbar — that is the scroll
+ * that belongs here. With the card no longer forced to a full-column
+ * minimum, the column simply grows to fit tabs + card, so nothing overflows
+ * and the second scrollbar never appears. */
+.v2-pgr-inbox .digit-results-table-wrapper .digit-data-table {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* My/All visibility tabs (Visibility V1, PR #1052). Rendered inside the
@@ -3262,12 +3315,15 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-checkbox-container {
   position: relative;
 }
+/* #2038: was a 1px near-black outline with square corners, which drew a box
+ * around every panel and made the page read as a spreadsheet. Hairline plus
+ * a soft lift, same as the landing, login and create-complaint cards. */
 .v2-pgr-inbox .digit-inbox-search-wrapper > div:first-child,
 .v2-pgr-inbox .digit-card-component {
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
 }
 .v2-pgr-inbox .card-label,
 .v2-pgr-inbox h2.card-label {
@@ -3345,10 +3401,15 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-button-primary:hover {
   background-color: var(--color-button-primary-bg-hover, var(--color-primary-2, #E6B800)) !important;
 }
+/* Scoped to filled buttons: `.v2-pgr-inbox .digit-button-label` alone also
+ * caught the tertiary/link labels on this page, which must not take the
+ * primary-button foreground. */
 .v2-pgr-inbox button.submit-bar h2,
 .v2-pgr-inbox button[class*="submit-bar"] h2,
-.v2-pgr-inbox .digit-button-label {
-  color: var(--color-text-primary, #0B0C0C) !important;
+.v2-pgr-inbox button[class*="submit-bar"] .digit-button-label,
+.v2-pgr-inbox button.digit-button-primary .digit-button-label,
+.v2-pgr-inbox .digit-button-primary .digit-button-label {
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -3982,10 +4043,14 @@ button[class*="toast-close"] svg,
   box-shadow: none !important;
   transform: none !important;
 }
+/* Scoped to the submit bar: `.v2-employee-create-complaint
+ * .digit-button-label` on its own also caught secondary and tertiary
+ * buttons on the page, which must not wear the primary-button foreground. */
 .v2-employee-create-complaint .digit-submit-bar h2,
-.v2-employee-create-complaint .digit-button-label,
+.v2-employee-create-complaint .digit-submit-bar .digit-button-label,
+.v2-employee-create-complaint [class*="submit-bar"] .digit-button-label,
 .v2-employee-create-complaint button[class*="submit-bar"] h2 {
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, var(--color-text-primary, #0B0C0C)) !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
   text-transform: none !important;
@@ -5296,13 +5361,32 @@ html .citizen-home-footer {
 
 /* 49. Login banner — drop the citizen-banner.svg illustration which
  *     contains a partial tagline ("...the resolution") that peeks out
- *     beside the login card and looks like leaked draft copy. Solid
- *     teal background reads cleaner. Tenant-neutral (uses upstream's
- *     existing teal value, no hardcoded brand). */
+ *     beside the login card and looks like leaked draft copy. A solid
+ *     field reads cleaner.
+ *
+ *     #2038: the field was a literal #0B4B66, so the pre-auth pages kept
+ *     upstream's teal no matter what the tenant theme said. Route it
+ *     through the header token (the same navy the top bar wears once you
+ *     are inside) and keep the old teal as the fallback, so a deployment
+ *     with no ThemeConfig looks exactly as it does today. */
 .banner, .banner-container,
 [class*="banner-container"]:not([class*="banner-text"]) {
-  background-image: linear-gradient(rgba(11, 75, 102, 0.85), rgba(11, 75, 102, 0.85)) !important;
-  background-color: #0B4B66 !important;
+  background-image: none !important;
+  /* Keyed on digitv2-header-sidenav, not header-bg. Two reasons.
+   *
+   * The vendored :root defines header-bg (#22394D), so a
+   * `var(--color-header-bg, …)` chain can never reach its fallback — a tenant
+   * that never set the token would silently take that generic value rather
+   * than anything of its own.
+   *
+   * And header-bg is the TOP BAR's surface, which a theme may legitimately set
+   * light: the navy palette in this ticket uses a white top bar, which would
+   * be a white login banner. digitv2-header-sidenav is the tenant's dark brand
+   * surface, which is what this full-bleed banner wants, and `primary-1` fans
+   * out to it, so every v3 record fills it in. Bomet resolves to its #1565A8
+   * rather than the old hardcoded teal — deliberate: the banner now follows
+   * the tenant instead of ignoring it. */
+  background-color: var(--color-digitv2-header-sidenav, #0B4B66) !important;
 }
 
 /* 50b. Tertiary action labels (.primary-label-btn, .link-label) — upstream
@@ -6343,6 +6427,19 @@ header.digit-header .digit-dropdown-master {
   outline: 2px solid var(--color-primary-accent, #c84c0e);
   outline-offset: 2px;
 }
+/* The generic `button:hover` lift above treats this as a filled button and
+ * floats a card shadow behind a line of text in the bar (#2038). It is a
+ * disclosure, not a raised control: swap the shadow for a quiet tint so the
+ * row still reads as clickable without appearing to lift off the bar. */
+.employee .digit-working-context-trigger:hover,
+.employee .digit-working-context-trigger:active {
+  box-shadow: none !important;
+  transform: none !important;
+}
+.employee .digit-working-context-trigger:hover {
+  background: rgba(15, 23, 42, 0.06) !important;
+  border-radius: 6px;
+}
 /* Single line, truncated — the employee topbar is 56px and this sits beside
  * the city/language controls, so it must never wrap or push them off-screen.
  * block + nowrap (rather than flex) so text-overflow actually applies. */
@@ -6451,4 +6548,458 @@ header.digit-header .digit-dropdown-master {
   color: var(--color-text-secondary, #505a5f);
   opacity: 1;
   max-width: 100%;
+}
+
+/* ----------------------------------------------------------------------
+ * 51. Language selection (#2038) — the last pre-auth screen still wearing
+ *     the legacy card: 4px corners, a hairline, and square language
+ *     buttons that read as disabled tiles rather than choices. Bring it
+ *     onto the same shape language as the modernised login card so the
+ *     two screens a user sees back to back match.
+ *
+ *     Radii are deliberately the v2 Button's `rounded-md` (6px) and the
+ *     login card's 14px, not new values.
+ * -------------------------------------------------------------------- */
+.employee .languageSelection {
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+  padding: 32px !important;
+}
+
+/* The row is three buttons inside a 420px card, so it has to be allowed to
+ * wrap — otherwise the widest label (PORTUGUÊS) is clipped by the card. */
+.employee .languageSelection .language-selector {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+.employee .languageSelection .language-button-container {
+  margin: 0 !important;
+}
+
+.employee .languageSelection .customBtn,
+.employee .languageSelection .customBtn-selected {
+  border-radius: 6px !important;
+  min-height: 40px;
+  padding: 0 14px !important;
+  width: auto !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+
+/* Unselected: a real, clickable outline rather than the grey 1px box. */
+.employee .languageSelection .customBtn {
+  border: 1px solid var(--color-input-border-default, var(--color-border, #E1E6EF)) !important;
+  background: var(--color-input-bg, #ffffff) !important;
+  color: var(--color-text-primary, #1D2433) !important;
+}
+.employee .languageSelection .customBtn:hover {
+  border-color: var(--color-button-primary-bg-default, #2563EB) !important;
+  background: var(--color-primary-1-bg, #EFF6FF) !important;
+}
+
+/* Selected: the same fill + white label as every other primary action. */
+.employee .languageSelection .customBtn-selected {
+  background: var(--color-button-primary-bg-default, var(--color-primary-2, #2563EB)) !important;
+  border: 1px solid var(--color-button-primary-border, var(--color-button-primary-bg-default, #2563EB)) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+}
+
+/* Same type as the login CTA and the language buttons — 0.875rem / 500.
+ * A heavier, larger label here made this one button look like a different
+ * component from every other primary action in the flow.
+ *
+ * SubmitBar renders its label as an inner <h2 class="digit-button-label">
+ * carrying its own 20px, so sizing the <button> alone changes nothing you
+ * can see — the h2 has to be targeted too. */
+.employee .languageSelection .digit-submit-bar,
+.employee .languageSelection button[class*="submit-bar"] {
+  border-radius: 6px !important;
+  min-height: 40px;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+.employee .languageSelection .digit-submit-bar .digit-button-label,
+.employee .languageSelection button[class*="submit-bar"] .digit-button-label,
+.employee .languageSelection .digit-submit-bar .icon-label-container,
+.employee .languageSelection button[class*="submit-bar"] .icon-label-container {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  margin: 0 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 52. Employee top bar (#2038)
+ * -------------------------------------------------------------------- */
+
+/* The far-right brand mark is the *same* image already sitting next to the
+ * eGov wordmark on the left (Header renders `img` a second time at the end
+ * of the action row). One tenant crest per bar is enough. The element is
+ * hidden rather than removed because Header is shared with other products,
+ * and passing no `img` makes it fall back to the DIGIT mark instead. */
+.digit-employee-header .digit-header-action-fields > .digit-header-img {
+  display: none !important;
+}
+
+/* One type scale across the bar. It was carrying three: the working
+ * context at 12px/400, the tenant and language dropdowns at 16px/400, and
+ * the profile initial at 16px/700. Everything is 0.875rem/500 now; the
+ * "+N" counters keep a heavier weight because they are a distinct datum
+ * rather than a label, and they are the one thing in the bar that has to
+ * survive being skimmed. */
+.digit-employee-header .digit-header-action-fields,
+.digit-employee-header .digit-header-action-fields .cp,
+.digit-employee-header .digit-working-context-summary,
+.digit-employee-header .digit-working-context-summary span,
+.digit-employee-header .header-dropdown-profile {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  letter-spacing: normal !important;
+}
+.digit-employee-header .digit-working-context-summary .digit-working-context-more {
+  font-weight: 600 !important;
+}
+
+/* The profile initial sits on its own filled circle, so it is the one piece
+ * of text in the bar that must NOT take the bar's foreground colour —
+ * inheriting near-black put dark text on a dark disc. Give the disc the
+ * action colour and the initial white (5.17:1). */
+.digit-employee-header .header-dropdown-profile.text {
+  background: var(--color-button-primary-bg-default, #2563EB) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+  font-weight: 600 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 53. Employee home footer (#2038) — "Powered by DIGIT" floated ~32px
+ *     above the bottom of the window because `.main` wraps to its content
+ *     instead of filling the viewport. Make the column full height and let
+ *     the footer be pushed to the end of it, so the mark sits on the
+ *     bottom edge on a short page and still follows the content on a long
+ *     one.
+ * -------------------------------------------------------------------- */
+.employee .main.digit-home-main {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.employee .main.digit-home-main > .digit-home-app-wrapper {
+  flex: 1 1 auto;
+}
+.employee .main.digit-home-main > .employee-home-footer {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding-bottom: 10px;
+}
+
+/* ----------------------------------------------------------------------
+ * 54. Employee landing cards (#2038)
+ *
+ *     The module cards were a 1px hard-black rectangle with square
+ *     corners, and their actions were bare tertiary buttons — text with a
+ *     chevron and no ground, so nothing said "button" until you hovered
+ *     one. Give the card the same shape language as the login card, and
+ *     give each action a standing surface so the affordance is visible at
+ *     rest rather than on hover only.
+ *
+ *     Labels stay near-black: the tint and the chevron carry the
+ *     affordance here, so the row does not also need to be blue.
+ * -------------------------------------------------------------------- */
+/* Card chrome itself (border, radius, shadow, padding) lives in section 30
+ * above, which carries the higher-specificity selector. */
+
+/* Title reads as a title: near-black, never the navy or the action blue. */
+.employee .digit-landing-page-card .ladingcard-moduleName {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+.employee .digit-landing-page-card .digit-landingpage-divider {
+  margin: 14px 0 10px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--color-card-divider, #E5E7EB) !important;
+}
+
+/* Actions: a standing surface, not hover-only. */
+.employee .digit-landing-page-card button.digit-button-teritiary {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin: 0 0 8px !important;
+  padding: 10px 14px !important;
+  min-height: 42px !important;
+  background: var(--color-page-secondary-bg, #F4F6F9) !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  text-align: left !important;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+.employee .digit-landing-page-card button.digit-button-teritiary:last-of-type {
+  margin-bottom: 0 !important;
+}
+.employee .digit-landing-page-card button.digit-button-teritiary:hover {
+  background: var(--color-primary-1-bg, #EFF6FF) !important;
+  border-color: var(--color-button-primary-bg-default, #2563EB) !important;
+}
+
+/* One size for the action label, and near-black rather than the link blue —
+ * on a filled row the surface is already saying "clickable". */
+.employee .digit-landing-page-card button.digit-button-teritiary .digit-button-label,
+.employee .digit-landing-page-card button.digit-button-teritiary .icon-label-container {
+  color: var(--color-text-primary, #1D2433) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  margin: 0 !important;
+}
+
+/* The chevron is the affordance, so it takes the action colour. */
+.employee .digit-landing-page-card button.digit-button-teritiary svg,
+.employee .digit-landing-page-card button.digit-button-teritiary svg path {
+  fill: var(--color-button-tertiary-text, #2563EB) !important;
+  color: var(--color-button-tertiary-text, #2563EB) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 55. Error / not-found screen (#2038) — ErrorComponent renders a bare
+ *     <button>, so it picked up the generic button chrome: a blue fill
+ *     with a near-black label, parked off-centre under a centred heading.
+ * -------------------------------------------------------------------- */
+.error-boundary .error-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 16px !important;
+}
+.error-boundary .error-container h1 {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+}
+.error-boundary .error-container button {
+  align-self: center !important;
+  margin: 0 !important;
+  min-height: 40px !important;
+  padding: 0 20px !important;
+  border: 1px solid var(--color-button-primary-border, #2563EB) !important;
+  border-radius: 6px !important;
+  background: var(--color-button-primary-bg-default, #2563EB) !important;
+  color: var(--color-button-primary-text, #ffffff) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+.error-boundary .error-container button * {
+  color: var(--color-button-primary-text, #ffffff) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 56. Create Complaint — form card and action bar (#2038)
+ *
+ *     The page container paints white edge to edge, and the action bar is
+ *     a transparent 52px strip *outside* the form card. So once the card's
+ *     hard border stopped, the submit button sat on a bare white slab with
+ *     nothing tying it to the form above it.
+ *
+ *     Let the page ground show instead, and give the card the same chrome
+ *     as the landing and login cards. The action bar then reads as a
+ *     footer belonging to the form rather than a leftover white band.
+ * -------------------------------------------------------------------- */
+.employee .v2-employee-create-complaint {
+  background-color: transparent !important;
+}
+.employee .v2-employee-create-complaint > form.custom-form > .digit-card-component {
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
+.employee .v2-employee-create-complaint .digit-action-bar-wrap {
+  padding: 16px 0 24px !important;
+  margin: 0 !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 57. Search Complaints / inbox (#2038)
+ *
+ *     Against the reference the page read as a spreadsheet rather than a
+ *     set of panels, for three reasons:
+ *       - the page scope painted white edge to edge, so the cards had no
+ *         ground to sit on and every panel ran into its neighbour;
+ *       - every table CELL carried a left and right border, drawing a full
+ *         grid instead of letting the row separators do the work;
+ *       - the header row was a tinted band rather than a plain heading.
+ * -------------------------------------------------------------------- */
+
+/* Let the page ground show, so the panels read as cards (same fix as the
+ * create-complaint container). */
+.employee .v2-pgr-inbox {
+  background-color: transparent !important;
+}
+
+/* One card treatment for the link, search, filter and results panels. */
+.employee .v2-pgr-inbox .digit-section,
+.employee .v2-pgr-inbox .digit-card-component.digit-table-card {
+  background-color: var(--color-page-bg, #ffffff) !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
+
+/* The strip under the page title is an empty 2px element that happens to be
+ * the search wrapper's first child, so the panel-chrome rule above boxed it
+ * and the two borders collapsed into a hard black rule under the heading.
+ * It holds no content, so it should draw nothing. Specificity has to clear
+ * `.v2-pgr-inbox .digit-inbox-search-wrapper > div:first-child`. */
+.employee .v2-pgr-inbox .digit-inbox-search-wrapper > div.digit-inbox-search-composer-header-action-wrapper {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Rows carry the separation; cells should not draw columns. */
+.employee .v2-pgr-inbox .rdt_TableCell {
+  border-left: 0 !important;
+  border-right: 0 !important;
+  font-size: 0.875rem !important;
+  color: var(--color-table-row-text, #363636) !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow {
+  border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow:last-of-type {
+  border-bottom: 0 !important;
+}
+.employee .v2-pgr-inbox .rdt_TableRow:hover {
+  background-color: var(--color-table-hover, #EFF6FF) !important;
+}
+
+/* Header: a plain heading row on the card surface, separated by a single
+ * rule, rather than a tinted band with a border above and below. The tint
+ * lives on .rdt_TableHead (the wrapper), not on the row. */
+/* Opaque, not transparent: this header is sticky over a scrolling row list,
+ * so a see-through ground lets the rows slide visibly through the labels.
+ * The card surface reads as "no tint" while still hiding what passes under. */
+.employee .v2-pgr-inbox .rdt_TableHead {
+  background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
+}
+.employee .v2-pgr-inbox .rdt_TableHeadRow {
+  background-color: transparent !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid var(--color-table-border, #E5E7EB) !important;
+  min-height: 48px !important;
+}
+.employee .v2-pgr-inbox .rdt_TableCol,
+.employee .v2-pgr-inbox .rdt_TableCol div {
+  color: var(--color-table-header-text, #1D2433) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+}
+
+/* The links panel was shouting: a 24px navy card title over a 20px
+ * underlined link, both far larger than anything else on the page. Bring
+ * them onto the same scale as the filter panel beside them, and let the
+ * title be a title (near-black) with the action in the link colour. */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-text,
+.employee .v2-pgr-inbox .digit-section.links .digit-inbox-search-links-heading,
+.employee .v2-pgr-inbox .digit-section.links h1,
+.employee .v2-pgr-inbox .digit-section.links h2,
+.employee .v2-pgr-inbox .digit-section.links h3 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  color: var(--color-text-heading, #1D2433) !important;
+  margin: 0 0 10px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-contents,
+.employee .v2-pgr-inbox .digit-inbox-search-link,
+.employee .v2-pgr-inbox .digit-inbox-search-link * {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
+  text-decoration: none !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-link:hover,
+.employee .v2-pgr-inbox .digit-inbox-search-link:hover * {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+
+/* "Clear search" is a tertiary action next to the Search button; it was a
+ * size larger than the button it sits beside. */
+.employee .v2-pgr-inbox .digit-button-teritiary .digit-button-label,
+.employee .v2-pgr-inbox [class*="teritiary"] .digit-button-label,
+.employee .v2-pgr-inbox [class*="tertiary"] .digit-button-label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* The pagination strip drew a full border around itself, so the foot of the
+ * results card looked like a separate boxed element sitting inside another
+ * box. The rows above it already end in a rule. */
+.employee .v2-pgr-inbox .rdt_Pagination {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 58. Inbox search fields on mobile (#2038)
+ *
+ *     `.digit-search-field-wrapper` is a three-column grid with fixed
+ *     track widths, and it keeps all three columns at every viewport. On a
+ *     phone that squeezes Mobile No down to a ~24px input and pushes the
+ *     date field to the card's edge. Stack the fields instead, each full
+ *     width, with the actions on their own row underneath.
+ * -------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .v2-pgr-inbox .digit-search-field-wrapper {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .employee .v2-pgr-inbox .digit-search-field-wrapper > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  /* The inputs themselves are sized by the vendor's inline widths. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-label-field-pair .digit-field,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-text-input,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-text-input-field,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="text"],
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="date"],
+  .employee .v2-pgr-inbox .digit-search-field-wrapper input[type="number"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* Mobile number keeps its +254 prefix beside a field that can shrink. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-input-with-prefix,
+  .employee .v2-pgr-inbox .digit-search-field-wrapper .digit-mobile-input {
+    display: flex !important;
+    width: 100% !important;
+  }
+  /* The actions are pinned to `grid-column: 3 / -1`. Left alone, that forces
+   * the grid to invent columns 2 and 3 even when the template is a single
+   * track, so the fields stayed side by side. Span the one column instead. */
+  .employee .v2-pgr-inbox .digit-search-field-wrapper > .digit-search-button-wrapper {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }

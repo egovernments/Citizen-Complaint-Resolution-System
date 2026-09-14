@@ -22,13 +22,19 @@ vi.mock('posthog-js', () => ({
   },
 }));
 
-// Mock Sentry
+// Mock Sentry.
+// browserTracingIntegration and replayIntegration are required by main.tsx's
+// integrations array: the mock is a whole-module factory, so any member it omits
+// is undefined and throws "is not a function" the moment a test imports a module
+// that builds that array.
 vi.mock('@sentry/react', () => ({
   init: vi.fn(),
   setUser: vi.fn(),
   setTag: vi.fn(),
   captureException: vi.fn(),
   addBreadcrumb: vi.fn(),
+  browserTracingIntegration: vi.fn(() => ({})),
+  replayIntegration: vi.fn(() => ({})),
   withProfiler: (component: unknown) => component,
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));

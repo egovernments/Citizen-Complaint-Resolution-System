@@ -22,6 +22,9 @@ const InputCard = ({
   onAdd,
   isMultipleAllow = false,
   cardStyle = {},
+  // Event name for the step's primary control (CCRS#2007). FormStep spreads a
+  // step's `config` in here, so a journey is tagged in config rather than code.
+  analyticsEvent,
 }) => {
   const isMobile = window.Digit.Utils.browser.isMobile();
   // TODO: inputs handle
@@ -31,7 +34,15 @@ const InputCard = ({
       {texts?.header && <CardHeader>{t(texts.header)}</CardHeader>}
       {texts?.cardText && <CardText>{t(texts.cardText)}</CardText>}
       {children}
-      {texts.submitBarLabel ? <SubmitBar disabled={isDisable} submit={submit} label={t(texts.submitBarLabel)} onSubmit={onNext} /> : null}
+      {texts.submitBarLabel ? (
+        <SubmitBar
+          disabled={isDisable}
+          submit={submit}
+          label={t(texts.submitBarLabel)}
+          onSubmit={onNext}
+          {...(analyticsEvent ? { "data-analytics-event": analyticsEvent } : {})}
+        />
+      ) : null}
       {texts.skipLabel ? <CardText style={{ marginTop: "10px", textAlign: isMobile ? "center" : "left" }}> {t(texts.skipLabel)} </CardText> : null}
       {texts.skipText ? <LinkButton label={t(texts.skipText)} onClick={onSkip} /> : null}
       {isMultipleAllow && texts.addMultipleText ? <LinkButton label={t(texts.addMultipleText)} onClick={onAdd} /> : null}

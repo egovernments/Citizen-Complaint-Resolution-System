@@ -4,36 +4,44 @@ import * as Sentry from '@sentry/react'
 import posthog from 'posthog-js'
 import './index.css'
 import App from './App.tsx'
+import { isTelemetryKilled } from './lib/telemetryGate'
 
-// Initialize Sentry for error tracking
-Sentry.init({
-  dsn: 'https://9858dc027b16081569d8e1a491c42efc@o4510791908720640.ingest.us.sentry.io/4510791969210368',
-  integrations: [
-    Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration(),
-  ],
-  // Performance Monitoring
-  tracesSampleRate: 1.0, // Capture 100% of transactions
-  // Session Replay
-  replaysSessionSampleRate: 0.1, // Sample 10% of sessions
-  replaysOnErrorSampleRate: 1.0, // Sample 100% of sessions with errors
-  // Send default PII data
-  sendDefaultPii: true,
-  environment: import.meta.env.MODE,
-})
+// Ops kill switch for this app's own telemetry. Absent flag => NOT killed, so
+// every already-deployed environment behaves exactly as before; see
+// src/lib/telemetryGate.ts for the three ways to switch it off. The error
+// boundary and profiler wrapper below stay unconditional so the fallback UI
+// still renders when telemetry is off.
+if (!isTelemetryKilled()) {
+  // Initialize Sentry for error tracking
+  Sentry.init({
+    dsn: 'https://9858dc027b16081569d8e1a491c42efc@o4510791908720640.ingest.us.sentry.io/4510791969210368',
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration(),
+    ],
+    // Performance Monitoring
+    tracesSampleRate: 1.0, // Capture 100% of transactions
+    // Session Replay
+    replaysSessionSampleRate: 0.1, // Sample 10% of sessions
+    replaysOnErrorSampleRate: 1.0, // Sample 100% of sessions with errors
+    // Send default PII data
+    sendDefaultPii: true,
+    environment: import.meta.env.MODE,
+  })
 
-// Initialize PostHog for analytics
-posthog.init('phc_NsoEDZg2dvgulUBNHAlf0GeRxmEgncH5L79yUvOhuwZ', {
-  api_host: 'https://us.i.posthog.com',
-  person_profiles: 'identified_only',
-  capture_pageview: true,
-  capture_pageleave: true,
-  autocapture: true,
-  // Respect Do Not Track
-  respect_dnt: true,
-  // Enable session recording
-  enable_recording_console_log: true,
-})
+  // Initialize PostHog for analytics
+  posthog.init('phc_NsoEDZg2dvgulUBNHAlf0GeRxmEgncH5L79yUvOhuwZ', {
+    api_host: 'https://us.i.posthog.com',
+    person_profiles: 'identified_only',
+    capture_pageview: true,
+    capture_pageleave: true,
+    autocapture: true,
+    // Respect Do Not Track
+    respect_dnt: true,
+    // Enable session recording
+    enable_recording_console_log: true,
+  })
+}
 
 // Wrap App with Sentry Error Boundary
 const SentryApp = Sentry.withProfiler(App)

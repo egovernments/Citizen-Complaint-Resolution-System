@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
 import { isPostalCodeValid, getPostalCodeErrorMessage, isPostalCodeNumeric } from "../../../utils/postalCode";
 import { serializeGeoLocation } from "../../../utils/geoLocation";
+import { trackEvent } from "../../../utils/analytics";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -938,11 +939,16 @@ const CreatePGRFlowV2: React.FC = () => {
       const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
       createMutation(payload, {
         onError: () => {
+          // Outcome, not intent. The submit click is already tagged; whether the
+          // complaint was actually created happens later and a click listener
+          // cannot see it. Without this pair the funnel ends at "pressed submit".
+          trackEvent("pgr.file-complaint.submit-failed", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
           history.push(`/digit-ui/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
+          trackEvent("pgr.file-complaint.submitted", { category: "pgr" });
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
@@ -1050,7 +1056,20 @@ const CreatePGRFlowV2: React.FC = () => {
         ) : null}
       </div>
       <FormFooter>
-        <Button variant="outline" onClick={handleBack} type="button">
+        {/* Analytics (CCRS#2007). Named from the step's stable STEPS id rather
+            than stepIndex, so inserting or reordering a step cannot silently
+            re-point an existing funnel step in the reports. The shim only emits
+            these when an admin has set trackClicks on the destination. */}
+        <Button
+          variant="outline"
+          onClick={handleBack}
+          type="button"
+          data-analytics-event={
+            stepIndex === 0
+              ? "pgr.file-complaint.cancel"
+              : `pgr.file-complaint.back.${STEPS[stepIndex]?.id ?? "unknown"}`
+          }
+        >
           {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : t("BACK")}
         </Button>
         <Button
@@ -1059,6 +1078,11 @@ const CreatePGRFlowV2: React.FC = () => {
           loading={submitting}
           disabled={!stepIsValid}
           type="button"
+          data-analytics-event={
+            isLast
+              ? "pgr.file-complaint.submit"
+              : `pgr.file-complaint.${STEPS[stepIndex]?.id ?? "unknown"}`
+          }
         >
           {isLast ? t("SUBMIT") : t("NEXT")}
         </Button>

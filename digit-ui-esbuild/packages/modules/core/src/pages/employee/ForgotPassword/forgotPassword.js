@@ -194,7 +194,16 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
                 marginTop: "0.5rem",
               }}
             >
-              <V2Button type="submit" width="full" loading={submitting} disabled={submitting}>
+              {/* Same contract as the login CTA: stays disabled until both
+                  required fields carry a value, so the button reflects
+                  whether the form can actually be submitted rather than
+                  inviting a click that only produces a validation toast. */}
+              <V2Button
+                type="submit"
+                width="full"
+                loading={submitting}
+                disabled={submitting || !username.trim() || !city?.code}
+              >
                 {tr(propsConfig?.texts?.submitButtonLabel, "Continue")}
               </V2Button>
               <V2Button
@@ -210,29 +219,10 @@ const ForgotPassword = ({ config: propsConfig, t, stateCode }) => {
         </form>
       </V2Card>
 
-      <div
-        className="EmployeeLoginFooter v2-scope"
-        style={{
-          position: "absolute",
-          bottom: 16,
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}
-      >
-        <ImageComponent
-          alt="Powered by DIGIT"
-          src={window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW")}
-          style={{ cursor: "pointer", pointerEvents: "auto" }}
-          onClick={() => {
-            window
-              .open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")
-              .focus();
-          }}
-        />
-      </div>
+      {/* The "Powered by DIGIT" footer is rendered once by V2LoginShell for
+          every pre-auth screen. The copy that used to live here carried
+          `v2-scope`, which paints the page background, so it laid a white
+          band across the foot of the banner. */}
 
       {showToast ? (
         <Toast type="error" label={showToast} onClose={closeToast} />

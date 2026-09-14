@@ -191,6 +191,11 @@ const EmployeeSideBar = () => {
       <SideNav
         items={sortedTransformedData}
         hideAccessbilityTools={true}
+        // #2038: drop the search affordance. SideNav defaults enableSearch to
+        // true, which on a CCRS deployment buys a magnifier over a two-item
+        // nav. The component already ships the collapsed `searchDisabled`
+        // layout for this case, so nothing else has to move.
+        enableSearch={false}
         onSelect={({ item, index, parentIndex }) => onItemSelect({ item, index, parentIndex })}
         theme={"dark"}
         variant={"primary"}

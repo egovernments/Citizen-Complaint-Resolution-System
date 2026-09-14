@@ -3134,5 +3134,33 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 1843
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 30,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1844
+  },
+  {
+    "rolecode": "MDMS_ADMIN",
+    "actionid": 31,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1845
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 30,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1846
+  },
+  {
+    "rolecode": "SUPERUSER",
+    "actionid": 31,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1847
   }
 ]
