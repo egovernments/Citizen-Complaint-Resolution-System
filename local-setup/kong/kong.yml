@@ -144,6 +144,17 @@ plugins:
           -- display context. PGR verifies the server-resolved userInfo.type; action RBAC is not
           -- appropriate because HRMS employee creation does not guarantee a shared base role.
           ["/pgr-services/v2/employee/_context"]=true,
+          -- The new account-onboarding endpoints authenticate the founder from the
+          -- identity BFF's HttpOnly session cookie inside pgr-services. They do not
+          -- accept DIGIT RequestInfo auth tokens because a tenant/user mapping does
+          -- not exist yet at this point in the journey.
+          ["/pgr-services/v2/onboarding/signups/_create"]=true,
+          ["/pgr-services/v2/onboarding/signups/_update"]=true,
+          ["/pgr-services/v2/onboarding/signups/_search"]=true,
+          ["/pgr-services/v2/onboarding/identifiers/_check"]=true,
+          ["/pgr-services/v2/onboarding/signups/_submit"]=true,
+          ["/pgr-services/v2/onboarding/operations/_search"]=true,
+          ["/pgr-services/v2/onboarding/operations/_retry"]=true,
           -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
           -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
           -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH

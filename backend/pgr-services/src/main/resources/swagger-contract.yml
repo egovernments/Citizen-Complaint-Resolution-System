@@ -122,8 +122,278 @@ paths:
               $ref: '#/components/schemas/ServiceRequest'
         description: Request schema.
         required: true
+  /onboarding/signups/_create:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Create or resume the authenticated founder's signup draft
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingSignupRequest'
+      responses:
+        '201':
+          description: Draft created or resumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSignupResponse'
+  /onboarding/signups/_update:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Update the authenticated founder's draft
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingSignupRequest'
+      responses:
+        '200':
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSignupResponse'
+  /onboarding/signups/_search:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Read the authenticated founder's draft
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingSignupRequest'
+      responses:
+        '200':
+          description: Matching founder-owned drafts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Signups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OnboardingSignup'
+  /onboarding/identifiers/_check:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Check an onboarding identifier before submission
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [Identifier]
+              properties:
+                Identifier:
+                  $ref: '#/components/schemas/OnboardingIdentifier'
+      responses:
+        '200':
+          description: Current availability; final reservation occurs at submit
+  /onboarding/signups/_submit:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Lock a complete draft, reserve identifiers, and start provisioning
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [Signup]
+              properties:
+                Signup:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+      responses:
+        '202':
+          description: Provisioning operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOperationResponse'
+  /onboarding/operations/_search:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Read a founder-owned provisioning operation
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingOperationRequest'
+      responses:
+        '200':
+          description: Matching founder-owned operation
+  /onboarding/operations/_retry:
+    post:
+      tags: [Tenant Onboarding]
+      summary: Retry a retryable provisioning operation
+      parameters:
+      - $ref: '#/components/parameters/IdentityCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingOperationRequest'
+      responses:
+        '202':
+          description: Operation accepted for another attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOperationResponse'
 components:
+  parameters:
+    IdentityCookie:
+      name: Cookie
+      in: header
+      required: true
+      description: Opaque HttpOnly identity-BFF session cookie; PGR introspects it server-side.
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 128
   schemas:
+    OnboardingSignupRequest:
+      type: object
+      required: [Signup]
+      properties:
+        Signup:
+          $ref: '#/components/schemas/OnboardingSignup'
+    OnboardingSignupResponse:
+      type: object
+      properties:
+        Signup:
+          $ref: '#/components/schemas/OnboardingSignup'
+    OnboardingSignup:
+      type: object
+      description: Versioned PostgreSQL draft. organizationAlias and requestedTenantId are server-derived.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [DRAFT, PROVISIONING, ACTIVE, FAILED]
+        accountName:
+          type: string
+        accountCode:
+          type: string
+          pattern: '^[A-Z0-9][A-Z0-9-]{1,31}$'
+        organizationAlias:
+          type: string
+          readOnly: true
+        requestedTenantId:
+          type: string
+          readOnly: true
+        urlSlug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        languages:
+          type: array
+          items:
+            type: string
+        timeZone:
+          type: string
+        financialYearPolicy:
+          type: string
+        acceptedTermsVersion:
+          type: string
+        tenantMetadata:
+          type: object
+          additionalProperties: true
+          description: Draft-only onboarding snapshot; projection code later maps approved fields to tenant/MDMS records.
+        version:
+          type: integer
+          format: int64
+          readOnly: true
+    OnboardingIdentifier:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [ACCOUNT_CODE, TENANT_ID, ORGANIZATION_ALIAS, URL_SLUG]
+        value:
+          type: string
+        signupId:
+          type: string
+          format: uuid
+        available:
+          type: boolean
+          readOnly: true
+    OnboardingOperationRequest:
+      type: object
+      required: [Operation]
+      properties:
+        Operation:
+          type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+    OnboardingOperationResponse:
+      type: object
+      properties:
+        Operation:
+          $ref: '#/components/schemas/OnboardingOperation'
+    OnboardingOperation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        signupId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, RETRYABLE_FAILED, TERMINAL_FAILED]
+        currentStep:
+          type: string
+        completedSteps:
+          type: array
+          items:
+            type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        attempt:
+          type: integer
     PGREntity:
       type: object
       description: 'Top level wrapper object containing the Service and Workflow objects'
