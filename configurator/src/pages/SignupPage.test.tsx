@@ -126,6 +126,7 @@ describe('wizard', () => {
     fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
     await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
@@ -134,6 +135,27 @@ describe('wizard', () => {
     expect(draft.accountName).toBe('Bomet County Government');
     // Required by the contract, and reused if the same action is retried.
     expect(key).toBeTruthy();
+  });
+
+  it('leaves fields the operator has not reached out of the payload', async () => {
+    // The validator rejects a blank value but accepts an absent field, so
+    // sending "" for a later step's field fails the create outright.
+    vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1' } as never);
+    render(<SignupPage />);
+
+    fireEvent.change(await screen.findByLabelText(/account name/i), {
+      target: { value: 'Bomet County Government' },
+    });
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
+    const [draft] = vi.mocked(api.createSignup).mock.calls[0];
+    expect(draft.countryCode).toBe('KE');
+    expect('financialYearPolicy' in draft).toBe(false);
+    expect('acceptedTermsVersion' in draft).toBe(false);
+    expect('tenantMetadata' in draft).toBe(false);
   });
 
   it('resumes an existing draft rather than starting a second', async () => {
@@ -188,6 +210,7 @@ describe('provisioning', () => {
     render(<SignupPage />);
 
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));

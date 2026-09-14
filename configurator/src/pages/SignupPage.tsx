@@ -265,20 +265,28 @@ export default function SignupPage() {
   useAvailability('ACCOUNT_CODE', accountCode, codeValid, setCodeState, setCodeChecking);
   useAvailability('URL_SLUG', urlSlug, slugValid, setSlugState, setSlugChecking);
 
-  const draft = useMemo<SignupDraftInput>(
-    () => ({
+  /**
+   * Only what has actually been filled in. The validator rejects a blank value
+   * but accepts an absent field, so sending `financialYearPolicy: ""` from the
+   * first step fails the create while omitting it succeeds — the fields the
+   * contract marks "on submit" are optional by absence, not by emptiness.
+   */
+  const draft = useMemo<SignupDraftInput>(() => {
+    const next: SignupDraftInput = {
       accountName: accountName.trim(),
       accountCode,
       urlSlug,
       countryCode,
-      languages,
-      timeZone,
-      financialYearPolicy,
-      acceptedTermsVersion: acceptedTerms ? TERMS_VERSION : '',
-      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: founderMobile.trim() } },
-    }),
-    [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, founderMobile]
-  );
+    };
+    if (languages.length) next.languages = languages;
+    if (timeZone) next.timeZone = timeZone;
+    if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
+    if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
+    if (founderMobile.trim()) {
+      next.tenantMetadata = { schemaVersion: 1, founder: { mobileNumber: founderMobile.trim() } };
+    }
+    return next;
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, founderMobile]);
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -374,12 +382,14 @@ export default function SignupPage() {
 
   const accountReady =
     accountName.trim().length > 0 &&
+    // Required by the server at create time, not only at submit.
+    countryCode.length === 2 &&
     codeValid &&
     slugValid &&
     codeState?.available !== false &&
     slugState?.available !== false;
   const preferencesReady =
-    countryCode.length === 2 && languages.length > 0 && timeZone.length > 0 && financialYearPolicy.length > 0 && founderMobile.trim().length > 0;
+    languages.length > 0 && timeZone.length > 0 && financialYearPolicy.length > 0 && founderMobile.trim().length > 0;
 
   const banner = error ? (
     <Alert variant="destructive" className="mb-4">
@@ -551,6 +561,30 @@ export default function SignupPage() {
             />
           </div>
           <div>
+            <label className="text-sm font-medium" htmlFor="countryCode">
+              Base country
+            </label>
+            <select
+              id="countryCode"
+              className={selectClass}
+              value={countryCode}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCountryCode(next);
+                // Suggest, never overwrite a zone already chosen by hand.
+                const suggested = COUNTRIES.find((c) => c.code === next)?.timeZone;
+                if (suggested && !timeZone) setTimeZone(suggested);
+              }}
+            >
+              <option value="">Select a country</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="text-sm font-medium" htmlFor="accountCode">
               Account code
             </label>
@@ -600,30 +634,6 @@ export default function SignupPage() {
         </div>
       ) : step === 'preferences' ? (
         <div className="space-y-5">
-          <div>
-            <label className="text-sm font-medium" htmlFor="countryCode">
-              Base country
-            </label>
-            <select
-              id="countryCode"
-              className={selectClass}
-              value={countryCode}
-              onChange={(e) => {
-                const next = e.target.value;
-                setCountryCode(next);
-                // Suggest, never overwrite a zone already chosen by hand.
-                const suggested = COUNTRIES.find((c) => c.code === next)?.timeZone;
-                if (suggested && !timeZone) setTimeZone(suggested);
-              }}
-            >
-              <option value="">Select a country</option>
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
           <div>
             <span className="text-sm font-medium">Languages</span>
             <div className="mt-2 flex flex-wrap gap-3">

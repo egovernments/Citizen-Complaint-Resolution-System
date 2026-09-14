@@ -249,12 +249,18 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const code =
-      (body && typeof body === 'object' && ((body as Record<string, unknown>).code as string)) || null;
+    // Three shapes in play. Onboarding answers with the DIGIT `Errors[]`
+    // envelope (`{"Errors":[{"code","message"}]}`), identity with a flat
+    // `{"error":"..."}`, and a few paths with `{"code","message"}`. Reading
+    // only the flat ones turned "Signup.countryCode is required" into
+    // "Request failed (400)", which tells the operator nothing.
+    const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    const first = Array.isArray(record.Errors) ? (record.Errors[0] as Record<string, unknown>) : null;
+    const code = ((first?.code as string) || (record.code as string)) ?? null;
     const message =
-      (body && typeof body === 'object' &&
-        (((body as Record<string, unknown>).message as string) ||
-          ((body as Record<string, unknown>).error as string))) ||
+      (first?.message as string) ||
+      (record.message as string) ||
+      (record.error as string) ||
       `Request failed (${response.status}).`;
     throw new OnboardingError(response.status, code, message);
   }
