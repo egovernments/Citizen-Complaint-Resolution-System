@@ -21,7 +21,7 @@ const normalizedSearch = (value) =>
     .trim()
     .toLocaleLowerCase();
 
-const MultiSelectPanel = ({
+export const MultiSelectPanel = ({
   options,
   values,
   searchable,
@@ -97,7 +97,11 @@ const MultiSelectPanel = ({
           autoFocus
         />
       )}
-      <div className="dashboard-popover-list dashboard-multiselect-options">
+      <div
+        className="dashboard-popover-list dashboard-multiselect-options"
+        role="listbox"
+        aria-multiselectable="true"
+      >
         {rows.length ? (
           rows
         ) : (
@@ -160,6 +164,7 @@ const MultiSelectFilter = ({
       disabled={loading}
       panelWidth={300}
       chipClassName={count ? "dashboard-popover-trigger--active" : ""}
+      variant="dialog"
     >
       {({ close }) => (
         <MultiSelectPanel

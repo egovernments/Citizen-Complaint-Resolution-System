@@ -111,14 +111,14 @@ const noop = () => {};
 
 /* ---------------- chip (closed widget) states ---------------- */
 
-test("chip smoke: root state shows All types with menu semantics", () => {
+test("chip smoke: root state shows All types with dialog semantics", () => {
   const html = renderFilter({
     tree: DEEP_TREE,
     filters: { complaintType: "all" },
     onFilterChange: noop,
     t,
   });
-  assert.match(html, /aria-haspopup="menu"/);
+  assert.match(html, /aria-haspopup="dialog"/);
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /All types/);
   assert.doesNotMatch(html, /<select/);

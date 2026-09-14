@@ -27,9 +27,12 @@ const ENTRY = `
 import React from "react";
 import ReactDOMServer from "react-dom/server";
 import DashboardFilters from "./DashboardFilters.jsx";
+import { MultiSelectPanel } from "./MultiSelectFilter.jsx";
 
 export const renderFilters = (props) =>
   ReactDOMServer.renderToStaticMarkup(React.createElement(DashboardFilters, props));
+export const renderMultiSelectPanel = (props) =>
+  ReactDOMServer.renderToStaticMarkup(React.createElement(MultiSelectPanel, props));
 `;
 
 function bundleEntry() {
@@ -59,7 +62,7 @@ function bundleEntry() {
   return require(out);
 }
 
-const { renderFilters } = bundleEntry();
+const { renderFilters, renderMultiSelectPanel } = bundleEntry();
 
 const TZ = "Africa/Nairobi";
 const noop = () => {};
@@ -88,10 +91,10 @@ test("filter bar renders no native <select> — ward and type are PopoverMenu ch
     },
   });
   assert.doesNotMatch(html, /<select/);
-  assert.match(html, /aria-label="Ward filter"[^>]*aria-haspopup="menu"|aria-haspopup="menu"[^>]*aria-label="Ward filter"/);
+  assert.match(html, /aria-label="Ward filter"[^>]*aria-haspopup="dialog"|aria-haspopup="dialog"[^>]*aria-label="Ward filter"/);
   assert.match(
     html,
-    /aria-label="Complaint type filter"[^>]*aria-haspopup="menu"|aria-haspopup="menu"[^>]*aria-label="Complaint type filter"/
+    /aria-label="Complaint type filter"[^>]*aria-haspopup="dialog"|aria-haspopup="dialog"[^>]*aria-label="Complaint type filter"/
   );
 });
 
@@ -145,4 +148,52 @@ test("public-dashboard.html sets a sans body font (no vendor CSS to inherit)", (
   const bodyRule = html.match(/body\s*\{[^}]*\}/g)?.find((rule) => rule.includes("font-family"));
   assert.ok(bodyRule, "expected a body{} rule declaring font-family");
   assert.match(bodyRule, /Inter, Roboto, ui-sans-serif, system-ui, sans-serif/);
+});
+
+/* ---------------- multi-select keyboard / dialog a11y (#1455 review) ---------------- */
+
+test("PopoverMenu dialog variant keeps Tab inside the panel (does not close like Escape)", () => {
+  const source = fs.readFileSync(path.join(__dirname, "ui", "PopoverMenu.jsx"), "utf8");
+  // Regression for the review blocker: Tab must not share Escape's close path.
+  assert.doesNotMatch(source, /event\.key === "Escape" \|\| event\.key === "Tab"/);
+  assert.match(source, /variant === "dialog"/);
+  assert.match(source, /if \(!isDialog\)[\s\S]*?close\(\)/);
+  assert.match(source, /FOCUSABLE_SELECTOR/);
+  assert.match(source, /aria-haspopup=\{isDialog \? "dialog" : "menu"\}/);
+});
+
+test("multi-select filters mount as dialogs so Apply is keyboard-reachable", () => {
+  const multi = fs.readFileSync(path.join(__dirname, "MultiSelectFilter.jsx"), "utf8");
+  const hierarchy = fs.readFileSync(
+    path.join(__dirname, "HierarchyMultiSelectFilter.jsx"),
+    "utf8"
+  );
+  assert.match(multi, /variant="dialog"/);
+  assert.match(hierarchy, /variant="dialog"/);
+  assert.match(multi, /role="listbox"/);
+  assert.match(hierarchy, /role="listbox"/);
+});
+
+test("multi-select panel exposes search, options listbox, and Apply for keyboard flow", () => {
+  const html = renderMultiSelectPanel({
+    options: [
+      { id: "W01", label: "Ward One" },
+      { id: "W02", label: "Ward Two" },
+    ],
+    values: ["W01"],
+    searchable: true,
+    searchPlaceholder: "Search wards",
+    allLabel: "Clear",
+    applyLabel: "Apply",
+    cancelLabel: "Cancel",
+    emptyLabel: "No wards",
+    onApply: noop,
+    close: noop,
+  });
+  assert.match(html, /data-popover-autofocus/);
+  assert.match(html, /role="listbox"/);
+  assert.match(html, /aria-multiselectable="true"/);
+  assert.match(html, /role="option"/);
+  assert.match(html, /dashboard-multiselect-apply/);
+  assert.match(html, />Apply</);
 });

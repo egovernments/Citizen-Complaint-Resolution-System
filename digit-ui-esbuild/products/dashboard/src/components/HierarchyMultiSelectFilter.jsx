@@ -147,7 +147,6 @@ const HierarchyMultiSelectPanel = ({
               <React.Fragment key={crumb}>
                 <button
                   type="button"
-                  role="menuitem"
                   data-menu-item=""
                   className="dashboard-popover-trail-crumb"
                   onClick={() => setBrowseCode(crumb)}
@@ -163,7 +162,11 @@ const HierarchyMultiSelectPanel = ({
         </div>
       )}
 
-      <div className="dashboard-popover-list dashboard-multiselect-options">
+      <div
+        className="dashboard-popover-list dashboard-multiselect-options"
+        role="listbox"
+        aria-multiselectable="true"
+      >
         {query ? (
           searchResults.length ? (
             searchResults.map((entry) => (
@@ -271,6 +274,7 @@ const HierarchyMultiSelectFilter = ({
       chipTitle={count ? `${label}: ${count}` : allLabel}
       panelWidth={320}
       chipClassName={count ? "dashboard-popover-trigger--active" : ""}
+      variant="dialog"
     >
       {({ close }) => (
         <HierarchyMultiSelectPanel
