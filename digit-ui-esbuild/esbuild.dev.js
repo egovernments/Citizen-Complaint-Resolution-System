@@ -423,6 +423,27 @@ async function start() {
       filePath = path.join(buildDir, pathname);
     }
 
+    // Static assets that are not build output live in `public/` and are copied
+    // into the build wholesale by esbuild.build.js. Dev has no such copy step,
+    // so anything under `public/` that is not `vendor/` — `brand/`, for one —
+    // fell through to the SPA fallback and came back as index.html with a 200,
+    // which an <img> can only report as a broken image. Fall back to `public/`
+    // so dev resolves the same paths production does.
+    if (!fs.existsSync(filePath) && pathname.startsWith("/digit-ui/")) {
+      const publicCandidate = path.resolve(
+        __dirname,
+        "public",
+        pathname.slice("/digit-ui/".length)
+      );
+      if (
+        publicCandidate.startsWith(path.resolve(__dirname, "public") + path.sep) &&
+        fs.existsSync(publicCandidate) &&
+        fs.statSync(publicCandidate).isFile()
+      ) {
+        filePath = publicCandidate;
+      }
+    }
+
     // Try to serve the file
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       const ext = path.extname(filePath);

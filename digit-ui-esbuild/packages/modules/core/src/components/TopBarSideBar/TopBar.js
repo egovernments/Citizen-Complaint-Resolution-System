@@ -9,7 +9,39 @@ import { Header as TopBarComponentMain } from "@egovernments/digit-ui-components
 import ImageComponent from "../ImageComponent";
 import { resolveProfilePhoto } from "../utils";
 
-const DEFAULT_EGOV_LOGO ="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/egov-logo-2025.png";
+const DEFAULT_EGOV_LOGO = "https://egov-dev-assets.s3.ap-south-1.amazonaws.com/egov-logo-2025.png";
+/**
+ * The shipped lockup is the dark-on-light one: an orange "e" and a navy "GOV".
+ * On a tenant that paints its header navy the "GOV" is navy on navy and simply
+ * disappears, so a dark header needs the reverse lockup instead. Same geometry
+ * as the default — 800x800, the wordmark 800x200 letterboxed on transparency —
+ * so it drops into the square slot without touching any layout.
+ *
+ * `applyTheme` publishes the header's tone from the same luminance it uses to
+ * pick readable foregrounds, so this cannot disagree with the rest of the
+ * chrome about whether the header is dark.
+ */
+const DEFAULT_EGOV_LOGO_ON_DARK = "/digit-ui/brand/egov-logo-white.png";
+
+/**
+ * Observed rather than read once: the theme record arrives over the network, so
+ * whether it lands before or after this component mounts is a race we should
+ * not have to win. An attribute observer means the logo is correct either way.
+ */
+const useHeaderTone = () => {
+  const [tone, setTone] = React.useState(() =>
+    typeof document === "undefined" ? undefined : document.documentElement.dataset.headerTone
+  );
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setTone(root.dataset.headerTone);
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-header-tone"] });
+    return () => observer.disconnect();
+  }, []);
+  return tone;
+};
 const TopBar = ({
   t,
   stateInfo,
@@ -29,6 +61,7 @@ const TopBar = ({
   workingContextError,
   workingContextTenantId,
 }) => {
+  const headerTone = useHeaderTone();
   const [profilePic, setProfilePic] = React.useState(null);
 
   React.useEffect(async () => {
@@ -200,7 +233,10 @@ const TopBar = ({
         img={logoUrl}
         logoWidth={"64px"}
         logoHeight={"48px"}
-        logo={(loggedin ? cityDetails?.logoId : stateInfo?.statelogo)||DEFAULT_EGOV_LOGO}
+        logo={
+          (loggedin ? cityDetails?.logoId : stateInfo?.statelogo) ||
+          (headerTone === "dark" ? DEFAULT_EGOV_LOGO_ON_DARK : DEFAULT_EGOV_LOGO)
+        }
         onImageClick={() => {}}
         onLogoClick={() => {}}
         props={{}}

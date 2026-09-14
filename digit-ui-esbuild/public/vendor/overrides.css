@@ -2479,7 +2479,11 @@ button[class*="toast-close"] svg,
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  /* Heading ink, not the brand colour. `primary-1` is navy in this palette,
+   * and a navy page title is indistinguishable from the blue that means
+   * "clickable" — the rest of the employee UI reserves brand for controls
+   * and paints every other title with `text-heading` (#2038). */
+  color: var(--color-text-heading, #363636);
   line-height: 1.25;
 }
 
@@ -2808,8 +2812,12 @@ button[class*="toast-close"] svg,
 .v2-pgr-details [class*="summary-card"],
 .v2-pgr-details .digit-card-component {
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
+  /* Was a 1px `text-heading` outline with square corners, from before the
+   * inbox and create-complaint surfaces settled on a 12px card with a light
+   * `card-border` hairline. A border is not text, and this page was the odd
+   * one out in the corner-radius audit (#2038 review round 2). */
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
   margin: 0 0 16px 0 !important;
   padding: 20px 24px !important;
@@ -2817,8 +2825,11 @@ button[class*="toast-close"] svg,
 .v2-pgr-details .digit-summary-card-header,
 .v2-pgr-details [class*="summary-card-header"],
 .v2-pgr-details .digit-card-header,
+.v2-pgr-details .digit-view-card-header,
 .v2-pgr-details .digit-card-component h2 {
-  color: var(--color-primary-1, var(--color-primary-main, #c84c0e)) !important;
+  /* Section titles take heading ink for the same reason the page title
+   * does — brand is reserved for things you can click (#2038). */
+  color: var(--color-text-heading, #363636) !important;
   font-weight: 600 !important;
   font-size: 1rem !important;
   line-height: 1.3 !important;
@@ -2874,7 +2885,7 @@ button[class*="toast-close"] svg,
 .v2-pgr-details button[class*="submit-bar"],
 .v2-pgr-details .digit-button-primary {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, #FFFFFF) !important;
   border-radius: 6px !important;
   padding: 10px 24px !important;
   font-weight: 600 !important;
@@ -2897,6 +2908,23 @@ button[class*="toast-close"] svg,
   .v2-pgr-details .digit-summary-card,
   .v2-pgr-details .digit-card-component {
     padding: 16px !important;
+  }
+  /* The only action on the page, and at 181px it sat in the bottom-right
+   * corner of a phone screen looking like an afterthought. Full width,
+   * same as every other primary action on mobile (#2038). The button sits
+   * four shrink-to-fit wrappers deep, so each one has to give it the room
+   * before `width: 100%` on the button itself means anything. */
+  .v2-pgr-details .digit-action-bar-fields,
+  .v2-pgr-details .action-bar-individual-action-field,
+  .v2-pgr-details .digit-action-button-wrapper {
+    width: 100% !important;
+  }
+  .v2-pgr-details button.actionButton,
+  .v2-pgr-details button.submit-bar,
+  .v2-pgr-details button[class*="submit-bar"],
+  .v2-pgr-details .digit-button-primary {
+    width: 100% !important;
+    justify-content: center !important;
   }
   /* Inline field pairs — switch to stacked on mobile, with the
    * label fixed full-width and `white-space: nowrap` so two-word
@@ -3896,8 +3924,8 @@ button[class*="toast-close"] svg,
  * -------------------------------------------------------------------- */
 .v2-employee-create-complaint .digit-card-component {
   background-color: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
-  border: 1px solid var(--color-text-heading, #363636) !important;
-  border-radius: 0 !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  border-radius: 12px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
   transition: none !important;
   /* No left/right margin — let the card align with the breadcrumb's
@@ -4020,7 +4048,7 @@ button[class*="toast-close"] svg,
 .v2-employee-create-complaint button.digit-submit-bar,
 .v2-employee-create-complaint button[class*="submit-bar"] {
   background-color: var(--color-button-primary-bg-default, var(--color-primary-2, #FEC931)) !important;
-  color: var(--color-text-primary, #0B0C0C) !important;
+  color: var(--color-button-primary-text, #FFFFFF) !important;
   border: 0 !important;
   border-bottom: 0 !important;
   border-radius: 6px !important;
@@ -4641,9 +4669,19 @@ label .required, label sup,
   box-shadow: 0 20px 25px -5px rgba(16, 24, 40, 0.10),
               0 10px 10px -5px rgba(16, 24, 40, 0.04);
 }
-.digit-popup-header, .digit-modal-header, .digit-dialog-header,
-[class*="popup-heading"] {
+/* The divider belongs to the header ROW. `[class*="popup-heading"]` also
+ * matched `.digit-popup-heading`, which is the title TEXT, so the rule drew a
+ * short rule under the word itself — the stray underline beneath "Logout"
+ * (#2038). Colour still applies to both; only the border is row-scoped. */
+.employee .digit-popup-header,
+.employee .digit-modal-header,
+.employee .digit-dialog-header {
   border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
+}
+.employee .digit-popup-header,
+.employee .digit-modal-header,
+.employee .digit-dialog-header,
+.employee [class*="popup-heading"] {
   color: var(--color-text-heading, var(--color-primary-1, #204F37));
 }
 .digit-popup-close, .digit-modal-close,
@@ -5805,8 +5843,11 @@ html .h1, html header.h1, html [class~="h1"] {
    * `.digit-topbar-ulb-mobileview` simultaneously on the employee
    * surface, producing two stacked NCCG logos in the header. The
    * wrapper version covers the same role; hide the redundant topbar
-   * variant on mobile. */
-  .digit-topbar .digit-topbar-ulb-mobileview {
+   * variant on mobile — and with it the divider that was meant to
+   * separate the two, which was left standing next to nothing and read
+   * as a stray caret beside the logo (#2038 review round 2). */
+  .digit-topbar .digit-topbar-ulb-mobileview,
+  .digit-topbar .digit-header-img-ulb-wrapper-mobileview .topbar-divider {
     display: none !important;
   }
 
@@ -5937,7 +5978,10 @@ html .h1, html header.h1, html [class~="h1"] {
  *   • hover/focus → brand border
  *
  * OTP boxes (`.v2-otp-box`), the citizen login phone input
- * (`.v2-login-phone-input` / `#login-mobile`), the legacy employee
+ * (`.v2-login-phone-input` / `#login-mobile`), the profile phone input
+ * (`.v2-profile-phone-input`) — both sit flush inside a bordered
+ * prefix wrapper, so a border of their own would read as a box in a
+ * box — the legacy employee
  * sandbox OTP (`.sandbox-otp-input`), and the inner display elements
  * inside dropdowns (`.digit-dropdown-employee-select-wrap--elipses`,
  * `.digit-employee-select-wrap--elipses`) are intentionally excluded
@@ -5946,7 +5990,7 @@ html .h1, html header.h1, html [class~="h1"] {
 
 input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
-input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
+input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input),
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
@@ -5980,7 +6024,7 @@ button[role="combobox"],
  * out (handled below). */
 input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
-input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
+input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input),
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
@@ -6092,7 +6136,7 @@ textarea:not(.v2-otp-skip),
 }
 .digit-text-input-field input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 .digit-text-input-field input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
-.digit-text-input-field input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
+.digit-text-input-field input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses),
 .digit-text-input-field input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
 .digit-text-input-field input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input),
 .digit-text-input-field input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input),
@@ -6129,7 +6173,7 @@ textarea:not(.v2-otp-skip),
 /* Hover — brand border */
 input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses):hover,
 input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):hover,
-input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):hover,
+input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):hover,
 input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):hover,
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):hover,
 input[type="search"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):hover,
@@ -6160,8 +6204,8 @@ input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-pas
 input[type="text"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):not(.digit-dropdown-employee-select-wrap--elipses):not(.digit-employee-select-wrap--elipses):not(.employee-select-wrap--elipses):focus-visible,
 input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus,
 input[type="number"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus-visible,
-input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus,
-input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus-visible,
+input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):focus,
+input[type="tel"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-profile-phone-input):not(.sandbox-otp-input):focus-visible,
 input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus,
 input[type="email"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.sandbox-otp-input):focus-visible,
 input[type="password"]:not(.v2-otp-box):not(.v2-login-phone-input):not(.v2-login-password-input):not(.sandbox-otp-input):focus,
@@ -6755,11 +6799,13 @@ header.digit-header .digit-dropdown-master {
   border-color: var(--color-button-primary-bg-default, #2563EB) !important;
 }
 
-/* One size for the action label, and near-black rather than the link blue —
- * on a filled row the surface is already saying "clickable". */
+/* The action label takes the clickable colour (#2038 review round 2). It was
+ * near-black on the grounds that the filled row already signalled "clickable",
+ * but the review asked for one colour across everything you can click, and a
+ * blue label plus the tinted row is a stronger affordance than either alone. */
 .employee .digit-landing-page-card button.digit-button-teritiary .digit-button-label,
 .employee .digit-landing-page-card button.digit-button-teritiary .icon-label-container {
-  color: var(--color-text-primary, #1D2433) !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   line-height: 1.25rem !important;
@@ -7002,4 +7048,540 @@ header.digit-header .digit-dropdown-master {
     flex-wrap: wrap;
     gap: 12px;
   }
+}
+
+/* ----------------------------------------------------------------------
+ * 59. Working context: pill + assignments panel (#2038 review round 2)
+ *
+ *     The summary used to spend the bar on one of eight department names
+ *     plus a "+7". It is a pill of counts now, and the panel carries the
+ *     detail as chips.
+ * -------------------------------------------------------------------- */
+.employee .digit-working-context-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--color-header-pill-border, rgba(255, 255, 255, 0.22)) !important;
+  background: var(--color-header-pill-bg, rgba(255, 255, 255, 0.08)) !important;
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out;
+}
+.employee .digit-working-context-trigger:hover {
+  background: var(--color-header-pill-bg-hover, rgba(255, 255, 255, 0.16)) !important;
+  border-color: var(--color-header-pill-border-hover, rgba(255, 255, 255, 0.34)) !important;
+}
+/* The place is the anchor of the pill; the counts sit back from it. */
+.employee .digit-working-context-summary .digit-working-context-place {
+  font-weight: 600;
+}
+.employee .digit-working-context-summary .digit-working-context-count,
+.employee .digit-working-context-summary .digit-working-context-sep {
+  opacity: 0.78;
+}
+
+/* Panel */
+.employee .digit-working-context-panel {
+  min-width: 280px;
+  padding: 16px 18px 18px !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.1) !important;
+}
+.employee .digit-working-context-place-block {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-card-divider, #E5E7EB);
+}
+.employee .digit-working-context-place-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text-heading, #1D2433);
+}
+.employee .digit-working-context-subtitle {
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary, #5F5C62);
+}
+.employee .digit-working-context-group + .digit-working-context-group {
+  margin-top: 12px;
+}
+.employee .digit-working-context-group-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #5F5C62);
+  margin-bottom: 6px;
+}
+/* NOT "...-chips": a broad `[class*="chip"]` rule earlier in this file paints
+ * anything whose class contains "chip" as a filter pill, which caught the
+ * container and drew a tinted lozenge behind each row. */
+.employee .digit-working-context-grouprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.employee .digit-working-context-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--color-page-secondary-bg, #F4F6F9);
+  border: 1px solid var(--color-card-border, #E5E7EB);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--color-text-primary, #1D2433);
+}
+
+/* ----------------------------------------------------------------------
+ * 60. Navy top bar, separated from the navy sidebar (#2038 review round 2)
+ *
+ *     Rahul asked for a navy bar. The sidebar is the same navy, so without
+ *     a seam the two read as one L-shaped slab and the sidebar loses its
+ *     edge. A hairline at the boundary is enough — it keeps both surfaces
+ *     the tenant's navy rather than inventing a second shade.
+ * -------------------------------------------------------------------- */
+.employee .digit-topbar.digit-employee-header {
+  border-bottom: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
+}
+
+
+/* ----------------------------------------------------------------------
+ * 61. Inbox panels (#2038 review round 2)
+ * -------------------------------------------------------------------- */
+
+/* "Filters" belongs at the head of the section. The markup already carries a
+ * `.filter-header` (funnel glyph + label) but it was hidden, so the panel
+ * opened straight into "Complaint Subtype" with nothing saying what the
+ * column was for. */
+.employee .v2-pgr-inbox .filter-card .filter-header {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.employee .v2-pgr-inbox .filter-card .filter-header .title-container,
+.employee .v2-pgr-inbox .filter-card .filter-header .filter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-heading, #1D2433) !important;
+}
+.employee .v2-pgr-inbox .filter-card .filter-header svg {
+  width: 20px !important;
+  height: 20px !important;
+  fill: var(--color-button-tertiary-text, #2563EB);
+}
+
+/* One box, not a box inside a box. `.filter-card` carried its own 4px radius
+ * and white ground inside the 12px section card — which is the corner
+ * mismatch the review spotted on the filters panel specifically. The section
+ * is the card; this is just its content. */
+.employee .v2-pgr-inbox .digit-section.filter {
+  padding: 20px !important;
+}
+.employee .v2-pgr-inbox .filter-card,
+.employee .v2-pgr-inbox .filter-card.filter-card-vertical {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* The links panel's title sat ~30px right of the link beneath it: the header
+ * is a flex row whose first child is a logo slot, and MDMS supplies no logo
+ * for this module, so the slot rendered 22px of nothing and shunted the title
+ * across. Rather than hide it, give it the module's own icon — the same
+ * filled speech-bubble the home card now uses — so the panel is headed the
+ * way the reference is, and the icon column explains the indent instead of
+ * being an accident. */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-logo:empty {
+  width: 20px !important;
+  height: 20px !important;
+  flex: 0 0 20px;
+  background-color: var(--color-button-tertiary-text, #2563EB);
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 2H4C2.9 2 2.01 2.9 2.01 4L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20 2H4C2.9 2 2.01 2.9 2.01 4L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z'/></svg>");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+/* Title and the links beneath it share one left edge. The icon sits in its
+ * own 20px gutter, so the links are indented by the icon width plus the row
+ * gap to line up with the title text rather than with the icon (#2038). */
+.employee .v2-pgr-inbox .digit-inbox-search-links-header {
+  align-items: center;
+  gap: 8px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-contents {
+  padding-left: 28px !important;
+}
+/* A tenant whose MDMS card config supplies `logoIcon.component` gets a real
+ * 2rem icon from InboxSearchLinks instead, so the indent is 32px + the 8px row
+ * gap. Written as an override on top of the 28px rather than as a pair of
+ * mutually exclusive `:has()` branches, so an engine without `:has()` still
+ * gets the alignment the unconditional rule always provided. */
+.employee
+  .v2-pgr-inbox
+  .digit-inbox-search-links-container:not(
+    :has(.digit-inbox-search-links-header-logo:empty)
+  )
+  .digit-inbox-search-links-contents {
+  padding-left: 40px !important;
+}
+.employee .v2-pgr-inbox .digit-inbox-search-links-header-text {
+  text-align: left !important;
+}
+
+/* Tabs need to look like tabs. The inactive one takes the clickable colour,
+ * the active one keeps the heading colour and owns the rule beneath it, and
+ * both respond to hover — at rest they were two pieces of dark text with a
+ * hairline under the row. */
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab {
+  position: relative;
+  padding: 8px 2px 10px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--color-button-tertiary-text, var(--color-link-normal, #2563EB)) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transition: color 0.15s ease-out;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab:hover {
+  color: var(--color-link-hover, #1D4FD8) !important;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab.active {
+  color: var(--color-text-heading, #1D2433) !important;
+  font-weight: 600 !important;
+}
+.employee .v2-pgr-inbox .pgr-inbox-tabs .pgr-inbox-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-button-primary-bg-default, #2563EB);
+}
+
+/* ----------------------------------------------------------------------
+ * 62. Confirmation dialogs — logout and friends (#2038 review round 2)
+ *
+ *     The logout confirm was the odd one out: its buttons were square
+ *     while every other button in the employee UI is 6px, its shell was
+ *     10px against the 12px every card uses, and its labels were 13.33px
+ *     against 14px. Three near-misses in one dialog, which is exactly the
+ *     "corner radius inconsistency" the review points at.
+ * -------------------------------------------------------------------- */
+/* Scoped to `.employee`, and the button rules further to the logout dialog
+ * itself. Unscoped, `.digit-popup-wrapper button` is every popup in both the
+ * citizen and the employee app — the PGR workflow-action and filter modals
+ * included, which would have had their primary action re-radiused and their
+ * weight dropped out from under them. 12px is the system shell radius, so
+ * that one is safe to apply to any employee dialog. */
+html .employee .digit-popup-overlay .digit-popup-wrapper,
+html .employee .digit-popup-wrapper,
+html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
+  border-radius: 12px !important;
+}
+.employee .digit-logout-popup-wrapper button,
+.employee .digit-logout-popup-wrapper [class*="popup-footer"] button {
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+.employee .digit-logout-popup-wrapper button .digit-button-label,
+.employee .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* The dialog's footer carries no ground of its own in vendor CSS, so it shows
+ * whatever is behind the card. Paint it with the card surface so the action
+ * row is unambiguously part of the dialog (#2038). */
+html .employee .digit-logout-popup-wrapper .digit-popup-footer,
+html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
+  background: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+/* ----------------------------------------------------------------------
+ * 63. Edit Profile (#2038 review round 2)
+ *
+ *     `.grounded-container` is the user-profile route's shell (see
+ *     employee/index.js). Three things put it out of step with the rest of
+ *     the employee UI:
+ *
+ *       - its v2 scope painted white edge to edge, so the cards had no
+ *         ground and the page read as one undifferentiated sheet — the
+ *         same thing already fixed on create-complaint and the inbox;
+ *       - its cards use Tailwind's `rounded-lg` (8px) rather than the 12px
+ *         every other card in this UI uses;
+ *       - nothing capped the column, so a single-column form stretched its
+ *         inputs to ~1360px on a desktop window.
+ * -------------------------------------------------------------------- */
+/* Generalised below — see "employee route grounds". */
+
+/* One column, readable width, centred — a name field does not need 1360px. */
+.employee .grounded-container > .v2-scope > * {
+  max-width: 880px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.employee .grounded-container > .v2-scope .rounded-lg {
+  border-radius: 12px !important;
+  border-color: var(--color-card-border, #E5E7EB) !important;
+  box-shadow: 0 1px 2px rgba(8, 20, 40, 0.04), 0 4px 16px rgba(8, 20, 40, 0.06) !important;
+}
+
+/* The avatar's camera button sits on the action blue, but its icon kept the
+ * page's near-black stroke — these are stroke-drawn (lucide) glyphs, so a
+ * `fill` would not have touched them. Take the same foreground every other
+ * filled primary control uses (#2038). */
+.employee .v2-profile-camera-btn {
+  color: var(--color-button-primary-text, #FFFFFF) !important;
+}
+.employee .v2-profile-camera-btn svg,
+.employee .v2-profile-camera-btn svg * {
+  stroke: var(--color-button-primary-text, #FFFFFF) !important;
+}
+
+/* Profile route gutters were asymmetric — 64px left against 24px right, a
+ * desktop sidebar allowance that never reset once the sidebar collapses to a
+ * hamburger. It also pushed the centred column off centre on desktop, since
+ * the max-width centres inside whatever the padding leaves. Symmetric at both
+ * sizes (#2038). */
+.employee .grounded-container > .v2-scope {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+@media (max-width: 47.99rem) {
+  .employee .grounded-container > .v2-scope {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+
+/* ----------------------------------------------------------------------
+ * 64. Inbox results on mobile — stacked cards (#2038 review round 2)
+ *
+ *     The complaints inbox is a five-column table. On a phone only three
+ *     columns fit, the third one truncated ("Pending a…"), the header row
+ *     is off-screen so nothing labels what is left, and the remaining two
+ *     columns sit behind a horizontal scrollbar nested inside the card's
+ *     own vertical one. Nobody triages complaints that way.
+ *
+ *     ResultsDataTable now swaps the columns for one synthetic column below
+ *     this breakpoint, rendering each record as a labelled card. The table
+ *     itself stays — pagination, the pending state, selection and row clicks
+ *     are all still react-data-table-component's — so this only has to
+ *     undress the row and cell chrome so the card can own its own padding.
+ *
+ *     The molecule is shared, so every field is labelled and no column is
+ *     treated as the record's title: which column identifies a record is the
+ *     consumer's business, and this file is not the place to guess.
+ * ---------------------------------------------------------------------- */
+
+@media (max-width: 47.99rem) {
+  /* The card the table already sits in is the only box wanted here. The
+   * table body's own 1px outline and the wrapper's side padding would draw
+   * a second one inside it, so drop both and let the cards run the full
+   * width, separated by the row rule they already carry. */
+  .digit-table-card-as-cards {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .digit-table-card-as-cards .rdt_TableBody {
+    border: 0 !important;
+  }
+  .digit-table-card-as-cards .rdt_TableRow:last-of-type {
+    border-bottom: 0 !important;
+  }
+
+  /* A card is the row, so the row contributes nothing of its own. */
+  .digit-table-card-as-cards .rdt_TableRow {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+  .digit-table-card-as-cards .rdt_TableCell {
+    padding: 0 !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  .digit-results-mobile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    padding: 14px 16px;
+    box-sizing: border-box;
+  }
+
+  /* Label left, value right, both on one line until they cannot be. */
+  .digit-results-mobile-card-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .digit-results-mobile-card-label {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-secondary, #6B7280);
+  }
+  .digit-results-mobile-card-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8125rem;
+    text-align: right;
+    word-break: break-word;
+    color: var(--color-text-primary, #0B0C0C);
+  }
+  /* Status pills, link buttons and the like keep their own chrome, just
+   * right-aligned and free to wrap — a complaint number needs the second
+   * line on a narrow screen. */
+  .digit-results-mobile-card-value > * {
+    display: inline-block;
+    vertical-align: middle;
+    max-width: 100%;
+    white-space: normal !important;
+    text-align: right !important;
+  }
+  /* Only the link variation sheds its chrome — it is text pretending to be a
+   * button, so its padding just pushes the value off the right edge. A filled
+   * button keeps its box: stripping that leaves a label sitting on its own
+   * background with a tap target of roughly one line-height, on exactly the
+   * viewport this section exists to fix.
+   *
+   * The floor lives on this rule rather than the generic one below, because
+   * `button[class*="link"]` outscores a bare `button` and `!important` settles
+   * ties before source order does — a plain floor further down never applied
+   * to the one kind of button that had shed its height. */
+  .digit-results-mobile-card-value button[class*="link"],
+  .digit-results-mobile-card-value button[class*="teritiary"],
+  .digit-results-mobile-card-value button[class*="tertiary"] {
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+  /* Same floor for the react-router link that is the way into a record: as a
+   * bare anchor it measured 22px, under any reasonable thumb. */
+  .digit-results-mobile-card-value button,
+  .digit-results-mobile-card-value a {
+    min-height: 24px;
+  }
+  .digit-results-mobile-card-value a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* `fixedHeaderScrollHeight: 100vh` caps the table at one viewport so the
+   * sticky header has something to pin against. In card mode there is no
+   * header, so that cap only nests a scrollbar inside the page's and clips
+   * the last card. Let the cards extend the page instead. */
+  .digit-table-card-as-cards .digit-data-table {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * 65. Employee forms — section rule, and label/field stacking on mobile
+ *     (#2038 review round 2)
+ *
+ *     Two things on the create-complaint form, both visible worst on a
+ *     phone:
+ *
+ *     a) `hr.digit-break-line` is `border-width: 1px` on all four sides
+ *        with the colour inherited from `color: var(--color-primary-main)`
+ *        — a 2px near-black double rule drawn across a white form card.
+ *        Every other divider in the employee UI is a single light
+ *        hairline; this one predates that language.
+ *
+ *     b) `.digit-label-field-pair` is a flex row with a content-width
+ *        label column, and `.label-styles` truncates with an ellipsis
+ *        rather than wrapping. On a 420px viewport that reads
+ *        "Complainant Pho…" and "Complaint's Loca…" — the operator
+ *        cannot tell what the field is. Stack them instead, which is
+ *        what the profile form already does at this width.
+ * ---------------------------------------------------------------------- */
+
+.employee .v2-scope hr.digit-break-line {
+  border: 0 !important;
+  border-top: 1px solid
+    var(--color-card-divider, var(--color-card-border, #E5E7EB)) !important;
+  margin: 20px 0 !important;
+}
+
+@media (max-width: 47.99rem) {
+  .employee .v2-scope .digit-label-field-pair {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  .employee .v2-scope .digit-label-field-pair > .digit-header-content.label,
+  .employee .v2-scope .digit-label-field-pair > .digit-header-content.label
+    .label-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* With the label above it, the field gets the whole row; `.digit-field`
+   * otherwise keeps the width it was given for the two-column desktop
+   * layout (239px of a 399px row). */
+  .employee .v2-scope .digit-label-field-pair > .digit-field,
+  .employee .v2-scope .digit-label-field-pair > .digit-field > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* A label that has room to wrap does not need to truncate. */
+  .employee .v2-scope .digit-label-field-pair .label-styles {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  .employee .v2-scope hr.digit-break-line {
+    margin: 16px 0 !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * 66. Employee route grounds (#2038 review round 2)
+ *
+ *     `.v2-scope` carries `background: var(--v2-page-bg)`, and `--v2-page-bg`
+ *     resolves to `--color-page-bg`, which this palette sets to #FFFFFF. The
+ *     employee route roots carry `.v2-scope` themselves, so each one repainted
+ *     the page white on top of the grey ground `.app-container.ground-container`
+ *     had already painted — a full-width white slab with the ground surviving
+ *     only in the gutter, and 12px cards with a light hairline sitting invisibly
+ *     on it.
+ *
+ *     `.v2-scope` is a styling scope, not a page. The ground is painted once,
+ *     by the container that owns it, so a route root nested inside that
+ *     container lets it show through. Fixed here rather than per route: Edit
+ *     Profile had its own copy of this, create-complaint had a different
+ *     workaround, and complaint details had neither.
+ * ---------------------------------------------------------------------- */
+.employee .app-container.ground-container > .v2-scope,
+.employee .grounded-container > .v2-scope {
+  background-color: transparent !important;
 }

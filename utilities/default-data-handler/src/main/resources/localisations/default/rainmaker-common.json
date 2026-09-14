@@ -8886,6 +8886,36 @@
         "locale": "default"
     },
     {
+        "code": "CS_WORKING_CONTEXT_SUBTITLE",
+        "message": "These are your assignments",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_ONE",
+        "message": "department",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_DEPARTMENT_MANY",
+        "message": "departments",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_ONE",
+        "message": "role",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "CS_WORKING_CONTEXT_ROLE_MANY",
+        "message": "roles",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
         "code": "CS_ROLE_CONTEXT_RESOLVER",
         "message": "Resolver",
         "module": "rainmaker-common",
