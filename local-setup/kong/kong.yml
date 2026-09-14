@@ -35,6 +35,7 @@ plugins:
     - Content-Length
     - Content-Type
     - Authorization
+    - Idempotency-Key
     - X-API-Key
     - X-Requested-With
     - auth-token
