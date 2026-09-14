@@ -51,7 +51,7 @@ public class OnboardingRepository {
                         "(id, owner_issuer, owner_subject, status, account_name, account_code, organization_alias, " +
                         "requested_tenant_id, url_slug, country_code, languages, time_zone, financial_year_policy, " +
                         "accepted_terms_version, tenant_metadata, idempotency_key, version, created_at, updated_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)",
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)",
                 signup.getId(), signup.getOwnerIssuer(), signup.getOwnerSubject(), signup.getStatus(),
                 signup.getAccountName(), signup.getAccountCode(), signup.getOrganizationAlias(),
                 signup.getRequestedTenantId(), signup.getUrlSlug(), signup.getCountryCode(),

@@ -41,6 +41,17 @@ public class OnboardingApiControllerTest {
     }
 
     @Test
+    public void missingIdentitySessionIsUnauthorizedNotBadRequest() throws Exception {
+        when(identitySessionClient.introspect(null)).thenThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED, "A valid identity session is required"));
+
+        mockMvc.perform(post("/v2/onboarding/signups/_search")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.Errors[0].code").value("ONBOARDING_IDENTITY_REQUIRED"));
+    }
+
+    @Test
     public void createUsesBffIdentityAndReturnsDraft() throws Exception {
         OnboardingSignup signup = OnboardingSignup.builder().id(UUID.randomUUID()).status("DRAFT").build();
         when(service.create(eq(principal), any(), eq("create-1"))).thenReturn(signup);

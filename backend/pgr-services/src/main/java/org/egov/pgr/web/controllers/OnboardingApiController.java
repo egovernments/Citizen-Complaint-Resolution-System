@@ -8,11 +8,13 @@ import org.egov.pgr.onboarding.OnboardingService;
 import org.egov.pgr.onboarding.OnboardingSignup;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -83,6 +85,18 @@ public class OnboardingApiController {
             @RequestBody Map<String, Object> request) {
         return ResponseEntity.accepted().body(single("Operation",
                 service.retry(principal(httpRequest), nested(request, "Operation"))));
+    }
+
+    // Identity failures keep their HTTP status (401/503). Without this, the tracer's
+    // catch-all advice reports every unauthenticated onboarding call as a 400.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> identityFailure(ResponseStatusException exception) {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("code", exception.getStatusCode().value() == 401
+                ? "ONBOARDING_IDENTITY_REQUIRED" : "ONBOARDING_IDENTITY_UNAVAILABLE");
+        error.put("message", exception.getReason());
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(single("Errors", Collections.singletonList(error)));
     }
 
     private OnboardingPrincipal principal(HttpServletRequest request) {
