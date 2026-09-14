@@ -7324,9 +7324,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *       - nothing capped the column, so a single-column form stretched its
  *         inputs to ~1360px on a desktop window.
  * -------------------------------------------------------------------- */
-.employee .grounded-container > .v2-scope {
-  background-color: transparent !important;
-}
+/* Generalised below — see "employee route grounds". */
 
 /* One column, readable width, centred — a name field does not need 1360px. */
 .employee .grounded-container > .v2-scope > * {
@@ -7560,4 +7558,26 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   .employee .v2-scope hr.digit-break-line {
     margin: 16px 0 !important;
   }
+}
+
+/* ----------------------------------------------------------------------
+ * 66. Employee route grounds (#2038 review round 2)
+ *
+ *     `.v2-scope` carries `background: var(--v2-page-bg)`, and `--v2-page-bg`
+ *     resolves to `--color-page-bg`, which this palette sets to #FFFFFF. The
+ *     employee route roots carry `.v2-scope` themselves, so each one repainted
+ *     the page white on top of the grey ground `.app-container.ground-container`
+ *     had already painted — a full-width white slab with the ground surviving
+ *     only in the gutter, and 12px cards with a light hairline sitting invisibly
+ *     on it.
+ *
+ *     `.v2-scope` is a styling scope, not a page. The ground is painted once,
+ *     by the container that owns it, so a route root nested inside that
+ *     container lets it show through. Fixed here rather than per route: Edit
+ *     Profile had its own copy of this, create-complaint had a different
+ *     workaround, and complaint details had neither.
+ * ---------------------------------------------------------------------- */
+.employee .app-container.ground-container > .v2-scope,
+.employee .grounded-container > .v2-scope {
+  background-color: transparent !important;
 }
