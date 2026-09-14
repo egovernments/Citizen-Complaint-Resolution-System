@@ -86,7 +86,13 @@ const assignedRoleLabels = (t, context) => {
     .map((c) => roleContextLabel(t, c))
     .filter(Boolean);
   if (contexts.length) return contexts;
-  return (context?.roles || []).filter(isAssignedRole).map((r) => roleLabel(t, r)).filter(Boolean);
+  const roles = context?.roles || [];
+  const assigned = roles.filter(isAssignedRole);
+  // A workbench or admin account can hold nothing *but* denylisted roles —
+  // SUPERUSER, MDMS_ADMIN, LOC_ADMIN and EMPLOYEE is a complete, real role set
+  // under multi-root-tenant. The denylist is here to cut noise, not to erase
+  // the only signal an account has, so when it empties the list, show the list.
+  return (assigned.length ? assigned : roles).map((r) => roleLabel(t, r)).filter(Boolean);
 };
 
 /** "3 departments" / "1 department" — the count is the point, not the list. */
@@ -155,7 +161,11 @@ export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantI
       {city && <span className="digit-working-context-place">{city}</span>}
       {parts.map((part, i) => (
         <React.Fragment key={i}>
-          <span className="digit-working-context-sep">·</span>
+          {/* `city` is legitimately falsy when cityDetails carries no i18nKey
+              and neither tenantId is set — the case cityLabel's fallback chain
+              is written to tolerate. Without this guard the pill opened with a
+              stray "· 8 departments". */}
+          {(i > 0 || city) && <span className="digit-working-context-sep">·</span>}
           <span className="digit-working-context-count">{part}</span>
         </React.Fragment>
       ))}

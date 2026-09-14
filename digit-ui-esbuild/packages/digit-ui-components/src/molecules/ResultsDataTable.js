@@ -11,15 +11,22 @@ import CardLabel from "../atoms/CardLabel";
 import Button from "../atoms/Button";
 import TextInput from "../atoms/TextInput";
 
-// Matches the `47.99rem` breakpoint the employee overrides use.
-const MOBILE_BREAKPOINT = 767;
+// The card styling lives in the stylesheet behind `(max-width: 47.99rem)`, so
+// the query is the single source of truth for where the cards begin. A px
+// constant here would diverge from it at any root font size other than 16px:
+// at a 12px root, 47.99rem is 575px, and a 700px window would render cards
+// that none of the card rules matched.
+const MOBILE_MEDIA_QUERY = "(max-width: 47.99rem)";
 
-// react-data-table-component calls `cell(row, rowIndex, column, id)` and falls
-// back to `selector(row, rowIndex)`; mirror that so a card shows exactly what
-// the table cell would have shown.
+// react-data-table-component resolves a cell as `cell` > `format` > `selector`
+// (see its `decorateColumns`/`Cell`); mirror that precedence so a card shows
+// exactly what the table cell would have shown, formatting included.
 const renderCellContent = (column, row, index) => {
   if (typeof column?.cell === "function") {
     return column.cell(row, index, column, column?.id);
+  }
+  if (typeof column?.format === "function") {
+    return column.format(row, index);
   }
   if (typeof column?.selector === "function") {
     return column.selector(row, index);
@@ -68,20 +75,33 @@ const ResultsDataTable = ({
 }) => {
   const { t } = useTranslation();
 
-  // A five-column inbox cannot fit a phone. Below the breakpoint the same rows
-  // render as stacked cards instead — one synthetic column holding the whole
-  // record, so react-data-table-component keeps owning pagination, the pending
-  // state, row selection and row clicks. Labels come from the column configs
-  // themselves, which are already translated (`name: t(column.label)` in
-  // ResultsDataTableWrapper), so the cards stay localised for free.
+  // A multi-column table cannot fit a narrow viewport. Below the breakpoint the
+  // same rows render as stacked cards instead — one synthetic column holding
+  // the whole record, so react-data-table-component keeps owning pagination,
+  // the pending state, row selection and row clicks. Labels come from the
+  // column configs themselves, which are already translated (`name:
+  // t(column.label)` in ResultsDataTableWrapper), so the cards stay localised
+  // for free, and every field carries its label — this molecule is shared, and
+  // nothing here can know which column a given consumer treats as the record's
+  // identity.
   const [isMobileView, setIsMobileView] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia(MOBILE_MEDIA_QUERY).matches
   );
   useEffect(() => {
-    const onResize = () =>
-      setIsMobileView(window.innerWidth <= MOBILE_BREAKPOINT);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    if (typeof window.matchMedia !== "function") return undefined;
+    const mql = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const onChange = (e) => setIsMobileView(e.matches);
+    setIsMobileView(mql.matches);
+    // Safari < 14 only has the deprecated add/removeListener pair.
+    if (mql.addEventListener) {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    }
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
   }, []);
 
   const mobileColumns = useMemo(
@@ -96,22 +116,21 @@ const ResultsDataTable = ({
               const content = renderCellContent(column, row, index);
               if (content === null || content === undefined || content === "")
                 return null;
-              // The first column is the record's identity (the complaint
-              // number here), so it leads the card instead of taking a label.
-              if (columnIndex === 0) {
-                return (
-                  <div
-                    className="digit-results-mobile-card-title"
-                    key={column?.id || columnIndex}
-                  >
-                    {content}
-                  </div>
-                );
-              }
               return (
                 <div
                   className="digit-results-mobile-card-row"
                   key={column?.id || columnIndex}
+                  // react-data-table-component honours `ignoreRowClick` by not
+                  // binding the row handler to that cell. Everything is one
+                  // cell here, so the equivalent is to stop the field from
+                  // bubbling: without it, tapping an in-cell action button
+                  // would also fire onRowClicked and navigate away from the
+                  // row the user was acting on.
+                  onClick={
+                    column?.ignoreRowClick
+                      ? (e) => e.stopPropagation()
+                      : undefined
+                  }
                 >
                   <span className="digit-results-mobile-card-label">
                     {column?.name}

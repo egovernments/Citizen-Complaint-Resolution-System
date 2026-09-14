@@ -7139,9 +7139,7 @@ header.digit-header .digit-dropdown-master {
 .employee .digit-topbar.digit-employee-header {
   border-bottom: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
 }
-.employee .digit-sidebar {
-  border-right: 1px solid var(--color-header-seam, rgba(255, 255, 255, 0.14));
-}
+
 
 /* ----------------------------------------------------------------------
  * 61. Inbox panels (#2038 review round 2)
@@ -7216,8 +7214,24 @@ header.digit-header .digit-dropdown-master {
   align-items: center;
   gap: 8px !important;
 }
-.employee .v2-pgr-inbox .digit-inbox-search-links-contents {
+.employee
+  .v2-pgr-inbox
+  .digit-inbox-search-links-container:has(
+    .digit-inbox-search-links-header-logo:empty
+  )
+  .digit-inbox-search-links-contents {
   padding-left: 28px !important;
+}
+/* A tenant whose MDMS card config supplies `logoIcon.component` gets a real
+ * 2rem icon from InboxSearchLinks instead, so the indent is 32px + the 8px
+ * row gap. Same rule, the width the header actually has. */
+.employee
+  .v2-pgr-inbox
+  .digit-inbox-search-links-container:not(
+    :has(.digit-inbox-search-links-header-logo:empty)
+  )
+  .digit-inbox-search-links-contents {
+  padding-left: 40px !important;
 }
 .employee .v2-pgr-inbox .digit-inbox-search-links-header-text {
   text-align: left !important;
@@ -7265,19 +7279,25 @@ header.digit-header .digit-dropdown-master {
  *     against 14px. Three near-misses in one dialog, which is exactly the
  *     "corner radius inconsistency" the review points at.
  * -------------------------------------------------------------------- */
-html .digit-popup-overlay .digit-popup-wrapper,
-html .digit-popup-wrapper,
-html .digit-popup-wrapper.digit-logout-popup-wrapper.default {
+/* Scoped to `.employee`, and the button rules further to the logout dialog
+ * itself. Unscoped, `.digit-popup-wrapper button` is every popup in both the
+ * citizen and the employee app — the PGR workflow-action and filter modals
+ * included, which would have had their primary action re-radiused and their
+ * weight dropped out from under them. 12px is the system shell radius, so
+ * that one is safe to apply to any employee dialog. */
+html .employee .digit-popup-overlay .digit-popup-wrapper,
+html .employee .digit-popup-wrapper,
+html .employee .digit-popup-wrapper.digit-logout-popup-wrapper.default {
   border-radius: 12px !important;
 }
-.digit-popup-wrapper button,
-.digit-popup-wrapper [class*="popup-footer"] button {
+.employee .digit-logout-popup-wrapper button,
+.employee .digit-logout-popup-wrapper [class*="popup-footer"] button {
   border-radius: 6px !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
-.digit-popup-wrapper button .digit-button-label,
-.digit-popup-wrapper [class*="popup-footer"] button .digit-button-label {
+.employee .digit-logout-popup-wrapper button .digit-button-label,
+.employee .digit-logout-popup-wrapper [class*="popup-footer"] button .digit-button-label {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
 }
@@ -7285,8 +7305,8 @@ html .digit-popup-wrapper.digit-logout-popup-wrapper.default {
 /* The dialog's footer carries no ground of its own in vendor CSS, so it shows
  * whatever is behind the card. Paint it with the card surface so the action
  * row is unambiguously part of the dialog (#2038). */
-html .digit-popup-wrapper .digit-popup-footer,
-html .digit-popup-wrapper [class*="popup-footer"] {
+html .employee .digit-logout-popup-wrapper .digit-popup-footer,
+html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
   background: var(--v2-surface-color, var(--color-surface, #ffffff)) !important;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
@@ -7362,11 +7382,15 @@ html .digit-popup-wrapper [class*="popup-footer"] {
  *     columns sit behind a horizontal scrollbar nested inside the card's
  *     own vertical one. Nobody triages complaints that way.
  *
- *     ResultsDataTable now swaps the five columns for one synthetic column
- *     below 767px, rendering each record as a card. The table itself stays
- *     — pagination, the pending state, selection and row clicks are all
- *     still react-data-table-component's — so this only has to undress the
- *     row and cell chrome so the card can own its own padding.
+ *     ResultsDataTable now swaps the columns for one synthetic column below
+ *     this breakpoint, rendering each record as a labelled card. The table
+ *     itself stays — pagination, the pending state, selection and row clicks
+ *     are all still react-data-table-component's — so this only has to
+ *     undress the row and cell chrome so the card can own its own padding.
+ *
+ *     The molecule is shared, so every field is labelled and no column is
+ *     treated as the record's title: which column identifies a record is the
+ *     consumer's business, and this file is not the place to guess.
  * ---------------------------------------------------------------------- */
 
 @media (max-width: 47.99rem) {
@@ -7409,22 +7433,6 @@ html .digit-popup-wrapper [class*="popup-footer"] {
     box-sizing: border-box;
   }
 
-  /* The complaint number, leading the card. It is a link button, so the
-   * blue and the tap target come from the button itself; all this does is
-   * let it wrap and sit flush left. */
-  .digit-results-mobile-card-title {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    line-height: 1.35;
-    word-break: break-word;
-  }
-  .digit-results-mobile-card-title button,
-  .digit-results-mobile-card-title .digit-link-label {
-    padding-left: 0 !important;
-    text-align: left !important;
-    white-space: normal !important;
-  }
-
   /* Label left, value right, both on one line until they cannot be. */
   .digit-results-mobile-card-row {
     display: flex;
@@ -7446,10 +7454,20 @@ html .digit-popup-wrapper [class*="popup-footer"] {
     word-break: break-word;
     color: var(--color-text-primary, #0B0C0C);
   }
-  /* Status pills and the like keep their own chrome, just right-aligned. */
+  /* Status pills, link buttons and the like keep their own chrome, just
+   * right-aligned and free to wrap — a complaint number needs the second
+   * line on a narrow screen. */
   .digit-results-mobile-card-value > * {
     display: inline-block;
     vertical-align: middle;
+    max-width: 100%;
+    white-space: normal !important;
+    text-align: right !important;
+  }
+  .digit-results-mobile-card-value button {
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   /* `fixedHeaderScrollHeight: 100vh` caps the table at one viewport so the
