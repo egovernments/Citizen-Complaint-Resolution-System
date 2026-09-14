@@ -57,6 +57,8 @@ public class EscalationConfigurationService {
         Map<String, Object> mdmsConfig = fetch(requestInfo, tenantId);
         int maxDepth = positiveInt(mdmsConfig == null ? null : mdmsConfig.get("maxDepth"),
                 config.getEscalationMaxDepth());
+        List<Long> defaultPercentages = percentageList(
+                mdmsConfig == null ? null : mdmsConfig.get("defaultSlaPercentageByLevel"));
         List<Long> defaultSlas = numberList(mdmsConfig == null ? null : mdmsConfig.get("defaultSlaByLevel"));
         if (defaultSlas.isEmpty()) {
             defaultSlas = Collections.singletonList(config.getEscalationDefaultSlaMs());
@@ -67,7 +69,9 @@ public class EscalationConfigurationService {
             eligibleStatuses = stringList(config.getEscalationEligibleStatuses());
         }
         Map<String, Object> overrides = map(mdmsConfig == null ? null : mdmsConfig.get("overrides"));
-        return new ResolvedEscalationConfig(maxDepth, defaultSlas, enabledByLevel, eligibleStatuses, overrides);
+        Map<String, Long> complaintSlas = mdmsUtils.getServiceCodeToSlaMillis(tenantId);
+        return new ResolvedEscalationConfig(maxDepth, defaultPercentages, defaultSlas,
+                enabledByLevel, eligibleStatuses, overrides, complaintSlas);
     }
 
     /** Returns the state root and every registered city below it. */
@@ -187,6 +191,26 @@ public class EscalationConfigurationService {
         return result;
     }
 
+    private static List<Long> percentageList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return Collections.emptyList();
+        }
+        List<Long> percentages = new ArrayList<>();
+        long previous = 0;
+        for (Object item : values) {
+            if (!(item instanceof Number number)) {
+                return Collections.emptyList();
+            }
+            long percentage = number.longValue();
+            if (number.doubleValue() != percentage || percentage <= previous || percentage > 200) {
+                return Collections.emptyList();
+            }
+            percentages.add(percentage);
+            previous = percentage;
+        }
+        return percentages;
+    }
+
     private static List<Boolean> booleanList(Object value) {
         if (!(value instanceof List<?> values)) {
             return Collections.emptyList();
@@ -221,19 +245,23 @@ public class EscalationConfigurationService {
     @Getter
     public static final class ResolvedEscalationConfig {
         private final int maxDepth;
+        private final List<Long> defaultPercentages;
         private final List<Long> defaultSlas;
         private final List<Boolean> enabledByLevel;
         private final List<String> eligibleStatuses;
         private final Map<String, Object> overrides;
+        private final Map<String, Long> complaintSlas;
 
-        ResolvedEscalationConfig(int maxDepth, List<Long> defaultSlas,
+        ResolvedEscalationConfig(int maxDepth, List<Long> defaultPercentages, List<Long> defaultSlas,
                                  List<Boolean> enabledByLevel, List<String> eligibleStatuses,
-                                 Map<String, Object> overrides) {
+                                 Map<String, Object> overrides, Map<String, Long> complaintSlas) {
             this.maxDepth = maxDepth;
+            this.defaultPercentages = List.copyOf(defaultPercentages);
             this.defaultSlas = List.copyOf(defaultSlas);
             this.enabledByLevel = List.copyOf(enabledByLevel);
             this.eligibleStatuses = List.copyOf(eligibleStatuses);
             this.overrides = Map.copyOf(overrides);
+            this.complaintSlas = Map.copyOf(complaintSlas);
         }
 
         public boolean isEnabled(String serviceCode, int level) {
@@ -244,18 +272,48 @@ public class EscalationConfigurationService {
 
         public long resolveSla(String serviceCode, int level) {
             OverrideConfig override = override(serviceCode);
+            List<Long> percentages = override.percentages.isEmpty()
+                    ? defaultPercentages : override.percentages;
+            Long complaintSla = complaintSlas.get(serviceCode);
+            if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
+                return percentageOf(complaintSla, valueAt(percentages, level));
+            }
             List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
             return valueAt(slas, level);
+        }
+
+        /** Percentage ladders are finite: their last entry is the final escalation. */
+        public int effectiveMaxDepth(String serviceCode) {
+            OverrideConfig override = override(serviceCode);
+            List<Long> percentages = override.percentages.isEmpty()
+                    ? defaultPercentages : override.percentages;
+            Long complaintSla = complaintSlas.get(serviceCode);
+            if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
+                return Math.min(maxDepth, percentages.size());
+            }
+            return maxDepth;
         }
 
         private OverrideConfig override(String serviceCode) {
             Object raw = overrides.get(serviceCode);
             if (raw instanceof List<?>) {
-                return new OverrideConfig(numberList(raw), Collections.emptyList());
+                return new OverrideConfig(Collections.emptyList(), numberList(raw), Collections.emptyList());
             }
             Map<String, Object> structured = map(raw);
-            return new OverrideConfig(numberList(structured.get("slaByLevel")),
+            return new OverrideConfig(percentageList(structured.get("slaPercentageByLevel")),
+                    numberList(structured.get("slaByLevel")),
                     booleanList(structured.get("enabledByLevel")));
+        }
+
+        private static long percentageOf(long value, long percentage) {
+            long whole = value / 100;
+            long remainder = value % 100;
+            try {
+                return Math.addExact(Math.multiplyExact(whole, percentage),
+                        (remainder * percentage + 99) / 100);
+            } catch (ArithmeticException ignored) {
+                return Long.MAX_VALUE;
+            }
         }
 
         private static <T> T valueAt(List<T> values, int level) {
@@ -263,7 +321,7 @@ public class EscalationConfigurationService {
             return values.get(Math.min(safeLevel, values.size() - 1));
         }
 
-        private record OverrideConfig(List<Long> slas, List<Boolean> enabled) {
+        private record OverrideConfig(List<Long> percentages, List<Long> slas, List<Boolean> enabled) {
         }
     }
 }

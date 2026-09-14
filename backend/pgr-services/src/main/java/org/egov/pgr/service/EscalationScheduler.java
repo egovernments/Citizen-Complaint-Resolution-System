@@ -92,19 +92,19 @@ public class EscalationScheduler {
                         scanned++;
                         Service complaint = wrapper.getService();
                         int currentLevel = escalationService.escalationLevel(complaint);
-                        if (currentLevel >= escalationConfig.getMaxDepth()
+                        if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
                                 || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
                             skipped++;
                             continue;
                         }
 
-                        long windowStartedAt = escalationService.escalationWindowStartedAt(complaint);
-                        if (windowStartedAt <= 0) {
+                        long complaintCreatedAt = escalationService.escalationWindowStartedAt(complaint);
+                        if (complaintCreatedAt <= 0) {
                             skipped++;
                             continue;
                         }
                         long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
-                        if (System.currentTimeMillis() - windowStartedAt < sla) {
+                        if (System.currentTimeMillis() - complaintCreatedAt < sla) {
                             continue;
                         }
 
@@ -114,7 +114,7 @@ public class EscalationScheduler {
                                     .service(complaint)
                                     .workflow(Workflow.builder()
                                             .action(ESCALATE)
-                                            .comments("Auto-escalated after SLA breach at level " + currentLevel)
+                                            .comments("Auto-escalated after complaint SLA threshold at level " + currentLevel)
                                             .build())
                                     .build();
                             // This is deliberately the same entry point used by manual ESCALATE.

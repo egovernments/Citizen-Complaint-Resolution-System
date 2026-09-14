@@ -9,14 +9,16 @@ This rollout implements #2048. It must be performed per supported state-level te
 - `ESCALATE` is a self-loop. The backend resolves the current workflow assignee's HRMS `reportingTo`; callers do not choose the target.
 - No assignee, no `reportingTo`, disabled level, or `maxDepth` reached means no automatic escalation. Manual requests receive an explicit error.
 - Both triggers enter `PGRService.update` and write `escalationLevel`, `lastEscalatedAt`, `assignmentChangedAt`, `escalatedFrom`, `escalatedTo`, and `escalationTrigger`.
-- `assignmentChangedAt` is the SLA clock. `auditDetails.lastModifiedTime` is only a fallback for records created before this field existed.
-- Ordinary `ASSIGN` and `REASSIGN` start a new assignment window and reset `escalationLevel` to zero.
+- Automatic thresholds are cumulative from `auditDetails.createdTime`; updates and reassignments do not reset this clock.
+- `defaultSlaPercentageByLevel` is applied to the complaint type's existing `ComplaintHierarchy.slaHours`. Shipped `[80,120,200]` means a 10-hour complaint escalates at hours 8, 12, and 20—not after 8+12+20 hours. Percentages must increase and are capped at 200.
+- `defaultSlaByLevel` remains the absolute-millisecond fallback when no valid percentage ladder or no `slaHours` exists. It is not a second complaint-type SLA.
+- Manual escalation increments `escalationLevel`, so automatic escalation waits for the next cumulative threshold. `ASSIGN` and `REASSIGN` update assignment audit metadata but preserve `escalationLevel`.
 
 `EscalationConfig.overrides` keys are exact leaf `ComplaintHierarchy.code` / complaint `serviceCode` values. Hierarchy depth does not affect lookup, and parent-category inheritance is not supported.
 
 ## Configuration ownership
 
-The policy uses one MDMS v2 master, `RAINMAKER-PGR.EscalationConfig`. Its schema is in `utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json`. A complete city record overrides the complete state record; fields are not merged between levels. The state record is the shared baseline. Service defaults apply only when neither level returns a record. The checked-in development example is under `utilities/default-data-handler/src/main/resources/mdmsData-dev/`; it is not a live deployment seed, and the local `full-dump.sql` contains no record.
+The policy uses one MDMS v2 master, `RAINMAKER-PGR.EscalationConfig`. Its schema is in `utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json`. The base complaint SLA remains `RAINMAKER-PGR.ComplaintHierarchy.slaHours`. A complete city escalation record overrides the complete state record; fields are not merged. The state record is the shared baseline. Service defaults apply only when neither level returns a record. The checked-in development example is under `utilities/default-data-handler/src/main/resources/mdmsData-dev/`; Nairobi's deployable record is under `ansible/nairobi-mdms/mdms/`; local `full-dump.sql` has no record.
 
 If the record is absent or unreadable, pgr-services falls back to `PGR_ESCALATION_ELIGIBLE_STATUSES` / `pgr.escalation.eligible.statuses` (`PENDINGATLME,PENDINGFORASSIGNMENT`), `PGR_ESCALATION_DEFAULT_SLA_MS` / `pgr.escalation.default.sla.ms` (432000000 ms), and `PGR_ESCALATION_MAX_DEPTH` / `pgr.escalation.max.depth` (3). `PGR_ESCALATION_ENABLED` / `pgr.escalation.enabled` and `PGR_ESCALATION_INTERVAL_MS` / `pgr.escalation.interval.ms` control only the automatic scheduler; disabling it does not disable manual `ESCALATE`. `PGR_ESCALATION_BATCH_SIZE` / `pgr.escalation.batch.size` is the scheduler page size, not a total-run cap. Every configured eligible state must expose an active `ESCALATE` self-loop authorizing `SYSTEM`. Local Compose and local Kubernetes currently set only `PGR_ESCALATION_ENABLED=true`; the remaining values come from `backend/pgr-services/src/main/resources/application.properties` unless an environment overrides them.
 
@@ -51,11 +53,11 @@ Keep the global `SUPERVISOR` and `AUTO_ESCALATE` role definitions and defensive 
 Deploy the backend and UI before re-enabling the scheduler. Then verify:
 
 1. `A --manual ESCALATE--> B --automatic ESCALATE--> C` stays in the same state and ends at level 2.
-2. Both hops follow actual HRMS `reportingTo` edges and start a new `assignmentChangedAt` window.
-3. A comment between assignment and SLA expiry does not change `assignmentChangedAt` or delay escalation.
+2. Both hops follow actual HRMS `reportingTo` edges; a manual first hop consumes level 1, so automation next evaluates level 2's cumulative threshold.
+3. Comments, assignment, reassignment, and escalation do not move the `createdTime`-based threshold clock. Reassignment preserves `escalationLevel`.
 4. An arbitrary manual target is rejected as `INVALID_ESCALATION_ASSIGNEE`; use `REASSIGN` for lateral routing.
 5. Unassigned and top-of-chain complaints remain unchanged with an observable reason.
-6. Maximum depth and exact leaf-service-code overrides behave identically for manual and automatic triggers.
+6. A 10-hour complaint with `[80,120,200]` escalates at complaint ages 8h, 12h, and 20h, then stops; absolute fallback and exact leaf-service-code overrides behave identically for manual and automatic triggers.
 7. Update, inbox, domain/notification, analytics, and `pgr-escalation-events` consumers receive the same escalation event shape, differing only by `escalationTrigger`.
 8. A city with its own complete `EscalationConfig` uses that policy; a city without one uses the state policy.
 

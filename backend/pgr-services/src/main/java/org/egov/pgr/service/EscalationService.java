@@ -75,7 +75,7 @@ public class EscalationService {
     /**
      * Preserves server-managed assignment metadata for every update and, for
      * ESCALATE, resolves the next reportingTo employee and advances the shared
-     * hierarchy/clock metadata exactly once.
+     * hierarchy metadata exactly once.
      */
     public void prepareUpdate(ServiceRequest request, Service persistedService) {
         if (request == null || request.getService() == null || request.getWorkflow() == null) {
@@ -93,8 +93,8 @@ public class EscalationService {
             long now = System.currentTimeMillis();
             incoming.put(ASSIGNMENT_CHANGED_AT, now);
             incoming.put(ASSIGNMENT_CHANGE_SOURCE, action.toUpperCase());
-            // An ordinary assignment establishes a new reporting-hierarchy baseline.
-            incoming.put(ESCALATION_LEVEL, 0);
+            // First assignment starts at rung zero; later reassignments preserve consumed rungs.
+            incoming.putIfAbsent(ESCALATION_LEVEL, 0);
         }
 
         request.getService().setAdditionalDetail(incoming);
@@ -106,7 +106,8 @@ public class EscalationService {
         String complaintId = persistedService.getServiceRequestId();
         RequestInfo requestInfo = request.getRequestInfo();
         int currentLevel = escalationLevel(persistedService);
-        int maxDepth = configurationService.resolve(requestInfo, tenantId).getMaxDepth();
+        int maxDepth = configurationService.resolve(requestInfo, tenantId)
+                .effectiveMaxDepth(persistedService.getServiceCode());
 
         if (currentLevel >= maxDepth) {
             throw new CustomException("ESCALATION_MAX_DEPTH",
@@ -158,21 +159,10 @@ public class EscalationService {
         return event;
     }
 
-    /**
-     * The dedicated clock. Audit timestamps are only a migration fallback for
-     * complaints created before assignmentChangedAt existed.
-     */
+    /** Escalation thresholds are cumulative from complaint creation. */
     public long escalationWindowStartedAt(Service complaint) {
-        Object value = details(complaint).get(ASSIGNMENT_CHANGED_AT);
-        if (value instanceof Number number && number.longValue() > 0) {
-            return number.longValue();
-        }
         if (complaint.getAuditDetails() == null) {
             return 0L;
-        }
-        Long modified = complaint.getAuditDetails().getLastModifiedTime();
-        if (modified != null && modified > 0) {
-            return modified;
         }
         Long created = complaint.getAuditDetails().getCreatedTime();
         return created == null ? 0L : created;

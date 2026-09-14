@@ -698,7 +698,8 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
   // Verifies the @Scheduled scanAndEscalate() in pgr-services actually fires
   // and walks the HRMS reportingTo chain. Requires Nairobi env vars:
   //   PGR_ESCALATION_INTERVAL_MS=60000   (1 min ticks)
-  //   PGR_ESCALATION_DEFAULT_SLA_MS=30000 (30s SLA so complaints ripen fast)
+  //   an effective 30s first threshold in EscalationConfig (absolute fallback,
+  //   or a percentage of a deliberately short ComplaintHierarchy.slaHours)
   // and the workflow ESCALATE action must permit role SYSTEM at tenant `ke`.
   //
   // Test takes ~3 min: complaint creation, ASSIGN through PGR, wait for the
@@ -708,12 +709,12 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
   test('13 — auto-escalation: SLA breach triggers scheduler', {
     annotation: {
       type: 'description',
-      description: `Verifies pgr-services' @Scheduled scanAndEscalate() actually fires when an assigned complaint breaches its SLA. Requires the deployment to be configured with PGR_ESCALATION_INTERVAL_MS=60000 and PGR_ESCALATION_DEFAULT_SLA_MS=30000, and the workflow ESCALATE action must accept role SYSTEM. Test takes ~3 minutes wall-clock.
+      description: `Verifies pgr-services' @Scheduled scanAndEscalate() actually fires when an assigned complaint reaches its cumulative complaint-age threshold. Requires PGR_ESCALATION_INTERVAL_MS=60000, an effective first threshold under 30 seconds, and a workflow ESCALATE action accepting SYSTEM. Test takes ~3 minutes wall-clock.
 
 Steps:
 1. test.skip if !prerequisitesMet; setTimeout 240s.
 2. seedComplaintAsCitizen() to file as CITIZEN on resolveSeedPlan()'s serviceCode; capture autoSrid.
-3. ASSIGN through PGR _update so the shared assignment path starts assignmentChangedAt.
+3. ASSIGN through PGR _update; the escalation clock remains the complaint's createdTime.
 4. Loop with 15s polls, fetching workflow history with history=true, until any ProcessInstance with action=ESCALATE and comment starting "Auto-escalated" appears, or 200s elapse.
 5. Assert escalated === true and the level (count of auto-escalates) >= 1.
 6. fetchComplaint(autoSrid) and assert additionalDetail.escalationLevel >= 1.
@@ -722,16 +723,17 @@ Long-running (240s) because it depends on a real scheduler tick + real SLA breac
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     // Pre-flight gate: the 200s poll deadline is only meetable when pgr-services
-    // is deployed with fast escalation tuning (PGR_ESCALATION_INTERVAL_MS=60000 +
-    // PGR_ESCALATION_DEFAULT_SLA_MS=30000). The service defaults are 300000 /
-    // 432000000, and no in-repo deploy passes the fast values, so on a stock
+    // is deployed with fast escalation tuning (PGR_ESCALATION_INTERVAL_MS=60000
+    // plus an effective first threshold under 30s). Percentage configuration
+    // takes precedence over PGR_ESCALATION_DEFAULT_SLA_MS when the complaint
+    // type has ComplaintHierarchy.slaHours, so on a stock
     // deployment the scheduler can't escalate within the deadline and this would
     // hard-fail as red noise. Opt in with PGR_FAST_ESCALATION=1.
     test.skip(
       process.env.PGR_FAST_ESCALATION !== '1',
       'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
-        '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000). ' +
-        'pgr-services defaults (300000 / 432000000) make the 200s poll deadline unmeetable.',
+        '(PGR_ESCALATION_INTERVAL_MS=60000 + an effective first threshold under 30s). ' +
+        'The stock cumulative percentage ladder makes the 200s poll deadline unmeetable.',
     );
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     test.setTimeout(240_000);  // up to 4 min for the SLA breach + scheduler tick
@@ -755,8 +757,8 @@ Long-running (240s) because it depends on a real scheduler tick + real SLA breac
     const assigned = await assertOk(assignResp, 'PGR ASSIGN');
     expect(assigned.ServiceWrappers[0].service.additionalDetail?.assignmentChangedAt).toBeTruthy();
 
-    // Poll for auto-escalation. With INTERVAL_MS=60000 and SLA_MS=30000,
-    // the next tick (≤60s away) should breach (after 30s) and trigger ESCALATE.
+    // Poll for auto-escalation. With INTERVAL_MS=60000 and an effective
+    // threshold under 30s, the next tick (≤60s away) should trigger ESCALATE.
     const deadline = Date.now() + 200_000;
     let escalated = false;
     let level = 0;
