@@ -32,7 +32,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.EscalationConfig",
-    "description": "Per-tenant escalation config consumed by pgr-services for both manual and automatic escalation. eligibleStatuses selects workflow states scanned for automatic escalation; defaultSlaByLevel is the assignment-window SLA in ms at each reporting-hierarchy depth; overrides are keyed by the exact leaf serviceCode; maxDepth caps total upward escalations regardless of trigger. enabledByLevel controls automatic triggering only. Without a record pgr-services uses its service defaults (issue #2048).",
+    "description": "Escalation config consumed by pgr-services for both manual and automatic escalation. A complete city record overrides the complete state record; fields are not merged. eligibleStatuses selects workflow states scanned for automatic escalation; defaultSlaByLevel is the assignment-window SLA in ms at each reporting-hierarchy depth; overrides are keyed by the exact leaf serviceCode; maxDepth caps total upward escalations regardless of trigger. enabledByLevel controls automatic triggering only. Without either record pgr-services uses its service defaults (issues #2046 and #2048).",
     "isActive": true,
     "definition": {
       "type": "object",

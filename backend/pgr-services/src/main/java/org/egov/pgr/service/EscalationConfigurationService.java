@@ -34,6 +34,9 @@ import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 @Slf4j
 public class EscalationConfigurationService {
 
+    private static final String TENANT_MODULE = "tenant";
+    private static final String TENANTS_MASTER = "tenants";
+
     private final PGRConfiguration config;
     private final ServiceRequestRepository serviceRequestRepository;
     private final MDMSUtils mdmsUtils;
@@ -67,16 +70,19 @@ public class EscalationConfigurationService {
         return new ResolvedEscalationConfig(maxDepth, defaultSlas, enabledByLevel, eligibleStatuses, overrides);
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> fetch(RequestInfo requestInfo, String tenantId) {
+    /** Returns the state root and every registered city below it. */
+    public List<String> resolveStateTenants(RequestInfo requestInfo, String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return Collections.emptyList();
+        }
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId.trim());
+        LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
+        tenantIds.add(stateTenant);
+
         try {
-            if (tenantId == null || tenantId.isBlank()) {
-                return null;
-            }
-            String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-            MasterDetail master = MasterDetail.builder().name(MDMS_ESCALATION_CONFIG).build();
+            MasterDetail master = MasterDetail.builder().name(TENANTS_MASTER).build();
             ModuleDetail module = ModuleDetail.builder()
-                    .moduleName(MDMS_MODULE_NAME)
+                    .moduleName(TENANT_MODULE)
                     .masterDetails(Collections.singletonList(master))
                     .build();
             MdmsCriteria criteria = MdmsCriteria.builder()
@@ -89,13 +95,76 @@ public class EscalationConfigurationService {
                     .build();
 
             Object response = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), request);
+            List<Map<String, Object>> tenants = JsonPath.read(
+                    response, "$.MdmsRes." + TENANT_MODULE + "." + TENANTS_MASTER);
+            if (tenants != null) {
+                for (Map<String, Object> tenant : tenants) {
+                    if (Boolean.FALSE.equals(tenant.get("active"))) {
+                        continue;
+                    }
+                    String configuredTenant = text(tenant.get("code"));
+                    if (belongsToState(configuredTenant, stateTenant)) {
+                        tenantIds.add(configuredTenant);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to discover city tenants below {}; caller must use a state-wide fallback scan",
+                    stateTenant, e);
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(tenantIds);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetch(RequestInfo requestInfo, String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return null;
+        }
+        String requestedTenant = tenantId.trim();
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(requestedTenant);
+        Map<String, Object> cityConfig = fetchAtTenant(requestInfo, requestedTenant);
+        if (cityConfig != null || requestedTenant.equals(stateTenant)) {
+            return cityConfig;
+        }
+        log.debug("{} not found for city {}; falling back to state tenant {}",
+                MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, requestedTenant, stateTenant);
+        return fetchAtTenant(requestInfo, stateTenant);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchAtTenant(RequestInfo requestInfo, String tenantId) {
+        try {
+            MasterDetail master = MasterDetail.builder().name(MDMS_ESCALATION_CONFIG).build();
+            ModuleDetail module = ModuleDetail.builder()
+                    .moduleName(MDMS_MODULE_NAME)
+                    .masterDetails(Collections.singletonList(master))
+                    .build();
+            MdmsCriteria criteria = MdmsCriteria.builder()
+                    .tenantId(tenantId)
+                    .moduleDetails(Collections.singletonList(module))
+                    .build();
+            MdmsCriteriaReq request = MdmsCriteriaReq.builder()
+                    .requestInfo(requestInfo)
+                    .mdmsCriteria(criteria)
+                    .build();
+
+            Object response = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), request);
             List<Map<String, Object>> records = JsonPath.read(response, MDMS_ESCALATION_CONFIG_JSONPATH);
             return records == null || records.isEmpty() ? null : records.get(0);
         } catch (Exception e) {
-            log.warn("Failed to fetch {} for tenant {}; using service defaults",
+            log.warn("Failed to fetch {} for tenant {}",
                     MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId, e);
             return null;
         }
+    }
+
+    private static boolean belongsToState(String tenantId, String stateTenant) {
+        return tenantId != null && (tenantId.equals(stateTenant) || tenantId.startsWith(stateTenant + "."));
+    }
+
+    private static String text(Object value) {
+        return value instanceof String text && !text.isBlank() ? text.trim() : null;
     }
 
     private static int positiveInt(Object value, Integer fallback) {
