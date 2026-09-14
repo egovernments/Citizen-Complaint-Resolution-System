@@ -1,13 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertCircle, Check, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Check, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import {
-  deriveAccountCode,
-  getOnboardingClient,
-  isOnboardingConfigured,
-  mockOnboardingClient,
-  slugifyAccountName,
   type AvailabilityResult,
+  type Operation,
+  type Signup,
+  type SignupDraftInput,
+  type TenantOption,
+  OnboardingError,
+  PROVISIONING_STEPS,
+  authMethods,
+  checkIdentifier,
+  createSignup,
+  deriveAccountCode,
+  findOperation,
+  findSignup,
+  isOperationSettled,
+  isValidAccountCode,
+  isValidUrlSlug,
+  newIdempotencyKey,
+  retryOperation,
+  selectContext,
+  session,
+  slugifyAccountName,
+  startSignIn,
+  submitSignup,
+  tenants,
+  updateSignup,
 } from '@/api/onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -20,36 +38,82 @@ const STEPS = [
   { id: 'review', label: 'Review' },
 ];
 
-/** Base countries, with the timezone each one suggests. */
-const COUNTRIES: { code: string; name: string; timezone: string }[] = [
-  { code: 'KE', name: 'Kenya', timezone: 'Africa/Nairobi' },
-  { code: 'IN', name: 'India', timezone: 'Asia/Kolkata' },
-  { code: 'ET', name: 'Ethiopia', timezone: 'Africa/Addis_Ababa' },
-  { code: 'NG', name: 'Nigeria', timezone: 'Africa/Lagos' },
-  { code: 'SN', name: 'Senegal', timezone: 'Africa/Dakar' },
-  { code: 'MZ', name: 'Mozambique', timezone: 'Africa/Maputo' },
-  { code: 'ZA', name: 'South Africa', timezone: 'Africa/Johannesburg' },
-  { code: 'ID', name: 'Indonesia', timezone: 'Asia/Jakarta' },
+/** Base countries, with the IANA zone each one suggests. */
+const COUNTRIES: { code: string; name: string; timeZone: string }[] = [
+  { code: 'KE', name: 'Kenya', timeZone: 'Africa/Nairobi' },
+  { code: 'IN', name: 'India', timeZone: 'Asia/Kolkata' },
+  { code: 'ET', name: 'Ethiopia', timeZone: 'Africa/Addis_Ababa' },
+  { code: 'NG', name: 'Nigeria', timeZone: 'Africa/Lagos' },
+  { code: 'SN', name: 'Senegal', timeZone: 'Africa/Dakar' },
+  { code: 'MZ', name: 'Mozambique', timeZone: 'Africa/Maputo' },
+  { code: 'ZA', name: 'South Africa', timeZone: 'Africa/Johannesburg' },
+  { code: 'ID', name: 'Indonesia', timeZone: 'Asia/Jakarta' },
 ];
 
-const TIMEZONES = [...new Set(COUNTRIES.map((c) => c.timezone))].sort();
-const LANGUAGES = ['English', 'French', 'Portuguese', 'Hindi'];
+const TIME_ZONES = [...new Set(COUNTRIES.map((c) => c.timeZone))].sort();
+
+/** The contract wants lowercase BCP-47-like codes, not display names. */
+const LANGUAGES: { code: string; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'fr', label: 'French' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'sw', label: 'Swahili' },
+  { code: 'hi', label: 'Hindi' },
+];
+
+/**
+ * The contract only requires a non-blank string and gives `JULY_JUNE` as its
+ * one example, so this list is our best guess at the vocabulary rather than a
+ * published enum. Confirm with the backend before this ships. (#1999)
+ */
 const FINANCIAL_YEARS = [
-  { code: 'JAN', label: 'January to December' },
-  { code: 'APR', label: 'April to March' },
-  { code: 'JUL', label: 'July to June' },
-  { code: 'OCT', label: 'October to September' },
+  { code: 'JANUARY_DECEMBER', label: 'January to December' },
+  { code: 'APRIL_MARCH', label: 'April to March' },
+  { code: 'JULY_JUNE', label: 'July to June' },
+  { code: 'OCTOBER_SEPTEMBER', label: 'October to September' },
 ];
 
-/** The account step runs through three states before Preferences opens. */
-type AccountPhase = 'details' | 'linkSent' | 'verified';
+const TERMS_VERSION = '2026-09';
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ' +
   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50';
 
+/** Poll cadence the contract asks for: every 2-5 seconds. */
+const POLL_MS = 3000;
+
+type Phase =
+  | 'loading'
+  | 'signedOut'
+  | 'chooseTenant'
+  | 'wizard'
+  | 'provisioning'
+  | 'entering'
+  | 'failed';
+
+function errorText(error: unknown): string {
+  if (error instanceof OnboardingError) return error.message;
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong.';
+}
+
 /** Availability line under the code and URL fields. */
-function AvailabilityNote({ state, checking }: { state: AvailabilityResult | null; checking: boolean }) {
+function AvailabilityNote({
+  state,
+  checking,
+  invalidReason,
+}: {
+  state: AvailabilityResult | null;
+  checking: boolean;
+  invalidReason?: string;
+}) {
+  if (invalidReason) {
+    return (
+      <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+        <AlertCircle className="h-3 w-3" /> {invalidReason}
+      </p>
+    );
+  }
   if (checking) {
     return (
       <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
@@ -58,487 +122,633 @@ function AvailabilityNote({ state, checking }: { state: AvailabilityResult | nul
     );
   }
   if (!state) return null;
-  if (state.available) {
-    return (
-      <p className="mt-1 flex items-center gap-1 text-xs text-green-700">
-        <Check className="h-3 w-3" /> Available.
-      </p>
-    );
-  }
-  return (
-    <p className="mt-1 text-xs text-destructive">
-      {state.reason}
-      {state.suggestion ? ` Try ${state.suggestion}.` : ''}
+  return state.available ? (
+    <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
+      <Check className="h-3 w-3" /> Available
+    </p>
+  ) : (
+    <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+      <AlertCircle className="h-3 w-3" /> Already taken
     </p>
   );
 }
 
 export default function SignupPage() {
-  const client = useMemo(() => getOnboardingClient(), []);
-  const live = isOnboardingConfigured();
-
-  const [step, setStep] = useState<string>('account');
-  const [phase, setPhase] = useState<AccountPhase>('details');
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
+  const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [signup, setSignup] = useState<Signup | null>(null);
+  const [operation, setOperation] = useState<Operation | null>(null);
+  const [step, setStep] = useState<string>('account');
+  const [saving, setSaving] = useState(false);
 
-  // Account
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [agreed, setAgreed] = useState(false);
+  // Form state, seeded from the server draft so a resumed signup shows what was
+  // already entered rather than an empty wizard.
   const [accountName, setAccountName] = useState('');
   const [accountCode, setAccountCode] = useState('');
-  const [codeTouched, setCodeTouched] = useState(false);
+  const [urlSlug, setUrlSlug] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [languages, setLanguages] = useState<string[]>(['en']);
+  const [timeZone, setTimeZone] = useState('');
+  const [financialYearPolicy, setFinancialYearPolicy] = useState('');
+  const [founderMobile, setFounderMobile] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
+  const [slugState, setSlugState] = useState<AvailabilityResult | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
 
-  // Preferences
-  const [country, setCountry] = useState('');
-  const [languages, setLanguages] = useState<string[]>(['English']);
-  const [timezone, setTimezone] = useState('');
-  const [financialYear, setFinancialYear] = useState('JAN');
-  const [accountUrl, setAccountUrl] = useState('');
-  const [urlTouched, setUrlTouched] = useState(false);
-  const [urlState, setUrlState] = useState<AvailabilityResult | null>(null);
-  const [urlChecking, setUrlChecking] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  // Fields the operator has edited by hand stop being derived from the name.
+  const codeTouched = useRef(false);
+  const slugTouched = useRef(false);
+  // Reused when retrying the *same* action after a network failure, which is
+  // the whole point of the header.
+  const createKey = useRef<string>(newIdempotencyKey());
+  const submitKey = useRef<string>(newIdempotencyKey());
 
-  // Code follows the account name (and later the country) until it is edited by
-  // hand, matching the prototype. Once touched, it is the operator's to own.
-  useEffect(() => {
-    if (codeTouched) return;
-    setAccountCode(deriveAccountCode(accountName, country));
-  }, [accountName, country, codeTouched]);
+  const seedFrom = useCallback((record: Signup) => {
+    setSignup(record);
+    setAccountName(record.accountName || '');
+    setAccountCode(record.accountCode || '');
+    setUrlSlug(record.urlSlug || '');
+    setCountryCode(record.countryCode || '');
+    setLanguages(record.languages?.length ? record.languages : ['en']);
+    setTimeZone(record.timeZone || '');
+    setFinancialYearPolicy(record.financialYearPolicy || '');
+    setFounderMobile(String(record.tenantMetadata?.founder?.mobileNumber || ''));
+    setAcceptedTerms(Boolean(record.acceptedTermsVersion));
+    if (record.accountCode) codeTouched.current = true;
+    if (record.urlSlug) slugTouched.current = true;
+  }, []);
 
-  useEffect(() => {
-    if (urlTouched) return;
-    setAccountUrl(slugifyAccountName(accountName));
-  }, [accountName, urlTouched]);
-
-  // Selecting a country suggests its timezone, but never overwrites a choice
-  // already made.
-  useEffect(() => {
-    if (!country) return;
-    const match = COUNTRIES.find((c) => c.code === country);
-    if (match) setTimezone((current) => current || match.timezone);
-  }, [country]);
-
-  // Debounced availability checks. The trailing-call guard stops a slow early
-  // response from overwriting the verdict for what is now in the field.
-  useEffect(() => {
-    const code = accountCode.trim();
-    if (!code) { setCodeState(null); return; }
-    let stale = false;
-    setCodeChecking(true);
-    const timer = window.setTimeout(async () => {
-      try {
-        const result = await client.checkAccountCode(code);
-        if (!stale) setCodeState(result);
-      } finally {
-        if (!stale) setCodeChecking(false);
+  /** Session → tenants → onboarding or chooser. The contract's own order. */
+  const bootstrap = useCallback(async () => {
+    setPhase('loading');
+    setError(null);
+    try {
+      const current = await session();
+      if (!current.authenticated) {
+        const { methods: available } = await authMethods();
+        setMethods(available);
+        setPhase('signedOut');
+        return;
       }
-    }, 400);
-    return () => { stale = true; window.clearTimeout(timer); };
-  }, [accountCode, client]);
+      const view = await tenants();
+      if (!view.onboardingRequired && view.tenants.length) {
+        setTenantOptions(view.tenants);
+        setPhase('chooseTenant');
+        return;
+      }
+      // One signup per founder: search first so a closed tab resumes rather
+      // than starting a second.
+      const existing = await findSignup();
+      if (existing) seedFrom(existing);
+      setPhase('wizard');
+    } catch (caught) {
+      setError(errorText(caught));
+      setPhase('failed');
+    }
+  }, [seedFrom]);
 
   useEffect(() => {
-    const slug = accountUrl.trim();
-    if (!slug) { setUrlState(null); return; }
-    let stale = false;
-    setUrlChecking(true);
-    const timer = window.setTimeout(async () => {
-      try {
-        const result = await client.checkAccountUrl(slug);
-        if (!stale) setUrlState(result);
-      } finally {
-        if (!stale) setUrlChecking(false);
+    void bootstrap();
+  }, [bootstrap]);
+
+  // Derivations, only while the operator has not taken the field over.
+  useEffect(() => {
+    if (!codeTouched.current) setAccountCode(deriveAccountCode(accountName, countryCode));
+  }, [accountName, countryCode]);
+  useEffect(() => {
+    if (!slugTouched.current) setUrlSlug(slugifyAccountName(accountName));
+  }, [accountName]);
+
+  /**
+   * Debounced, with a trailing-call guard: a slow early response must not
+   * overwrite the verdict for what is in the field now.
+   */
+  const useAvailability = (
+    type: 'ACCOUNT_CODE' | 'URL_SLUG',
+    value: string,
+    valid: boolean,
+    setState: (v: AvailabilityResult | null) => void,
+    setChecking: (v: boolean) => void
+  ) => {
+    useEffect(() => {
+      if (!valid) {
+        setState(null);
+        setChecking(false);
+        return;
       }
-    }, 400);
-    return () => { stale = true; window.clearTimeout(timer); };
-  }, [accountUrl, client]);
+      let current = true;
+      setChecking(true);
+      const timer = setTimeout(async () => {
+        try {
+          const result = await checkIdentifier(type, value, signup?.id);
+          if (current) setState(result);
+        } catch {
+          if (current) setState(null);
+        } finally {
+          if (current) setChecking(false);
+        }
+      }, 400);
+      return () => {
+        current = false;
+        clearTimeout(timer);
+      };
+    }, [type, value, valid, setState, setChecking]);
+  };
 
-  const sendLink = useCallback(async () => {
-    setBusy(true);
+  const codeValid = isValidAccountCode(accountCode);
+  const slugValid = isValidUrlSlug(urlSlug);
+  useAvailability('ACCOUNT_CODE', accountCode, codeValid, setCodeState, setCodeChecking);
+  useAvailability('URL_SLUG', urlSlug, slugValid, setSlugState, setSlugChecking);
+
+  const draft = useMemo<SignupDraftInput>(
+    () => ({
+      accountName: accountName.trim(),
+      accountCode,
+      urlSlug,
+      countryCode,
+      languages,
+      timeZone,
+      financialYearPolicy,
+      acceptedTermsVersion: acceptedTerms ? TERMS_VERSION : '',
+      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: founderMobile.trim() } },
+    }),
+    [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, founderMobile]
+  );
+
+  /** Create on first save, update thereafter — one signup per founder. */
+  const persist = useCallback(async (): Promise<Signup> => {
+    if (signup) {
+      const updated = await updateSignup(signup.id, draft);
+      setSignup(updated);
+      return updated;
+    }
+    const created = await createSignup(draft, createKey.current);
+    setSignup(created);
+    return created;
+  }, [draft, signup]);
+
+  const advance = async (next: string) => {
+    setSaving(true);
     setError(null);
     try {
-      await client.startEmailVerification({ email: email.trim(), firstName, lastName });
-      setPhase('linkSent');
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : 'Could not send the sign-in link.');
+      await persist();
+      setStep(next);
+    } catch (caught) {
+      setError(errorText(caught));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
-  }, [client, email, firstName, lastName]);
+  };
 
-  const confirmVerified = useCallback(async () => {
-    setBusy(true);
+  const submit = async () => {
+    setSaving(true);
     setError(null);
     try {
-      if (!live) mockOnboardingClient.markVerified(email.trim());
-      const ok = await client.isEmailVerified(email.trim());
-      if (ok) setPhase('verified');
-      else setError('That link has not been opened yet. Check your inbox and try again.');
+      const record = await persist();
+      const started = await submitSignup(record.id, submitKey.current);
+      setOperation(started);
+      setPhase('provisioning');
+    } catch (caught) {
+      setError(errorText(caught));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
-  }, [client, email, live]);
+  };
 
-  const createAccount = useCallback(async () => {
-    setBusy(true);
+  // Poll while the worker runs. Stops as soon as the operation settles, so a
+  // terminal failure does not sit here hammering the endpoint.
+  useEffect(() => {
+    if (phase !== 'provisioning' || !operation || isOperationSettled(operation.status)) return;
+    const timer = setTimeout(async () => {
+      try {
+        const latest = await findOperation(operation.id);
+        if (latest) setOperation(latest);
+      } catch (caught) {
+        setError(errorText(caught));
+      }
+    }, POLL_MS);
+    return () => clearTimeout(timer);
+  }, [phase, operation]);
+
+  // Provisioning done: the new tenant appears without another sign-in.
+  useEffect(() => {
+    if (phase !== 'provisioning' || operation?.status !== 'SUCCEEDED') return;
+    let live = true;
+    (async () => {
+      try {
+        const view = await tenants();
+        if (!live) return;
+        setTenantOptions(view.tenants);
+        setPhase('chooseTenant');
+      } catch (caught) {
+        if (live) setError(errorText(caught));
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [phase, operation?.status]);
+
+  const enter = async (tenantId: string) => {
+    setSaving(true);
     setError(null);
     try {
-      await client.createAccount({
-        firstName, lastName, email: email.trim(), accountName, accountCode,
-        baseCountry: country, languages, timezone, financialYear, accountUrl,
-      });
-      setSubmitted(true);
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : 'Could not create the account.');
-    } finally {
-      setBusy(false);
+      const context = await selectContext(tenantId);
+      // The existing DIGIT auth state takes it from here; normal business calls
+      // resume with RequestInfo.authToken = access_token.
+      window.localStorage.setItem('Employee.token', context.access_token);
+      window.localStorage.setItem('Employee.tenant-id', context.UserRequest.tenantId);
+      window.localStorage.setItem('Employee.user-info', JSON.stringify(context.UserRequest));
+      setPhase('entering');
+      window.location.assign('/configurator/');
+    } catch (caught) {
+      setError(errorText(caught));
+      setSaving(false);
     }
-  }, [client, firstName, lastName, email, accountName, accountCode, country, languages, timezone, financialYear, accountUrl]);
+  };
 
-  const toggleLanguage = (language: string) =>
-    setLanguages((current) =>
-      current.includes(language)
-        ? current.filter((l) => l !== language)
-        : [...current, language],
+  const accountReady =
+    accountName.trim().length > 0 &&
+    codeValid &&
+    slugValid &&
+    codeState?.available !== false &&
+    slugState?.available !== false;
+  const preferencesReady =
+    countryCode.length === 2 && languages.length > 0 && timeZone.length > 0 && financialYearPolicy.length > 0 && founderMobile.trim().length > 0;
+
+  const banner = error ? (
+    <Alert variant="destructive" className="mb-4">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Could not continue</AlertTitle>
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ) : null;
+
+  if (phase === 'loading') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+      </div>
     );
+  }
 
-  const detailsReady = firstName.trim() && lastName.trim() && email.trim().includes('@') && agreed;
-  const accountReady = accountName.trim() && accountCode.trim() && codeState?.available === true;
-  const preferencesReady = country && timezone && languages.length > 0 && urlState?.available === true;
+  if (phase === 'signedOut') {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16">
+        <h1 className="text-2xl font-semibold">Set up your account</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Sign in to begin. We will create your workspace once the details are confirmed.
+        </p>
+        {banner}
+        <div className="mt-6 space-y-2">
+          {/* Only what the backend actually has enabled. Google, GitHub and the
+              magic link appear here once their Keycloak providers are switched
+              on, and they use this same redirect, so nothing changes here. */}
+          {methods.map((method) => (
+            <Button key={method.id} className="w-full" onClick={() => startSignIn(method.id)}>
+              <LogIn className="mr-2 h-4 w-4" /> Continue with {method.label}
+            </Button>
+          ))}
+          {!methods.length && (
+            <p className="text-sm text-muted-foreground">No sign-in method is enabled on this environment.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'chooseTenant') {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16">
+        <h1 className="text-2xl font-semibold">Choose a workspace</h1>
+        {banner}
+        <div className="mt-6 space-y-2">
+          {tenantOptions.map((option) => (
+            <Button
+              key={option.tenantId}
+              variant="outline"
+              className="w-full justify-between"
+              disabled={saving}
+              onClick={() => enter(option.tenantId)}
+            >
+              <span>{option.name}</span>
+              <span className="text-xs text-muted-foreground">{option.tenantId}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'entering') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening your workspace…
+      </div>
+    );
+  }
+
+  if (phase === 'provisioning' && operation) {
+    const done = new Set(operation.completedSteps);
+    const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <h1 className="text-2xl font-semibold">Setting up {accountName}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">This usually takes a minute or two.</p>
+        {banner}
+        <ol className="mt-6 space-y-3">
+          {PROVISIONING_STEPS.map((name) => {
+            const isDone = done.has(name);
+            const isCurrent = operation.currentStep === name && !isDone;
+            return (
+              <li key={name} className="flex items-center gap-3 text-sm">
+                {isDone ? (
+                  <Check className="h-4 w-4 text-emerald-600" />
+                ) : isCurrent && !failed ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <span className="h-4 w-4 rounded-full border border-muted-foreground/40" />
+                )}
+                <span className={isDone ? 'text-foreground' : 'text-muted-foreground'}>
+                  {name.replace(/_/g, ' ').toLowerCase()}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+        {failed && (
+          <Alert variant="destructive" className="mt-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Setup did not finish</AlertTitle>
+            <AlertDescription>
+              {operation.errorMessage || 'The setup could not be completed.'}
+              {operation.errorCode ? ` (${operation.errorCode})` : ''}
+            </AlertDescription>
+          </Alert>
+        )}
+        {operation.status === 'RETRYABLE_FAILED' && (
+          <Button
+            className="mt-4"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                setOperation(await retryOperation(operation.id));
+              } catch (caught) {
+                setError(errorText(caught));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" /> Try again
+          </Button>
+        )}
+        {operation.status === 'TERMINAL_FAILED' && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            This signup cannot be retried. Please contact support to continue.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === 'failed') {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16">
+        {banner}
+        <Button onClick={() => void bootstrap()}>
+          <RefreshCw className="mr-2 h-4 w-4" /> Try again
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Brand panel. Hidden on small screens so the form owns the viewport. */}
-      <aside className="hidden flex-col justify-between bg-secondary p-10 text-white lg:flex">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-1 bg-primary" />
-            <div>
-              <p className="font-condensed text-xl font-bold">DIGIT Complaint Management</p>
-              <p className="text-xs uppercase tracking-widest text-white/70">
-                Digital infrastructure for public services
-              </p>
-            </div>
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <h1 className="text-2xl font-semibold">Set up your account</h1>
+      <div className="mt-6">
+        <Stepper steps={STEPS} current={step} />
+      </div>
+      <div className="mt-8">{banner}</div>
+
+      {step === 'account' ? (
+        <div className="space-y-5">
+          <div>
+            <label className="text-sm font-medium" htmlFor="accountName">
+              Account name
+            </label>
+            <Input
+              id="accountName"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              placeholder="Bomet County Government"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="accountCode">
+              Account code
+            </label>
+            <Input
+              id="accountCode"
+              value={accountCode}
+              onChange={(e) => {
+                codeTouched.current = true;
+                setAccountCode(e.target.value.toUpperCase());
+              }}
+            />
+            <AvailabilityNote
+              state={codeState}
+              checking={codeChecking}
+              invalidReason={
+                accountCode && !codeValid ? '2 to 32 characters, using A-Z, 0-9 and hyphens.' : undefined
+              }
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="urlSlug">
+              Account URL
+            </label>
+            <Input
+              id="urlSlug"
+              value={urlSlug}
+              onChange={(e) => {
+                slugTouched.current = true;
+                setUrlSlug(e.target.value.toLowerCase());
+              }}
+            />
+            <AvailabilityNote
+              state={slugState}
+              checking={slugChecking}
+              invalidReason={
+                urlSlug && !slugValid
+                  ? '2 to 63 characters, lowercase letters, digits and hyphens, with at least two letters.'
+                  : undefined
+              }
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button disabled={!accountReady || saving} onClick={() => advance('preferences')}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Continue
+            </Button>
           </div>
         </div>
-        <div>
-          <h1 className="font-condensed text-4xl font-bold leading-tight">
-            Manage complaints from intake to closure.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-white/80">
-            Set up your account to receive complaints, assign them to the right team, track service
-            timelines, and monitor resolution across departments and localities.
+      ) : step === 'preferences' ? (
+        <div className="space-y-5">
+          <div>
+            <label className="text-sm font-medium" htmlFor="countryCode">
+              Base country
+            </label>
+            <select
+              id="countryCode"
+              className={selectClass}
+              value={countryCode}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCountryCode(next);
+                // Suggest, never overwrite a zone already chosen by hand.
+                const suggested = COUNTRIES.find((c) => c.code === next)?.timeZone;
+                if (suggested && !timeZone) setTimeZone(suggested);
+              }}
+            >
+              <option value="">Select a country</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span className="text-sm font-medium">Languages</span>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {LANGUAGES.map((language) => (
+                <label key={language.code} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={languages.includes(language.code)}
+                    onChange={(e) =>
+                      setLanguages((prev) =>
+                        e.target.checked
+                          ? [...prev, language.code]
+                          : prev.filter((code) => code !== language.code)
+                      )
+                    }
+                  />
+                  {language.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="timeZone">
+              Time zone
+            </label>
+            <select
+              id="timeZone"
+              className={selectClass}
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
+            >
+              <option value="">Select a time zone</option>
+              {TIME_ZONES.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="financialYearPolicy">
+              Financial year
+            </label>
+            <select
+              id="financialYearPolicy"
+              className={selectClass}
+              value={financialYearPolicy}
+              onChange={(e) => setFinancialYearPolicy(e.target.value)}
+            >
+              <option value="">Select a financial year</option>
+              {FINANCIAL_YEARS.map((fy) => (
+                <option key={fy.code} value={fy.code}>
+                  {fy.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="founderMobile">
+              Your mobile number
+            </label>
+            <Input
+              id="founderMobile"
+              value={founderMobile}
+              onChange={(e) => setFounderMobile(e.target.value)}
+              placeholder="+254700000199"
+            />
+            {/* Not optional metadata: the provisioning worker needs it to create
+                the tenant-local employee, and without it setup ends in
+                FOUNDER_ACCOUNT_REJECTED rather than a validation message. */}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Used to create your account inside the new workspace.
+            </p>
+          </div>
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setStep('account')}>
+              Back
+            </Button>
+            <Button disabled={!preferencesReady || saving} onClick={() => advance('review')}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Continue
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <dl className="divide-y rounded-md border">
+            {[
+              ['Account name', accountName],
+              ['Account code', accountCode],
+              ['Account URL', urlSlug],
+              ['Base country', COUNTRIES.find((c) => c.code === countryCode)?.name || countryCode],
+              ['Languages', languages.join(', ')],
+              ['Time zone', timeZone],
+              ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYearPolicy)?.label || financialYearPolicy],
+              ['Mobile number', founderMobile],
+            ].map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4 px-4 py-3 text-sm">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="text-right font-medium">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+            />
+            <span>I agree to the terms of service.</span>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Setup runs in the background and takes a minute or two. You will see its progress on the next
+            screen.
           </p>
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setStep('preferences')}>
+              Back
+            </Button>
+            <Button disabled={!acceptedTerms || saving} onClick={submit}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
+            </Button>
+          </div>
         </div>
-        <p className="text-xs text-white/50">© 2026 eGovernments Foundation · DIGIT</p>
-      </aside>
-
-      <main className="flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md space-y-6">
-          <Stepper steps={STEPS} current={step} />
-
-          {!live && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Preview mode</AlertTitle>
-              <AlertDescription>
-                The onboarding backend is not wired yet, so this flow runs against mock data and
-                creates nothing.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>Something went wrong</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {submitted ? (
-            <section className="space-y-4">
-              <h2 className="font-condensed text-2xl font-bold">Account requested</h2>
-              <Alert>
-                <ShieldCheck className="h-4 w-4" />
-                <AlertTitle>Setting up your workspace</AlertTitle>
-                <AlertDescription>
-                  Setup usually takes 10 to 15 minutes. We will email {email} as soon as it is done.
-                </AlertDescription>
-              </Alert>
-              <Link to="/login" className="inline-block text-sm text-primary underline underline-offset-4">
-                Go to sign in
-              </Link>
-            </section>
-          ) : step === 'account' ? (
-            <section className="space-y-4">
-              {phase === 'details' && (
-                <>
-                  <div>
-                    <h2 className="font-condensed text-2xl font-bold">Verify your email to begin</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Confirm who you are first. Once your email is verified, you can name your
-                      account and continue the setup.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      First name
-                      <Input className="mt-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-                    </label>
-                    <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Last name
-                      <Input className="mt-1" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                    </label>
-                  </div>
-                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Email address
-                    <Input className="mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </label>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={agreed}
-                      onChange={(e) => setAgreed(e.target.checked)}
-                      aria-label="Agree to the Terms of Service and Privacy Notice"
-                    />
-                    <span className="text-muted-foreground">
-                      By continuing, you agree to the Terms of Service and Privacy Notice.
-                    </span>
-                  </label>
-                  {/* No password field: identity is a magic link (#1999). */}
-                  <Button className="w-full" disabled={!detailsReady || busy} onClick={() => void sendLink()}>
-                    {busy ? <Loader2 className="animate-spin" /> : <Mail />} Continue with email
-                  </Button>
-                  <p className="text-center text-sm text-muted-foreground">
-                    Already have an account?{' '}
-                    <Link to="/login" className="text-primary underline underline-offset-4">Sign in</Link>
-                  </p>
-                </>
-              )}
-
-              {phase === 'linkSent' && (
-                <>
-                  <div>
-                    <h2 className="font-condensed text-2xl font-bold">Check your email</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      We sent a sign-in link to <strong>{email}</strong>. Open the link to verify your
-                      address and continue.
-                    </p>
-                  </div>
-                  <Button className="w-full" disabled={busy} onClick={() => void confirmVerified()}>
-                    {busy ? <Loader2 className="animate-spin" /> : null}
-                    {live ? 'I have opened the link' : 'Simulate email verification'}
-                  </Button>
-                  <Button variant="outline" className="w-full" onClick={() => { setPhase('details'); setError(null); }}>
-                    Use a different email
-                  </Button>
-                </>
-              )}
-
-              {phase === 'verified' && (
-                <>
-                  <div>
-                    <h2 className="font-condensed text-2xl font-bold">Set up your account</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Create the account details that will identify your account in DIGIT Complaint
-                      Management.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                    <span>{email}</span>
-                    <span className="flex items-center gap-1 text-green-700">
-                      <Check className="h-4 w-4" /> Verified
-                    </span>
-                  </div>
-                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Account name
-                    <Input
-                      className="mt-1"
-                      value={accountName}
-                      placeholder="Bomet County Government"
-                      onChange={(e) => setAccountName(e.target.value)}
-                    />
-                  </label>
-                  <p className="-mt-2 text-xs text-muted-foreground">
-                    The name of your account. It could be a government organisation, agency,
-                    department, institution, or programme.
-                  </p>
-                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Account code
-                    <Input
-                      className="mt-1"
-                      value={accountCode}
-                      onChange={(e) => { setCodeTouched(true); setAccountCode(e.target.value.toUpperCase()); }}
-                    />
-                  </label>
-                  <div className="-mt-2">
-                    <p className="text-xs text-muted-foreground">
-                      Used as a short identifier for your account across configuration, URLs, and
-                      system references.
-                    </p>
-                    <AvailabilityNote state={codeState} checking={codeChecking} />
-                  </div>
-                  <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
-                    Continue
-                  </Button>
-                </>
-              )}
-            </section>
-          ) : step === 'preferences' ? (
-            <section className="space-y-4">
-              <div>
-                <h2 className="font-condensed text-2xl font-bold">Personalise your account</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Set the defaults your account will use across the product.
-                </p>
-              </div>
-
-              <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Base country of operations
-                <select
-                  className={`mt-1 ${selectClass}`}
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  aria-label="Base country of operations"
-                >
-                  <option value="">Select a country</option>
-                  {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
-              </label>
-              <p className="-mt-2 text-xs text-muted-foreground">
-                Used to suggest locale, timezone, and account code defaults.
-              </p>
-
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Languages</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {LANGUAGES.map((language) => {
-                    const on = languages.includes(language);
-                    return (
-                      <button
-                        key={language}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggleLanguage(language)}
-                        className={`rounded-full border px-3 py-1 text-sm transition-colors ${
-                          on ? 'border-primary bg-primary/10 text-primary' : 'border-input text-muted-foreground hover:border-primary/50'
-                        }`}
-                      >
-                        {language}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Timezone
-                <select
-                  className={`mt-1 ${selectClass}`}
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  aria-label="Timezone"
-                >
-                  <option value="">Select a timezone</option>
-                  {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-                </select>
-              </label>
-
-              <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Financial year
-                <select
-                  className={`mt-1 ${selectClass}`}
-                  value={financialYear}
-                  onChange={(e) => setFinancialYear(e.target.value)}
-                  aria-label="Financial year"
-                >
-                  {FINANCIAL_YEARS.map((fy) => <option key={fy.code} value={fy.code}>{fy.label}</option>)}
-                </select>
-              </label>
-
-              <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Account URL
-                <Input
-                  className="mt-1"
-                  value={accountUrl}
-                  onChange={(e) => { setUrlTouched(true); setAccountUrl(slugifyAccountName(e.target.value)); }}
-                />
-              </label>
-              <div className="-mt-2">
-                <p className="text-xs text-muted-foreground">
-                  This short name will be used in your account URLs.
-                </p>
-                {accountUrl && (
-                  <p className="text-xs text-muted-foreground">
-                    Preview: <strong>https://{accountUrl}.cms.digit.org</strong>
-                  </p>
-                )}
-                <AvailabilityNote state={urlState} checking={urlChecking} />
-              </div>
-
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setStep('account')}>Back</Button>
-                <Button className="flex-1" disabled={!preferencesReady} onClick={() => setStep('review')}>
-                  Continue
-                </Button>
-              </div>
-            </section>
-          ) : (
-            <section className="space-y-4">
-              <div>
-                <h2 className="font-condensed text-2xl font-bold">Review and create your account</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  These will be the main entry points for your account once your workspace has been
-                  set up.
-                </p>
-              </div>
-
-              <dl className="divide-y rounded-md border">
-                {[
-                  ['Account name', accountName],
-                  ['Account code', accountCode],
-                  ['Base country', COUNTRIES.find((c) => c.code === country)?.name ?? country],
-                  ['Languages', languages.join(', ')],
-                  ['Timezone', timezone],
-                  ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYear)?.label ?? financialYear],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-4 px-3 py-2 text-sm">
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="text-right font-medium text-foreground">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <div className="rounded-md border p-3">
-                <p className="text-sm font-medium">Primary URL</p>
-                <p className="text-xs text-muted-foreground">
-                  Main entry point for administrators, supervisors, resolvers, and other government
-                  employees.
-                </p>
-                <code className="mt-2 block break-all rounded bg-muted px-2 py-1 text-xs">
-                  https://{accountUrl}.cms.digit.org
-                </code>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  This URL is representative. Working URLs will be available post provisioning.
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setStep('preferences')}>Back</Button>
-                <Button className="flex-1" disabled={busy} onClick={() => void createAccount()}>
-                  {busy ? <Loader2 className="animate-spin" /> : null} Create account
-                </Button>
-              </div>
-            </section>
-          )}
-        </div>
-      </main>
+      )}
     </div>
   );
 }

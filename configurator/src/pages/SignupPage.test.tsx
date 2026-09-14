@@ -1,123 +1,200 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SignupPage from './SignupPage';
 
-const renderPage = () => render(<SignupPage />, { wrapper: MemoryRouter });
+/**
+ * The network-facing half of the contract is mocked; the pure helpers
+ * (derivations, validation) stay real so the screens are exercised against the
+ * same rules the server enforces.
+ */
+vi.mock('@/api/onboarding', async () => {
+  const actual = await vi.importActual<typeof import('@/api/onboarding')>('@/api/onboarding');
+  return {
+    ...actual,
+    session: vi.fn(),
+    authMethods: vi.fn(),
+    tenants: vi.fn(),
+    findSignup: vi.fn(),
+    createSignup: vi.fn(),
+    updateSignup: vi.fn(),
+    checkIdentifier: vi.fn(),
+    submitSignup: vi.fn(),
+    findOperation: vi.fn(),
+    selectContext: vi.fn(),
+    startSignIn: vi.fn(),
+  };
+});
 
-/** Walk the Account step up to the verified sub-state. */
-const completeAccountStep = async () => {
-  fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Proto' } });
-  fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Tester' } });
-  fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'proto@example.com' } });
-  fireEvent.click(screen.getByLabelText(/agree to the terms/i));
-  fireEvent.click(screen.getByRole('button', { name: /continue with email/i }));
+import * as api from '@/api/onboarding';
 
-  fireEvent.click(await screen.findByRole('button', { name: /simulate email verification/i }));
-  await screen.findByText('Verified');
-};
+const signedIn = { authenticated: true, user: { id: 'u', email: 'f@x.test', name: 'F', preferredUsername: 'f' } };
 
-describe('SignupPage', () => {
-  it('says plainly that nothing is created while the backend is mocked', () => {
-    renderPage();
-    expect(screen.getByText('Preview mode')).toBeInTheDocument();
+beforeEach(() => {
+  vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: true });
+  vi.mocked(api.findSignup).mockResolvedValue(null);
+});
+
+afterEach(() => vi.clearAllMocks());
+
+describe('sign-in gate', () => {
+  it('renders only the methods the backend reports as enabled', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+    });
+
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('button', { name: /continue with password/i })).toBeInTheDocument();
+    // Nothing is hardcoded, so a provider that is off simply does not appear.
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
 
-  it('never asks for a password (identity is a magic link)', () => {
-    renderPage();
+  it('hands sign-in to the backend rather than collecting a credential', async () => {
+    vi.mocked(api.session).mockResolvedValue({ authenticated: false });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+    });
+
+    render(<SignupPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /continue with password/i }));
+
+    expect(api.startSignIn).toHaveBeenCalledWith('password');
+    // The whole point: no password field ever exists in this flow.
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
+});
 
-  it('will not send a link until the details and consent are given', () => {
-    renderPage();
-    const submit = screen.getByRole('button', { name: /continue with email/i });
-    expect(submit).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Proto' } });
-    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Tester' } });
-    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'proto@example.com' } });
-    // Consent still missing.
-    expect(submit).toBeDisabled();
-
-    fireEvent.click(screen.getByLabelText(/agree to the terms/i));
-    expect(submit).toBeEnabled();
+describe('wizard', () => {
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
   });
 
-  it('derives the account code from the name and checks it', async () => {
-    renderPage();
-    await completeAccountStep();
+  it('derives the code and slug from the account name', async () => {
+    render(<SignupPage />);
 
-    fireEvent.change(screen.getByLabelText(/account name/i), {
+    const name = await screen.findByLabelText(/account name/i);
+    fireEvent.change(name, { target: { value: 'Bomet County Government' } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/account code/i)).toHaveValue('BCG');
+      expect(screen.getByLabelText(/account url/i)).toHaveValue('bomet-county-government');
+    });
+  });
+
+  it('stops deriving once the operator edits the code themselves', async () => {
+    render(<SignupPage />);
+
+    fireEvent.change(await screen.findByLabelText(/account name/i), {
+      target: { value: 'Bomet County Government' },
+    });
+    const code = screen.getByLabelText(/account code/i);
+    fireEvent.change(code, { target: { value: 'KE-CUSTOM' } });
+    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Something Else Entirely' } });
+
+    await waitFor(() => expect(code).toHaveValue('KE-CUSTOM'));
+  });
+
+  it('explains an invalid slug instead of silently refusing to continue', async () => {
+    render(<SignupPage />);
+
+    fireEvent.change(await screen.findByLabelText(/account name/i), { target: { value: 'Bomet' } });
+    fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: '12-34' } });
+
+    // The server needs at least two letters; say so rather than just disabling.
+    expect(await screen.findByText(/at least two letters/i)).toBeInTheDocument();
+  });
+
+  it('blocks Continue while an identifier is taken', async () => {
+    vi.mocked(api.checkIdentifier).mockResolvedValue({ type: 'URL_SLUG', value: 'x', available: false });
+    render(<SignupPage />);
+
+    fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
 
-    const code = screen.getByLabelText(/account code/i) as HTMLInputElement;
-    await waitFor(() => expect(code.value).toBe('BCG'));
-    expect(await screen.findByText('Available.', {}, { timeout: 3000 })).toBeInTheDocument();
-  });
-
-  it('blocks Continue while the chosen code is taken', async () => {
-    renderPage();
-    await completeAccountStep();
-
-    fireEvent.change(screen.getByLabelText(/account name/i), { target: { value: 'Placeholder' } });
-    fireEvent.change(screen.getByLabelText(/account code/i), { target: { value: 'KE-NRB' } });
-
-    expect(await screen.findByText(/already in use/i, {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^continue$/i })).toBeDisabled();
-  });
-
-  it('lets a different email be used after the link is sent', async () => {
-    renderPage();
-    fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Proto' } });
-    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Tester' } });
-    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'proto@example.com' } });
-    fireEvent.click(screen.getByLabelText(/agree to the terms/i));
-    fireEvent.click(screen.getByRole('button', { name: /continue with email/i }));
-
-    fireEvent.click(await screen.findByRole('button', { name: /use a different email/i }));
-    expect(screen.getByRole('button', { name: /continue with email/i })).toBeInTheDocument();
-  });
-
-  it('prefixes the code with the country and suggests its timezone', async () => {
-    renderPage();
-    await completeAccountStep();
-    fireEvent.change(screen.getByLabelText(/account name/i), {
-      target: { value: 'Bomet County Government' },
-    });
-    await screen.findByText('Available.', {}, { timeout: 3000 });
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
-
-    fireEvent.change(await screen.findByLabelText(/base country/i), { target: { value: 'KE' } });
-
-    // Timezone is suggested, not left for the operator to hunt for.
     await waitFor(() =>
-      expect((screen.getByLabelText(/^timezone$/i) as HTMLSelectElement).value).toBe('Africa/Nairobi'),
+      expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
     );
-
-    // And the code picked up the country prefix, as in the prototype.
-    fireEvent.change(screen.getByLabelText(/account url/i), { target: { value: 'bomet-county-government' } });
-    await screen.findByText('Available.', {}, { timeout: 3000 });
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
-    expect(await screen.findByText('KE-BCG')).toBeInTheDocument();
   });
 
-  it('tells the operator provisioning is asynchronous', async () => {
-    renderPage();
-    await completeAccountStep();
-    fireEvent.change(screen.getByLabelText(/account name/i), {
+  it('creates the draft on the server when the first step is completed', async () => {
+    vi.mocked(api.createSignup).mockResolvedValue({ id: 'signup-1' } as never);
+    render(<SignupPage />);
+
+    fireEvent.change(await screen.findByLabelText(/account name/i), {
       target: { value: 'Bomet County Government' },
     });
-    await screen.findByText('Available.', {}, { timeout: 3000 });
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
-    fireEvent.change(await screen.findByLabelText(/base country/i), { target: { value: 'KE' } });
-    await screen.findByText('Available.', {}, { timeout: 3000 });
-    fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+    await waitFor(() => expect(api.createSignup).toHaveBeenCalledTimes(1));
+    const [draft, key] = vi.mocked(api.createSignup).mock.calls[0];
+    expect(draft.accountName).toBe('Bomet County Government');
+    // Required by the contract, and reused if the same action is retried.
+    expect(key).toBeTruthy();
+  });
 
-    fireEvent.click(await screen.findByRole('button', { name: /create account/i }));
+  it('resumes an existing draft rather than starting a second', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      accountName: 'Bomet County',
+      accountCode: 'KE-BC',
+      urlSlug: 'bomet-county',
+      countryCode: 'KE',
+      languages: ['en'],
+      timeZone: 'Africa/Nairobi',
+      financialYearPolicy: 'JULY_JUNE',
+      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: '+254700000199' } },
+    } as never);
 
-    expect(await screen.findByText('Account requested', {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText(/10 to 15 minutes/i)).toBeInTheDocument();
+    render(<SignupPage />);
+
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    expect(api.createSignup).not.toHaveBeenCalled();
+  });
+});
+
+describe('provisioning', () => {
+  it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      accountName: 'Bomet County',
+      accountCode: 'KE-BC',
+      urlSlug: 'bomet-county',
+      countryCode: 'KE',
+      languages: ['en'],
+      timeZone: 'Africa/Nairobi',
+      financialYearPolicy: 'JULY_JUNE',
+      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: '+254700000199' } },
+    } as never);
+    vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
+    vi.mocked(api.submitSignup).mockResolvedValue({
+      id: 'op-1',
+      signupId: 'signup-1',
+      status: 'RETRYABLE_FAILED',
+      currentStep: 'ORGANIZATION',
+      completedSteps: ['TENANT_FOUNDATION'],
+      errorCode: 'ONBOARDING_VALIDATION_ERROR',
+      errorMessage: 'Could not create the organization.',
+      attempt: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    } as never);
+
+    render(<SignupPage />);
+
+    await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByText(/could not create the organization/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 });
