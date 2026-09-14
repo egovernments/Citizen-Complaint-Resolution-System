@@ -75,6 +75,16 @@ const INFRASTRUCTURE_ROLES = new Set([
 const isAssignedRole = (role) => !INFRASTRUCTURE_ROLES.has(String(role?.code || "").toUpperCase());
 
 /**
+ * The subset of the denylist that is never an employee assignment under any
+ * reading, as opposed to the ones that are merely too generic to be useful.
+ * Used as the floor when filtering would otherwise leave an account with no
+ * roles at all.
+ */
+const NEVER_AN_ASSIGNMENT = new Set(["CITIZEN", "INTERNAL_MICROSERVICE_ROLE"]);
+const isNeverAnAssignment = (role) =>
+  !NEVER_AN_ASSIGNMENT.has(String(role?.code || "").toUpperCase());
+
+/**
  * The one answer to "what roles does this person hold here", so the pill's
  * count and the panel's chips can never disagree. Role contexts are the
  * higher-level story ("Resolver") and win when the payload carries them;
@@ -88,11 +98,19 @@ const assignedRoleLabels = (t, context) => {
   if (contexts.length) return contexts;
   const roles = context?.roles || [];
   const assigned = roles.filter(isAssignedRole);
+  if (assigned.length) return assigned.map((r) => roleLabel(t, r)).filter(Boolean);
   // A workbench or admin account can hold nothing *but* denylisted roles —
   // SUPERUSER, MDMS_ADMIN, LOC_ADMIN and EMPLOYEE is a complete, real role set
-  // under multi-root-tenant. The denylist is here to cut noise, not to erase
-  // the only signal an account has, so when it empties the list, show the list.
-  return (assigned.length ? assigned : roles).map((r) => roleLabel(t, r)).filter(Boolean);
+  // under multi-root-tenant, and answering "what am I here to do" with nothing
+  // is worse than answering it with platform roles.
+  //
+  // A floor rather than no filter, though: pgr's `tenantRoles` keeps every role
+  // stamped for the tenant, CITIZEN included, so an account carrying
+  // [EMPLOYEE, CITIZEN] reaches here with `roleContexts: [CITIZEN]` already
+  // discarded by `isAssignedContext`. Falling back to the raw list would put a
+  // "Citizen" chip in the panel two lines after this file argues that CITIZEN
+  // is not an employee assignment. Keep the two we are certain about out.
+  return roles.filter(isNeverAnAssignment).map((r) => roleLabel(t, r)).filter(Boolean);
 };
 
 /** "3 departments" / "1 department" — the count is the point, not the list. */

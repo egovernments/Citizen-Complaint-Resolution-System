@@ -18,21 +18,34 @@ import TextInput from "../atoms/TextInput";
 // that none of the card rules matched.
 const MOBILE_MEDIA_QUERY = "(max-width: 47.99rem)";
 
-// react-data-table-component resolves a cell as `cell` > `format` > `selector`
-// (see its `decorateColumns`/`Cell`); mirror that precedence so a card shows
-// exactly what the table cell would have shown, formatting included.
+// react-data-table-component's own resolution, verbatim from the 7.6.2 Cell:
+//   cell ? cell(row, i, column, id)
+//        : selector ? (format ? format(row, i) : selector(row, i))
+//                   : null
+// `format` is consulted only when a `selector` exists, and is ignored entirely
+// when `cell` is present. Worth matching rather than approximating: this
+// molecule is exported publicly, and a column configured with `format` alone
+// renders blank in the table, so the card has to render blank too.
 const renderCellContent = (column, row, index) => {
   if (typeof column?.cell === "function") {
     return column.cell(row, index, column, column?.id);
   }
-  if (typeof column?.format === "function") {
-    return column.format(row, index);
-  }
-  if (typeof column?.selector === "function") {
-    return column.selector(row, index);
-  }
-  return null;
+  if (typeof column?.selector !== "function") return null;
+  if (typeof column?.format === "function") return column.format(row, index);
+  return column.selector(row, index);
 };
+
+// rdt binds row events on the row but fires them only when the *click target*
+// carries this attribute, and it tags a cell's content wrapper only for columns
+// that have no `cell` renderer. The synthetic card column is all `cell`, so
+// unless the card tags its own fields the row handler can never fire: the one
+// tagged element left is the `rdt_TableCell`, and the card covers it edge to
+// edge. Mirrors rdt's own rule, which is also the real expression of
+// `ignoreRowClick` — omit the tag rather than fight the event:
+//   dataTag: column.ignoreRowClick || column.button ? null : "allowRowEvents"
+const ROW_EVENT_TAG = "allowRowEvents";
+const rowEventTag = (column) =>
+  column?.ignoreRowClick || column?.button ? undefined : ROW_EVENT_TAG;
 
 const ResultsDataTable = ({
   data,
@@ -111,31 +124,29 @@ const ResultsDataTable = ({
         name: "",
         grow: 1,
         cell: (row, index) => (
-          <div className="digit-results-mobile-card">
+          // The card's own whitespace is tagged so a tap in the gaps between
+          // fields still opens the record, the way a tap anywhere in a table
+          // row does.
+          <div className="digit-results-mobile-card" data-tag={ROW_EVENT_TAG}>
             {(columns || []).map((column, columnIndex) => {
               const content = renderCellContent(column, row, index);
               if (content === null || content === undefined || content === "")
                 return null;
+              // Absent on a column that opted out, which is precisely how rdt
+              // keeps the row handler off an action cell.
+              const tag = rowEventTag(column);
               return (
                 <div
                   className="digit-results-mobile-card-row"
                   key={column?.id || columnIndex}
-                  // react-data-table-component honours `ignoreRowClick` by not
-                  // binding the row handler to that cell. Everything is one
-                  // cell here, so the equivalent is to stop the field from
-                  // bubbling: without it, tapping an in-cell action button
-                  // would also fire onRowClicked and navigate away from the
-                  // row the user was acting on.
-                  onClick={
-                    column?.ignoreRowClick
-                      ? (e) => e.stopPropagation()
-                      : undefined
-                  }
+                  data-tag={tag}
                 >
-                  <span className="digit-results-mobile-card-label">
+                  {/* The tag has to sit on what the finger actually lands on:
+                      the handler reads `e.target`, not the bubbling path. */}
+                  <span className="digit-results-mobile-card-label" data-tag={tag}>
                     {column?.name}
                   </span>
-                  <span className="digit-results-mobile-card-value">
+                  <span className="digit-results-mobile-card-value" data-tag={tag}>
                     {content}
                   </span>
                 </div>
@@ -262,7 +273,16 @@ const ResultsDataTable = ({
   };
 
   return (
-    <Card className={"digit-table-card"}>
+    // The modifier, not `:has()`, is what the card styling keys off. Both
+    // halves of the layout then switch on one signal: an engine without
+    // `:has()` support (Chromium < 105, Firefox < 121, Safari < 15.4) would
+    // otherwise collapse the columns in JS while every card rule dropped out,
+    // leaving unstyled fields inside the old table chrome.
+    <Card
+      className={`digit-table-card${
+        isMobileView ? " digit-table-card-as-cards" : ""
+      }`}
+    >
       {(showTableDescription || showTableTitle || enableGlobalSearch) && (
         <div className="table-header-wrapper">
           <div className="header-filter-wrapper">

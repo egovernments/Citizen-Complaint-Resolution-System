@@ -7214,17 +7214,14 @@ header.digit-header .digit-dropdown-master {
   align-items: center;
   gap: 8px !important;
 }
-.employee
-  .v2-pgr-inbox
-  .digit-inbox-search-links-container:has(
-    .digit-inbox-search-links-header-logo:empty
-  )
-  .digit-inbox-search-links-contents {
+.employee .v2-pgr-inbox .digit-inbox-search-links-contents {
   padding-left: 28px !important;
 }
 /* A tenant whose MDMS card config supplies `logoIcon.component` gets a real
- * 2rem icon from InboxSearchLinks instead, so the indent is 32px + the 8px
- * row gap. Same rule, the width the header actually has. */
+ * 2rem icon from InboxSearchLinks instead, so the indent is 32px + the 8px row
+ * gap. Written as an override on top of the 28px rather than as a pair of
+ * mutually exclusive `:has()` branches, so an engine without `:has()` still
+ * gets the alignment the unconditional rule always provided. */
 .employee
   .v2-pgr-inbox
   .digit-inbox-search-links-container:not(
@@ -7398,25 +7395,23 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
    * table body's own 1px outline and the wrapper's side padding would draw
    * a second one inside it, so drop both and let the cards run the full
    * width, separated by the row rule they already carry. */
-  .digit-table-card:has(.digit-results-mobile-card) {
+  .digit-table-card-as-cards {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
-  .digit-table-card .rdt_TableBody:has(.digit-results-mobile-card) {
+  .digit-table-card-as-cards .rdt_TableBody {
     border: 0 !important;
   }
-  .digit-table-card
-    .rdt_TableRow:has(.digit-results-mobile-card):last-of-type {
+  .digit-table-card-as-cards .rdt_TableRow:last-of-type {
     border-bottom: 0 !important;
   }
 
   /* A card is the row, so the row contributes nothing of its own. */
-  .digit-table-card .rdt_TableRow:has(> div > .digit-results-mobile-card),
-  .digit-table-card .rdt_TableRow:has(.digit-results-mobile-card) {
+  .digit-table-card-as-cards .rdt_TableRow {
     min-height: 0 !important;
     padding: 0 !important;
   }
-  .digit-table-card .rdt_TableCell:has(.digit-results-mobile-card) {
+  .digit-table-card-as-cards .rdt_TableCell {
     padding: 0 !important;
     min-width: 0 !important;
     white-space: normal !important;
@@ -7464,17 +7459,35 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
     white-space: normal !important;
     text-align: right !important;
   }
-  .digit-results-mobile-card-value button {
+  /* Only the link variation sheds its chrome — it is text pretending to be a
+   * button, so its padding just pushes the value off the right edge. A filled
+   * button keeps its box: stripping that leaves a label sitting on its own
+   * background with a tap target of roughly one line-height, on exactly the
+   * viewport this section exists to fix. */
+  .digit-results-mobile-card-value button[class*="link"],
+  .digit-results-mobile-card-value button[class*="teritiary"],
+  .digit-results-mobile-card-value button[class*="tertiary"] {
     padding: 0 !important;
     height: auto !important;
     min-height: 0 !important;
+  }
+  /* Same floor for the link that is the way into a record: rendered as a bare
+   * anchor it is 22px tall, which is under any reasonable thumb. */
+  .digit-results-mobile-card-value button,
+  .digit-results-mobile-card-value a {
+    min-height: 24px;
+  }
+  .digit-results-mobile-card-value a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   /* `fixedHeaderScrollHeight: 100vh` caps the table at one viewport so the
    * sticky header has something to pin against. In card mode there is no
    * header, so that cap only nests a scrollbar inside the page's and clips
    * the last card. Let the cards extend the page instead. */
-  .digit-table-card .digit-data-table:has(.digit-results-mobile-card) {
+  .digit-table-card-as-cards .digit-data-table {
     max-height: none !important;
     overflow-y: visible !important;
   }
