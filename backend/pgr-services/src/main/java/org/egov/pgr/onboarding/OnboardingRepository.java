@@ -145,6 +145,48 @@ public class OnboardingRepository {
         return operation;
     }
 
+    // ---- worker lease -------------------------------------------------------
+
+    /** Claims the oldest PENDING operation, or a RUNNING one whose lease expired. */
+    public Optional<OnboardingLease> claimOperation(String workerId, UUID leaseToken, long leaseExpiresAt, long now) {
+        return first(jdbcTemplate.query("UPDATE eg_pgr_onboarding_operation SET status = 'RUNNING', " +
+                        "lease_owner = ?, lease_token = ?, lease_expires_at = ?, updated_at = ? " +
+                        "WHERE id = (SELECT id FROM eg_pgr_onboarding_operation " +
+                        "WHERE status = 'PENDING' OR (status = 'RUNNING' AND lease_expires_at < ?) " +
+                        "ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *",
+                (rs, rowNum) -> new OnboardingLease(operationMapper().mapRow(rs, rowNum),
+                        uuid(rs, "lease_token"), rs.getLong("lease_expires_at")),
+                workerId, leaseToken, leaseExpiresAt, now, now));
+    }
+
+    public Optional<OnboardingOperation> findOperation(UUID id) {
+        return first(jdbcTemplate.query(
+                "SELECT * FROM eg_pgr_onboarding_operation WHERE id = ?", operationMapper(), id));
+    }
+
+    public Optional<OnboardingSignup> findSignup(UUID id) {
+        return first(jdbcTemplate.query(
+                "SELECT * FROM eg_pgr_onboarding_signup WHERE id = ?", signupMapper(), id));
+    }
+
+    /** Ends a lease. Returns false when the caller no longer holds it. */
+    public boolean finishOperation(UUID operationId, UUID leaseToken, String status, List<String> completedSteps,
+                                   String currentStep, String errorCode, String errorMessage, long now) {
+        int changed = jdbcTemplate.update("UPDATE eg_pgr_onboarding_operation SET status = ?, " +
+                        "completed_steps = ?::jsonb, current_step = ?, error_code = ?, error_message = ?, " +
+                        "lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = ? " +
+                        "WHERE id = ? AND status = 'RUNNING' AND lease_token = ?",
+                status, json(completedSteps), currentStep, errorCode, errorMessage, now, operationId, leaseToken);
+        return changed == 1;
+    }
+
+    public void settleSignup(UUID signupId, String signupStatus, String identifierStatus, long now) {
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_signup SET status = ?, version = version + 1, updated_at = ? " +
+                "WHERE id = ?", signupStatus, now, signupId);
+        jdbcTemplate.update("UPDATE eg_pgr_onboarding_identifier SET status = ? WHERE signup_id = ?",
+                identifierStatus, signupId);
+    }
+
     private RowMapper<OnboardingSignup> signupMapper() {
         return (rs, rowNum) -> OnboardingSignup.builder()
                 .id(uuid(rs, "id")).ownerIssuer(rs.getString("owner_issuer"))

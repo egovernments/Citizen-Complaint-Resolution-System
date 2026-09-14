@@ -1,6 +1,8 @@
 package org.egov.pgr.onboarding;
 
 import org.egov.tracer.model.CustomException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +21,21 @@ public class OnboardingService {
 
     private static final Pattern ACCOUNT_CODE = Pattern.compile("^[A-Z0-9][A-Z0-9-]{1,31}$");
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
-    private static final Pattern TENANT_ID = Pattern.compile("^[a-z0-9][a-z0-9.-]{1,255}$");
+    // DIGIT tenant ids are letters and dots (egov-user validates ^[a-zA-Z. ]*$).
+    private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,}(\\.[a-z]{2,})+$");
 
     private final OnboardingRepository repository;
+    private final String tenantRoot;
 
-    public OnboardingService(OnboardingRepository repository) {
+    @Autowired
+    public OnboardingService(OnboardingRepository repository,
+                             @Value("${pgr.onboarding.tenant-root:}") String tenantRoot) {
         this.repository = repository;
+        this.tenantRoot = tenantRoot == null ? "" : tenantRoot.trim().toLowerCase(Locale.ROOT);
+    }
+
+    OnboardingService(OnboardingRepository repository) {
+        this(repository, "");
     }
 
     @Transactional
@@ -130,7 +141,7 @@ public class OnboardingService {
         }
         if (values.containsKey("urlSlug")) {
             String slug = requiredString(values.get("urlSlug"), "Signup.urlSlug").toLowerCase(Locale.ROOT);
-            if (!SLUG.matcher(slug).matches()) invalid("Signup.urlSlug");
+            if (!SLUG.matcher(slug).matches() || tenantSegment(slug).length() < 2) invalid("Signup.urlSlug");
             signup.setUrlSlug(slug);
             signup.setOrganizationAlias(slug);
         }
@@ -170,9 +181,16 @@ public class OnboardingService {
         // These identifiers are server-owned projections of the founder's choices.
         // Never accept a client-supplied alias or tenant id that can drift from them.
         signup.setOrganizationAlias(signup.getUrlSlug());
-        signup.setRequestedTenantId(signup.getCountryCode() == null || signup.getUrlSlug() == null
+        String root = !tenantRoot.isEmpty() ? tenantRoot
+                : signup.getCountryCode() == null ? null : signup.getCountryCode().toLowerCase(Locale.ROOT);
+        signup.setRequestedTenantId(root == null || signup.getUrlSlug() == null
                 ? null
-                : signup.getCountryCode().toLowerCase(Locale.ROOT) + "." + signup.getUrlSlug());
+                : root + "." + tenantSegment(signup.getUrlSlug()));
+    }
+
+    /** The slug's letters only: DIGIT tenant codes cannot carry digits or hyphens. */
+    private static String tenantSegment(String slug) {
+        return slug.replaceAll("[^a-z]", "");
     }
 
     private void validateComplete(OnboardingSignup signup) {

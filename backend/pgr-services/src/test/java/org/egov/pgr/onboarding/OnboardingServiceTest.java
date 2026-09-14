@@ -50,7 +50,7 @@ public class OnboardingServiceTest {
         OnboardingSignup signup = service.create(principal, request, "create-1");
 
         assertEquals("bomet-county", signup.getOrganizationAlias());
-        assertEquals("ke.bomet-county", signup.getRequestedTenantId());
+        assertEquals("ke.bometcounty", signup.getRequestedTenantId());
         assertEquals(metadata, signup.getTenantMetadata());
         assertEquals("DRAFT", signup.getStatus());
         assertNotNull(signup.getId());
@@ -71,7 +71,7 @@ public class OnboardingServiceTest {
                 principal, Collections.singletonMap("id", signupId.toString()), "submit-1"));
 
         verify(repository).reserveIdentifier(eq("ACCOUNT_CODE"), eq("BOMET"), eq(signupId), anyLong());
-        verify(repository).reserveIdentifier(eq("TENANT_ID"), eq("ke.bomet-county"), eq(signupId), anyLong());
+        verify(repository).reserveIdentifier(eq("TENANT_ID"), eq("ke.bometcounty"), eq(signupId), anyLong());
         verify(repository).reserveIdentifier(eq("ORGANIZATION_ALIAS"), eq("bomet-county"), eq(signupId), anyLong());
         verify(repository).reserveIdentifier(eq("URL_SLUG"), eq("bomet-county"), eq(signupId), anyLong());
     }
@@ -84,6 +84,27 @@ public class OnboardingServiceTest {
 
         assertThrows(CustomException.class, () -> service.update(
                 principal, Collections.singletonMap("id", signupId.toString())));
+    }
+
+    @Test
+    public void configuredTenantRootReplacesTheCountryCodeRoot() {
+        OnboardingService rooted = new OnboardingService(repository, "PG");
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        when(repository.insertSignup(any(OnboardingSignup.class), eq("create-2")))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        OnboardingSignup signup = rooted.create(principal, completeRequest(new LinkedHashMap<>()), "create-2");
+
+        assertEquals("pg.bometcounty", signup.getRequestedTenantId());
+    }
+
+    @Test
+    public void slugWithoutTwoLettersCannotBecomeADigitTenant() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        Map<String, Object> request = completeRequest(new LinkedHashMap<>());
+        request.put("urlSlug", "a-123");
+
+        assertThrows(CustomException.class, () -> service.create(principal, request, "create-3"));
     }
 
     private Map<String, Object> completeRequest(Map<String, Object> metadata) {
@@ -108,7 +129,7 @@ public class OnboardingServiceTest {
         signup.setAccountCode("BOMET");
         signup.setUrlSlug("bomet-county");
         signup.setOrganizationAlias("bomet-county");
-        signup.setRequestedTenantId("ke.bomet-county");
+        signup.setRequestedTenantId("ke.bometcounty");
         signup.setCountryCode("KE");
         signup.setLanguages(Arrays.asList("en", "sw"));
         signup.setTimeZone("Africa/Nairobi");

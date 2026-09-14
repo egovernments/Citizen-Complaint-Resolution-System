@@ -45,4 +45,24 @@ public class OnboardingRepositoryTest {
         }
         assertEquals(Arrays.asList("languages", "tenant_metadata"), jsonbColumns);
     }
+
+    @Test
+    public void finishingALeaseCastsCompletedStepsAndRequiresTheLeaseToken() {
+        OnboardingRepository repository = new OnboardingRepository(jdbcTemplate, new ObjectMapper());
+        UUID id = UUID.randomUUID();
+        UUID lease = UUID.randomUUID();
+
+        repository.finishOperation(id, lease, "SUCCEEDED", Collections.singletonList("ORGANIZATION"),
+                null, null, null, 1L);
+
+        org.mockito.invocation.Invocation call = org.mockito.Mockito.mockingDetails(jdbcTemplate)
+                .getInvocations().iterator().next();
+        String sql = (String) call.getArgument(0);
+        Object[] args = call.getRawArguments()[1] instanceof Object[]
+                ? (Object[]) call.getRawArguments()[1] : java.util.Arrays.copyOfRange(call.getArguments(), 1, call.getArguments().length);
+        assertEquals(true, sql.contains("completed_steps = ?::jsonb"));
+        assertEquals(true, sql.contains("status = 'RUNNING' AND lease_token = ?"));
+        assertEquals("[\"ORGANIZATION\"]", args[1]);
+        assertEquals(lease, args[args.length - 1]);
+    }
 }
