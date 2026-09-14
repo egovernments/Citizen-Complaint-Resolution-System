@@ -89,6 +89,7 @@ type Phase =
   | 'wizard'
   | 'provisioning'
   | 'entering'
+  | 'stuck'
   | 'failed';
 
 function errorText(error: unknown): string {
@@ -208,6 +209,14 @@ export default function SignupPage() {
       // than starting a second.
       const existing = await findSignup();
       if (existing) seedFrom(existing);
+      // Only a DRAFT is editable. A founder whose signup ended FAILED cannot
+      // edit it and cannot start another — `_create` hands back the same failed
+      // record — so showing them the wizard again would only walk them into an
+      // update that the server rejects. Say what has happened instead.
+      if (existing && existing.status !== 'DRAFT') {
+        setPhase('stuck');
+        return;
+      }
       setPhase('wizard');
     } catch (caught) {
       setError(errorText(caught));
@@ -549,6 +558,23 @@ export default function SignupPage() {
             This signup cannot be retried. Please contact support to continue.
           </p>
         )}
+      </div>
+    );
+  }
+
+  if (phase === 'stuck') {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16">
+        <h1 className="text-2xl font-semibold">Setup could not be completed</h1>
+        <Alert variant="destructive" className="mt-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>This signup is closed</AlertTitle>
+          <AlertDescription>
+            Setting up {signup?.accountName || 'your account'} did not finish, and it cannot be
+            restarted from here. Please contact support and quote{' '}
+            <span className="font-mono">{signup?.id}</span>.
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }

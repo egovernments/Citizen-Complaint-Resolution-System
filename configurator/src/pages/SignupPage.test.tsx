@@ -161,6 +161,7 @@ describe('wizard', () => {
   it('resumes an existing draft rather than starting a second', async () => {
     vi.mocked(api.findSignup).mockResolvedValue({
       id: 'signup-1',
+      status: 'DRAFT',
       accountName: 'Bomet County',
       accountCode: 'KE-BC',
       urlSlug: 'bomet-county',
@@ -175,6 +176,26 @@ describe('wizard', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/account name/i)).toHaveValue('Bomet County'));
     expect(api.createSignup).not.toHaveBeenCalled();
+  });
+});
+
+describe('a signup that ended FAILED', () => {
+  it('says so instead of showing a wizard whose saves the server will reject', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: '654c74d6',
+      status: 'FAILED',
+      accountName: 'Bomet County Government',
+    } as never);
+
+    render(<SignupPage />);
+
+    // Only a DRAFT is editable, and `_create` hands the same failed record
+    // back, so the wizard would be a trap.
+    expect(await screen.findByText(/this signup is closed/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
+    expect(screen.getByText('654c74d6')).toBeInTheDocument();
   });
 });
 
@@ -208,6 +229,7 @@ describe('provisioning', () => {
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     vi.mocked(api.findSignup).mockResolvedValue({
       id: 'signup-1',
+      status: 'DRAFT',
       accountName: 'Bomet County',
       accountCode: 'KE-BC',
       urlSlug: 'bomet-county',
