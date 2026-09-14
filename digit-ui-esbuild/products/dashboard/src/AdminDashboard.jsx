@@ -817,21 +817,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refsKey, pack, tenantId, publicMode]);
 
-  // "Last updated" reads the batch's OWN echoed asOf/calendar (#29) — the single
-  // clock reading every tile in this batch was judged against — never a fresh
-  // new Date() at render time, which would drift from what's actually on screen.
-  // No stamp (rather than a fabricated "now") when the batch hasn't supplied one.
-  const lastUpdatedLabel = useMemo(() => {
-    if (batch.asOf == null) return null;
-    const zone = batch.calendar?.timeZone || timeZone;
-    return new Date(batch.asOf).toLocaleString(language?.replace("_", "-"), {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      ...(zone ? { timeZone: zone } : {}),
-    });
-  }, [batch.asOf, batch.calendar, timeZone, language]);
+  // Freshness stamp uses the batch's echoed asOf (#29 / #2047) — relative
+  // "Updated x min/hrs ago", never a client clock pretending to be the data time.
+  // CardUpdatedStamp owns the relative formatting + one-minute tick.
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
@@ -1050,7 +1038,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                   {removeBtn}
                   {renderTile(item.i)}
                   {ignoredNote}
-                  {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
+                  {batch.asOf != null && <CardUpdatedStamp asOf={batch.asOf} />}
                 </div>
               );
             }
@@ -1115,7 +1103,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                   {renderTile(item.i, groupBy.info)}
                 </div>
                 {ignoredNote}
-                {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
+                {batch.asOf != null && <CardUpdatedStamp asOf={batch.asOf} />}
                 <ResizeGrip />
               </section>
             );

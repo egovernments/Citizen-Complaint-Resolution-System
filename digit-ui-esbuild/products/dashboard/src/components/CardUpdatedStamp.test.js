@@ -10,8 +10,18 @@ import React from "react";
 import ReactDOMServer from "react-dom/server";
 import CardUpdatedStamp from "./CardUpdatedStamp.jsx";
 
-export const renderStamp = (label) =>
-  ReactDOMServer.renderToStaticMarkup(React.createElement(CardUpdatedStamp, { label }));
+export const renderStamp = (asOf, nowMs) => {
+  // Freeze "now" by stubbing Date.now for the SSR pass.
+  const realNow = Date.now;
+  Date.now = () => nowMs;
+  try {
+    return ReactDOMServer.renderToStaticMarkup(
+      React.createElement(CardUpdatedStamp, { asOf })
+    );
+  } finally {
+    Date.now = realNow;
+  }
+};
 `;
 
 function bundleEntry() {
@@ -43,7 +53,7 @@ function bundleEntry() {
 
 const bundledEntry = bundleEntry();
 
-function renderIn(locale, messages) {
+function renderIn(locale, messages, asOf, nowMs) {
   delete require.cache[bundledEntry];
   global.window = {
     i18next: {
@@ -57,19 +67,43 @@ function renderIn(locale, messages) {
     localStorage: { getItem: () => locale },
   };
   try {
-    return require(bundledEntry).renderStamp("13 Aug, 14:30");
+    return require(bundledEntry).renderStamp(asOf, nowMs);
   } finally {
     delete global.window;
   }
 }
 
+const now = Date.UTC(2026, 8, 13, 12, 0, 0);
+
 test("updated stamp resolves through the active dashboard locale", () => {
-  const html = renderIn("pt_PT", { DASHBOARD_COMMON_UPDATED: "Atualizado" });
-  assert.match(html, />Atualizado 13 Aug, 14:30</);
+  const html = renderIn(
+    "pt_PT",
+    {
+      DASHBOARD_COMMON_UPDATED: "Atualizado",
+      DASHBOARD_COMMON_UPDATED_MIN_AGO: "{{n}} min atrás",
+    },
+    now - 8 * 60_000,
+    now
+  );
+  assert.match(html, />Atualizado 8 min atrás</);
   assert.doesNotMatch(html, />Updated /);
 });
 
-test("updated stamp retains the seeded English rendering", () => {
-  const html = renderIn("en_IN", { DASHBOARD_COMMON_UPDATED: "Updated" });
-  assert.match(html, />Updated 13 Aug, 14:30</);
+test("updated stamp uses relative ago copy in English", () => {
+  const html = renderIn(
+    "en_IN",
+    {
+      DASHBOARD_COMMON_UPDATED: "Updated",
+      DASHBOARD_COMMON_UPDATED_HRS_AGO: "{{n}} hrs ago",
+    },
+    now - 2 * 3600_000,
+    now
+  );
+  assert.match(html, />Updated 2 hrs ago</);
+  assert.doesNotMatch(html, /Aug/);
+});
+
+test("updated stamp renders nothing without asOf", () => {
+  const html = renderIn("en_IN", { DASHBOARD_COMMON_UPDATED: "Updated" }, null, now);
+  assert.equal(html, "");
 });
