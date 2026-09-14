@@ -126,6 +126,9 @@ test("Add KPI portal panel re-applies .dashboard-root for the scoped font", () =
   // The panel portals to document.body; without dashboard-root the public page
   // (no vendor CSS on <body>) renders it in the browser's default serif.
   assert.match(source, /className="dashboard-root dashboard-add-kpi-panel/);
+  // Searchable picker is a dialog, not an ARIA menu (textbox is invalid in menus).
+  assert.match(source, /role="dialog"/);
+  assert.doesNotMatch(source, /role="menu"/);
 });
 
 test("public-dashboard.html sets a sans body font (no vendor CSS to inherit)", () => {

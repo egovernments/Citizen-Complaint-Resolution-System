@@ -63,3 +63,20 @@ test("AddKpiDropdown wires search input + sorted list helper", () => {
   assert.match(source, /dashboard-add-kpi-search/);
   assert.match(source, /DASHBOARD_HEADER_SEARCH_KPIS/);
 });
+
+test("AddKpiDropdown uses dialog/listbox semantics (not ARIA menu) for search", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "components", "AddKpiDropdown.jsx"), "utf8");
+  assert.match(source, /role="dialog"/);
+  assert.match(source, /role="listbox"/);
+  assert.doesNotMatch(source, /role="menu"/);
+  assert.match(source, /closePicker/);
+  assert.match(source, /trigger\.focus/);
+});
+
+test("Add KPI trigger advertises dialog popup", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "components", "DashboardHeader.jsx"), "utf8");
+  assert.match(
+    source,
+    /aria-haspopup="dialog"\s*\n\s*className="dashboard-header-btn dashboard-add-kpi-trigger"/
+  );
+});
