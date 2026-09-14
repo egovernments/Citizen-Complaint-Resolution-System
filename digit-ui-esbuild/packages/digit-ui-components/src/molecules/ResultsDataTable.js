@@ -140,6 +140,13 @@ const ResultsDataTable = ({
               typeof onRowClicked === "function"
                 ? (event) => {
                     if (event.target.closest(NON_ROW_CLICK_TARGETS)) return;
+                    // Card mode is chosen on width, not on touch, so a narrow
+                    // desktop window lands here too — and there a drag to
+                    // select text ends in a click. Navigating away from the
+                    // selection the user just made is the one thing that is
+                    // certainly not what they meant.
+                    const selection = window.getSelection?.();
+                    if (selection && !selection.isCollapsed) return;
                     onRowClicked(row, event);
                   }
                 : undefined
