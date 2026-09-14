@@ -47,6 +47,15 @@ public class OnboardingRepositoryTest {
     }
 
     @Test
+    public void readsNeverSelectStarSoMigrationsCannotBreakCachedPlans() throws Exception {
+        String source = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(
+                "src/main/java/org/egov/pgr/onboarding/OnboardingRepository.java")));
+        assertEquals(false, source.contains("SELECT *"));
+        assertEquals(false, source.contains("operation.*"));
+        assertEquals(false, source.contains("RETURNING *"));
+    }
+
+    @Test
     public void finishingALeaseCastsCompletedStepsAndRequiresTheLeaseToken() {
         OnboardingRepository repository = new OnboardingRepository(jdbcTemplate, new ObjectMapper());
         UUID id = UUID.randomUUID();

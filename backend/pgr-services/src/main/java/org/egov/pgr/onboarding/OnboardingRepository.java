@@ -19,6 +19,14 @@ import java.util.UUID;
 @Repository
 public class OnboardingRepository {
 
+    // Explicit columns: through pgbouncer a cached star-select plan fails with
+    // "cached plan must not change result type" once a migration adds columns.
+    private static final String SIGNUP_COLUMNS = "id, owner_issuer, owner_subject, status, account_name, " +
+            "account_code, organization_alias, requested_tenant_id, url_slug, country_code, languages, time_zone, " +
+            "financial_year_policy, accepted_terms_version, tenant_metadata, version, created_at, updated_at";
+    private static final String OPERATION_COLUMNS = "id, signup_id, status, current_step, completed_steps, " +
+            "error_code, error_message, attempt, created_at, updated_at";
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
@@ -29,19 +37,19 @@ public class OnboardingRepository {
 
     public Optional<OnboardingSignup> findSignupByOwner(String issuer, String subject) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_signup WHERE owner_issuer = ? AND owner_subject = ?",
+                "SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE owner_issuer = ? AND owner_subject = ?",
                 signupMapper(), issuer, subject));
     }
 
     public Optional<OnboardingSignup> findOwnedSignup(UUID id, String issuer, String subject) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_signup WHERE id = ? AND owner_issuer = ? AND owner_subject = ?",
+                "SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE id = ? AND owner_issuer = ? AND owner_subject = ?",
                 signupMapper(), id, issuer, subject));
     }
 
     public Optional<OnboardingSignup> findOwnedSignupForUpdate(UUID id, String issuer, String subject) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_signup WHERE id = ? AND owner_issuer = ? " +
+                "SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE id = ? AND owner_issuer = ? " +
                         "AND owner_subject = ? FOR UPDATE",
                 signupMapper(), id, issuer, subject));
     }
@@ -118,7 +126,8 @@ public class OnboardingRepository {
     }
 
     public Optional<OnboardingOperation> findOwnedOperation(UUID operationId, String issuer, String subject) {
-        return first(jdbcTemplate.query("SELECT operation.* FROM eg_pgr_onboarding_operation operation " +
+        return first(jdbcTemplate.query("SELECT operation." + OPERATION_COLUMNS.replace(", ", ", operation.") +
+                        " FROM eg_pgr_onboarding_operation operation " +
                         "JOIN eg_pgr_onboarding_signup signup ON signup.id = operation.signup_id " +
                         "WHERE operation.id = ? AND signup.owner_issuer = ? AND signup.owner_subject = ?",
                 operationMapper(), operationId, issuer, subject));
@@ -126,7 +135,7 @@ public class OnboardingRepository {
 
     public Optional<OnboardingOperation> findOperationBySignup(UUID signupId) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_operation WHERE signup_id = ?", operationMapper(), signupId));
+                "SELECT " + OPERATION_COLUMNS + " FROM eg_pgr_onboarding_operation WHERE signup_id = ?", operationMapper(), signupId));
     }
 
     public OnboardingOperation retry(OnboardingOperation operation, long now) {
@@ -153,7 +162,8 @@ public class OnboardingRepository {
                         "lease_owner = ?, lease_token = ?, lease_expires_at = ?, updated_at = ? " +
                         "WHERE id = (SELECT id FROM eg_pgr_onboarding_operation " +
                         "WHERE status = 'PENDING' OR (status = 'RUNNING' AND lease_expires_at < ?) " +
-                        "ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *",
+                        "ORDER BY updated_at LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING " + OPERATION_COLUMNS +
+                        ", lease_token, lease_expires_at",
                 (rs, rowNum) -> new OnboardingLease(operationMapper().mapRow(rs, rowNum),
                         uuid(rs, "lease_token"), rs.getLong("lease_expires_at")),
                 workerId, leaseToken, leaseExpiresAt, now, now));
@@ -161,12 +171,12 @@ public class OnboardingRepository {
 
     public Optional<OnboardingOperation> findOperation(UUID id) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_operation WHERE id = ?", operationMapper(), id));
+                "SELECT " + OPERATION_COLUMNS + " FROM eg_pgr_onboarding_operation WHERE id = ?", operationMapper(), id));
     }
 
     public Optional<OnboardingSignup> findSignup(UUID id) {
         return first(jdbcTemplate.query(
-                "SELECT * FROM eg_pgr_onboarding_signup WHERE id = ?", signupMapper(), id));
+                "SELECT " + SIGNUP_COLUMNS + " FROM eg_pgr_onboarding_signup WHERE id = ?", signupMapper(), id));
     }
 
     /** Ends a lease. Returns false when the caller no longer holds it. */
