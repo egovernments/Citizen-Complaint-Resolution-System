@@ -178,6 +178,30 @@ describe('wizard', () => {
   });
 });
 
+describe('expired session', () => {
+  it('returns to sign-in rather than leaving a button that can only fail', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.authMethods).mockResolvedValue({
+      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+    });
+    vi.mocked(api.createSignup).mockRejectedValue(
+      new api.OnboardingError(401, 'ONBOARDING_IDENTITY_REQUIRED', 'A valid identity session is required')
+    );
+
+    render(<SignupPage />);
+    fireEvent.change(await screen.findByLabelText(/account name/i), {
+      target: { value: 'Bomet County Government' },
+    });
+    fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    expect(await screen.findByText(/sign-in expired/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /continue with password/i })).toBeInTheDocument();
+  });
+});
+
 describe('provisioning', () => {
   it('shows the worker steps and offers a retry only when the failure is retryable', async () => {
     vi.mocked(api.session).mockResolvedValue(signedIn);

@@ -97,6 +97,9 @@ function errorText(error: unknown): string {
   return 'Something went wrong.';
 }
 
+const isExpiredSession = (error: unknown) =>
+  error instanceof OnboardingError && error.isUnauthenticated;
+
 /** Availability line under the code and URL fields. */
 function AvailabilityNote({
   state,
@@ -300,6 +303,28 @@ export default function SignupPage() {
     return created;
   }, [draft, signup]);
 
+  /**
+   * The session is a cookie with its own lifetime, so it can lapse mid-wizard.
+   * The contract's answer to a 401 is to restart sign-in, and leaving the
+   * operator on Review with a button that can only keep failing is not that.
+   * The server-side draft is what makes this cheap: signing back in resumes
+   * exactly where they were.
+   */
+  const handleFailure = useCallback(async (caught: unknown) => {
+    if (!isExpiredSession(caught)) {
+      setError(errorText(caught));
+      return;
+    }
+    try {
+      const { methods: available } = await authMethods();
+      setMethods(available);
+    } catch {
+      /* The gate still renders; it just may list nothing. */
+    }
+    setError('Your sign-in expired. Sign in again to pick up where you left off.');
+    setPhase('signedOut');
+  }, []);
+
   const advance = async (next: string) => {
     setSaving(true);
     setError(null);
@@ -307,7 +332,7 @@ export default function SignupPage() {
       await persist();
       setStep(next);
     } catch (caught) {
-      setError(errorText(caught));
+      await handleFailure(caught);
     } finally {
       setSaving(false);
     }
@@ -322,7 +347,7 @@ export default function SignupPage() {
       setOperation(started);
       setPhase('provisioning');
     } catch (caught) {
-      setError(errorText(caught));
+      await handleFailure(caught);
     } finally {
       setSaving(false);
     }
@@ -337,7 +362,7 @@ export default function SignupPage() {
         const latest = await findOperation(operation.id);
         if (latest) setOperation(latest);
       } catch (caught) {
-        setError(errorText(caught));
+        await handleFailure(caught);
       }
     }, POLL_MS);
     return () => clearTimeout(timer);
