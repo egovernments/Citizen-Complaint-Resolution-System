@@ -420,6 +420,63 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# ────────── Inbound WhatsApp — xstate-chatbot (#1992) ──────────
+#
+# The OTHER half of bidirectional WhatsApp. enable_novu above gives you OUTBOUND
+# (complaint updates pushed to the citizen, via Novu -> Twilio). Novu has no webhook
+# receiver, so a citizen's reply reaches nothing. This flag adds INBOUND: Twilio calls
+# the chatbot directly and the citizen can FILE and TRACK complaints by messaging the
+# business number. The two are independent — you can run either alone.
+#
+# Adds 2 containers (xstate-chatbot + a one-shot Flyway migration).
+#
+# BEFORE ENABLING, read docs/2.12/notifications/inbound-whatsapp.md. In particular the
+# webhook is public by necessity (Twilio cannot present a DIGIT token), so it is
+# authenticated by Twilio signature validation — keep chatbot_validate_signature on and
+# set twilio_auth_token, or every inbound message is rejected.
+#
+# Workflow:
+#   1. Set twilio_account_sid / twilio_auth_token / twilio_whatsapp_from (shared with
+#      the Novu outbound bootstrap — same Twilio account serves both directions).
+#   2. enable_chatbot: true, then ./deploy.sh <tenant>.
+#   3. In the Twilio Console set the sender's inbound webhook to
+#         https://<domain>/xstate-chatbot/message        (HTTP POST)
+#      and the status callback to
+#         https://<domain>/xstate-chatbot/status         (HTTP POST)
+enable_chatbot: false
+
+# Tenant complaints filed over WhatsApp are recorded against. Must be a tenant whose
+# ComplaintHierarchy and boundaries are seeded. Defaults to the deployment's state_root.
+# chatbot_root_tenant: "pg"
+
+# Your WhatsApp sender in national form, digits only, no '+'. Used to build the
+# city/locality deep links. Leave blank to omit them.
+# chatbot_whatsapp_business_number: ""
+
+# false (recommended) uses the MDMS/boundary city -> locality pick-lists.
+# true needs nlp-engine — NOT deployed in this stack — plus a Google Maps key.
+# chatbot_geo_search: false
+
+# Boundary hierarchy complaints are filed against. Named per deployment; not always ADMIN.
+# chatbot_boundary_hierarchy_type: "ADMIN"
+
+# Public origin Twilio was pointed at, used to verify the request signature. Defaults to
+# this tenant's own https://<domain>. Override only when TLS terminates on a different
+# hostname than `domain`.
+# chatbot_webhook_base_url: ""
+
+# Leave true. false disables Twilio signature validation, which makes the public webhook
+# forgeable by anyone who learns the URL — local console testing only.
+# chatbot_validate_signature: true
+
+# Shared secret for POST /xstate-chatbot/reminder, which fans a message out to EVERY
+# active session. Blank disables the route entirely (the safe default).
+# chatbot_reminder_token: ""
+
+# Image pins. Default to the nightly-develop builds published by CI.
+# chatbot_image: "egovio/xstate-chatbot:nightly-develop"
+# chatbot_db_image: "egovio/xstate-chatbot-db:nightly-develop"
+
 # Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
 # under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
 # Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),

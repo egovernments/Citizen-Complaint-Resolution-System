@@ -434,6 +434,14 @@ endpoints:
     alerts:
       - type: slack
 
+  - name: XState Chatbot (inbound WhatsApp)
+    group: Notifications
+    enabled: ${GATUS_PROFILE_CHATBOT}
+    url: "http://xstate-chatbot:8080/xstate-chatbot/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
   - name: Novu Bridge Endpoint
     group: Notifications
     enabled: ${GATUS_PROFILE_NOTIFICATIONS}

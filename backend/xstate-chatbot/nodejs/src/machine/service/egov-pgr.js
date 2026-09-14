@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const config = require("../../env-variables");
+const mobileValidation = require('./mobile-validation-service');
 const getCityAndLocality = require("./util/google-maps-util");
 const localisationService = require("../util/localisation-service");
 const urlencode = require("urlencode");
@@ -402,13 +403,17 @@ class PGRService {
   }
 
   async getCityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
+    // The business number is stored as a national number; the deep link needs it in E.164.
+    // The country code comes from the tenant's mobile rule rather than a hardcoded +91.
+    const mobileConfig = await mobileValidation.getConfig(tenantId);
+    const phone = mobileValidation.toE164(whatsAppBusinessNumber, mobileConfig);
     let url =
       config.egovServices.externalHost +
       config.egovServices.cityExternalWebpagePath +
       "?tenantId=" +
       tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      "&phone=" +
+      encodeURIComponent(phone);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -423,13 +428,17 @@ class PGRService {
   }
 
   async getLocalityExternalWebpageLink(tenantId, whatsAppBusinessNumber) {
+    // The business number is stored as a national number; the deep link needs it in E.164.
+    // The country code comes from the tenant's mobile rule rather than a hardcoded +91.
+    const mobileConfig = await mobileValidation.getConfig(tenantId);
+    const phone = mobileValidation.toE164(whatsAppBusinessNumber, mobileConfig);
     let url =
       config.egovServices.externalHost +
       config.egovServices.localityExternalWebpagePath +
       "?tenantId=" +
       tenantId +
-      "&phone=+91" +
-      whatsAppBusinessNumber;
+      "&phone=" +
+      encodeURIComponent(phone);
     let shorturl = await this.getShortenedURL(url);
     return shorturl;
   }
@@ -454,7 +463,7 @@ class PGRService {
         if (mdmsData['CMS-BOUNDARY'] && mdmsData['CMS-BOUNDARY']['HierarchySchema']) {
           const hierarchySchemas = mdmsData['CMS-BOUNDARY']['HierarchySchema'];
           // Find ADMIN hierarchy
-          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === 'ADMIN');
+          const adminHierarchy = hierarchySchemas.find(h => h.hierarchy === config.boundaryHierarchyType);
           if (adminHierarchy && adminHierarchy.lowestHierarchy) {
             lowestBoundaryType = adminHierarchy.lowestHierarchy;
           }
@@ -465,7 +474,10 @@ class PGRService {
       // Step 1: Fetch boundary data from boundary service with specific boundary type
 
       // Use boundary type parameter to fetch only the lowest level boundaries
-      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=ADMIN&boundaryType=${lowestBoundaryType}&includeChildren=true`;
+      // hierarchyType is named per deployment (it is not always ADMIN), so it is
+      // configurable; the default preserves the previous behaviour.
+      const hierarchyType = config.boundaryHierarchyType;
+      const boundaryUrl = `${config.egovServices.egovServicesHost}boundary-service/boundary-relationships/_search?tenantId=${tenantId}&hierarchyType=${encodeURIComponent(hierarchyType)}&boundaryType=${lowestBoundaryType}&includeChildren=true`;
 
       const boundaryRequest = {
         RequestInfo: {
