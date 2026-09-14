@@ -35,17 +35,24 @@ const renderCellContent = (column, row, index) => {
   return column.selector(row, index);
 };
 
-// rdt binds row events on the row but fires them only when the *click target*
-// carries this attribute, and it tags a cell's content wrapper only for columns
-// that have no `cell` renderer. The synthetic card column is all `cell`, so
-// unless the card tags its own fields the row handler can never fire: the one
-// tagged element left is the `rdt_TableCell`, and the card covers it edge to
-// edge. Mirrors rdt's own rule, which is also the real expression of
-// `ignoreRowClick` — omit the tag rather than fight the event:
-//   dataTag: column.ignoreRowClick || column.button ? null : "allowRowEvents"
-const ROW_EVENT_TAG = "allowRowEvents";
-const rowEventTag = (column) =>
-  column?.ignoreRowClick || column?.button ? undefined : ROW_EVENT_TAG;
+// rdt decides whether a click counts as a row click by testing the click
+// target against a `data-tag` attribute it puts on a cell's content wrapper.
+// That test cannot work for the card: the wrapper does not descend into what a
+// cell renderer returns, and renderers almost always wrap their content, so the
+// tap lands on an untagged child. Threading the tag through the card's own
+// elements only moved the problem — it then depended on how each consumer
+// happens to render a control, and sandbox's bare `<SVG onClick>` inside a
+// plain `<div>` fits none of the shapes.
+//
+// So the card owns the decision instead: one handler, and anything that is
+// itself interactive is skipped by ancestry rather than by tag. Nothing is
+// made transparent to hit-testing, so text in every field stays selectable.
+//
+// `svg` is in the list because an icon with its own `onClick` is a control
+// wearing no control's clothes; without it sandbox's edit action would fire its
+// redirect and the row click on the same tap.
+const NON_ROW_CLICK_TARGETS =
+  'button, a, [role="button"], input, select, textarea, svg, [data-row-click="off"]';
 
 const ResultsDataTable = ({
   data,
@@ -123,30 +130,40 @@ const ResultsDataTable = ({
         id: "digit-results-mobile-card",
         name: "",
         grow: 1,
+        // Keeps rdt from tagging the cell and running its own target test, so
+        // the card handler below is the only thing that can open a record.
+        ignoreRowClick: true,
         cell: (row, index) => (
-          // The card's own whitespace is tagged so a tap in the gaps between
-          // fields still opens the record, the way a tap anywhere in a table
-          // row does.
-          <div className="digit-results-mobile-card" data-tag={ROW_EVENT_TAG}>
+          <div
+            className="digit-results-mobile-card"
+            onClick={
+              typeof onRowClicked === "function"
+                ? (event) => {
+                    if (event.target.closest(NON_ROW_CLICK_TARGETS)) return;
+                    onRowClicked(row, event);
+                  }
+                : undefined
+            }
+          >
             {(columns || []).map((column, columnIndex) => {
               const content = renderCellContent(column, row, index);
               if (content === null || content === undefined || content === "")
                 return null;
-              // Absent on a column that opted out, which is precisely how rdt
-              // keeps the row handler off an action cell.
-              const tag = rowEventTag(column);
               return (
                 <div
                   className="digit-results-mobile-card-row"
                   key={column?.id || columnIndex}
-                  data-tag={tag}
+                  // The per-column opt-out, carried on the field so the card's
+                  // handler can honour it by ancestry the same way it honours a
+                  // control.
+                  data-row-click={
+                    column?.ignoreRowClick || column?.button ? "off" : undefined
+                  }
                 >
-                  {/* The tag has to sit on what the finger actually lands on:
-                      the handler reads `e.target`, not the bubbling path. */}
-                  <span className="digit-results-mobile-card-label" data-tag={tag}>
+                  <span className="digit-results-mobile-card-label">
                     {column?.name}
                   </span>
-                  <span className="digit-results-mobile-card-value" data-tag={tag}>
+                  <span className="digit-results-mobile-card-value">
                     {content}
                   </span>
                 </div>
@@ -156,7 +173,7 @@ const ResultsDataTable = ({
         ),
       },
     ],
-    [columns]
+    [columns, onRowClicked]
   );
 
   const renderTable = () => {
