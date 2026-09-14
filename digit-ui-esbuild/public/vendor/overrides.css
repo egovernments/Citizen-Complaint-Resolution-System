@@ -7459,20 +7459,48 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
     white-space: normal !important;
     text-align: right !important;
   }
+  /* A cell renderer almost always wraps its content — `<span class="link">`,
+   * `<span style="white-space:nowrap">`, `<span class="digit-tag-text">` — and
+   * `e.target` is the deepest element under the finger, so the tag on the value
+   * span is not what a tap actually hits. (rdt has the same hole on desktop:
+   * its own tagged div wraps the content and does not descend into it, so a
+   * click on the wrapped text does not fire the row handler there either.)
+   *
+   * Making the decorative wrappers transparent to hit-testing lets the tap fall
+   * through to the tagged span, so the whole card behaves as one target rather
+   * than a card where the label opens the record and the value beside it does
+   * nothing. Real controls are handed their pointer events back explicitly,
+   * since `pointer-events: none` otherwise disables the entire subtree and
+   * would take the complaint-number link with it. */
+  .digit-results-mobile-card-value > *:not(button):not(a) {
+    pointer-events: none;
+  }
+  .digit-results-mobile-card-value a,
+  .digit-results-mobile-card-value button {
+    pointer-events: auto;
+  }
+
   /* Only the link variation sheds its chrome — it is text pretending to be a
    * button, so its padding just pushes the value off the right edge. A filled
    * button keeps its box: stripping that leaves a label sitting on its own
    * background with a tap target of roughly one line-height, on exactly the
-   * viewport this section exists to fix. */
+   * viewport this section exists to fix.
+   *
+   * The floor lives on this rule rather than the generic one below, because
+   * `button[class*="link"]` outscores a bare `button` and `!important` settles
+   * ties before source order does — a plain floor further down never applied
+   * to the one kind of button that had shed its height. */
   .digit-results-mobile-card-value button[class*="link"],
   .digit-results-mobile-card-value button[class*="teritiary"],
   .digit-results-mobile-card-value button[class*="tertiary"] {
     padding: 0 !important;
     height: auto !important;
-    min-height: 0 !important;
+    min-height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
   }
-  /* Same floor for the link that is the way into a record: rendered as a bare
-   * anchor it is 22px tall, which is under any reasonable thumb. */
+  /* Same floor for the react-router link that is the way into a record: as a
+   * bare anchor it measured 22px, under any reasonable thumb. */
   .digit-results-mobile-card-value button,
   .digit-results-mobile-card-value a {
     min-height: 24px;
