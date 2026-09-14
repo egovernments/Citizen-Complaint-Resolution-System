@@ -16,14 +16,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.egov.pgr.util.PGRConstants.ESCALATE;
-import static org.egov.pgr.util.PGRConstants.PENDINGATLME;
-import static org.egov.pgr.util.PGRConstants.PENDINGFORASSIGNMENT;
 
 @Component
 @Slf4j
@@ -71,7 +68,7 @@ public class EscalationScheduler {
         int scanned = 0;
         int escalated = 0;
         int skipped = 0;
-        for (String status : Arrays.asList(PENDINGATLME, PENDINGFORASSIGNMENT)) {
+        for (String status : escalationConfig.getEligibleStatuses()) {
             int offset = 0;
             while (true) {
                 List<ServiceWrapper> complaints;

@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_ESCALATION_CONFIG;
@@ -57,8 +59,12 @@ public class EscalationConfigurationService {
             defaultSlas = Collections.singletonList(config.getEscalationDefaultSlaMs());
         }
         List<Boolean> enabledByLevel = booleanList(mdmsConfig == null ? null : mdmsConfig.get("enabledByLevel"));
+        List<String> eligibleStatuses = stringList(mdmsConfig == null ? null : mdmsConfig.get("eligibleStatuses"));
+        if (eligibleStatuses.isEmpty()) {
+            eligibleStatuses = stringList(config.getEscalationEligibleStatuses());
+        }
         Map<String, Object> overrides = map(mdmsConfig == null ? null : mdmsConfig.get("overrides"));
-        return new ResolvedEscalationConfig(maxDepth, defaultSlas, enabledByLevel, overrides);
+        return new ResolvedEscalationConfig(maxDepth, defaultSlas, enabledByLevel, eligibleStatuses, overrides);
     }
 
     @SuppressWarnings("unchecked")
@@ -125,6 +131,19 @@ public class EscalationConfigurationService {
         return result;
     }
 
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (Object item : values) {
+            if (item instanceof String text && !text.isBlank()) {
+                result.add(text.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> map(Object value) {
         return value instanceof Map<?, ?> ? (Map<String, Object>) value : Collections.emptyMap();
@@ -135,13 +154,16 @@ public class EscalationConfigurationService {
         private final int maxDepth;
         private final List<Long> defaultSlas;
         private final List<Boolean> enabledByLevel;
+        private final List<String> eligibleStatuses;
         private final Map<String, Object> overrides;
 
         ResolvedEscalationConfig(int maxDepth, List<Long> defaultSlas,
-                                 List<Boolean> enabledByLevel, Map<String, Object> overrides) {
+                                 List<Boolean> enabledByLevel, List<String> eligibleStatuses,
+                                 Map<String, Object> overrides) {
             this.maxDepth = maxDepth;
             this.defaultSlas = List.copyOf(defaultSlas);
             this.enabledByLevel = List.copyOf(enabledByLevel);
+            this.eligibleStatuses = List.copyOf(eligibleStatuses);
             this.overrides = Map.copyOf(overrides);
         }
 

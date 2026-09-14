@@ -5,7 +5,7 @@ This rollout implements #2048. It must be performed per supported state-level te
 ## Target contract
 
 - Configuration: `RAINMAKER-PGR.EscalationConfig` in state-level MDMS v2.
-- Eligible states: `PENDINGATLME` and `PENDINGFORASSIGNMENT`.
+- Eligible automatic-escalation states come from `EscalationConfig.eligibleStatuses`; the shipped value is `PENDINGATLME` and `PENDINGFORASSIGNMENT`.
 - `ESCALATE` is a self-loop. The backend resolves the current workflow assignee's HRMS `reportingTo`; callers do not choose the target.
 - No assignee, no `reportingTo`, disabled level, or `maxDepth` reached means no automatic escalation. Manual requests receive an explicit error.
 - Both triggers enter `PGRService.update` and write `escalationLevel`, `lastEscalatedAt`, `assignmentChangedAt`, `escalatedFrom`, `escalatedTo`, and `escalationTrigger`.
@@ -18,7 +18,7 @@ This rollout implements #2048. It must be performed per supported state-level te
 
 The SLA policy is the single state-root MDMS v2 record `RAINMAKER-PGR.EscalationConfig`. Its schema is in `utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json`. The only checked-in example record is under `utilities/default-data-handler/src/main/resources/mdmsData-dev/`; that development profile is not a live deployment seed, and the local `full-dump.sql` contains no record. Operators must fetch or create the record in each live state-level tenant instead of assuming the example is installed.
 
-If the record is absent or unreadable, pgr-services falls back to `PGR_ESCALATION_DEFAULT_SLA_MS` / `pgr.escalation.default.sla.ms` (432000000 ms) and `PGR_ESCALATION_MAX_DEPTH` / `pgr.escalation.max.depth` (3). `PGR_ESCALATION_ENABLED` / `pgr.escalation.enabled` and `PGR_ESCALATION_INTERVAL_MS` / `pgr.escalation.interval.ms` control only the automatic scheduler; disabling it does not disable manual `ESCALATE`. `PGR_ESCALATION_BATCH_SIZE` / `pgr.escalation.batch.size` is the scheduler page size, not a total-run cap. Local Compose and local Kubernetes currently set only `PGR_ESCALATION_ENABLED=true`; the remaining values come from `backend/pgr-services/src/main/resources/application.properties` unless an environment overrides them.
+If the record is absent or unreadable, pgr-services falls back to `PGR_ESCALATION_ELIGIBLE_STATUSES` / `pgr.escalation.eligible.statuses` (`PENDINGATLME,PENDINGFORASSIGNMENT`), `PGR_ESCALATION_DEFAULT_SLA_MS` / `pgr.escalation.default.sla.ms` (432000000 ms), and `PGR_ESCALATION_MAX_DEPTH` / `pgr.escalation.max.depth` (3). `PGR_ESCALATION_ENABLED` / `pgr.escalation.enabled` and `PGR_ESCALATION_INTERVAL_MS` / `pgr.escalation.interval.ms` control only the automatic scheduler; disabling it does not disable manual `ESCALATE`. `PGR_ESCALATION_BATCH_SIZE` / `pgr.escalation.batch.size` is the scheduler page size, not a total-run cap. Every configured eligible state must expose an active `ESCALATE` self-loop authorizing `SYSTEM`. Local Compose and local Kubernetes currently set only `PGR_ESCALATION_ENABLED=true`; the remaining values come from `backend/pgr-services/src/main/resources/application.properties` unless an environment overrides them.
 
 ## Preflight
 
@@ -28,7 +28,7 @@ For every tenant:
 2. Fetch the live `PGR` BusinessService. Do not infer it from repository seeds.
 3. Count complaints in `PENDINGATSUPERVISOR` and `RESOLVEDBYSUPERVISOR`.
 4. Verify every currently assigned employee and each intended escalation target has a valid current HRMS assignment, `reportingTo`, jurisdiction, and PGR access.
-5. Verify the one `EscalationConfig` record and confirm every override key is a live leaf service code.
+5. Verify the one `EscalationConfig` record, confirm every `eligibleStatuses` value has an active `ESCALATE` self-loop, and confirm every override key is a live leaf service code.
 
 Do not remove a legacy state while an active complaint still occupies it.
 

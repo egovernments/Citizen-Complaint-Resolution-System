@@ -3,6 +3,10 @@
     "tenantId": "ke",
     "data": {
       "maxDepth": 3,
+      "eligibleStatuses": [
+        "PENDINGATLME",
+        "PENDINGFORASSIGNMENT"
+      ],
       "defaultSlaByLevel": [
         3600000,
         14400000,
