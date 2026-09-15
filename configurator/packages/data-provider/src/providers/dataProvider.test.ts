@@ -59,6 +59,24 @@ describe('createDigitDataProvider', () => {
     );
   });
 
+  it('rejects PGR writes through the competing generic workflow escalation masters', async () => {
+    const dp = createDigitDataProvider(client, 'pg');
+    await assert.rejects(
+      () => dp.create('auto-escalation', {
+        data: { businessService: 'PGR', module: 'PGR' },
+      }),
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
+    );
+    await assert.rejects(
+      () => dp.update('auto-escalation-ignore', {
+        id: 'PGR',
+        data: { businessService: 'PGR', module: 'PGR' },
+        previousData: { businessService: 'PGR', module: 'PGR' },
+      }),
+      /configured only through RAINMAKER-PGR.EscalationConfig/,
+    );
+  });
+
   it('creates a non-root boundary relationship in the login tenant with its direct parent', async () => {
     mock.method(client, 'boundaryHierarchySearch', async (tenantId: string, hierarchyType?: string) => {
       assert.equal(tenantId, 'ke');

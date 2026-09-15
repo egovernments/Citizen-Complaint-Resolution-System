@@ -14,6 +14,8 @@ import org.egov.pgr.web.models.workflow.ProcessInstance;
 import org.egov.pgr.web.models.workflow.ProcessInstanceResponse;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -21,8 +23,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.ESCALATE;
@@ -58,18 +62,50 @@ public class EscalationService {
     private final ServiceRequestRepository serviceRequestRepository;
     private final EscalationConfigurationService configurationService;
     private final ObjectMapper mapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
     public EscalationService(HRMSUtil hrmsUtil,
                              WorkflowService workflowService,
                              ServiceRequestRepository serviceRequestRepository,
                              EscalationConfigurationService configurationService,
-                             ObjectMapper mapper) {
+                             ObjectMapper mapper,
+                             JdbcTemplate jdbcTemplate) {
         this.hrmsUtil = hrmsUtil;
         this.workflowService = workflowService;
         this.serviceRequestRepository = serviceRequestRepository;
         this.configurationService = configurationService;
         this.mapper = mapper;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    /** Serializes every manual and automatic ESCALATE for one complaint across service replicas. */
+    public <T> T withComplaintLock(String tenantId, String serviceRequestId, Supplier<T> operation) {
+        return jdbcTemplate.execute((ConnectionCallback<T>) connection -> {
+            try (var statement = connection.prepareStatement(
+                    "SELECT pg_advisory_lock(hashtext(?), hashtext(?))")) {
+                statement.setString(1, tenantId);
+                statement.setString(2, serviceRequestId);
+                statement.execute();
+            }
+            try {
+                return operation.get();
+            } finally {
+                try (var statement = connection.prepareStatement(
+                        "SELECT pg_advisory_unlock(hashtext(?), hashtext(?))")) {
+                    statement.setString(1, tenantId);
+                    statement.setString(2, serviceRequestId);
+                    statement.execute();
+                }
+            }
+        });
+    }
+
+    /** Removes metadata that only the service may originate. */
+    public void prepareCreate(Service service) {
+        Map<String, Object> additionalDetails = details(service);
+        SERVER_MANAGED_METADATA.forEach(additionalDetails::remove);
+        service.setAdditionalDetail(additionalDetails);
     }
 
     /**
@@ -78,6 +114,10 @@ public class EscalationService {
      * hierarchy metadata exactly once.
      */
     public void prepareUpdate(ServiceRequest request, Service persistedService) {
+        prepareUpdate(request, persistedService, isAutomatic(request.getRequestInfo()));
+    }
+
+    public void prepareUpdate(ServiceRequest request, Service persistedService, boolean automatic) {
         if (request == null || request.getService() == null || request.getWorkflow() == null) {
             return;
         }
@@ -88,7 +128,7 @@ public class EscalationService {
 
         String action = request.getWorkflow().getAction();
         if (action != null && ESCALATE.equalsIgnoreCase(action)) {
-            prepareEscalation(request, persistedService, incoming);
+            prepareEscalation(request, persistedService, incoming, automatic);
         } else if (changesAssignment(action, request.getWorkflow())) {
             long now = System.currentTimeMillis();
             incoming.put(ASSIGNMENT_CHANGED_AT, now);
@@ -101,17 +141,23 @@ public class EscalationService {
     }
 
     private void prepareEscalation(ServiceRequest request, Service persistedService,
-                                   Map<String, Object> details) {
+                                   Map<String, Object> details, boolean automatic) {
         String tenantId = persistedService.getTenantId();
         String complaintId = persistedService.getServiceRequestId();
         RequestInfo requestInfo = request.getRequestInfo();
-        int currentLevel = escalationLevel(persistedService);
-        int maxDepth = configurationService.resolve(requestInfo, tenantId)
-                .effectiveMaxDepth(persistedService.getServiceCode());
+        int currentLevel = Math.max(escalationLevel(persistedService),
+                workflowEscalationCount(complaintId, tenantId, requestInfo));
+        EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
+                configurationService.resolve(requestInfo, tenantId);
+        int maxDepth = escalationConfig.effectiveMaxDepth(persistedService.getServiceCode());
 
         if (currentLevel >= maxDepth) {
             throw new CustomException("ESCALATION_MAX_DEPTH",
                     "Complaint " + complaintId + " is already at maximum escalation depth");
+        }
+
+        if (automatic) {
+            validateAutomaticThreshold(persistedService, currentLevel, escalationConfig);
         }
 
         List<String> currentAssignees = getCurrentAssignees(complaintId, tenantId, requestInfo);
@@ -125,6 +171,10 @@ public class EscalationService {
             throw new CustomException("ESCALATION_TOP_OF_HIERARCHY",
                     "No reportingTo employee exists for the current assignee");
         }
+        if (currentAssignees.contains(expectedAssignee)) {
+            throw new CustomException("ESCALATION_HIERARCHY_CYCLE",
+                    "HRMS reportingTo points back to a current assignee");
+        }
 
         List<String> requestedAssignees = request.getWorkflow().getAssignes();
         if (!CollectionUtils.isEmpty(requestedAssignees)
@@ -135,7 +185,7 @@ public class EscalationService {
 
         request.getWorkflow().setAssignes(Collections.singletonList(expectedAssignee));
         long now = System.currentTimeMillis();
-        String trigger = isAutomatic(requestInfo) ? "AUTOMATIC" : "MANUAL";
+        String trigger = automatic ? "AUTOMATIC" : "MANUAL";
         details.put(ESCALATION_LEVEL, currentLevel + 1);
         details.put(LAST_ESCALATED_AT, now);
         details.put(ASSIGNMENT_CHANGED_AT, now);
@@ -173,6 +223,25 @@ public class EscalationService {
         return level instanceof Number number ? Math.max(number.intValue(), 0) : 0;
     }
 
+    private void validateAutomaticThreshold(Service complaint, int currentLevel,
+            EscalationConfigurationService.ResolvedEscalationConfig escalationConfig) {
+        String status = complaint.getApplicationStatus();
+        if (status == null || !escalationConfig.getEligibleStatuses().contains(status.toUpperCase(Locale.ROOT))) {
+            throw new CustomException("ESCALATION_STATUS_NOT_ELIGIBLE",
+                    "Complaint is not in an automatic-escalation state");
+        }
+        if (!escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
+            throw new CustomException("ESCALATION_LEVEL_DISABLED",
+                    "Automatic escalation is disabled at the current level");
+        }
+        long createdAt = escalationWindowStartedAt(complaint);
+        long threshold = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
+        if (createdAt <= 0 || System.currentTimeMillis() - createdAt < threshold) {
+            throw new CustomException("ESCALATION_NOT_DUE",
+                    "The next cumulative escalation threshold has not been reached");
+        }
+    }
+
     /** Gets current assignees from the workflow process-instance source of truth. */
     public List<String> getCurrentAssignees(String serviceRequestId, String tenantId,
                                             RequestInfo requestInfo) {
@@ -196,6 +265,26 @@ public class EscalationService {
         } catch (Exception e) {
             log.error("Failed to read workflow assignees for complaint {}", serviceRequestId, e);
             return Collections.emptyList();
+        }
+    }
+
+    private int workflowEscalationCount(String serviceRequestId, String tenantId,
+                                        RequestInfo requestInfo) {
+        StringBuilder url = workflowService.getprocessInstanceSearchURL(tenantId, serviceRequestId);
+        url.append("&history=true");
+        RequestInfoWrapper wrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+        Object result = serviceRequestRepository.fetchResult(url, wrapper);
+        try {
+            ProcessInstanceResponse response = mapper.convertValue(result, ProcessInstanceResponse.class);
+            if (response == null || CollectionUtils.isEmpty(response.getProcessInstances())) {
+                return 0;
+            }
+            return (int) response.getProcessInstances().stream()
+                    .filter(instance -> ESCALATE.equalsIgnoreCase(instance.getAction()))
+                    .count();
+        } catch (Exception e) {
+            throw new CustomException("ESCALATION_HISTORY_ERROR",
+                    "Failed to reconcile escalation history for complaint " + serviceRequestId);
         }
     }
 

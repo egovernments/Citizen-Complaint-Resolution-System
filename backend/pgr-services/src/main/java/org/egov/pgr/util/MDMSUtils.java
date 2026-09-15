@@ -124,19 +124,26 @@ public class MDMSUtils {
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
      * slaHours (interior nodes carry no slaHours and are skipped by the Number guard below).
-     * Cached per state-level tenant with the same short TTL as the notification masters, so a
-     * configurator slaHours edit takes effect without a pgr-services restart. Returns an empty
-     * map (never null) on MDMS failure, so callers can fall back to the uniform business-level SLA.
+     * Resolved as a complete city map followed by a complete state map, and cached by requesting
+     * tenant with the same short TTL as the notification masters. Returns an empty map (never
+     * null) on MDMS failure, so callers can use an explicit non-type-specific fallback.
      */
     public Map<String, Long> getServiceCodeToSlaMillis(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return Collections.emptyMap();
+        }
+        String requestedTenant = tenantId.trim();
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         long ttl = config.getNotificationMdmsCacheTtlMs();
-        TimedSlaMap cached = serviceCodeToSlaCache.get(stateTenant);
+        TimedSlaMap cached = serviceCodeToSlaCache.get(requestedTenant);
         if (cached != null && cached.fresh(ttl)) return cached.value;
 
-        Map<String, Long> fetched = fetchServiceCodeToSlaMillis(stateTenant);
+        Map<String, Long> fetched = fetchServiceCodeToSlaMillis(requestedTenant);
+        if (fetched.isEmpty() && !requestedTenant.equals(stateTenant)) {
+            fetched = fetchServiceCodeToSlaMillis(stateTenant);
+        }
         if (!fetched.isEmpty()) {
-            serviceCodeToSlaCache.put(stateTenant, new TimedSlaMap(fetched));
+            serviceCodeToSlaCache.put(requestedTenant, new TimedSlaMap(fetched));
             return fetched;
         }
         // Empty fetch = transient MDMS miss OR a hierarchy that genuinely carries no slaHours.
@@ -146,10 +153,10 @@ public class MDMSUtils {
         return cached != null ? cached.value : fetched;
     }
 
-    private Map<String, Long> fetchServiceCodeToSlaMillis(String stateTenant) {
+    private Map<String, Long> fetchServiceCodeToSlaMillis(String tenantId) {
         Map<String, Long> map = new LinkedHashMap<>();
         try {
-            MdmsCriteriaReq req = getMDMSRequest(new RequestInfo(), stateTenant);
+            MdmsCriteriaReq req = getMDMSRequest(new RequestInfo(), tenantId);
             Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
             List<Map<String, Object>> defs = JsonPath.read(result, MDMS_DATA_JSONPATH);
             for (Map<String, Object> def : defs) {
@@ -160,7 +167,7 @@ public class MDMSUtils {
             }
         } catch (Exception e) {
             log.error("Failed to load serviceCode->SLA map for tenant {}; inbox SLA sort will fall back "
-                    + "to the business-level SLA", stateTenant, e);
+                    + "to the configured absolute escalation threshold", tenantId, e);
         }
         return map;
     }

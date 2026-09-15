@@ -648,7 +648,7 @@ Steps:
   test('12 — cleanup: assign and resolve the unassigned-case complaint', {
     annotation: {
       type: 'description',
-      description: `Drains the unassigned-case complaint to RESOLVED and verifies ASSIGN establishes the assignment clock and hierarchy baseline.
+      description: `Drains the unassigned-case complaint to RESOLVED and verifies ASSIGN records assignment audit metadata and hierarchy baseline.
 
 Steps:
 1. test.skip if !prerequisitesMet.

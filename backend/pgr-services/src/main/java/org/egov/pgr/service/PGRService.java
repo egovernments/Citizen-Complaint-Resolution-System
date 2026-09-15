@@ -108,7 +108,7 @@ public class PGRService {
 		Object mdmsData = mdmsUtils.mDMSCall(request);
 		validator.validateCreate(request, mdmsData);
 		enrichmentService.enrichCreateRequest(request);
-		workflowService.updateWorkflowStatus(request);
+		escalationService.prepareCreate(request.getService());
 
 		Service service = request.getService();
 
@@ -136,6 +136,8 @@ public class PGRService {
 					encryptionDecryptionService.encrypt(ext, cfg, tenantId));
 			enrichmentService.enrichUserContactDetails(request);
 		}
+
+		workflowService.updateWorkflowStatus(request);
 
 		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
@@ -223,14 +225,37 @@ public class PGRService {
      * @return
      */
     public ServiceRequest update(ServiceRequest request){
+        return updateWithEscalationLock(request, false);
+    }
+
+    /** Scheduler entry point: same update pipeline, with unchanged encrypted fields preserved. */
+    public ServiceRequest updateAutomaticEscalation(ServiceRequest request) {
+        return updateWithEscalationLock(request, true);
+    }
+
+    private ServiceRequest updateWithEscalationLock(ServiceRequest request, boolean automaticEscalation) {
+        boolean escalation = request.getWorkflow() != null
+                && org.egov.pgr.util.PGRConstants.ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction());
+        if (!escalation) {
+            return updateInternal(request, false);
+        }
+        Service service = request.getService();
+        return escalationService.withComplaintLock(service.getTenantId(), service.getServiceRequestId(),
+                () -> updateInternal(request, automaticEscalation));
+    }
+
+    private ServiceRequest updateInternal(ServiceRequest request, boolean automaticEscalation) {
         String tenantId = request.getService().getTenantId();
         String fromState = request.getService().getApplicationStatus();
         Object mdmsData = mdmsUtils.mDMSCall(request);
         Service persistedService = validator.validateUpdate(request, mdmsData);
         fromState = persistedService.getApplicationStatus();
-        escalationService.prepareUpdate(request, persistedService);
+        if (automaticEscalation) {
+            escalationService.prepareUpdate(request, persistedService, true);
+        } else {
+            escalationService.prepareUpdate(request, persistedService);
+        }
         enrichmentService.enrichUpdateRequest(request);
-        workflowService.updateWorkflowStatus(request);
 
         Service updateService = request.getService();
 		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
@@ -247,7 +272,7 @@ public class PGRService {
 		ExtendedAttributes updatedExt = updateService.getExtendedAttributes();
 		ComplaintTemplateTypeConfig cfg = null;
 		ExtendedAttributes plainExt = null;
-		if (updatedExt != null) {
+		if (updatedExt != null && !automaticEscalation) {
 			if (updatedExt.getIsConfidential() == null) updatedExt.setIsConfidential(false);
 			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
 					request.getRequestInfo(), tenantId, updatedExt.getCaseRelatedTo());
@@ -265,6 +290,8 @@ public class PGRService {
 					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
 			enrichmentService.enrichUserContactDetails(request);
 		}
+
+        workflowService.updateWorkflowStatus(request);
 
         complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId, config.getUpdateTopic(), request);

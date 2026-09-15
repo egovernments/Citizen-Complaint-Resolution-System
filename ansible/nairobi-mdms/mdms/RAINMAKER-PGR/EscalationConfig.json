@@ -2,6 +2,7 @@
   {
     "tenantId": "ke",
     "data": {
+      "code": "DEFAULT",
       "maxDepth": 3,
       "eligibleStatuses": [
         "PENDINGATLME",

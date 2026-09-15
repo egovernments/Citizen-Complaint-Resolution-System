@@ -39,14 +39,20 @@
       "title": "Generated schema for Root",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
+        "code",
         "maxDepth",
         "eligibleStatuses",
         "defaultSlaByLevel"
       ],
       "x-unique": [
-        "maxDepth"
+        "code"
       ],
       "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["DEFAULT"],
+          "description": "Stable singleton record key."
+        },
         "maxDepth": {
           "type": "number"
         },

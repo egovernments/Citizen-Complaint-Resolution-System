@@ -28,6 +28,7 @@ import org.mockito.quality.Strictness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -159,6 +160,10 @@ class PGRServiceTest {
         when(config.getInboxUpdateTopic()).thenReturn("pgr-inbox-update");
         when(config.getEscalationKafkaTopic()).thenReturn("pgr-escalation-events");
         when(escalationService.buildEscalationEvent(request)).thenReturn(Map.of("serviceRequestId", "PGR-1"));
+        when(escalationService.withComplaintLock(any(), any(), any())).thenAnswer(invocation -> {
+            Supplier<ServiceRequest> operation = invocation.getArgument(2);
+            return operation.get();
+        });
 
         pgrService.update(request);
 

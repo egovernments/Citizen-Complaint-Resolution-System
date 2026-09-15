@@ -17,7 +17,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.egov.pgr.util.PGRConstants.ESCALATE;
@@ -32,7 +34,7 @@ public class EscalationScheduler {
     private final EscalationConfigurationService configurationService;
     private final PGRService pgrService;
 
-    @Value("${egov.state.level.tenant.id:ke}")
+    @Value("${state.level.tenant.id:${egov.state.level.tenant.id:ke}}")
     private String stateLevelTenantId;
 
     @Autowired
@@ -63,81 +65,103 @@ public class EscalationScheduler {
         log.info("Escalation scan started for tenant {}", tenantId);
         RequestInfo systemRequestInfo = buildSystemRequestInfo(tenantId);
 
-        int scanned = 0;
-        int escalated = 0;
-        int skipped = 0;
         List<String> stateTenants = configurationService.resolveStateTenants(systemRequestInfo, tenantId);
         boolean exactTenantScan = !stateTenants.isEmpty();
-        if (!exactTenantScan) {
-            stateTenants = Collections.singletonList(tenantId);
-        }
-        for (String scanTenant : stateTenants) {
-            EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
-                    configurationService.resolve(systemRequestInfo, scanTenant);
-            for (String status : escalationConfig.getEligibleStatuses()) {
-                int offset = 0;
-                while (true) {
-                    List<ServiceWrapper> complaints;
-                    try {
-                        complaints = searchComplaintsByStatus(scanTenant, status, offset, exactTenantScan);
-                    } catch (Exception e) {
-                        log.error("Error scanning complaints in status {} for tenant {}", status, scanTenant, e);
-                        break;
-                    }
-                    if (complaints.isEmpty()) {
-                        break;
-                    }
-
-                    for (ServiceWrapper wrapper : complaints) {
-                        scanned++;
-                        Service complaint = wrapper.getService();
-                        int currentLevel = escalationService.escalationLevel(complaint);
-                        if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
-                                || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
-                            skipped++;
-                            continue;
-                        }
-
-                        long complaintCreatedAt = escalationService.escalationWindowStartedAt(complaint);
-                        if (complaintCreatedAt <= 0) {
-                            skipped++;
-                            continue;
-                        }
-                        long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
-                        if (System.currentTimeMillis() - complaintCreatedAt < sla) {
-                            continue;
-                        }
-
-                        try {
-                            ServiceRequest escalationRequest = ServiceRequest.builder()
-                                    .requestInfo(systemRequestInfo)
-                                    .service(complaint)
-                                    .workflow(Workflow.builder()
-                                            .action(ESCALATE)
-                                            .comments("Auto-escalated after complaint SLA threshold at level " + currentLevel)
-                                            .build())
-                                    .build();
-                            // This is deliberately the same entry point used by manual ESCALATE.
-                            pgrService.update(escalationRequest);
-                            escalated++;
-                        } catch (Exception e) {
-                            skipped++;
-                            log.warn("Complaint {} was due but could not be escalated: {}",
-                                    complaint.getServiceRequestId(), e.getMessage());
-                        }
-                    }
-
-                    // batch.size is a page size, not a cap: scan every page in this run.
-                    if (complaints.size() < config.getEscalationBatchSize()) {
-                        break;
-                    }
-                    offset += complaints.size();
+        Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache = new HashMap<>();
+        ScanResult total = new ScanResult();
+        if (exactTenantScan) {
+            for (String scanTenant : stateTenants) {
+                EscalationConfigurationService.ResolvedEscalationConfig policy =
+                        policyFor(scanTenant, systemRequestInfo, policyCache);
+                for (String status : policy.getEligibleStatuses()) {
+                    total.add(scan(scanTenant, status, true, systemRequestInfo, policyCache));
                 }
             }
+        } else {
+            // Discovery failure changes only how complaints are found. Every returned complaint
+            // is still evaluated against the policy resolved for its own tenant.
+            total.add(scan(tenantId, null, false, systemRequestInfo, policyCache));
         }
 
         log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}",
-                scanned, escalated, skipped);
+                total.scanned, total.escalated, total.skipped);
+    }
+
+    private ScanResult scan(String scanTenant, String status, boolean exactTenantScan,
+                            RequestInfo systemRequestInfo,
+                            Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache) {
+        ScanResult result = new ScanResult();
+        int offset = 0;
+        while (true) {
+            List<ServiceWrapper> complaints;
+            try {
+                complaints = searchComplaintsByStatus(scanTenant, status, offset, exactTenantScan);
+            } catch (Exception e) {
+                log.error("Error scanning complaints in status {} for tenant {}", status, scanTenant, e);
+                break;
+            }
+            if (complaints.isEmpty()) {
+                break;
+            }
+
+            for (ServiceWrapper wrapper : complaints) {
+                result.scanned++;
+                Service complaint = wrapper.getService();
+                EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
+                        policyFor(complaint.getTenantId(), systemRequestInfo, policyCache);
+                if (complaint.getApplicationStatus() == null
+                        || !escalationConfig.getEligibleStatuses().contains(
+                                complaint.getApplicationStatus().toUpperCase(Locale.ROOT))) {
+                    result.skipped++;
+                    continue;
+                }
+                int currentLevel = escalationService.escalationLevel(complaint);
+                if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
+                        || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
+                    result.skipped++;
+                    continue;
+                }
+
+                long complaintCreatedAt = escalationService.escalationWindowStartedAt(complaint);
+                if (complaintCreatedAt <= 0) {
+                    result.skipped++;
+                    continue;
+                }
+                long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
+                if (System.currentTimeMillis() - complaintCreatedAt < sla) {
+                    continue;
+                }
+
+                try {
+                    ServiceRequest escalationRequest = ServiceRequest.builder()
+                            .requestInfo(systemRequestInfo)
+                            .service(complaint)
+                            .workflow(Workflow.builder()
+                                    .action(ESCALATE)
+                                    .comments("Auto-escalated after complaint SLA threshold at level " + currentLevel)
+                                    .build())
+                            .build();
+                    pgrService.updateAutomaticEscalation(escalationRequest);
+                    result.escalated++;
+                } catch (Exception e) {
+                    result.skipped++;
+                    log.warn("Complaint {} was due but could not be escalated: {}",
+                            complaint.getServiceRequestId(), e.getMessage());
+                }
+            }
+
+            if (complaints.size() < config.getEscalationBatchSize()) {
+                break;
+            }
+            offset += complaints.size();
+        }
+        return result;
+    }
+
+    private EscalationConfigurationService.ResolvedEscalationConfig policyFor(
+            String tenantId, RequestInfo requestInfo,
+            Map<String, EscalationConfigurationService.ResolvedEscalationConfig> cache) {
+        return cache.computeIfAbsent(tenantId, key -> configurationService.resolve(requestInfo, key));
     }
 
     private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status, int offset,
@@ -145,10 +169,13 @@ public class EscalationScheduler {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder()
                 .tenantId(tenantId)
                 .tenantIds(exactTenantScan ? Collections.singleton(tenantId) : null)
-                .applicationStatus(Collections.singleton(status))
+                .applicationStatus(status == null ? null : Collections.singleton(status))
                 .limit(config.getEscalationBatchSize())
                 .offset(offset)
-                .isPlainSearch(true)
+                // Exact scans pin tenantIds. Discovery fallback uses the normal
+                // state-root tenant predicate; a plain search without tenantIds
+                // would accidentally scan every state in a shared database.
+                .isPlainSearch(exactTenantScan)
                 .build();
         return repository.getServiceWrappers(criteria);
     }
@@ -176,10 +203,18 @@ public class EscalationScheduler {
     }
 
     private String getStateLevelTenantId() {
-        Map<String, String> hostMap = config.getUiAppHostMap();
-        if (hostMap != null && !hostMap.isEmpty()) {
-            return hostMap.keySet().iterator().next();
-        }
         return stateLevelTenantId == null || stateLevelTenantId.isBlank() ? null : stateLevelTenantId;
+    }
+
+    private static final class ScanResult {
+        private int scanned;
+        private int escalated;
+        private int skipped;
+
+        private void add(ScanResult other) {
+            scanned += other.scanned;
+            escalated += other.escalated;
+            skipped += other.skipped;
+        }
     }
 }

@@ -80,8 +80,7 @@ public class EscalationConfigurationService {
             return Collections.emptyList();
         }
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId.trim());
-        LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
-        tenantIds.add(stateTenant);
+        LinkedHashSet<String> discoveredTenants = new LinkedHashSet<>();
 
         try {
             MasterDetail master = MasterDetail.builder().name(TENANTS_MASTER).build();
@@ -108,7 +107,7 @@ public class EscalationConfigurationService {
                     }
                     String configuredTenant = text(tenant.get("code"));
                     if (belongsToState(configuredTenant, stateTenant)) {
-                        tenantIds.add(configuredTenant);
+                        discoveredTenants.add(configuredTenant);
                     }
                 }
             }
@@ -117,6 +116,14 @@ public class EscalationConfigurationService {
                     stateTenant, e);
             return Collections.emptyList();
         }
+        if (discoveredTenants.isEmpty()) {
+            log.warn("No active tenants discovered below {}; caller must use a state-wide fallback scan",
+                    stateTenant);
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
+        tenantIds.add(stateTenant);
+        tenantIds.addAll(discoveredTenants);
         return new ArrayList<>(tenantIds);
     }
 
@@ -155,7 +162,26 @@ public class EscalationConfigurationService {
 
             Object response = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), request);
             List<Map<String, Object>> records = JsonPath.read(response, MDMS_ESCALATION_CONFIG_JSONPATH);
-            return records == null || records.isEmpty() ? null : records.get(0);
+            if (records == null || records.isEmpty()) {
+                return null;
+            }
+            List<Map<String, Object>> defaults = records.stream()
+                    .filter(record -> "DEFAULT".equalsIgnoreCase(text(record.get("code"))))
+                    .toList();
+            if (records.size() == 1) {
+                if (defaults.size() == 1) {
+                    return defaults.get(0);
+                }
+                if (text(records.get(0).get("code")) == null) {
+                    log.warn("Using legacy {} record without code=DEFAULT for tenant {}",
+                            MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId);
+                    return records.get(0);
+                }
+            }
+            log.error("Expected exactly one {} record for tenant {}; found {} records and {} defaults",
+                    MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId,
+                    records.size(), defaults.size());
+            return null;
         } catch (Exception e) {
             log.warn("Failed to fetch {} for tenant {}",
                     MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId, e);
@@ -272,26 +298,27 @@ public class EscalationConfigurationService {
 
         public long resolveSla(String serviceCode, int level) {
             OverrideConfig override = override(serviceCode);
-            List<Long> percentages = override.percentages.isEmpty()
-                    ? defaultPercentages : override.percentages;
+            boolean overridesTiming = !override.percentages.isEmpty() || !override.slas.isEmpty();
+            List<Long> percentages = overridesTiming ? override.percentages : defaultPercentages;
             Long complaintSla = complaintSlas.get(serviceCode);
             if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
                 return percentageOf(complaintSla, valueAt(percentages, level));
             }
-            List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
+            List<Long> slas = overridesTiming && !override.slas.isEmpty() ? override.slas : defaultSlas;
             return valueAt(slas, level);
         }
 
         /** Percentage ladders are finite: their last entry is the final escalation. */
         public int effectiveMaxDepth(String serviceCode) {
             OverrideConfig override = override(serviceCode);
-            List<Long> percentages = override.percentages.isEmpty()
-                    ? defaultPercentages : override.percentages;
+            boolean overridesTiming = !override.percentages.isEmpty() || !override.slas.isEmpty();
+            List<Long> percentages = overridesTiming ? override.percentages : defaultPercentages;
             Long complaintSla = complaintSlas.get(serviceCode);
             if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
                 return Math.min(maxDepth, percentages.size());
             }
-            return maxDepth;
+            List<Long> slas = overridesTiming && !override.slas.isEmpty() ? override.slas : defaultSlas;
+            return Math.min(maxDepth, slas.size());
         }
 
         private OverrideConfig override(String serviceCode) {
