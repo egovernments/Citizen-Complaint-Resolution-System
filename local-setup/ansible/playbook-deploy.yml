@@ -5276,12 +5276,15 @@
           -s "redirectUris=${REDIRECTS}" \
           -s "webOrigins=${ORIGINS}"
         # existing realms never get re-imported, so re-assert sslRequired here
-        # too — but with the SAME tls_enabled conditional the realm template
-        # uses (keycloak-realm.json.j2), or this unconditional `external` (which
-        # runs every deploy once the client UUID resolves) silently overwrites
-        # the template's value. With KC_PROXY_HEADERS=xforwarded Keycloak sees
-        # the real client IP, so `external` = "HTTPS required" on every login of
-        # a plain-HTTP tenant. (Vinoth review.)
+        # too, using the SAME tls_enabled conditional the realm template uses
+        # (keycloak-realm.json.j2). An unconditional external here runs every
+        # deploy once the client UUID resolves and would silently overwrite the
+        # value from that template. With KC_PROXY_HEADERS=xforwarded Keycloak
+        # sees the real client IP, so external forces HTTPS-required on every
+        # login of a plain-HTTP tenant. (Vinoth review.)
+        # NB: keep this comment free of apostrophes and quotes — ansible splits
+        # the whole shell block (comments included) and an unbalanced quote
+        # fails play load.
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
           -s "sslRequired=${SSLREQ}"
       when:
