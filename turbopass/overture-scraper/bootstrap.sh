@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 #
-# Bootstrap the offline Overture boundary DB for turbopass.
+# Build the offline Overture boundary DB that turbopass search-api serves.
 #
-# Runs the full pipeline into ../overture-data/boundaries.sqlite:
-#   1. scrape.py            — pull division geometries from Overture Maps (S3)
-#   2. apply_admin_levels.py — assign synthetic admin_levels to sub-divisions
-#   3. build_hierarchy.py   — spatial-join centroids to compute parent_id
+#   1. scrape.py             — pull division areas from Overture Maps (S3)
+#   2. apply_admin_levels.py — synthetic admin_levels for sub-divisions
+#   3. build_hierarchy.py    — drop maritime duplicates, compute parent_id,
+#                              simplify geometry, index
+#   4. verify_db.py          — fail unless every requested country landed
 #
-# Defaults to the P0 set (India, Kenya, Mozambique). Retarget without editing
-# any file:
-#   COUNTRIES="IN,KE,MZ,ZA" ./bootstrap.sh
+# Environment: COUNTRIES (default IN,KE,MZ), OVERTURE_RELEASE (default: the
+# newest release in the bucket), OVERTURE_DB_PATH, SIMPLIFY_TOLERANCE. Any step
+# failing stops the run with a non-zero exit — never "ready" over an empty DB.
 #
-# Works two ways:
-#   - On a host: creates ./venv and installs requirements.txt automatically.
-#   - In the docker image (deps preinstalled): set TURBOPASS_SKIP_VENV=1.
+# On a host this creates ./venv from requirements.txt; the docker image has the
+# deps baked in and sets TURBOPASS_SKIP_VENV=1.
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 
 export COUNTRIES="${COUNTRIES:-IN,KE,MZ}"
-export OVERTURE_RELEASE="${OVERTURE_RELEASE:-2026-06-17.0}"
+export PYTHONUNBUFFERED=1
 
 PY=python3
 
@@ -34,16 +34,16 @@ if [ -z "${TURBOPASS_SKIP_VENV:-}" ] && ! "$PY" -c "import duckdb, geopandas" >/
   PY=python
 fi
 
-echo "==> [1/3] Downloading Overture boundaries for: ${COUNTRIES}"
+echo "==> [1/4] Downloading Overture boundaries for: ${COUNTRIES}"
 "$PY" scrape.py
 
-echo "==> [2/3] Applying synthetic admin levels..."
+echo "==> [2/4] Applying synthetic admin levels"
 "$PY" apply_admin_levels.py
 
-echo "==> [3/3] Building spatial hierarchy (this can take a few minutes)..."
+echo "==> [3/4] Building hierarchy (a few minutes for India)"
 "$PY" build_hierarchy.py
 
-echo ""
-echo "==> Done. Boundary DB ready at ${OVERTURE_DB_PATH:-../overture-data/boundaries.sqlite}"
-echo "    Start the service:  docker compose up -d search-api"
-echo "    or locally:         cd ../search-api && npm install && npm run start:dev"
+echo "==> [4/4] Verifying"
+"$PY" verify_db.py
+
+echo "==> Boundary DB ready at ${OVERTURE_DB_PATH:-../overture-data/boundaries.sqlite}"
