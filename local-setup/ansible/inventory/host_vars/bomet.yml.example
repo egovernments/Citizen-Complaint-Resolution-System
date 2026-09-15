@@ -156,9 +156,6 @@ twilio_whatsapp_from: "whatsapp:+14155238886"
 enable_otp_services: false
 # Turbopass (OSM location autocomplete) — standalone on-box container.
 enable_turbopass: false
-# Self-hosted Overpass (boundary-polygon fetch) — falls back to public
-# overpass-api.de when off.
-enable_overpass: false
 
 # ── digit-integration-tests dashboards (off — not used on this box) ──
 enable_integration_tests: false

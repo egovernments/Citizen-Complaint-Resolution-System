@@ -15,8 +15,8 @@ Parts 40–50 describe our implementation and our history, and go stale when we 
 
 Adjacent docs, not duplicated here: [`docs/map-config.md`](../map-config.md) is
 authoritative for the `RAINMAKER-PGR.MapConfig` master;
-[`overpass/README.md`](../../overpass/README.md) and
-[`turbopass/README.md`](../../turbopass/README.md) are the operator runbooks.
+[`turbopass/README.md`](../../turbopass/README.md) is the operator runbook (the self-hosted
+Overpass add-on was retired in #999).
 
 ## The four access patterns
 
@@ -44,7 +44,7 @@ Three constraints that have each cost us a bug:
 
 | Service | Where | Hosting | Risk |
 |---|---|---|---|
-| Overpass | configurator onboarding (operator-triggered) | self-hostable (`enable_overpass`) | low |
+| Overpass | configurator onboarding (operator-triggered) | no longer called — self-hosting retired in #999 | low |
 | Place autocomplete | configurator boundary search | self-hosted only (`enable_turbopass`) | low |
 | Nominatim | citizen pin reverse-geocode + address search | public service only | **high — citizen hot path, no self-host option** |
 | Basemap tiles | every map | public CARTO / OSMF endpoints | **high — keyless courtesy endpoints** |

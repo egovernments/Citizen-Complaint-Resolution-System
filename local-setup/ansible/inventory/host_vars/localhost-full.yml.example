@@ -248,11 +248,6 @@ tolerate_bootstrap_failures: true
 # Values: true | false.
 enable_turbopass: false
 
-# Self-hosted Overpass for boundary-polygon fetch. Off means the configurator
-# uses the public overpass-api.de, which is rate-limited and 504-prone.
-# Requires a prepared OSM extract on the box first. Values: true | false.
-enable_overpass: false
-
 # ────────── Notifications (the full-vs-slim dividing line) ──────────
 #
 # THIS BLOCK IS THE ONLY FUNCTIONAL DIFFERENCE between this file and

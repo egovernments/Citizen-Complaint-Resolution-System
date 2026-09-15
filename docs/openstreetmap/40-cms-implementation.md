@@ -103,18 +103,15 @@ Basemap themes and every configuration semantic live in
 
 | Flag | Container | Port | nginx | Build |
 |---|---|---|---|---|
-| `enable_overpass` | `wiktorn/overpass-api` | `127.0.0.1:12346` | `/overpass/` | bakes `VITE_OVERPASS_URL=/overpass/api/interpreter` |
 | `enable_turbopass` | `turbopass-search:local` | `127.0.0.1:13301` | `/turbopass/` | client defaults to `/turbopass` |
 
-Both default to false in `local-setup/ansible/inventory/host_vars/_example.yml`, which also
-carries the ports, `overpass_data_dir`, `overpass_db_dir` and `overpass_planet_file`. The
-playbook sets `OVERPASS_META=no`, `OVERPASS_MODE=init` and `OVERPASS_RULES_LOAD`; nginx
-`/overpass/` and `/turbopass/` blocks render byte-identical when the flags are off (the
-trailing slash strips the prefix). Data prep is `overpass/prepare-extract.sh`.
-
-The deploy **warns rather than fails** when `enable_overpass: true` but no extract exists at
-`overpass_planet_file` — so a flag can be on with the service effectively absent. Triage
-order for "OSM search finds nothing" is in [part 20](20-services.md).
+It defaults to false in `local-setup/ansible/inventory/host_vars/_example.yml`, which also
+carries the port and `turbopass_overture_data_dir` — the offline Overture DB, built separately
+(see `turbopass/README.md`). The nginx `/turbopass/` block renders byte-identical when the flag
+is off (the trailing slash strips the prefix). The self-hosted Overpass add-on
+(`enable_overpass`) was retired in #999 once Phase 2 stopped querying Overpass; a deploy
+removes any leftover `bomet-overpass` container. Triage order for "OSM search finds nothing"
+is in [part 20](20-services.md).
 
 ## boundary-service quirks
 

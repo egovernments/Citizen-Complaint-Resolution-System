@@ -938,8 +938,7 @@ reachable.
 | **Novu notification stack** | `enable_novu` (+ `build_novu_dashboard`) | Notification infra only (no config) | `enable-notifications.sh` above is the full turn-key path |
 | **Keycloak SSO** | `enable_keycloak` + `nginx_features.keycloak` | Keycloak at `/auth/` + token exchange; optional Google IdP via `keycloak_google_client_*` | SPA switch to OIDC is a separate `auth_provider` step |
 | **Citizen UI v2** | `enable_digit_ui_v2` + `nginx_features.digit_ui_v2` | Vite + React 19 citizen SPA at `/citizen/` | Both flags, or the bundle sits on disk unreachable |
-| **Turbopass (OSM autocomplete)** | `enable_turbopass` | Self-hosted location search from a prepared OSM extract | Prepare the data dir on the controller first |
-| **Overpass (OSM queries)** | `enable_overpass` | Self-hosted Overpass API | Prepare the country extract first — see `overpass/README.md` |
+| **Turbopass (boundary search)** | `enable_turbopass` (+ `turbopass_overture_data_dir`) | Phase 2 boundary search + fetch from the offline Overture DB; optional Geoapify | Build the Overture DB first — see `turbopass/README.md` |
 | **Real OTP (production SMS)** | `enable_otp_services` | Real OTP delivery instead of the console mock | ALSO remove the Kong mock plugin + set a real `SMS_PROVIDER_CLASS` — see `kong/kong.yml` notes |
 | **Integration-test dashboards** | `enable_integration_tests` + `nginx_features.integration_tests` (+ `_runner` pair for in-dashboard runs) | Published Playwright dashboards at `/tests/` | Runner is CPU/RAM heavy — shares the box with the live stack |
 | **Brand assets** | `nginx_features.brand_assets` | Local logo/banner mirror at `/brand/` | |
