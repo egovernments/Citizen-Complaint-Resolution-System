@@ -15,7 +15,7 @@ severity/priority, no false triggers.
 Requirements: claude CLI (logged in), git, python3, certifi, openpyxl. The upload token is
 supplied at runtime via SECSCAN_TOKEN (never committed). See README.md.
 """
-import os, sys, json, subprocess, tempfile, shutil, datetime, re, glob, html
+import os, sys, json, subprocess, tempfile, shutil, datetime, re
 
 HOME = os.path.expanduser("~")
 TOOL_HOME = os.path.dirname(os.path.abspath(__file__))

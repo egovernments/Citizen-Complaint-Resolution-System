@@ -116,7 +116,6 @@ def autosize(ws, cols, data_rows):
             w = min(spec.get("max", 40), max(spec.get("min", 9), maxlen + 3))
         ws.column_dimensions[get_column_letter(ci)].width = w
     # row heights for wrapped columns
-    wrapcols = [(ci, spec) for ci, spec in enumerate(cols, 1) if spec.get("wrap")]
     for r in range(2, data_rows + 2):
         lines = 1
         for ci, spec in enumerate(cols, 1):

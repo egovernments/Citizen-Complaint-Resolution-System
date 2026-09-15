@@ -14,7 +14,7 @@ Env:
   SECSCAN_TOKEN   upload token (never committed); without it the scan runs but does not upload
   GITHUB_REPOSITORY / GITHUB_REF_NAME / GITHUB_SHA   provided by Actions (fallbacks below)
 """
-import os, sys, json, subprocess, datetime, base64, collections, re, argparse, tempfile
+import os, sys, json, subprocess, datetime, base64, collections, argparse, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -80,6 +80,7 @@ def line_in_manifest(pkg_name, rel_path):
             if out.stdout:
                 line = int(out.stdout.split(":", 1)[0])
         except Exception:
+            # best-effort: a missing file:line ref must never fail the scan
             pass
     _line_cache[key] = line
     return line
