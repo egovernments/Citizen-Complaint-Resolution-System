@@ -108,7 +108,8 @@
     "**/webpack-dev-server/ansi-html": "0.0.8",
     "**/@pmmmwh/react-refresh-webpack-plugin/ansi-html": "0.0.8",
     "**/@egovernments/digit-ui-react-components/ajv": "8.20.0",
-    "**/@egovernments/digit-ui-module-workbench/ajv": "8.20.0"
+    "**/@egovernments/digit-ui-module-workbench/ajv": "8.20.0",
+    "**/pdfkit": "0.12.3"
   },
   "scripts": {
     "start": "react-scripts start",
