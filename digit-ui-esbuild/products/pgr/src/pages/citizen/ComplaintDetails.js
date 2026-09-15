@@ -141,7 +141,12 @@ function WorkflowComponent({ complaintDetails, id }) {
   // mz.igsae CMS workflow) with no hardcoded status list, replacing the legacy
   // status-ordered <TimeLine>.
   const { isLoading: isWorkFlowLoading, data: workflowData, revalidate } = Digit.Hooks.useCustomAPIHook({
-    url: "/egov-workflow-v2/egov-wf/process/_search",
+    // CRQ v2 AC-03: read the chronology through pgr-services' filtered
+    // endpoint — same response shape, but employee comments/attachments and
+    // identities are stripped SERVER-SIDE for citizens instead of only being
+    // hidden by this page. (The raw workflow API returned everything to the
+    // citizen's token.)
+    url: "/pgr-services/v2/request/_chronology",
     params: { tenantId, history: true, businessIds: id },
     changeQueryName: id,
   });
@@ -224,6 +229,16 @@ function WorkflowComponent({ complaintDetails, id }) {
       // QA #19 part 1 (sheet v4): the citizen must not see which employee
       // handled the complaint — employee name + contact lines are omitted.
       hideEmployeeContacts
+      // Comments and attachments exchanged BETWEEN officers (assignment,
+      // escalation, internal notes) stay internal; the citizen sees the
+      // closing entry and their own submissions (CRQ v2 §3).
+      hideInternalNotes
+      // CRQ v2: the citizen's OWN name/number in the chronology are shown on a
+      // non-confidential complaint and masked on a confidential one.
+      maskConfidential={complaintDetails?.service?.extendedAttributes?.isConfidential === true}
+      // Who the complainant IS — the actor/complainant split matches on this
+      // uuid, not on the CITIZEN role (officers can hold it too).
+      complainantUuid={complaintDetails?.service?.citizen?.uuid || complaintDetails?.service?.accountId}
     />
   );
 }

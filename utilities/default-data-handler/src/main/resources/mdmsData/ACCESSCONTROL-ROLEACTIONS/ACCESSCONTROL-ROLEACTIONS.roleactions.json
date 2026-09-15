@@ -4885,5 +4885,138 @@
     "actioncode": "",
     "tenantId": "{tenantid}",
     "id": 2021
+  },
+  {
+    "rolecode": "SUPERVISOR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2022
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2023
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2024
+  },
+  {
+    "rolecode": "CSR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2025
+  },
+  {
+    "rolecode": "CITIZEN",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2026
+  },
+  {
+    "rolecode": "PGR_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2027
+  },
+  {
+    "rolecode": "CMS_SCREENING_OFFICER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2028
+  },
+  {
+    "rolecode": "CMS_RECEPTION_OFFICER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2029
+  },
+  {
+    "rolecode": "CMS_CASE_MANAGER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2030
+  },
+  {
+    "rolecode": "CMS_SUPERVISOR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2031
+  },
+  {
+    "rolecode": "CMS_DASHBOARD_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2032
+  },
+  {
+    "rolecode": "COMPLAINTS_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2033
+  },
+  {
+    "rolecode": "CENTRAL_USER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2034
+  },
+  {
+    "rolecode": "DEPARTMENT_USER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2035
+  },
+  {
+    "rolecode": "COMPLAINTS_CREATOR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2036
+  },
+  {
+    "rolecode": "COMPLAINTS_EDITOR",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2037
+  },
+  {
+    "rolecode": "CONFIDENTIAL_COMPLAINT_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2038
+  },
+  {
+    "rolecode": "CMS_ADMIN",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2039
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2635,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2040
   }
 ]
