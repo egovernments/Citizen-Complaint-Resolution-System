@@ -22,25 +22,19 @@ const maskPhone = (phone) => (phone ? MASKED : phone);
 //   RESOLVE / REJECT      the CLOSING ENTRY — the single exception the CRQ
 //                         allows: the outcome and its justification reach
 //                         the citizen
-//   AWAITINGINFORMATION   the CMS workflow's question put to the citizen
-//                         (INVESTIGATION --AWAITINGINFORMATION-->
-//                         INFOFROMCITIZEN). The CRQ change briefly removed it
-//                         on the theory the Reception Officer relays the
-//                         question, but the reply transition belongs to staff
-//                         and no notification reliably carries the comment —
-//                         the timeline IS the citizen's channel for it
-//                         (review of AC-03, flow-checked against
-//                         CmsPgrWorkflowConfig).
 //   APPLY / REOPEN / RATE / COMMENT-by-a-citizen  the citizen's own words
 // Every other employee step (ASSIGN, REASSIGN, ESCALATE, RESOLVEBYSUPERVISOR,
-// staff COMMENT) renders status-only: the citizen sees THAT the complaint
-// moved, never the internal text.
+// staff COMMENT, and AWAITINGINFORMATION — the officer's request for
+// information, per the product decision on issue #94: the citizen sees the
+// step, not the officer's text; the question is relayed out of band) renders
+// status-only: the citizen sees THAT the complaint moved, never the internal
+// text.
 //
 // The classification is by ACTION because a workflow comment is a plain string
 // with no audience field. Client-side filtering only — the CRQ's AC-03
 // (nothing in the API payload either) is enforced by the chronology endpoint,
 // whose CITIZEN_CONTENT_ACTIONS mirrors this set.
-const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "AWAITINGINFORMATION", "APPLY", "REOPEN", "RATE"]);
+const CITIZEN_FACING_ACTIONS = new Set(["RESOLVE", "REJECT", "APPLY", "REOPEN", "RATE"]);
 
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");

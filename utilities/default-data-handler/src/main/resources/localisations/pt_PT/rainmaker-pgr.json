@@ -1781,5 +1781,17 @@
         "message": "Comprovativo da Manifestação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_AWAITINGINFORMATION",
+        "message": "Aguarda informação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_PGR_COMMENT",
+        "message": "Comentário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

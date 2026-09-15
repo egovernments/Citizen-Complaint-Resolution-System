@@ -109,23 +109,27 @@ class ChronologyServiceTest {
     }
 
     @Test
-    void complainantKeepsTheQuestionPutToThem() {
+    void complainantSeesTheRequestForInformationStatusOnly() {
         // igsae CMS workflow: INVESTIGATION --AWAITINGINFORMATION--> INFOFROMCITIZEN.
-        // The officer's comment IS the question, and the timeline is the
-        // citizen's one reliable channel for it (the reply transition belongs
-        // to staff; no notification reliably carries the comment). Stripping
-        // it stalls the complaint on a question the citizen cannot see.
-        // Identity still never survives.
+        // Product decision (issue #94): the officer's request for information
+        // is internal like every other employee step. The citizen sees the
+        // step and its state (the complaint is waiting on them) but neither
+        // the officer's text nor attachments nor identity; the question is
+        // relayed out of band and staff record the answer.
         ObjectNode root = fixture();
         ObjectNode question = (ObjectNode) root.get("ProcessInstances").get(1);
         question.put("action", "AWAITINGINFORMATION");
         question.put("comment", "Por favor indique o numero do processo.");
+        ((ObjectNode) question.get("state")).put("state", "INFOFROMCITIZEN");
         ChronologyService.filterForRequester(root, requester("CITIZEN", COMPLAINANT, "CITIZEN"), ctx(false));
         JsonNode filtered = root.get("ProcessInstances").get(1);
-        assertEquals("Por favor indique o numero do processo.", filtered.get("comment").asText(),
-                "the request-for-information comment must reach the citizen");
-        assertEquals("secret-file-7", filtered.get("documents").get(0).get("fileStoreId").asText());
-        assertTrue(filtered.get("assigner").isNull(), "but never the employee identity");
+        assertEquals("AWAITINGINFORMATION", filtered.get("action").asText());
+        assertTrue(filtered.get("comment").isNull(), "the officer's question must not reach the citizen payload");
+        assertTrue(filtered.get("documents").isNull(), "nor its attachments");
+        assertTrue(filtered.get("assigner").isNull(), "nor the employee identity");
+        assertTrue(filtered.get("assignes").isNull());
+        // the step itself still shows: the citizen sees the complaint is waiting on them
+        assertEquals("INFOFROMCITIZEN", filtered.get("state").get("state").asText());
     }
 
     @Test

@@ -8345,5 +8345,17 @@
         "message": "Complaint Receipt",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "WF_PGR_AWAITINGINFORMATION",
+        "message": "Awaiting Information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "WF_PGR_COMMENT",
+        "message": "Comment",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
