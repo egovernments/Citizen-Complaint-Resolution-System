@@ -2074,7 +2074,32 @@
     # the published dev default. Checking the post-read value catches exactly
     # that, and also lets a tenant that set the secret straight in OpenBao
     # (`bao kv put`) with an empty host_vars pass.
-    - name: "Opt-in stacks — refuse to deploy on a published dev secret"
+    # Fresh deploys fail closed on a published dev secret; already-deployed boxes
+    # WARN and continue (operator decision, 2026-09-15).
+    #
+    # The fail-closed assert is correct for a NEW tenant — it must never come up
+    # on a public default. But hard-failing an EXISTING box mid-deploy is worse
+    # than the gap it guards: it aborts the whole play (so unrelated fixes — e.g.
+    # the AWS_KEY strip's filestore recreate — never run) over a weak secret that
+    # was already live before this deploy and is a separately-tracked finding.
+    # @dhruv-1001 hit exactly this: bomet's Elasticsearch runs on the published
+    # default, so the assert aborted before filestore could be recreated and the
+    # cluster-2 upload fix could take effect. So: fresh box (no prior .env) fails
+    # closed; existing box (prior .env present) gets a loud warning and proceeds,
+    # and the operator rotates the credential out of band.
+    - name: "Opt-in stacks — classify the box and build the dev-secret check list"
+      ansible.builtin.set_fact:
+        _existing_box: "{{ (prev_env.content is defined) and ((prev_env.content | b64decode | length) > 0) }}"
+        _optin_secret_checks:
+          - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
+          - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
+          - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
+          - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
+          - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
+          - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
+          - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
+
+    - name: "Opt-in stacks — refuse to deploy on a published dev secret (fresh boxes fail closed)"
       ansible.builtin.assert:
         that:
           - (bao_secrets.json.data.data[item.var] | default('')) | length > 0
@@ -2088,15 +2113,29 @@
           bootstrap_secrets in host_vars/{{ inventory_hostname }}.yml on a tenant
           whose OpenBao has not been seeded yet). These values are in a public
           repo, so the default is equivalent to no secret at all.
-      when: item.enabled
-      loop:
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_secret_key",            bad: "dev-novu-secret-key-change-in-production" }
-        - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_mongo_password",        bad: "secret" }
-        - { feature: "Keycloak (enable_keycloak)", enabled: "{{ enable_keycloak | default(false) }}", var: "keycloak_admin_password",  bad: "admin" }
-        - { feature: "MCP (enable_mcp)",         enabled: "{{ enable_mcp | default(false) }}",      var: "mcp_db_password",            bad: "mcp123" }
-        - { feature: "Search (enable_search_stack)", enabled: "{{ enable_search_stack | default(false) }}", var: "elasticsearch_password", bad: "changeme-elastic" }
+      when:
+        - item.enabled | bool
+        - not (_existing_box | bool)
+      loop: "{{ _optin_secret_checks }}"
+      loop_control:
+        label: "{{ item.feature }} / {{ item.var }}"
+
+    - name: "Opt-in stacks — WARN (do not abort) when an already-deployed box still runs on a published dev secret"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: {{ item.feature }} is enabled but `{{ item.var }}` is empty or
+          the published default in OpenBao on this already-deployed box. The
+          deploy is CONTINUING so an existing tenant is not bricked, but this
+          credential is public and equivalent to no secret at all — rotate it:
+          `bao kv put {{ secrets_path }} {{ item.var }}=<value>` and rotate the
+          live service to match. Fresh deploys fail closed on this.
+      when:
+        - item.enabled | bool
+        - _existing_box | bool
+        - >-
+          ((bao_secrets.json.data.data[item.var] | default('')) | length == 0)
+          or ((bao_secrets.json.data.data[item.var] | default('')) == item.bad)
+      loop: "{{ _optin_secret_checks }}"
       loop_control:
         label: "{{ item.feature }} / {{ item.var }}"
 
