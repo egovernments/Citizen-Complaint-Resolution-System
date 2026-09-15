@@ -54,7 +54,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .modnav{display:flex;flex-direction:column;gap:4px}
 .mod{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid transparent;
  background:none;color:var(--ink-2);font:inherit;font-weight:600;font-size:13.5px;padding:9px 11px;
- border-radius:10px;cursor:pointer;transition:.13s}
+ border-radius:10px;cursor:pointer;transition:.13s;text-decoration:none}
 .mod svg{width:17px;height:17px;flex:none;opacity:.8}
 .mod:hover{background:var(--surface-3)}
 .mod.active{background:var(--surface-3);color:var(--brand);border-color:var(--line-2);box-shadow:var(--sh-sm)}
@@ -270,14 +270,18 @@ details.grp>summary .cx{margin-left:auto;color:var(--faint);font-size:12px;font-
   </div>
   <div class="sb-label">Modules</div>
   <nav class="modnav" role="tablist" aria-label="Scan modules">
-   <button class="mod active" id="modAnsible" data-mod="ansible" type="button" onclick="selectModule('ansible')">
+   <a class="mod" id="modAnsible" data-mod="ansible" href="../ansible">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
     Ansible
-   </button>
-   <button class="mod disabled" id="modK8s" data-mod="k8s" type="button" onclick="selectModule('k8s')" title="Coming soon">
+   </a>
+   <a class="mod" id="modK8s" data-mod="k8s" href="../kubernetes" title="Coming soon">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 4.6v9.8l-8 4.6-8-4.6V7.1l8-4.6z"/><circle cx="12" cy="12" r="3"/></svg>
     Kubernetes<span class="soon">Soon</span>
-   </button>
+   </a>
+   <a class="mod" id="modCode" data-mod="code" href="../code">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    Code Base
+   </a>
   </nav>
   <div class="sb-foot">More scan modules on the way.</div>
  </aside>
@@ -381,8 +385,16 @@ const SOFT={CRITICAL:"#F8E7EA",HIGH:"#FCEAEA",MEDIUM:"#FFF1CC",LOW:"#EAF0FF"};  
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const cap=s=>s?s[0]+s.slice(1).toLowerCase():s;
-const fmtTime=ts=>{try{return ts?new Date(ts).toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'numeric',minute:'2-digit',hour12:true,timeZoneName:'short'}):"";}catch(e){return ts||"";}};
+// Local zone abbreviation (IST, CAT, EST...) from the long zone name's initials; browsers give
+// "GMT+5:30" for timeZoneName:'short' in many zones, so derive the abbreviation ourselves.
+const tzAbbr=d=>{try{const nm=(new Intl.DateTimeFormat('en-US',{timeZoneName:'long'}).formatToParts(d).find(p=>p.type==='timeZoneName')||{}).value||"";if(nm==='Coordinated Universal Time')return 'UTC';const ini=nm.split(/\s+/).filter(w=>/^[A-Z]/.test(w)).map(w=>w[0]).join("");if(ini.length>=2&&!/[0-9+]/.test(nm))return ini;const s=new Intl.DateTimeFormat('en-US',{timeZoneName:'short'}).formatToParts(d).find(p=>p.type==='timeZoneName');return s?s.value:"";}catch(e){return "";}};
+// 24-hour local time with the zone abbreviation, e.g. "Sep 11, 2026, 01:30 IST".
+const fmtTime=ts=>{try{if(!ts)return "";const d=new Date(ts);const day=d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});const tm=d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hourCycle:'h23'});const z=tzAbbr(d);return `${day}, ${tm}${z?' '+z:''}`;}catch(e){return ts||"";}};
 const fmtShort=ts=>{try{return ts?new Date(ts).toLocaleString(undefined,{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):"";}catch(e){return ts||"";}};
+// Report label shown in the viewer's own timezone: derive the time from the ISO ts (like the
+// Scanned chip) rather than the frozen label string, whose zone is the scanner host's (UTC in CI).
+const runName=r=>r.runner||((r.label||"").split(" - ")[0])||"";
+const runLabel=r=>{const t=fmtTime(r.ts);return t?`${runName(r)} - ${t}`:(r.label||r.date||"");};
 const PRO={P0:0,P1:1,P2:2,P3:3,"":4};
 const PRICOL ={P0:"#5B21B6",P1:"#C0267E",P2:"#047857",P3:"#5F6673"};  // solid: card border
 const PRISOFT={P0:"#EEE8FB",P1:"#FAE7F2",P2:"#E2F3EC",P3:"#ECEEF1"};  // soft: badge bg
@@ -440,15 +452,21 @@ function setTheme(dark){
 }
 function toggleTheme(){setTheme(!document.body.classList.contains("dark"));}
 
+let DATA_BASE="";   // "" for ansible (root), "source_code/" for the Code Base module
 async function boot(){
   let saved="light"; try{saved=localStorage.getItem("secdash-theme")||"light";}catch(e){}
   setTheme(saved==="dark");   // default light
+  // Route by URL path: /security_scan/(ansible|kubernetes|code); the root "/security_scan/" -> ansible.
+  const seg=(location.pathname.replace(/\/+$/,"").split("/").pop()||"").toLowerCase();
+  MODULE = seg==="code" ? "code" : (seg==="kubernetes"||seg==="k8s") ? "k8s" : "ansible";
+  document.querySelectorAll(".mod").forEach(b=>b.classList.toggle("active", b.dataset.mod===MODULE));
+  if(MODULE==="k8s"){ HASDATA=false; $("scope").textContent="Kubernetes Deployment — Coming soon"; renderModulePage(); return; }
+  DATA_BASE = "";   // each module lives in its own subdir and reads its own manifest.json + data/
   let manifest;
-  try{ manifest=await (await fetch("manifest.json",{cache:"no-store"})).json(); }
+  try{ manifest=await (await fetch(DATA_BASE+"manifest.json",{cache:"no-store"})).json(); }
   catch(e){ HASDATA=false; renderModulePage(); return; }
   RUNS=manifest.runs||[]; REPORUNS=RUNS;
   if(!RUNS.length){ HASDATA=false; renderModulePage(); return; }
-  MODULE="ansible"; document.querySelectorAll(".mod").forEach(b=>b.classList.toggle("active", b.dataset.mod==="ansible"));
   buildSelector(); drawTrend(REPORUNS); selectRun(0);
 }
 
@@ -460,7 +478,7 @@ function buildSelector(){
       const tag=i===0?`<span class="rsel-tag">Latest</span>`:"";
       const bits=[esc(r.branch),`${r.occurrences} occ`].filter(Boolean);
       return `<button class="rsel-item" role="option" data-i="${i}" aria-selected="${i===0}">
-        <span class="rsel-when">${esc(r.label||fmtTime(r.ts)||r.date)}${tag}</span>
+        <span class="rsel-when">${esc(runLabel(r))}${tag}</span>
         <span class="rsel-sub">${bits.map((b,j)=>`${j?'<span class="rsel-dot"></span>':''}<span>${b}</span>`).join("")}</span>
       </button>`;
     }).join("");
@@ -468,7 +486,7 @@ function buildSelector(){
 }
 function selectRun(i){
   RUNI=i; const r=REPORUNS[i]||{};
-  $("runBtnLabel").textContent=r.label||fmtTime(r.ts)||r.date||"—";
+  $("runBtnLabel").textContent=runLabel(r)||"—";
   CURXLSX=r.xlsxUrl||"";
   $("runMenu").querySelectorAll(".rsel-item").forEach((el,j)=>el.setAttribute("aria-selected",j===i));
   loadRun(r.file);
@@ -481,7 +499,8 @@ document.addEventListener("click",e=>{if(!$("rsel").contains(e.target))closeMenu
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeMenu();});
 
 async function loadRun(file){
-  let d; try{ d=await (await fetch(file,{cache:"no-store"})).json(); }catch(e){ return; }
+  let d; try{ d=await (await fetch(DATA_BASE+file,{cache:"no-store"})).json(); }catch(e){ return; }
+  if((d.meta||{}).kind==="source-code"){ renderCode(d); return; }   // Code Base module
   const m=d.meta,s=d.summary;
   // fold any legacy Info (older runs) into Low so historical reports render on the 4-level scale
   (d.findings||[]).forEach(f=>{ if(f.severity==="INFO") f.severity="LOW"; });
@@ -590,6 +609,57 @@ function card(f,isAction){
     <div class="b"><div class="k">How to fix ${vmark}</div>${esc(f.fix)}</div></div>
    <div class="loc1">First location: ${firstLink}</div>${det}
   </div>`;
+}
+
+/* ---- Code Base module: OSV-Scanner dependency vulnerabilities (reuses the same shell) ---- */
+const ECOCOL={npm:"#b5372f",Maven:"#7a4ea0",Go:"#1e7f9c"};
+function shortPath(p){const a=String(p).split("/");return a.length>2?".../"+a.slice(-2).join("/"):p;}
+function renderCode(d){
+  const m=d.meta||{}, s=d.summary||{}, bySev=s.bySeverity||{};
+  $("scope").textContent = m.scope || "Source Code — Dependency Vulnerabilities";
+  // posture pill
+  const p=$("posture"),pt=$("postureTxt"); p.style.display="";
+  const high=(bySev.CRITICAL||0)+(bySev.HIGH||0);
+  if(!s.cve){pt.textContent="No known CVEs";p.style.background="#16a34a";}
+  else if(high){pt.textContent="Action required";p.style.background="#b91c1c";}
+  else{pt.textContent="Review recommended";p.style.background="#b45309";}
+  // metabar (same chips as Ansible)
+  const commit=`<a href="https://github.com/${m.repo}/commit/${m.sha}" target="_blank" rel="noopener"><b>${esc(m.shaShort)}</b></a>`;
+  $("metabar").innerHTML=
+    `<span class="chip blu"><span class="k">Repo</span><b>${esc(m.repo)}</b></span>`+
+    `<span class="chip blu"><span class="k">Branch</span><b>${esc(m.branch)}</b></span>`+
+    `<span class="chip"><span class="k">Commit</span>${commit}</span>`+
+    `<span class="chip"><span class="k">Engine</span><b>${esc(m.engine||"OSV-Scanner")}</b></span>`+
+    `<span class="chip"><span class="k">Scanned</span><b>${esc(fmtTime(m.ts)||m.date)}</b></span>`+
+    `<span class="chip"><a href="${esc(m.runUrl)}" target="_blank" rel="noopener">source ↗</a></span>`;
+  // ansible-only chrome hidden for this module
+  $("execWrap").style.display="none"; $("priWrap").style.display="none";
+  $("xlsxBtn").style.display="none";
+  const fp=$("fpToggle"); if(fp&&fp.closest("label")) fp.closest("label").style.display="none";
+  // Overview: severity donut + "By project" table
+  drawDonut(bySev);
+  const areaHdr=$("areaTable").closest("section").querySelector(".h2 .t"); if(areaHdr) areaHdr.textContent="By project";
+  $("areaTable").innerHTML=(d.projects||[]).map(pr=>
+    `<tr><td>${esc(pr.name)} <span class="tag">${esc(pr.ecosystem)}</span></td><td class="r">${pr.cve||0}</td></tr>`
+  ).join("")||'<tr><td class="muted">None</td></tr>';
+  // Vulnerabilities: risk summary grouped by severity, each CVE with ecosystem + file:line ref + count
+  $("riskHead").innerHTML=`<div class="rsub"><b>${s.cve}</b> CVEs across <b>${s.projects}</b> projects</div>`;
+  const showSev=SEV.filter(sv=>(bySev[sv]||0)>0);
+  $("highWrap").innerHTML=showSev.map(sv=>{
+    const n=bySev[sv]||0;
+    const items=(d.findings||[]).filter(f=>f.severity===sv);
+    let h=`<div class="sevrow"><span class="hdot" style="background:${COL[sv]}"></span><b>${cap(sv)}</b><span class="sevn">· ${n}</span></div>`;
+    if(items.length) h+=`<ul class="catlist">`+items.map(f=>{
+      const loc=(f.locations||[])[0];
+      const ec=`<span class="tag" style="background:${ECOCOL[f.ecosystem]||''};${ECOCOL[f.ecosystem]?'color:#fff;border-color:transparent':''}">${esc(f.ecosystem||"")}</span>`;
+      const ref=loc?`<a class="tag" href="${esc(loc.url)}" target="_blank" rel="noopener"><code>${esc(shortPath(loc.path))}${loc.line?":L"+loc.line:""}</code></a>`:"";
+      return `<li><span class="ct">${esc(f.summary)}<span class="muted"> · ${esc(f.package)}</span></span>${ec}${ref}<span class="cn">${f.count}</span></li>`;
+    }).join("")+`</ul>`;
+    return h;
+  }).join("");
+  const sec2=$("prioTitle").closest("section"); if(sec2) sec2.style.display="none";   // hide Ansible action-required section
+  $("foot").innerHTML=`Report-only · OSV-Scanner dependency vulnerabilities across the code dirs (backend, frontend, digit-ui-esbuild, digit-ui-v2) · file links open the exact line on commit ${esc(m.shaShort)}.`;
+  CUR=d; HASDATA=true; renderModulePage();
 }
 
 function drawDonut(occ){

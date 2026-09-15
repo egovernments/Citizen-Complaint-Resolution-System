@@ -500,6 +500,20 @@ test("a provider waits for the surface to be decidable, then activates on the ro
   assert.equal(t.scripts.length, 1);
 });
 
+test("the public tutorial page counts as the citizen surface", () => {
+  // FC-0009 (monitor landing AND tutorial access): /tutorial is a shell-free
+  // public route like /landing. Found live on UAT — the landing sent its page
+  // view, the tutorial sent nothing, because only landing/privacy-policy were
+  // recognised as public citizen segments and the provider stayed deferred.
+  const t = loadShim({
+    pathname: "/digit-ui/tutorial",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", Object.assign({}, MATOMO_OK, { surfaces: "citizen" }))] : []),
+  });
+  t.flush();
+  assert.equal(t.internal.providers(), 1, "a citizen-scoped provider must activate on the tutorial page");
+  assert.equal(t.scripts.length, 1, "and load its tracker");
+});
+
 test("a record scoped to the other surface stays inert", () => {
   const t = loadShim({
     pathname: "/digit-ui/employee/pgr/inbox",

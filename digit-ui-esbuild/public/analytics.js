@@ -373,7 +373,11 @@
    * carry no /citizen|/employee segment, but "unknown" would keep every
    * provider deferred forever there, making the public landing invisible.
    * They are citizen-facing, so they count as the citizen surface. */
-  var PUBLIC_CITIZEN_SEGMENTS = ["landing", "privacy-policy"];
+  /* "tutorial" is the public help page linked from the landing header
+   * (core App.js routes /<contextPath>/tutorial shell-free, like the landing).
+   * Without it here the surface resolved to "unknown" and the tutorial sent
+   * nothing — verified live: zero matomo.php hits on /digit-ui/tutorial. */
+  var PUBLIC_CITIZEN_SEGMENTS = ["landing", "privacy-policy", "tutorial"];
 
   function currentSurface() {
     var p = "";

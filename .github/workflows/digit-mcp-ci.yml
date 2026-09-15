@@ -17,6 +17,9 @@ defaults:
   run:
     working-directory: digit-mcp
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

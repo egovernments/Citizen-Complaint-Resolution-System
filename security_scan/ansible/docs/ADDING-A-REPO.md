@@ -1,11 +1,11 @@
 # Deploying the scanner in another repo
 
-The tool is per-repo: each repo carries its own copy of `security-scan/`. To add it to another
+The tool is per-repo: each repo carries its own copy of `security_scan/ansible/`. To add it to another
 CMS repo (e.g. `CMS-KENYA`), copy the folder and change a handful of hard-coded values.
 
 ## Steps
 
-1. **Copy** `security-scan/` into the target repo's root (on a branch, e.g. `security/security-scan`).
+1. **Copy** `security_scan/ansible/` into the target repo's root (on a branch, e.g. `security/security-scan`).
 
 2. **Edit `scan.py`** — the per-repo config block near the top:
    ```python
@@ -32,7 +32,7 @@ CMS repo (e.g. `CMS-KENYA`), copy the folder and change a handful of hard-coded 
 
 6. **Enable GitHub Pages** on the new repo (Settings → Pages → branch `gh-pages` `/`).
 
-7. **Merge** the branch to master so `curl …/master/security-scan/run.sh` resolves.
+7. **Merge** the branch to master so `curl …/master/security_scan/ansible/run.sh` resolves.
 
 ## What does NOT change
 

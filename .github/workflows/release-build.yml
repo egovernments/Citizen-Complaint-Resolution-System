@@ -20,6 +20,9 @@ concurrency:
   group: release-${{ github.event.release.tag_name }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build:
     uses: ./.github/workflows/build-images.yml

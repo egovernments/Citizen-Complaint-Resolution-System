@@ -1,0 +1,57 @@
+# ---------------------------------------------------------------------------
+# Source-code dependency vulnerability scan configuration for CMS-MOZAMBIQUE.
+#
+# Each entry under `projects:` is one scan target: a project directory + the
+# ecosystem of the manifest/lockfile it ships. security_scan/code-base/scan.py reads this file,
+# scans each project independently with OSV-Scanner, and publishes a per-project
+# report to Drive + the gh-pages dashboard ("Source Code" module).
+#
+# ecosystem: maven | npm | gomod | pip | gradle | auto  ("auto" = detect from manifest)
+# lockfile:  optional - pin one lockfile when a dir has several (avoids double-count)
+# ---------------------------------------------------------------------------
+version: 1
+scanner: osv-scanner
+
+defaults:
+  severities: [CRITICAL, HIGH, MEDIUM, LOW]
+  fail_on: never          # report-only; never fail the CI job on findings
+
+projects:
+  # ----- backend: Java (Maven) -----
+  - name: pgr-services
+    path: backend/pgr-services
+    ecosystem: maven
+  - name: novu-bridge
+    path: backend/novu-bridge
+    ecosystem: maven
+  - name: digit-config-service
+    path: backend/digit-config-service
+    ecosystem: maven
+
+  # ----- backend: Go -----
+  - name: digit-user-preferences-service
+    path: backend/digit-user-preferences-service
+    ecosystem: gomod
+
+  # ----- backend: Node sub-apps -----
+  - name: novu-bridge-endpoint
+    path: backend/novu-bridge-endpoint
+    ecosystem: npm
+  - name: xstate-chatbot-nodejs
+    path: backend/xstate-chatbot/nodejs
+    ecosystem: npm
+  - name: xstate-chatbot-react
+    path: backend/xstate-chatbot/react-app
+    ecosystem: npm
+
+  # ----- frontend / UI apps: Node (React) -----
+  - name: micro-ui
+    path: frontend/micro-ui/web
+    ecosystem: npm
+    lockfile: package-lock.json     # this dir also has yarn.lock
+  - name: digit-ui-esbuild
+    path: digit-ui-esbuild
+    ecosystem: npm
+  - name: digit-ui-v2
+    path: digit-ui-v2
+    ecosystem: npm
