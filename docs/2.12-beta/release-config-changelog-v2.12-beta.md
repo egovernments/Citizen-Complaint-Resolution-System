@@ -21,7 +21,7 @@ All MDMS-v2 master data lives under `utilities/default-data-handler` (auto-seede
 - **`RAINMAKER-PGR.ComplaintExtendedAttributeSchema`** (NEW) — per-`schemaRef` JSON-Schema fragments for extended/confidential complaint fields (e.g. `IgeComplaintExtendedAttributes`), with `x-security` attribute lists.
 - **`RAINMAKER-PGR.ComplaintRelatedToMap`** (NEW) — lookup driving which extended-attribute schema applies to a complaint (`IGE`, `IGSAE` codes).
 - **`RAINMAKER-PGR.ComplaintTemplateType`** (NEW) — joins `caseRelatedTo` → `schemaRef` + allowed document types + allowed viewer roles (e.g. `CONFIDENTIAL_COMPLAINT_VIEWER`).
-- **`RAINMAKER-PGR.EscalationConfig`** (NEW) — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing `[1h,4h,24h]` absolute ladder remains a fallback, and no record falls back to the service's 5-day value.
+- **`RAINMAKER-PGR.EscalationConfig`** (NEW) — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing `[1h,4h,24h]` absolute ladder remains a fallback, and no record expands the service's 5-day interval to cumulative 5 / 10 / 15-day thresholds.
 - **`RAINMAKER-PGR.MapConfig`** (NEW schema, no default data) — per-tenant map tiles/center/zoom/geocode-bbox config. Opt-in; UI falls back to globalConfigs/built-in defaults if no record exists.
 - **`RAINMAKER-PGR.InboxVisibilityConfig`** (NEW schema, no default data) — feature flag + config for the employee inbox "My/All" tabs (Visibility V1). Missing record = legacy inbox behaviour; safe by default.
 

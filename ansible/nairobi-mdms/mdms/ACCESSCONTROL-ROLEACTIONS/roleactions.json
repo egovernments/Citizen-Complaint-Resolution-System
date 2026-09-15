@@ -30098,5 +30098,25 @@
       "tenantId": "ke",
       "actioncode": ""
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2110,
+      "actionid": 2649,
+      "rolecode": "SUPERUSER",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2111,
+      "actionid": 2650,
+      "rolecode": "SUPERUSER",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
   }
 ]

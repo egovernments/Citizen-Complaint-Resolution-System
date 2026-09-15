@@ -61,7 +61,7 @@ public class EscalationConfigurationService {
                 mdmsConfig == null ? null : mdmsConfig.get("defaultSlaPercentageByLevel"));
         List<Long> defaultSlas = numberList(mdmsConfig == null ? null : mdmsConfig.get("defaultSlaByLevel"));
         if (defaultSlas.isEmpty()) {
-            defaultSlas = Collections.singletonList(config.getEscalationDefaultSlaMs());
+            defaultSlas = fallbackSlaLadder(config.getEscalationDefaultSlaMs(), maxDepth);
         }
         List<Boolean> enabledByLevel = booleanList(mdmsConfig == null ? null : mdmsConfig.get("enabledByLevel"));
         List<String> eligibleStatuses = stringList(mdmsConfig == null ? null : mdmsConfig.get("eligibleStatuses"));
@@ -112,12 +112,12 @@ public class EscalationConfigurationService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to discover city tenants below {}; caller must use a state-wide fallback scan",
+            log.warn("Failed to discover city tenants below {}; caller must use complaint-table discovery",
                     stateTenant, e);
             return Collections.emptyList();
         }
         if (discoveredTenants.isEmpty()) {
-            log.warn("No active tenants discovered below {}; caller must use a state-wide fallback scan",
+            log.warn("No active tenants discovered below {}; caller must use complaint-table discovery",
                     stateTenant);
             return Collections.emptyList();
         }
@@ -209,10 +209,19 @@ public class EscalationConfigurationService {
             return Collections.emptyList();
         }
         List<Long> result = new ArrayList<>();
+        long previous = -1;
         for (Object item : values) {
-            if (item instanceof Number number && number.longValue() >= 0) {
-                result.add(number.longValue());
+            if (!(item instanceof Number number)) {
+                log.error("Ignoring invalid cumulative absolute escalation ladder {}", value);
+                return Collections.emptyList();
             }
+            long threshold = number.longValue();
+            if (number.doubleValue() != threshold || threshold < 0 || threshold <= previous) {
+                log.error("Ignoring non-increasing cumulative absolute escalation ladder {}", value);
+                return Collections.emptyList();
+            }
+            result.add(threshold);
+            previous = threshold;
         }
         return result;
     }
@@ -225,16 +234,34 @@ public class EscalationConfigurationService {
         long previous = 0;
         for (Object item : values) {
             if (!(item instanceof Number number)) {
+                log.error("Ignoring invalid cumulative percentage escalation ladder {}", value);
                 return Collections.emptyList();
             }
             long percentage = number.longValue();
             if (number.doubleValue() != percentage || percentage <= previous || percentage > 200) {
+                log.error("Ignoring invalid cumulative percentage escalation ladder {}; values must increase and be <= 200", value);
                 return Collections.emptyList();
             }
             percentages.add(percentage);
             previous = percentage;
         }
         return percentages;
+    }
+
+    private static List<Long> fallbackSlaLadder(Long intervalMs, int maxDepth) {
+        if (intervalMs == null || intervalMs < 0 || maxDepth <= 0) {
+            return Collections.emptyList();
+        }
+        List<Long> result = new ArrayList<>(maxDepth);
+        for (int level = 1; level <= maxDepth; level++) {
+            try {
+                result.add(Math.multiplyExact(intervalMs, (long) level));
+            } catch (ArithmeticException overflow) {
+                result.add(Long.MAX_VALUE);
+                break;
+            }
+        }
+        return result;
     }
 
     private static List<Boolean> booleanList(Object value) {
@@ -298,26 +325,26 @@ public class EscalationConfigurationService {
 
         public long resolveSla(String serviceCode, int level) {
             OverrideConfig override = override(serviceCode);
-            boolean overridesTiming = !override.percentages.isEmpty() || !override.slas.isEmpty();
-            List<Long> percentages = overridesTiming ? override.percentages : defaultPercentages;
+            List<Long> percentages = override.percentages.isEmpty()
+                    ? defaultPercentages : override.percentages;
             Long complaintSla = complaintSlas.get(serviceCode);
             if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
                 return percentageOf(complaintSla, valueAt(percentages, level));
             }
-            List<Long> slas = overridesTiming && !override.slas.isEmpty() ? override.slas : defaultSlas;
+            List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
             return valueAt(slas, level);
         }
 
         /** Percentage ladders are finite: their last entry is the final escalation. */
         public int effectiveMaxDepth(String serviceCode) {
             OverrideConfig override = override(serviceCode);
-            boolean overridesTiming = !override.percentages.isEmpty() || !override.slas.isEmpty();
-            List<Long> percentages = overridesTiming ? override.percentages : defaultPercentages;
+            List<Long> percentages = override.percentages.isEmpty()
+                    ? defaultPercentages : override.percentages;
             Long complaintSla = complaintSlas.get(serviceCode);
             if (complaintSla != null && complaintSla > 0 && !percentages.isEmpty()) {
                 return Math.min(maxDepth, percentages.size());
             }
-            List<Long> slas = overridesTiming && !override.slas.isEmpty() ? override.slas : defaultSlas;
+            List<Long> slas = override.slas.isEmpty() ? defaultSlas : override.slas;
             return Math.min(maxDepth, slas.size());
         }
 

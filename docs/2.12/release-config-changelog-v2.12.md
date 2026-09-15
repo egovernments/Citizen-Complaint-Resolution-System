@@ -22,7 +22,7 @@ This lists every config key, master data change, and infra change in this releas
 
 #### Access Control / RBAC
 
-* `RAINMAKER-PGR.EscalationConfig` *(new)* — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing 1h/4h/24h absolute ladder remains a compatibility fallback, and no record falls back to the service's 5-day value.
+* `RAINMAKER-PGR.EscalationConfig` *(new)* — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing 1h/4h/24h absolute ladder remains a compatibility fallback, and no record expands the service's 5-day interval to cumulative 5 / 10 / 15-day thresholds.
 * `RAINMAKER-PGR.MapConfig`, `.InboxVisibilityConfig` *(new, schema only)* — per-tenant map settings and the "My/All" inbox visibility flag. No default data; safe by default if absent.
 * `RAINMAKER-PGR.ComplaintExtendedAttributeSchema`, `.ComplaintRelatedToMap`, `.ComplaintTemplateType` *(new)* — confidential/extended complaint fields.
 * New role `CMS_SCREENING_OFFICER` *(new)* — screens complaints and routes them to the right department.

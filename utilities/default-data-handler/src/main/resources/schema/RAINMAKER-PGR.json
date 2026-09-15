@@ -68,7 +68,7 @@
         },
         "defaultSlaByLevel": {
           "type": "array",
-          "description": "Absolute cumulative complaint-age thresholds in milliseconds. Used only when a percentage ladder or ComplaintHierarchy.slaHours is unavailable.",
+          "description": "Strictly increasing absolute cumulative complaint-age thresholds in milliseconds. Used only when a percentage ladder or ComplaintHierarchy.slaHours is unavailable; the application enforces ordering.",
           "items": {
             "type": "integer",
             "minimum": 0
@@ -101,8 +101,10 @@
               {
                 "type": "array",
                 "items": {
-                  "type": "number"
-                }
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 1
               },
               {
                 "type": "object",
@@ -114,13 +116,16 @@
                       "exclusiveMinimum": 0,
                       "maximum": 200
                     },
+                    "minItems": 1,
                     "uniqueItems": true
                   },
                   "slaByLevel": {
                     "type": "array",
                     "items": {
-                      "type": "number"
-                    }
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minItems": 1
                   },
                   "enabledByLevel": {
                     "type": "array",

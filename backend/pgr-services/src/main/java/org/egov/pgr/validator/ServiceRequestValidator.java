@@ -79,7 +79,14 @@ public class ServiceRequestValidator {
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
-        validateDepartment(request, mdmsData);
+        // ESCALATE is server-targeted after validation. Validating an optional
+        // caller-supplied UUID here can reject the correct cross-department
+        // reportingTo, while omitting the UUID succeeds. EscalationService owns
+        // and validates that target; department validation remains for assignment.
+        if (request.getWorkflow() == null
+                || !ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            validateDepartment(request, mdmsData);
+        }
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
         criteria.setIsPlainSearch(false);
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);

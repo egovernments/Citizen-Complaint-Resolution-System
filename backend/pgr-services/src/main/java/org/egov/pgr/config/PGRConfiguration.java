@@ -353,6 +353,9 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.max.depth}")
     private Integer escalationMaxDepth;
 
+    @Value("${pgr.escalation.claim.ttl.ms:300000}")
+    private Long escalationClaimTtlMs;
+
     @Value("#{'${pgr.escalation.eligible.statuses:PENDINGATLME,PENDINGFORASSIGNMENT}'.split(',')}")
     private java.util.List<String> escalationEligibleStatuses;
 

@@ -1592,7 +1592,6 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async update(resource, params): Promise<UpdateResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        rejectLegacyPgrEscalationWrite(config, params.data as Record<string, unknown>);
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
         // Opt-in reactivation: when meta.includeInactive is set, fall back to a
         // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
@@ -1617,6 +1616,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        // React-admin may send only dirty fields. Validate the authoritative
+        // merged record so partial updates, updateMany, and reactivation cannot
+        // revive a competing PGR Workflow.AutoEscalation policy.
+        rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, true);
         if (config.leafServiceDefAdapter) {
           const all = await mdmsGetList(client, config, tenantId);

@@ -160,7 +160,7 @@ class PGRServiceTest {
         when(config.getInboxUpdateTopic()).thenReturn("pgr-inbox-update");
         when(config.getEscalationKafkaTopic()).thenReturn("pgr-escalation-events");
         when(escalationService.buildEscalationEvent(request)).thenReturn(Map.of("serviceRequestId", "PGR-1"));
-        when(escalationService.withComplaintLock(any(), any(), any())).thenAnswer(invocation -> {
+        when(escalationService.withComplaintLease(any(), any(), any())).thenAnswer(invocation -> {
             Supplier<ServiceRequest> operation = invocation.getArgument(2);
             return operation.get();
         });

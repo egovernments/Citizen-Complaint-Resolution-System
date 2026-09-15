@@ -123,6 +123,7 @@ public class PGRService {
 		ExtendedAttributes ext = service.getExtendedAttributes();
 		ComplaintTemplateTypeConfig cfg = null;
 		ExtendedAttributes plainExt = null;
+		EnrichmentService.UserContactDetails pendingContact = null;
 		if (ext != null) {
 			if (ext.getIsConfidential() == null) ext.setIsConfidential(false);
 			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
@@ -134,7 +135,7 @@ public class PGRService {
 			plainExt = ext.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
 			service.setExtendedAttributes(
 					encryptionDecryptionService.encrypt(ext, cfg, tenantId));
-			enrichmentService.enrichUserContactDetails(request);
+			pendingContact = enrichmentService.detachUserContactDetails(request);
 		}
 
 		workflowService.updateWorkflowStatus(request);
@@ -143,6 +144,7 @@ public class PGRService {
 
 		producer.push(tenantId, config.getCreateTopic(), request);
 		producer.push(tenantId, config.getInboxCreateTopic(), request);
+		syncUserContactDetailsAfterPersistence(request, pendingContact);
 
 		if (plainExt != null)
 			service.setExtendedAttributes(plainExt);
@@ -225,22 +227,22 @@ public class PGRService {
      * @return
      */
     public ServiceRequest update(ServiceRequest request){
-        return updateWithEscalationLock(request, false);
+        return updateWithEscalationClaim(request, false);
     }
 
     /** Scheduler entry point: same update pipeline, with unchanged encrypted fields preserved. */
     public ServiceRequest updateAutomaticEscalation(ServiceRequest request) {
-        return updateWithEscalationLock(request, true);
+        return updateWithEscalationClaim(request, true);
     }
 
-    private ServiceRequest updateWithEscalationLock(ServiceRequest request, boolean automaticEscalation) {
+    private ServiceRequest updateWithEscalationClaim(ServiceRequest request, boolean automaticEscalation) {
         boolean escalation = request.getWorkflow() != null
                 && org.egov.pgr.util.PGRConstants.ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction());
         if (!escalation) {
             return updateInternal(request, false);
         }
         Service service = request.getService();
-        return escalationService.withComplaintLock(service.getTenantId(), service.getServiceRequestId(),
+        return escalationService.withComplaintLease(service.getTenantId(), service.getServiceRequestId(),
                 () -> updateInternal(request, automaticEscalation));
     }
 
@@ -272,6 +274,7 @@ public class PGRService {
 		ExtendedAttributes updatedExt = updateService.getExtendedAttributes();
 		ComplaintTemplateTypeConfig cfg = null;
 		ExtendedAttributes plainExt = null;
+		EnrichmentService.UserContactDetails pendingContact = null;
 		if (updatedExt != null && !automaticEscalation) {
 			if (updatedExt.getIsConfidential() == null) updatedExt.setIsConfidential(false);
 			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
@@ -288,7 +291,7 @@ public class PGRService {
 				encryptionDecryptionService.maskAll(plainExt);
 			updateService.setExtendedAttributes(
 					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
-			enrichmentService.enrichUserContactDetails(request);
+			pendingContact = enrichmentService.detachUserContactDetails(request);
 		}
 
         workflowService.updateWorkflowStatus(request);
@@ -301,11 +304,24 @@ public class PGRService {
             producer.push(tenantId, config.getEscalationKafkaTopic(),
                     escalationService.buildEscalationEvent(request));
         }
+		syncUserContactDetailsAfterPersistence(request, pendingContact);
 
 		if (plainExt != null)
 			updateService.setExtendedAttributes(plainExt);
 
         return request;
+    }
+
+    private void syncUserContactDetailsAfterPersistence(
+            ServiceRequest request, EnrichmentService.UserContactDetails pendingContact) {
+        try {
+            enrichmentService.syncUserContactDetails(request, pendingContact);
+        } catch (Exception e) {
+            // Workflow and complaint persistence have already been accepted. Do not
+            // report the complaint update as failed and invite a duplicate transition.
+            log.error("Complaint {} persisted but User Service contact sync failed",
+                    request.getService().getServiceRequestId(), e);
+        }
     }
 
     /**

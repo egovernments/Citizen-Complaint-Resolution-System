@@ -175,7 +175,7 @@ A complaint that stays unresolved past its allowed time moves up automatically �
 | | |
 |---|---|
 | Enable/disable | On by default (`pgr.escalation.enabled=true`); per-deployment override `PGR_ESCALATION_ENABLED`. |
-| City data | `RAINMAKER-PGR.EscalationConfig` — cumulative percentage thresholds against `ComplaintHierarchy.slaHours`, optional exact-service-code overrides, and absolute fallback thresholds. Design default: 80% / 120% / 200%, with 1 h / 4 h / 24 h as fallback — but this master has **no generic live seed path**, so an unseeded tenant uses the service's configured 5-day fallback. |
+| City data | `RAINMAKER-PGR.EscalationConfig` — cumulative percentage thresholds against `ComplaintHierarchy.slaHours`, optional exact-service-code overrides, and absolute fallback thresholds. Design default: 80% / 120% / 200%, with 1 h / 4 h / 24 h as fallback — but this master has **no generic live seed path**, so an unseeded tenant uses cumulative 5 / 10 / 15-day thresholds expanded from the service's configured 5-day interval. |
 | Service settings | `pgr.escalation.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — **this messaging topic must exist** while escalation is on. |
 | Prerequisite | `Workflow.BusinessServiceMasterConfig` must contain a `PGR` row (`active:true, isStatelevel:true`). |
 

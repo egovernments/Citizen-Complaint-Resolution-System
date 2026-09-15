@@ -60,6 +60,12 @@ describe('createDigitDataProvider', () => {
   });
 
   it('rejects PGR writes through the competing generic workflow escalation masters', async () => {
+    mock.method(client, 'mdmsSearch', async () => [{
+      id: 'legacy-pgr', tenantId: 'pg', schemaCode: 'Workflow.AutoEscalationStatesToIgnore',
+      uniqueIdentifier: 'PGR', data: { businessService: 'PGR', module: 'PGR' },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    }]);
     const dp = createDigitDataProvider(client, 'pg');
     await assert.rejects(
       () => dp.create('auto-escalation', {
@@ -70,7 +76,8 @@ describe('createDigitDataProvider', () => {
     await assert.rejects(
       () => dp.update('auto-escalation-ignore', {
         id: 'PGR',
-        data: { businessService: 'PGR', module: 'PGR' },
+        // Partial dirty-field payload: the guard must use the merged server row.
+        data: { active: true },
         previousData: { businessService: 'PGR', module: 'PGR' },
       }),
       /configured only through RAINMAKER-PGR.EscalationConfig/,

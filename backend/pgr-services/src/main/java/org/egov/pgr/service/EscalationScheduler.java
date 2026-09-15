@@ -66,28 +66,31 @@ public class EscalationScheduler {
         RequestInfo systemRequestInfo = buildSystemRequestInfo(tenantId);
 
         List<String> stateTenants = configurationService.resolveStateTenants(systemRequestInfo, tenantId);
-        boolean exactTenantScan = !stateTenants.isEmpty();
+        if (stateTenants.isEmpty()) {
+            try {
+                stateTenants = repository.getComplaintTenantIds(tenantId);
+                log.warn("Tenant-master discovery failed; scanning complaint tenants {}", stateTenants);
+            } catch (Exception e) {
+                log.error("Both tenant-master and complaint-tenant discovery failed for {}; skipping scan",
+                        tenantId, e);
+                return;
+            }
+        }
         Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache = new HashMap<>();
         ScanResult total = new ScanResult();
-        if (exactTenantScan) {
-            for (String scanTenant : stateTenants) {
-                EscalationConfigurationService.ResolvedEscalationConfig policy =
-                        policyFor(scanTenant, systemRequestInfo, policyCache);
-                for (String status : policy.getEligibleStatuses()) {
-                    total.add(scan(scanTenant, status, true, systemRequestInfo, policyCache));
-                }
+        for (String scanTenant : stateTenants) {
+            EscalationConfigurationService.ResolvedEscalationConfig policy =
+                    policyFor(scanTenant, systemRequestInfo, policyCache);
+            for (String status : policy.getEligibleStatuses()) {
+                total.add(scan(scanTenant, status, systemRequestInfo, policyCache));
             }
-        } else {
-            // Discovery failure changes only how complaints are found. Every returned complaint
-            // is still evaluated against the policy resolved for its own tenant.
-            total.add(scan(tenantId, null, false, systemRequestInfo, policyCache));
         }
 
         log.info("Escalation scan complete: scanned={}, escalated={}, skipped={}",
                 total.scanned, total.escalated, total.skipped);
     }
 
-    private ScanResult scan(String scanTenant, String status, boolean exactTenantScan,
+    private ScanResult scan(String scanTenant, String status,
                             RequestInfo systemRequestInfo,
                             Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache) {
         ScanResult result = new ScanResult();
@@ -95,7 +98,7 @@ public class EscalationScheduler {
         while (true) {
             List<ServiceWrapper> complaints;
             try {
-                complaints = searchComplaintsByStatus(scanTenant, status, offset, exactTenantScan);
+                complaints = searchComplaintsByStatus(scanTenant, status, offset);
             } catch (Exception e) {
                 log.error("Error scanning complaints in status {} for tenant {}", status, scanTenant, e);
                 break;
@@ -129,6 +132,19 @@ public class EscalationScheduler {
                 }
                 long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
                 if (System.currentTimeMillis() - complaintCreatedAt < sla) {
+                    result.skipped++;
+                    continue;
+                }
+
+                // PENDINGFORASSIGNMENT is configurable because some tenant workflows may
+                // assign in that state. Canonically it is unassigned, so skip it before the
+                // full update pipeline and avoid a warning every scheduler interval.
+                List<String> currentAssignees = escalationService.getCurrentAssignees(
+                        complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
+                if (currentAssignees.isEmpty()
+                        || !escalationService.hasReportingTo(
+                                currentAssignees, systemRequestInfo, complaint.getTenantId())) {
+                    result.skipped++;
                     continue;
                 }
 
@@ -164,18 +180,14 @@ public class EscalationScheduler {
         return cache.computeIfAbsent(tenantId, key -> configurationService.resolve(requestInfo, key));
     }
 
-    private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status, int offset,
-                                                          boolean exactTenantScan) {
+    private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status, int offset) {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder()
                 .tenantId(tenantId)
-                .tenantIds(exactTenantScan ? Collections.singleton(tenantId) : null)
-                .applicationStatus(status == null ? null : Collections.singleton(status))
+                .tenantIds(Collections.singleton(tenantId))
+                .applicationStatus(Collections.singleton(status))
                 .limit(config.getEscalationBatchSize())
                 .offset(offset)
-                // Exact scans pin tenantIds. Discovery fallback uses the normal
-                // state-root tenant predicate; a plain search without tenantIds
-                // would accidentally scan every state in a shared database.
-                .isPlainSearch(exactTenantScan)
+                .isPlainSearch(true)
                 .build();
         return repository.getServiceWrappers(criteria);
     }
