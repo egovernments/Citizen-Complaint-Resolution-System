@@ -1,5 +1,8 @@
 # Turbopass Search API
 
+> This file covers the legacy Trie `/search`. The boundary endpoints (`/boundary/*`),
+> configuration and deployment are in [`../README.md`](../README.md).
+
 This is a lightning-fast, highly optimized backend built with NestJS. It reads the raw JSON geographic hierarchy scraped from OpenStreetMap and builds a custom **Trie** structure in-memory to support rapid fuzzy text search, autocomplete, and prefix matching across states, cities, and towns worldwide.
 
 ## Setup & Startup
