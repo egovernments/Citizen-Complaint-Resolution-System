@@ -5282,7 +5282,7 @@
         # the real client IP, so `external` = "HTTPS required" on every login of
         # a plain-HTTP tenant. (Vinoth review.)
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
-          -s 'sslRequired={{ "external" if (tls_enabled | default(true)) else "none" }}'
+          -s "sslRequired={{ 'external' if (tls_enabled | default(true)) else 'none' }}"
       when:
         - enable_keycloak | default(false)
         - kc_digit_ui_client_id is defined
