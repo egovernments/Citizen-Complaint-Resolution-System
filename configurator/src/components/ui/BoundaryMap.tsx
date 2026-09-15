@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { drawGeoJsonOnGoogleMap } from '@/utils/googleMaps';
 
 // A GeoJSON geometry (Polygon / MultiPolygon / Point) or a full
 // FeatureCollection. boundary-service stores per-boundary `geometry`; the
@@ -18,6 +19,9 @@ interface BoundaryMapProps {
   /** Highlight fill/stroke colour. Defaults to DIGIT brand green. */
   color?: string;
   className?: string;
+  /** Draw on Google Maps with this key instead of OpenStreetMap tiles — pass the
+   *  tenant's MapConfig provider (useMapProviderConfig().google). */
+  google?: { apiKey: string };
 }
 
 // Rough bounding-box area of a Polygon/MultiPolygon outer ring(s) — a cheap
@@ -74,53 +78,78 @@ function hasCoordinates(data: GeoJsonInput): boolean {
 }
 
 /**
- * Renders one or many boundary geometries on an OSM basemap, highlighted and
- * auto-fitted to bounds. Vanilla Leaflet (not react-leaflet) to stay
- * React-version agnostic and avoid the marker-icon bundling dance — we only
- * draw polygons. Returns a graceful placeholder when there's no geometry.
+ * Renders one or many boundary geometries, highlighted and auto-fitted to
+ * bounds: on OpenStreetMap tiles via vanilla Leaflet (React-version agnostic,
+ * no marker-icon bundling — we only draw polygons), or on Google Maps when
+ * `google` carries a key. If Google won't load, it falls back to Leaflet and
+ * says why. Returns a graceful placeholder when there's no geometry.
  */
-export function BoundaryMap({ data, height = '360px', color = '#0b4d2c', className }: BoundaryMapProps) {
+export function BoundaryMap({ data, height = '360px', color = '#0b4d2c', className, google }: BoundaryMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
+  // Tagged with the key it belongs to, so a changed key never shows a stale error.
+  const [googleError, setGoogleError] = useState<{ key: string; message: string } | null>(null);
+  const googleKey = google?.apiKey;
 
   useEffect(() => {
-    if (!containerRef.current || !data || !hasCoordinates(data)) return;
+    const container = containerRef.current;
+    if (!container || !data || !hasCoordinates(data)) return;
+    const input = toGeoJsonLayerInput(data);
+    let cleanup = () => {};
+    let cancelled = false;
 
-    const map = L.map(containerRef.current, { scrollWheelZoom: false });
-    mapRef.current = map;
+    const drawLeaflet = () => {
+      const map = L.map(container, { scrollWheelZoom: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
+      const layer = L.geoJSON(input, {
+        style: { color, weight: 2, fillColor: color, fillOpacity: 0.25 },
+        pointToLayer: (_feature, latlng) => L.circleMarker(latlng, { radius: 6, color, fillColor: color, fillOpacity: 0.6 }),
+        onEachFeature: (feature, lyr) => {
+          const props = (feature.properties || {}) as Record<string, unknown>;
+          const label = props.name || props.code;
+          if (label) lyr.bindTooltip(String(label), { sticky: true });
+        },
+      }).addTo(map);
 
-    const layer = L.geoJSON(toGeoJsonLayerInput(data), {
-      style: { color, weight: 2, fillColor: color, fillOpacity: 0.25 },
-      pointToLayer: (_feature, latlng) => L.circleMarker(latlng, { radius: 6, color, fillColor: color, fillOpacity: 0.6 }),
-      onEachFeature: (feature, lyr) => {
-        const props = (feature.properties || {}) as Record<string, unknown>;
-        const label = props.name || props.code;
-        if (label) lyr.bindTooltip(String(label), { sticky: true });
-      },
-    }).addTo(map);
+      try {
+        const bounds = layer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [16, 16] });
+        else map.setView([0, 0], 2);
+      } catch {
+        map.setView([0, 0], 2);
+      }
 
-    try {
-      const bounds = layer.getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [16, 16] });
-      else map.setView([0, 0], 2);
-    } catch {
-      map.setView([0, 0], 2);
+      // Leaflet mis-sizes when the container animates/lays out after mount.
+      const t = setTimeout(() => map.invalidateSize(), 100);
+      cleanup = () => {
+        clearTimeout(t);
+        map.remove();
+      };
+    };
+
+    if (googleKey) {
+      drawGeoJsonOnGoogleMap(container, input, color, googleKey)
+        .then((dispose) => {
+          if (cancelled) dispose();
+          else cleanup = dispose;
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setGoogleError({ key: googleKey, message: e instanceof Error ? e.message : String(e) });
+          drawLeaflet();
+        });
+    } else {
+      drawLeaflet();
     }
 
-    // Leaflet mis-sizes when the container animates/lays out after mount.
-    const t = setTimeout(() => map.invalidateSize(), 100);
-
     return () => {
-      clearTimeout(t);
-      map.remove();
-      mapRef.current = null;
+      cancelled = true;
+      cleanup();
     };
-  }, [data, color]);
+  }, [data, color, googleKey]);
 
   if (!data || !hasCoordinates(data)) {
     return (
@@ -142,7 +171,16 @@ export function BoundaryMap({ data, height = '360px', color = '#0b4d2c', classNa
     );
   }
 
-  return <div ref={containerRef} className={className} style={{ height, borderRadius: 8, overflow: 'hidden' }} />;
+  return (
+    <div className={className}>
+      <div ref={containerRef} style={{ height, borderRadius: 8, overflow: 'hidden' }} />
+      {googleError && googleError.key === googleKey && (
+        <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+          Google Maps couldn't load ({googleError.message}) — showing OpenStreetMap tiles instead.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default BoundaryMap;

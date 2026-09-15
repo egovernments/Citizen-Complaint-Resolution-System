@@ -21,6 +21,7 @@ import { useApp } from '../../App';
 import { digitClient } from '@/providers/bridge';
 import { getDescriptor } from '../schemaDescriptors';
 import type { FieldSpec } from '../schemaDescriptors/types';
+import { validateGoogleMapsKey } from '@/utils/googleMaps';
 
 /**
  * Editor for `RAINMAKER-PGR.MapConfig`.
@@ -51,6 +52,7 @@ const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 // Plain-language intro per section — the raw field names ("Search box — west")
 // don't tell an operator what they're for.
 const SECTION_HELP: Record<string, string> = {
+  'Map provider': 'Which map library draws the maps. Boundaries and addresses don’t change — only the map underneath. Google Maps needs a Maps JavaScript API key restricted to this site.',
   Basemap: 'How the map looks: the tile style and the colour wards are highlighted in.',
   'Starting position': 'Where the citizen map opens before they share a location. Filled in automatically from your boundaries at onboarding — change only to override.',
   'Ward boundaries': 'Which tenant’s wards are drawn over the map and used to turn a dropped pin into a ward.',
@@ -122,6 +124,24 @@ function FieldInput({
 }: { spec: FieldSpec; data: Obj; setField: (path: string, value: unknown) => void }) {
   const raw = getPath(data, spec.path);
 
+  if (spec.path === 'mapProvider') {
+    return (
+      <FieldShell spec={spec}>
+        <Select value={(raw as string) || 'leaflet'} onValueChange={(v) => setField(spec.path, v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="leaflet">OpenStreetMap tiles (default)</SelectItem>
+            <SelectItem value="google">Google Maps</SelectItem>
+          </SelectContent>
+        </Select>
+      </FieldShell>
+    );
+  }
+
+  if (spec.path === 'googleMapsApiKey') {
+    return <GoogleKeyInput spec={spec} value={typeof raw === 'string' ? raw : ''} setField={setField} />;
+  }
+
   if (spec.path === 'baseMapTheme') {
     return (
       <FieldShell spec={spec}>
@@ -164,6 +184,35 @@ function FieldInput({
           setField(spec.path, isNumber ? (v === '' ? undefined : Number(v)) : v);
         }}
       />
+    </FieldShell>
+  );
+}
+
+function GoogleKeyInput({
+  spec, value, setField,
+}: { spec: FieldSpec; value: string; setField: (path: string, value: unknown) => void }) {
+  const [check, setCheck] = useState<{ state: 'checking' | 'ok' | 'error'; text?: string } | null>(null);
+  const test = async () => {
+    setCheck({ state: 'checking' });
+    try {
+      await validateGoogleMapsKey(value);
+      setCheck({ state: 'ok', text: 'Google accepted this key.' });
+    } catch (e) {
+      setCheck({ state: 'error', text: e instanceof Error ? e.message : String(e) });
+    }
+  };
+  return (
+    <FieldShell spec={spec}>
+      <div className="flex items-center gap-2">
+        <Input type="password" autoComplete="off" value={value} placeholder="AIza…"
+          onChange={(e) => { setCheck(null); setField(spec.path, e.target.value); }} />
+        <Button type="button" variant="outline" size="sm" disabled={!value.trim() || check?.state === 'checking'} onClick={test}>
+          {check?.state === 'checking' ? 'Checking…' : 'Test key'}
+        </Button>
+      </div>
+      {check?.text && (
+        <p className={`text-xs mt-1 ${check.state === 'ok' ? 'text-green-700' : 'text-destructive'}`}>{check.text}</p>
+      )}
     </FieldShell>
   );
 }
