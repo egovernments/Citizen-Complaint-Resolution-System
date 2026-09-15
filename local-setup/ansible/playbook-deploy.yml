@@ -5262,6 +5262,7 @@
     - name: "keycloak-bootstrap — update digit-ui client redirect URIs in-place"
       ansible.builtin.shell: |
         SCHEME="{{ 'https://' if (tls_enabled | default(true)) else 'http://' }}"
+        SSLREQ="{{ 'external' if (tls_enabled | default(true)) else 'none' }}"
         BASE="${SCHEME}{{ domain }}"
         REDIRECTS='{{ ([ "__BASE__/citizen/*", "__BASE__/digit-ui/*", "__BASE__/auth/callback*" ] + (keycloak_dev_redirect_uris | default([]))) | to_json }}'
         ORIGINS='{{ ([ "__BASE__" ] + (keycloak_dev_web_origins | default([]))) | to_json }}'
@@ -5282,7 +5283,7 @@
         # the real client IP, so `external` = "HTTPS required" on every login of
         # a plain-HTTP tenant. (Vinoth review.)
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
-          -s "sslRequired={{ 'external' if (tls_enabled | default(true)) else 'none' }}"
+          -s "sslRequired=${SSLREQ}"
       when:
         - enable_keycloak | default(false)
         - kc_digit_ui_client_id is defined
