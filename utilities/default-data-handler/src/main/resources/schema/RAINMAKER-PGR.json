@@ -478,6 +478,18 @@
           "type": "string",
           "description": "Record key. The map surfaces read a single config, so use \"DEFAULT\" unless you are deliberately keeping several variants."
         },
+        "mapProvider": {
+            "type": "string",
+            "enum": [
+                "leaflet",
+                "google"
+            ],
+            "description": "Which library draws the maps: leaflet (OpenStreetMap-style tiles, the default) or google (Google Maps; needs googleMapsApiKey). Boundaries and addresses are unaffected - only the map underneath changes."
+        },
+        "googleMapsApiKey": {
+            "type": "string",
+            "description": "Google Maps JavaScript API key, used when mapProvider is google. It is sent to every browser that shows a map, so restrict it to the deployment's domain (HTTP referrers) in Google Cloud Console."
+        },
         "baseMapTheme": {
           "type": "string",
           "enum": [

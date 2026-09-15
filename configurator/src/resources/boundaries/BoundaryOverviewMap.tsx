@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/api/client';
 import { boundaryService } from '@/api/services/boundary';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
+import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 
 type Feature = {
   type: 'Feature';
@@ -39,6 +40,7 @@ function hasRealGeometry(g?: { type: string; coordinates: unknown }): boolean {
 // incomplete or inconsistent — geometry lives on the entity, not the tree.
 export function BoundaryOverviewMap() {
   const tenantId = apiClient.getAuth().tenantId;
+  const mapProvider = useMapProviderConfig(tenantId);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'empty' | 'ready' | 'error'>('idle');
   const [count, setCount] = useState<{ total: number; withGeom: number }>({ total: 0, withGeom: 0 });
@@ -91,7 +93,7 @@ export function BoundaryOverviewMap() {
         </div>
       )}
       {status === 'ready' && (
-        <BoundaryMap data={{ type: 'FeatureCollection', features: features as unknown[] }} height="480px" />
+        <BoundaryMap data={{ type: 'FeatureCollection', features: features as unknown[] }} height="480px" google={mapProvider.google} />
       )}
     </div>
   );
