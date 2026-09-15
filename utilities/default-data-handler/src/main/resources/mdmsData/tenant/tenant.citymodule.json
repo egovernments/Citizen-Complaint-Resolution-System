@@ -22,6 +22,17 @@
     ]
   },
   {
+    "code": "PGR.WHATSAPP",
+    "order": 3,
+    "active": true,
+    "module": "PGR.WHATSAPP",
+    "tenants": [
+      {
+        "code": "{tenantid}"
+      }
+    ]
+  },
+  {
     "code": "HRMS",
     "order": 3,
     "active": true,

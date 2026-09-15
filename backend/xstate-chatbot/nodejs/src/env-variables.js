@@ -13,7 +13,11 @@ const envVariables = {
 
     repoProvider: process.env.REPO_PROVIDER || 'InMemory',
 
-    whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '919880900990',
+    // No built-in default: the old '919880900990' is an eGov DEMO number, and a blank
+    // WHATSAPP_BUSINESS_NUMBER silently rendered it into citizen-facing deep links
+    // (reminders-service and pdf-service both do .slice(2) on this). Blank now means
+    // "omit", which is what host_vars documents, and a misconfiguration stays visible.
+    whatsAppBusinessNumber: process.env.WHATSAPP_BUSINESS_NUMBER || '',
 
     rootTenantId: process.env.ROOT_TENANTID || 'pg',
 
@@ -86,7 +90,9 @@ const envVariables = {
     twilio: {
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
-        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+919880900990',
+        // Also no default, for the same reason: silently sending as the eGov demo number is
+        // worse than a startup failure. senderAddress() raises when this is unset.
+        whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '',
         baseUrl: process.env.TWILIO_BASE_URL || '',
         // Verify X-Twilio-Signature on every inbound webhook. Defaults ON: the webhook is
         // public and unauthenticated by necessity, so the signature is the only thing

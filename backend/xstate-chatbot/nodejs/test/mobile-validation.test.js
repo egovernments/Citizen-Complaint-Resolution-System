@@ -173,3 +173,72 @@ test("the resolved config is cached per tenant", async () => {
   await s.getConfig("ke");
   assert.equal(calls, 1);
 });
+
+// ---------------------------------------------------------------------------
+// Regressions from PR #2054 review. Each of these failed before the fix.
+// ---------------------------------------------------------------------------
+
+test("REGRESSION #3: an Indian national number starting 91 keeps its country code", () => {
+  const s = loadService();
+  // 9123456789 is a valid 10-digit Indian mobile that happens to start with the dial
+  // code. The old `startsWith(cc)` shortcut treated it as already-international and
+  // returned +9123456789 -- Twilio 21211, citizen gets no reply.
+  for (const national of ["9123456789", "9188776655", "9100000001"]) {
+    assert.equal(s.toInternational(national, INDIA), "91" + national);
+    assert.equal(s.toE164(national, INDIA), "+91" + national);
+  }
+});
+
+test("REGRESSION #3: inbound -> outbound round-trip is stable for 91-prefixed mobiles", () => {
+  const s = loadService();
+  for (const raw of ["whatsapp:+919123456789", "whatsapp:+919188776655"]) {
+    const national = s.toNational(raw, INDIA);
+    // Must match what the old hardcoded `whatsapp:+91${to}` produced.
+    assert.equal(s.toE164(national, INDIA), "+91" + national);
+    assert.equal(s.digitsOnly(raw), s.toInternational(national, INDIA));
+  }
+});
+
+test("REGRESSION #2: a bare national number is never rewritten to a different one", () => {
+  const s = loadService();
+  const US = { countryCode: "+1", mobileNumberRegex: "^[0-9]{10}$" };
+  // Stripping the country code first ate the leading '1' and prepended a fabricated '0',
+  // yielding 0234567890 -- a DIFFERENT subscriber, which then flowed into createUser.
+  assert.equal(s.toNational("1234567890", US), "1234567890");
+  assert.equal(s.toNational("+11234567890", US), "1234567890");
+  assert.equal(s.toNational("11234567890", US), "1234567890");
+});
+
+test("REGRESSION #1: a city tenant falls back to its state root, not to India", async () => {
+  const seen = [];
+  const s = loadService({
+    fetchImpl: async (url, opts) => {
+      seen.push(JSON.parse(opts.body).MdmsCriteria.tenantId);
+      const t = JSON.parse(opts.body).MdmsCriteria.tenantId;
+      // MobileNumberValidation is seeded at the STATE tenant only.
+      if (t !== "ke") return { ok: true, json: async () => ({ mdms: [] }) };
+      return {
+        ok: true,
+        json: async () => ({
+          mdms: [{ isActive: true, data: { countryCode: "+254", mobileNumberRegex: "^0?[17][0-9]{8}$", default: true } }],
+        }),
+      };
+    },
+  });
+  const resolved = await s.getConfig("ke.nairobi");
+  assert.deepEqual(seen, ["ke.nairobi", "ke"]);
+  assert.equal(resolved.countryCode, "+254");
+  assert.notEqual(resolved.fallback, true);
+});
+
+test("REGRESSION #1: an unqualified tenant is not looked up twice", async () => {
+  const seen = [];
+  const s = loadService({
+    fetchImpl: async (url, opts) => {
+      seen.push(JSON.parse(opts.body).MdmsCriteria.tenantId);
+      return { ok: true, json: async () => ({ mdms: [] }) };
+    },
+  });
+  await s.getConfig("pg");
+  assert.deepEqual(seen, ["pg"]);
+});

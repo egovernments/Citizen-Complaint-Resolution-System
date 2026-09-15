@@ -115,7 +115,9 @@ the flag turns on, and what was deliberately left out.
 | Country code | read from `common-masters.MobileNumberValidation` (the same master egov-user, egov-hrms, digit-ui and novu-bridge use); falls back to `+91` / 10 digits, so India is unchanged |
 | Boundary hierarchy | `BOUNDARY_HIERARCHY_TYPE`, default `ADMIN` |
 | Deployment | Compose services under the `chatbot` profile, Kong route, Gatus check in both tiers, `enable_chatbot` in Ansible |
-| Seed | `PGR.WHATSAPP` row in `tenant.citymodule` |
+| Seed | `PGR.WHATSAPP` row in `tenant.citymodule`, in **both** the default and dev MDMS bundles (the dev bundle alone only loads under `dev.enabled`, so production-onboarded tenants would get an empty city list) |
+| Sender address | `twilio_whatsapp_from` keeps its repo-wide `whatsapp:+<E164>` form, shared with the Novu outbound bootstrap; the chatbot strips and re-adds the prefix itself rather than redefining a variable outbound depends on |
+| Fail-loud config | an unset Twilio sender raises at send time instead of silently using the eGov demo number `+919880900990` |
 
 Two things are deliberately **not** done, and are tracked separately:
 
