@@ -1,0 +1,4 @@
+# Python packages for the DIGIT Security Scanner (install with: pip install -r requirements.txt)
+# Everything else the script uses is in the Python standard library.
+certifi>=2020.6.20      # CA bundle for HTTPS to the Drive web app (macOS python.org builds ship none)
+openpyxl>=3.0.0         # builds the .xlsx audit workbook
