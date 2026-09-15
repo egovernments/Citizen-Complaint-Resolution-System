@@ -56,7 +56,8 @@ config:
     build:
       - work-dir: "backend/digit-user-preferences-service"
         image-name: "digit-user-preferences-service"
-      - work-dir: "backend/digit-user-preferences-service/db"
+        dockerfile: "build/maven/Dockerfile"
+      - work-dir: "backend/digit-user-preferences-service/src/main/resources/db"
         image-name: "digit-user-preferences-service-db"
   - name: "builds/Citizen-Complaint-Resolution-System/backend/xstate-chatbot"
     build:
