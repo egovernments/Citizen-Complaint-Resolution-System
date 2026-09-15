@@ -1481,6 +1481,36 @@
         - prev_env.content is defined
         - ('# BEGIN ' + item) in (prev_env.content | b64decode)
 
+    # Strip every AWS_KEY / AWS_SECRETKEY line from .env (cluster-2 fix).
+    #
+    # Placed HERE — immediately after the block-restore that can reintroduce a
+    # stale AWS_KEY, and BEFORE any later fail-closed assert — so the stale key
+    # is removed the moment it reappears and cannot survive even if a downstream
+    # assert aborts the play (the ordering bug @dhruv-1001 caught: the strip used
+    # to sit after the dev-secret assert, which aborts on boxes whose OpenBao
+    # still holds a published default, so the strip never ran).
+    #
+    # egov-filestore is the only consumer, and its compose entry falls back to
+    # MINIO_ROOT_USER/MINIO_ROOT_PASSWORD when these are unset
+    # (`AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER}}`). Removing the lines makes
+    # filestore derive its credential from the SAME variable MinIO reads, so the
+    # two can never disagree. Removal (not "write the right value") because a
+    # stale AWS_KEY=minioadmin restored above sits LATER in the file than any
+    # freshly-written value and .env is last-occurrence-wins — an explicit write
+    # would be shadowed by the duplicate, which is exactly how filestore ended up
+    # authenticating as `minioadmin` while MinIO had rotated (InvalidAccessKeyId
+    # on every upload, only on boxes with deploy history). state:absent deletes
+    # ALL matches, so no duplicate can survive however it got in.
+    - name: "MinIO — remove any AWS_KEY/AWS_SECRETKEY from .env so filestore follows MINIO_ROOT_USER"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: "{{ item }}"
+        state: absent
+      loop:
+        - '^AWS_KEY='
+        - '^AWS_SECRETKEY='
+      no_log: true
+
     # ==================== digit-ui globalConfigs.js (per-tenant) ====================
     # Boot-time config for the digit-ui SPA. Every value comes from the
     # inventory (host_vars overrides group_vars). Add new keys to the
@@ -2160,33 +2190,6 @@
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
-      no_log: true
-
-    # Strip every AWS_KEY / AWS_SECRETKEY line from .env (cluster-2 fix).
-    #
-    # egov-filestore is the only consumer, and its compose entry falls back to
-    # MINIO_ROOT_USER/MINIO_ROOT_PASSWORD when these are unset
-    # (`AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER}}`). By removing the lines entirely
-    # we make filestore derive its credential from the SAME variable MinIO reads,
-    # so the two can never disagree.
-    #
-    # Why removal rather than "write the right value": a stale AWS_KEY=minioadmin
-    # can re-enter .env via the ".env regeneration + restore OpenBao blocks" step
-    # (the restored previous block, or a legacy differently-marked block, sits
-    # LATER in the file than the freshly-written value, and .env is last-wins).
-    # An explicit write would then be shadowed by the stale duplicate — the exact
-    # failure @dhruv-1001 root-caused: filestore authenticating as `minioadmin`
-    # while MinIO had rotated, so every upload 500'd with InvalidAccessKeyId on a
-    # box with deploy history (fresh boxes never showed it). state:absent deletes
-    # ALL matching lines, so no duplicate can survive regardless of how it got in.
-    - name: "MinIO — remove any AWS_KEY/AWS_SECRETKEY from .env so filestore follows MINIO_ROOT_USER"
-      ansible.builtin.lineinfile:
-        path: "{{ digit_dir }}/.env"
-        regexp: "{{ item }}"
-        state: absent
-      loop:
-        - '^AWS_KEY='
-        - '^AWS_SECRETKEY='
       no_log: true
 
     # No earlier task writes a placeholder GF_ADMIN_PASSWORD= line any more —
