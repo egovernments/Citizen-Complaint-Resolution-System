@@ -1,30 +1,24 @@
-# Turbopass — self-hosted boundary autocomplete + hierarchy service.
+# Turbopass — boundary search + fetch for the configurator (see README.md).
 #
-#   1. Build the offline Overture DB (India, Kenya, Mozambique by default):
-#        docker compose --profile bootstrap up --build bootstrap
-#      Writes ./overture-data/boundaries.sqlite (~1GB, gitignored). Retarget:
-#        TURBOPASS_COUNTRIES="IN,KE,MZ,ZA" docker compose --profile bootstrap up --build bootstrap
+#   docker compose --profile bootstrap run --rm bootstrap   # build the boundary DB
+#   docker compose up -d search-api                         # serve it on :3000
 #
-#   2. Start the API:
-#        docker compose up -d --build search-api
-#        curl "http://localhost:3000/boundary/search?q=Maputo&source=overture"
-#
-# The search-api also serves the committed Trie data (data/**/hierarchy.json)
-# on /search, and Geoapify passthrough on /boundary/*?source=geoapify when
-# GEOAPIFY_API_KEY is set.
+# Images are published by .github/workflows/turbopass-build.yml; add --build to
+# build from this checkout instead.
 name: turbopass
 
 services:
-  # One-shot data pipeline. Guarded behind the `bootstrap` profile so a plain
+  # One-shot data pipeline, behind the `bootstrap` profile so a plain
   # `docker compose up` never re-downloads gigabytes from Overture.
   bootstrap:
     build:
       context: ./overture-scraper
-    image: turbopass-bootstrap:local
+    image: egovio/turbopass-bootstrap:${TURBOPASS_TAG:-latest}
     environment:
-      # ISO 3166-1 alpha-2 codes, comma-separated. Default = P0 set.
       COUNTRIES: ${TURBOPASS_COUNTRIES:-IN,KE,MZ}
-      OVERTURE_RELEASE: ${OVERTURE_RELEASE:-2026-06-17.0}
+      # Empty → the newest release in the bucket.
+      OVERTURE_RELEASE: ${OVERTURE_RELEASE:-}
+      SIMPLIFY_TOLERANCE: ${SIMPLIFY_TOLERANCE:-0.0001}
       OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
     volumes:
       - ./overture-data:/overture-data
@@ -33,14 +27,15 @@ services:
   search-api:
     build:
       context: ./search-api
-    image: turbopass-search:local
+    image: egovio/turbopass-search:${TURBOPASS_TAG:-latest}
     environment:
-      # Offline Overture DB produced by `bootstrap`.
       OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
-      # Committed Trie hierarchies (data/**/hierarchy.json) for /search.
       DATA_DIR: /data
-      # Optional: enables /boundary/*?source=geoapify passthrough.
       GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+      GEOAPIFY_RATE_LIMIT: ${GEOAPIFY_RATE_LIMIT:-120}
+      FETCH_MAX_FEATURES: ${FETCH_MAX_FEATURES:-5000}
+      # Set to the configurator origins on a central instance holding a Geoapify key.
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     ports:
       - "${TURBOPASS_PORT:-3000}:3000"
     volumes:
@@ -52,4 +47,4 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 20s

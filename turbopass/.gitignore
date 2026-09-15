@@ -1,7 +1,8 @@
 # Data directories
 overpass_data/
 overpass_db/
-overture-data/
+overture-data*/
+overture-scraper/coverage-*.csv
 overture-scraper/venv/
 
 # Logs
