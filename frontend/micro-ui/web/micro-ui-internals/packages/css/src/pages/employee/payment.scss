@@ -22,14 +22,14 @@
 .inbox-header-text {
     padding-left: 16px;
     margin-top: 2px;
-    @extend .typography.heading-m;
+    @extend %typography-heading-m;
     color: theme(digitv2.lightTheme.primary-2);
 }
 
 .custom-inbox-filter-heading {
     padding-left: 16px;
     margin-top: 2px;
-    @extend .typography.heading-m;
+    @extend %typography-heading-m;
     color: theme(digitv2.lightTheme.primary-2);
 }
 
@@ -149,7 +149,7 @@
 }
 
 .view-label-heading {
-    @extend .typography.heading-s;
+    @extend %typography-heading-s;
     color: theme(digitv2.lightTheme.text-primary);
     width: 20%;
     text-align: left;
@@ -158,7 +158,7 @@
 }
 
 .view-label-text {
-    @extend .typography.body-s;
+    @extend %typography-body-s;
     color: theme(digitv2.lightTheme.text-primary);
     width: 80%;
 }

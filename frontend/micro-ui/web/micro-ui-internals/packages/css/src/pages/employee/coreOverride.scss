@@ -102,7 +102,7 @@
   }
 }
 header {
-  @extend .typography.text-heading-xl;
+  @extend %typography-text-heading-xl;
   margin-bottom: 0rem;
 }
 .digit-button-secondary {
