@@ -74,15 +74,30 @@ run_static_validation() {
 
 # Install the collections the playbook needs (community.general.ufw / htpasswd /
 # ini_file, ansible.posix, …) UNCONDITIONALLY — not only inside the ansible-lint
-# branch, and without swallowing failures (Vinoth review). On an ansible-core-only
-# controller, or any run with SKIP_LINT=1, the old lint-gated `… || true` install
-# never ran, and the playbook then died at parse time with "couldn't resolve
-# module/action 'community.general.ufw'". Idempotent and cheap, so run it always
-# and let a real install failure stop the deploy with a clear message.
+# branch (Vinoth review). On an ansible-core-only controller, or any run with
+# SKIP_LINT=1, the old lint-gated install never ran and the playbook then died
+# at parse time with "couldn't resolve module/action 'community.general.ufw'".
+#
+# Notes learned the hard way:
+#   - no `--quiet`: it is not a valid `ansible-galaxy collection install` flag on
+#     several ansible-core versions ("unrecognized arguments: --quiet"). The old
+#     call carried it but hid the error behind `2>/dev/null || true`, so the
+#     install had in fact never run on those controllers.
+#   - fail only if the collection is genuinely MISSING afterwards. A controller
+#     with no galaxy reachability but the collections already present (e.g. from
+#     the pip ansible bundle) must still deploy — so a failed *download* is only
+#     fatal when community.general truly isn't installed.
 if command -v ansible-galaxy >/dev/null 2>&1; then
-  echo "──── ansible-galaxy: install required collections ────────────────"
-  ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet \
-    || { echo "ERROR: failed to install Ansible collections from requirements.yml." >&2; exit 1; }
+  echo "──── ansible-galaxy: ensure required collections ─────────────────"
+  if ! ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections; then
+    if ansible-galaxy collection list 2>/dev/null | grep -qiE '^community\.general\b'; then
+      echo "WARN: galaxy install failed, but required collections are already present — continuing." >&2
+    else
+      echo "ERROR: community.general is not installed and the galaxy install failed." >&2
+      echo "  Install it: ansible-galaxy collection install -r requirements.yml" >&2
+      exit 1
+    fi
+  fi
 fi
 
 if [[ "${SKIP_LINT:-0}" != "1" ]]; then
