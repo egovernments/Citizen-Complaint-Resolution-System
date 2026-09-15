@@ -1,0 +1,49 @@
+# Dependabot version-update configuration for CMS-MOZAMBIQUE.
+# Scope: the application code-base only - backend/ (Maven) and the three UI apps (npm).
+# Deployment/infra trees (local-setup/, ansible/, k8s, docs/, etc.) are intentionally excluded.
+# This also satisfies the OpenSSF Scorecard "Dependency-Update-Tool" check.
+version: 2
+updates:
+  # ---------------- backend: Maven services ----------------
+  - package-ecosystem: "maven"
+    directory: "/backend/pgr-services"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+
+  - package-ecosystem: "maven"
+    directory: "/backend/novu-bridge"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+
+  - package-ecosystem: "maven"
+    directory: "/backend/digit-config-service"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+
+  # ---------------- frontend / UI apps: npm ----------------
+  - package-ecosystem: "npm"
+    directory: "/frontend/micro-ui"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+
+  - package-ecosystem: "npm"
+    directory: "/digit-ui-esbuild"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+
+  - package-ecosystem: "npm"
+    directory: "/digit-ui-v2"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]

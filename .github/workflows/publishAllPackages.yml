@@ -10,6 +10,9 @@ on:
     paths:
       - 'frontend/micro-ui/web/micro-ui-internals/**'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

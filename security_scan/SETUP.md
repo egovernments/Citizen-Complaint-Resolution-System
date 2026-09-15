@@ -19,7 +19,7 @@ Repo → Settings → Pages → Source = **Deploy from a branch**, Branch = **gh
 
 ## 3. Deploy the Apps Script
 
-1. https://script.google.com → New project → paste **`apps-script.gs`** (in this folder).
+1. https://script.google.com → New project → paste **`security_scan/apps-script.gs`** (the shared publisher, one level up at the `security_scan/` root).
 2. Set the two secrets — **either** edit the config vars at the top of the script:
    ```js
    var SHARED_TOKEN = "eDyz05i…";                 // runners pass this as SECSCAN_TOKEN
@@ -32,7 +32,7 @@ Repo → Settings → Pages → Source = **Deploy from a branch**, Branch = **gh
    external service" — the latter (`.../auth/script.external_request`) is what lets the script write
    to GitHub. If it is missing, scans upload to Drive but the dashboard step fails with
    *"You do not have permission to call UrlFetchApp.fetch"* — fix it via **Re-authorizing** below.
-5. Copy the `/exec` URL and paste it into `scan.py` → `WEBAPP_URL` (it's public/safe to commit).
+5. Copy the `/exec` URL and paste it into **both** scanners: `ansible/scan.py` and `code-base/scan.py` → `WEBAPP_URL` (it is public/safe to commit).
 
 ### Re-authorizing (external-requests permission)
 
@@ -56,16 +56,20 @@ scope and redeploy:
    required for the added scope to take effect).
 5. Re-run a scan; the dashboard should publish.
 
-## 4. Give runners the token
+## 4. Give the token to runners and CI
 
-Distribute `SHARED_TOKEN` to runners through a secure channel (e.g. a shared password manager).
-Each runner sets `export SECSCAN_TOKEN='<that value>'` before running. **Never commit it.**
+`SHARED_TOKEN` is the shared upload gate, distributed through a secure channel (e.g. a shared
+password manager). **Never commit it.** Two consumers:
+
+- **Ansible runners** — each person sets `export SECSCAN_TOKEN='<that value>'` before running `run.sh`.
+- **Code Base workflow** — add it as a **repo secret** named `SECSCAN_TOKEN`
+  (Settings → Secrets and variables → Actions). The `code-scan.yml` workflow reads it there.
 
 ## 5. First run
 
 - If the repo's `gh-pages:/security_scan/` already has an old (CI-pipeline) dashboard, clear
   `security_scan/manifest.json` and `security_scan/data/` once so the Claude runs start clean.
-  (The Apps Script seeds a fresh `index.html` from this repo's `security-scan/dashboard-index.html`.)
+  (The Apps Script seeds a fresh `index.html` from this repo's `security_scan/dashboard-index.html`.)
 - Run a scan from any branch and confirm it appears at
   `https://egov-global.github.io/CMS-MOZAMBIQUE/security_scan/`.
 

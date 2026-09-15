@@ -23,6 +23,9 @@ on:
 env:
   PYTHON_VERSION: '3.12'
 
+permissions:
+  contents: read
+
 jobs:
   test-dataloader:
     name: Run DataLoader E2E Tests

@@ -159,7 +159,7 @@ bootstrap_secrets:
   keycloak_admin_password: "e<change-me>"
   keycloak_db_password: "<change-me>"
   keycloak_google_client_secret: ''
-  token_exchange_system_password: "<change-me>"        
+  token_exchange_system_password: "<change-me>"  
 
 pgr_services_image:  "egovio/pgr-services:release-v2.12-moz-9deb7e0"
 novu_bridge_image: "novu-bridge:local"  # manually built from source (OTP-via-Ozeki changes) — see backend/novu-bridge/Dockerfile
