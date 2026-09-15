@@ -1913,7 +1913,14 @@ services:
       SCHEMA_TABLE: xstate_chatbot_schema
       FLYWAY_USER: ${POSTGRES_USER:-egov}
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      FLYWAY_LOCATIONS: filesystem:/flyway/sql/main
+      # /flyway/sql, NOT /flyway/sql/main: the db Dockerfile does
+      # `COPY ./migration/main /flyway/sql`, so the migrations land at the root. Flyway's
+      # failOnMissingLocations defaults to false, so a wrong path applies ZERO migrations
+      # and still exits 0 -- service_completed_successfully is satisfied, the chatbot boots
+      # with REPO_PROVIDER=Postgres against a missing eg_chat_state_v2, and every
+      # conversation fails on its first state write. All 18 other migration containers in
+      # this repo use filesystem:/flyway/sql.
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
     networks:
       - egov-network
 

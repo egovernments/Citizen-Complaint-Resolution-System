@@ -189,10 +189,32 @@ class TwilioWhatsAppProvider {
         return `whatsapp:${e164}`;
     }
 
-    /** The business sender is configured as a full number already; just normalise the prefix. */
+    /**
+     * Build Twilio's `From` address from the configured sender.
+     *
+     * TWILIO_WHATSAPP_NUMBER is fed from `twilio_whatsapp_from`, and the repo-wide
+     * convention for that variable is the ALREADY-PREFIXED form `whatsapp:+14155238886`
+     * (every host_vars example and the Novu bootstrap default use it, because Novu's Twilio
+     * integration wants it that way). Blindly re-prefixing produced
+     * `From=whatsapp:+whatsapp:+14155238886`, which Twilio rejects -- the webhook validated,
+     * the dialog ran, state was written, and the citizen never got a reply.
+     *
+     * So normalise instead of assuming: strip any `whatsapp:` prefix and any leading `+`,
+     * then rebuild exactly once. That keeps `twilio_whatsapp_from` meaning the same thing for
+     * the Novu outbound bootstrap, which also consumes it -- inbound must not redefine a
+     * variable outbound depends on.
+     */
     senderAddress() {
-        const number = this.whatsappNumber;
-        return `whatsapp:${number.startsWith('+') ? number : '+' + number}`;
+        const raw = String(this.whatsappNumber || '').trim();
+        if (!raw) {
+            // Fail loudly rather than silently sending as someone else's number.
+            throw new Error(
+                'TWILIO_WHATSAPP_NUMBER is not set. Set twilio_whatsapp_from in host_vars ' +
+                '(e.g. "whatsapp:+14155238886") so the chatbot can address replies.'
+            );
+        }
+        const digits = raw.replace(/^whatsapp:/i, '').replace(/[^0-9]/g, '');
+        return `whatsapp:+${digits}`;
     }
 
     async getUserMessage(requestBody, tenantId = null) {

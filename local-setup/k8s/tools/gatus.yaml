@@ -839,6 +839,8 @@ spec:
               value: "false"
             - name: GATUS_PROFILE_KEYCLOAK
               value: "false"
+            - name: GATUS_PROFILE_CHATBOT
+              value: "false"          # inbound WhatsApp is compose-only; no k8s Deployment/Service
             - name: GATUS_PROFILE_NOTIFICATIONS
               value: "false"
             # No nginx proxy Deployments in the k3s tier either.

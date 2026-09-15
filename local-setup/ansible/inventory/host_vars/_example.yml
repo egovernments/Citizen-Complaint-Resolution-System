@@ -450,7 +450,13 @@ enable_chatbot: false
 # chatbot_root_tenant: "pg"
 
 # Your WhatsApp sender in national form, digits only, no '+'. Used to build the
-# city/locality deep links. Leave blank to omit them.
+# city/locality deep links. Blank omits them -- there is deliberately no built-in
+# default, because the old one was an eGov demo number that would otherwise appear in
+# citizen-facing links.
+#
+# This is SEPARATE from twilio_whatsapp_from, which is the Twilio sender address and
+# keeps its repo-wide `whatsapp:+<E164>` form (the Novu outbound bootstrap consumes the
+# same variable). The chatbot normalises that prefix itself, so either form works there.
 # chatbot_whatsapp_business_number: ""
 
 # false (recommended) uses the MDMS/boundary city -> locality pick-lists.
