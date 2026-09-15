@@ -3737,11 +3737,16 @@
     # re-running. Password comes from vault/host_vars; the task skips entirely
     # if unset (dashboards would then 401 with no valid user — set it).
     # ---- Gatus status board basic auth (nginx_features.status) ----
-    # Fail CLOSED rather than render an open board: the nginx template always
-    # emits auth_basic for /status/, so a deploy that enables the feature
-    # without a password would serve a 403 (missing .htpasswd-status) and the
-    # operator would have to guess why. Assert up front instead.
-    - name: "status board — require a basic-auth password when /status/ is enabled"
+    # Same fresh-vs-existing split as the dev-secret assert above (operator
+    # decision, 2026-09-15): a FRESH box that enables /status/ without a password
+    # fails closed; an ALREADY-DEPLOYED box gets a WARNING and the deploy
+    # continues. The nginx template always emits auth_basic for /status/, so a
+    # box with the feature on but no password simply serves 403 (missing
+    # .htpasswd-status) — closed, not exposed — until the operator sets one; that
+    # is not worth aborting the whole play (and every later fix-up task) on an
+    # existing tenant. @dhruv-1001 hit this as the next domino after the ES
+    # assert on bomet, which enables the board without a password.
+    - name: "status board — require a basic-auth password when /status/ is enabled (fresh boxes fail closed)"
       ansible.builtin.assert:
         that:
           - status_basic_auth_password is defined
@@ -3755,6 +3760,21 @@
           to false to stop publishing the board.
       when:
         - nginx_features.status | default(false)
+        - not (_existing_box | default(false) | bool)
+
+    - name: "status board — WARN (do not abort) when an already-deployed box enables /status/ without a password"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: nginx_features.status is true but `status_basic_auth_password`
+          is not set on this already-deployed box. The Gatus board will return
+          403 (its nginx location requires auth and no .htpasswd-status exists)
+          rather than be exposed — set status_basic_auth_password in
+          host_vars/{{ inventory_hostname }}.yml to publish it, or set
+          nginx_features.status to false. Fresh deploys fail closed on this.
+      when:
+        - nginx_features.status | default(false)
+        - _existing_box | default(false) | bool
+        - not (status_basic_auth_password is defined and (status_basic_auth_password | length > 0))
 
     # Idempotent via `creates`: rotate by deleting the file and re-running.
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
