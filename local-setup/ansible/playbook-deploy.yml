@@ -4193,10 +4193,19 @@
         validate_certs: "{{ tls_enabled | default(true) }}"
         headers: "{{ {} if (tls_enabled | default(true)) else {'Host': domain} }}"
         url_username: "{{ status_basic_auth_user | default('digit-status') }}"
-        url_password: "{{ status_basic_auth_password }}"
+        url_password: "{{ status_basic_auth_password | default('') }}"
         force_basic_auth: true
       no_log: true
-      when: nginx_features.status | default(false)
+      # Only validate the board actually serves 200 when it is BOTH enabled and
+      # has a password. On an already-deployed box that enables /status/ without
+      # a password, the assert above intentionally warns-and-continues and the
+      # board serves 403 by design — so probing it for 200 here would just
+      # re-abort the play for the same reason. Skip it in that case (the warning
+      # already told the operator to set a password to publish the board).
+      when:
+        - nginx_features.status | default(false)
+        - status_basic_auth_password is defined
+        - (status_basic_auth_password | default('') | length) > 0
 
     # An unauthenticated HEAD /mcp now returns 401 (token required — the MCP
     # auth hardening), or 405 on an older image that only rejects the method.
