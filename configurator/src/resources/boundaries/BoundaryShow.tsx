@@ -3,9 +3,11 @@ import { FieldSection, FieldRow, JsonViewer } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { BoundaryMap } from '@/components/ui/BoundaryMap';
 import { useShowController } from 'ra-core';
+import { useMapProviderConfig } from '@/hooks/useMapProviderConfig';
 
 export function BoundaryShow() {
   const { record } = useShowController();
+  const mapProvider = useMapProviderConfig(record?.tenantId ? String(record.tenantId) : undefined);
 
   return (
     <DigitShow title={record ? `Boundary: ${record.code ?? record.id}` : 'Boundary'} hasEdit>
@@ -27,7 +29,7 @@ export function BoundaryShow() {
 
           {rec.geometry != null && (
             <FieldSection title="Map">
-              <BoundaryMap data={rec.geometry as Parameters<typeof BoundaryMap>[0]['data']} />
+              <BoundaryMap data={rec.geometry as Parameters<typeof BoundaryMap>[0]['data']} google={mapProvider.google} />
             </FieldSection>
           )}
 
