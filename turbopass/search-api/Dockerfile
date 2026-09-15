@@ -1,7 +1,7 @@
 # Build stage
 # bookworm-slim (glibc) so better-sqlite3 installs its prebuilt binary — no
 # node-gyp/python/g++ toolchain needed, unlike alpine/musl.
-FROM node:20-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ COPY . .
 RUN npm run build
 
 # Runtime stage
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
