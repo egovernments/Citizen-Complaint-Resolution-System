@@ -1,0 +1,144 @@
+name: Build turbopass images
+run-name: Build turbopass images (${{ github.head_ref || github.ref_name }})
+
+# The turbopass boundary service (turbopass/search-api) and its Overture
+# bootstrap (turbopass/overture-scraper) are deployed as their own service,
+# apart from the DIGIT stack, so they get their own pipeline that runs only
+# when their code changes. Images go to the same egovio/ namespace as every
+# other CCRS image:
+#   egovio/turbopass-search:<branch>-<sha>     (+ :latest from master)
+#   egovio/turbopass-bootstrap:<branch>-<sha>  (+ :latest from master)
+# Pull requests build and test both images without pushing.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'turbopass/search-api/**'
+      - 'turbopass/overture-scraper/**'
+      - '.github/workflows/turbopass-build.yml'
+  pull_request:
+    paths:
+      - 'turbopass/search-api/**'
+      - 'turbopass/overture-scraper/**'
+      - '.github/workflows/turbopass-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: turbopass-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NAMESPACE: egovio
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: turbopass/search-api/package-lock.json
+
+      - name: search-api — typecheck + unit tests
+        working-directory: turbopass/search-api
+        run: |
+          npm ci
+          npx tsc --noEmit -p tsconfig.build.json
+          npm test
+
+      - name: overture-scraper — scripts compile
+        working-directory: turbopass/overture-scraper
+        run: |
+          python3 -m py_compile scrape.py apply_admin_levels.py build_hierarchy.py verify_db.py coverage.py
+          bash -n bootstrap.sh
+
+  tag:
+    name: Resolve tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      push: ${{ steps.tag.outputs.push }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: |
+          BRANCH=$(printf '%s' "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" | tr '/:@' '-' | sed 's/[^A-Za-z0-9_.-]/-/g')
+          echo "tag=${BRANCH}-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          # Pull requests (including forks, which get no registry secrets) never push.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    needs: [test, tag]
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [turbopass-search, turbopass-bootstrap]
+        arch: [amd64, arm64]
+        include:
+          - image: turbopass-search
+            context: turbopass/search-api
+          - image: turbopass-bootstrap
+            context: turbopass/overture-scraper
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Docker login
+        if: needs.tag.outputs.push == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Build
+        run: |
+          docker buildx build \
+            --platform linux/${{ matrix.arch }} \
+            --tag "${NAMESPACE}/${{ matrix.image }}:${{ needs.tag.outputs.tag }}-${{ matrix.arch }}" \
+            ${{ needs.tag.outputs.push == 'true' && '--push' || '--load' }} \
+            ${{ matrix.context }}
+
+  manifest:
+    name: Publish multi-arch manifests
+    needs: [tag, build]
+    if: needs.tag.outputs.push == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Create and push manifests
+        run: |
+          TAG='${{ needs.tag.outputs.tag }}'
+          echo "### Turbopass images" >> "$GITHUB_STEP_SUMMARY"
+          for IMAGE in turbopass-search turbopass-bootstrap; do
+            REF="${NAMESPACE}/${IMAGE}"
+            docker manifest create --amend "${REF}:${TAG}" "${REF}:${TAG}-amd64" "${REF}:${TAG}-arm64"
+            docker manifest push "${REF}:${TAG}"
+            if [ "${GITHUB_REF_NAME}" = "master" ]; then
+              docker manifest create --amend "${REF}:latest" "${REF}:${TAG}-amd64" "${REF}:${TAG}-arm64"
+              docker manifest push "${REF}:latest"
+            fi
+            echo "- \`${REF}:${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          done

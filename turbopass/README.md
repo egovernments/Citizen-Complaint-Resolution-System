@@ -1,131 +1,117 @@
 # Turbopass
 
-Turbopass is the boundary backend for the configurator's Phase 2 **OSM boundary fetch**. Instead of the operator hand-authoring a boundaries `.xlsx`, the configurator queries Turbopass as they type a city name, then resolves the selected place's full administrative boundary **hierarchy + GeoJSON geometry** straight into the DIGIT boundary payload.
+Boundary search and fetch for the configurator's Phase 2 "fetch boundaries" flow. An
+operator types a place name, picks it, and gets that place's administrative hierarchy with
+polygons — no spreadsheet.
 
-It serves boundaries from three interchangeable sources:
+Turbopass runs as **its own service**, apart from any DIGIT deployment: one instance can
+serve every configurator. The Ansible playbook's `enable_turbopass` can also run it on a
+DIGIT box, which suits a single box or local testing.
 
-| `source=` | Backend | Needs |
-|---|---|---|
-| `overture` | **Self-hosted offline** SQLite DB built from [Overture Maps](https://overturemaps.org/) divisions | The bootstrap pipeline (below). No network at query time. |
-| `geoapify` | Hosted [Geoapify](https://www.geoapify.com/) geocoding + boundaries API | `GEOAPIFY_API_KEY` on the service. |
-| _(legacy `/search`)_ | In-memory **Trie** over the committed `data/**/hierarchy.json` | Nothing — data is vendored. Fuzzy name autocomplete only, no geometry. |
-
-The rest of this README covers the **Overture offline path** — the recommended, no-external-dependency way to run Turbopass for the P0 countries (**India, Kenya, Mozambique**).
-
-> The `scraper/` (Overpass) directory and `data/` hierarchies are vendored from [dhruv-1001/osm-mapped-data](https://github.com/dhruv-1001/osm-mapped-data) at the commit in [`.vendored-from`](.vendored-from). Keep diffs against those minimal.
-
-**Why a bespoke service rather than Nominatim:** the public Nominatim usage policy
-explicitly forbids client-side autocomplete ("you must not implement such a service on
-the client side using the API"), and debouncing does not make it compliant — the pattern
-is barred, not just the rate. A bounded, pre-fetched, self-hosted gazetteer is the
-compliant answer for a search space that is a known set of administrative places. See
-[`docs/openstreetmap/20-services.md`](../docs/openstreetmap/20-services.md) for the policy and the
-alternatives (Photon, Pelias, commercial providers).
-
-## Layout
-
-| Path | What it is |
+| Path | What |
 |---|---|
-| `search-api/` | NestJS service. Serves `/boundary/search`, `/boundary/fetch`, legacy `/search`, `/health`. Listens on `:3000`. |
-| `overture-scraper/` | The offline data pipeline: `scrape.py` → `apply_admin_levels.py` → `build_hierarchy.py`, wrapped by `bootstrap.sh`. |
-| `data/` | Vendored Trie hierarchies (`<Continent>/<Country>/hierarchy.json`) for the legacy `/search`. |
-| `scraper/` | Vendored local Overpass instance used to (re)generate `data/`. See `scraper/README.md`. |
-| `overture-data/` | **Generated, gitignored.** `boundaries.sqlite` (~1GB) produced by the bootstrap pipeline. |
-| `docker-compose.yml` | Bootstrap the DB and run the service. |
+| `search-api/` | NestJS service: `/boundary/search`, `/boundary/fetch`, `/health`, and the legacy `/search`. Port 3000. |
+| `overture-scraper/` | Builds the offline boundary DB from Overture Maps (`bootstrap.sh`); `coverage.py` |
+| `data/`, `scraper/` | Name hierarchies for the legacy Trie `/search`, vendored from dhruv-1001/osm-mapped-data |
+| `docker-compose.yml` | The one-shot `bootstrap` and the `search-api` |
 
-## API contract
+## Sources
 
-```
-GET /boundary/search?q=<term>&source=overture|geoapify
-→ GeoJSON FeatureCollection of matching places (properties.place_id is the fetch id)
+| `source=` | Backed by | Needs |
+|---|---|---|
+| `overture` (default) | Offline SQLite DB built from Overture Maps divisions | The DB (below). No network or key at query time. |
+| `geoapify` | Hosted Geoapify API | `GEOAPIFY_API_KEY` on the service; every call spends that key's quota |
 
-GET /boundary/fetch?id=<place_id>&source=overture|geoapify
-→ GeoJSON FeatureCollection: the place plus its full nested admin hierarchy
-
-GET /health
-→ { status: "ok", locationsLoaded: <n> }
-```
-
-The configurator calls this through a same-origin base path, default `/turbopass` (override via Vite env `VITE_TURBOPASS_URL`), and picks the source via `VITE_TURBOPASS_SOURCE` (`geoapify` by default; set to `overture` for the offline DB).
-
----
-
-## Deploy with Docker Compose (recommended)
-
-Everything runs from this directory. Requires Docker with Compose v2.
-
-### 1. Bootstrap the boundary data (one-time, ~1GB download)
+## Run it
 
 ```bash
-docker compose --profile bootstrap up --build bootstrap
+cd turbopass
+docker compose --profile bootstrap run --rm bootstrap   # 1. build the DB (~15 min, network-bound)
+docker compose up -d search-api                         # 2. serve it
+curl -s localhost:3000/health | jq .
 ```
 
-This runs the full pipeline (scrape Overture S3 → assign synthetic admin levels → compute the spatial parent/child hierarchy) and writes `./overture-data/boundaries.sqlite`. The `bootstrap` profile keeps it out of the default `up`, so the multi-GB download only happens when you ask for it.
+CI (`.github/workflows/turbopass-build.yml`, which runs only when this directory changes)
+publishes `egovio/turbopass-search` and `egovio/turbopass-bootstrap`. Add `--build` to build
+from the checkout instead.
 
-Retarget the countries (ISO 3166-1 alpha-2, comma-separated) without editing any file:
+## Build the boundary DB
+
+`overture-scraper/bootstrap.sh`, the bootstrap image's entrypoint, runs four steps and exits
+non-zero if any fails — it never reports "ready" over an empty DB:
+
+1. `scrape.py` reads Overture's `division_area` parquet on S3 for the requested countries.
+2. `apply_admin_levels.py`: Overture numbers admin levels only down to county (country 0,
+   region 1, county 2); this sets locality 3, macrohood 4, neighborhood 5, microhood 6.
+3. `build_hierarchy.py` drops maritime duplicates — Overture ships every country and some
+   coastal regions twice under one division, land plus territorial sea, and the land area is
+   kept. It then links each area to its parent (centroid inside the polygon, same country,
+   nearest shallower level), simplifies the geometry and indexes the table.
+4. `verify_db.py` checks every requested country is present with a root, at least 90% of
+   areas have a parent, and no division has two areas.
+
+| Variable | Default | |
+|---|---|---|
+| `COUNTRIES` (`TURBOPASS_COUNTRIES` in compose) | `IN,KE,MZ` | ISO 3166-1 alpha-2 codes |
+| `OVERTURE_RELEASE` | newest in the bucket | Overture keeps only its last few releases; a pinned release that has gone is a hard error |
+| `SIMPLIFY_TOLERANCE` | `0.0001` (about 11 m) | `0` keeps full resolution |
+| `OVERTURE_DB_PATH` | `../overture-data/boundaries.sqlite` | |
+
+`overture-data/` is gitignored.
+
+**Which countries can be onboarded?** `coverage.py` counts Overture's division areas per
+country and subtype without downloading any geometry:
 
 ```bash
-TURBOPASS_COUNTRIES="IN,KE,MZ,ZA" docker compose --profile bootstrap up --build bootstrap
+docker compose --profile bootstrap run --rm --entrypoint python3 bootstrap coverage.py
 ```
 
-### 2. Run the service
+A country whose data stops at region level gives operators a two-level hierarchy at best.
 
-```bash
-docker compose up -d --build search-api
-```
+## API
 
-The API is now on `http://localhost:3000` (override the host port with `TURBOPASS_PORT`). Verify:
+`GET /boundary/search?q=<name>`
 
-```bash
-curl -s "http://localhost:3000/health" | jq .
-curl -s "http://localhost:3000/boundary/search?q=Maputo&source=overture" | jq '.features[].properties.name'
-# Fetch a hierarchy (Maputo City → Distritos → Bairros):
-curl -s "http://localhost:3000/boundary/fetch?id=e93d7baf-bdc6-4182-8b2b-1ef8a9b21a34&source=overture" | jq '.features | length'
-```
+| Param | Default | |
+|---|---|---|
+| `source` | `overture` | or `geoapify` |
+| `match` | `substring` | `exact`, `prefix`, `substring`, or `fuzzy` (one typo up to 6 letters, two beyond) |
+| `limit` | `10` | 1–50 |
+| `min_descendants` | `0` | Only places with at least this many areas inside. The configurator sends `1`: a place with nothing inside can't form a hierarchy. |
 
-### 3. Point the configurator at it
+`match`, `limit` and `min_descendants` apply to `overture`. Results rank exact → prefix →
+substring → fuzzy, then broadest place first; matching ignores case and accents. Each result
+carries `place_id`, `name`, `subtype`, `admin_level`, `parent_name`, `region_name`,
+`country_name`, `descendant_count`, `match_type`, and a `formatted` label that tells
+same-name places apart ("Delhi — region, India"). Search results have a GeoJSON `bbox`
+(`[west, south, east, north]`) but no polygons — `geometry` is `null`.
 
-Set `VITE_TURBOPASS_SOURCE=overture` (and `VITE_TURBOPASS_URL` if the service isn't same-origin `/turbopass`) in the configurator's build env, then use Phase 2's OSM boundary fetch as normal.
+`GET /boundary/fetch?id=<place_id>` — the place and every area inside it, with polygons. A
+place with more than `FETCH_MAX_FEATURES` areas inside is refused with `413`, naming the count.
 
-### Environment variables
+`GET /health` — `sources` (which of `overture` / `geoapify` can answer here) and `overture`
+(release, countries, build time, number of places).
 
-| Var | Where | Default | Purpose |
-|---|---|---|---|
-| `TURBOPASS_COUNTRIES` | compose (bootstrap) | `IN,KE,MZ` | Countries to scrape. |
-| `OVERTURE_RELEASE` | compose (bootstrap) | `2026-06-17.0` | Overture Maps release tag. |
-| `TURBOPASS_PORT` | compose (search-api) | `3000` | Host port. |
-| `GEOAPIFY_API_KEY` | compose (search-api) | _(unset)_ | Enables `source=geoapify`. |
-| `OVERTURE_DB_PATH` | search-api / scripts | `/overture-data/boundaries.sqlite` (container) | SQLite DB location. |
-| `DATA_DIR` | search-api | `/data` (container) | Trie data dir for legacy `/search`. |
+## Configuration
 
----
+| Variable | Default | |
+|---|---|---|
+| `OVERTURE_DB_PATH` | `/overture-data/boundaries.sqlite` in the image | Without the DB, `overture` answers 503; the service still starts |
+| `GEOAPIFY_API_KEY` | — | Enables `source=geoapify` |
+| `GEOAPIFY_RATE_LIMIT` | `120` | Geoapify calls per minute, across all callers; `0` = off |
+| `FETCH_MAX_FEATURES` | `5000` | Largest `/boundary/fetch`; `0` = off |
+| `CORS_ORIGINS` | `*` | Comma-separated origins. Set it on a central instance that holds a Geoapify key. |
+| `DATA_DIR` | `/data` | Vendored hierarchies for the legacy `/search` |
 
-## Run without Docker (local dev)
+## Configurator side
 
-Bootstrap the DB on the host (creates a `venv` and installs `overture-scraper/requirements.txt` automatically):
+| Build variable | Default | |
+|---|---|---|
+| `VITE_TURBOPASS_URL` | `/turbopass` | Same-origin path (nginx proxies it), or the central service's URL |
+| `VITE_TURBOPASS_SOURCE` | `overture` | |
+| `VITE_TURBOPASS_MATCH` | `substring` | The `match` mode the configurator sends |
 
-```bash
-cd overture-scraper
-./bootstrap.sh                      # or: COUNTRIES="IN,KE,MZ,ZA" ./bootstrap.sh
-```
+## Adding countries
 
-Then run the API against the DB it produced (`../overture-data/boundaries.sqlite`):
-
-```bash
-cd ../search-api
-npm install
-npm run start:dev                   # http://localhost:3000
-# If better-sqlite3 complains about a Node ABI mismatch: npm rebuild better-sqlite3
-```
-
-The manual, step-by-step version of the pipeline is in [`RUNNING_TURBOPASS.md`](RUNNING_TURBOPASS.md); the design/data-model details are in [`OVERTURE_INTEGRATION.md`](OVERTURE_INTEGRATION.md).
-
----
-
-## Deploy on a DIGIT box (Ansible)
-
-Enabled per-tenant via the `enable_turbopass` host_var. The playbook builds `search-api/Dockerfile` and runs the container on loopback `127.0.0.1:13301`; host nginx proxies `/turbopass/` to it, so the configurator's same-origin default works without extra config. To serve the offline Overture source there, mount the generated `overture-data/boundaries.sqlite` into the container at `OVERTURE_DB_PATH` (the compose file above is the reference wiring).
-
-## Extending coverage
-
-Add ISO codes to `TURBOPASS_COUNTRIES` (or `COUNTRIES` when running `bootstrap.sh` directly) and re-run the bootstrap — it drops and rebuilds `boundaries.sqlite` for the full set. To extend the legacy Trie `/search`, run the Overpass scraper (see `scraper/README.md`), which writes new `hierarchy.json` files under `data/`.
+Add ISO codes to `TURBOPASS_COUNTRIES` (or `COUNTRIES`) and re-run the bootstrap; it rebuilds
+the DB from scratch. Check `coverage.py` first.

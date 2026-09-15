@@ -13,6 +13,9 @@ COPY . .
 
 # Deps are baked into the image; skip the host-venv branch in bootstrap.sh.
 ENV TURBOPASS_SKIP_VENV=1
+# Stream progress when run without a TTY (CI, a central server); Python
+# block-buffers stdout otherwise and prints nothing until it exits.
+ENV PYTHONUNBUFFERED=1
 # Written to the volume mounted by docker-compose.
 ENV OVERTURE_DB_PATH=/overture-data/boundaries.sqlite
 
