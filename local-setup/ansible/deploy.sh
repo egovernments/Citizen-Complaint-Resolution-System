@@ -46,7 +46,6 @@ run_static_validation() {
 
   if command -v ansible-lint >/dev/null 2>&1; then
     echo "──── ansible-lint ────────────────────────────────────────────────"
-    ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet 2>/dev/null || true
     if ! ansible-lint playbook-deploy.yml; then
       echo "ERROR: ansible-lint found violations. Fix them before deploying." >&2
       failed=1
@@ -72,6 +71,19 @@ run_static_validation() {
   fi
   echo "──── Static validation passed ────────────────────────────────────"
 }
+
+# Install the collections the playbook needs (community.general.ufw / htpasswd /
+# ini_file, ansible.posix, …) UNCONDITIONALLY — not only inside the ansible-lint
+# branch, and without swallowing failures (Vinoth review). On an ansible-core-only
+# controller, or any run with SKIP_LINT=1, the old lint-gated `… || true` install
+# never ran, and the playbook then died at parse time with "couldn't resolve
+# module/action 'community.general.ufw'". Idempotent and cheap, so run it always
+# and let a real install failure stop the deploy with a clear message.
+if command -v ansible-galaxy >/dev/null 2>&1; then
+  echo "──── ansible-galaxy: install required collections ────────────────"
+  ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet \
+    || { echo "ERROR: failed to install Ansible collections from requirements.yml." >&2; exit 1; }
+fi
 
 if [[ "${SKIP_LINT:-0}" != "1" ]]; then
   run_static_validation

@@ -876,12 +876,31 @@
                 name: ufw
                 state: present
 
+            # Read the port sshd is ACTUALLY listening on, rather than trusting
+            # ansible_port (Vinoth review). ansible_port is only populated when
+            # the port comes from inventory; an operator connecting via an SSH
+            # alias whose Port lives in ~/.ssh/config — which the onboarding
+            # skill tells them to do — leaves it unset, so the allow-list would
+            # render [22] and default-deny would lock them out on the next
+            # connection (the in-flight session survives via ESTABLISHED, so the
+            # play still goes green). `sshd -T` reports the effective config.
+            - name: "ufw — detect the port(s) sshd is actually listening on"
+              ansible.builtin.shell:
+                cmd: sshd -T 2>/dev/null | awk '/^port /{print $2}'
+                executable: /bin/bash
+              register: _sshd_ports
+              changed_when: false
+              failed_when: false
+
             - name: "ufw — allow SSH BEFORE enabling (do not lock ourselves out)"
               community.general.ufw:
                 rule: allow
                 port: "{{ item }}"
                 proto: tcp
-              loop: "{{ ([22, ansible_port | default(22)]) | unique }}"
+              loop: >-
+                {{ ([22, ansible_port | default(22)]
+                    + (_sshd_ports.stdout_lines | default([]) | map('int') | list)
+                    + (ufw_extra_allow_ports | default([]) | map('int') | list)) | unique }}
 
             # nginx_host_port is overridable (group_vars/all.yml). Hardcoding
             # 80/443 here would let a tenant that moved its listener lock
@@ -1359,6 +1378,45 @@
           scripts:  ../scripts
           keycloak: ../keycloak
 
+    # ==================== Kong CORS origins (pin BEFORE up -d) ====================
+    # The config sync above rsynced the repo's kong.yml, which ships
+    # `origins: ['*']` for local `docker compose up`/Tilt. That wildcard must
+    # never reach a deployed box (it lets any site read every auth-optional API
+    # cross-origin). Pin it to this tenant's domain HERE — before "Start DIGIT
+    # stack" — so Kong never comes up serving the wildcard and an abort anywhere
+    # after this can't leave it live. (Vinoth review: previously pinned ~190
+    # lines after up -d, opening the window on every image-pin-recreate redeploy.)
+    # Override with `kong_cors_origins` in host_vars for extra origins.
+    #
+    # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
+    # (#1683). ansible.builtin.replace os.rename()s a temp file over it (new
+    # inode); so edit a staging copy, then `cat` it over the original — the
+    # redirect truncates in place, preserving the inode the container will mount.
+    - name: "Kong — stage a copy to pin CORS origins into"
+      ansible.builtin.copy:
+        src: "{{ digit_dir }}/kong/kong.yml"
+        dest: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        remote_src: true
+        mode: '0644'
+
+    # `[ \t]*-` rather than `\s*-`: \s matches newlines, so the greedy form
+    # could run past a blank line and swallow the NEXT plugin's `- name:` entry.
+    # Origin scheme follows tls_enabled (Vinoth review) — a hardcoded https://
+    # can never match the browser Origin on a plain-HTTP tenant.
+    - name: "Kong — pin CORS origins to the tenant domain (staging copy)"
+      ansible.builtin.replace:
+        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
+        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
+        replace: "\\1{% for o in (kong_cors_origins | default([ ('https://' if (tls_enabled | default(true)) else 'http://') ~ domain ])) %}    - '{{ o }}'\n{% endfor %}"
+      register: kong_cors_pin
+
+    - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cat "{{ digit_dir }}/kong/.kong.yml.pinned" > "{{ digit_dir }}/kong/kong.yml"
+        rm -f "{{ digit_dir }}/kong/.kong.yml.pinned"
+      changed_when: true
+
     # Upgrade path for #1743. `synchronize` only writes what is in the list
     # above — it never removes a directory that has dropped out of it. A host
     # deployed before the Jupyter removal therefore keeps two stale copies of
@@ -1440,6 +1498,7 @@
         src: "{{ digit_dir }}/.env"
       register: prev_env
       failed_when: false
+      no_log: true   # holds the entire previous .env (POSTGRES/MINIO/KC/GF secrets); -v would print it (Vinoth review)
 
     - name: Write per-tenant compose .env
       template:
@@ -1979,6 +2038,7 @@
               secret_threshold: 1
             status_code: [200]
           register: bao_init_response
+          no_log: true   # json.root_token + json.keys_base64 — highest-value pair on the box; -v would print it (Vinoth review)
 
         - name: "OpenBao — persist init state"
           ansible.builtin.copy:
@@ -2087,9 +2147,27 @@
     # cluster-2 upload fix could take effect. So: fresh box (no prior .env) fails
     # closed; existing box (prior .env present) gets a loud warning and proceeds,
     # and the operator rotates the credential out of band.
+    # "Existing box" = a prior deploy actually brought the stack up, detected by
+    # the main postgres data volume. This is deliberately NOT keyed off .env or
+    # OpenBao init state (Vinoth review): those are written EARLIER in this same
+    # run, so a fresh box that trips the fail-closed assert below and is re-run
+    # would find the file it just wrote and reclassify itself "existing",
+    # downgrading the assert to a warning — the fail-closed gate would survive
+    # exactly one attempt. The postgres volume is created only at "Start DIGIT
+    # stack" (up -d), which runs AFTER this assert, so a fresh box that aborts
+    # here never creates it and stays fail-closed on every re-run. Excludes the
+    # keycloak/mcp sidecar postgres volumes.
+    - name: "Opt-in stacks — detect a prior deploy (main postgres data volume exists)"
+      ansible.builtin.shell:
+        cmd: docker volume ls --format '{{ "{{" }}.Name{{ "}}" }}' | grep -E '_postgres_data$' | grep -vqE 'keycloak|mcp' && echo EXISTING || echo FRESH
+        executable: /bin/bash
+      register: _prior_deploy_check
+      changed_when: false
+      failed_when: false
+
     - name: "Opt-in stacks — classify the box and build the dev-secret check list"
       ansible.builtin.set_fact:
-        _existing_box: "{{ (prev_env.content is defined) and ((prev_env.content | b64decode | length) > 0) }}"
+        _existing_box: "{{ 'EXISTING' in (_prior_deploy_check.stdout | default('')) }}"
         _optin_secret_checks:
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_jwt_secret",            bad: "dev-jwt-secret-change-in-production-please" }
           - { feature: "Novu (enable_novu)",       enabled: "{{ enable_novu | default(false) }}",     var: "novu_store_encryption_key",  bad: "change-this-key-32-characters!!!" }
@@ -2640,68 +2718,18 @@
     # This is the layer that actually knows which profiles are enabled, so the
     # enforcement lives here: if you turn a stack on, its secrets must be set
     # and must not still be the published dev value.
-    # ==================== Kong CORS origins ====================
-    # The repo's kong.yml ships `origins: ['*']` so a local `docker compose up`
-    # or Tilt run (SPA on its own port) works without configuration. That
-    # wildcard must never reach a deployed box: paired with the credentials
-    # flag it used to make every origin trusted for CREDENTIALED calls, and
-    # even without credentials it lets any site read every auth-optional API
-    # cross-origin.
+    # ==================== Kong CORS origins (verify) ====================
+    # The wildcard pin now happens BEFORE "Start DIGIT stack" (see "Kong — pin
+    # CORS origins…" right after the config sync), so Kong never comes up serving
+    # `origins: ['*']` and there is no window where an aborted deploy leaves the
+    # wildcard live. (Vinoth review — previously the pin ran ~190 lines after
+    # up -d.) What stays here is the CONTAINER-view verification + the reload:
     #
-    # A real deployment serves the SPAs and Kong from ONE origin behind nginx,
-    # so the correct value is just this tenant's domain. Override with
-    # `kong_cors_origins` in host_vars when a tenant genuinely needs more (a
-    # separate analytics host, say).
-    #
-    # kong.yml is a single-file bind mount, so the edit MUST preserve the inode
-    # or the running container keeps reading the old one forever (#1683 — the
-    # same reason the config sync above uses rsync --inplace).
-    #
-    # `unsafe_writes: true` does NOT achieve that. An earlier revision of this
-    # task assumed it did. ansible.builtin.replace writes a temp file and calls
-    # atomic_move(), which tries os.rename() FIRST; on a plain host file that
-    # succeeds, so the unsafe_writes path is never reached and the inode is
-    # swapped regardless. Verified directly: os.rename over a file changes its
-    # inode; an open-for-write truncation does not.
-    #
-    # The failure was silent, and worse than not doing it at all: Kong would
-    # keep serving the un-pinned config, the host-side check below would read
-    # the correct file and report success, and every FUTURE kong.yml change
-    # would land on an inode the container no longer holds — freezing the
-    # gateway's config permanently.
-    #
-    # So: edit a staging copy, then `cat` it over the original. The redirect
-    # truncates the existing file in place, preserving the inode.
-    - name: "Kong — stage a copy to pin CORS origins into"
-      ansible.builtin.copy:
-        src: "{{ digit_dir }}/kong/kong.yml"
-        dest: "{{ digit_dir }}/kong/.kong.yml.pinned"
-        remote_src: true
-        mode: '0644'
-
-    # `[ \t]*-` rather than `\s*-`: \s matches newlines, so the greedy form
-    # could run past a blank line and swallow the NEXT plugin's `- name:` entry.
-    - name: "Kong — pin CORS origins to the tenant domain (staging copy)"
-      ansible.builtin.replace:
-        path: "{{ digit_dir }}/kong/.kong.yml.pinned"
-        regexp: "(origins:\\s+# kong-cors-origins-marker\\n)(?:[ \\t]*-[ \\t]*.*\\n)+"
-        replace: "\\1{% for o in (kong_cors_origins | default(['https://' ~ domain])) %}    - '{{ o }}'\n{% endfor %}"
-      register: kong_cors_pin
-
-    - name: "Kong — write the pinned config back IN PLACE (preserves the inode)"
-      ansible.builtin.shell: |
-        set -euo pipefail
-        cat "{{ digit_dir }}/kong/.kong.yml.pinned" > "{{ digit_dir }}/kong/kong.yml"
-        rm -f "{{ digit_dir }}/kong/.kong.yml.pinned"
-      changed_when: true
-
     # Fail loudly rather than silently leaving '*' in place: if the marker ever
-    # drifts out of kong.yml the replace above is a no-op, and a green deploy
-    # would ship the wildcard to production.
-    # Read what the CONTAINER has, not the host path. A host-side check cannot
-    # detect the inode-orphaning failure described above: the file on disk looks
-    # correct while the gateway serves something else entirely. That is exactly
-    # the false-green this verification exists to prevent.
+    # drifts out of kong.yml the pin is a no-op, and a green deploy would ship
+    # the wildcard. Read what the CONTAINER has, not the host path — a host-side
+    # check cannot detect an inode-orphaning failure: the file on disk looks
+    # correct while the gateway serves something else entirely.
     - name: "Kong — verify the CORS wildcard is gone (as the container sees it)"
       ansible.builtin.shell: |
         set -euo pipefail
@@ -2740,10 +2768,11 @@
       ansible.builtin.command:
         cmd: docker exec kong-gateway kong reload
       when: >-
-        config_sync.results | default([])
-        | selectattr('item.key', 'equalto', 'kong')
-        | selectattr('changed', 'defined') | selectattr('changed')
-        | list | length > 0
+        (kong_cors_pin.changed | default(false))
+        or (config_sync.results | default([])
+            | selectattr('item.key', 'equalto', 'kong')
+            | selectattr('changed', 'defined') | selectattr('changed')
+            | list | length > 0)
       changed_when: true
 
     # Same failure mode as Kong, one hop further down (#1683). The OpenTelemetry
@@ -3776,14 +3805,21 @@
         - _existing_box | default(false) | bool
         - not (status_basic_auth_password is defined and (status_basic_auth_password | length > 0))
 
-    # Idempotent via `creates`: rotate by deleting the file and re-running.
+    # community.general.htpasswd, not `htpasswd -bBc … <pw>` (Vinoth review):
+    #   - idempotent against the STORED HASH, so "edit host_vars + redeploy"
+    #     actually rotates the credential — the old `creates:` guard made
+    #     rotation a silent no-op (file exists → task skipped, old password
+    #     still valid, deploy green).
+    #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
+    #     so `-b` defeats no_log for the lifetime of the exec — the same reason
+    #     the Grafana reset uses --password-from-stdin).
     - name: "status board — basic-auth user in /etc/nginx/.htpasswd-status"
-      ansible.builtin.command: >-
-        htpasswd -bBc /etc/nginx/.htpasswd-status
-        "{{ status_basic_auth_user | default('digit-status') }}"
-        "{{ status_basic_auth_password }}"
-      args:
-        creates: /etc/nginx/.htpasswd-status
+      community.general.htpasswd:
+        path: /etc/nginx/.htpasswd-status
+        name: "{{ status_basic_auth_user | default('digit-status') }}"
+        password: "{{ status_basic_auth_password }}"
+        crypt_scheme: bcrypt
+        mode: '0640'
       no_log: true
       when:
         - nginx_features.status | default(false)
@@ -3797,12 +3833,12 @@
     # this, auth_basic_user_file points at a file nginx cannot open and every
     # /status/ request is a 500 rather than a 401.
     - name: "status board — basic-auth user for the Mac nginx container"
-      ansible.builtin.command: >-
-        htpasswd -bBc {{ digit_dir }}/nginx/.htpasswd-status
-        "{{ status_basic_auth_user | default('digit-status') }}"
-        "{{ status_basic_auth_password }}"
-      args:
-        creates: "{{ digit_dir }}/nginx/.htpasswd-status"
+      community.general.htpasswd:
+        path: "{{ digit_dir }}/nginx/.htpasswd-status"
+        name: "{{ status_basic_auth_user | default('digit-status') }}"
+        password: "{{ status_basic_auth_password }}"
+        crypt_scheme: bcrypt
+        mode: '0640'
       no_log: true
       when:
         - nginx_features.status | default(false)
@@ -3810,12 +3846,12 @@
         - ansible_system == "Darwin"
 
     - name: "integration-tests — basic-auth user in /etc/nginx/.htpasswd-tests"
-      ansible.builtin.command: >-
-        htpasswd -bBc /etc/nginx/.htpasswd-tests
-        "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
-        "{{ integration_tests_basic_auth_password }}"
-      args:
-        creates: /etc/nginx/.htpasswd-tests
+      community.general.htpasswd:
+        path: /etc/nginx/.htpasswd-tests
+        name: "{{ integration_tests_basic_auth_user | default('digit-tests') }}"
+        password: "{{ integration_tests_basic_auth_password }}"
+        crypt_scheme: bcrypt
+        mode: '0640'
       no_log: true
       when:
         - enable_integration_tests | default(false)
@@ -4254,6 +4290,7 @@
       delay: 10
       until: auth_probe.status == 200
       failed_when: false
+      no_log: true   # auth_probe.json.access_token is a live admin token; -v would print it (Vinoth review)
 
     - name: "validate — auth probe returned an access_token"
       ansible.builtin.assert:
@@ -4261,10 +4298,13 @@
           - auth_probe.status == 200
           - auth_probe.json.access_token is defined
           - auth_probe.json.access_token | length > 10
+        # Deliberately does NOT interpolate auth_probe.json into the message:
+        # fail_msg renders at default verbosity, and the short-token branch is
+        # exactly the case where the body would be echoed. Report status only.
         fail_msg: >-
           Token mint failed for bootstrap user '{{ bootstrap_user | default('ADMIN') }}'
-          on tenant '{{ bootstrap_tenant | default('pg') }}'
-          (HTTP {{ auth_probe.status }}: {{ auth_probe.json | default({}) | to_json | truncate(200) }}).
+          on tenant '{{ bootstrap_tenant | default('pg') }}' (HTTP {{ auth_probe.status }},
+          access_token missing or too short).
           If this is 'Invalid login credentials': the user exists but its password does not
           match host_vars bootstrap_password (user-seed skips existing users and never
           rewrites passwords). Either set bootstrap_password back to the value the user was
@@ -5234,9 +5274,15 @@
           -s 'baseUrl=/citizen/' \
           -s "redirectUris=${REDIRECTS}" \
           -s "webOrigins=${ORIGINS}"
-        # existing realms never get re-imported, so enforce TLS here too
+        # existing realms never get re-imported, so re-assert sslRequired here
+        # too — but with the SAME tls_enabled conditional the realm template
+        # uses (keycloak-realm.json.j2), or this unconditional `external` (which
+        # runs every deploy once the client UUID resolves) silently overwrites
+        # the template's value. With KC_PROXY_HEADERS=xforwarded Keycloak sees
+        # the real client IP, so `external` = "HTTPS required" on every login of
+        # a plain-HTTP tenant. (Vinoth review.)
         docker exec keycloak /opt/keycloak/bin/kcadm.sh update "realms/{{ state_tenant_id }}" \
-          -s 'sslRequired=external'
+          -s 'sslRequired={{ "external" if (tls_enabled | default(true)) else "none" }}'
       when:
         - enable_keycloak | default(false)
         - kc_digit_ui_client_id is defined

@@ -980,7 +980,13 @@ services:
       OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-otlp}
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
-      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
+      # The fixed dev OTP (123456) MUST be off wherever real OTP delivery is on,
+      # or every account is one guessable code away from takeover. The Ansible
+      # deploy renders this false whenever enable_otp_services is true (see
+      # digit.env.j2), so following the production OTP runbook actually disables
+      # it. Bare `docker compose up` (local dev, no real SMS) defaults to true
+      # for convenience. (Vinoth review.)
+      CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: ${CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED:-true}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
       EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
       EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
@@ -1998,7 +2004,13 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      # Loopback-only INSIDE the container: Kong is DB-less, so a reachable
+      # Admin API means any container on egov-network could POST /config and
+      # replace the whole gateway declaration — including the pre-function auth
+      # gate this stack relies on. Nothing consumes the Admin API remotely (the
+      # declarative reload is `docker exec … kong reload`), so bind it to the
+      # container's own loopback and drop the host publication below. (Vinoth review.)
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001
       KONG_ADMIN_GUI_URL: http://localhost:8002
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_MEM_CACHE_SIZE: 64m
@@ -2012,7 +2024,9 @@ services:
     ports:
       - "${PROXY_BIND_IP:-127.0.0.1}:18000:8000"   # Proxy (HTTP)
       - "${BIND_IP:-127.0.0.1}:18443:8443"   # Proxy (HTTPS)
-      - "${BIND_IP:-127.0.0.1}:18001:8001"   # Admin API
+      # Admin API (8001) is container-loopback-only (see KONG_ADMIN_LISTEN
+      # above) and deliberately NOT published. The declarative reload uses
+      # `docker exec … kong reload`, not the API over TCP. (Vinoth review.)
       - "${BIND_IP:-127.0.0.1}:18002:8002"   # Kong Manager GUI
       # Status listener. Bound to loopback (#1614): with the Kong prometheus
       # plugin enabled, /metrics on this port exposes route names, per-route

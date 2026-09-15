@@ -236,10 +236,13 @@ server {
 {% if nginx_features.mcp %}
   # DIGIT MCP server (HTTP transport at /mcp; healthcheck at /mcp/healthz).
   # Streaming-friendly: long timeouts and buffering disabled for SSE.
-  # WARNING: /mcp exposes admin tools (mdms_create, user_create,
-  # employee_create, tenant_bootstrap, pgr_update, …) without auth —
-  # only safe for test deployments. The /v1/* REST shim below is
-  # authenticated (Authorization: Bearer <token> or body.auth = …).
+  # AUTH: /mcp is authenticated — an unauthenticated request gets 401 (the
+  # deploy asserts this: "validate — MCP HTTP transport is routed"). Admin tools
+  # (mdms_create, user_create, employee_create, tenant_bootstrap, pgr_update, …)
+  # require a token, gated by the MCP's own access tiers. The /v1/* REST shim
+  # below is likewise authenticated (Authorization: Bearer <token> or body.auth).
+  # (Updated per Vinoth review — this used to say "without auth / test only",
+  # which is no longer true and was misleading a security reader.)
   location /mcp {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;

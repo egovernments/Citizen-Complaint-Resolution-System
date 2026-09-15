@@ -19,7 +19,7 @@ fail=0
 #    A YAML walk (not a line grep) so quoting, flow-style {a: b}, and
 #    continuation-line scalars cannot smuggle a value past the check.
 # ---------------------------------------------------------------------------
-echo "==> secret values in tracked inventory / env-example files"
+echo "==> secret values in tracked inventory files (host_vars / group_vars / hosts.yml)"
 python3 - <<'PY' || fail=1
 import subprocess, sys, glob, os
 try:
@@ -27,8 +27,11 @@ try:
 except ImportError:
     print("FAIL: PyYAML not available — cannot parse inventory safely."); sys.exit(1)
 
-# Scan ALL inventory + group_vars + hosts + env-example files, not just host_vars
-# (group_vars/all.yml, hosts.yml.example etc. share the same var namespace).
+# Scan ALL tracked inventory files — host_vars, group_vars AND hosts.yml* —
+# not just host_vars (group_vars/all.yml, hosts.yml.example etc. share the same
+# var namespace). NOTE (Vinoth review): this is a YAML walk, so it covers the
+# YAML inventory only; shell-format `.env*`/`*.env.example` files are a separate
+# format and are NOT scanned here — the banner above no longer claims they are.
 patterns = [
     "local-setup/ansible/inventory/host_vars/*",
     "local-setup/ansible/inventory/group_vars/*",
@@ -46,6 +49,11 @@ SECRET_KEYS = {
   "keycloak_admin_password","keycloak_db_password","keycloak_google_client_secret",
   "token_exchange_system_password","bootstrap_password","grafana_admin_password",
   "novu_jwt_secret","novu_store_encryption_key","novu_secret_key","novu_mongo_password",
+  # basic-auth passwords introduced by the security rework, and secrets this
+  # deploy uses that were missing from the list (Vinoth review):
+  "status_basic_auth_password","integration_tests_basic_auth_password",
+  "twilio_auth_token","novu_api_key","novu_bridge_smscountry_password",
+  "gatus_slack_webhook_url","ansible_become_password",
 }
 PLACEHOLDERS = {"", "CHANGE_ME", None}
 import re as _re
