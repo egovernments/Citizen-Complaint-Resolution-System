@@ -40,12 +40,12 @@ describe('sign-in gate', () => {
   it('renders only the methods the backend reports as enabled', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
-      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+      methods: [{ id: 'password', label: 'Email and password', type: 'password' }],
     });
 
     render(<SignupPage />);
 
-    expect(await screen.findByRole('button', { name: /continue with password/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
     // Nothing is hardcoded, so a provider that is off simply does not appear.
     expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
   });
@@ -53,11 +53,11 @@ describe('sign-in gate', () => {
   it('hands sign-in to the backend rather than collecting a credential', async () => {
     vi.mocked(api.session).mockResolvedValue({ authenticated: false });
     vi.mocked(api.authMethods).mockResolvedValue({
-      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+      methods: [{ id: 'password', label: 'Email and password', type: 'password' }],
     });
 
     render(<SignupPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue with password/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /email and password/i }));
 
     expect(api.startSignIn).toHaveBeenCalledWith('password');
     // The whole point: no password field ever exists in this flow.
@@ -204,7 +204,7 @@ describe('expired session', () => {
     vi.mocked(api.session).mockResolvedValue(signedIn);
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
     vi.mocked(api.authMethods).mockResolvedValue({
-      methods: [{ id: 'password', label: 'Password', type: 'password' }],
+      methods: [{ id: 'password', label: 'Email and password', type: 'password' }],
     });
     vi.mocked(api.createSignup).mockRejectedValue(
       new api.OnboardingError(401, 'ONBOARDING_IDENTITY_REQUIRED', 'A valid identity session is required')
@@ -219,7 +219,7 @@ describe('expired session', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect(await screen.findByText(/sign-in expired/i)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /continue with password/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /email and password/i })).toBeInTheDocument();
   });
 });
 

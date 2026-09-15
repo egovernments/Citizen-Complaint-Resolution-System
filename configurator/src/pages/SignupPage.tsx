@@ -474,8 +474,11 @@ export default function SignupPage() {
               magic link appear here once their Keycloak providers are switched
               on, and they use this same redirect, so nothing changes here. */}
           {methods.map((method) => (
+            // The label is the whole phrase, not a noun to prefix: the backend
+            // sends "Email me a sign-in link", which "Continue with" turns into
+            // nonsense. Render what it sends.
             <Button key={method.id} className="w-full" onClick={() => startSignIn(method.id)}>
-              <LogIn className="mr-2 h-4 w-4" /> Continue with {method.label}
+              <LogIn className="mr-2 h-4 w-4" /> {method.label}
             </Button>
           ))}
           {!methods.length && (
