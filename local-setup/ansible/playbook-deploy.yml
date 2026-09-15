@@ -2133,8 +2133,17 @@
           MCP_DB_PASSWORD={{ bao_secrets.json.data.data.mcp_db_password }}
           MINIO_ROOT_USER={{ bao_secrets.json.data.data.minio_root_user }}
           MINIO_ROOT_PASSWORD={{ bao_secrets.json.data.data.minio_root_password }}
-          AWS_KEY={{ bao_secrets.json.data.data.minio_root_user }}
-          AWS_SECRETKEY={{ bao_secrets.json.data.data.minio_root_password }}
+          # NB: intentionally NO AWS_KEY / AWS_SECRETKEY here. egov-filestore's
+          # compose entry is `AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER}}` (and the
+          # same for the secret), so with no AWS_KEY line present filestore
+          # derives its credential from MINIO_ROOT_USER — the exact value MinIO
+          # itself loads. Writing AWS_KEY here reintroduced the cluster-2 bug: a
+          # stale AWS_KEY line carried forward by the ".env regeneration + restore
+          # OpenBao blocks" step (or a differently-marked legacy block) is a
+          # later duplicate that WINS over the rotated value, so filestore
+          # authenticated as `minioadmin` while MinIO had rotated → every upload
+          # 500s with InvalidAccessKeyId. The "strip stale AWS_KEY" task below
+          # guarantees no such line survives. (Root-caused by @dhruv-1001.)
           ELASTICSEARCH_MASTER_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_master_password }}
           EGOV_HRMS_DEFAULT_PASSWORD={{ bao_secrets.json.data.data.egov_hrms_default_password }}
           ELASTICSEARCH_PASSWORD={{ bao_secrets.json.data.data.elasticsearch_password | default('', true) }}
@@ -2151,6 +2160,33 @@
         marker: "# {mark} TENANT SECRETS"
         create: false           # .env was already written by the digit.env.j2 template earlier
         mode: '0600'            # tighten — was 0644 from the template; secrets bump to 0600
+      no_log: true
+
+    # Strip every AWS_KEY / AWS_SECRETKEY line from .env (cluster-2 fix).
+    #
+    # egov-filestore is the only consumer, and its compose entry falls back to
+    # MINIO_ROOT_USER/MINIO_ROOT_PASSWORD when these are unset
+    # (`AWS_KEY: ${AWS_KEY:-${MINIO_ROOT_USER}}`). By removing the lines entirely
+    # we make filestore derive its credential from the SAME variable MinIO reads,
+    # so the two can never disagree.
+    #
+    # Why removal rather than "write the right value": a stale AWS_KEY=minioadmin
+    # can re-enter .env via the ".env regeneration + restore OpenBao blocks" step
+    # (the restored previous block, or a legacy differently-marked block, sits
+    # LATER in the file than the freshly-written value, and .env is last-wins).
+    # An explicit write would then be shadowed by the stale duplicate — the exact
+    # failure @dhruv-1001 root-caused: filestore authenticating as `minioadmin`
+    # while MinIO had rotated, so every upload 500'd with InvalidAccessKeyId on a
+    # box with deploy history (fresh boxes never showed it). state:absent deletes
+    # ALL matching lines, so no duplicate can survive regardless of how it got in.
+    - name: "MinIO — remove any AWS_KEY/AWS_SECRETKEY from .env so filestore follows MINIO_ROOT_USER"
+      ansible.builtin.lineinfile:
+        path: "{{ digit_dir }}/.env"
+        regexp: "{{ item }}"
+        state: absent
+      loop:
+        - '^AWS_KEY='
+        - '^AWS_SECRETKEY='
       no_log: true
 
     # No earlier task writes a placeholder GF_ADMIN_PASSWORD= line any more —
@@ -3286,202 +3322,6 @@
       register: post_secrets_recreate_mac
       changed_when: true
       when: ansible_system == "Darwin"
-
-    # ── MinIO ⇄ filestore credential reconciliation (cluster-2 guard) ────
-    #
-    # egov-filestore authenticates to MinIO with AWS_KEY/AWS_SECRETKEY; those
-    # MUST equal the MINIO_ROOT_USER/MINIO_ROOT_PASSWORD the *running* MinIO
-    # container serves, or every MinioRepository.push fails with
-    # InvalidAccessKeyId and attachment upload silently 500s.
-    #
-    # A running container freezes its environment at creation time, and MinIO
-    # adopts whatever root credentials its env carries at start-up — the
-    # volume's earlier credentials stop working (verified empirically on a
-    # throwaway container against a copy of a live data volume: the new env
-    # creds authenticated, the volume's original creds were rejected). So the
-    # two services diverge whenever a deploy recreates one but not the other:
-    # a targeted `up -d --force-recreate egov-filestore`/`restart` that skips
-    # MinIO, an incremental helper, or a stack first brought up on the
-    # placeholder creds and only partially recreated afterwards. On a fresh
-    # box the single `up -d` recreates both from the same .env and they match;
-    # on a box with history they can end on different credential sets. That is
-    # exactly the InvalidAccessKeyId failure seen in the integration-test
-    # cluster-2 regression.
-    #
-    # This reconciles them idempotently against TWO independent drift signals:
-    #   (1) MinIO not serving the .env creds — probe whether .env's
-    #       AWS_KEY/AWS_SECRETKEY authenticate against the live MinIO;
-    #   (2) filestore's *running container* froze a stale AWS_KEY/AWS_SECRETKEY
-    #       (a container's env is fixed at creation, so a filestore recreated
-    #       on an older .env keeps sending the old creds even after MinIO is
-    #       correct) — compare a hash of filestore's baked-in creds to .env.
-    # Signal (2) matters because (1) can read OK while filestore is still stale:
-    # MinIO already serves the .env creds, .env authenticates, yet the frozen
-    # filestore sends something else and every push 500s. Checking only (1)
-    # would silently miss that case.
-    #
-    # On drift: force-recreate MinIO so it adopts the authoritative .env creds
-    # (volume, bucket and anonymous policy persist), force-recreate filestore so
-    # it picks the .env creds up too, then re-assert both signals. A no-op on
-    # any box already aligned. Credential values are never printed — the
-    # comparison uses an md5 of the two lines, which is not reversible.
-    - name: "MinIO ⇄ filestore — is digit-minio running?"
-      ansible.builtin.shell:
-        cmd: docker ps --format '{{ "{{" }}.Names{{ "}}" }}' | grep -qx digit-minio && echo YES || echo NO
-        executable: /bin/bash
-      register: minio_present
-      changed_when: false
-      failed_when: false
-      # macOS deploys converge via mac-stack-up.sh (down + up), which recreates
-      # MinIO and filestore together from the same .env — they cannot diverge
-      # there. This reconciliation targets the Linux partial-recreate paths.
-      when: ansible_system != "Darwin"
-
-    - name: "MinIO ⇄ filestore — probe filestore's .env credentials against the live MinIO"
-      ansible.builtin.shell:
-        cmd: |
-          set -uo pipefail
-          cd "{{ digit_dir }}"
-          AWS_KEY=$(grep -E '^AWS_KEY=' .env | head -1 | cut -d= -f2-)
-          AWS_SECRETKEY=$(grep -E '^AWS_SECRETKEY=' .env | head -1 | cut -d= -f2-)
-          if [ -z "${AWS_KEY}" ] || [ -z "${AWS_SECRETKEY}" ]; then echo NOKEYS; exit 0; fi
-          # Share MinIO's own network namespace so 127.0.0.1:9000 reaches it
-          # regardless of the compose network name; MC_HOST_ env avoids an
-          # on-disk alias and shell-quoting the secret.
-          if docker run --rm --network "container:digit-minio" \
-               -e "MC_HOST_chk=http://${AWS_KEY}:${AWS_SECRETKEY}@127.0.0.1:9000" \
-               --entrypoint mc egovio/mc:RELEASE.2024-01-16T16-06-34Z \
-               ls chk >/dev/null 2>&1; then
-            echo OK
-          else
-            echo MISMATCH
-          fi
-        executable: /bin/bash
-      register: minio_cred_probe
-      changed_when: false
-      failed_when: false
-      when:
-        - ansible_system != "Darwin"
-        - "'YES' in (minio_present.stdout | default(''))"
-
-    - name: "MinIO ⇄ filestore — does the running filestore's baked-in AWS_KEY match .env?"
-      ansible.builtin.shell:
-        cmd: |
-          set -uo pipefail
-          cd "{{ digit_dir }}"
-          env_sig=$(grep -E '^AWS_KEY=|^AWS_SECRETKEY=' .env | sort | md5sum | cut -d' ' -f1)
-          fs_sig=$(docker inspect egov-filestore \
-                     --format '{{ "{{" }}range .Config.Env{{ "}}" }}{{ "{{" }}println .{{ "}}" }}{{ "{{" }}end{{ "}}" }}' 2>/dev/null \
-                   | grep -E '^AWS_KEY=|^AWS_SECRETKEY=' | sort | md5sum | cut -d' ' -f1)
-          if [ -z "${fs_sig}" ]; then echo NOFS; elif [ "${env_sig}" = "${fs_sig}" ]; then echo SAME; else echo DIFF; fi
-        executable: /bin/bash
-      register: filestore_cred_drift
-      changed_when: false
-      failed_when: false
-      when:
-        - ansible_system != "Darwin"
-        - "'YES' in (minio_present.stdout | default(''))"
-
-    - name: "MinIO ⇄ filestore — decide whether reconciliation is needed"
-      ansible.builtin.set_fact:
-        _minio_needs_reconcile: >-
-          {{ ('MISMATCH' in (minio_cred_probe.stdout | default('')))
-             or ('DIFF' in (filestore_cred_drift.stdout | default(''))) }}
-      when: ansible_system != "Darwin"
-
-    - name: "MinIO — force-recreate so it adopts the authoritative .env credentials (only when MinIO drifted)"
-      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate minio
-      args:
-        chdir: "{{ digit_dir }}"
-      register: minio_reconcile_recreate
-      changed_when: true
-      when:
-        - ansible_system != "Darwin"
-        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
-
-    - name: "MinIO — wait for the reconciled container to report healthy"
-      ansible.builtin.shell:
-        cmd: |
-          for i in $(seq 1 30); do
-            docker exec digit-minio mc ready local >/dev/null 2>&1 && { echo READY; exit 0; }
-            sleep 2
-          done
-          echo NOTREADY
-        executable: /bin/bash
-      register: minio_reconcile_ready
-      changed_when: false
-      failed_when: false
-      when:
-        - ansible_system != "Darwin"
-        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
-
-    - name: "filestore — force-recreate so it picks up the .env credentials (when MinIO or filestore drifted)"
-      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate egov-filestore
-      args:
-        chdir: "{{ digit_dir }}"
-      changed_when: true
-      when:
-        - ansible_system != "Darwin"
-        - _minio_needs_reconcile | default(false) | bool
-
-    - name: "MinIO ⇄ filestore — re-probe .env credentials against the live MinIO"
-      ansible.builtin.shell:
-        cmd: |
-          set -uo pipefail
-          cd "{{ digit_dir }}"
-          AWS_KEY=$(grep -E '^AWS_KEY=' .env | head -1 | cut -d= -f2-)
-          AWS_SECRETKEY=$(grep -E '^AWS_SECRETKEY=' .env | head -1 | cut -d= -f2-)
-          if docker run --rm --network "container:digit-minio" \
-               -e "MC_HOST_chk=http://${AWS_KEY}:${AWS_SECRETKEY}@127.0.0.1:9000" \
-               --entrypoint mc egovio/mc:RELEASE.2024-01-16T16-06-34Z \
-               ls chk >/dev/null 2>&1; then
-            echo OK
-          else
-            echo MISMATCH
-          fi
-        executable: /bin/bash
-      register: minio_cred_reprobe
-      changed_when: false
-      failed_when: false
-      when:
-        - ansible_system != "Darwin"
-        - _minio_needs_reconcile | default(false) | bool
-
-    - name: "MinIO ⇄ filestore — re-check the filestore container now matches .env"
-      ansible.builtin.shell:
-        cmd: |
-          set -uo pipefail
-          cd "{{ digit_dir }}"
-          env_sig=$(grep -E '^AWS_KEY=|^AWS_SECRETKEY=' .env | sort | md5sum | cut -d' ' -f1)
-          fs_sig=$(docker inspect egov-filestore \
-                     --format '{{ "{{" }}range .Config.Env{{ "}}" }}{{ "{{" }}println .{{ "}}" }}{{ "{{" }}end{{ "}}" }}' 2>/dev/null \
-                   | grep -E '^AWS_KEY=|^AWS_SECRETKEY=' | sort | md5sum | cut -d' ' -f1)
-          [ "${env_sig}" = "${fs_sig}" ] && echo SAME || echo DIFF
-        executable: /bin/bash
-      register: filestore_cred_redrift
-      changed_when: false
-      failed_when: false
-      when:
-        - ansible_system != "Darwin"
-        - _minio_needs_reconcile | default(false) | bool
-
-    - name: "MinIO ⇄ filestore — fail loudly if credentials still do not reconcile"
-      ansible.builtin.assert:
-        that:
-          - "'OK' in (minio_cred_reprobe.stdout | default(''))"
-          - "'SAME' in (filestore_cred_redrift.stdout | default(''))"
-        fail_msg: >-
-          egov-filestore still cannot authenticate to MinIO after force-recreating
-          both from .env (probe={{ minio_cred_reprobe.stdout | default('') | trim }},
-          filestore-match={{ filestore_cred_redrift.stdout | default('') | trim }}).
-          MinIO could not adopt the .env credentials — inspect
-          `docker logs digit-minio` and confirm MINIO_ROOT_USER/MINIO_ROOT_PASSWORD
-          in {{ digit_dir }}/.env equal AWS_KEY/AWS_SECRETKEY.
-        success_msg: "MinIO ⇄ filestore credentials reconciled and verified."
-      when:
-        - ansible_system != "Darwin"
-        - _minio_needs_reconcile | default(false) | bool
-        - "'MISMATCH' in (minio_cred_probe.stdout | default(''))"
 
     # Bringing the stack up recreated the openbao container, which comes back
     # SEALED — the earlier unseal ran before that recreate. Without
