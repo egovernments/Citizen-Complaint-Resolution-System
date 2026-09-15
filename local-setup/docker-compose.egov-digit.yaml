@@ -2711,14 +2711,21 @@ services:
       pgbouncer:
         condition: service_healthy
     environment:
+      # SPRING_DATASOURCE_* is the preferred form and takes precedence; the
+      # DB_* names this service carried as a Go binary are still honoured, so
+      # an operator's existing overrides keep working.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # Embedded Flyway off — digit-user-preferences-service-migration
+      # (docker-compose.migrations.yml) owns this schema, as for every sibling.
+      SPRING_FLYWAY_ENABLED: 'false'
       SERVER_PORT: '8080'
+      # NOT server.servlet.context-path: the service mounts its API under this
+      # prefix but keeps /health at the root, which is what the healthcheck
+      # below and both Gatus tiers probe.
       SERVER_CONTEXT_PATH: /user-preference
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_NAME: egov
-      DB_USER: egov
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      DB_SSL_MODE: disable
+      JAVA_OPTS: -Xms128m -Xmx384m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -2791,12 +2798,12 @@ services:
       # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
       NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
-      # NOTE: the preference check calls
-      # `digit-user-preferences-service/user-preference/v1/_check`,
-      # which 404s on the upstream image (the actual path differs and
-      # the controller may not be deployed). Leaving it off lets OTP
-      # and complaint events flow; flip to 'true' once preferences are
-      # wired up for the tenant.
+      # NOTE: this points at `/user-preference/v1/_check`, which the
+      # preference service does not implement and never has — it exposes
+      # `_upsert` and `_search` only, so the check 404s and every dispatch is
+      # denied. Leaving it off lets OTP and complaint events flow. To turn the
+      # gate on, point CHECK_PATH at `/user-preference/v1/_search` (the same
+      # endpoint SEARCH_PATH below uses) and flip this to 'true'.
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
