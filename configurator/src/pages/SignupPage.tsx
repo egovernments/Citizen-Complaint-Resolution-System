@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Check, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import {
+  API_ORIGIN,
   type AvailabilityResult,
   type Operation,
   type Signup,
@@ -401,11 +402,30 @@ export default function SignupPage() {
     setError(null);
     try {
       const context = await selectContext(tenantId);
-      // The existing DIGIT auth state takes it from here; normal business calls
-      // resume with RequestInfo.authToken = access_token.
-      window.localStorage.setItem('Employee.token', context.access_token);
-      window.localStorage.setItem('Employee.tenant-id', context.UserRequest.tenantId);
-      window.localStorage.setItem('Employee.user-info', JSON.stringify(context.UserRequest));
+      // Hand the DIGIT token to the session the app actually restores from.
+      // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
+      // `Employee.*` keys instead left the operator looking at whichever
+      // session was already there.
+      const { UserRequest: user, access_token: authToken } = context;
+      window.localStorage.setItem(
+        'crs-auth-state',
+        JSON.stringify({
+          isAuthenticated: true,
+          user: {
+            name: user.userName,
+            email: `${user.userName}@digit.org`,
+            roles: user.roles?.map((role) => role.code) ?? [],
+            uuid: user.uuid,
+          },
+          environment: API_ORIGIN || window.location.origin,
+          tenant: user.tenantId,
+          targetTenant: user.tenantId,
+          mode: 'management',
+          currentPhase: 1,
+          completedPhases: [],
+          authToken,
+        })
+      );
       setPhase('entering');
       window.location.assign('/configurator/');
     } catch (caught) {

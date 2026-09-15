@@ -34,7 +34,7 @@
  * here uses `credentials: "include"` — but the FE origin has to be one the
  * backend allows, and the OAuth callback has to be pointed back at it.
  */
-const API_ORIGIN: string = (import.meta.env.VITE_ONBOARDING_API_ORIGIN as string | undefined)?.replace(/\/$/, '') ?? '';
+export const API_ORIGIN: string = (import.meta.env.VITE_ONBOARDING_API_ORIGIN as string | undefined)?.replace(/\/$/, '') ?? '';
 
 const IDENTITY_BASE = `${API_ORIGIN}/identity/v1`;
 const ONBOARDING_BASE = `${API_ORIGIN}/pgr-services/v2/onboarding`;
