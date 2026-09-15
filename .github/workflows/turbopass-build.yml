@@ -5,14 +5,14 @@ run-name: Build turbopass images (${{ github.head_ref || github.ref_name }})
 # bootstrap (turbopass/overture-scraper) are deployed as their own service,
 # apart from the DIGIT stack, so they get their own pipeline that runs only
 # when their code changes. Images go to the same egovio/ namespace as every
-# other CCRS image:
+# other CCRS image, from both master and develop:
 #   egovio/turbopass-search:<branch>-<sha>     (+ :latest from master)
 #   egovio/turbopass-bootstrap:<branch>-<sha>  (+ :latest from master)
 # Pull requests build and test both images without pushing.
 
 on:
   push:
-    branches: [master]
+    branches: [master, develop]
     paths:
       - 'turbopass/search-api/**'
       - 'turbopass/overture-scraper/**'
