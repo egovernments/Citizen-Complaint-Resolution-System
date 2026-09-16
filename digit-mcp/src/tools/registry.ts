@@ -66,7 +66,11 @@ export class ToolRegistry {
     // Read-only mode drops every write-risk tool so it can never be called.
     // `core` is exempt from the drop because its only write tools are session
     // bookkeeping (`init`, `session_checkpoint`) that touch local session state,
-    // not DIGIT data, and dropping them would break the session-hint flow.
+    // not DIGIT data, and dropping them would break the session-hint / group-
+    // enable flow. Their actual writes to the shared session DB ARE still refused
+    // in read-only mode — inside the handlers (sessions.ts): `session_checkpoint`
+    // is rejected outright (unbounded caller INSERT) and `init` skips its
+    // session-row write while keeping the group-enable + hints it exists for.
     //
     // `configure` is the one core tool that CAN mutate DIGIT (it self-grants
     // roles via userUpdate, and its `base_url` arg can be pointed anywhere): it

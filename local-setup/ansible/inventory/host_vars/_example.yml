@@ -377,6 +377,19 @@ enable_mcp: true
 #   2. nginx_features.mcp_readonly: true    # serves /mcp + /v1/ from it (mutually exclusive with nginx_features.mcp)
 #   3. mcp_readonly_basic_auth_password: "{{ vault_mcp_readonly_password }}"   # basic-auth gate (in vault; never commit)
 # Some reads (user_search, pgr_search) still return data, so keep the basic-auth on.
+#
+# Linux-only: nginx runs as a container reaching the host via
+# host.docker.internal, which can't reach the loopback-published read-only port,
+# and the htpasswd file isn't mounted on Darwin — so the macOS path 502/500s.
+# The preflight refuses enabling it on Darwin rather than deploying it dead.
+#
+# Trade-off: nginx_features.mcp_readonly is mutually exclusive with
+# nginx_features.mcp (both serve /mcp + /v1/). Turning read-only ON therefore
+# turns the full instance's HTTPS write-onboarding OFF — `/v1/tenant/bootstrap`,
+# `/v1/tenant/city` and `/v1/tools/city_setup_from_xlsx` return 404 on the
+# read-only container. Onboarding then only works over an SSH tunnel to the
+# internal instance's port 13101. Leave nginx_features.mcp on (and read-only
+# off) if you still need remote HTTPS onboarding for this tenant.
 # enable_mcp_readonly: false
 # mcp_readonly_basic_auth_user: "digit-mcp"
 

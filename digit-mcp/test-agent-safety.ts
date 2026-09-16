@@ -458,9 +458,10 @@ await test('10.1 read-only registry registers no non-core write tool', () => {
 await test('10.2 read-only drops the dangerous mutators', () => {
   const ro = new ToolRegistry({ readOnly: true });
   registerAllTools(ro);
-  // snapshot_capture is included: it was reclassified read->write (writes files,
-  // returns raw env secrets), so it must be dropped too.
-  for (const name of ['tenant_destroy', 'tenant_bootstrap', 'decrypt_data', 'mdms_create', 'user_create', 'workflow_create', 'snapshot_capture']) {
+  // snapshot_capture AND snapshot_diff are included: both were reclassified
+  // read->write (they write files and/or return raw env secrets via a live
+  // capture with redact:false), so both must be dropped.
+  for (const name of ['tenant_destroy', 'tenant_bootstrap', 'decrypt_data', 'mdms_create', 'user_create', 'workflow_create', 'snapshot_capture', 'snapshot_diff']) {
     assert(ro.getTool(name) === undefined, `${name} must be absent in read-only mode`);
   }
 });
@@ -518,6 +519,41 @@ await test('10.6b configure refuses base_url when read-only (guard actually fire
       typeof out.error === 'string' && out.error.includes('read-only'),
       `refusal must name read-only, got: ${JSON.stringify(out.error)}`
     );
+  } finally {
+    setEffectiveReadOnly(false);
+    if (orig === undefined) delete process.env.MCP_READ_ONLY;
+    else process.env.MCP_READ_ONLY = orig;
+  }
+});
+
+await test('10.6c core write tools stay listed but refuse their DB write when read-only', async () => {
+  // init and session_checkpoint are core/write, kept for the group-enable + hints
+  // flow, so they must remain present — but their writes to the shared session DB
+  // must not run for an anonymous public caller. session_checkpoint is rejected
+  // outright (its unbounded `messages` INSERT); init keeps enabling groups and
+  // returning hints while skipping its session-row write.
+  const ro = new ToolRegistry({ readOnly: true });
+  registerAllTools(ro);
+  const orig = process.env.MCP_READ_ONLY;
+  delete process.env.MCP_READ_ONLY;
+  setEffectiveReadOnly(ro.isReadOnly());
+  try {
+    assert(ro.getTool('session_checkpoint') !== undefined, 'session_checkpoint must remain listed');
+    assert(ro.getTool('init') !== undefined, 'init must remain listed');
+
+    const checkpoint = JSON.parse(await ro.getTool('session_checkpoint')!.handler({ summary: 'x', messages: [{ turn: 1, role: 'user', content: [] }] }));
+    assert(checkpoint.success === false, 'session_checkpoint must refuse on a read-only instance');
+    assert(
+      typeof checkpoint.error === 'string' && checkpoint.error.includes('read-only'),
+      `checkpoint refusal must name read-only, got: ${JSON.stringify(checkpoint.error)}`
+    );
+
+    // init must still succeed (it drives group-enabling) without throwing on the
+    // skipped write — no session is set up in this unit context, so setUserContext
+    // would no-op anyway; the point is it returns hints and enables groups.
+    const initOut = JSON.parse(await ro.getTool('init')!.handler({ purpose: 'explore' }));
+    assert(initOut.success === true, 'init must still succeed on a read-only instance');
+    assert(Array.isArray(initOut.suggestedNextSteps), 'init must still return hints');
   } finally {
     setEffectiveReadOnly(false);
     if (orig === undefined) delete process.env.MCP_READ_ONLY;

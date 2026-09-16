@@ -865,6 +865,15 @@ if (transportMode === 'stdio') {
     // sibling deployment. Body: { "auth": …, "schemas"?: ["…"], "limit"?: 500 }
     const exportMatch = pathname.match(/^\/v1\/tenant\/([a-zA-Z][a-zA-Z0-9._-]*)\/export$/);
     if (req.method === 'POST' && exportMatch) {
+      // This route calls exportTenant() directly rather than resolving through
+      // restRegistry.getTool, so the read-only filter never sees it — and
+      // authenticateRest auto-passes on the CRS_* env creds. It dumps a whole
+      // tenant's MDMS + workflow, so on a read-only (publicly-exposed) instance
+      // refuse it outright, same as /api/sessions.
+      if (restRegistry.isReadOnly()) {
+        jsonResponse(res, 403, { success: false, error: 'Tenant export is disabled on a read-only MCP instance.' });
+        return;
+      }
       try {
         const targetTenant = exportMatch[1];
         const body = JSON.parse(await readBody(req) || '{}');

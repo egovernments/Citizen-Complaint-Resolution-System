@@ -105,7 +105,13 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     group: 'snapshot',
     category: 'snapshot',
     access: 'admin',
-    risk: 'read',
+    // `write`, not `read`: like snapshot_capture this reaches secrets and the
+    // filesystem. `a`/`b` accept a file path (→ JSON.parse(readFileSync), an
+    // arbitrary local read whose parse error echoes file content in the 500), and
+    // `{"capture":{"redact":false}}` re-enters the unredacted capture path that
+    // returns raw env (POSTGRES_PASSWORD, encryption keys, the admin password).
+    // Classifying it write keeps it off a read-only instance entirely.
+    risk: 'write',
     description:
       'Diff two system-state snapshots and report deviations per layer (images/config/data) with severity. ' +
       'Pure comparison — no infra access needed, so it runs anywhere on two captured artifacts. ' +
