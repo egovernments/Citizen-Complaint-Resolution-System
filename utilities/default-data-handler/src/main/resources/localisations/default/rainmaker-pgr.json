@@ -37,7 +37,7 @@
     },
     {
         "code": "COMMON_BOTTOM_NAVIGATION_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
@@ -3349,7 +3349,7 @@
     },
     {
         "code": "ES_PGR_HEADER_COMPLAINT",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Complaints Management System",
         "module": "rainmaker-pgr",
         "locale": "default"
     },
