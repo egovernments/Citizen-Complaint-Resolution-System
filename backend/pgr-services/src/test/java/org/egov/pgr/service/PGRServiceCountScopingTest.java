@@ -58,6 +58,7 @@ public class PGRServiceCountScopingTest {
     @Mock private SearchAccessPolicyService searchAccessPolicyService;
     @Mock private FieldVisibilityService fieldVisibilityService;
     @Mock private EscalationService escalationService;
+    @Mock private EscalationLockManager escalationLockManager;
 
     private PGRService pgrService;
 
@@ -67,7 +68,7 @@ public class PGRServiceCountScopingTest {
                 validator, producer, config, repository, mdmsUtils,
                 complaintDomainEventService, pgrUtils, extendedAttributesValidationService,
                 encryptionDecryptionService, searchAccessPolicyService, fieldVisibilityService,
-                escalationService);
+                escalationService, escalationLockManager);
     }
 
     private RequestInfo requestInfo() {

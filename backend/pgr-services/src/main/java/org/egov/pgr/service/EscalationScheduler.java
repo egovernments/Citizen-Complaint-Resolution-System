@@ -79,10 +79,14 @@ public class EscalationScheduler {
         Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache = new HashMap<>();
         ScanResult total = new ScanResult();
         for (String scanTenant : stateTenants) {
-            EscalationConfigurationService.ResolvedEscalationConfig policy =
-                    policyFor(scanTenant, systemRequestInfo, policyCache);
-            for (String status : policy.getEligibleStatuses()) {
-                total.add(scan(scanTenant, status, systemRequestInfo, policyCache));
+            try {
+                EscalationConfigurationService.ResolvedEscalationConfig policy =
+                        policyFor(scanTenant, systemRequestInfo, policyCache);
+                for (String status : policy.getEligibleStatuses()) {
+                    total.add(scan(scanTenant, status, systemRequestInfo, policyCache));
+                }
+            } catch (Exception e) {
+                log.error("Could not resolve escalation policy for tenant {}; skipping it", scanTenant, e);
             }
         }
 
@@ -94,11 +98,13 @@ public class EscalationScheduler {
                             RequestInfo systemRequestInfo,
                             Map<String, EscalationConfigurationService.ResolvedEscalationConfig> policyCache) {
         ScanResult result = new ScanResult();
-        int offset = 0;
+        Long createdTimeBefore = null;
+        String serviceRequestIdBefore = null;
         while (true) {
             List<ServiceWrapper> complaints;
             try {
-                complaints = searchComplaintsByStatus(scanTenant, status, offset);
+                complaints = searchComplaintsByStatus(
+                        scanTenant, status, createdTimeBefore, serviceRequestIdBefore);
             } catch (Exception e) {
                 log.error("Error scanning complaints in status {} for tenant {}", status, scanTenant, e);
                 break;
@@ -110,45 +116,45 @@ public class EscalationScheduler {
             for (ServiceWrapper wrapper : complaints) {
                 result.scanned++;
                 Service complaint = wrapper.getService();
-                EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
-                        policyFor(complaint.getTenantId(), systemRequestInfo, policyCache);
-                if (complaint.getApplicationStatus() == null
-                        || !escalationConfig.getEligibleStatuses().contains(
-                                complaint.getApplicationStatus().toUpperCase(Locale.ROOT))) {
-                    result.skipped++;
-                    continue;
-                }
-                int currentLevel = escalationService.escalationLevel(complaint);
-                if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
-                        || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
-                    result.skipped++;
-                    continue;
-                }
-
-                long complaintCreatedAt = escalationService.escalationWindowStartedAt(complaint);
-                if (complaintCreatedAt <= 0) {
-                    result.skipped++;
-                    continue;
-                }
-                long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
-                if (System.currentTimeMillis() - complaintCreatedAt < sla) {
-                    result.skipped++;
-                    continue;
-                }
-
-                // PENDINGFORASSIGNMENT is configurable because some tenant workflows may
-                // assign in that state. Canonically it is unassigned, so skip it before the
-                // full update pipeline and avoid a warning every scheduler interval.
-                List<String> currentAssignees = escalationService.getCurrentAssignees(
-                        complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
-                if (currentAssignees.isEmpty()
-                        || !escalationService.hasReportingTo(
-                                currentAssignees, systemRequestInfo, complaint.getTenantId())) {
-                    result.skipped++;
-                    continue;
-                }
-
                 try {
+                    EscalationConfigurationService.ResolvedEscalationConfig escalationConfig =
+                            policyFor(complaint.getTenantId(), systemRequestInfo, policyCache);
+                    if (complaint.getApplicationStatus() == null
+                            || !escalationConfig.getEligibleStatuses().contains(
+                                    complaint.getApplicationStatus().toUpperCase(Locale.ROOT))) {
+                        result.skipped++;
+                        continue;
+                    }
+                    int currentLevel = escalationService.escalationLevel(complaint);
+                    if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
+                            || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)) {
+                        result.skipped++;
+                        continue;
+                    }
+
+                    long complaintCreatedAt = escalationService.escalationWindowStartedAt(complaint);
+                    if (complaintCreatedAt <= 0) {
+                        result.skipped++;
+                        continue;
+                    }
+                    long sla = escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel);
+                    if (System.currentTimeMillis() - complaintCreatedAt < sla) {
+                        result.skipped++;
+                        continue;
+                    }
+
+                    // PENDINGFORASSIGNMENT is configurable because some tenant workflows may
+                    // assign in that state. Canonically it is unassigned, so skip it before the
+                    // full update pipeline and avoid a warning every scheduler interval.
+                    List<String> currentAssignees = escalationService.getCurrentAssignees(
+                            complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
+                    if (currentAssignees.isEmpty()
+                            || !escalationService.hasReportingTo(
+                                    currentAssignees, systemRequestInfo, complaint.getTenantId())) {
+                        result.skipped++;
+                        continue;
+                    }
+
                     ServiceRequest escalationRequest = ServiceRequest.builder()
                             .requestInfo(systemRequestInfo)
                             .service(complaint)
@@ -169,7 +175,15 @@ public class EscalationScheduler {
             if (complaints.size() < config.getEscalationBatchSize()) {
                 break;
             }
-            offset += complaints.size();
+            Service last = complaints.get(complaints.size() - 1).getService();
+            if (last.getAuditDetails() == null || last.getAuditDetails().getCreatedTime() == null
+                    || last.getServiceRequestId() == null) {
+                log.error("Cannot continue stable escalation scan after complaint {} in tenant {}",
+                        last.getServiceRequestId(), scanTenant);
+                break;
+            }
+            createdTimeBefore = last.getAuditDetails().getCreatedTime();
+            serviceRequestIdBefore = last.getServiceRequestId();
         }
         return result;
     }
@@ -180,13 +194,19 @@ public class EscalationScheduler {
         return cache.computeIfAbsent(tenantId, key -> configurationService.resolve(requestInfo, key));
     }
 
-    private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status, int offset) {
+    private List<ServiceWrapper> searchComplaintsByStatus(String tenantId, String status,
+                                                          Long createdTimeBefore,
+                                                          String serviceRequestIdBefore) {
         RequestSearchCriteria criteria = RequestSearchCriteria.builder()
                 .tenantId(tenantId)
                 .tenantIds(Collections.singleton(tenantId))
                 .applicationStatus(Collections.singleton(status))
                 .limit(config.getEscalationBatchSize())
-                .offset(offset)
+                .offset(0)
+                .sortBy(RequestSearchCriteria.SortBy.createdTime)
+                .sortOrder(RequestSearchCriteria.SortOrder.DESC)
+                .createdTimeBefore(createdTimeBefore)
+                .serviceRequestIdBefore(serviceRequestIdBefore)
                 .isPlainSearch(true)
                 .build();
         return repository.getServiceWrappers(criteria);

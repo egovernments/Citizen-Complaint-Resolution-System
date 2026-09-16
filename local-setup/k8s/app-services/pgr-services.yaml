@@ -74,7 +74,7 @@ spec:
               value: "true"
             - name: EGOV_USR_EVENTS_CREATE_TOPIC
               value: persist-user-events-async
-            - name: PGR_STATELEVEL_TENANTID
+            - name: STATE_LEVEL_TENANT_ID
               value: pg
             - name: JAVA_OPTS
               value: "-Xmx192m -Xms192m"

@@ -353,8 +353,11 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.max.depth}")
     private Integer escalationMaxDepth;
 
-    @Value("${pgr.escalation.claim.ttl.ms:300000}")
-    private Long escalationClaimTtlMs;
+    @Value("${pgr.escalation.lock.pool.size:4}")
+    private Integer escalationLockPoolSize;
+
+    @Value("${pgr.escalation.lock.connection.timeout.ms:30000}")
+    private Long escalationLockConnectionTimeoutMs;
 
     @Value("#{'${pgr.escalation.eligible.statuses:PENDINGATLME,PENDINGFORASSIGNMENT}'.split(',')}")
     private java.util.List<String> escalationEligibleStatuses;

@@ -64,6 +64,7 @@ class PGRServiceTest {
     @Mock private SearchAccessPolicyService searchAccessPolicyService;
     @Mock private FieldVisibilityService fieldVisibilityService;
     @Mock private EscalationService escalationService;
+    @Mock private EscalationLockManager escalationLockManager;
 
     private PGRService pgrService;
 
@@ -73,7 +74,7 @@ class PGRServiceTest {
         pgrService = new PGRService(enrichmentService, userService, workflowService, validator, producer,
                 config, repository, mdmsUtils, complaintDomainEventService, pgrUtils,
                 extendedAttributesValidationService, encryptionDecryptionService, searchAccessPolicyService,
-                fieldVisibilityService, escalationService);
+                fieldVisibilityService, escalationService, escalationLockManager);
     }
 
     @Test
@@ -160,7 +161,7 @@ class PGRServiceTest {
         when(config.getInboxUpdateTopic()).thenReturn("pgr-inbox-update");
         when(config.getEscalationKafkaTopic()).thenReturn("pgr-escalation-events");
         when(escalationService.buildEscalationEvent(request)).thenReturn(Map.of("serviceRequestId", "PGR-1"));
-        when(escalationService.withComplaintLease(any(), any(), any())).thenAnswer(invocation -> {
+        when(escalationLockManager.withComplaintLock(any(), any(), any())).thenAnswer(invocation -> {
             Supplier<ServiceRequest> operation = invocation.getArgument(2);
             return operation.get();
         });

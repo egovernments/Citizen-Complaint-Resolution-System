@@ -54,7 +54,8 @@
           "description": "Stable singleton record key."
         },
         "maxDepth": {
-          "type": "number"
+          "type": "integer",
+          "minimum": 0
         },
         "eligibleStatuses": {
           "type": "array",

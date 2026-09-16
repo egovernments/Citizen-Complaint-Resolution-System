@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
-import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.web.models.RequestInfoWrapper;
@@ -15,7 +14,6 @@ import org.egov.pgr.web.models.workflow.ProcessInstance;
 import org.egov.pgr.web.models.workflow.ProcessInstanceResponse;
 import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -26,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.ESCALATE;
@@ -62,68 +59,18 @@ public class EscalationService {
     private final ServiceRequestRepository serviceRequestRepository;
     private final EscalationConfigurationService configurationService;
     private final ObjectMapper mapper;
-    private final JdbcTemplate jdbcTemplate;
-    private final PGRConfiguration config;
 
     @Autowired
     public EscalationService(HRMSUtil hrmsUtil,
                              WorkflowService workflowService,
                              ServiceRequestRepository serviceRequestRepository,
                              EscalationConfigurationService configurationService,
-                             ObjectMapper mapper,
-                             JdbcTemplate jdbcTemplate,
-                             PGRConfiguration config) {
+                             ObjectMapper mapper) {
         this.hrmsUtil = hrmsUtil;
         this.workflowService = workflowService;
         this.serviceRequestRepository = serviceRequestRepository;
         this.configurationService = configurationService;
         this.mapper = mapper;
-        this.jdbcTemplate = jdbcTemplate;
-        this.config = config;
-    }
-
-    /**
-     * Claims one complaint without holding a pooled connection across MDMS, workflow,
-     * HRMS, or Kafka calls. A successful operation releases the claim after the
-     * synchronous workflow transition is visible. A failed/interrupted operation leaves
-     * it until the TTL because its remote side effects may still have completed.
-     */
-    public <T> T withComplaintLease(String tenantId, String serviceRequestId, Supplier<T> operation) {
-        if (tenantId == null || tenantId.isBlank()
-                || serviceRequestId == null || serviceRequestId.isBlank()) {
-            throw new CustomException("INVALID_ESCALATION_ID",
-                    "tenantId and serviceRequestId are required for ESCALATE");
-        }
-
-        long now = System.currentTimeMillis();
-        long ttl = config.getEscalationClaimTtlMs() == null
-                ? 300_000L : Math.max(config.getEscalationClaimTtlMs(), 1L);
-        long claimUntil = now > Long.MAX_VALUE - ttl ? Long.MAX_VALUE : now + ttl;
-        List<String> claimed = jdbcTemplate.query(
-                "INSERT INTO eg_pgr_escalation_claim_v2 "
-                        + "(tenantid, servicerequestid, claimedat, claimuntil) VALUES (?, ?, ?, ?) "
-                        + "ON CONFLICT (tenantid, servicerequestid) DO UPDATE "
-                        + "SET claimedat = EXCLUDED.claimedat, claimuntil = EXCLUDED.claimuntil "
-                        + "WHERE eg_pgr_escalation_claim_v2.claimuntil <= EXCLUDED.claimedat "
-                        + "RETURNING servicerequestid",
-                (resultSet, rowNum) -> resultSet.getString(1),
-                tenantId, serviceRequestId, now, claimUntil);
-        if (claimed.isEmpty()) {
-            throw new CustomException("ESCALATION_IN_PROGRESS",
-                    "Another escalation for complaint " + serviceRequestId + " is still being persisted");
-        }
-        T result = operation.get();
-        try {
-            jdbcTemplate.update(
-                    "DELETE FROM eg_pgr_escalation_claim_v2 "
-                            + "WHERE tenantid = ? AND servicerequestid = ? AND claimedat = ?",
-                    tenantId, serviceRequestId, now);
-        } catch (Exception e) {
-            // The escalation already succeeded. Retaining the claim until its TTL is
-            // safer than returning a failure that encourages a duplicate retry.
-            log.warn("Escalation {} succeeded but its claim could not be released", serviceRequestId, e);
-        }
-        return result;
     }
 
     /** Removes metadata that only the service may originate. */
@@ -293,7 +240,7 @@ public class EscalationService {
         }
     }
 
-    /** Cheap scheduler preflight; the claimed update repeats this authoritative check. */
+    /** Cheap scheduler preflight; the locked update repeats this authoritative check. */
     public boolean hasReportingTo(List<String> assignees, RequestInfo requestInfo, String tenantId) {
         if (CollectionUtils.isEmpty(assignees)) {
             return false;

@@ -190,11 +190,6 @@ env: |
     value: "RATE"
   - name: EGOV_USR_EVENTS_REOPEN_CODE
     value: "REOPEN" 
-  - name: PGR_STATELEVEL_TENANTID
-    valueFrom:
-      configMapKeyRef:
-        name: egov-config
-        key: egov-state-level-tenant-id
   - name: SPRING_DATASOURCE_URL
     valueFrom:
       configMapKeyRef:

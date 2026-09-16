@@ -164,7 +164,7 @@ SELECT
   coalesce(tx.status_is_terminal,false)        AS status_is_terminal,
   (NOT coalesce(tx.status_is_terminal,false))  AS status_is_open,
   tx.actor_uuid, asg.assignee_uuid,
-  (ua.type = 'SYSTEM')                         AS actor_is_system,
+  (ua.type = 'SYSTEM')                           AS actor_is_system,
   tx.entered_at, tx.exited_at,
   (tx.exited_at - tx.entered_at)               AS dwell_ms,
   tx.status_seq, tx.previous_status_seq,
@@ -178,7 +178,9 @@ SELECT
   (tx.action = 'REOPEN')                       AS is_reopen,
   (tx.action = 'ESCALATE' OR coalesce(tx.escalated,false)) AS is_escalation,
   CASE WHEN tx.action = 'ESCALATE' OR coalesce(tx.escalated,false)
-       THEN (CASE WHEN ua.type='SYSTEM' THEN 'auto' ELSE 'manual' END) END AS escalation_source,
+       THEN (CASE WHEN ua.type='SYSTEM' THEN 'auto'
+                  WHEN ua.uuid IS NULL THEN 'unknown'
+                  ELSE 'manual' END) END AS escalation_source,
   (tx.comment IS NOT NULL AND tx.comment <> '') AS has_comment,
   length(tx.comment)                           AS comment_length,
   tx.event_rating,
@@ -278,7 +280,8 @@ mdms AS (   -- #1494: ComplaintHierarchy LEAF rows (was RAINMAKER-PGR.ServiceDef
             -- resolves from the hierarchy path alone (see the coalesce below).
   SELECT tenantid,
          data->>'code'                   AS service_code,
-         (data->>'slaHours')::int        AS mdms_sla_hours,
+         CASE WHEN data->>'slaHours' ~ '^[0-9]+([.][0-9]+)?$'
+              THEN (data->>'slaHours')::numeric END AS mdms_sla_hours,
          NULL::text                      AS legacy_service_group,   -- #1494: retired with menuPath
          (data->>'order')::smallint      AS service_order,
          CASE WHEN upper(btrim(coalesce(data->>'department', data->'departments'->>0))) IN ('NA','')
@@ -346,8 +349,11 @@ esc_ranked AS ( -- Mirror the runtime singleton rule: one DEFAULT, or one legacy
          data->>'code'              AS code,
          data->'overrides'         AS overrides,
          data->'defaultSlaByLevel' AS default_levels,
-         CASE WHEN data->>'maxDepth' ~ '^[0-9]+$'
-              THEN (data->>'maxDepth')::int END AS max_depth,
+         CASE WHEN NOT (data ? 'maxDepth') THEN NULL
+              WHEN data->>'maxDepth' ~ '^[0-9]+$'
+                   AND (data->>'maxDepth')::numeric <= 2147483647
+              THEN (data->>'maxDepth')::int
+              ELSE 0 END AS max_depth,
          count(*) OVER (PARTITION BY tenantid) AS record_count,
          count(*) FILTER (WHERE upper(data->>'code') = 'DEFAULT')
            OVER (PARTITION BY tenantid) AS default_count
@@ -385,7 +391,7 @@ SELECT
   m.service_order, m.mdms_sla_hours, m.department_code,
   cur.current_state_seq, cur.current_state_sla_ms, tgt.sla_target_ms,      -- #1028: COALESCE'd target
   (m.mdms_sla_hours IS NOT NULL AND cur.business_sla_ms IS NOT NULL
-    AND m.mdms_sla_hours::bigint*3600000 <> cur.business_sla_ms) AS sla_config_mismatch,
+    AND ceil(m.mdms_sla_hours*3600000)::bigint <> cur.business_sla_ms) AS sla_config_mismatch,
   roll.created_at, roll.first_assigned_at, roll.first_assigned_at AS first_response_at,
   roll.resolved_at, roll.last_transition_at, roll.first_escalated_at, roll.last_escalated_at,
   roll.transition_count, roll.assignment_count, roll.escalation_count, roll.reopen_count,
@@ -463,47 +469,60 @@ CROSS JOIN LATERAL (                         -- #1079: path-derived complaint-ax
   FROM (SELECT string_to_array(cnp.complaint_node_path,'.') AS arr) x
 ) cx
 LEFT JOIN LATERAL (                          -- cumulative absolute fallback for this complaint
-  SELECT coalesce(
-           CASE
-           WHEN jsonb_typeof(e.overrides -> s.servicecode) = 'array'
-                AND jsonb_array_length(e.overrides -> s.servicecode) > 0
-             THEN (SELECT v.value::numeric::bigint
-                   FROM jsonb_array_elements_text(e.overrides -> s.servicecode)
-                        WITH ORDINALITY v(value, ord)
-                   WHERE v.ord <= least(coalesce(e.max_depth,
-                               jsonb_array_length(e.overrides -> s.servicecode)),
-                               jsonb_array_length(e.overrides -> s.servicecode))
-                   ORDER BY v.ord DESC LIMIT 1)
-           WHEN jsonb_typeof(e.overrides -> s.servicecode) = 'object'
-                AND jsonb_typeof(e.overrides -> s.servicecode -> 'slaByLevel') = 'array'
-                AND jsonb_array_length(e.overrides -> s.servicecode -> 'slaByLevel') > 0
-             THEN (SELECT v.value::numeric::bigint
-                   FROM jsonb_array_elements_text(e.overrides -> s.servicecode -> 'slaByLevel')
-                        WITH ORDINALITY v(value, ord)
-                   WHERE v.ord <= least(coalesce(e.max_depth,
-                               jsonb_array_length(e.overrides -> s.servicecode -> 'slaByLevel')),
-                               jsonb_array_length(e.overrides -> s.servicecode -> 'slaByLevel'))
-                   ORDER BY v.ord DESC LIMIT 1)
+  WITH matching AS (
+    SELECT e.*
+    FROM esc e
+    WHERE s.tenantid = e.tenantid
+       OR left(s.tenantid, length(e.tenantid) + 1) = e.tenantid || '.'
+    ORDER BY array_length(string_to_array(e.tenantid, '.'), 1) DESC, e.tenantid
+    LIMIT 1
+  ), candidates(priority, levels, max_depth) AS (
+    SELECT 1,
+           CASE WHEN jsonb_typeof(e.overrides -> s.servicecode) = 'array'
+                  THEN e.overrides -> s.servicecode
+                WHEN jsonb_typeof(e.overrides -> s.servicecode) = 'object'
+                  THEN e.overrides -> s.servicecode -> 'slaByLevel'
            END,
-           CASE WHEN jsonb_typeof(e.default_levels) = 'array'
-                     AND jsonb_array_length(e.default_levels) > 0
-             THEN (SELECT v.value::numeric::bigint
-                   FROM jsonb_array_elements_text(e.default_levels)
-                        WITH ORDINALITY v(value, ord)
-                   WHERE v.ord <= least(coalesce(e.max_depth,
-                               jsonb_array_length(e.default_levels)),
-                               jsonb_array_length(e.default_levels))
-                   ORDER BY v.ord DESC LIMIT 1)
-           END
-         ) AS ladder_sla_ms
-  FROM esc e
-  WHERE s.tenantid = e.tenantid
-     OR left(s.tenantid, length(e.tenantid) + 1) = e.tenantid || '.'
-  ORDER BY array_length(string_to_array(e.tenantid, '.'), 1) DESC, e.tenantid
+           e.max_depth
+    FROM matching e
+    UNION ALL
+    SELECT 2, e.default_levels, e.max_depth
+    FROM matching e
+  ), items AS (
+    SELECT c.priority, c.max_depth, v.ord,
+           CASE WHEN jsonb_typeof(v.value) = 'number'
+                     AND v.value::text ~ '^[0-9]+$'
+                     AND v.value::numeric <= 9223372036854775807
+                THEN v.value::numeric::bigint END AS threshold
+    FROM candidates c
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE WHEN jsonb_typeof(c.levels) = 'array' THEN c.levels ELSE '[]'::jsonb END
+    ) WITH ORDINALITY v(value, ord)
+  ), ordered AS (
+    SELECT priority, max_depth, ord, threshold,
+           lag(threshold) OVER (PARTITION BY priority ORDER BY ord) AS previous_threshold
+    FROM items
+  ), validated AS (
+    SELECT priority,
+           CASE WHEN count(*) > 0
+                     AND bool_and(threshold IS NOT NULL
+                                  AND (previous_threshold IS NULL
+                                       OR threshold > previous_threshold))
+                THEN max(threshold) FILTER (
+                       WHERE max_depth IS NULL OR ord <= max_depth
+                     )
+           END AS ladder_sla_ms
+    FROM ordered
+    GROUP BY priority, max_depth
+  )
+  SELECT v.ladder_sla_ms
+  FROM validated v
+  WHERE v.ladder_sla_ms IS NOT NULL
+  ORDER BY v.priority
   LIMIT 1
 ) lad ON true
 CROSS JOIN LATERAL (                         -- #1028: the decided SLA-target precedence
-  SELECT coalesce(m.mdms_sla_hours::bigint * 3600000,   -- 1) ComplaintHierarchy leaf slaHours
+  SELECT coalesce(ceil(m.mdms_sla_hours * 3600000)::bigint, -- 1) ComplaintHierarchy leaf slaHours
                   lad.ladder_sla_ms,                    -- 2) escalation-ladder total
                   cur.business_sla_ms                   -- 3) workflow SLA (state-root fallback)
          ) AS sla_target_ms

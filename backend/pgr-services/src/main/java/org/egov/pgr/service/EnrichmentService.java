@@ -186,8 +186,7 @@ public class EnrichmentService {
     }
 
 
-    /** Removes User-Service-owned fields before PGR persistence, without making
-     * an external call that could survive a later workflow failure. */
+    /** Removes User-Service-owned fields from the complaint before synchronization. */
     public UserContactDetails detachUserContactDetails(ServiceRequest request) {
         ExtendedAttributes ext = request.getService().getExtendedAttributes();
         if (ext == null) return UserContactDetails.EMPTY;
@@ -202,7 +201,7 @@ public class EnrichmentService {
         return new UserContactDetails(email, address);
     }
 
-    /** Best-effort post-transition synchronization of the detached fields. */
+    /** Synchronizes detached fields after validation and before the workflow transition. */
     public void syncUserContactDetails(ServiceRequest request, UserContactDetails contact) {
         if (contact == null || contact.isEmpty()) return;
 

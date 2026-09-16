@@ -62,7 +62,8 @@ public class RequestsApiController{
     @InitBinder
     public void disallowInternalCriteriaFields(org.springframework.web.bind.WebDataBinder binder) {
         binder.setDisallowedFields("visibilityIds*", "visibilityUnassignedStates*",
-                "serviceRequestIds*", "userIds*", "isPlainSearch*");
+                "serviceRequestIds*", "userIds*", "isPlainSearch*",
+                "createdTimeBefore*", "serviceRequestIdBefore*");
     }
 
 

@@ -12,9 +12,11 @@ import org.egov.mdms.model.ModuleDetail;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.MDMSUtils;
+import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -36,6 +38,9 @@ public class EscalationConfigurationService {
 
     private static final String TENANT_MODULE = "tenant";
     private static final String TENANTS_MASTER = "tenants";
+    private static final String WORKFLOW_MODULE = "Workflow";
+    private static final String LEGACY_AUTO_ESCALATION = "AutoEscalation";
+    private static final String LEGACY_AUTO_ESCALATION_IGNORE = "AutoEscalationStatesToIgnore";
 
     private final PGRConfiguration config;
     private final ServiceRequestRepository serviceRequestRepository;
@@ -55,7 +60,7 @@ public class EscalationConfigurationService {
 
     public ResolvedEscalationConfig resolve(RequestInfo requestInfo, String tenantId) {
         Map<String, Object> mdmsConfig = fetch(requestInfo, tenantId);
-        int maxDepth = positiveInt(mdmsConfig == null ? null : mdmsConfig.get("maxDepth"),
+        int maxDepth = nonNegativeInt(mdmsConfig == null ? null : mdmsConfig.get("maxDepth"),
                 config.getEscalationMaxDepth());
         List<Long> defaultPercentages = percentageList(
                 mdmsConfig == null ? null : mdmsConfig.get("defaultSlaPercentageByLevel"));
@@ -135,12 +140,18 @@ public class EscalationConfigurationService {
         String requestedTenant = tenantId.trim();
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(requestedTenant);
         Map<String, Object> cityConfig = fetchAtTenant(requestInfo, requestedTenant);
-        if (cityConfig != null || requestedTenant.equals(stateTenant)) {
+        if (requestedTenant.equals(stateTenant)) {
+            return cityConfig;
+        }
+        // A city config may override the state config, but a legacy PGR workflow
+        // auto-escalation record at either level would still be a competing writer.
+        Map<String, Object> stateConfig = fetchAtTenant(requestInfo, stateTenant);
+        if (cityConfig != null) {
             return cityConfig;
         }
         log.debug("{} not found for city {}; falling back to state tenant {}",
                 MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, requestedTenant, stateTenant);
-        return fetchAtTenant(requestInfo, stateTenant);
+        return stateConfig;
     }
 
     @SuppressWarnings("unchecked")
@@ -151,9 +162,15 @@ public class EscalationConfigurationService {
                     .moduleName(MDMS_MODULE_NAME)
                     .masterDetails(Collections.singletonList(master))
                     .build();
+            ModuleDetail workflowModule = ModuleDetail.builder()
+                    .moduleName(WORKFLOW_MODULE)
+                    .masterDetails(List.of(
+                            MasterDetail.builder().name(LEGACY_AUTO_ESCALATION).build(),
+                            MasterDetail.builder().name(LEGACY_AUTO_ESCALATION_IGNORE).build()))
+                    .build();
             MdmsCriteria criteria = MdmsCriteria.builder()
                     .tenantId(tenantId)
-                    .moduleDetails(Collections.singletonList(module))
+                    .moduleDetails(List.of(module, workflowModule))
                     .build();
             MdmsCriteriaReq request = MdmsCriteriaReq.builder()
                     .requestInfo(requestInfo)
@@ -161,7 +178,8 @@ public class EscalationConfigurationService {
                     .build();
 
             Object response = serviceRequestRepository.fetchResult(mdmsUtils.getMdmsSearchUrl(), request);
-            List<Map<String, Object>> records = JsonPath.read(response, MDMS_ESCALATION_CONFIG_JSONPATH);
+            rejectLegacyPgrEscalation(response, tenantId);
+            List<Map<String, Object>> records = readRecords(response, MDMS_ESCALATION_CONFIG_JSONPATH);
             if (records == null || records.isEmpty()) {
                 return null;
             }
@@ -182,11 +200,54 @@ public class EscalationConfigurationService {
                     MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId,
                     records.size(), defaults.size());
             return null;
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("Failed to fetch {} for tenant {}",
                     MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId, e);
             return null;
         }
+    }
+
+    private static void rejectLegacyPgrEscalation(Object response, String tenantId) {
+        for (String master : List.of(LEGACY_AUTO_ESCALATION, LEGACY_AUTO_ESCALATION_IGNORE)) {
+            List<Map<String, Object>> records = readRecords(
+                    response, "$.MdmsRes." + WORKFLOW_MODULE + "." + master);
+            boolean conflict = records.stream()
+                    .filter(EscalationConfigurationService::isActive)
+                    .anyMatch(EscalationConfigurationService::isPgrRecord);
+            if (conflict) {
+                throw new CustomException("PGR_ESCALATION_CONFIG_CONFLICT",
+                        "Disable Workflow." + master + " for PGR in tenant " + tenantId
+                                + "; RAINMAKER-PGR.EscalationConfig is the only supported PGR escalation policy");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> readRecords(Object response, String path) {
+        try {
+            List<Map<String, Object>> records = JsonPath.read(response, path);
+            return records == null ? Collections.emptyList() : records;
+        } catch (Exception missingMaster) {
+            return Collections.emptyList();
+        }
+    }
+
+    private static boolean isActive(Map<String, Object> record) {
+        Object active = record.get("active");
+        return !Boolean.FALSE.equals(active)
+                && !(active instanceof String text && "false".equalsIgnoreCase(text.trim()));
+    }
+
+    private static boolean isPgrRecord(Map<String, Object> record) {
+        String businessService = text(record.get("businessService"));
+        String module = text(record.get("module"));
+        return startsWithPgr(businessService) || startsWithPgr(module);
+    }
+
+    private static boolean startsWithPgr(String value) {
+        return value != null && value.toUpperCase(Locale.ROOT).startsWith("PGR");
     }
 
     private static boolean belongsToState(String tenantId, String stateTenant) {
@@ -197,11 +258,22 @@ public class EscalationConfigurationService {
         return value instanceof String text && !text.isBlank() ? text.trim() : null;
     }
 
-    private static int positiveInt(Object value, Integer fallback) {
-        if (value instanceof Number number && number.intValue() >= 0) {
-            return number.intValue();
+    private static int nonNegativeInt(Object value, Integer fallback) {
+        if (value == null) {
+            return fallback == null ? 0 : Math.max(fallback, 0);
         }
-        return fallback == null ? 0 : fallback;
+        if (value instanceof Number number) {
+            try {
+                int parsed = new BigDecimal(number.toString()).intValueExact();
+                if (parsed >= 0) {
+                    return parsed;
+                }
+            } catch (NumberFormatException | ArithmeticException ignored) {
+                // Fall through to fail closed below.
+            }
+        }
+        log.error("Invalid EscalationConfig.maxDepth {}; disabling escalation for this config", value);
+        return 0;
     }
 
     private static List<Long> numberList(Object value) {

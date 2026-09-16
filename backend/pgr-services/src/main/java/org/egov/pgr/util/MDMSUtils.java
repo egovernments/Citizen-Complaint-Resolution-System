@@ -18,9 +18,10 @@ import org.springframework.stereotype.Component;
 
 import org.egov.tracer.model.CustomException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
@@ -162,8 +163,20 @@ public class MDMSUtils {
             for (Map<String, Object> def : defs) {
                 Object code = def.get(MDMS_DATA_SERVICE_CODE_KEYWORD);
                 Object sla = def.get(MDMS_DATA_SLA_KEYWORD);
-                if (code != null && sla instanceof Number)
-                    map.put(code.toString(), TimeUnit.HOURS.toMillis(((Number) sla).longValue()));
+                if (code != null && sla instanceof Number number) {
+                    try {
+                        BigDecimal milliseconds = new BigDecimal(number.toString())
+                                .multiply(BigDecimal.valueOf(3_600_000L));
+                        if (milliseconds.signum() >= 0) {
+                            map.put(code.toString(), milliseconds
+                                    .setScale(0, RoundingMode.CEILING)
+                                    .longValueExact());
+                        }
+                    } catch (NumberFormatException | ArithmeticException invalidSla) {
+                        log.error("Ignoring invalid slaHours {} for serviceCode {} in tenant {}",
+                                sla, code, tenantId);
+                    }
+                }
             }
         } catch (Exception e) {
             log.error("Failed to load serviceCode->SLA map for tenant {}; inbox SLA sort will fall back "

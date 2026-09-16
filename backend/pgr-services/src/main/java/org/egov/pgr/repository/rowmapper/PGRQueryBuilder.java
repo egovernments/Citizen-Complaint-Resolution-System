@@ -165,6 +165,14 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, serviceRequestIds);
         }
 
+        if (criteria.getCreatedTimeBefore() != null && criteria.getServiceRequestIdBefore() != null) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" (ser.createdtime < ? OR (ser.createdtime = ? AND ser.serviceRequestId < ?)) ");
+            preparedStmtList.add(criteria.getCreatedTimeBefore());
+            preparedStmtList.add(criteria.getCreatedTimeBefore());
+            preparedStmtList.add(criteria.getServiceRequestIdBefore());
+        }
+
         // Visibility (reportee-scoped All): team-assigned complaints OR the
         // unassigned queues, in one predicate so pagination and count stay
         // correct. Set only by VisibilityService.
@@ -360,6 +368,16 @@ public class PGRQueryBuilder {
         if(criteria.getSortOrder()== RequestSearchCriteria.SortOrder.ASC)
             builder.append(" ASC ");
         else builder.append(" DESC ");
+
+        // createdtime is not unique. Scheduler keyset scans require a deterministic
+        // second key so equal-timestamp complaints cannot be skipped between pages.
+        if (StringUtils.isEmpty(criteria.getSortBy())
+                || criteria.getSortBy() == RequestSearchCriteria.SortBy.createdTime) {
+            builder.append(", ser.serviceRequestId ");
+            if (criteria.getSortOrder() == RequestSearchCriteria.SortOrder.ASC)
+                builder.append(" ASC ");
+            else builder.append(" DESC ");
+        }
 
     }
 
