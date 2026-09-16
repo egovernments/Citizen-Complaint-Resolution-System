@@ -156,25 +156,42 @@ class MobileValidationService {
     if (!digits) return null;
 
     const cc = this.countryDigits(mobileConfig);
+    const withoutCc =
+      cc && digits.startsWith(cc) && digits.length > cc.length ? digits.slice(cc.length) : null;
 
-    // The number AS SENT is tried first, so an already-national number is never rewritten
-    // into a different one. Stripping the country code first was wrong: for a rule like
-    // `^[0-9]{10}$` with cc `+1`, '1234567890' had its leading '1' eaten and a fabricated
-    // '0' prepended, yielding '0234567890' -- a DIFFERENT subscriber, which then flowed into
-    // loginUser/createUser. Only country-code-stripped forms that actually occur are
-    // considered; nothing is fabricated.
-    const candidates = [digits];
-    if (digits.startsWith("0")) candidates.push(digits.replace(/^0+/, ""));
-    if (cc && digits.startsWith(cc) && digits.length > cc.length) {
-      const withoutCc = digits.slice(cc.length);
+    // Order matters, and both orderings have bitten this function:
+    //
+    //  * country-code-stripped FIRST, because a tenant rule can also match the
+    //    dial-code-prefixed form. With +258 / ^[0-9]{9,12}$, '258841234567' satisfies the
+    //    rule as-sent, so trying the as-sent form first returned the INTERNATIONAL number
+    //    as the national one -- diverging from the 9-digit record novu-bridge uses for the
+    //    same citizen, so inbound and outbound disagreed about who the user is.
+    //
+    //  * as-sent SECOND, so a genuine national number is never rewritten. With +1 /
+    //    ^[0-9]{10}$, '1234567890' must stay itself; stripping the leading '1' leaves 9
+    //    digits, which fails the rule, so this falls through to the as-sent form correctly.
+    //
+    // Nothing is fabricated among these: every candidate is a form the sender could have
+    // actually transmitted.
+    const candidates = [];
+    if (withoutCc) {
       candidates.push(withoutCc);
-      // Some senders keep the domestic trunk 0 after the country code (+254 0712...).
-      if (withoutCc.startsWith("0"))
-        candidates.push(withoutCc.replace(/^0+/, ""));
+      if (withoutCc.startsWith('0')) candidates.push(withoutCc.replace(/^0+/, ''));
     }
+    candidates.push(digits);
+    if (digits.startsWith('0')) candidates.push(digits.replace(/^0+/, ''));
 
     for (const candidate of candidates) {
       if (this.isNational(candidate, mobileConfig)) return candidate;
+    }
+
+    // LAST RESORT, and only after every real form has failed: a tenant whose rule REQUIRES
+    // the domestic trunk 0 (e.g. ^0[17][0-9]{8}$) can never match a country-code-prefixed
+    // number without it. Synthesising the 0 here is safe precisely because we would
+    // otherwise return null -- it cannot shadow a real interpretation, which is what went
+    // wrong when this candidate sat ahead of the as-sent form.
+    if (withoutCc && !withoutCc.startsWith('0') && this.isNational('0' + withoutCc, mobileConfig)) {
+      return '0' + withoutCc;
     }
     return null;
   }
@@ -213,6 +230,29 @@ class MobileValidationService {
   toE164(national, mobileConfig) {
     const international = this.toInternational(national, mobileConfig);
     return international ? "+" + international : null;
+  }
+
+  /**
+   * Best-effort E.164 digits for ADDRESSING a reply, without inventing a country code.
+   *
+   * `toInternational` prepends the tenant's code unconditionally, which is right for a
+   * number already reconciled to national form and wrong for anything else. Feeding it an
+   * unreconciled number produced addresses that cannot exist:
+   *
+   *   +447700900123 under the ke rule -> national=null -> To=+254447700900123  (Twilio 21211)
+   *   +254712345678 under a trunk-0-required rule -> To=+254254712345678
+   *
+   * Twilio always delivers E.164 in `From`, so when a number cannot be reconciled to the
+   * tenant rule the digits already ARE international and are returned untouched. The
+   * citizen gets a reply at the number they actually messaged from, and a mismatched or
+   * overly narrow MDMS rule degrades to "answer anyway" rather than "answer nobody".
+   */
+  toAddressableDigits(raw, mobileConfig) {
+    const digits = this.digitsOnly(raw);
+    if (!digits) return null;
+    const national = this.toNational(digits, mobileConfig);
+    if (national) return this.toInternational(national, mobileConfig);
+    return digits;
   }
 
   /** Convenience: resolve the tenant rule and normalise in one call. */
