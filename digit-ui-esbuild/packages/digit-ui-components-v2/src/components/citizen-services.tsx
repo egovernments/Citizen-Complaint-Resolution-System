@@ -11,9 +11,13 @@
 //   * Single full-width column inside the v2 sidebar layout — page header
 //     ("All Services" / brand-tinted) + responsive grid of module cards.
 //   * Each module card lists the module's available services as tappable
-//     rows with chevron affordance. Hover uses the theme's
-//     --color-primary-selected-bg (kenya-yellow #FFF4D7 on naipepea) so
-//     the same hover language matches the v2 dropdown / sidebar rows.
+//     rows with chevron affordance, styled to match the employee module
+//     card's tertiary-button rows: a --color-surface-subtle chip with the
+//     label in the action colour. Hover deepens the chip to
+//     --color-primary-selected-bg, the same hover language as the v2
+//     dropdown / sidebar rows.
+//   * Card tracks cap at 434px, the employee module-card width, so a
+//     single-module tenant doesn't get one slab across the page.
 //   * No back link at the top — the citizen sidebar's Home row already
 //     covers that, and a top-of-page Back was redundant on this surface.
 //   * No card outline shadows on hover; this surface is dense, the tint
@@ -24,6 +28,12 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { Card } from "./ui/card";
+
+// Clickable text reads in the brand's action colour (--color-primary-2,
+// #2563EB on CMS Blue) while headings stay in --color-primary-1. Employee
+// module cards already follow this; the citizen rows rendered their labels
+// in the heading colour, which is what made the two surfaces diverge.
+const LINK_COLOR = "var(--color-primary-2, var(--color-primary-main, #c84c0e))";
 
 interface ServiceLink {
   link?: string;
@@ -117,7 +127,7 @@ function ModuleCard({
           margin: 0,
           display: "flex",
           flexDirection: "column",
-          gap: "2px",
+          gap: "8px",
         }}
       >
         {links.map((link, i) => {
@@ -131,22 +141,21 @@ function ModuleCard({
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "12px",
-                padding: "10px 8px",
-                borderRadius: "6px",
+                padding: "10px 14px",
+                borderRadius: "8px",
                 fontSize: "0.875rem",
-                color: "var(--color-text-heading, #363636)",
-                transition: "background-color 0.15s ease-out, color 0.15s ease-out",
+                fontWeight: 500,
+                backgroundColor: "var(--color-surface-subtle, #FAFAFA)",
+                color: LINK_COLOR,
+                transition: "background-color 0.15s ease-out",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.backgroundColor =
-                  "var(--color-primary-selected-bg, #FFF4D7)";
-                (e.currentTarget as HTMLElement).style.color =
-                  "var(--color-primary-1, var(--color-primary-main, #c84c0e))";
+                  "var(--color-primary-selected-bg, #EFF6FF)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                (e.currentTarget as HTMLElement).style.color =
-                  "var(--color-text-heading, #363636)";
+                (e.currentTarget as HTMLElement).style.backgroundColor =
+                  "var(--color-surface-subtle, #FAFAFA)";
               }}
             >
               <span style={{ flex: 1 }}>{label}</span>
@@ -264,12 +273,10 @@ export function CitizenServices({ modules, renderIcon, title }: CitizenServicesP
               // calm full-width row so the page doesn't feel under-filled.
               // From 3 modules onward, fall back to the auto-fill grid so
               // information density scales for module-heavy tenants.
-              gridTemplateColumns:
-                codes.length <= 2
-                  ? "minmax(0, 1fr)"
-                  : "repeat(auto-fill, minmax(280px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 434px))",
               gap: "1rem",
               alignItems: "start",
+              justifyContent: "start",
             }}
           >
             {codes.map((code) => (
