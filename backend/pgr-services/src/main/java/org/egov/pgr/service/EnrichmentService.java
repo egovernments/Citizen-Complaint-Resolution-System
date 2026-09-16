@@ -186,9 +186,10 @@ public class EnrichmentService {
     }
 
 
-    public void enrichUserContactDetails(ServiceRequest request) {
+    /** Removes User-Service-owned fields from the complaint before synchronization. */
+    public UserContactDetails detachUserContactDetails(ServiceRequest request) {
         ExtendedAttributes ext = request.getService().getExtendedAttributes();
-        if (ext == null) return;
+        if (ext == null) return UserContactDetails.EMPTY;
 
         String email   = ext.getEmail();
         String address = ext.getComplainantAddress();
@@ -197,14 +198,27 @@ public class EnrichmentService {
         ext.setEmail(null);
         ext.setComplainantAddress(null);
 
-        if (email == null && address == null) return;
+        return new UserContactDetails(email, address);
+    }
+
+    /** Synchronizes detached fields after validation and before the workflow transition. */
+    public void syncUserContactDetails(ServiceRequest request, UserContactDetails contact) {
+        if (contact == null || contact.isEmpty()) return;
 
         userService.updateUserContactDetails(
                 request.getService().getAccountId(),
-                email,
-                address,
+                contact.email(),
+                contact.address(),
                 request.getService().getTenantId(),
                 request.getRequestInfo());
+    }
+
+    public record UserContactDetails(String email, String address) {
+        private static final UserContactDetails EMPTY = new UserContactDetails(null, null);
+
+        public boolean isEmpty() {
+            return email == null && address == null;
+        }
     }
 
 

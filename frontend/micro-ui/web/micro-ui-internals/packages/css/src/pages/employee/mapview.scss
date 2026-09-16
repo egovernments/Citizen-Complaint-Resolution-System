@@ -123,7 +123,7 @@
             box-shadow: none;
 
             .map-filter-layers {
-                @extend .typography.heading-s;
+                @extend %typography-heading-s;
                 margin: 0;
                 padding: 0;
                 color: theme(digitv2.lightTheme.paper);
@@ -205,7 +205,7 @@
                 }
 
                 p {
-                    @extend .typography.heading-xs;
+                    @extend %typography-heading-xs;
                     color: theme(digitv2.lightTheme.primary) !important;
                     font-size: 0.75rem;
                 }
@@ -230,7 +230,7 @@
         p {
           margin: 0;
           padding: 0;
-          @extend .typography.heading-s;
+          @extend %typography-heading-s;
           margin: 0;
           padding: 0;
           color: theme(digitv2.lightTheme.paper);
@@ -326,7 +326,7 @@
             gap: 0.5rem;
 
             .map-header-section-header {
-                @extend .typography.heading-m;
+                @extend %typography-heading-m;
                 color: theme(digitv2.lightTheme.text-primary)
             }
         }

@@ -14,6 +14,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 import { hasUsableGeoLocation } from "../../utils/geoLocation";
+import { trackEvent } from "../../utils/analytics";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -200,16 +201,9 @@ const ACTION_CONFIGS = [
     },
   },
   {
-    // ESCALATE was missing from this list, so getUpdatedConfig() returned null
-    // and PGRWorkflowModal short-circuited (`if (!config) return null`) — the
-    // "Escalate" action rendered an empty no-op modal (issue #521). The PGR
-    // BusinessService defines ESCALATE as a valid action at PENDINGFORASSIGNMENT
-    // (GRO/PGR_VIEWER) and PENDINGATLME (GRO/PGR_LME/PGR_VIEWER), so the backend
-    // already accepts the transition; only this front-end config was absent.
-    // Mirrors REASSIGN: pick a forward assignee + mandatory comments. The
-    // assignee role set is injected dynamically by computeAssigneeRoles()/
-    // getUpdatedConfig(), and handleActionSubmit() already maps
-    // SelectedAssignee.uuid -> workflow.assignes/hrmsAssignes.
+    // ESCALATE is not an arbitrary employee picker. The backend resolves the
+    // current assignee's HRMS reportingTo and performs the same self-loop for
+    // manual and automatic triggers. Lateral assignment remains REASSIGN.
     actionType: "ESCALATE",
     formConfig: {
       label: {
@@ -220,14 +214,6 @@ const ACTION_CONFIGS = [
       form: [
         {
           body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
             {
               type: "textarea",
               isMandatory: true,
@@ -555,7 +541,7 @@ const PGRDetails = () => {
 
   // Compute the assignee role set for an action by looking at the *forward*
   // (non-self-looping) actions defined on the next state and unioning their
-  // roles. Self-loops like ESCALATE / SLA_ESCALATE / COMMENT add noise (e.g.
+  // roles. Self-loops like ESCALATE / COMMENT add noise (e.g.
   // GRO showing up in a PENDINGATLME assignment dropdown), so we exclude them.
   // System roles (CITIZEN, AUTO_ESCALATE, ANONYMOUS) are filtered out too.
   const computeAssigneeRoles = (nextStateUuid, businessServiceResponse) => {
@@ -571,11 +557,14 @@ const PGRDetails = () => {
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
+    const currentAssignees = workflowData?.ProcessInstances?.[0]?.assignes || [];
     const matchingState = businessServiceResponse?.states?.find((state) => state.uuid === currentState?.uuid);
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
     return matchingState.actions
-      ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
+      ? matchingState.actions
+        .filter((action) => action.roles.some((role) => userRoles.includes(role)))
+        .filter((action) => action.action !== "ESCALATE" || currentAssignees.length > 0)
         .map((action) => ({
           action: action.action,
           roles: action.roles,
@@ -791,6 +780,10 @@ const PGRDetails = () => {
           actionFields={[
             <Button
               className="custom-class"
+              // Analytics (CCRS#2007): opening the action menu. The action the
+              // operator then picks is emitted separately from onOptionSelect
+              // below, because a click listener cannot see inside the menu.
+              data-analytics-event="pgr.complaint.take-action"
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
@@ -804,6 +797,9 @@ const PGRDetails = () => {
                 if (selected.action === "REOPEN") {
                   const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
                   if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+                    // A refusal is a drop-off worth seeing: it tells us the reopen
+                    // window is set too tight, which no click event would reveal.
+                    trackEvent("pgr.complaint.reopen-blocked", { category: "pgr" });
                     setToast({
                       show: true,
                       type: "error",
@@ -812,6 +808,10 @@ const PGRDetails = () => {
                     return;
                   }
                 }
+                // The chosen action arrives here, not on the click, so the
+                // declarative tag on the button cannot capture it. The code goes
+                // in `label` so the event name stays stable as actions are added.
+                trackEvent("pgr.complaint.action-selected", { category: "pgr", label: selected?.action });
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}

@@ -36,7 +36,7 @@
     "json-edit-react": "^1.22.6",
     "json-schema-to-yup": "^1.8.8",
     "jsonpath": "^1.1.1",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "lodash": "4.17.21",
     "lodash.merge": "^4.6.2",

@@ -46,11 +46,7 @@ const consumedComplaints = new Set<string>();
 /**
  * Choose the human ASSIGN action in the Take-Action select.
  *
- * Anchored deliberately: from PENDINGFORASSIGNMENT the PGR workflow also offers
- * `ASSIGNEDBYAUTOESCALATION` (roles: [AUTO_ESCALATE]) and the UI lists it BEFORE
- * `ASSIGN`, so a loose /assign/i picks the system-only transition. No human role
- * holds AUTO_ESCALATE, so the _update then 400s with `INVALID ROLE`. Anchoring on
- * ^ also keeps `Reassign to Employee` out.
+ * Anchored deliberately so a loose /assign/i cannot select Reassign.
  *
  * Asserts on the option's text so a future label change fails loudly here rather
  * than silently selecting a neighbouring action.

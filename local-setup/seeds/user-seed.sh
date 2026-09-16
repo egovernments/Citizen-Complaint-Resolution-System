@@ -105,9 +105,10 @@ create_user() {
 #   REASSIGN, RESOLVE     → PGR_LME, PGR_VIEWER
 #   REOPEN                → CFC, CITIZEN, CSR, PGR_VIEWER
 #   RATE                  → CFC, CITIZEN
-#   RESOLVEBYSUPERVISOR   → SUPERVISOR
-#   FORWARD/AUTO          → AUTO_ESCALATE
-# Plus the generic ones (SUPERUSER, EMPLOYEE, DGRO) for completeness.
+#   ESCALATE              → PGR_LME, PGR_VIEWER (SYSTEM for the scheduler)
+# Plus generic/bootstrap roles for completeness. SUPERVISOR and AUTO_ESCALATE
+# remain for independent access-control and notification compatibility; neither
+# has special meaning in the active PGR escalation workflow.
 #
 # ACCOUNT_ADMIN: Kong gateway RBAC (ENFORCE_RBAC, since #1837) maps the
 # tenant-bootstrap write endpoints (ACCESSCONTROL-ROLEACTIONS/-ACTIONS-TEST

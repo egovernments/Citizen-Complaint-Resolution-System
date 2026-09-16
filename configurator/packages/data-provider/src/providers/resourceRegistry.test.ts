@@ -121,6 +121,7 @@ describe('resourceRegistry', () => {
       'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
       'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
       'pgr-ui-constants': 'RAINMAKER-PGR.UIConstants',
+      'pgr-escalation': 'RAINMAKER-PGR.EscalationConfig',
     };
     for (const [resource, schema] of Object.entries(expected)) {
       const cfg = getResourceConfig(resource);

@@ -30,6 +30,13 @@
 # and the package manager, so those two strings are templated rather than
 # duplicating the whole task per OS family (which previously let the version
 # regexps drift apart).
+- name: "{{ node_ensure_label }} — probe dpkg architecture (for the apt source line)"
+  ansible.builtin.command: dpkg --print-architecture
+  register: _node_deb_arch
+  changed_when: false
+  failed_when: false
+  when: ansible_facts['os_family'] == 'Debian'
+
 - name: "{{ node_ensure_label }} — decide whether NodeSource Node 20 is needed"
   ansible.builtin.set_fact:
     _node_needs_install: >-
@@ -37,11 +44,85 @@
          or _ensure_npm_ver.rc != 0
          or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.')) }}
 
-- name: "{{ node_ensure_label }} — install NodeSource Node 20 (node <20 or npm absent)"
-  ansible.builtin.shell: |
-    set -euo pipefail
-    curl -fsSL https://{{ 'deb' if ansible_facts['os_family'] == 'Debian' else 'rpm' }}.nodesource.com/setup_20.x | bash -
-    {{ 'apt-get' if ansible_facts['os_family'] == 'Debian' else 'dnf' }} install -y nodejs
-  args:
-    executable: /bin/bash
-  when: _node_needs_install | bool
+# Declarative repo setup instead of `curl … | bash -` as root.
+#
+# The old form piped an unauthenticated remote script straight into a root
+# shell on the target: whatever NodeSource served (or whatever a MITM or a
+# compromised CDN served in its place) executed with full privileges on a box
+# that holds every tenant secret, and nothing about the transfer was verified
+# beyond TLS. It also ran on every deploy that needed Node — it was the default
+# path, not an opt-in.
+#
+# The replacement is the same shape the Docker install above already uses:
+# fetch the publisher's GPG key to /etc/apt/keyrings, register a `signed-by=`
+# apt source, and let apt verify every package signature. On RHEL the dnf repo
+# carries gpgcheck=1 with the same key. A tampered package now fails the
+# signature check instead of executing.
+#
+# NOTE: setting `digit_ui_bundle_image` in group_vars skips the on-host UI
+# build entirely, so no Node install is needed at all — prefer that where the
+# deploy does not need a toolchain on the box.
+
+- name: "{{ node_ensure_label }} — NodeSource repo (Debian/Ubuntu)"
+  when:
+    - _node_needs_install | bool
+    - ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: "{{ node_ensure_label }} — prerequisites for a signed apt repo"
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: yes
+
+    # Dearmor to a temp file, then install into place only on full success.
+    # The old form (gpg dearmor straight to the dest, guarded by creates:)
+    # truncated the dest before the piped download had succeeded, so a failed
+    # curl left a 0-byte keyring that creates: then skipped forever, wedging
+    # every later deploy with an unverifiable apt repo. pipefail catches the
+    # curl failure; the temp+install makes the dest all-or-nothing. No creates:
+    # so a previously-left empty keyring is always re-created.
+    # (Keep this shell body comment-free: an apostrophe or backtick in a
+    # shell: block trips ansible arg-splitting at runtime.)
+    - name: "{{ node_ensure_label }} — install NodeSource GPG key to /etc/apt/keyrings"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        install -m 0755 -d /etc/apt/keyrings
+        tmp=$(mktemp)
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o "$tmp"
+        test -s "$tmp"
+        install -m 0644 "$tmp" /etc/apt/keyrings/nodesource.gpg
+        rm -f "$tmp"
+      args:
+        executable: /bin/bash
+
+    - name: "{{ node_ensure_label }} — register signed-by NodeSource apt source"
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/nodesource.list
+        mode: '0644'
+        content: |
+          deb [arch={{ _node_deb_arch.stdout | trim }} signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main
+
+    - name: "{{ node_ensure_label }} — install nodejs (signature-verified by apt)"
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+
+- name: "{{ node_ensure_label }} — NodeSource repo (RHEL family)"
+  when:
+    - _node_needs_install | bool
+    - ansible_facts['os_family'] == 'RedHat'
+  block:
+    - name: "{{ node_ensure_label }} — register NodeSource dnf repo with gpgcheck"
+      ansible.builtin.yum_repository:
+        name: nodesource-nodejs
+        description: Node.js Packages - Node 20
+        baseurl: https://rpm.nodesource.com/pub_20.x/nodistro/nodejs/$basearch
+        gpgcheck: true
+        gpgkey: https://rpm.nodesource.com/gpgkey/ns-operations-public.key
+        enabled: true
+
+    - name: "{{ node_ensure_label }} — install nodejs (signature-verified by dnf)"
+      ansible.builtin.dnf:
+        name: nodejs
+        state: present

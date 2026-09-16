@@ -30078,5 +30078,45 @@
       "tenantId": "statea",
       "actioncode": ""
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2108,
+      "actionid": 2649,
+      "rolecode": "MDMS_ADMIN",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2109,
+      "actionid": 2650,
+      "rolecode": "MDMS_ADMIN",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2110,
+      "actionid": 2649,
+      "rolecode": "SUPERUSER",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2111,
+      "actionid": 2650,
+      "rolecode": "SUPERUSER",
+      "tenantId": "ke",
+      "actioncode": ""
+    }
   }
 ]

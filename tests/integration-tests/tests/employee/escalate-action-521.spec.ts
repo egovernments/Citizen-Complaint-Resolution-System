@@ -7,40 +7,10 @@
  * ESCALATE (issue #521 was an *empty no-op modal* — the option rendered and
  * did nothing).
  *
- * ── THE ESCALATION MODEL, settled from the source ──────────────────────────
- *
- * pgr-services does NOT decide the state ESCALATE lands in. All it ever does
- * is hand egov-workflow-v2 an action plus assignees:
- *
- *   EscalationService.escalateComplaint()  (backend/pgr-services/.../service/
- *   EscalationService.java:92-113) builds Workflow{action: ESCALATE,
- *   assignes: [supervisorUuid]} and calls workflowService.updateWorkflowStatus().
- *   The supervisor is HRMSUtil.getSupervisorUuid() — HRMS `reportingTo[0]` of
- *   the current assignee (HRMSUtil.java:73-97), i.e. escalation climbs the HRMS
- *   reporting chain, one rung per escalation, bounded by escalationLevel <
- *   maxDepth (EscalationService.java:62-68, EscalationScheduler.java:98-102).
- *
- * So the ASSIGNEE move is app code and is invariant across deployments; the
- * STATE move is 100% businessService config. The app's own shipped seed
- * (utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json,
- * commit 8a5d6d9d "fix(pgr): #521 — seed manual ESCALATE action on
- * PENDINGATLME") wires it as:
- *
- *   PENDINGATLME --ESCALATE--> PENDINGATSUPERVISOR
- *       roles [PGR_LME, PGR_VIEWER, SYSTEM, AUTO_ESCALATE]
- *
- * That is the intended product wiring, and this spec annotates a run whose
- * deployment says otherwise. It does not hard-assert PENDINGATSUPERVISOR,
- * because a deployment is free to (and mz.maputo currently does) wire ESCALATE
- * as a self-loop on PENDINGATLME — asserting a literal target would be exactly
- * the hardcoded-deployment-value mistake WRITING-TESTS.md forbids. The target
- * is read live off businessservice/_search; what is asserted unconditionally is
- * the part #521 is actually about: the option appears, the modal renders a real
- * form, and the submit produces an ESCALATE process instance carrying our
- * comment — then the state matches whatever this deployment configured.
- *
- * (api/pgr-escalation.spec.ts's "add ESCALATE if missing" self-heal writes the
- * SELF-LOOP variant, which is what put mz.maputo out of step with the seed.)
+ * ESCALATE has one meaning: resolve the current assignee's HRMS reportingTo,
+ * reassign to that employee, increment shared metadata, and stay in the same
+ * workflow state. The modal therefore asks only for a comment; it never offers
+ * an arbitrary employee picker.
  *
  * ESCALATE remains a workflow-config capability, so requires() stays the single
  * source of truth for skip-vs-fail: it SKIPs on a deployment that declares
@@ -56,15 +26,15 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { requires, isPresent } from '../utils/capabilities';
-import { getPersona } from '../utils/personas';
+import { getPersona, resolveSeedPlan } from '../utils/personas';
 import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
 import { loginEmployeeBrowser, getPrincipal, apiStatus, type Principal } from '../utils/employee-ui';
 import { BASE_URL, TENANT } from '../utils/env';
 
 const CAPABILITY = 'workflow.pgr.actions.ESCALATE' as const;
 
-/** The nextState the app's own seed wires ESCALATE@PENDINGATLME to. */
-const SEEDED_ESCALATE_TARGET = 'PENDINGATSUPERVISOR';
+/** The only valid nextState for ESCALATE@PENDINGATLME. */
+const SEEDED_ESCALATE_TARGET = 'PENDINGATLME';
 
 // Resolved at beforeAll time. An explicit ASSIGNED_COMPLAINT_ID env
 // override wins (operator supplied a known PENDINGATLME complaint);
@@ -145,8 +115,36 @@ test.beforeAll(async () => {
     // employee has no such luck.) driveToPendingAtLme reuses the same
     // (serviceCode, actor, assignee) triple the create used, so the ASSIGN
     // that follows lines up on the department check instead of guessing.
+    const plan = await resolveSeedPlan();
+    if ('error' in plan) {
+      seedSkipReason = `could not resolve an escalation seed plan: ${plan.error}`;
+      return;
+    }
+    const employeeResp = await fetch(
+      `${BASE_URL}/egov-hrms/employees/_search?tenantId=${encodeURIComponent(TENANT)}` +
+        `&uuids=${encodeURIComponent(plan.assigneeUuid)}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${plan.actor.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RequestInfo: { apiId: 'Rainmaker', authToken: plan.actor.token, userInfo: plan.actor.userInfo },
+        }),
+      },
+    );
+    if (!employeeResp.ok) {
+      seedSkipReason = `could not inspect reportingTo for ${plan.assigneeCode}: HTTP ${employeeResp.status}`;
+      return;
+    }
+    const employeeBody: any = await employeeResp.json();
+    const currentAssignment = (employeeBody?.Employees?.[0]?.assignments || [])
+      .find((assignment: any) => assignment.isCurrentAssignment);
+    if (!currentAssignment?.reportingTo) {
+      seedSkipReason = `seed assignee ${plan.assigneeCode} has no current HRMS reportingTo; ESCALATE must reject it`;
+      return;
+    }
+
     const { srid } = await seedComplaintAsCitizen({ description: `#521 escalate seed — ${new Date().toISOString()}` });
-    await driveToPendingAtLme(srid);
+    await driveToPendingAtLme(srid, plan.assigneeUuid);
     COMPLAINT_ID = srid;
     console.log(`[escalate-521] seeded ${COMPLAINT_ID} at PENDINGATLME`);
   } catch (err: any) {
@@ -183,19 +181,7 @@ test.describe('employee — manual Escalate action #521', () => {
       '#521 — the PGR businessService must define an active ESCALATE action on PENDINGATLME ' +
         `(the app seeds it as PENDINGATLME --ESCALATE--> ${SEEDED_ESCALATE_TARGET})`,
     ).not.toBeNull();
-    console.log(`[escalate-521] ESCALATE@PENDINGATLME lands in ${escalateTarget}`);
-    if (escalateTarget !== SEEDED_ESCALATE_TARGET) {
-      // Not a failure — a deployment may legitimately wire ESCALATE as a
-      // self-loop — but it IS drift from the shipped seed and worth surfacing
-      // on every run rather than discovering it again from scratch.
-      test.info().annotations.push({
-        type: 'workflow-drift',
-        description:
-          `ESCALATE@PENDINGATLME lands in ${escalateTarget}, not the seeded ${SEEDED_ESCALATE_TARGET} ` +
-          '(utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json). ' +
-          'On this deployment the state stays put and only the assignee climbs the HRMS reportingTo chain.',
-      });
-    }
+    expect(escalateTarget, 'ESCALATE must be a PENDINGATLME self-loop').toBe(SEEDED_ESCALATE_TARGET);
 
     // ============ digit-ui employee login ============
     // Token injection, not the login form: the login page's city picker is a
@@ -239,15 +225,11 @@ test.describe('employee — manual Escalate action #521', () => {
     const commentBox = page.locator('textarea').first();
     await expect(
       commentBox,
-      '#521 — Escalate must render its action form (assignee + comments), not an empty no-op modal',
+      '#521 — Escalate must render its comment form, not an empty no-op modal',
     ).toBeVisible({ timeout: 10_000 });
     await commentBox.fill(comment);
 
-    // The Escalate modal's assignee picker is optional (PGRAssigneeComponent,
-    // isMandatory: false) and its option set is derived from the NEXT state's
-    // roles, which differ per deployment — leaving it empty keeps the spec
-    // deployment-agnostic. The reportingTo climb is the auto-escalation
-    // scheduler's job (EscalationService) and is covered by api/pgr-escalation.
+    await expect(page.getByText(/employee name/i)).toHaveCount(0);
     await page.getByRole('button', { name: /^SUBMIT$|^Submit$/ }).first().click();
 
     // ============ Verify a real ESCALATE transition happened ============

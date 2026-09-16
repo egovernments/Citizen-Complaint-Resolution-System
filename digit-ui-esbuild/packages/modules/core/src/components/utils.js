@@ -54,3 +54,54 @@ export const resolveProfilePhoto = async (photo, stateId) => {
   }
   return null;
 };
+/**
+ * MDMS StateInfo stores each language's label as a shouted endonym
+ * ("ENGLISH", "FRANÇAIS", "PORTUGUÊS") and the UI runs it through t(). Only
+ * the ones somebody seeded a localization key for come back title-cased;
+ * i18next echoes the key for the rest, so a language list ends up mixing
+ * "English" with "FRANÇAIS".
+ *
+ * Rather than depend on a key existing per language per tenant, fall back to
+ * the endonym in title case.
+ *
+ * Only SHOUTED labels are recased. A label that already carries mixed case is
+ * somebody's deliberate spelling — "isiZulu", "pidginEnglish" — and
+ * lowercasing it to re-capitalise would corrupt it.
+ */
+const isShouted = (raw) => raw === raw.toUpperCase() && raw !== raw.toLowerCase();
+
+/**
+ * MDMS locale values are underscore-style ("en_IN", and for script-qualified
+ * languages "zh_Hans_CN"). Intl wants hyphens, and it wants ALL of them
+ * converted: a single replace leaves "zh-Hans_CN", which is not a valid tag
+ * and makes toLocaleLowerCase throw a RangeError — blanking the language
+ * selector and the top-bar dropdown. Anything Intl still rejects falls back to
+ * locale-independent casing rather than taking the screen down.
+ */
+const toLocaleTag = (value) => (typeof value === "string" ? value.replace(/_/g, "-") : undefined);
+
+export const titleCaseEndonym = (raw, locale) => {
+  const upper = (ch) => {
+    try {
+      return ch.toLocaleUpperCase(locale);
+    } catch (e) {
+      return ch.toUpperCase();
+    }
+  };
+  let lowered;
+  try {
+    lowered = String(raw).toLocaleLowerCase(locale);
+  } catch (e) {
+    lowered = String(raw).toLowerCase();
+  }
+  return lowered.replace(/(^|[\s\-'\u2019])(\p{L})/gu, (_, sep, ch) => sep + upper(ch));
+};
+
+export const languageLabel = (t, language) => {
+  const raw = language?.label;
+  if (!raw) return "";
+  const translated = t(raw);
+  if (translated && translated !== raw) return translated;
+  if (!isShouted(String(raw))) return raw;
+  return titleCaseEndonym(raw, toLocaleTag(language?.value));
+};
