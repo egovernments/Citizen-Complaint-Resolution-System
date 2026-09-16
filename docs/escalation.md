@@ -5,7 +5,8 @@ same workflow self-loop: the complaint stays in its current state and is
 reassigned to the current assignee's HRMS `reportingTo`. The service increments
 the same `additionalDetails.escalationLevel` metadata for both triggers. No
 assignee or no `reportingTo` means no escalation; neither a `SUPERVISOR` role nor
-a `PENDINGATSUPERVISOR` state participates.
+a `PENDINGATSUPERVISOR` state participates. The canonical workflow exposes the
+self-loop only on assigned `PENDINGATLME`, not on unassigned queue states.
 
 The policy is the singleton `code: DEFAULT` record in MDMS v2
 `RAINMAKER-PGR.EscalationConfig`. Resolution is complete city record, then

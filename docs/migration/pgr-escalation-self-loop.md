@@ -45,7 +45,7 @@ Do not remove a legacy state while an active complaint still occupies it.
    - `utilities/default-data-handler/src/main/resources/PgrWorkflowConfig.json`
    - `utilities/crs_dataloader/templates/PgrWorkflowConfig.json`
    - `local-setup/dataloader/templates/PgrWorkflowConfig.json`
-4. Confirm both `ESCALATE` actions point to their own current-state UUID and authorize `SYSTEM`.
+4. Confirm the `PENDINGATLME` `ESCALATE` action points to its own current-state UUID and authorizes `SYSTEM`.
 5. Confirm `FORWARD`, `ASSIGNEDBYAUTOESCALATION`, `RESOLVEBYSUPERVISOR`, `PENDINGATSUPERVISOR`, and `RESOLVEDBYSUPERVISOR` are absent from the active BusinessService.
 
 Keep legacy localization strings so historical timelines remain readable.
