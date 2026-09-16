@@ -50,8 +50,9 @@ export function registerSnapshotTools(registry: ToolRegistry): void {
     category: 'snapshot',
     // `write`, not `read`: `output_path` goes straight to writeFileSync (arbitrary
     // file overwrite) and the `config` layer with redact:false returns raw
-    // container env — DB passwords, encryption keys, CRS_PASSWORD. That makes it
-    // a mutating / secret-exposing tool, so read-only instances must not carry it.
+    // container env — DB passwords, encryption keys, the server's admin password.
+    // That makes it a mutating / secret-exposing tool, so read-only instances
+    // must not carry it.
     access: 'admin',
     risk: 'write',
     description:
