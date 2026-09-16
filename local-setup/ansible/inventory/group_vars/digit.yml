@@ -229,6 +229,10 @@ nginx_features:
                             # tunnel to 127.0.0.1:13000 instead).
   api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
   mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  mcp_readonly: false       # /mcp + /v1/ for the PUBLIC read-only MCP instance
+                            # (digit-mcp-readonly). Basic-auth gated; mutually
+                            # exclusive with `mcp`. Needs enable_mcp_readonly and
+                            # mcp_readonly_basic_auth_password set.
   matomo: false             # /matomo/matomo.js + /matomo/matomo.php — the two
                             # tracking endpoints ONLY, as exact matches. The
                             # Matomo admin UI is deliberately NOT proxied: it
@@ -246,6 +250,7 @@ upstream_kong_port: 18000
 upstream_grafana_port: 13000
 upstream_gatus_port: 18889
 upstream_mcp_port: 13101
+upstream_mcp_readonly_port: 13102   # digit-mcp-readonly container (profile mcp-readonly)
 upstream_esbuild_port: 18080
 upstream_minio_port: 19000
 # Matomo's admin UI. Bound to 127.0.0.1 by the overlay, so this is the

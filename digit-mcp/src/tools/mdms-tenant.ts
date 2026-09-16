@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ToolMetadata, MdmsRecord } from '../types/index.js';
 import { MDMS_SCHEMAS } from '../types/index.js';
 import type { ToolRegistry } from './registry.js';
+import { isReadOnlyEffective } from './registry.js';
 import { digitApi } from '../services/digit-api.js';
 import { digitDb } from '../services/digit-db.js';
 import { ensureAuthenticated, checkBaseUrlAllowed, getAuthMode, defaultProvisioningPassword } from '../services/auth.js';
@@ -507,6 +508,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const baseUrl = args.base_url as string | undefined;
       const envKey = (args.environment as string) || process.env.CRS_ENVIRONMENT || 'self-hosted';
 
+      // A read-only instance must not be steered to an arbitrary host at all:
+      // base_url flows to setAdHocEnvironment and, with the CRS_USERNAME/CRS_PASSWORD
+      // fallback below, would POST the admin credentials there and poison the
+      // process-wide client for every later read. Refuse it outright — stricter
+      // than the allow-list guards below. (configure stays a read tool because a
+      // read-only instance still needs it to connect to its own environment.)
+      if (isReadOnlyEffective() && baseUrl) {
+        return JSON.stringify({
+          success: false,
+          error: 'base_url is not allowed on a read-only MCP instance.',
+        }, null, 2);
+      }
+
       // ── base_url guards ──
       // Pointing the client at a caller-chosen host makes it send credentials
       // there. Two independent checks: the host must be allow-listed, and the
@@ -653,7 +667,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         !!explicitRoot && usedLoginTenant !== explicitRoot && usedLoginTenant !== explicitTenantId;
       let rolesProvisioned: string[] | null = null;
       let rolesProvisionSkipped: Record<string, unknown> | null = null;
-      if (tenantFellBack && !provisionRoles) {
+      // The provisioning branch below calls userUpdate to self-grant SUPERUSER
+      // (and eight other roles) on the target root — a write to the DIGIT user
+      // store, which a read-only instance must never do. Surface a skip note
+      // instead of attempting it, even when provision_roles was requested.
+      if (tenantFellBack && provisionRoles && isReadOnlyEffective()) {
+        rolesProvisionSkipped = {
+          targetTenant: explicitRoot,
+          loggedInOn: usedLoginTenant,
+          note:
+            `Logged in on "${usedLoginTenant}" but you asked for "${explicitRoot}". Role provisioning grants ` +
+            `SUPERUSER and is disabled on a read-only MCP instance; assign roles out of band if needed.`,
+        };
+      } else if (tenantFellBack && !provisionRoles) {
         rolesProvisionSkipped = {
           targetTenant: explicitRoot,
           loggedInOn: usedLoginTenant,

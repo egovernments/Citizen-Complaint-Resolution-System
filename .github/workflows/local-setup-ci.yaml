@@ -25,7 +25,11 @@ jobs:
   ansible-lint:
     name: Ansible static validation
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 15, not 5: the lint itself is seconds, but `pip install ansible-lint` +
+    # `ansible-galaxy collection install` runs right up against 5 min on a cold
+    # runner and intermittently tips over it, cancelling the job before the
+    # linters ever run. Give the install headroom so a slow runner isn't a red.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: local-setup/ansible
