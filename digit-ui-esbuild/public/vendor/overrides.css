@@ -7565,7 +7565,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 }
 
 /* ----------------------------------------------------------------------
- * 66. Employee route grounds (#2038 review round 2)
+ * 66. Route grounds (#2038 review round 2, extended for citizen)
  *
  *     `.v2-scope` carries `background: var(--v2-page-bg)`, and `--v2-page-bg`
  *     resolves to `--color-page-bg`, which this palette sets to #FFFFFF. The
@@ -7583,5 +7583,19 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  * ---------------------------------------------------------------------- */
 .employee .app-container.ground-container > .v2-scope,
 .employee .grounded-container > .v2-scope {
+  background-color: transparent !important;
+}
+
+/*     Same defect on the citizen side, reported on #2038 as a downstream
+ *     deviation: `/citizen/all-services` paints a white `div.v2-scope`
+ *     route root over the grey `.body-container`, so the page reads as a
+ *     white slab with the ground surviving only below the fold and the
+ *     card invisible on it.
+ *
+ *     Guarded with the same `:has(> aside.v2-scope)` test the layout rules
+ *     above use, because the citizen login / OTP surfaces don't mount the
+ *     sidebar and do want their own white ground. `div.v2-scope` (not bare
+ *     `.v2-scope`) so the navy sidebar `aside` keeps its background. */
+.center-container.citizen-home-container:has(> aside.v2-scope) > div.v2-scope {
   background-color: transparent !important;
 }
