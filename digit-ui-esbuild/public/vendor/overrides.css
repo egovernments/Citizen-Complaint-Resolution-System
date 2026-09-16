@@ -386,6 +386,29 @@ table.digit-table-main thead th {
   color: var(--color-tooltip-text, #FFFFFF) !important;
 }
 
+/* Leaflet's own tooltip ships white-on-#222 with a white callout arrow.
+ * The box itself is already recolored by the `[role="tooltip"]` rule above
+ * (react-leaflet sets that role), but the border and the arrow are drawn by
+ * leaflet's own rules and stayed white, leaving a white notch under a navy
+ * box. Route all three through the same tokens. */
+.leaflet-tooltip {
+  background-color: var(--color-tooltip-bg, #22394D) !important;
+  border-color: var(--color-tooltip-bg, #22394D) !important;
+  color: var(--color-tooltip-text, #FFFFFF) !important;
+}
+.leaflet-tooltip-top:before {
+  border-top-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-bottom:before {
+  border-bottom-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-left:before {
+  border-left-color: var(--color-tooltip-bg, #22394D) !important;
+}
+.leaflet-tooltip-right:before {
+  border-right-color: var(--color-tooltip-bg, #22394D) !important;
+}
+
 /* Dashboard Add-KPI hover card is not a DIGIT tooltip — keep surface styling. */
 .dashboard-add-kpi-preview,
 .dashboard-add-kpi-preview.dashboard-root {
@@ -3032,6 +3055,22 @@ button[class*="toast-close"] svg,
  * bottom as the filter column. */
 .v2-pgr-inbox .digit-sections-parent.inbox > * {
   align-self: stretch !important;
+}
+
+/* ...except the links panel, which is in the FIRST grid row, not the second.
+ * The rule above was written for the table/filter row and catching row 1 as
+ * well left the links card stretched to the height of the search form beside
+ * it: measured 210px of card around 99px of content, which is the
+ * "too much white space on the top left box" in the #2038 review.
+ *
+ * `align-self` alone is not enough — vendor also sets
+ * `.digit-section.links { height: 100% }` (resolved against the row) and a
+ * `.digit-section { min-height: 10rem }` floor. Clear all three so the panel
+ * is as tall as the one link it holds. Measured 210px -> 149px. */
+.v2-pgr-inbox .digit-sections-parent.inbox > .digit-section.links {
+  align-self: start !important;
+  height: auto !important;
+  min-height: 0 !important;
 }
 .v2-pgr-inbox .digit-results-table-wrapper {
   display: flex;
@@ -7598,4 +7637,98 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *     `.v2-scope`) so the navy sidebar `aside` keeps its background. */
 .center-container.citizen-home-container:has(> aside.v2-scope) > div.v2-scope {
   background-color: transparent !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 67. Detail-card label / value hierarchy (#2038 QA)
+ *
+ *     Reported as "everything (subheading and text) is in same font, hard to
+ *     differentiate at first glance" on the complaint details page. Measured:
+ *     the label is 13px/500 and the value 15px/400, in exactly the same
+ *     colour. The label being smaller but heavier cancels out against the
+ *     value being larger but lighter, so neither reads as subordinate.
+ *
+ *     Treat the label as what it is, a field caption: smaller, uppercase,
+ *     tracked out, in the muted tone. The value carries the weight instead.
+ *     That is the same caption treatment the v2 form fields already use, so
+ *     the read/write halves of the module now match.
+ *
+ *     Note this needs the theme's text ramp to actually be a ramp. The
+ *     bomet-county ThemeConfig currently sets text-primary, -secondary,
+ *     -muted and -heading all to #1D2433, which flattens every caption in
+ *     the app to body colour; that is fixed in the MDMS record, not here.
+ * ---------------------------------------------------------------------- */
+.employee .digit-viewcard-label,
+.employee [class*="field-pair-label"] {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-muted, #6B7280) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  margin-bottom: 2px !important;
+}
+.employee .digit-viewcard-value,
+.employee [class*="field-pair-value"] {
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  color: var(--color-text-primary, #1D2433) !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 68. Language selection buttons (#2038 QA)
+ *
+ *     "button sizes are different for each language button": the container
+ *     is `display: block` and each button shrink-wraps its own label, so the
+ *     row measured 76 / 84 / 94px for English / Francais / Portugues. A
+ *     language picker is a set of equal choices and should not rank them by
+ *     how long the word is.
+ *
+ *     Flex row with a shared floor instead. 7rem clears the longest of the
+ *     three at this type size and lands the row on the same left edge as the
+ *     Continue button beneath it. Wraps rather than overflowing when a tenant
+ *     ships more languages than fit.
+ * ---------------------------------------------------------------------- */
+.language-button-container {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  justify-content: center !important;
+}
+.language-button-container .customBtn,
+.language-button-container .customBtn-selected {
+  flex: 0 0 auto !important;
+  min-width: 7rem !important;
+  margin: 0 !important;
+  text-align: center !important;
+}
+
+/* ----------------------------------------------------------------------
+ * 69. Employee form type scale (#2038 QA)
+ *
+ *     "Bigger and more legible font size and header vs content font size
+ *     hierarchy" on Create Complaint. Measured before: section header 16/600,
+ *     field label 14/500, input text 14/400, and the breadcrumb's current
+ *     crumb 16/400 — the same size as the section headers it sits above, so
+ *     the loudest thing on the page was the navigation.
+ *
+ *     After: breadcrumb 14, label 14, input 15, section header 18. The
+ *     section header now reads a step above its fields, the breadcrumb a step
+ *     below, and the text the operator actually types is the larger of the
+ *     two body sizes. Input size matches the detail card's value size from
+ *     section 67, so the read and write views of a complaint agree.
+ * ---------------------------------------------------------------------- */
+.employee .digit-card-section-header {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+}
+.employee .digit-bread-crumb,
+.employee .digit-bread-crumb-content {
+  font-size: 0.875rem !important;
+}
+.employee .v2-scope input,
+.employee .v2-scope textarea,
+.employee .v2-scope [role="combobox"],
+.employee .v2-scope [role="combobox"] span,
+.employee .v2-scope [role="option"] {
+  font-size: 0.9375rem !important;
 }
