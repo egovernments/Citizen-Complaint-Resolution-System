@@ -137,7 +137,7 @@ const MobileSortComponent = ({ uiConfig, fullConfig, onClose }) => {
               <Button
                 label={t("ES_CLEAR_ALL")}
                 variation="secondary"
-                onButtonClick={() => reset({ close: true })}
+                onClick={() => reset({ close: true })}
                 type="button"
               />
               <SubmitBar label={t("ES_COMMON_APPLY")} onSubmit={apply} />
