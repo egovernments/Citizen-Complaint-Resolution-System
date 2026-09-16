@@ -70,18 +70,6 @@
             {
               "tenantId": "{tenantid}",
               "currentState": "PENDINGFORASSIGNMENT",
-              "action": "ESCALATE",
-              "nextState": "PENDINGFORASSIGNMENT",
-              "roles": [
-                "GRO",
-                "PGR_VIEWER",
-                "SYSTEM"
-              ],
-              "active": true
-            },
-            {
-              "tenantId": "{tenantid}",
-              "currentState": "PENDINGFORASSIGNMENT",
               "action": "COMMENT",
               "nextState": "PENDINGFORASSIGNMENT",
               "roles": [
