@@ -60,7 +60,7 @@ function ResourceCard({ resource }: { resource: string }) {
       onClick={() => navigate(`/manage/${resource}`)}
       className="text-left w-full h-full focus:outline-none group"
     >
-      <DigitCard className="h-full w-full mb-0 p-4 flex items-center min-h-[88px] transition-all duration-150 group-hover:shadow-md group-hover:border-primary/40 group-hover:bg-accent/5">
+      <DigitCard className="h-full w-full mb-0 p-4 flex items-center min-h-[88px] border border-transparent transition-all duration-150 group-hover:shadow-md group-hover:border-primary/40 group-hover:bg-accent/5">
         <div className="flex items-center gap-3.5 w-full">
           <div className="w-11 h-11 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
             <Icon className="w-5 h-5 text-primary" />
