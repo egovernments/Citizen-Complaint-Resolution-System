@@ -506,6 +506,22 @@ function applyTheme(config) {
   for (const name of Object.keys(vars)) {
     root.style.setProperty(name, vars[name]);
   }
+
+  // Brand assets are files, not tokens, so no amount of colour maths makes a
+  // dark-on-light lockup readable once a tenant paints its header navy. Publish
+  // the header's tone so the chrome can reach for the right file — the same
+  // luminance the foreground backfill above is judged on, so the two can never
+  // disagree about whether a surface is dark.
+  const headerLum = relativeLuminance(vars["--color-header-bg"]);
+  if (headerLum === null) {
+    delete root.dataset.headerTone;
+  } else {
+    root.dataset.headerTone =
+      contrastWithLuminance(headerLum, relativeLuminance(WHITE)) >= AA_NORMAL_TEXT
+        ? "dark"
+        : "light";
+  }
+
   const bridged = injectV2Bridge(vars);
   console.log(
     `[theme] applied ${Object.keys(vars).length} variables` +

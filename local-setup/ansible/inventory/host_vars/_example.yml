@@ -826,11 +826,117 @@ grafana_anonymous_enabled: false
 # the vhost render with an undefined-variable error instead of falling
 # back to off.
 
+# ==================== Gatus status board auth ====================
+# /status/ is served behind HTTP basic auth. The board lists every internal
+# component, its endpoint and its live health, which is a ready-made recon map
+# of the deployment — it used to be world-readable on every tenant that had
+# `nginx_features.status: true`, which every shipped template set. The feature
+# now defaults to false and the board is never served without a password.
+#
+# The playbook ASSERTS on this: enabling the feature without a password fails
+# the deploy rather than rendering a board nobody realises is public. Set the
+# password, or set nginx_features.status to false to stop publishing it.
+status_basic_auth_user: digit-status
+# status_basic_auth_password: ""      # REQUIRED when nginx_features.status is true
+#
+# Rotate by deleting /etc/nginx/.htpasswd-status on the box and re-running the
+# deploy (the task is idempotent via `creates`).
+
+# ==================== Kong CORS origins ====================
+# The repo's kong/kong.yml ships `origins: ['*']` so a local `docker compose up`
+# or a Tilt run works with the SPA on its own port. The deploy REWRITES that to
+# the value below, because a wildcard on a real box lets any website read every
+# auth-optional DIGIT API cross-origin. (It was previously paired with
+# `credentials: true`, which made every origin trusted for authenticated calls;
+# that flag is now gone from kong.yml entirely.)
+#
+# Default is https://<domain> — correct for the normal single-origin
+# deployment, where nginx serves the SPAs and proxies Kong on one hostname.
+# Only set this when a genuinely separate browser origin must call the APIs.
+# kong_cors_origins:
+#   - "https://{{ domain }}"
+#   - "https://analytics.example.org"
+
+# ==================== nginx security headers ====================
+# X-Content-Type-Options, X-Frame-Options, Referrer-Policy and HSTS (when
+# tls_enabled) are always sent. The Content-Security-Policy is sent in
+# Report-Only mode by default: an untested policy against these SPAs breaks the
+# UI instead of hardening it. Collect reports, tune, then enforce.
+# nginx_csp_enforce: false
+# nginx_csp_policy: "default-src 'self'; ..."   # override the shipped policy
+
+# ==================== HRMS dev mode ====================
+# Lets employee-create honour a password supplied in the request rather than
+# generating one. The configurator / XLSX onboarding wizards need it to set a
+# known first password for the employees they create. It was previously ON for
+# every deployment, which means anyone authorised to create employees chose
+# their credentials directly and bypassed the generated-password flow.
+#
+# Turn it on while you are onboarding employees through those wizards, then
+# turn it back off.
+hrms_dev_mode: false
+
+# ==================== Deploy SSH account ====================
+# The generated inventory defaults to `ansible_user: root` because a freshly
+# provisioned box has root (or the image's default user) and nothing else.
+# host_vars beat group vars, so setting it here switches THIS tenant to an
+# unprivileged deploy account — the play already runs under `become`, and the
+# rsync/synchronize tasks already opt out of it, so nothing else changes.
+#
+# Recommended once the box exists:
+#   1. useradd -m -s /bin/bash digit-deploy && usermod -aG sudo digit-deploy
+#   2. install the controller's public key in ~digit-deploy/.ssh/authorized_keys
+#   3. set ansible_user below (and ansible_become_password, unless you granted
+#      NOPASSWD sudo)
+#   4. disable root SSH: PermitRootLogin no in /etc/ssh/sshd_config
+#
+# ansible_user: digit-deploy
+# ansible_become_password: "..."      # omit with NOPASSWD sudo
+#
+# Set DIGIT_ANSIBLE_USER in the environment to change the default for every
+# tenant at once instead of per file.
+
+# ==================== Integration-tests runner account ====================
+# The RUN-button daemon runs as this unprivileged system account (created by
+# the playbook), not root. It clones a branch and executes a Playwright suite,
+# which is arbitrary code by design, and is reachable through nginx /tests/api/.
+# integration_tests_runner_user: digit-tests
+
+# ==================== Keycloak dev redirect URIs ====================
+# Only consumed when enable_keycloak: true. EMPTY by default, deliberately.
+#
+# The realm template used to hardcode `http://localhost:*` as a redirect URI on
+# a PUBLIC client. On a public client the redirect list is the only thing
+# binding an authorization code to a legitimate destination, so a localhost
+# wildcard lets anything listening on the victim's own machine receive a real
+# code for that user. The wildcard `https://*.egov.theflywheel.in/*` origin is
+# gone for the same reason: any subdomain, including one an attacker controls.
+#
+# Set these on a DEV tenant only:
+# keycloak_dev_redirect_uris:
+#   - "http://localhost:5173/*"
+# keycloak_dev_web_origins:
+#   - "http://localhost:5173"
+
+# ==================== Host firewall ====================
+# The playbook installs and enables ufw on Debian/Ubuntu (default deny
+# incoming; 22/ansible_port, 80 and 443 allowed) and firewalld on RHEL.
+# Set false ONLY when ingress is already managed elsewhere — a cloud security
+# group, a provider firewall — and a second policy layer would confuse
+# matters. Note this is defence in depth, not the control that contains the
+# container ports: Docker's DNAT rules bypass ufw's INPUT chain entirely, so
+# published ports are contained by BIND_IP loopback binding instead (see the
+# header of docker-compose.egov-digit.yaml).
+manage_host_firewall: true
+
 nginx_features:
   brand_assets: false        # /brand/ — local logo/banner mirror
   configurator: false        # /configurator/ — DIGIT Studio SPA
   configurator_caching: false  # asset-level cache headers for above
-  status: true               # /status/ — Gatus health dashboard
+  status: false              # /status/ — Gatus health dashboard. OFF by default:
+                             # the board maps every internal component and its
+                             # health. To publish it, set this true AND set
+                             # status_basic_auth_password (the deploy asserts).
   api_pgr: false             # /api/pgr/ — proxied to MCP server
   mcp: true                  # /mcp + /v1/* — MCP HTTP transport + REST shim (requires enable_mcp: true)
   keycloak: false            # /auth/ + /token-exchange/ — requires enable_keycloak: true
@@ -900,12 +1006,22 @@ secrets_path: kv/digit/mytenant
 # `asd@#$@$!132123` — the dump's eg_enc_*_keys decrypt only under that
 # value. Mismatch → AEADBadTagException in egov-enc-service on boot.
 bootstrap_secrets:
-  postgres_password: change-me-strong
-  mcp_db_password: change-me-strong
-  minio_root_user: minioadmin
-  minio_root_password: change-me-strong
-  elasticsearch_master_password: "asd@#$@$!132123"  # see comment above
-  egov_hrms_default_password: "eGov@123"
+  # CHANGE_ME is enforced: scripts/check-committed-secrets.sh fails CI if a
+  # tracked host_vars file ships a real value, because this repo is public and
+  # anything committed here is disclosed the moment it lands.
+  postgres_password: "CHANGE_ME"
+  mcp_db_password: "CHANGE_ME"
+  minio_root_user: "CHANGE_ME"
+  minio_root_password: "CHANGE_ME"
+  # With db_fast_path: true this MUST be `asd@#$@$!132123` — see the note
+  # above. That value is not a secret: it belongs to the PUBLIC dump shipped
+  # with this repo, and the dump's eg_enc_*_keys decrypt only under it. On a
+  # real deployment (no dump) use a generated value.
+  elasticsearch_master_password: "asd@#$@$!132123"
+  # ES login for the opt-in search stack (enable_search_stack). DISTINCT from
+  # the master password above — never reuse the PII-encryption master here.
+  # elasticsearch_password: "CHANGE_ME"
+  egov_hrms_default_password: "CHANGE_ME"
   # Grafana admin login (user `admin`). OPTIONAL — leave it out and the
   # playbook generates a 24-char password on first deploy and stores it here
   # in OpenBao. Read it back with:
@@ -921,4 +1037,4 @@ bootstrap_secrets:
   keycloak_admin_password: ""               # master realm admin login
   keycloak_db_password: ""                  # Keycloak's Postgres connection
   keycloak_google_client_secret: ""         # only if keycloak_google_client_id is set
-  token_exchange_system_password: "eGov@123"  # DIGIT system user the exchange impersonates
+  token_exchange_system_password: "CHANGE_ME"  # DIGIT system user the exchange impersonates

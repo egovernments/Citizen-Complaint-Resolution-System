@@ -1,64 +1,78 @@
+/* Each .typography variant is emitted as its own top-level block, in the original
+   source order, so the cascade is byte-for-byte unchanged. Variants that other
+   stylesheets @extend are additionally exposed as placeholders: dart-sass rejects
+   `@extend .typography.heading-s` (a compound selector), but extending a
+   placeholder expresses the same intent and is portable across sass implementations. */
+%typography-text-heading-xl {
+  font-family: theme(digitv2.fontFamily.rc);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+  color: theme(digitv2.lightTheme.text-primary);
+  line-height: theme(digitv2.lineHeight.normal);
+
+  @media (min-width: theme(digitv2.screens.desktop)) {
+    font-size: theme(digitv2.fontSize.heading-xl.desktop);
+  }
+
+  @media (min-width: theme(digitv2.screens.tablet)) {
+    font-size: theme(digitv2.fontSize.heading-xl.tablet);
+  }
+
+  @media (min-width: theme(digitv2.screens.mobile)) {
+    font-size: theme(digitv2.fontSize.heading-xl.mobile);
+  }
+}
 .typography {
-  &.text-heading-xl {
-    font-family: theme(digitv2.fontFamily.rc);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
-    color: theme(digitv2.lightTheme.text-primary);
-    line-height: theme(digitv2.lineHeight.normal);
+  &.text-heading-xl { @extend %typography-text-heading-xl; }
+}
 
-    @media (min-width: theme(digitv2.screens.desktop)) {
-      font-size: theme(digitv2.fontSize.heading-xl.desktop);
-    }
+%typography-text-heading-l {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+  color: theme(digitv2.lightTheme.text-primary);
+  line-height: theme(digitv2.lineHeight.normal);
 
-    @media (min-width: theme(digitv2.screens.tablet)) {
-      font-size: theme(digitv2.fontSize.heading-xl.tablet);
-    }
-
-    @media (min-width: theme(digitv2.screens.mobile)) {
-      font-size: theme(digitv2.fontSize.heading-xl.mobile);
-    }
+  @media screen and (min-width: theme(digitv2.screens.desktop)) {
+    font-size: theme(digitv2.fontSize.heading-l.desktop);
   }
 
-  &.text-heading-l {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
-    color: theme(digitv2.lightTheme.text-primary);
-    line-height: theme(digitv2.lineHeight.normal);
-
-    @media screen and (min-width: theme(digitv2.screens.desktop)) {
-      font-size: theme(digitv2.fontSize.heading-l.desktop);
-    }
-
-    @media screen and (min-width: theme(digitv2.screens.tablet)) {
-      font-size: theme(digitv2.fontSize.heading-l.tablet);
-    }
-
-    @media screen and (min-width: theme(digitv2.screens.mobile)) {
-      font-size: theme(digitv2.fontSize.heading-l.mobile);
-    }
+  @media screen and (min-width: theme(digitv2.screens.tablet)) {
+    font-size: theme(digitv2.fontSize.heading-l.tablet);
   }
 
-  &.text-heading-m {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
-    color: theme(digitv2.lightTheme.text-primary);
-    line-height: theme(digitv2.lineHeight.normal);
+  @media screen and (min-width: theme(digitv2.screens.mobile)) {
+    font-size: theme(digitv2.fontSize.heading-l.mobile);
+  }
+}
+.typography {
+  &.text-heading-l { @extend %typography-text-heading-l; }
+}
 
-    @media screen and (min-width: theme(digitv2.screens.desktop)) {
-      font-size: theme(digitv2.fontSize.heading-m.desktop);
-    }
+%typography-text-heading-m {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+  color: theme(digitv2.lightTheme.text-primary);
+  line-height: theme(digitv2.lineHeight.normal);
 
-    @media screen and (min-width: theme(digitv2.screens.tablet)) {
-      font-size: theme(digitv2.fontSize.heading-m.tablet);
-    }
-
-    @media screen and (min-width: theme(digitv2.screens.mobile)) {
-      font-size: theme(digitv2.fontSize.heading-m.desktop);
-    }
+  @media screen and (min-width: theme(digitv2.screens.desktop)) {
+    font-size: theme(digitv2.fontSize.heading-m.desktop);
   }
 
+  @media screen and (min-width: theme(digitv2.screens.tablet)) {
+    font-size: theme(digitv2.fontSize.heading-m.tablet);
+  }
+
+  @media screen and (min-width: theme(digitv2.screens.mobile)) {
+    font-size: theme(digitv2.fontSize.heading-m.desktop);
+  }
+}
+.typography {
+  &.text-heading-m { @extend %typography-text-heading-m; }
+}
+
+.typography {
   &.text-heading-s {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
@@ -78,7 +92,9 @@
       font-size: theme(digitv2.fontSize.heading-s.mobile);
     }
   }
+}
 
+.typography {
   &.text-heading-xs {
     @media screen and (min-width: theme(digitv2.screens.mobile)) {
       font-size: theme(digitv2.fontSize.heading-xs.mobile);
@@ -89,7 +105,9 @@
       line-height: theme(digitv2.lineHeight.normal);
     }
   }
+}
 
+.typography {
   &.text-caption-l {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -109,7 +127,9 @@
       font-size: theme(digitv2.fontSize.caption-l.mobile);
     }
   }
+}
 
+.typography {
   &.text-caption-m {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -129,7 +149,9 @@
       font-size: theme(digitv2.fontSize.caption-m.mobile);
     }
   }
+}
 
+.typography {
   &.text-caption-s {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -149,7 +171,9 @@
       font-size: theme(digitv2.fontSize.caption-s.desktop);
     }
   }
+}
 
+.typography {
   &.text-body-l {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -171,7 +195,9 @@
       line-height: theme(digitv2.lineHeight.line-height-body-l.mobile);
     }
   }
+}
 
+.typography {
   &.text-body-s {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -193,7 +219,9 @@
       line-height: theme(digitv2.lineHeight.line-height-body-s.mobile);
     }
   }
+}
 
+.typography {
   &.text-body-xs {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -215,7 +243,9 @@
       line-height: theme(digitv2.lineHeight.line-height-body-xs.mobile);
     }
   }
+}
 
+.typography {
   &.text-label {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -235,7 +265,9 @@
       font-size: theme(digitv2.fontSize.label.mobile);
     }
   }
+}
 
+.typography {
   &.text-link {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
@@ -256,98 +288,115 @@
       font-size: theme(digitv2.fontSize.link.mobile);
     }
   }
+}
 
-  &.heading-xl {
-    font-family: theme(digitv2.fontFamily.rc);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
+%typography-heading-xl {
+  font-family: theme(digitv2.fontFamily.rc);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
 
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.heading-xl.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.heading-xl.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.heading-xl.desktop);
-    }
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.heading-xl.mobile);
   }
 
-  &.heading-l {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
-
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.heading-l.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.heading-l.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.heading-l.desktop);
-    }
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.heading-xl.tablet);
   }
 
-  &.heading-m {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.heading-xl.desktop);
+  }
+}
+.typography {
+  &.heading-xl { @extend %typography-heading-xl; }
+}
 
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.heading-m.mobile);
-    }
+%typography-heading-l {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
 
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.heading-m.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.heading-m.desktop);
-    }
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.heading-l.mobile);
   }
 
-  &.heading-s {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
-
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.heading-s.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.heading-s.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.heading-s.desktop);
-    }
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.heading-l.tablet);
   }
 
-  &.heading-xs {
-    font-size: theme(digitv2.fontSize.heading-xs.mobile);
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.bold);
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.heading-l.desktop);
+  }
+}
+.typography {
+  &.heading-l { @extend %typography-heading-l; }
+}
+
+%typography-heading-m {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.heading-m.mobile);
   }
 
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.heading-m.tablet);
+  }
+
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.heading-m.desktop);
+  }
+}
+.typography {
+  &.heading-m { @extend %typography-heading-m; }
+}
+
+%typography-heading-s {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.heading-s.mobile);
+  }
+
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.heading-s.tablet);
+  }
+
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.heading-s.desktop);
+  }
+}
+.typography {
+  &.heading-s { @extend %typography-heading-s; }
+}
+
+%typography-heading-xs {
+  font-size: theme(digitv2.fontSize.heading-xs.mobile);
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.bold);
+}
+.typography {
+  &.heading-xs { @extend %typography-heading-xs; }
+}
+
+.typography {
   &.caption-l {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -368,7 +417,9 @@
       font-size: theme(digitv2.fontSize.caption-l.desktop);
     }
   }
+}
 
+.typography {
   &.caption-m {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.italic);
@@ -389,70 +440,81 @@
       font-size: theme(digitv2.fontSize.caption-m.desktop);
     }
   }
+}
 
-  &.caption-s {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.italic);
-    font-weight: theme(digitv2.fontWeight.medium);
+%typography-caption-s {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.italic);
+  font-weight: theme(digitv2.fontWeight.medium);
 
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.caption-s.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.caption-s.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.caption-s.desktop);
-    }
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.caption-s.mobile);
   }
 
-  &.body-l {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.regular);
-
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.body-l.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.body-l.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.body-l.desktop);
-    }
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.caption-s.tablet);
   }
 
-  &.body-s {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.regular);
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.caption-s.desktop);
+  }
+}
+.typography {
+  &.caption-s { @extend %typography-caption-s; }
+}
 
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.body-s.mobile);
-    }
+%typography-body-l {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.regular);
 
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.body-s.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.body-s.desktop);
-    }
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.body-l.mobile);
   }
 
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.body-l.tablet);
+  }
+
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.body-l.desktop);
+  }
+}
+.typography {
+  &.body-l { @extend %typography-body-l; }
+}
+
+%typography-body-s {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.regular);
+
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.body-s.mobile);
+  }
+
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.body-s.tablet);
+  }
+
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.body-s.desktop);
+  }
+}
+.typography {
+  &.body-s { @extend %typography-body-s; }
+}
+
+.typography {
   &.body-xs {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
@@ -473,28 +535,33 @@
       font-size: theme(digitv2.fontSize.body-xs.desktop);
     }
   }
+}
 
-  &.label {
-    font-family: theme(digitv2.fontFamily.sans);
-    font-style: theme(digitv2.fontStyle.normal);
-    font-weight: theme(digitv2.fontWeight.regular);
+%typography-label {
+  font-family: theme(digitv2.fontFamily.sans);
+  font-style: theme(digitv2.fontStyle.normal);
+  font-weight: theme(digitv2.fontWeight.regular);
 
-    @media (max-width: 30rem) {
-      /* Media query for mobile */
-      font-size: theme(digitv2.fontSize.label.mobile);
-    }
-
-    @media (min-width: 30.063rem) and (max-width: 47.938rem) {
-      /* Media query for tablets */
-      font-size: theme(digitv2.fontSize.label.tablet);
-    }
-
-    @media (min-width: 48rem) {
-      /* Media query for desktop */
-      font-size: theme(digitv2.fontSize.label.desktop);
-    }
+  @media (max-width: 30rem) {
+    /* Media query for mobile */
+    font-size: theme(digitv2.fontSize.label.mobile);
   }
 
+  @media (min-width: 30.063rem) and (max-width: 47.938rem) {
+    /* Media query for tablets */
+    font-size: theme(digitv2.fontSize.label.tablet);
+  }
+
+  @media (min-width: 48rem) {
+    /* Media query for desktop */
+    font-size: theme(digitv2.fontSize.label.desktop);
+  }
+}
+.typography {
+  &.label { @extend %typography-label; }
+}
+
+.typography {
   &.link {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
@@ -502,7 +569,9 @@
     text-decoration: theme(digitv2.textDecorationLine.underline);
     font-size: theme(digitv2.fontSize.link.desktop);
   }
+}
 
+.typography {
   &.button {
     font-family: theme(digitv2.fontFamily.sans);
     font-style: theme(digitv2.fontStyle.normal);
@@ -510,3 +579,4 @@
     font-size: theme(digitv2.fontSize.button.desktop);
   }
 }
+

@@ -15,7 +15,11 @@ const header = require("postcss-header");
 
 const clean = require("gulp-clean");
 const postcss = require("gulp-postcss");
-const sass = require('gulp-sass');
+// gulp-sass 5+ takes the compiler as an argument and no longer bundles node-sass.
+// node-sass 4.x ships no prebuilt binary past node 14 and falls back to a
+// node-gyp/python2 source build, so it cannot install on a modern node; dart-sass
+// (the `sass` package) is pure JS and produces equivalent output here.
+const sass = require('gulp-sass')(require('sass'));
 
 const postcssPresetEnv = require("postcss-preset-env");
 const cleanCSS = require("gulp-clean-css");

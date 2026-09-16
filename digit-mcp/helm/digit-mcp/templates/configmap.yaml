@@ -5,11 +5,11 @@ metadata:
   labels:
     {{- include "digit-mcp.labels" . | nindent 4 }}
 data:
-  MCP_TRANSPORT: {{ .Values.env.MCP_TRANSPORT | quote }}
-  MCP_PORT: {{ .Values.env.MCP_PORT | quote }}
-  CRS_ENVIRONMENT: {{ .Values.env.CRS_ENVIRONMENT | quote }}
-  CRS_TENANT_ID: {{ .Values.env.CRS_TENANT_ID | quote }}
-  # DIGIT API base the shim proxies to. Defaults to the in-cluster gateway;
-  # without it the 'self-hosted' env falls back to http://kong:8000 (compose-only).
-  CRS_API_URL: {{ .Values.env.CRS_API_URL | quote }}
-  CRS_ENV_NAME: {{ .Values.env.CRS_ENV_NAME | quote }}
+  # Iterate `env` rather than enumerating keys. The previous hardcoded list
+  # silently dropped any value added to values.yaml — so a security-relevant
+  # setting (MCP_AUTH_MODE, TELEMETRY, …) would never reach the container even
+  # though it looked configured. Iterating also means CRS_API_URL / CRS_ENV_NAME
+  # (added on develop) are picked up without a template edit.
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

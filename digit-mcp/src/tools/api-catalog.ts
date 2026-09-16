@@ -30,6 +30,7 @@ export function registerApiCatalogTools(registry: ToolRegistry): void {
     name: 'api_catalog',
     group: 'docs',
     category: 'docs',
+    access: 'public',
     risk: 'read',
     description:
       'Get the complete DIGIT platform API catalog as an OpenAPI 3.0 specification. ' +

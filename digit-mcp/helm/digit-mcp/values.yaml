@@ -1,27 +1,91 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/chakshugautam/digit-mcp
-  tag: latest
-  pullPolicy: IfNotPresent
+  # The image this repo builds. `digit-mcp` is declared in build/build-config.yml
+  # and published by .github/workflows/build-images.yml, so the Dockerfile in
+  # this directory is the one that ends up running.
+  #
+  # The chart previously pointed at ghcr.io/chakshugautam/digit-mcp — a personal
+  # registry fed by a different repository. Nothing in this tree reached the
+  # cluster through it, so a fix merged here would never have shipped.
+  repository: egovio/digit-mcp
+  # Tags published by that pipeline: `develop-<sha8>`, `develop-YYYYMMDD`,
+  # `nightly-develop`, and release tags. (Chart.AppVersion is NOT a valid tag
+  # here — the chart version and the image pipeline are independent.)
+  #
+  # `develop-<sha8>` tags are PRUNED by the nightly job — it keeps only the 5
+  # most recent — so a sha pin silently disappears within about a week, taking
+  # your rollback target with it. Pin a `develop-YYYYMMDD` or a release tag for
+  # anything long-lived.
+  tag: nightly-develop
+  # Always, not IfNotPresent: the default tag moves. With IfNotPresent a node
+  # that has the tag cached never re-pulls, so two replicas can run different
+  # code indefinitely and `helm upgrade` is a no-op. If you pin an immutable
+  # tag or a digest, IfNotPresent is the better choice.
+  pullPolicy: Always
 
 service:
+  # ClusterIP only. /mcp and /v1/* expose admin-capable tooling; do not put an
+  # Ingress in front of this without an authenticating proxy.
   type: ClusterIP
   port: 3000
 
 env:
   MCP_TRANSPORT: http
   MCP_PORT: "3000"
+  # Deployment targeting (from develop — matches the ccrs-prod configmap).
   CRS_ENVIRONMENT: "self-hosted"
   CRS_TENANT_ID: "pg"
   # DIGIT API base the shim proxies to (in-cluster gateway service).
   CRS_API_URL: "http://gateway.egov:8080"
   CRS_ENV_NAME: "CCRS"
+  # Require a validated DIGIT token on /mcp, /v1/* and /api/*. Do not set this to
+  # "ambient" unless the socket is bound to loopback — ambient makes every
+  # anonymous caller act as CRS_USERNAME.
+  MCP_AUTH_MODE: token
+  # Usage telemetry is opt-in: unset MATOMO_URL means nothing leaves the cluster.
+  TELEMETRY: "false"
+  # Hosts `configure` may be pointed at. Empty => only the configured CRS_API_URL.
+  MCP_ALLOWED_BASE_URLS: ""
+  # Directory snapshot artifacts are confined to (must be writable; see volumes).
+  MCP_ARTIFACT_DIR: /app/data/artifacts
+  # Session viewer database. The image defaults to localhost:15433, which has no
+  # listener in a pod — sessions silently were not persisted and /api/stats
+  # returned "Database not available". Point these at a real Postgres, or leave
+  # them empty and accept JSONL-only session recording.
+  SESSION_DB_HOST: ""
+  SESSION_DB_PORT: "5432"
+  SESSION_DB_NAME: mcp_sessions
+  SESSION_DB_USER: mcp
+  # Role codes that satisfy a tool's access: 'admin' requirement. Empty => the
+  # built-in defaults (SUPERUSER, MDMS_ADMIN, SYSTEM_ADMIN, STADMIN).
+  MCP_ADMIN_ROLES: ""
+  # Peers whose X-Forwarded-For may be trusted: IPv4 or IPv6 addresses and
+  # CIDRs, or "*" behind an ingress that overwrites the header. Empty => never
+  # trust it.
+  MCP_TRUSTED_PROXIES: ""
+  # Password assigned to accounts this server CREATES (never to an existing
+  # one). Defaults to the published "eGov@123" if unset — override it.
+  MCP_DEFAULT_PROVISIONING_PASSWORD: ""
 
 secret:
   # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...
+  #
+  # CRS_USERNAME/CRS_PASSWORD are only used by the ambient-mode fallback, which
+  # MCP_AUTH_MODE=token disables. They remain here for a loopback/stdio deploy.
   CRS_USERNAME: ""
   CRS_PASSWORD: ""
+  # Session-viewer database. Unset => the published local-compose default, which
+  # is not a credential; set it on any real deployment.
+  SESSION_DB_PASSWORD: ""
+
+# Bounds for the three emptyDir volumes (see deployment.yaml). The access log
+# and session JSONL are append-only and unrotated, so these are what stop a
+# chatty pod from filling the node.
+storage:
+  logsSizeLimit: 512Mi
+  dataSizeLimit: 1Gi
+  tmpSizeLimit: 128Mi
 
 resources:
   requests:

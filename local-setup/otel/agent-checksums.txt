@@ -1,0 +1,21 @@
+# SHA256 checksums for the OpenTelemetry Java agent JAR, by release version.
+#
+# Format: <sha256>  <version>
+#
+# The upstream release does NOT publish a .sha256 asset — only a detached GPG
+# signature (opentelemetry-javaagent.jar.asc). Each checksum below was taken
+# from a jar whose .asc signature was verified against the OpenTelemetry Java
+# signing key before the digest was recorded:
+#
+#   pub   rsa2048 2020-11-27 [SC]
+#         3F05 DDA9 F317 301E 9271  36D4 17A2 7CE7 A60F F5F0
+#   uid   OpenTelemetry Java
+#
+# To add a version:
+#   curl -fSLO .../vX.Y.Z/opentelemetry-javaagent.jar
+#   curl -fSLO .../vX.Y.Z/opentelemetry-javaagent.jar.asc
+#   gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys 17A27CE7A60FF5F0
+#   gpg --verify opentelemetry-javaagent.jar.asc opentelemetry-javaagent.jar
+#   sha256sum opentelemetry-javaagent.jar     # record it here only if the
+#                                             # signature verified
+4cff4ab46179260a61fc0d884f3f170cfbd9d2962dd260be2cff31262d0c7618  2.11.0

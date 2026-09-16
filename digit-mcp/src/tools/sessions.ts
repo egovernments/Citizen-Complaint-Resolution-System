@@ -38,6 +38,7 @@ export function registerSessionTools(registry: ToolRegistry): void {
     name: 'init',
     group: 'core',
     category: 'sessions',
+    access: 'public',
     risk: 'write',
     description:
       'Initialize a DIGIT MCP session. Call this at the start of a conversation to set up the session context. ' +
@@ -151,6 +152,7 @@ export function registerSessionTools(registry: ToolRegistry): void {
     name: 'session_checkpoint',
     group: 'core',
     category: 'sessions',
+    access: 'public',
     risk: 'write',
     description:
       'Record a checkpoint summarizing your progress so far. Call this periodically (every 5-10 tool calls) to capture what you accomplished. The summary is persisted across sessions and searchable later.',

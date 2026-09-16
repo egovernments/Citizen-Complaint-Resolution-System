@@ -11,7 +11,7 @@
   "license": "MIT",
   "private": true,
   "engines": {
-    "node": "14"
+    "node": ">=14"
   },
   "scripts": {
     "start": "run-s build start:dev",
@@ -42,7 +42,8 @@
     "**/minimatch": "7.4.6",
     "**/glob": "7.2.3",
     "**/chokidar": "3.5.3",
-    "**/node-releases": "2.0.14"
+    "**/node-releases": "2.0.14",
+    "**/pdfkit": "0.12.3"
   },
   "devDependencies": {
     "husky": "7.0.4",

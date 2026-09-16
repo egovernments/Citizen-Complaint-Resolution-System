@@ -1524,8 +1524,12 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 <Phone style={{ height: "0.95rem", width: "0.95rem" }} aria-hidden />
                 {countryCode}
               </span>
+              {/* The class opts this field out of the global input chrome in
+                  overrides.css. The wrapper above owns the border and the
+                  radius, so a second set here reads as a box in a box. */}
               <input
                 id="profile-mobile"
+                className="v2-profile-phone-input"
                 type="tel"
                 inputMode="numeric"
                 pattern="[0-9]*"
