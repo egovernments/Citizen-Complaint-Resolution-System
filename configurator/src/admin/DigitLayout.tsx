@@ -479,7 +479,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              Open DIGIT Docs
+              {translate('app.nav.open_digit_docs', { _: 'Open DIGIT Docs' })}
             </a>
           </div>
         </footer>
