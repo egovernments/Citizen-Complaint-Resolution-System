@@ -19,7 +19,7 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
     const tenantId = Digit.ULBService.getCurrentTenantId();
     const headerLocale = Digit.Utils.locale.getTransformedLocale(tenantId);
 
-    const { dispatch } = useContext(InboxContext)
+    const { state, dispatch } = useContext(InboxContext)
 
     // Check if it's mobile view
     const isMobile = window.innerWidth <= 426;
@@ -49,6 +49,19 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
         register("offset", 0);
         register("limit", 10);
     }, [register]);
+
+    // This component owns the page offset locally and pushes it into
+    // tableForm, but the Filter / Search modal also sends the offset back
+    // to 0 when the criteria change. Follow the reducer when that happens,
+    // otherwise the pager keeps showing the old page number and the
+    // next/prev buttons step from a stale offset. Only mirrors, never
+    // dispatches, so this cannot loop with onSubmit above.
+    const reducerOffset = state?.tableForm?.offset;
+    useEffect(() => {
+        if (reducerOffset !== undefined && reducerOffset !== getValues("offset")) {
+            setValue("offset", reducerOffset);
+        }
+    }, [reducerOffset]);
 
     function onPageSizeChange(e) {
         setValue("limit", Number(e.target.value));
