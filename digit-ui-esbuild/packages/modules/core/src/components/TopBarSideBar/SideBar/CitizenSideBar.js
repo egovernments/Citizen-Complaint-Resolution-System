@@ -4,6 +4,7 @@ import React, { useState, Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import ChangeCity from "../../ChangeCity";
+import { navigateToEmployeeUrl } from "./employeeNavItems";
 import { defaultImage, resolveProfilePhoto } from "../../utils";
 import StaticCitizenSideBar from "./StaticCitizenSideBar";
 import { Hamburger } from "@egovernments/digit-ui-components";
@@ -82,6 +83,10 @@ export const CitizenSideBar = ({
   toggleSidebar,
   onLogout,
   isEmployee = false,
+  // Employee navigation, same tree the desktop SideNav renders. Supplied by
+  // EmployeeMobileSideBar rather than fetched here, so the citizen drawer
+  // never mounts the access-control query.
+  employeeNavItems = [],
   linkData,
   islinkDataLoading,
   userProfile,
@@ -350,7 +355,16 @@ export const CitizenSideBar = ({
     }
   };
   const onItemSelect = ({ item, index, parentIndex }) => {
-    if (item?.navigationURL) {
+    if (item?.navigationUrl) {
+      // Employee nav rows carry `navigationUrl`; the citizen rows below use
+      // `navigationURL` / `link`. Routed through the same helper the desktop
+      // SideNav uses so external links and multi-root tenants behave alike.
+      navigateToEmployeeUrl(history, item?.navigationUrl, {
+        isMultiRootTenant: Digit.Utils.getMultiRootTenant(),
+        tenantId: Digit.ULBService.getStateId(),
+      });
+      toggleSidebar();
+    } else if (item?.navigationURL) {
       handleModuleClick(item?.navigationURL);
     } else if (item?.link) {
       handleModuleClick(item?.link);
@@ -417,15 +431,23 @@ export const CitizenSideBar = ({
     icon: "Language",
   }));
 
+  // On employee the access-control tree already supplies Home (and the
+  // module rows, and Dashboard) so the hardcoded HOME row would duplicate it.
+  // Before this, the drawer had neither: the employee branch built no module
+  // rows at all, so "Modules" opened onto "No Tenants Found" and there was no
+  // way to reach the dashboard from a phone (#2038 mobile review).
   const hamburgerItems = [
-    {
-      label: "HOME",
-      value: "HOME",
-      icon: "Home",
-      // children: transformedSelectedCityData?.length>0 ? transformedSelectedCityData : undefined,
-      type: "custom",
-      key: "home",
-    },
+    ...(isEmployee
+      ? employeeNavItems
+      : [
+          {
+            label: "HOME",
+            value: "HOME",
+            icon: "Home",
+            type: "custom",
+            key: "home",
+          },
+        ]),
     {
       label: city,
       value: city,
@@ -451,11 +473,17 @@ export const CitizenSideBar = ({
         },
       ]
     : []),
-    {
-      label: t("Modules"),
-      icon: "DriveFileMove",
-      children: transformedMenuItems,
-    },
+    // Citizen only: on employee the module rows are already above, and this
+    // group resolved to an empty list.
+    ...(isEmployee
+      ? []
+      : [
+          {
+            label: t("Modules"),
+            icon: "DriveFileMove",
+            children: transformedMenuItems,
+          },
+        ]),
   ];
   return isMobile ? (
     <Hamburger
