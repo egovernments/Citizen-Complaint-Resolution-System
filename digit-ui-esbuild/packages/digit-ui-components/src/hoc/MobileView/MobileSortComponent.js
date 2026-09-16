@@ -67,11 +67,25 @@ const MobileSortComponent = ({ uiConfig, fullConfig, onClose }) => {
     });
   };
 
-  const reset = () => {
-    setSortBy(options.find((o) => o.code === resultsConfig?.defaultSortBy) || options[0]);
-    setSortOrder(
-      ORDERS.find((o) => o.code === resultsConfig?.defaultSortOrder) || ORDERS[0]
-    );
+  // Same split as the Filter / Search modal: the header refresh icon resets
+  // the picker in place, the footer button is terminal so it commits the
+  // default order and closes. Without committing, "Clear All" would look
+  // like it did nothing until you pressed Apply, which is the defect the
+  // filter modal was reported for.
+  const reset = ({ close = false } = {}) => {
+    const defaultBy =
+      options.find((o) => o.code === resultsConfig?.defaultSortBy) || options[0];
+    const defaultOrder =
+      ORDERS.find((o) => o.code === resultsConfig?.defaultSortOrder) || ORDERS[0];
+    setSortBy(defaultBy);
+    setSortOrder(defaultOrder);
+    if (close) {
+      onClose?.();
+      dispatch({
+        type: "tableForm",
+        state: { sortBy: defaultBy?.code, sortOrder: defaultOrder?.code, offset: 0 },
+      });
+    }
   };
 
   if (options.length === 0) return null;
@@ -87,7 +101,7 @@ const MobileSortComponent = ({ uiConfig, fullConfig, onClose }) => {
           <span style={{ fontSize: "1.5rem", fontWeight: "700", marginRight: "12px" }}>
             {t(uiConfig?.headerLabel || "CS_COMMON_SORT_BY", "Sort by")}
           </span>
-          <span className="clear-search refresh-icon-container" onClick={reset}>
+          <span className="clear-search refresh-icon-container" onClick={() => reset()}>
             <CustomSVG.RefreshIcon />
           </span>
         </span>
@@ -123,7 +137,7 @@ const MobileSortComponent = ({ uiConfig, fullConfig, onClose }) => {
               <Button
                 label={t("ES_CLEAR_ALL")}
                 variation="secondary"
-                onButtonClick={reset}
+                onButtonClick={() => reset({ close: true })}
                 type="button"
               />
               <SubmitBar label={t("ES_COMMON_APPLY")} onSubmit={apply} />
