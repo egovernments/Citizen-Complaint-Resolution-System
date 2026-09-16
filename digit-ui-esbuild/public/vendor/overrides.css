@@ -7732,3 +7732,76 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
 .employee .v2-scope [role="option"] {
   font-size: 0.9375rem !important;
 }
+
+/* ----------------------------------------------------------------------
+ * 70. Submitted-complaint response screen on mobile (#2038 QA)
+ *
+ *     '"Create Another Complaint" clickable text is misaligned'. The panel's
+ *     footer row carries `margin-left: auto`, which right-aligns the action
+ *     buttons. That is the right call for a wide desktop panel, but on a
+ *     phone the single tertiary link gets pushed off the left edge that the
+ *     description paragraph directly above it sits on, so the two read as
+ *     misaligned rather than as a column.
+ *
+ *     Left-align the footer on mobile only, so the link lines up with the
+ *     copy it follows. Desktop keeps its right-aligned action row.
+ *
+ *     The Back bar below it is inline-styled `marginLeft: 6rem` and
+ *     `minWidth: 16rem` in the PGR Response component, tuned for a desktop
+ *     action bar. On a 414px viewport that is a 96px indent on a 256px
+ *     button, so it sits off-centre too. Released here rather than in the
+ *     component, which would have to branch on viewport to keep the desktop
+ *     placement.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .employee .digit-panelcard-footer,
+  .employee .digit-panelcard-footer-buttons {
+    margin-left: 0 !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  .employee .digit-action-bar-wrap.mc_back .digit-button,
+  .employee .mc_back .digit-button {
+    margin-left: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * 71. "Powered by DIGIT" below the fold on mobile (#2038 QA)
+ *
+ *     Reported as the footer not showing on a phone until you scroll, even
+ *     on the landing page where the content ends less than half way down.
+ *
+ *     Measured on a 800px viewport: the topbar is `position: fixed` so it
+ *     takes no flow, but the mobile working-context strip is `position:
+ *     sticky` and does, costing 41px. Under it `.main` asks for 100vh and
+ *     `.employee-app-wrapper` for `100vh - 160px`, neither of which knows
+ *     about that strip. So the column always came to viewport + 41px and the
+ *     footer, which is the last child of `.main`, started at y=801: one pixel
+ *     past the fold.
+ *
+ *     Rather than teach each of those calc()s about the strip, make the
+ *     column a flex column and let the two fillers flex. The footer then sits
+ *     at the bottom of the viewport when the page is short and flows normally
+ *     when it is long. Measured: footer bottom 841 -> exactly 800, page no
+ *     longer scrollable on the landing page.
+ * ---------------------------------------------------------------------- */
+@media (max-width: 47.99rem) {
+  .body-container > .employee {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 100vh !important;
+  }
+  .body-container > .employee > .main {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .body-container > .employee > .main > .employee-app-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+}
