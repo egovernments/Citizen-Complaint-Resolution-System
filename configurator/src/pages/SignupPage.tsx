@@ -103,6 +103,36 @@ function errorText(error: unknown): string {
 const isExpiredSession = (error: unknown) =>
   error instanceof OnboardingError && error.isUnauthenticated;
 
+
+/** Uppercase caption plus helper text, the field chrome the reference uses. */
+function Field({
+  id,
+  label,
+  help,
+  children,
+  status,
+}: {
+  id: string;
+  label: string;
+  help?: React.ReactNode;
+  children: React.ReactNode;
+  status?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+      >
+        {label}
+      </label>
+      <div className="mt-1">{children}</div>
+      {help && <p className="mt-1 text-xs text-muted-foreground">{help}</p>}
+      {status}
+    </div>
+  );
+}
+
 /** Availability line under the code and URL fields. */
 function AvailabilityNote({
   state,
@@ -130,11 +160,11 @@ function AvailabilityNote({
   if (!state) return null;
   return state.available ? (
     <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-      <Check className="h-3 w-3" /> Available
+      <Check className="h-3 w-3" /> Available.
     </p>
   ) : (
     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-      <AlertCircle className="h-3 w-3" /> Already taken
+      <AlertCircle className="h-3 w-3" /> Already taken.
     </p>
   );
 }
@@ -182,6 +212,7 @@ function SignupFlow() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
   const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
+  const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -234,6 +265,7 @@ function SignupFlow() {
     setError(null);
     try {
       const current = await session();
+      if (current.user) setSessionUser({ email: current.user.email, name: current.user.name });
       if (!current.authenticated) {
         const { methods: available } = await authMethods();
         setMethods(available);
@@ -312,6 +344,9 @@ function SignupFlow() {
       };
     }, [type, value, valid, setState, setChecking]);
   };
+
+  /** What the slug will produce. Representative until provisioning runs. */
+  const accountUrl = `https://${urlSlug || 'your-account'}.cms.digit.org`;
 
   const codeValid = isValidAccountCode(accountCode);
   const slugValid = isValidUrlSlug(urlSlug);
@@ -475,15 +510,17 @@ function SignupFlow() {
   };
 
   const accountReady =
-    accountName.trim().length > 0 &&
-    // Required by the server at create time, not only at submit.
-    countryCode.length === 2 &&
-    codeValid &&
-    slugValid &&
-    codeState?.available !== false &&
-    slugState?.available !== false;
+    accountName.trim().length > 0 && codeValid && codeState?.available !== false;
+  // The draft is created at the end of this step rather than the last one,
+  // because the server needs countryCode and urlSlug to create at all.
   const preferencesReady =
-    languages.length > 0 && timeZone.length > 0 && financialYearPolicy.length > 0 && founderMobile.trim().length > 0;
+    countryCode.length === 2 &&
+    languages.length > 0 &&
+    timeZone.length > 0 &&
+    financialYearPolicy.length > 0 &&
+    slugValid &&
+    slugState?.available !== false &&
+    founderMobile.trim().length > 0;
 
   const banner = error ? (
     <Alert variant="destructive" className="mb-4">
@@ -684,31 +721,88 @@ function SignupFlow() {
     );
   }
 
+  const email = sessionUser?.email;
+
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Set up your account</h1>
-      <div className="mt-6">
-        <Stepper steps={STEPS} current={step} />
-      </div>
-      <div className="mt-8">{banner}</div>
+    <>
+      <Stepper steps={STEPS} current={step} />
+      {banner}
 
       {step === 'account' ? (
-        <div className="space-y-5">
+        <section className="space-y-4">
           <div>
-            <label className="text-sm font-medium" htmlFor="accountName">
-              Account name
-            </label>
+            <h2 className="font-condensed text-2xl font-bold">Set up your account</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create the account details that will identify your account in DIGIT Complaint
+              Management.
+            </p>
+          </div>
+
+          {email && (
+            <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
+              <span>{email}</span>
+              <span className="flex items-center gap-1 text-emerald-600">
+                <Check className="h-4 w-4" /> Verified
+              </span>
+            </div>
+          )}
+
+          <Field
+            id="accountName"
+            label="Account name"
+            help="The name of your account. It could be a government organisation, agency, department, institution, or programme."
+          >
             <Input
               id="accountName"
               value={accountName}
               onChange={(e) => setAccountName(e.target.value)}
-              placeholder="Bomet County Government"
             />
-          </div>
+          </Field>
+
+          <Field
+            id="accountCode"
+            label="Account code"
+            help="Used as a short identifier for your account across configuration, URLs, and system references."
+            status={
+              <AvailabilityNote
+                state={codeState}
+                checking={codeChecking}
+                invalidReason={
+                  accountCode && !codeValid
+                    ? '2 to 32 characters, using A-Z, 0-9 and hyphens.'
+                    : undefined
+                }
+              />
+            }
+          >
+            <Input
+              id="accountCode"
+              value={accountCode}
+              onChange={(e) => {
+                codeTouched.current = true;
+                setAccountCode(e.target.value.toUpperCase());
+              }}
+            />
+          </Field>
+
+          <Button className="w-full" disabled={!accountReady} onClick={() => setStep('preferences')}>
+            Continue
+          </Button>
+        </section>
+      ) : step === 'preferences' ? (
+        <section className="space-y-4">
           <div>
-            <label className="text-sm font-medium" htmlFor="countryCode">
-              Base country
-            </label>
+            <h2 className="font-condensed text-2xl font-bold">Personalise your account</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set the defaults your account will use across the product.
+            </p>
+          </div>
+
+          <Field
+            id="countryCode"
+            label="Base country of operations"
+            help="Used to suggest locale, timezone, and account code defaults."
+          >
             <select
               id="countryCode"
               className={selectClass}
@@ -728,82 +822,42 @@ function SignupFlow() {
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
+
           <div>
-            <label className="text-sm font-medium" htmlFor="accountCode">
-              Account code
-            </label>
-            <Input
-              id="accountCode"
-              value={accountCode}
-              onChange={(e) => {
-                codeTouched.current = true;
-                setAccountCode(e.target.value.toUpperCase());
-              }}
-            />
-            <AvailabilityNote
-              state={codeState}
-              checking={codeChecking}
-              invalidReason={
-                accountCode && !codeValid ? '2 to 32 characters, using A-Z, 0-9 and hyphens.' : undefined
-              }
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium" htmlFor="urlSlug">
-              Account URL
-            </label>
-            <Input
-              id="urlSlug"
-              value={urlSlug}
-              onChange={(e) => {
-                slugTouched.current = true;
-                setUrlSlug(e.target.value.toLowerCase());
-              }}
-            />
-            <AvailabilityNote
-              state={slugState}
-              checking={slugChecking}
-              invalidReason={
-                urlSlug && !slugValid
-                  ? '2 to 63 characters, lowercase letters, digits and hyphens, with at least two letters.'
-                  : undefined
-              }
-            />
-          </div>
-          <div className="flex justify-end">
-            <Button disabled={!accountReady || saving} onClick={() => advance('preferences')}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Continue
-            </Button>
-          </div>
-        </div>
-      ) : step === 'preferences' ? (
-        <div className="space-y-5">
-          <div>
-            <span className="text-sm font-medium">Languages</span>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {LANGUAGES.map((language) => (
-                <label key={language.code} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={languages.includes(language.code)}
-                    onChange={(e) =>
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Languages
+            </span>
+            {/* Pills, not checkboxes: a short multi-select reads better as
+                toggles and matches the reference. */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LANGUAGES.map((language) => {
+                const on = languages.includes(language.code);
+                return (
+                  <button
+                    key={language.code}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
                       setLanguages((prev) =>
-                        e.target.checked
-                          ? [...prev, language.code]
-                          : prev.filter((code) => code !== language.code)
+                        on ? prev.filter((code) => code !== language.code) : [...prev, language.code]
                       )
                     }
-                  />
-                  {language.label}
-                </label>
-              ))}
+                    className={
+                      'rounded-full border px-3 py-1 text-sm transition-colors ' +
+                      (on
+                        ? 'border-primary text-primary'
+                        : 'border-input text-muted-foreground hover:text-foreground')
+                    }
+                  >
+                    {language.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div>
-            <label className="text-sm font-medium" htmlFor="timeZone">
-              Time zone
-            </label>
+
+          <Field id="timeZone" label="Timezone">
             <select
               id="timeZone"
               className={selectClass}
@@ -817,11 +871,9 @@ function SignupFlow() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium" htmlFor="financialYearPolicy">
-              Financial year
-            </label>
+          </Field>
+
+          <Field id="financialYearPolicy" label="Financial year">
             <select
               id="financialYearPolicy"
               className={selectClass}
@@ -835,52 +887,110 @@ function SignupFlow() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium" htmlFor="founderMobile">
-              Your mobile number
-            </label>
+          </Field>
+
+          <Field
+            id="urlSlug"
+            label="Account URL"
+            help={
+              <>
+                This short name will be used in your account URLs.
+                {urlSlug && (
+                  <>
+                    <br />
+                    Preview: <strong>{accountUrl}</strong>
+                  </>
+                )}
+              </>
+            }
+            status={
+              <AvailabilityNote
+                state={slugState}
+                checking={slugChecking}
+                invalidReason={
+                  urlSlug && !slugValid
+                    ? '2 to 63 characters, lowercase letters, digits and hyphens, with at least two letters.'
+                    : undefined
+                }
+              />
+            }
+          >
+            <Input
+              id="urlSlug"
+              value={urlSlug}
+              onChange={(e) => {
+                slugTouched.current = true;
+                setUrlSlug(e.target.value.toLowerCase());
+              }}
+            />
+          </Field>
+
+          <Field
+            id="founderMobile"
+            label="Your mobile number"
+            help="Used to create your account inside the new workspace."
+          >
             <Input
               id="founderMobile"
               value={founderMobile}
               onChange={(e) => setFounderMobile(e.target.value)}
               placeholder="+254700000199"
             />
-            {/* Not optional metadata: the provisioning worker needs it to create
-                the tenant-local employee, and without it setup ends in
-                FOUNDER_ACCOUNT_REJECTED rather than a validation message. */}
-            <p className="mt-1 text-xs text-muted-foreground">
-              Used to create your account inside the new workspace.
-            </p>
-          </div>
-          <div className="flex justify-between">
+          </Field>
+
+          <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('account')}>
               Back
             </Button>
-            <Button disabled={!preferencesReady || saving} onClick={() => advance('review')}>
+            <Button className="flex-1" disabled={!preferencesReady || saving} onClick={() => advance('review')}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Continue
             </Button>
           </div>
-        </div>
+        </section>
       ) : (
-        <div className="space-y-5">
-          <dl className="divide-y rounded-md border">
+        <section className="space-y-4">
+          <div>
+            <h2 className="font-condensed text-2xl font-bold">Review and create your account</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              These will be the main entry points for your account once your workspace has been set
+              up.
+            </p>
+          </div>
+
+          <dl className="overflow-hidden rounded-md border">
             {[
               ['Account name', accountName],
               ['Account code', accountCode],
-              ['Account URL', urlSlug],
               ['Base country', COUNTRIES.find((c) => c.code === countryCode)?.name || countryCode],
-              ['Languages', languages.join(', ')],
-              ['Time zone', timeZone],
+              ['Languages', languages.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')],
+              ['Timezone', timeZone],
               ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYearPolicy)?.label || financialYearPolicy],
               ['Mobile number', founderMobile],
-            ].map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-4 px-4 py-3 text-sm">
+            ].map(([label, value], i) => (
+              <div
+                key={label}
+                className={
+                  'flex justify-between gap-4 px-4 py-3 text-sm ' + (i % 2 ? 'bg-muted/40' : '')
+                }
+              >
                 <dt className="text-muted-foreground">{label}</dt>
                 <dd className="text-right font-medium">{value}</dd>
               </div>
             ))}
           </dl>
+
+          <div className="rounded-md border p-4">
+            <p className="text-sm font-medium">Primary URL</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Main entry point for administrators, supervisors, resolvers, and other government
+              employees.
+            </p>
+            <p className="mt-2 rounded bg-muted px-3 py-2 font-mono text-xs">{accountUrl}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This URL is representative. Working URLs will be available post provisioning.
+            </p>
+          </div>
+
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -888,23 +998,20 @@ function SignupFlow() {
               checked={acceptedTerms}
               onChange={(e) => setAcceptedTerms(e.target.checked)}
             />
-            <span>I agree to the terms of service.</span>
+            <span className="text-muted-foreground">I agree to the terms of service.</span>
           </label>
-          <p className="text-xs text-muted-foreground">
-            Setup runs in the background and takes a minute or two. You will see its progress on the next
-            screen.
-          </p>
-          <div className="flex justify-between">
+
+          <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep('preferences')}>
               Back
             </Button>
-            <Button disabled={!acceptedTerms || saving} onClick={submit}>
+            <Button className="flex-1" disabled={!acceptedTerms || saving} onClick={submit}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Create account
             </Button>
           </div>
-        </div>
+        </section>
       )}
-    </div>
+    </>
   );
 }
 
