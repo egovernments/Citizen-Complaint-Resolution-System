@@ -6,9 +6,9 @@ import io.swagger.annotations.ApiModel;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.hibernate.validator.constraints.SafeHtml;
+import org.egov.pgr.annotation.SafeHtml;
 import org.springframework.validation.annotation.Validated;
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -35,7 +35,7 @@ public class Workflow   {
 
         @JsonProperty("assignes")
         @Valid
-        private List<String> assignes = null;
+        private List<@SafeHtml String> assignes = null;
 
         @SafeHtml
         @JsonProperty("comments")
