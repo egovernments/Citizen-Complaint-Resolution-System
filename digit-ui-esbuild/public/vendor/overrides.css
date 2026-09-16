@@ -7658,8 +7658,15 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *     -muted and -heading all to #1D2433, which flattens every caption in
  *     the app to body colour; that is fixed in the MDMS record, not here.
  * ---------------------------------------------------------------------- */
+/*     The PGR details page already had a 13px label rule of its own from an
+ *     earlier round, written as
+ *     `.v2-pgr-details [class*="field-pair"] [class*="label"]`. That is
+ *     three compounds to this rule's two, so it won on size and weight and
+ *     only the uppercase landed. Matching its shape here keeps the caption
+ *     defined in one place instead of two rules disagreeing. */
 .employee .digit-viewcard-label,
-.employee [class*="field-pair-label"] {
+.employee [class*="field-pair-label"],
+.employee [class*="field-pair"] [class*="label"] {
   font-size: 0.75rem !important;
   font-weight: 600 !important;
   color: var(--color-text-muted, #6B7280) !important;
