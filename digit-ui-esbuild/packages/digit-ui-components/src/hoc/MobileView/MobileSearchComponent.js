@@ -235,7 +235,7 @@ const MobileSearchComponent = ({
                     <Button
                       label={t(uiConfig?.secondaryLabel)}
                       variation="secondary"
-                      onButtonClick={() => clearSearch({ close: true })}
+                      onClick={() => clearSearch({ close: true })}
                       type="button"
                     />
                   )}
