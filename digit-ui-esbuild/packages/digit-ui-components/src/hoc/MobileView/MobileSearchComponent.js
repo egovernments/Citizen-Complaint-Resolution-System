@@ -125,7 +125,18 @@ const MobileSearchComponent = ({
     resetPagination();
   };
 
-  const clearSearch = () => {
+  // `close` distinguishes the two affordances that land here. The footer
+  // "Clear All" is a terminal action like Apply, so it closes; the header
+  // refresh icon is an in-place reset of the fields, so it does not.
+  //
+  // Closing is the actual "Clear All doesn't work right away, user has to
+  // click apply after that to make it effective" defect. The dispatch below
+  // always cleared the criteria and the list behind the modal updated
+  // immediately, but the modal still covered it, so nothing appeared to
+  // happen until Apply closed it. On desktop the panel is inline and the
+  // list is visible the whole time, which is the "not consistent with
+  // desktop view" half of the report.
+  const clearSearch = ({ close = false } = {}) => {
     reset(uiConfig?.defaultValues);
     // Keyed off `modalType` like onSubmit above. `uiConfig.type` is not set
     // on every section (PGR's search section omits it), so the two handlers
@@ -136,6 +147,7 @@ const MobileSearchComponent = ({
       //need to pass form with empty strings
     });
     resetPagination();
+    if (close) onClose?.();
   };
 
   const closeToast = () => {
@@ -178,7 +190,7 @@ const MobileSearchComponent = ({
             {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
           </span>
           {(isFilter || isSort) && (
-            <span className="clear-search refresh-icon-container" onClick={clearSearch}>
+            <span className="clear-search refresh-icon-container" onClick={() => clearSearch()}>
               <CustomSVG.RefreshIcon />
             </span>
           )}
@@ -223,7 +235,7 @@ const MobileSearchComponent = ({
                     <Button
                       label={t(uiConfig?.secondaryLabel)}
                       variation="secondary"
-                      onButtonClick={() => clearSearch()}
+                      onButtonClick={() => clearSearch({ close: true })}
                       type="button"
                     />
                   )}
