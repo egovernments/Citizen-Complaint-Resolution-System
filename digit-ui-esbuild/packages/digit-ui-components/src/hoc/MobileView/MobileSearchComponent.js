@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { InboxContext } from "../InboxSearchComposerContext";
@@ -56,7 +56,6 @@ const MobileSearchComponent = ({
     reset,
     watch,
     control,
-    formState,
     errors,
     setError,
     clearErrors,
@@ -71,18 +70,6 @@ const MobileSearchComponent = ({
       e.preventDefault();
     }
   };
-
-  // //on form value change, update session data with form data
-  // useEffect(()=>{
-  //   if (!_.isEqual(sessionFormData, formData)) {
-  //     // const difference = _.pickBy(sessionFormData, (v, k) => !_.isEqual(formData[k], v));
-  //     setSessionFormData({ ...sessionFormData,...formData,  });
-  //   }
-  // },[formData]);
-
-  // useEffect(()=>{
-  //   clearSessionFormData();
-  // },[]);
 
   // Pagination has to go back to the first page whenever the criteria
   // change, otherwise a narrower result set is read at the old offset and

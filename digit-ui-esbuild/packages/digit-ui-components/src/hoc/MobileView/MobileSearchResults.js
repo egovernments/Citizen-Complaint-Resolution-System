@@ -148,7 +148,10 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
                     display: 'flex',
                     justifyContent: 'flex-end',
                     color: 'var(--color-text-primary, #333)',
-                    fontSize: '0.875rem',
+                    // 15px, the same value size the detail card uses, so the
+                    // list and the record it opens agree. The label above
+                    // stays a 14px caption.
+                    fontSize: '0.9375rem',
                     textAlign: 'right',
                     flex: '1 1 55%',
                     wordBreak: 'break-word'
