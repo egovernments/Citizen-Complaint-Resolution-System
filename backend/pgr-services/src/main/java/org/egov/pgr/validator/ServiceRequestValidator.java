@@ -73,13 +73,20 @@ public class ServiceRequestValidator {
      * @param request The request to update complaint
      * @param mdmsData The master data for pgr
      */
-    public void validateUpdate(ServiceRequest request, Object mdmsData){
+    public Service validateUpdate(ServiceRequest request, Object mdmsData){
 
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
         validateMDMS(request, mdmsData);
-        validateDepartment(request, mdmsData);
+        // ESCALATE is server-targeted after validation. Validating an optional
+        // caller-supplied UUID here can reject the correct cross-department
+        // reportingTo, while omitting the UUID succeeds. EscalationService owns
+        // and validates that target; department validation remains for assignment.
+        if (request.getWorkflow() == null
+                || !ESCALATE.equalsIgnoreCase(request.getWorkflow().getAction())) {
+            validateDepartment(request, mdmsData);
+        }
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
         criteria.setIsPlainSearch(false);
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
@@ -89,9 +96,17 @@ public class ServiceRequestValidator {
 
         // Re-open eligibility (authorization + deadline) must be checked against the
         // persisted record, so fetch it first and pass it in — never trust the request body.
-        validateReOpen(request, serviceWrappers.get(0).getService());
+        Service persistedService = serviceWrappers.get(0).getService();
+        if (!Objects.equals(persistedService.getServiceRequestId(),
+                request.getService().getServiceRequestId())) {
+            throw new CustomException("INVALID_SERVICE_REQUEST_ID",
+                    "serviceRequestId does not match the complaint id");
+        }
+        validateReOpen(request, persistedService);
 
         // TO DO
+
+        return persistedService;
 
     }
 

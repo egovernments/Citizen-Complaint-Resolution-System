@@ -53,7 +53,7 @@ the three separate root causes fixed across #1014/#1058 and the
 products/pgr duplicate-hook fix).
 
 Needs a tenant with more than 10 complaints in an inbox-visible status
-(`PENDINGFORASSIGNMENT`/`PENDINGFORREASSIGNMENT`/`PENDINGATLME`/
-`PENDINGATSUPERVISOR`) to actually exercise pagination — with 10 or fewer,
+(`PENDINGFORASSIGNMENT`/`PENDINGFORREASSIGNMENT`/`PENDINGATLME`) to actually
+exercise pagination — with 10 or fewer,
 the tests skip themselves with a clear reason rather than reporting a false
 pass.

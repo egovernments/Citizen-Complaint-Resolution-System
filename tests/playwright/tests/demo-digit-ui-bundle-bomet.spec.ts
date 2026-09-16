@@ -280,7 +280,7 @@ test.describe('Demo: digit-ui (employee) bundle on bomet', () => {
     // the inbox regresses to "all states including RESOLVED", at least
     // one row will surface a closed state and flip this red.
     const OPEN_STATES =
-      /PENDINGFORASSIGNMENT|PENDINGFORREASSIGNMENT|PENDINGATLME|PENDINGATSUPERVISOR|PENDINGFORWORK|OPEN/i;
+      /PENDINGFORASSIGNMENT|PENDINGFORREASSIGNMENT|PENDINGATLME|PENDINGFORWORK|OPEN/i;
     const CLOSED_STATES = /RESOLVED|REJECTED|CLOSED/i;
     if (rowCount > 0) {
       const rowsText = await page.locator('tbody tr').allInnerTexts();

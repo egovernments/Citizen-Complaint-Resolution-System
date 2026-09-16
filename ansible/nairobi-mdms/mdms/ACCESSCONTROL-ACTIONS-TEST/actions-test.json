@@ -28021,5 +28021,37 @@
       "path": "",
       "method": "POST"
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2649,
+      "url": "/mdms-v2/v2/_create/RAINMAKER-PGR.EscalationConfig",
+      "name": "MDMS",
+      "displayName": "create RAINMAKER-PGR.EscalationConfig",
+      "orderNumber": 1,
+      "parentModule": "",
+      "enabled": true,
+      "serviceCode": "MDMS",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 2650,
+      "url": "/mdms-v2/v2/_update/RAINMAKER-PGR.EscalationConfig",
+      "name": "MDMS",
+      "displayName": "update RAINMAKER-PGR.EscalationConfig",
+      "orderNumber": 1,
+      "parentModule": "",
+      "enabled": true,
+      "serviceCode": "MDMS",
+      "code": "null",
+      "path": "",
+      "method": "POST"
+    }
   }
 ]

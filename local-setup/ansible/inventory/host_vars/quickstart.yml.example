@@ -206,7 +206,10 @@ install_claude_code: false
 nginx_features:
   configurator: true         # /configurator/ — the onboarding wizard
   configurator_caching: false
-  status: true               # /status/ — the Gatus health dashboard
+  status: false              # /status/ — Gatus health dashboard. OFF by default:
+                             # the board maps every internal component and its
+                             # health. To publish it, set this true AND set
+                             # status_basic_auth_password (the deploy asserts).
   mcp: true                  # /mcp + /v1/* — the tenant-creation API
   grafana: true              # /grafana/ — dashboards; asks for a login
   brand_assets: false

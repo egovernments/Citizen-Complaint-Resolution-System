@@ -10,8 +10,8 @@ the trade-offs accepted.
 
 DIGIT MCP Server bridges Claude (via the Model Context Protocol) to the DIGIT
 eGov platform -- India's open-source digital governance infrastructure for
-municipalities and state governments. The server exposes 60 tools organized
-into 14 groups, covering 16 DIGIT services: Auth, User, MDMS v2, Boundary,
+municipalities and state governments. The server exposes 70 tools organized
+into 15 groups, covering 16 DIGIT services: Auth, User, MDMS v2, Boundary,
 Boundary Management, HRMS, PGR, Workflow, Localization, Filestore,
 Access Control, ID Generation, Location, Encryption, plus Distributed Tracing
 (Grafana Tempo) and Infrastructure Monitoring (Kafka, Persister, PostgreSQL).
@@ -36,7 +36,7 @@ src/
 
 ## 2. Progressive Disclosure
 
-**Problem.** 60 tools overwhelm the LLM's context window. When every tool
+**Problem.** 70 tools overwhelm the LLM's context window. When every tool
 description is included in the system prompt, the model spends tokens parsing
 irrelevant tools and may choose poorly among too many options.
 
@@ -46,9 +46,9 @@ management) and `docs` (documentation search). Clients call `enable_tools` to
 unlock additional groups. When groups change, the server sends a
 `tools/list_changed` MCP notification so clients re-fetch the tool list.
 
-14 groups: `core`, `mdms`, `boundary`, `masters`, `employees`, `localization`,
+15 groups: `core`, `mdms`, `boundary`, `masters`, `employees`, `localization`,
 `pgr`, `admin`, `idgen`, `location`, `encryption`, `docs`, `monitoring`,
-`tracing`. The `core` group cannot be disabled. Set `MCP_ENABLE_ALL_GROUPS=1`
+`tracing`, `snapshot`. The `core` group cannot be disabled. Set `MCP_ENABLE_ALL_GROUPS=1`
 to pre-enable everything (used by integration tests).
 
 **Implementation.** `ToolRegistry` (`src/tools/registry.ts`) holds an in-memory
@@ -89,19 +89,34 @@ from stdin, writes responses to stdout. One process = one session. State
 
 **HTTP** (`MCP_TRANSPORT=http`). An `http.createServer` on port 3000 routes:
 
-| Path | Purpose |
-|------|---------|
-| `POST /mcp` | MCP JSON-RPC (StreamableHTTPServerTransport, stateless) |
-| `GET /healthz` | Kubernetes liveness/readiness probe |
-| `GET /api/stats` | Aggregate session statistics |
-| `GET /api/sessions` | Paginated session list |
-| `GET /api/sessions/{id}/events` | Full event timeline for a session |
-| `POST /api/sessions/{id}/messages` | Ingest conversation messages |
-| `GET /` | Session viewer UI (static files from `ui/`) |
+| Path | Auth | Purpose |
+|------|------|---------|
+| `POST /mcp` | bearer + per-tool tier | MCP JSON-RPC (StreamableHTTPServerTransport, stateless) |
+| `POST /v1/*` | bearer + per-tool tier | REST shim over the same tools |
+| `GET /v1/tools` | bearer | Tool list + input schemas |
+| `GET /healthz` | none | Kubernetes liveness/readiness probe |
+| `GET /api/stats` | bearer + admin role | Aggregate session statistics |
+| `GET /api/sessions` | bearer + admin role | Paginated session list |
+| `GET /api/sessions/{id}/events` | bearer + admin role | Full event timeline for a session |
+| `POST /api/sessions/{id}/messages` | bearer + admin role | Ingest conversation messages |
+| `GET /api/pgr/dashboard` | bearer + admin role | PGR complaint dashboard data |
+| `GET /` | none | Session viewer UI (static files from `ui/`) |
+
+"Auth" applies in `token` mode, the default whenever `MCP_TRANSPORT=http`
+(see `getAuthMode()` in `src/services/auth.ts`). Bearer tokens are introspected
+against egov-user's `/user/_details`; a token the platform doesn't recognise is
+a 401 on every route. `MCP_AUTH_MODE=ambient` disables the checks and is only
+correct for a loopback-bound socket.
+
+The viewer UI itself is served unauthenticated because it is a static bundle
+with nothing in it; its `/api/*` calls carry a token the operator pastes into
+the sign-in gate, held in `sessionStorage` for the tab.
 
 Each `/mcp` request creates a fresh `Server` + transport with
-`sessionIdGenerator: undefined` (stateless mode). No session affinity
-required -- any replica can handle any request.
+`sessionIdGenerator: undefined` (stateless mode), and — in token mode — its own
+`DigitApiClient` and request context via `AsyncLocalStorage`, so concurrent
+callers cannot observe each other's identity or be cross-attributed in the
+audit trail. No session affinity required -- any replica can handle any request.
 
 **Trade-off.** Stateless HTTP means the DIGIT auth token is not cached across
 requests. Each new session must call `configure` to authenticate. Acceptable
