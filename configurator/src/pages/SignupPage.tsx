@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Loader2, LogIn, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertCircle, Check, Loader2, Mail, RefreshCw } from 'lucide-react';
 import {
   API_ORIGIN,
   type AvailabilityResult,
@@ -501,30 +502,61 @@ function SignupFlow() {
   }
 
   if (phase === 'signedOut') {
+    // Deliberately the same card as the original first step: stepper, heading,
+    // small print, the sign-in line. Only the middle changed, because Keycloak
+    // collects the email now and there is nothing left for us to ask for.
+    const [primary, ...rest] = methods;
     return (
-      <div>
-        <h1 className="text-2xl font-semibold">Set up your account</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Sign in to begin. We will create your workspace once the details are confirmed.
-        </p>
+      <>
+        <Stepper steps={STEPS} current="account" />
         {banner}
-        <div className="mt-6 space-y-2">
-          {/* Only what the backend actually has enabled. Google, GitHub and the
-              magic link appear here once their Keycloak providers are switched
-              on, and they use this same redirect, so nothing changes here. */}
-          {methods.map((method) => (
-            // The label is the whole phrase, not a noun to prefix: the backend
-            // sends "Email me a sign-in link", which "Continue with" turns into
-            // nonsense. Render what it sends.
-            <Button key={method.id} className="w-full" onClick={() => startSignIn(method.id)}>
-              <LogIn className="mr-2 h-4 w-4" /> {method.label}
+        <section className="space-y-4">
+          <div>
+            <h2 className="font-condensed text-2xl font-bold">Verify your email to begin</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Confirm who you are first. Once your email is verified, you can name your account and
+              continue the setup.
+            </p>
+          </div>
+
+          {primary ? (
+            <Button className="w-full" onClick={() => startSignIn(primary.id)}>
+              <Mail className="mr-2 h-4 w-4" /> {primary.label}
             </Button>
-          ))}
-          {!methods.length && (
-            <p className="text-sm text-muted-foreground">No sign-in method is enabled on this environment.</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No sign-in method is enabled on this environment.
+            </p>
           )}
-        </div>
-      </div>
+
+          {/* Anything beyond the first sits under it as a quiet alternative
+              rather than a second wall of buttons. */}
+          {rest.length > 0 && (
+            <p className="text-center text-sm text-muted-foreground">
+              {rest.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={() => startSignIn(method.id)}
+                  className="text-primary underline underline-offset-4"
+                >
+                  {method.label}
+                </button>
+              ))}
+            </p>
+          )}
+
+          <p className="text-sm text-muted-foreground">
+            By continuing, you agree to the Terms of Service and Privacy Notice.
+          </p>
+          <p className="text-center text-sm text-muted-foreground">
+            Already have an account?{' '}
+            <Link to="/login" className="text-primary underline underline-offset-4">
+              Sign in
+            </Link>
+          </p>
+        </section>
+      </>
     );
   }
 
