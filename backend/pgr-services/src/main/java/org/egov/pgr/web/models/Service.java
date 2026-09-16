@@ -35,6 +35,7 @@ public class Service   {
         @JsonProperty("active")
         private boolean active = true;
 
+        @Valid
         @JsonProperty("citizen")
         private User citizen = null;
 

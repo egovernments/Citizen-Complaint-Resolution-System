@@ -177,4 +177,29 @@ class BeanValidationWiringTest {
         assertTrue(paths(validator.validate(action)).contains("comment"),
                 "pgrV1 ActionInfo.comment must reject markup");
     }
+
+    @Test
+    void validCascadesIntoTheComplainant() {
+        // Service.citizen carried no @Valid, so the User model was never reached and its
+        // fields were unconstrained. API fuzzing confirmed <script> in citizen.emailId and
+        // citizen.userName was accepted with HTTP 200; some sibling fields only appeared
+        // safe because the downstream egov-user service rejected them itself.
+        org.egov.pgr.web.models.User citizen = new org.egov.pgr.web.models.User();
+        citizen.setEmailId("<script>alert(1)</script>");
+        Service s = new Service();
+        s.setCitizen(citizen);
+        Set<String> violated = paths(validator.validate(s));
+        assertTrue(violated.contains("citizen.emailId"),
+                "expected citizen.emailId to be validated, got " + violated);
+
+        org.egov.pgr.web.models.User ok = new org.egov.pgr.web.models.User();
+        ok.setName("O'Brien & Sons");
+        ok.setEmailId("a.b+x@c.org");
+        ok.setCorrespondenceAddress("12 Main St <2 km from park");
+        Service clean = new Service();
+        clean.setCitizen(ok);
+        Set<String> cleanViolations = paths(validator.validate(clean));
+        assertTrue(cleanViolations.stream().noneMatch(p -> p.startsWith("citizen.")),
+                "ordinary complainant data must be accepted, got " + cleanViolations);
+    }
 }
