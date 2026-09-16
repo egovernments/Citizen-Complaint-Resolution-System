@@ -42,7 +42,7 @@ public class OnboardingWorkerServiceTest {
     public void claimReturnsTheLeasedOperationWithItsSignup() {
         OnboardingOperation operation = OnboardingOperation.builder()
                 .id(operationId).signupId(signupId).status("RUNNING").build();
-        OnboardingSignup signup = OnboardingSignup.builder().id(signupId).requestedTenantId("pg.bomet").build();
+        OnboardingSignup signup = OnboardingSignup.builder().id(signupId).requestedTenantId("bomet").build();
         when(repository.claimOperation(eq("worker-1"), any(UUID.class), anyLong(), anyLong()))
                 .thenReturn(Optional.of(new OnboardingLease(operation, leaseToken, 1L)));
         when(repository.findSignup(signupId)).thenReturn(Optional.of(signup));
@@ -88,7 +88,7 @@ public class OnboardingWorkerServiceTest {
     }
 
     @Test
-    public void terminalFailureFailsTheSignupAndReleasesIdentifiers() {
+    public void terminalFailureFailsTheSignupAndQuarantinesIdentifiers() {
         when(repository.findOperation(operationId)).thenReturn(Optional.of(
                 OnboardingOperation.builder().id(operationId).signupId(signupId).build()));
         when(repository.finishOperation(eq(operationId), eq(leaseToken), eq("TERMINAL_FAILED"),
@@ -96,7 +96,7 @@ public class OnboardingWorkerServiceTest {
 
         service.fail(operationId, leaseToken, false, "FOUNDER_MOBILE_REQUIRED", "mobile required", "DIGIT_ACCOUNT", null);
 
-        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RELEASED"), anyLong());
+        verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
     }
 
     @Test

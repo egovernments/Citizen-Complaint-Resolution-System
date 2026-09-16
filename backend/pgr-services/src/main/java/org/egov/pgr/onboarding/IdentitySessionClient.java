@@ -7,6 +7,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -58,9 +59,38 @@ public class IdentitySessionClient {
                     identity.get("subject").toString(),
                     stringValue(identity.get("email")),
                     stringValue(identity.get("name")));
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().value() == 401) {
+                throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "Identity session could not be resolved");
+            }
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Identity service is unavailable");
         } catch (RestClientException exception) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,
-                    "Identity session could not be resolved");
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Identity service is unavailable");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public boolean identifierAvailable(String type, String value) {
+        if (identityBffUrl.isBlank() || workloadToken == null || workloadToken.isBlank()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Onboarding identity is not configured");
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(workloadToken);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        Map<String, Object> request = Map.of("type", type, "value", value);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    identityBffUrl + "/internal/identity/v1/identifiers/_check",
+                    HttpMethod.POST, new HttpEntity<>(request, headers), Map.class);
+            Map<String, Object> body = response.getBody();
+            return body != null && Boolean.TRUE.equals(body.get("available"));
+        } catch (RestClientException exception) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Identity availability check is unavailable");
         }
     }
 

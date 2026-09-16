@@ -1,8 +1,6 @@
 package org.egov.pgr.onboarding;
 
 import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,21 +19,14 @@ public class OnboardingService {
 
     private static final Pattern ACCOUNT_CODE = Pattern.compile("^[A-Z0-9][A-Z0-9-]{1,31}$");
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
-    // DIGIT tenant ids are letters and dots (egov-user validates ^[a-zA-Z. ]*$).
-    private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,}(\\.[a-z]{2,})+$");
+    // Normal onboarding creates an independent root. Dotted ids are reserved
+    // for a separate, explicit subtenant operation and are never derived here.
+    private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,63}$");
 
     private final OnboardingRepository repository;
-    private final String tenantRoot;
 
-    @Autowired
-    public OnboardingService(OnboardingRepository repository,
-                             @Value("${pgr.onboarding.tenant-root:}") String tenantRoot) {
+    public OnboardingService(OnboardingRepository repository) {
         this.repository = repository;
-        this.tenantRoot = tenantRoot == null ? "" : tenantRoot.trim().toLowerCase(Locale.ROOT);
-    }
-
-    OnboardingService(OnboardingRepository repository) {
-        this(repository, "");
     }
 
     @Transactional
@@ -105,6 +96,7 @@ public class OnboardingService {
         validateComplete(signup);
         long now = System.currentTimeMillis();
         repository.reserveIdentifier("ACCOUNT_CODE", signup.getAccountCode(), signup.getId(), now);
+        repository.reserveIdentifier("ORGANIZATION_NAME", normalizeOrganizationName(signup.getAccountName()), signup.getId(), now);
         repository.reserveIdentifier("TENANT_ID", signup.getRequestedTenantId(), signup.getId(), now);
         repository.reserveIdentifier("ORGANIZATION_ALIAS", signup.getOrganizationAlias(), signup.getId(), now);
         repository.reserveIdentifier("URL_SLUG", signup.getUrlSlug(), signup.getId(), now);
@@ -181,11 +173,9 @@ public class OnboardingService {
         // These identifiers are server-owned projections of the founder's choices.
         // Never accept a client-supplied alias or tenant id that can drift from them.
         signup.setOrganizationAlias(signup.getUrlSlug());
-        String root = !tenantRoot.isEmpty() ? tenantRoot
-                : signup.getCountryCode() == null ? null : signup.getCountryCode().toLowerCase(Locale.ROOT);
-        signup.setRequestedTenantId(root == null || signup.getUrlSlug() == null
+        signup.setRequestedTenantId(signup.getUrlSlug() == null
                 ? null
-                : root + "." + tenantSegment(signup.getUrlSlug()));
+                : tenantSegment(signup.getUrlSlug()));
     }
 
     /** The slug's letters only: DIGIT tenant codes cannot carry digits or hyphens. */
@@ -214,6 +204,8 @@ public class OnboardingService {
                 value = value.toUpperCase(Locale.ROOT);
                 if (!ACCOUNT_CODE.matcher(value).matches()) invalid("Identifier.value");
                 return value;
+            case "ORGANIZATION_NAME":
+                return normalizeOrganizationName(value);
             case "TENANT_ID":
                 value = value.toLowerCase(Locale.ROOT);
                 if (!TENANT_ID.matcher(value).matches()) invalid("Identifier.value");
@@ -226,6 +218,10 @@ public class OnboardingService {
             default:
                 throw new CustomException("ONBOARDING_IDENTIFIER_TYPE_INVALID", "Unsupported identifier type");
         }
+    }
+
+    public static String normalizeOrganizationName(String value) {
+        return value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private void requireIdempotencyKey(String value) {

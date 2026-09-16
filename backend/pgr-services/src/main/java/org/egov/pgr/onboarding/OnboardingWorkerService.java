@@ -64,7 +64,9 @@ public class OnboardingWorkerService {
         OnboardingOperation operation = requireLease(operationId, leaseToken,
                 retryable ? "RETRYABLE_FAILED" : "TERMINAL_FAILED", completedSteps,
                 currentStep, code.length() > 128 ? code.substring(0, 128) : code, message, now);
-        if (!retryable) repository.settleSignup(operation.getSignupId(), "FAILED", "RELEASED", now);
+        // Partial root/KC objects are deliberately quarantined. Releasing their
+        // identifiers would let another signup collide with materialized state.
+        if (!retryable) repository.settleSignup(operation.getSignupId(), "FAILED", "RESERVED", now);
     }
 
     private OnboardingOperation requireLease(UUID operationId, UUID leaseToken, String status, List<String> steps,

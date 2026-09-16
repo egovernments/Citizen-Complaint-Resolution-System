@@ -6,6 +6,7 @@ import org.egov.pgr.onboarding.OnboardingOperation;
 import org.egov.pgr.onboarding.OnboardingPrincipal;
 import org.egov.pgr.onboarding.OnboardingService;
 import org.egov.pgr.onboarding.OnboardingSignup;
+import org.egov.tracer.model.CustomException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -59,8 +60,13 @@ public class OnboardingApiController {
     @PostMapping("/identifiers/_check")
     public ResponseEntity<Map<String, Object>> checkIdentifier(HttpServletRequest httpRequest,
             @RequestBody Map<String, Object> request) {
-        return ResponseEntity.ok(single("Identifier",
-                service.checkIdentifier(principal(httpRequest), nested(request, "Identifier"))));
+        Map<String, Object> identifier = new LinkedHashMap<>(service.checkIdentifier(
+                principal(httpRequest), nested(request, "Identifier")));
+        if (Boolean.TRUE.equals(identifier.get("available"))) {
+            identifier.put("available", identitySessionClient.identifierAvailable(
+                    identifier.get("type").toString(), identifier.get("value").toString()));
+        }
+        return ResponseEntity.ok(single("Identifier", identifier));
     }
 
     @PostMapping("/signups/_submit")
@@ -68,8 +74,28 @@ public class OnboardingApiController {
             HttpServletRequest httpRequest,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody Map<String, Object> request) {
-        OnboardingOperation operation = service.submit(
-                principal(httpRequest), nested(request, "Signup"), idempotencyKey);
+        OnboardingPrincipal principal = principal(httpRequest);
+        Map<String, Object> signupRequest = nested(request, "Signup");
+        List<OnboardingSignup> owned = service.search(principal, signupRequest);
+        if (owned.isEmpty()) {
+            throw new CustomException("ONBOARDING_SIGNUP_NOT_FOUND", "Signup was not found");
+        }
+        OnboardingSignup signup = owned.get(0);
+        Map<String, String> identifiers = new LinkedHashMap<>();
+        identifiers.put("ORGANIZATION_NAME", OnboardingService.normalizeOrganizationName(
+                requiredIdentifier(signup.getAccountName(), "Signup.accountName")));
+        identifiers.put("ACCOUNT_CODE", requiredIdentifier(signup.getAccountCode(), "Signup.accountCode"));
+        identifiers.put("TENANT_ID", requiredIdentifier(signup.getRequestedTenantId(), "Signup.requestedTenantId"));
+        identifiers.put("ORGANIZATION_ALIAS", requiredIdentifier(
+                signup.getOrganizationAlias(), "Signup.organizationAlias"));
+        identifiers.put("URL_SLUG", requiredIdentifier(signup.getUrlSlug(), "Signup.urlSlug"));
+        for (Map.Entry<String, String> identifier : identifiers.entrySet()) {
+            if (!identitySessionClient.identifierAvailable(identifier.getKey(), identifier.getValue())) {
+                throw new CustomException("ONBOARDING_IDENTIFIER_TAKEN",
+                        identifier.getKey() + " is already in use");
+            }
+        }
+        OnboardingOperation operation = service.submit(principal, signupRequest, idempotencyKey);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(single("Operation", operation));
     }
 
@@ -114,5 +140,12 @@ public class OnboardingApiController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put(key, value);
         return response;
+    }
+
+    private String requiredIdentifier(String value, String field) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new CustomException("ONBOARDING_VALIDATION_ERROR", field + " is required");
+        }
+        return value.trim();
     }
 }

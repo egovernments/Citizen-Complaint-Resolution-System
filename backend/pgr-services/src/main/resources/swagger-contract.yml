@@ -315,6 +315,8 @@ components:
         requestedTenantId:
           type: string
           readOnly: true
+          pattern: '^[a-z]{2,63}$'
+          description: Independent root tenant ID derived from the URL slug; never a dotted child tenant.
         urlSlug:
           type: string
           pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
@@ -345,7 +347,7 @@ components:
       properties:
         type:
           type: string
-          enum: [ACCOUNT_CODE, TENANT_ID, ORGANIZATION_ALIAS, URL_SLUG]
+          enum: [ORGANIZATION_NAME, ACCOUNT_CODE, TENANT_ID, ORGANIZATION_ALIAS, URL_SLUG]
         value:
           type: string
         signupId:
@@ -384,6 +386,7 @@ components:
           enum: [PENDING, RUNNING, SUCCEEDED, RETRYABLE_FAILED, TERMINAL_FAILED]
         currentStep:
           type: string
+          enum: [TENANT_FOUNDATION, ORGANIZATION, FOUNDER_MEMBERSHIP, FOUNDER_ROLES, DIGIT_ACCOUNT]
         completedSteps:
           type: array
           items:

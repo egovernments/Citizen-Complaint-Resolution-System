@@ -1606,10 +1606,8 @@ services:
       # failing closed with 503; the token is the introspection-only credential.
       PGR_ONBOARDING_IDENTITY_BFF_URL: ${PGR_ONBOARDING_IDENTITY_BFF_URL:-}
       PGR_ONBOARDING_IDENTITY_BFF_TOKEN: ${PGR_ONBOARDING_IDENTITY_BFF_TOKEN:-}
-      # Provisioning-worker lease API credential (internal network only) and an
-      # optional tenant root replacing the country code in requested tenant ids.
+      # Provisioning-worker lease API credential (internal network only).
       PGR_ONBOARDING_WORKER_TOKEN: ${PGR_ONBOARDING_WORKER_TOKEN:-}
-      PGR_ONBOARDING_TENANT_ROOT: ${PGR_ONBOARDING_TENANT_ROOT:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'

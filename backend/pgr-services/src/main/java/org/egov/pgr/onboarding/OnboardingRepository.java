@@ -116,7 +116,7 @@ public class OnboardingRepository {
                 "updated_at = ? WHERE id = ? AND status = 'DRAFT'", now, signup.getId());
         OnboardingOperation operation = OnboardingOperation.builder()
                 .id(UUID.randomUUID()).signupId(signup.getId()).status("PENDING")
-                .currentStep("TENANT_RECORD").attempt(1).createdAt(now).updatedAt(now).build();
+                .currentStep("TENANT_FOUNDATION").attempt(1).createdAt(now).updatedAt(now).build();
         jdbcTemplate.update("INSERT INTO eg_pgr_onboarding_operation " +
                         "(id, signup_id, status, current_step, completed_steps, attempt, idempotency_key, created_at, updated_at) " +
                         "VALUES (?, ?, ?, ?, '[]'::jsonb, ?, ?, ?, ?)",

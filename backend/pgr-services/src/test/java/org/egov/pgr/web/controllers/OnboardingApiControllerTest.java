@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -72,7 +73,8 @@ public class OnboardingApiControllerTest {
                 OnboardingSignup.builder().id(id).status("DRAFT").build());
         when(service.search(eq(principal), any())).thenReturn(Collections.emptyList());
         when(service.checkIdentifier(eq(principal), any())).thenReturn(
-                Collections.singletonMap("available", true));
+                Map.of("type", "URL_SLUG", "value", "bomet", "available", true));
+        when(identitySessionClient.identifierAvailable("URL_SLUG", "bomet")).thenReturn(true);
 
         request("/v2/onboarding/signups/_update", "{\"Signup\":{\"id\":\"" + id + "\"}}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.Signup.id").value(id.toString()));
@@ -88,6 +90,12 @@ public class OnboardingApiControllerTest {
         UUID operationId = UUID.randomUUID();
         OnboardingOperation operation = OnboardingOperation.builder()
                 .id(operationId).signupId(signupId).status("PENDING").attempt(1).build();
+        OnboardingSignup signup = OnboardingSignup.builder()
+                .id(signupId).accountName("Bomet County Government").accountCode("BOMET")
+                .requestedTenantId("bometcounty").organizationAlias("bomet-county")
+                .urlSlug("bomet-county").status("DRAFT").build();
+        when(service.search(eq(principal), any())).thenReturn(Collections.singletonList(signup));
+        when(identitySessionClient.identifierAvailable(any(), any())).thenReturn(true);
         when(service.submit(eq(principal), any(), eq("submit-1"))).thenReturn(operation);
         when(service.searchOperations(eq(principal), any())).thenReturn(Collections.singletonList(operation));
         when(service.retry(eq(principal), any())).thenReturn(operation.toBuilder().attempt(2).build());
