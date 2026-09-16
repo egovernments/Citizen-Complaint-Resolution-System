@@ -242,3 +242,64 @@ test("REGRESSION #1: an unqualified tenant is not looked up twice", async () => 
   await s.getConfig("pg");
   assert.deepEqual(seen, ["pg"]);
 });
+
+// ---------------------------------------------------------------------------
+// Round-2 regressions from PR #2054 review (findings NEW 1 and NEW 4).
+// ---------------------------------------------------------------------------
+
+const MZ = { countryCode: "+258", mobileNumberRegex: "^[0-9]{9,12}$" };
+// A tenant rule that REQUIRES the domestic trunk 0.
+const KE_TRUNK = { countryCode: "+254", mobileNumberRegex: "^0[17][0-9]{8}$" };
+
+test("REGRESSION NEW4: a rule that also matches the dial-code form still yields the national number", () => {
+  const s = loadService();
+  // With as-sent tried first, '258841234567' satisfied ^[0-9]{9,12}$ and was returned as the
+  // "national" number -- diverging from the 9-digit record novu-bridge uses for the same
+  // citizen, so inbound and outbound disagreed about who the user is.
+  assert.equal(s.toNational("whatsapp:+258841234567", MZ), "841234567");
+  assert.equal(s.toE164("841234567", MZ), "+258841234567");
+});
+
+test("REGRESSION NEW4: the finding-2 case is still correct with the new ordering", () => {
+  const s = loadService();
+  const US = { countryCode: "+1", mobileNumberRegex: "^[0-9]{10}$" };
+  assert.equal(s.toNational("1234567890", US), "1234567890");
+  assert.equal(s.toNational("+11234567890", US), "1234567890");
+});
+
+test("REGRESSION NEW1: an unreconcilable number is addressed as sent, not re-prefixed", () => {
+  const s = loadService();
+  // A UK sender under the ke rule: toNational cannot match, and prefixing the tenant code
+  // produced To=+254447700900123 -> Twilio 21211, citizen never answered.
+  assert.equal(s.toNational("whatsapp:+447700900123", KENYA), null);
+  assert.equal(s.toAddressableDigits("whatsapp:+447700900123", KENYA), "447700900123");
+});
+
+test("REGRESSION NEW1: a trunk-0-required rule resolves instead of double-prefixing", () => {
+  const s = loadService();
+  // ^0[17][0-9]{8}$ cannot match a country-code-prefixed number without the trunk 0, so this
+  // used to fall back to raw digits and come back as To=+254254712345678.
+  assert.equal(s.toNational("whatsapp:+254712345678", KE_TRUNK), "0712345678");
+  assert.equal(s.toAddressableDigits("whatsapp:+254712345678", KE_TRUNK), "254712345678");
+});
+
+test("REGRESSION NEW1: the trunk-0 candidate is a last resort, never a shadow", () => {
+  const s = loadService();
+  const US = { countryCode: "+1", mobileNumberRegex: "^[0-9]{10}$" };
+  // '0234567890' is reachable only by synthesising a 0. Because the as-sent form matches
+  // first, the synthesised candidate must never be chosen here.
+  assert.equal(s.toNational("1234567890", US), "1234567890");
+});
+
+test("REGRESSION NEW1: toAddressableDigits round-trips every reconcilable form", () => {
+  const s = loadService();
+  for (const [cfg, raw, want] of [
+    [INDIA, "whatsapp:+919123456789", "919123456789"],
+    [INDIA, "9876543210", "919876543210"],
+    [KENYA, "whatsapp:+254712345678", "254712345678"],
+    [KENYA, "0712345678", "254712345678"],
+    [MZ, "whatsapp:+258841234567", "258841234567"],
+  ]) {
+    assert.equal(s.toAddressableDigits(raw, cfg), want, `failed for ${raw}`);
+  }
+});

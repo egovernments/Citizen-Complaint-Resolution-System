@@ -182,11 +182,20 @@ class TwilioWhatsAppProvider {
         return digits;
     }
 
-    /** National number -> the `whatsapp:+E.164` address Twilio's To/From fields require. */
-    async toWhatsAppAddress(nationalNumber, tenantId = null) {
+    /**
+     * Number -> the `whatsapp:+E.164` address Twilio's To/From fields require.
+     *
+     * Uses toAddressableDigits rather than toE164 so a number that could not be reconciled
+     * to the tenant's rule is addressed as-sent instead of having the tenant's country code
+     * prepended to it. extractPhoneNumber below keeps the raw digits in exactly that case,
+     * and re-prefixing them fabricated addresses that cannot be delivered
+     * (+447700900123 under the ke rule became +254447700900123).
+     */
+    async toWhatsAppAddress(number, tenantId = null) {
         const mobileConfig = await mobileValidation.getConfig(tenantId || config.rootTenantId);
-        const e164 = mobileValidation.toE164(nationalNumber, mobileConfig);
-        return `whatsapp:${e164}`;
+        const digits = mobileValidation.toAddressableDigits(number, mobileConfig);
+        if (!digits) throw new Error(`Cannot build a WhatsApp address from '${number}'`);
+        return `whatsapp:+${digits}`;
     }
 
     /**
@@ -287,7 +296,11 @@ class TwilioWhatsAppProvider {
         };
 
         reformattedMessage.extraInfo = {
-            whatsAppBusinessNumber: await this.extractPhoneNumber(requestBody.To, tenantId),
+            // The business number is the TWILIO ACCOUNT's, so it is NOT run through the
+            // citizen tenant's mobile rule: a US sandbox sender under a ke rule never matches,
+            // which logged a spurious error on every single inbound message. Its E.164 digits
+            // are kept as-is; the deep-link builders re-add the '+'.
+            whatsAppBusinessNumber: mobileValidation.digitsOnly(requestBody.To),
             tenantId: tenantId || config.rootTenantId
         };
 

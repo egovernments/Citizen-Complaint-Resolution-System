@@ -40,6 +40,8 @@ const app = express();
     return app;
 }
 
+require('./config-check').logAtStartup();
+
 const app = createAppServer();
 module.exports = app;
 app.listen(port, () => console.log(`XState-Chatbot-Server is running on port ${envVariables.port} with contextPath: ${envVariables.contextPath}`));

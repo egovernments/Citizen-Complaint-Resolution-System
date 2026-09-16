@@ -5,6 +5,7 @@ const express = require("express"),
   channelProvider = require("../"),
   twilioSignature = require("../twilio-signature"),
   mobileValidation = require("../../machine/service/mobile-validation-service"),
+  configCheck = require("../../config-check"),
   remindersService = require("../../machine/service/reminders-service");
 
 /**
@@ -118,6 +119,15 @@ router.post("/reminder", async (req, res) => {
   res.end();
 });
 
-router.get("/health", (req, res) => res.sendStatus(200));
+// 503 on a configuration that cannot actually serve citizens. This is what the container
+// healthcheck and the Gatus check poll, so a deployment missing its Twilio sender shows up
+// red there instead of looking healthy while silently dropping every reply (see
+// src/config-check.js).
+router.get("/health", (req, res) => {
+  const problems = configCheck.problems();
+  if (!problems.length) return res.sendStatus(200);
+  console.error("Health check failing on configuration: " + problems.join(" | "));
+  return res.status(503).json({ status: "misconfigured", problems: problems });
+});
 
 module.exports = router;

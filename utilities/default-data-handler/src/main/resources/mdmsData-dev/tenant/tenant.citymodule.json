@@ -28,20 +28,6 @@
     ]
   },
   {
-    "code": "PGR.WHATSAPP",
-    "order": 3,
-    "active": true,
-    "module": "PGR.WHATSAPP",
-    "tenants": [
-      {
-        "code": "{tenantid}"
-      },
-      {
-        "code": "{tenantid}.citya"
-      }
-    ]
-  },
-  {
     "code": "HRMS",
     "order": 2,
     "active": true,
