@@ -1,6 +1,6 @@
 # DIGIT MCP Server Documentation
 
-MCP server that bridges Claude to the DIGIT eGov platform -- 60 tools across 14 groups covering tenant management, grievance redressal (PGR), employee management, workflow, and observability.
+MCP server that bridges Claude to the DIGIT eGov platform -- 70 tools across 16 groups covering tenant management, grievance redressal (PGR), employee management, workflow, and observability.
 
 ## Guides
 

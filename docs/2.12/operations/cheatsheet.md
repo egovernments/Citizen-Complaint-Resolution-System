@@ -10,7 +10,7 @@ One page. Print it, or pin it in the alert channel.
 
 | | |
 |---|---|
-| Health dashboard | `https://<your-domain>/status/` — no login |
+| Health dashboard | `https://<your-domain>/status/` — basic auth (`status_basic_auth_*`) |
 | Grafana | `https://<your-domain>/grafana/` — **login required**, your own account (admin creates it, Editor role) |
 | Logs | `https://<your-domain>/grafana/d/digit-loki-logs/` |
 | Service metrics | `https://<your-domain>/grafana/d/digit-jvm/` |

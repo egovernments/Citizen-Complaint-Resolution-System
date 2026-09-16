@@ -26,7 +26,8 @@ system by following this page.
 
 ### Logins and passwords
 
-**The health dashboard needs no login.** Open the URL and you're in.
+**The health dashboard needs a login** (HTTP basic auth). Ask your deploy owner for the
+`status_basic_auth_user` / `status_basic_auth_password` set in the tenant's host_vars.
 
 **Grafana does need one**, and you should have it *before* your first call rather than
 hunting for it during one. You do not use the `admin` login for this — that one belongs to
