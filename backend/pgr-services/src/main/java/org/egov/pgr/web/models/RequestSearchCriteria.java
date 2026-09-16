@@ -22,13 +22,13 @@ public class RequestSearchCriteria {
     private String tenantId;
 
     @JsonProperty("tenantIds")
-    private Set<String> tenantIds;
+    private Set<@SafeHtml String> tenantIds;
 
     @JsonProperty("serviceCode")
-    private Set<String> serviceCode;
+    private Set<@SafeHtml String> serviceCode;
 
     @JsonProperty("applicationStatus")
-    private Set<String> applicationStatus;
+    private Set<@SafeHtml String> applicationStatus;
 
     @SafeHtml
     @JsonProperty("mobileNumber")
@@ -45,10 +45,10 @@ public class RequestSearchCriteria {
     private SortOrder sortOrder;
   
     @JsonProperty("locality")
-    private Set<String> locality;
+    private Set<@SafeHtml String> locality;
 
     @JsonProperty("ids")
-    private Set<String> ids;
+    private Set<@SafeHtml String> ids;
 
     @JsonProperty("fromDate")
     private Long fromDate;
@@ -67,10 +67,10 @@ public class RequestSearchCriteria {
      * result set; they can't widen a search.
      */
     @JsonIgnore
-    private Set<String> visibilityIds;
+    private Set<@SafeHtml String> visibilityIds;
 
     @JsonIgnore
-    private Set<String> visibilityUnassignedStates;
+    private Set<@SafeHtml String> visibilityUnassignedStates;
 
     @JsonProperty("slaDeltaMinLimit")
     private Long slaDeltaMinLimit;
@@ -82,7 +82,7 @@ public class RequestSearchCriteria {
     private Integer offset;
 
     @JsonIgnore
-    private Set<String> userIds;
+    private Set<@SafeHtml String> userIds;
 
     @JsonIgnore
     private Boolean isPlainSearch;
@@ -110,7 +110,7 @@ public class RequestSearchCriteria {
     private String assignee;
 
     @JsonIgnore
-    private Set<String> serviceRequestIds;
+    private Set<@SafeHtml String> serviceRequestIds;
 
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null

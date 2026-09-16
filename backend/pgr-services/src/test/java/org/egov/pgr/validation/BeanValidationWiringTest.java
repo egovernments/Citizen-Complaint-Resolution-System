@@ -3,6 +3,7 @@ package org.egov.pgr.validation;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.egov.pgr.web.models.Service;
+import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -127,5 +128,53 @@ class BeanValidationWiringTest {
             assertTrue(paths(validator.validate(s)).contains("description"),
                     "must reject: " + payload);
         }
+    }
+
+    @Test
+    void safeHtmlAppliesToCollectionElementsNotJustScalars() {
+        // Set<@SafeHtml String> is a container-element constraint. A plain field-level
+        // @SafeHtml on a Set would make HV look for ConstraintValidator<SafeHtml, Set>
+        // and blow up with UnexpectedTypeException, so this guards the TYPE_USE form.
+        RequestSearchCriteria hostile = RequestSearchCriteria.builder()
+                .serviceCode(Set.of("<script>alert(1)</script>"))
+                .build();
+        assertTrue(paths(validator.validate(hostile)).stream().anyMatch(p -> p.startsWith("serviceCode")),
+                "script payload inside Set<String> must be rejected, got " + paths(validator.validate(hostile)));
+
+        RequestSearchCriteria clean = RequestSearchCriteria.builder()
+                .serviceCode(Set.of("StreetLightNotWorking"))
+                .locality(Set.of("WARD_001"))
+                .build();
+        assertTrue(validator.validate(clean).isEmpty(),
+                "ordinary search criteria must be accepted, got " + paths(validator.validate(clean)));
+    }
+
+    @Test
+    void safeHtmlCoversThePgrV1MigrationModels() {
+        // MigrationController is @ConditionalOnProperty("migration.enabled") and is not
+        // registered in every deployment, so these models cannot always be exercised over
+        // HTTP - but they still take an external @RequestBody where they are enabled.
+        org.egov.pgr.web.models.pgrV1.Service v1 = new org.egov.pgr.web.models.pgrV1.Service();
+        v1.setTenantId("egov");
+        v1.setDescription("<script>alert(1)</script>");
+        assertTrue(paths(validator.validate(v1)).contains("description"),
+                "pgrV1 Service.description must reject script payloads");
+
+        org.egov.pgr.web.models.pgrV1.Citizen citizen = new org.egov.pgr.web.models.pgrV1.Citizen();
+        citizen.setName("<img src=x onerror=alert(1)>");
+        assertTrue(paths(validator.validate(citizen)).contains("name"),
+                "pgrV1 Citizen.name must reject markup");
+
+        // password is deliberately NOT annotated: it may legitimately contain '<' and is
+        // never rendered as HTML, so constraining it would only cause false rejections.
+        org.egov.pgr.web.models.pgrV1.Citizen pw = new org.egov.pgr.web.models.pgrV1.Citizen();
+        pw.setPassword("a<b>c&d");
+        assertFalse(paths(validator.validate(pw)).contains("password"),
+                "password must not be constrained by @SafeHtml");
+
+        org.egov.pgr.web.models.pgrV1.ActionInfo action = org.egov.pgr.web.models.pgrV1.ActionInfo.builder()
+                .comment("<iframe src=//evil.com></iframe>").build();
+        assertTrue(paths(validator.validate(action)).contains("comment"),
+                "pgrV1 ActionInfo.comment must reject markup");
     }
 }

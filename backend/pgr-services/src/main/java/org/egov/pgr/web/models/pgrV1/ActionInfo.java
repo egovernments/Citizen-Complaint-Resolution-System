@@ -1,5 +1,7 @@
 package org.egov.pgr.web.models.pgrV1;
 
+import org.egov.pgr.annotation.SafeHtml;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -25,14 +27,17 @@ import java.util.Objects;
 public class ActionInfo   {
 	
   @JsonProperty("uuid")
+  @SafeHtml
   private String uuid;
   
   @JsonProperty("tenantId")
   @Size(min=2,max=25)
   @Pattern(regexp="^[a-zA-Z.]*$")
+  @SafeHtml
   private String tenantId = null;
 
   @JsonProperty("by")
+  @SafeHtml
   private String by = null;
 
   @JsonProperty("isInternal")
@@ -42,24 +47,29 @@ public class ActionInfo   {
   private Long when = null;
 
   @JsonProperty("businessKey")
+  @SafeHtml
   private String businessKey = null;
 
   @JsonProperty("action")
+  @SafeHtml
   private String action = null;
 
   @JsonProperty("status")
+  @SafeHtml
   private String status = null;
 
   @JsonProperty("assignee")
+  @SafeHtml
   private String assignee = null;
 
   @JsonProperty("media")
   @Valid
-  private List<String> media = null;
+  private List<@SafeHtml String> media = null;
 
   @JsonProperty("comments")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/:; ()&']*$")
   @Size(max=256)
+  @SafeHtml
   private String comment = null;
 
   public String getUuid() {

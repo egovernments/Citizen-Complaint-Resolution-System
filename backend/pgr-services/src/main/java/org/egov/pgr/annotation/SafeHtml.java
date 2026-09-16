@@ -21,7 +21,11 @@ import java.lang.annotation.Target;
  */
 @Documented
 @Constraint(validatedBy = SafeHtmlValidator.class)
-@Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
+// TYPE_USE is required for container-element constraints such as
+// Set<@SafeHtml String>: a field-level constraint on a Set would make Hibernate
+// Validator look for a ConstraintValidator<SafeHtml, Set> and fail with
+// UnexpectedTypeException, since this validator handles CharSequence.
+@Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER, ElementType.TYPE_USE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface SafeHtml {
 
