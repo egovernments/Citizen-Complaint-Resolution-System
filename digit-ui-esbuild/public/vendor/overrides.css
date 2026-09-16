@@ -7666,7 +7666,7 @@ html .employee .digit-logout-popup-wrapper [class*="popup-footer"] {
  *     defined in one place instead of two rules disagreeing. */
 .employee .digit-viewcard-label,
 .employee [class*="field-pair-label"],
-.employee [class*="field-pair"] [class*="label"] {
+.employee .digit-viewcard-field-pair [class*="label"] {
   font-size: 0.75rem !important;
   font-weight: 600 !important;
   color: var(--color-text-muted, #6B7280) !important;
