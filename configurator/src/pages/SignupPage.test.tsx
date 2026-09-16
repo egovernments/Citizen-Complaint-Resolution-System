@@ -195,6 +195,7 @@ describe('a signup that ended FAILED', () => {
       status: 'FAILED',
       accountName: 'Bomet County Government',
     } as never);
+    // ACTIVE is a success, not a dead end, so it must not land here.
 
     render(<SignupPage />);
 
@@ -203,6 +204,22 @@ describe('a signup that ended FAILED', () => {
     expect(await screen.findByText(/this signup is closed/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
     expect(screen.getByText('654c74d6')).toBeInTheDocument();
+  });
+});
+
+describe('a signup that already provisioned', () => {
+  it('is not mistaken for a dead end', async () => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
+    vi.mocked(api.findSignup).mockResolvedValue({
+      id: 'signup-1',
+      status: 'ACTIVE',
+      accountName: 'Bomet County Government',
+    } as never);
+
+    render(<SignupPage />);
+
+    await waitFor(() => expect(screen.queryByText(/this signup is closed/i)).not.toBeInTheDocument());
   });
 });
 

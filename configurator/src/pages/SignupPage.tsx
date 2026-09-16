@@ -282,11 +282,12 @@ function SignupFlow() {
       // than starting a second.
       const existing = await findSignup();
       if (existing) seedFrom(existing);
-      // Only a DRAFT is editable. A founder whose signup ended FAILED cannot
-      // edit it and cannot start another — `_create` hands back the same failed
-      // record — so showing them the wizard again would only walk them into an
-      // update that the server rejects. Say what has happened instead.
-      if (existing && existing.status !== 'DRAFT') {
+      // FAILED is the dead end: the founder cannot edit it and cannot start
+      // another, because `_create` hands back the same failed record. Say so
+      // rather than offering a wizard whose saves the server will reject.
+      // Every other non-DRAFT status means provisioning got somewhere, so it
+      // is not this screen's business.
+      if (existing?.status === 'FAILED') {
         setPhase('stuck');
         return;
       }
