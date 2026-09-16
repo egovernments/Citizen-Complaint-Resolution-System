@@ -60,7 +60,7 @@ export const PGR_SEARCH_SCOPE_RESOURCE: Record<string, unknown> = {
     scope: {
       axes: ['department', 'jurisdiction'],
       roleScopes: {
-        GRO: { department: 'ALL', jurisdiction: 'OWN' },
+        GRO: { department: 'OWN', jurisdiction: 'OWN' },
         PGR_LME: { department: 'OWN', jurisdiction: 'OWN' },
         SUPERVISOR: { department: 'OWN', jurisdiction: 'ALL' },
       },
