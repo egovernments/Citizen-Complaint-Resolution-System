@@ -9,6 +9,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 /** Resolve a dot-separated path like 'user.name' from a record */
 function getNestedValue(record: RaRecord, path: string): unknown {
@@ -67,13 +68,20 @@ export function DigitFormSelect({
     { enabled: !!reference },
   );
 
+  // Deduped on `value` — the string this control submits. `optionValue` is the
+  // record's business key (`code` by default), NOT its react-admin id, so two
+  // master records sharing a code produce two SelectItems with the same value:
+  // Radix then marks both checked and <SelectValue> prints both labels
+  // back-to-back. Collapsing here covers every reference-backed dropdown in the
+  // configurator at once, and also guards a caller passing repeated
+  // `staticChoices`. See #1923 and lib/uniqueBy.
   const choices = useMemo(() => {
-    if (staticChoices) return staticChoices;
-    if (!data) return [];
-    return data.map((item) => ({
-      value: String(getNestedValue(item, optionValue) ?? item.id),
-      label: String(getNestedValue(item, optionText) ?? getNestedValue(item, optionValue) ?? item.id),
-    }));
+    const built = staticChoices
+      ?? (data ?? []).map((item) => ({
+        value: String(getNestedValue(item, optionValue) ?? item.id),
+        label: String(getNestedValue(item, optionText) ?? getNestedValue(item, optionValue) ?? item.id),
+      }));
+    return uniqueBy(built, (c) => c.value);
   }, [staticChoices, data, optionValue, optionText]);
 
   const hasError = fieldState.invalid && fieldState.isTouched;

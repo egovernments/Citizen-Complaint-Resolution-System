@@ -10,6 +10,7 @@ import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { Button } from '@/components/ui/button';
 import { BulkExportButton } from '@/admin/bulk/BulkExportButton';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const filters = [
   <SearchFilterInput key="q" source="q" alwaysOn />,
@@ -46,10 +47,12 @@ const exportColumns = [
 ];
 
 export function DepartmentList() {
+  const { canEditResource } = useMastersCapability();
+  const canEdit = canEditResource('departments');
   return (
     <DigitList
       title="app.resources.departments"
-      hasCreate
+      hasCreate={canEdit}
       sort={{ field: 'code', order: 'ASC' }}
       filters={filters}
       actions={
@@ -59,12 +62,14 @@ export function DepartmentList() {
             sheetName="Department"
             columns={exportColumns}
           />
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
-            <Link to="/manage/departments/bulk">
-              <Upload className="w-4 h-4" />
-              Bulk import
-            </Link>
-          </Button>
+          {canEdit && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to="/manage/departments/bulk">
+                <Upload className="w-4 h-4" />
+                Bulk import
+              </Link>
+            </Button>
+          )}
         </>
       }
     >

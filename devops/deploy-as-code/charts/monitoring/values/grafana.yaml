@@ -723,18 +723,23 @@ notifiers: {}
 #      editable: true
 #      options:
 #        path: /var/lib/grafana/dashboards/default
-dashboardProviders:
-  dashboardproviders.yaml:
-    apiVersion: 1
-    providers:
-    - name: 'grafana-dashboards-kubernetes'
-      orgId: 1
-      folder: 'Kubernetes'
-      type: file
-      disableDeletion: true
-      editable: true
-      options:
-        path: /var/lib/grafana/dashboards/grafana-dashboards-kubernetes
+# dashboardProviders is deliberately UNSET (#1650).
+#
+# It used to declare a `grafana-dashboards-kubernetes` provider pointing at
+# /var/lib/grafana/dashboards/grafana-dashboards-kubernetes. That directory only
+# ever existed because the `dashboards:` block below fetched the boards into it
+# at pod start -- and that block is gone, replaced by ConfigMaps rendered from
+# charts/monitoring/dashboards.
+#
+# Leaving the provider behind is not inert. Verified on a cluster: Grafana logs
+#   level=error msg="Cannot read directory" error="stat /var/lib/grafana/dashboards/grafana-dashboards-kubernetes: no such file or directory"
+# every 10 seconds, indefinitely, and the folder that provider named is never
+# created -- so all 8 boards landed in `General` instead. The chart's own note
+# below says the two are a pair: "To use dashboards you must also
+# enable/configure dashboardProviders". Half a pair is worse than neither.
+#
+# The sidecar declares its own provider (sidecar.dashboards.provider), which is
+# what actually loads the ConfigMaps; the folder is set there instead.
 
 
 ## Configure grafana dashboard to import
@@ -771,33 +776,22 @@ dashboardProviders:
   #     url: https://example.com/repository/test-azure.json
   #     basic: ''
   #     acceptHeader: '*/*'
-dashboards:
-  grafana-dashboards-kubernetes:
-    k8s-views-global:
-      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/master/dashboards/k8s-views-global.json
-      token: ''
-    k8s-views-namespaces:
-      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/master/dashboards/k8s-views-namespaces.json
-      token: ''
-    k8s-views-nodes:
-      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/master/dashboards/k8s-views-nodes.json
-      token: ''
-    k8s-views-pods:
-      url: https://raw.githubusercontent.com/egovernments/configs/master/monitoring-dashboards/Kubernetes-Views-Pods.json
-      token: ''
-    ingress-dashboard:
-      url: https://raw.githubusercontent.com/egovernments/configs/master/monitoring-dashboards/k8s-ingress-dashbaord.json
-      token: '' 
-    Loki-Logs:
-      url: https://raw.githubusercontent.com/egovernments/configs/master/monitoring-dashboards/loki.json
-      token: ''       
-    BlackBox:
-      url: https://raw.githubusercontent.com/egovernments/configs/master/monitoring-dashboards/blackbox.json
-      token: ''
-    persistent-volumes:
-      url: https://raw.githubusercontent.com/egovernments/configs/master/monitoring-dashboards/kubernetes-persistent-volumes.json
-      token: ''
-      
+# Dashboards are NOT listed here any more (#1650).
+#
+# This block used to define 8 boards by URL, every one pinned to `master`:
+#   - `master` is mutable, so two deployments a week apart could get different
+#     dashboards and a deployment could not be rebuilt as it was;
+#   - an init container fetched and applied-as-config whatever those URLs
+#     returned at pod start -- a deploy-time network dependency and a
+#     supply-chain one;
+#   - three of them pointed at an account outside this organisation;
+#   - and dashboard changes reached production without passing through this repo.
+#
+# They are now vendored under charts/monitoring/dashboards/dashboards/ at a
+# pinned upstream commit, rendered into ConfigMaps labelled grafana_dashboard,
+# and picked up by the sidecar enabled above. Reviewable, diffable, reproducible,
+# and no network at pod start.
+dashboards: {}
 
 ## Reference to external ConfigMap per provider. Use provider name as key and ConfigMap name as value.
 ## A provider dashboards must be defined either by external ConfigMaps or in values.yaml, not in both.
@@ -959,7 +953,10 @@ sidecar:
     # Sets the size limit of the alert sidecar emptyDir volume
     sizeLimit: {}
   dashboards:
-    enabled: false
+    # Enabled (#1650). Watches for ConfigMaps labelled grafana_dashboard and
+    # loads them, which is how the vendored boards in charts/monitoring/dashboards
+    # reach Grafana -- with no network fetch at pod start.
+    enabled: true
     # Additional environment variables for the dashboards sidecar
     env: {}
     # Do not reprocess already processed unchanged resources on k8s API reconnect.
@@ -1008,7 +1005,12 @@ sidecar:
       # orgid as configured in grafana
       orgid: 1
       # folder in which the dashboards should be imported in grafana
-      folder: ''
+      #
+      # 'Kubernetes' (#1650) so the vendored boards keep the grouping the
+      # removed dashboardProviders entry used to give them. With '' they all
+      # land in `General`, which is where they ended up once that provider was
+      # deleted -- confirmed on a cluster before setting this.
+      folder: 'Kubernetes'
       # type of the provider
       type: file
       # disableDelete to activate a import-only behaviour

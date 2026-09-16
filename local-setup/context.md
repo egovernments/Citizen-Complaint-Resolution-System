@@ -60,7 +60,7 @@ const stateCode = window?.globalConfigs?.getConfig("BOOTSTRAP_TENANT_ID")
 
 **Why:** `index.js` uses `stateCode` as the fallback tenant for `Citizen.tenant-id` and `Employee.tenant-id` in SessionStorage/localStorage when no user session exists. Must match the bootstrap tenant so the pre-login MDMS calls go to the right root.
 
-#### 4. `local-setup/jupyter/dataloader/crs_loader.py` — `create_tenant()` method
+#### 4. `local-setup/dataloader/crs_loader.py` — `create_tenant()` method
 
 **What changed:** After successfully creating a tenant record under its own root, the method now also registers it under `pg` if the root is not already `pg`:
 ```python
@@ -212,7 +212,7 @@ Full lifecycle: login, MDMS fetch, HRMS employee create with department, complai
 
 ## Background
 
-The CRS DataLoader (`jupyter/dataloader/crs_loader.py`) provides a 6-phase workflow for loading master data into a DIGIT/eGov deployment. Phase 2 handles **administrative boundaries** — the hierarchical geographic units (e.g., Country → County → SubCounty → Ward) that scope complaints and employee assignments.
+The CRS DataLoader (`dataloader/crs_loader.py`) provides a 6-phase workflow for loading master data into a DIGIT/eGov deployment. Phase 2 handles **administrative boundaries** — the hierarchical geographic units (e.g., Country → County → SubCounty → Ward) that scope complaints and employee assignments.
 
 The boundary loading flow is:
 1. **Phase 2a** (`load_hierarchy`): Define hierarchy levels and generate an Excel template via the boundary management service
@@ -410,7 +410,7 @@ Chromium was not installed during initial attempts (`npx playwright install` nee
 | `local-setup/nginx/globalConfigs.js` | Done | `stateTenantId="pg"`, added `bootstrapTenantId`, added config key |
 | `frontend/micro-ui/web/src/App.js` | Done | `BOOTSTRAP_TENANT_ID` fallback chain for stateCode |
 | `frontend/micro-ui/web/src/index.js` | Done | `BOOTSTRAP_TENANT_ID` in both stateCode assignments |
-| `local-setup/jupyter/dataloader/crs_loader.py` | Done | Dual-register tenants under `pg` in `create_tenant()` |
+| `local-setup/dataloader/crs_loader.py` | Done | Dual-register tenants under `pg` in `create_tenant()` |
 | `local-setup/mcp_changes.md` | Created | Documents pending MCP tool changes |
 | Kong routes / nginx proxy | TODO | Need route for `/tenant-management` (mock or stub) |
 | MDMS backfill | TODO | Register existing cross-root tenants under `pg` |
@@ -435,7 +435,7 @@ Chromium was not installed during initial attempts (`npx playwright install` nee
 | File | Status | Change |
 |------|--------|--------|
 | `local-setup/nginx/globalConfigs.js` | Modified | `MULTI_ROOT_TENANT = true` |
-| `local-setup/jupyter/dataloader/crs_loader.py` | Modified | Flat tenant `parent: null`, localization for all tenants |
+| `local-setup/dataloader/crs_loader.py` | Modified | Flat tenant `parent: null`, localization for all tenants |
 
 ## Part D — Test Suite
 
@@ -449,11 +449,11 @@ Chromium was not installed during initial attempts (`npx playwright install` nee
 
 | File | Role |
 |------|------|
-| `jupyter/dataloader/crs_loader.py` | `load_boundaries`, `_autogenerate_boundary_codes`, `_autogen_standard_format`, `_autogen_level_format`, `_generate_boundary_code` |
-| `jupyter/dataloader/unified_loader.py` | `process_boundary_data`, `_create_boundary_entity`, `_create_boundary_relationship`, `create_localization_messages` |
-| `jupyter/dataloader/test_boundary_codes.py` | Unit tests for code generation and auto-gen (44 tests) |
-| `jupyter/dataloader/DataLoader_v2.ipynb` | User-facing notebook (Phase 2a/2b cells) |
-| `jupyter/dataloader/templates/Kenya_Boundary_Master.xlsx` | Kenya boundary data (needs update) |
+| `dataloader/crs_loader.py` | `load_boundaries`, `_autogenerate_boundary_codes`, `_autogen_standard_format`, `_autogen_level_format`, `_generate_boundary_code` |
+| `dataloader/unified_loader.py` | `process_boundary_data`, `_create_boundary_entity`, `_create_boundary_relationship`, `create_localization_messages` |
+| `dataloader/test_boundary_codes.py` | Unit tests for code generation and auto-gen (44 tests) |
+| `../utilities/crs_dataloader/DataLoader_v2.ipynb` | Standalone notebook (Phase 2a/2b cells) — a separate tool with its own tree, not part of local-setup since #1743 |
+| `dataloader/templates/Kenya_Boundary_Master.xlsx` | Kenya boundary data (needs update) |
 
 ---
 
@@ -479,4 +479,4 @@ Chromium was not installed during initial attempts (`npx playwright install` nee
 - **Frontend:** `@egovernments/digit-ui-module-core` v1.9.18-cms (pre-built npm, not source-editable)
 - **Key services:** Kong (gateway :18000), nginx (digit-ui :18080), MDMS, egov-user, egov-enc-service, PGR
 - **Bootstrap tenant:** `pg` (system seed with all schemas, localization, and MDMS data)
-- **DataLoader:** Jupyter notebook + Python (`crs_loader.py` / `unified_loader.py`)
+- **DataLoader:** Python library (`crs_loader.py` / `unified_loader.py`)

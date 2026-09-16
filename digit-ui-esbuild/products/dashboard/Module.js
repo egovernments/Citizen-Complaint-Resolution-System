@@ -3,17 +3,14 @@ import { Redirect } from "react-router-dom";
 import { Loader } from "@egovernments/digit-ui-react-components";
 import AdminDashboard from "./src/AdminDashboard";
 import DashboardCard from "./DashboardCard";
-import { DASHBOARD_ROLES, useDashboardAccess } from "./roles";
-
-export { DASHBOARD_ROLES };
+import { useDashboardAccess } from "./roles";
 
 // Mounted by core AppModules at /{contextPath}/employee/dashboard INSIDE the
 // employee chrome (topbar + sidebar). AppModules already guarantees a logged-in
-// session, so the only guard needed here is the role check — resolved from
-// MDMS (dss.DashboardConfig) with the roles.js list as fallback, checked
-// tenant-agnostically (see roles.js) — before rendering the dashboard in
-// embedded mode (which suppresses its standalone shell: internal sidebar,
-// login gate, 100dvh layout).
+// session, so the only guard needed here is the access-control capability
+// check (see roles.js) — before rendering the dashboard in embedded mode
+// (which suppresses its standalone shell: internal sidebar, login gate,
+// 100dvh layout).
 const DashboardModule = ({ stateCode }) => {
   // Lazy-load this module's localization bundles into the host i18next
   // (same pattern as PGRModule): rainmaker-dashboard for the dashboard's own
@@ -28,8 +25,9 @@ const DashboardModule = ({ stateCode }) => {
     modulePrefix: "rainmaker",
   });
   const { allowed, loading: accessLoading } = useDashboardAccess();
-  // While the MDMS-backed gate resolves, hold on the Loader (never the
-  // Redirect) so an eventually-allowed role doesn't flash away from the route.
+  // While the access-control capability check resolves, hold on the Loader
+  // (never the Redirect) so an eventually-allowed caller doesn't flash away
+  // from the route.
   if (accessLoading || isLoading) {
     return <Loader />;
   }

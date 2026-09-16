@@ -5,6 +5,7 @@ import {
   getTenantId,
   toRequestError,
 } from "./authService";
+import { runChunkedAnalyticsBatch } from "./analyticsBatch";
 
 // Re-exported for existing importers; authService is the definition.
 export { getTenantId };
@@ -19,7 +20,7 @@ export function getAnalyticsBase() {
 
 const ANALYTICS_BASE = getAnalyticsBase();
 
-async function postAnalytics(path, body) {
+async function postAnalytics(path, body, signal) {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   // The analytics API is the dashboard's primary data path, so it is the one
   // surface allowed to conclude the session is dead (sessionCritical defaults
@@ -36,6 +37,7 @@ async function postAnalytics(path, body) {
         RequestInfo: buildRequestInfo("dashboard"),
         ...body,
       }),
+      signal,
     });
   } catch (error) {
     const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -63,7 +65,7 @@ async function postAnalytics(path, body) {
  * anonymous PUBLIC contract, so this transport always sends a role-less
  * RequestInfo and performs exactly one request.
  */
-async function postPublicAnalytics(path, body) {
+async function postPublicAnalytics(path, body, signal) {
   const url = `${ANALYTICS_BASE}/public${path}`;
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   let response;
@@ -72,6 +74,7 @@ async function postPublicAnalytics(path, body) {
       method: "POST",
       headers: { "Content-Type": "application/json", ...withTraceHeaders({}) },
       credentials: "omit",
+      signal,
       body: JSON.stringify({
         RequestInfo: {
           apiId: "Rainmaker",
@@ -100,6 +103,18 @@ async function postPublicAnalytics(path, body) {
 
 export function fetchSchema() {
   return postAnalytics("/_schema", { tenantId: getTenantId() });
+}
+
+/**
+ * POST /v2/analytics/_access — the sole source of dashboard nav/route
+ * authorization. egov-accesscontrol resolves the caller's roles server-side
+ * (via the RequestInfo already attached by postAnalytics) and evaluates them
+ * against the analytics capability action ids; the frontend sends no role
+ * list and applies no allowlist of its own.
+ * Returns { allowed: boolean, capabilities?: string[] }.
+ */
+export function fetchAccess(tenantId) {
+  return postAnalytics("/_access", { tenantId });
 }
 
 export function runBatchQueries(queries) {
@@ -131,8 +146,13 @@ export function fetchCatalog(tenantId) {
  * refs: { [tileKey]: { kpiId, params } }
  * Returns { results: { [tileKey]: { columns, rows, asOf, scope } }, partial, errors }
  */
-export function runKpiBatch(refs, tenantId) {
-  return postAnalytics("/_query", { tenantId, queries: refs });
+export function runKpiBatch(refs, tenantId, maxBatchQueries, options = {}) {
+  return runChunkedAnalyticsBatch(
+    refs,
+    maxBatchQueries,
+    (queries) => postAnalytics("/_query", { tenantId, queries }, options.signal),
+    options
+  );
 }
 
 /** Curated PUBLIC pack. The response itself contains the safe tile descriptors. */
@@ -140,7 +160,33 @@ export function fetchPublicPack(tenantId) {
   return postPublicAnalytics("/packs", { tenantId });
 }
 
-/** PUBLIC data path. The backend accepts only curated, base kpiId references. */
-export function runPublicKpiBatch(refs, tenantId) {
-  return postPublicAnalytics("/_query", { tenantId, queries: refs });
+/**
+ * POST /v2/analytics/public/catalog/_search — every PUBLIC-tagged published tile
+ * (#1797). Feeds the public Add-KPI menu; same safe tile shape as fetchCatalog.
+ */
+export function fetchPublicCatalog(tenantId) {
+  return postPublicAnalytics("/catalog/_search", { tenantId });
+}
+
+/**
+ * POST /v2/analytics/public/_options — filter-bar option codes (#1797). The
+ * response mirrors the inline-batch envelope useFilterOptions already reads
+ * (results.wards.rows[].ward_code / results.complaintTypes.rows[].service_code)
+ * so one option builder serves both surfaces; counts are stripped server-side.
+ */
+export function fetchPublicFilterOptions(tenantId) {
+  return postPublicAnalytics("/_options", { tenantId });
+}
+
+/**
+ * PUBLIC data path. The backend accepts {kpiId[, params]} references over
+ * PUBLIC-tagged tiles, with params limited to the global filter bar.
+ */
+export function runPublicKpiBatch(refs, tenantId, maxBatchQueries, options = {}) {
+  return runChunkedAnalyticsBatch(
+    refs,
+    maxBatchQueries,
+    (queries) => postPublicAnalytics("/_query", { tenantId, queries }, options.signal),
+    options
+  );
 }

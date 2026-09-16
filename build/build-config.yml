@@ -75,8 +75,11 @@ config:
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
   # --- newer container-served services (runtime-configured, one image per service
-  # serves every tenant). digit-ui-v2 / configurator are intentionally absent:
-  # their bundles bake tenant build-env and need parameterized Dockerfiles first.
+  # serves every tenant). The Vite SPAs that bake build-env into the bundle are
+  # a separate group further down. Everything from here on has a self-contained
+  # Dockerfile (context = work-dir, no WORK_DIR build-arg), so these are the
+  # entries dispatchable from .github/workflows/spa-build.yml rather than
+  # build.yml — keep that workflow's `options:` list in step with this group.
   - name: "builds/Citizen-Complaint-Resolution-System/digit-mcp"
     build:
       - work-dir: "digit-mcp"
@@ -97,12 +100,11 @@ config:
   # nightly builds the neutral-default reference image (see build/NIGHTLY-BUILDS.md).
   - name: "builds/Citizen-Complaint-Resolution-System/configurator"
     build:
-      - work-dir: "configurator"
+      - work-dir: "."
         dockerfile: "configurator/Dockerfile"
         image-name: "configurator"
   - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-v2"
     build:
-      - work-dir: "digit-ui-v2"
+      - work-dir: "."
         dockerfile: "digit-ui-v2/Dockerfile"
         image-name: "digit-ui-v2"
-

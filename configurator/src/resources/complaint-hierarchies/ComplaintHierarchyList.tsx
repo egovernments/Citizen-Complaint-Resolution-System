@@ -1,6 +1,7 @@
 import { DigitList, DigitDatagrid, SearchFilterInput } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { MigrateHierarchyAction } from './MigrateHierarchyAction';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const filters = [<SearchFilterInput key="q" source="q" alwaysOn />];
 
@@ -29,10 +30,11 @@ const columns: DigitColumn[] = [
 ];
 
 export function ComplaintHierarchyList() {
+  const { canEditResource } = useMastersCapability();
   return (
     <DigitList
       title="Complaint Hierarchies"
-      hasCreate
+      hasCreate={canEditResource('complaint-hierarchies')}
       sort={{ field: 'hierarchyType', order: 'ASC' }}
       filters={filters}
       actions={<MigrateHierarchyAction />}

@@ -1,0 +1,435 @@
+# Gatus endpoint catalogue for the deploy-as-code (EKS) tier.
+#
+# Names, ports and health paths were verified against the LIVE ccrs-prod
+# cluster, and DIFFER from the k3s/compose catalogue (local-setup/k8s/tools/
+# gatus.yaml): there every DIGIT service listens on its own port and lives in
+# `digit`; here they ALL listen on 8080 and live in `egov`, reached from this
+# `monitoring`-namespace pod by FQDN (<svc>.<ns>). Health paths are the plain
+# `/<context>/health` form this tier serves (the actuator paths the k3s file
+# uses return 404/400 here). Keep both catalogues maintained independently.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+data:
+  config.yaml: |
+    # Retention is left to Gatus's own per-endpoint pruning (100 results /
+    # 50 events), so the sqlite file settles at a steady size instead of
+    # growing forever.
+    storage:
+      type: sqlite
+      path: /data/gatus.db
+
+    ui:
+      title: {{ .Values.gatus.ui.title | quote }}
+      description: {{ .Values.gatus.ui.description | quote }}
+
+    # Slack alerting is OFF unless GATUS_SLACK_WEBHOOK_URL is set (optional
+    # secret `gatus-alerting`, wired in the Deployment). Gatus expands an unset
+    # variable to "" and then drops the provider with a warning rather than
+    # failing to start, so clusters without the secret deploy unchanged. Each
+    # endpoint still has to declare `alerts: - type: slack` for these defaults
+    # to apply to it.
+    alerting:
+      slack:
+        webhook-url: "${GATUS_SLACK_WEBHOOK_URL}"
+        default-alert:
+          enabled: true
+          failure-threshold: 3
+          success-threshold: 2
+          send-on-resolved: true
+
+    endpoints:
+      # ==================== Infrastructure ====================
+{{- if .Values.gatus.postgresHost }}
+      # External RDS -- TCP reachability only (no SQL auth from here).
+      - name: PostgreSQL (RDS)
+        group: Infrastructure
+        url: "tcp://{{ .Values.gatus.postgresHost }}:{{ .Values.gatus.postgresPort }}"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+{{- end }}
+
+      - name: Redis
+        group: Infrastructure
+        url: "tcp://redis.backbone:6379"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Kafka
+        group: Infrastructure
+        url: "tcp://kafka-kraft.backbone:9092"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      # TCP, not HTTP: ES on this tier runs with xpack security (TLS + basic
+      # auth), so an unauthenticated http probe gets an EOF and https gets 401.
+      # A TCP check reports reachability without coupling this dashboard to the
+      # elastic credentials -- the same treatment Redis and Kafka get.
+      - name: Elasticsearch
+        group: Infrastructure
+        url: "tcp://elasticsearch-master.backbone:9200"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      # ==================== Core Services ====================
+      - name: MDMS Service
+        group: Core Services
+        url: "http://mdms-v2.egov:8080/mdms-v2/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Encryption Service
+        group: Core Services
+        url: "http://egov-enc-service.egov:8080/egov-enc-service/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: ID Generation Service
+        group: Core Services
+        url: "http://egov-idgen.egov:8080/egov-idgen/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: User Service
+        group: Core Services
+        url: "http://egov-user.egov:8080/user/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Workflow Service
+        group: Core Services
+        url: "http://egov-workflow-v2.egov:8080/egov-workflow-v2/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Localization Service
+        group: Core Services
+        url: "http://egov-localization.egov:8080/localization/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Boundary Service
+        group: Core Services
+        url: "http://boundary-service.egov:8080/boundary-service/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      # No HTTP health endpoint; TCP probe only (matches the k3s catalogue).
+      - name: Boundary Management Service
+        group: Core Services
+        url: "tcp://egov-bndry-mgmnt.egov:8080"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Access Control Service
+        group: Core Services
+        url: "http://egov-accesscontrol.egov:8080/access/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Persister Service
+        group: Core Services
+        url: "http://egov-persister.egov:8080/common-persist/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Filestore Service
+        group: Core Services
+        url: "http://egov-filestore.egov:8080/filestore/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: HRMS Service
+        group: Core Services
+        url: "http://egov-hrms.egov:8080/egov-hrms/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      # No HTTP health path on this tier; TCP probe only.
+      - name: URL Shortening Service
+        group: Core Services
+        url: "tcp://egov-url-shortening.egov:8080"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Audit Service
+        group: Core Services
+        url: "http://audit-service.egov:8080/audit-service/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Config Service
+        group: Core Services
+        url: "http://digit-config-service.egov:8080/config-service/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: User Preferences Service
+        group: Core Services
+        url: "http://digit-user-preferences-service.egov:8080/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: User Event Service
+        group: Core Services
+        url: "http://egov-user-event.egov:8080/egov-user-event/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+{{- if .Values.gatus.groups.otp }}
+      # ==================== OTP / Notifications ====================
+      - name: OTP Service
+        group: OTP
+        url: "http://egov-otp.egov:8080/otp/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: User OTP Service
+        group: OTP
+        url: "http://user-otp.egov:8080/user-otp/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Notification SMS Service
+        group: OTP
+        url: "http://egov-notification-sms.egov:8080/notification-sms/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+{{- end }}
+
+{{- if .Values.gatus.groups.search }}
+      # ==================== Search ====================
+      - name: Indexer Service
+        group: Search
+        url: "http://egov-indexer.egov:8080/egov-indexer/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      # No HTTP health path exposed on this tier; TCP probe only.
+      - name: Inbox Service
+        group: Search
+        url: "tcp://inbox.egov:8080"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+{{- end }}
+
+{{- if .Values.gatus.groups.mcp }}
+      # ==================== MCP ====================
+      - name: DIGIT MCP
+        group: MCP
+        url: "http://digit-mcp-digit-mcp.egov:3000/healthz"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+{{- end }}
+
+{{- if .Values.gatus.groups.notifications }}
+      # ==================== Notifications (Novu) ====================
+      - name: Novu API
+        group: Notifications
+        url: "http://novu-api.novu:3000/v1/health-check"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Novu WS
+        group: Notifications
+        url: "tcp://novu-ws.novu:3002"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Novu Dashboard
+        group: Notifications
+        url: "tcp://novu-dashboard.novu:4000"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Novu Mongo
+        group: Notifications
+        url: "tcp://novu-mongodb.novu:27017"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: slack
+
+      - name: Novu Bridge
+        group: Notifications
+        url: "http://novu-bridge.egov:8080/novu-bridge/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+{{- end }}
+
+      # ==================== Application ====================
+      - name: PGR Services
+        group: Application
+        url: "http://pgr-services.egov:8080/pgr-services/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: DIGIT UI
+        group: Application
+        url: "http://digit-ui.egov:80/digit-ui/"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Configurator
+        group: Application
+        url: "http://configurator.egov:80/"
+        interval: 30s
+        conditions:
+          - "[STATUS] < 500"
+        alerts:
+          - type: slack
+
+{{- if .Values.gatus.groups.observability }}
+      # ==================== Observability ====================
+      - name: Grafana
+        group: Observability
+        url: "http://grafana.monitoring:3000/api/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Prometheus
+        group: Observability
+        url: "http://kube-prometheus-stack-prometheus.monitoring:9090/-/healthy"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+
+      - name: Loki
+        group: Observability
+        url: "http://loki-stack.monitoring:3100/ready"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+        alerts:
+          - type: slack
+{{- end }}
+
+{{- $publicUrl := .Values.gatus.publicUrl | default (printf "https://%s/digit-ui/" .Values.global.domain) }}
+{{- if $publicUrl }}
+      # ==================== Public Endpoint (TLS) ====================
+      # The only check that exercises the REAL public path end to end -- DNS,
+      # ingress, TLS termination, routing -- and the only one that would catch
+      # an expired public certificate (every other check runs inside the
+      # cluster and never sees the public cert). [CONNECTED] is paired with the
+      # expiry check so a TLS handshake failure (which pins expiry to 0s) reads
+      # as "cannot connect" rather than a false "cert about to expire".
+      - name: TLS Certificate
+        group: Public Endpoint
+        url: {{ $publicUrl | quote }}
+        interval: 5m
+        conditions:
+          - "[CONNECTED] == true"
+          - "[CERTIFICATE_EXPIRATION] > 240h"
+          - "[STATUS] < 500"
+        alerts:
+          - type: slack
+{{- end }}

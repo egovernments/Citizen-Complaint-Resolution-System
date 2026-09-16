@@ -98,6 +98,13 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           justifyContent: "center",
           minHeight: "100vh",
           padding: "24px",
+          // .banner is a flex container that centers its children, so
+          // without an explicit width this wrapper shrink-wraps to the
+          // card's min-content and a leftover page-bg paints a full-height
+          // white/grey column beside (and behind) the card instead of the
+          // <Background> banner showing edge-to-edge (CCSD-1995 / #1860).
+          width: "100%",
+          backgroundColor: "transparent",
         }}
       >
         {children}

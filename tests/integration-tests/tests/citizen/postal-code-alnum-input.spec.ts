@@ -26,7 +26,8 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, ROOT_TENANT, LOCALES } from '../utils/env';
+import { fetchLocalizedMessage } from '../utils/probes';
 
 test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)', () => {
   test.slow();
@@ -76,7 +77,7 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
     }
     await clickNext();
 
-    // ── Step 2: Pin Location — don't touch the map (CCRS#469) ───────
+    // ── Step 2: optional Pin Location — continue without a pin ──────
     await page.waitForTimeout(2500);
     await clickNext();
   }
@@ -88,7 +89,7 @@ test.describe('Citizen v2 postal-code input — alnum/dash regression (PR #1315)
 
 Steps:
 1. OTP-login as the provisioned citizen.
-2. Navigate to /digit-ui/citizen/pgr/create-complaint/complaint-type and walk Steps 1-2 (complaint type + pin, don't touch the map).
+2. Navigate to /digit-ui/citizen/pgr/create-complaint/complaint-type and walk Steps 1-2 (complaint type, then continue without the optional pin).
 3. On Step 3 (Location Details), locate #postal-code and type an alnum probe with a space ("SW1A 1AA", the UK example from _example.yml).
 4. Assert the input's value is exactly "SW1A 1AA" — not stripped to only its digits ("11").
 5. Clear and type a dash-suffixed 10-char probe ("12345-6789", the US example from _example.yml).
@@ -129,19 +130,25 @@ Catches a regression where the field silently mangles input before the shared is
     await expect(postalInput).toHaveValue(usProbe);
   });
 
-  test('invalid postal code renders the length-interpolated localized error', {
+  test('invalid postal code renders the error the tenant\'s own pattern implies', {
     annotation: {
       type: 'description',
-      description: `Proves the actual #722 deliverable end-to-end: the visible error message states the digit count derived from the tenant's configured postalCodePattern, rendered through the real i18next pipeline (CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN with a {{length}} interpolation — the first interpolated key in rainmaker-pgr, so this path has no other coverage in the repo).
+      description: `Proves the actual #722 deliverable end-to-end on ANY deployment: the visible error is the one utils/postalCode.js's own contract selects for this tenant's configured postalCodePattern, rendered through the real i18next pipeline.
+
+The app has two branches and this exercises whichever one applies here:
+  • plain ^[0-9]{N}$ pattern -> CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN with a {{length}} interpolation (the only interpolated key in rainmaker-pgr).
+  • anything else (India's ^[1-9][0-9]{5}$, MZ's dash shape, UK alnum) -> CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC, no count.
 
 Steps:
 1. OTP-login as the provisioned citizen and walk to Step 3 (Location Details).
 2. Read the tenant's effective postalCodePattern from the page (same resolution order as utils/postalCode.js).
-3. Skip unless the pattern is a plain ^[0-9]{N}$ shape (the interpolated-length message only applies to digit-only tenants).
-4. Type N+1 digits into #postal-code — guaranteed invalid for a ^[0-9]{N}$ pattern.
-5. Assert the visible error text reads "…valid N-digit postal code" with the tenant's actual N.
+3. Derive the app's own branch from it, and derive an invalid probe value the pattern is guaranteed to reject.
+4. Ask the localization service whether the branch's key is seeded here, so the expected copy is the seeded translation where there is one and the code's English fallback where there is not.
+5. Type the probe and assert that exact copy is visible, and that no raw CS_COMPLAINT_POSTALCODE_* key leaked to the citizen.
 
-Catches: a broken i18next interpolation (post-processors mangling the {{length}} placeholder), a missing/mis-seeded localization key surfacing as a raw key, or a digit count derived from the wrong part of the pattern.`,
+Previously skipped on any tenant whose pattern was not literally ^[0-9]{N}$, which left the GENERIC branch — the one an Indian, Mozambican or UK tenant actually hits — with no coverage anywhere in the repo.
+
+Catches: a broken i18next interpolation (post-processors mangling {{length}}), a missing key surfacing as a raw code, a digit count derived from the wrong part of the pattern, and a validator that fails to flag an invalid value at all.`,
     },
     tag: ['@area:pgr', '@ccrs:722', '@kind:regression', '@layer:ui', '@persona:citizen', '@pr:1315'] }, async ({ page }) => {
     test.setTimeout(120_000);
@@ -173,22 +180,60 @@ Catches: a broken i18next interpolation (post-processors mangling the {{length}}
       return String(cfg?.postalCodePattern || '^[0-9]{5}$');
     });
 
+    // Same regex getPostalCodeDigitLength() uses, so the test picks the SAME
+    // branch the app does. Deliberately strict: a `{N}` quantifier found
+    // elsewhere in a compound pattern is not this pattern's digit count, which
+    // is exactly why the app refuses to interpolate one there.
     const lenMatch = pattern.match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/);
-    test.skip(!lenMatch, `tenant pattern "${pattern}" is not ^[0-9]{N}$-shaped — length-interpolated message doesn't apply`);
-    const n = Number(lenMatch![1]);
+    const digitLength = lenMatch ? lenMatch[1] : null;
 
-    // N+1 digits can never satisfy ^[0-9]{N}$, so the field must flag it.
+    // An invalid probe derived from the tenant's own rule rather than assumed
+    // from its shape. For ^[0-9]{N}$, N+1 digits is the minimal violation; for
+    // everything else, walk a ladder and take the first candidate the pattern
+    // rejects. Never empty — an empty postal code is VALID (optional field), so
+    // an empty probe would assert that no error appears.
+    const compiled = new RegExp(pattern);
+    const probe = digitLength
+      ? '1'.repeat(Number(digitLength) + 1)
+      : ['1', '12', '1234567890123', 'ZZ ZZZ', '00000-0000-0000'].find((c) => !compiled.test(c));
+    expect(
+      probe,
+      `could not derive a value that pattern ${pattern} rejects — the probe ladder needs a candidate for this shape`,
+    ).toBeTruthy();
+
+    // What copy SHOULD appear, mirroring getPostalCodeErrorMessage(t): the
+    // seeded translation when the deployment has one, otherwise the hardcoded
+    // English fallback the helper falls through to. `pg` seeds neither key, so
+    // there the expectation is the fallback — and asserting the fallback is
+    // still worth doing: it is the string real citizens read on that tenant.
+    const key = digitLength
+      ? 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN'
+      : 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC';
+    const seeded = await fetchLocalizedMessage(ROOT_TENANT, LOCALES[0], key, { module: 'rainmaker-pgr' });
+    const expected = seeded
+      ? seeded.replace(/\{\{\s*length\s*\}\}/g, digitLength ?? '')
+      : digitLength
+        ? `Please enter a valid ${digitLength}-digit postal code`
+        : 'Please enter a valid postal code';
+
     await postalInput.click();
     await postalInput.fill('');
-    await postalInput.pressSequentially('1'.repeat(n + 1), { delay: 50 });
+    await postalInput.pressSequentially(probe!, { delay: 50 });
 
-    // The visible error must carry the tenant's real digit count — not a raw
-    // localization key, not a mangled "{{length}}" placeholder, and not a
-    // hardcoded count from some other tenant's pattern. `.first()` because
-    // getByText is strict-mode: if the message ever also surfaces in a toast
-    // or summary step, one visible occurrence should still pass rather than
-    // failing as a strict-mode violation.
-    const errorText = page.getByText(new RegExp(`valid\\s+${n}[\\s-]?digit postal code`, 'i')).first();
-    await expect(errorText).toBeVisible({ timeout: 10_000 });
+    // `.first()` because getByText is strict-mode: if the message ever also
+    // surfaces in a toast or on the summary step, one visible occurrence should
+    // still pass rather than failing as a strict-mode violation.
+    await expect(
+      page.getByText(expected, { exact: false }).first(),
+      `typing ${probe} (invalid under ${pattern}) must surface "${expected}"`,
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Whichever branch ran, a citizen must never be shown the raw key — the
+    // failure mode when the localization row is missing AND the code-level
+    // fallback is removed.
+    expect(
+      await page.getByText(/CS_COMPLAINT_POSTALCODE_INVALID_ERROR/).count(),
+      'no raw localization key may leak into the rendered error',
+    ).toBe(0);
   });
 });

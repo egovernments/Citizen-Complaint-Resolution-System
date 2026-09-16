@@ -20,6 +20,13 @@ const TopBarSideBar = ({
 }) => {
   const [isSidebarOpen, toggleSidebar] = useState(false);
   const history = useHistory();
+  // Working context (CCRS#1833) is fetched once here and handed to whichever
+  // top bar renders, so a custom header consumes the same contract.
+  const workingContextTenantId = cityDetails?.code || userDetails?.info?.tenantId;
+  const { data: workingContext, isError: workingContextError } = Digit.Hooks.pgr.useEmployeeWorkingContext(
+    workingContextTenantId,
+    { enabled: !CITIZEN && !!workingContextTenantId && !!userDetails?.access_token }
+  );
   const [showDialog, setShowDialog] = useState(false);
   const handleLogout = () => {
     toggleSidebar(false);
@@ -61,6 +68,9 @@ const TopBarSideBar = ({
         logoUrl={logoUrl}
         logoUrlWhite={logoUrlWhite}
         showLanguageChange={showLanguageChange}
+        workingContext={workingContext}
+        workingContextError={workingContextError}
+        workingContextTenantId={workingContextTenantId}
       />
       {showDialog && <LogoutDialog onSelect={handleOnSubmit} onCancel={handleOnCancel} onDismiss={handleOnCancel}></LogoutDialog>}
       {!CITIZEN

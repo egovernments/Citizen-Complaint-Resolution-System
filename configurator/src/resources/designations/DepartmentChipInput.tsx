@@ -4,6 +4,7 @@ import { useGetList, useInput } from 'ra-core';
 import { ChevronDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 export interface DepartmentChipInputProps {
   source?: string;
@@ -60,7 +61,10 @@ export function DepartmentChipInput({
 
   const options = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (data ?? [])
+    // One entry per department code — the chips this writes are codes, so a
+    // repeated code renders an option that does nothing on the second click
+    // (it is already selected) and reads as duplicated master data (#1923).
+    return uniqueBy(data, (d) => d.code ?? String(d.id))
       .filter((d) => {
         const code = d.code ?? String(d.id);
         return !selectedSet.has(code);

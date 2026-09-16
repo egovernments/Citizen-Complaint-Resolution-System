@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dashboards
+description: >-
+  Grafana dashboards vendored in-repo as labelled ConfigMaps (#1650). Replaces
+  fetching them from GitHub master at pod start, which was neither reproducible
+  nor reviewable, and pulled three boards from an account outside this org.
+type: application
+version: 0.1.0
+appVersion: "1.0"

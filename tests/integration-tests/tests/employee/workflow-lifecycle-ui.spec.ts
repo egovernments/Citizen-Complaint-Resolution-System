@@ -116,6 +116,23 @@ test.describe('employee PGR lifecycle through the Take-Action UI', () => {
     const empInput = page.locator('.digit-dropdown-employee-select-wrap input[type="text"]').first();
     await empInput.click();
     await page.waitForTimeout(800);
+    // NOTE (2026-08-10): this currently fails on a tenant that has any DEACTIVATED
+    // employee, and the failure is an APP DEFECT, not a test bug — left red on
+    // purpose so it keeps reporting.
+    //
+    // admin/employees "5. deactivate" leaves PW_* employees with
+    // eg_hrms_employee.active=false AND eg_user.active=false. The Take-Action
+    // ASSIGN dropdown still OFFERS them; picking one makes PGR reject the assign:
+    //     400 INVALID UUID "User not found for uuid: b8981ea2-..."
+    //     (= PW_D645324A_EMPROLE, inactive in both tables)
+    // so the complaint stays PENDINGFORASSIGNMENT and this poll times out.
+    // The dropdown must exclude inactive employees. Any real operator hits this
+    // the moment their tenant has ever deactivated staff.
+    //
+    // Deliberately NOT worked around here: employee display names are encrypted
+    // at rest (eg_user.name is ciphertext), so the test cannot filter options by
+    // text without decrypting, and picking "some other option" would hide a
+    // defect that affects real users.
     const empOption = page.locator('.main-option').first();
     if (await empOption.count()) await empOption.click();
     else { await empInput.press('ArrowDown'); await empInput.press('Enter'); }

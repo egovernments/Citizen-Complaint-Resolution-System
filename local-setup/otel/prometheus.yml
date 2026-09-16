@@ -16,3 +16,48 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets: ['node-exporter:9100']
+
+  # Database metrics (#1615) from postgres_exporter, added by the same
+  # docker-compose.monitoring.yml overlay as node-exporter. Feeds the
+  # "PostgreSQL Database" Grafana dashboard.
+  #
+  # It connects to postgres-db (the database), NOT the `postgres` alias, which
+  # is PgBouncer — see the comment on the service definition. Connection-pool
+  # saturation is the metric this exists for, and the pooler's own view of it
+  # would be the wrong answer.
+  #
+  # The job is named after the exporter, not `postgres`, for the same reason:
+  # `postgres` is the pooler's alias in this stack, so a job by that name would
+  # re-introduce exactly the ambiguity the comment above warns about for anyone
+  # filtering by job= in Prometheus or Grafana later.
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+  # Broker metrics (#1623). Redpanda serves Prometheus metrics natively from
+  # its admin API — no exporter container needed. `/public_metrics` is the
+  # curated set; the internal `/metrics` carries far higher cardinality, which
+  # matters on a memory-tight box (#1612).
+  #
+  # The admin API is NOT named in redpanda's compose command, so this relies on
+  # its default listener 0.0.0.0:9644. Fail-safe either way: if it is not
+  # listening, this target simply reports down and the broker is unaffected.
+  # Confirm on a live box with:
+  #   docker exec redpanda curl -s localhost:9644/public_metrics | head
+  #
+  # Why this matters beyond dashboards: egov-persister CONSUMES from here to
+  # write complaints. If it stalls, the API still returns 200 and Gatus stays
+  # green while complaints are never persisted — invisible without these.
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ['redpanda:9644']
+
+  # Gateway metrics (#1614) from Kong's bundled prometheus plugin, enabled
+  # globally in kong/kong.yml. Served on Kong's STATUS listener (8100), not
+  # the proxy or admin port — same port Gatus health-checks at /status.
+  # Gives per-route request counts, status codes and latency: the only view
+  # we have of what citizens actually experience, since every request
+  # crosses Kong.
+  - job_name: kong
+    static_configs:
+      - targets: ['kong:8100']

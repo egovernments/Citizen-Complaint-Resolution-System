@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useGetList } from 'ra-core';
 import {
   Select,
@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { uniqueBy } from '@/lib/uniqueBy';
 
 export interface ReferenceSelectProps {
   /** The react-admin resource to fetch choices from (e.g. 'departments', 'roles') */
@@ -40,6 +41,8 @@ export function ReferenceSelect({
     pagination: { page: 1, perPage: 200 },
     sort: { field: displayField, order: 'ASC' },
   });
+
+  const options = useMemo(() => uniqueBy(data, (record) => String(record.id)), [data]);
 
   const handleValueChange = async (newValue: string) => {
     if (newValue === value) {
@@ -88,7 +91,7 @@ export function ReferenceSelect({
         <SelectValue placeholder="Select..." />
       </SelectTrigger>
       <SelectContent>
-        {data?.map((record) => {
+        {options.map((record) => {
           const id = String(record.id);
           const label = String((record as Record<string, unknown>)[displayField] ?? id);
           return (

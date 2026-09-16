@@ -5,6 +5,7 @@ import { parseDepartmentExcel } from '@/utils/excelParser';
 import { mdmsService } from '@/api';
 import type { DepartmentExcelRow, Department } from '@/api/types';
 import { useApp } from '../../App';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 type DepartmentBulkRow = DepartmentExcelRow & BulkRow;
 
@@ -43,6 +44,7 @@ function buildTemplate(tenant: string): Blob {
 
 export function DepartmentBulkImport() {
   const { state } = useApp();
+  const { canEditResource } = useMastersCapability();
   const tenantId = state.tenant;
 
   const [existing, setExisting] = useState<Department[]>([]);
@@ -121,6 +123,7 @@ export function DepartmentBulkImport() {
       columns={columns}
       createOne={createOne}
       entityLabel={{ singular: 'department', plural: 'departments' }}
+      canImport={canEditResource('departments')}
     />
   );
 }

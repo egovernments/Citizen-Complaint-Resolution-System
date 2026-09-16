@@ -64,20 +64,65 @@ No HTTP, no UI — pure regex assertion. Pairs with the legacy-pattern test belo
     expect(PATTERN.test('999999999999')).toBe(false);
   });
 
-  test('the legacy Indian pattern would have rejected this tenant\'s valid postal code', {
+  test('postal validation is driven by the tenant\'s own configured rule, not the legacy Indian PIN pattern', {
     annotation: {
       type: 'description',
-      description: `Documents WHY the old pattern was wrong outside India: the legacy Indian rule /^[1-9][0-9]{5}$/i (exactly 6 digits, can't start with 0) rejects this deployment's known-valid postal sample (POSTAL_CODE_VALID — "00100" starts with 0, "0101-03" has a hyphen). Justifies migrating away from the Indian PIN format to the tenant-pinned pattern in the sibling test.
+      description: `Pins the #478 migration away from the hardcoded Indian PIN rule /^[1-9][0-9]{5}$/i, on ANY deployment — including one that legitimately uses the Indian format. Two branches, chosen from the deployment's own data:
 
 Steps:
-1. Define LEGACY = /^[1-9][0-9]{5}$/i.
-2. Assert LEGACY.test(POSTAL_CODE_VALID) === false.
+1. Assert the tenant's own pattern accepts its own known-valid sample (precondition).
+2. If the legacy Indian rule REJECTS that sample (non-India: "00100" starts with 0, "0101-03" has a hyphen) — assert exactly that. The two rules disagree, so the migration is observably load-bearing here.
+3. Else the tenant genuinely runs the Indian 6-digit shape, and no input can distinguish the two rules. Assert PROVENANCE instead: profile.postal.pattern equals the discovered pattern AND configuredExplicitly is true — i.e. the rule is a per-tenant configuration decision, not a built-in fallback.
 
-Pins the rationale in code so a future "standardize the regex" PR can't silently regress to the Indian form.`,
+Branch 3 is what makes this non-vacuous on an Indian tenant: if a future PR drops corePostalConfigs.postalCodePattern (or re-hardcodes the Indian rule as the app default), the resolver falls back to the SPA's 5-digit default, configuredExplicitly goes false, and this goes red.`,
     },
     tag: ['@area:pgr', '@ccrs:478', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:citizen'] }, () => {
     const LEGACY = /^[1-9][0-9]{5}$/i;
-    expect(LEGACY.test(POSTAL_CODE_VALID)).toBe(false);
+    const TENANT_RULE = new RegExp(POSTAL_CODE_PATTERN);
+
+    // Precondition on every deployment: the tenant's own rule accepts the
+    // tenant's own sample. Everything below reads on top of this.
+    expect(
+      TENANT_RULE.test(POSTAL_CODE_VALID),
+      `this deployment's own pattern ${POSTAL_CODE_PATTERN} must accept its own sample ${POSTAL_CODE_VALID}`,
+    ).toBe(true);
+
+    if (!LEGACY.test(POSTAL_CODE_VALID)) {
+      // Non-India shape — the original point of this test. The legacy rule and
+      // the tenant rule DISAGREE on this deployment's own valid postcode, so
+      // shipping the legacy rule would have locked these citizens out of the
+      // form entirely.
+      expect(
+        LEGACY.test(POSTAL_CODE_VALID),
+        `the legacy Indian rule must reject ${POSTAL_CODE_VALID} — that disagreement is why #478 migrated off it`,
+      ).toBe(false);
+      return;
+    }
+
+    // India-shaped deployment (the `pg` playground tenant is Punjab —
+    // 143001..143010). Here the tenant rule and the legacy rule accept exactly
+    // the same set of strings, so NO input can tell them apart and the old
+    // assertion ("legacy would have rejected it") was simply false — it used to
+    // self-skip for that reason, which left the #478 guarantee untested on the
+    // one deployment shape where the two rules coincide.
+    //
+    // What is still falsifiable, and is the regression that actually matters, is
+    // PROVENANCE: the effective rule has to come from this tenant's own
+    // configuration so that changing the config changes validation. Asserted
+    // against the profile because it mirrors the SPA's resolution order
+    // (utils/postalCode.js): MDMS common-masters.FormValidations row first, then
+    // globalConfigs, then the built-in 5-digit default. The sibling test below
+    // does the independent live re-read; this one asserts that a rule was
+    // *chosen* at all.
+    const profile = getProfile();
+    expect(
+      profile.postal.pattern,
+      'the discovered pattern must be the one this run validates against',
+    ).toBe(POSTAL_CODE_PATTERN);
+    expect(
+      profile.postal.configuredExplicitly,
+      'the Indian 6-digit rule must be an explicit per-tenant configuration, not the app falling back to a hardcoded default',
+    ).toBe(true);
   });
 
   test('the discovered postal pattern is self-consistent with the deployment\'s own globalConfigs', {

@@ -5,10 +5,16 @@ serviceMaps:
     description: Persists pgr service request in tables
     fromTopic: save-pgr-request
     isTransaction: true
+    isAuditEnabled: true
+    module: CMS
+    objecIdJsonPath: $.id
+    tenantIdJsonPath: $.tenantId
+    transactionCodeJsonPath: $.serviceRequestId
+    auditAttributeBasePath: $.service
     queryMaps:
 
     - query: INSERT INTO eg_pgr_service_v2(id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, extended_attributes, applicationstatus, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      basePath: service
+      basePath: $.service
       jsonMaps:
       - jsonPath: $.service.id
 
@@ -43,7 +49,7 @@ serviceMaps:
       - jsonPath: $.service.auditDetails.lastModifiedTime
 
     - query: INSERT INTO eg_pgr_address_v2(id, tenantid, parentid, doorno, plotno, buildingname, street, landmark, city, pincode, locality, district, region, state, country, latitude, longitude, additionaldetails, createdby, createdtime, lastmodifiedby, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      basePath: service.address
+      basePath: $.service.address
       jsonMaps:
       - jsonPath: $.service.address.id
 
@@ -92,7 +98,7 @@ serviceMaps:
       - jsonPath: $.service.auditDetails.lastModifiedTime
 
     - query: INSERT INTO eg_pgr_document_v2(id, document_type, filestore_id, document_uid, service_id, additional_details, created_by, last_modified_by, created_time, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      basePath: service.documents.*
+      basePath: $.service.documents.*
       jsonMaps:
       - jsonPath: $.service.documents.*.id
 
@@ -117,14 +123,21 @@ serviceMaps:
       - jsonPath: $.service.auditDetails.lastModifiedTime
 
 
+
   - version: 1.0
     description: Updates pgr service request in tables
     fromTopic: update-pgr-request
     isTransaction: true
+    isAuditEnabled: true
+    module: CMS
+    objecIdJsonPath: $.id
+    tenantIdJsonPath: $.tenantId
+    transactionCodeJsonPath: $.serviceRequestId
+    auditAttributeBasePath: $.service
     queryMaps:
 
     - query: UPDATE eg_pgr_service_v2 SET servicecode=?, rating = ?,servicerequestid=?, description=?, accountid=?, additionaldetails=?, extended_attributes=?, applicationstatus=?, lastmodifiedby=?, lastmodifiedtime=? WHERE id=?;
-      basePath: service
+      basePath: $.service
       jsonMaps:
       - jsonPath: $.service.serviceCode
 
@@ -154,9 +167,8 @@ serviceMaps:
 
 
     - query: UPDATE eg_pgr_address_v2 SET doorno=?, plotno=?, buildingname=?, street=?, landmark=?, city=?, pincode=?, locality=?, district=?, region=?, state=?, country=?, latitude=?, longitude=?,additionaldetails=?, lastmodifiedby=?, lastmodifiedtime=? WHERE id=?;
-      basePath: service.address
+      basePath: $.service.address
       jsonMaps:
-
       - jsonPath: $.service.address.doorNo
 
       - jsonPath: $.service.address.plotNo

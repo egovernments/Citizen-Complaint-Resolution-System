@@ -33,7 +33,6 @@ service:
 env:
   MCP_TRANSPORT: http
   MCP_PORT: "3000"
-  # Deployment targeting (from develop — matches the ccrs-prod configmap).
   CRS_ENVIRONMENT: "self-hosted"
   CRS_TENANT_ID: "pg"
   # DIGIT API base the shim proxies to (in-cluster gateway service).

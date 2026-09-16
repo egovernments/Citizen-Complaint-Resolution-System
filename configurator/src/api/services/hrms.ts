@@ -165,7 +165,7 @@ export const hrmsService = {
     mobileNumber: string;
     emailId?: string;
     gender?: string;
-    dob: number;
+    dob?: number;
     department: string;
     designation: string;
     roles: Role[];
@@ -209,9 +209,14 @@ export const hrmsService = {
     });
     // Every assignment's fromDate must be >= dateOfAppointment — anchor it
     // to the earliest historical window so HRMS doesn't reject either edge.
-    const dateOfAppointment = deptList.length > 1
+    // When the caller supplies no DOA we send none (egovernments/CCRS#1949):
+    // the field is optional in egov-hrms, and defaulting to `now` both invented
+    // a date nobody entered and imposed a today-or-later floor on assignment
+    // fromDates. `primaryFrom` still falls back to `now` because assignment
+    // fromDate itself is non-nullable in the HRMS DTO.
+    const dateOfAppointment = data.dateOfAppointment && deptList.length > 1
       ? primaryFrom - (deptList.length + 1) * dayMs
-      : (data.dateOfAppointment || now);
+      : data.dateOfAppointment;
 
     const user: EmployeeUser = {
       userName: data.userName.toLowerCase(),

@@ -76,18 +76,31 @@ test("public pack and query never read or send stored employee credentials", asy
   const calls = [];
   const observed = installBrowser(async (url, init) => {
     calls.push({ url, init, body: JSON.parse(init.body) });
-    return response({ json: url.endsWith("/packs") ? { tiles: [] } : { results: {} } });
+    return response({ json: url.endsWith("/_query") || url.endsWith("/_options") ? { results: {} } : { tiles: [] } });
   });
   delete require.cache[require.resolve(OUT)];
-  const { fetchPublicPack, runPublicKpiBatch } = require(OUT);
+  const { fetchPublicPack, fetchPublicCatalog, fetchPublicFilterOptions, runPublicKpiBatch } = require(OUT);
 
   await fetchPublicPack("ke");
-  await runPublicKpiBatch({ created: { kpiId: "created" } }, "ke");
+  await fetchPublicCatalog("ke");
+  await fetchPublicFilterOptions("ke");
+  await runPublicKpiBatch(
+    { created: { kpiId: "created", params: { ward: "W1", dateFrom: "2026-07-01", dateTo: "2026-07-31" } } },
+    "ke"
+  );
 
   assert.deepEqual(calls.map((call) => call.url), [
     "/pgr-services/v2/analytics/public/packs",
+    "/pgr-services/v2/analytics/public/catalog/_search",
+    "/pgr-services/v2/analytics/public/_options",
     "/pgr-services/v2/analytics/public/_query",
   ]);
+  // The filter params ride the anonymous transport untouched (#1797) — the
+  // backend's allow-list, not this layer, decides what is acceptable.
+  assert.deepEqual(calls[3].body.queries.created.params,
+    { ward: "W1", dateFrom: "2026-07-01", dateTo: "2026-07-31" });
+  // The options endpoint takes nothing but the tenant.
+  assert.deepEqual(Object.keys(calls[2].body).sort(), ["RequestInfo", "tenantId"]);
   for (const call of calls) {
     assert.equal(call.init.credentials, "omit");
     assert.equal(call.body.RequestInfo.authToken, undefined);

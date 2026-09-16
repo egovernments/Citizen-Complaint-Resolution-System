@@ -17,7 +17,9 @@ spec:
     spec:
       containers:
         - name: mdms-backend
-          image: localhost:5000/egovio/mdms-v2:v2.9.2-4a60f20
+          # PARITY: matches local-setup/docker-compose*.yaml + the Helm chart (issue #953 —
+          # v2.9.2 500s on configurator writes; this tag adds POST /v2/_count).
+          image: localhost:5000/egovio/mdms-v2:mdms-count-api-3ac4f8e
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8094

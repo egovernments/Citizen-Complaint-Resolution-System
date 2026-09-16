@@ -4,9 +4,12 @@ export const PUBLIC_DASHBOARD_PATH = '/digit-ui/public-dashboard';
 
 export interface DashboardConfigData extends Record<string, unknown> {
   id: string;
-  allowedRoles: string[];
   publicDashboardEnabled?: boolean;
+  /** IANA zone, e.g. "Africa/Nairobi". Absent/invalid falls back to Africa/Nairobi server-side. */
+  timeZone?: string;
 }
+
+export const DEFAULT_DASHBOARD_TIME_ZONE = 'Africa/Nairobi';
 
 /** The same deterministic record rule used by pgr-services and digit-ui. */
 export function selectOwnedDashboardConfig(

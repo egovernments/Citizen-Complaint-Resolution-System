@@ -621,13 +621,14 @@ function refreshSession() {
  */
 export async function authFetch(
   url,
-  { buildBody, method = "POST", headers, sessionCritical = true } = {}
+  { buildBody, method = "POST", headers, sessionCritical = true, signal } = {}
 ) {
   const send = () =>
     fetch(url, {
       method,
       headers: { "Content-Type": "application/json", ...headers },
       credentials: "omit",
+      signal,
       body: buildBody ? JSON.stringify(buildBody()) : undefined,
     });
 

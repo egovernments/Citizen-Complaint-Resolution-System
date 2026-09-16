@@ -124,27 +124,7 @@ describe('DigitApiClient.boundaryHierarchySearch pagination', () => {
   });
 });
 
-describe('DigitApiClient.mdmsSearchAll pagination', () => {
-  it('walks offset until a short page', async () => {
-    const client = new DigitApiClient({ url: 'https://test.example.com' });
-    const rows = Array.from({ length: 250 }, (_, i) => ({
-      id: `id-${i}`,
-      tenantId: 'ke',
-      schemaCode: 'common-masters.Department',
-      uniqueIdentifier: `DEPT_${i}`,
-      data: { code: `DEPT_${i}` },
-      isActive: true,
-    }));
-    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
-      async (_path: unknown, body: Record<string, unknown>) => {
-        const criteria = body.MdmsCriteria as { offset: number; limit: number };
-        return { mdms: rows.slice(criteria.offset, criteria.offset + criteria.limit) };
-      };
-
-    const result = await client.mdmsSearchAll('ke', 'common-masters.Department', { isActive: true });
-    assert.equal(result.length, 250);
-  });
-
+describe('DigitApiClient paged-search guard', () => {
   it('throws rather than returning a truncated total when the page guard is hit', async () => {
     const client = new DigitApiClient({ url: 'https://test.example.com' });
     let calls = 0;
@@ -152,16 +132,14 @@ describe('DigitApiClient.mdmsSearchAll pagination', () => {
       async () => {
         calls += 1;
         return {
-          mdms: Array.from({ length: DigitApiClient.SEARCH_PAGE_SIZE }, (_, i) => ({
-            id: `id-${calls}-${i}`,
-            uniqueIdentifier: `ROW_${calls}_${i}`,
-            isActive: true,
+          BoundaryHierarchy: Array.from({ length: DigitApiClient.SEARCH_PAGE_SIZE }, (_, i) => ({
+            hierarchyType: `TYPE_${calls}_${i}`,
           })),
         };
       };
 
     await assert.rejects(
-      () => client.mdmsSearchAll('ke', 'common-masters.Department'),
+      () => client.boundaryHierarchySearch('ke'),
       /truncated after 200 pages/,
     );
     assert.equal(calls, DigitApiClient.SEARCH_MAX_PAGES);

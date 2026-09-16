@@ -21,6 +21,23 @@ vi.mock('../../App', async (importOriginal) => {
   return { ...actual, useApp: () => ({ state: { tenant: 'pg' } }) };
 });
 
+// Masters capability gating (docs/design/masters-configurator-access-policy-design.md)
+// denies edit by default until the access policy is fetched, and DigitCreate
+// hides its save action while denied. That policy has its own tests
+// (hooks/useMastersCapability.test.tsx); here it would just mean no Create
+// button to click, so grant edit and keep this test about the dispatch.
+vi.mock('@/hooks/useMastersCapability', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMastersCapability')>();
+  return {
+    ...actual,
+    useMastersCapability: () => ({
+      roles: [],
+      canViewResource: () => true,
+      canEditResource: () => true,
+    }),
+  };
+});
+
 function makeDataProvider(): DataProvider {
   return {
     getList: async () => ({ data: [], total: 0 }),

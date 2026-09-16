@@ -6,7 +6,7 @@ import tempfile
 
 import pandas as pd
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "jupyter", "dataloader")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dataloader")))
 
 from unified_loader import APIUploader
 

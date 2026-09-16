@@ -6,7 +6,13 @@ on:
     paths:
       - 'local-setup/**'
   pull_request:
-    branches: [main, master, develop]
+    # `monitoring-fix` is a temporary integration branch collecting the
+    # monitoring work before it goes to master as one change. Without it here
+    # this workflow does NOT run on those PRs — a branch filter is a silent
+    # skip, not a failure, so retargeting them dropped `Config combination +
+    # infra contracts`, `test` and `Ansible static validation` while the PRs
+    # merely looked cleaner. Remove this entry once the branch is merged.
+    branches: [main, master, develop, monitoring-fix]
     paths:
       - 'local-setup/**'
   workflow_dispatch:
@@ -146,7 +152,7 @@ jobs:
 
           # Verify telemetry.py has browser-like UA
           echo -n "  telemetry.py user-agent ... "
-          if grep -q 'Mozilla' jupyter/dataloader/telemetry.py; then
+          if grep -q 'Mozilla' dataloader/telemetry.py; then
             echo "OK"
           else
             echo "FAIL (browser-like user-agent missing)"
@@ -188,15 +194,20 @@ jobs:
       - name: Wait for all containers healthy
         run: |
           echo "Waiting for all containers to be healthy (up to 15 minutes)..."
-          # Skip containers not required for API tests
-          SKIP_REGEX="digit-ui|digit-telemetry"
+          # Skip containers not required for API tests. egov-accesscontrol is deliberately
+          # excluded too: its pinned/local images are minimal/distroless with no shell and no
+          # wget/curl, so it can never satisfy a Docker healthcheck (see the "No healthcheck"
+          # comment on that service in docker-compose.egov-digit.yaml) — some docker/compose CLI
+          # versions report its healthcheck-less container as a non-"", non-"healthy" Health
+          # value instead of "", which otherwise wedges this loop for the full 15-minute timeout.
+          SKIP_REGEX="digit-ui|digit-telemetry|egov-accesscontrol"
           # Wait for all services to report healthy via Docker
           timeout 900 bash -c '
             while true; do
-              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" || true)
+              UNHEALTHY_NAMES=$(docker compose ps --format json | jq -r "select(.Health != \"healthy\" and .Health != \"\" and .State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry|egov-accesscontrol" || true)
               UNHEALTHY=$(echo "$UNHEALTHY_NAMES" | grep -c . || true)
-              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry" | wc -l)
-              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui, digit-telemetry)"
+              TOTAL=$(docker compose ps --format json | jq -r "select(.State == \"running\") | .Name" | grep -vE "digit-ui|digit-telemetry|egov-accesscontrol" | wc -l)
+              echo "Healthy containers: $((TOTAL - UNHEALTHY))/$TOTAL (skipping digit-ui, digit-telemetry, egov-accesscontrol)"
               if [ "$UNHEALTHY" -gt 0 ]; then
                 echo "  Waiting on: $UNHEALTHY_NAMES" | tr "\n" " "
                 echo ""

@@ -1,0 +1,61 @@
+{{- $p := trimSuffix "/" .Values.ingress.path -}}
+# nginx sub_filter proxy that lets Gatus be served under a sub-PATH ({{ $p }})
+# on the main domain instead of its own sub-domain. Gatus's SPA loads its
+# assets and calls its API from ABSOLUTE paths (/js, /css, /api/v1), so a plain
+# rewrite is not enough -- the HTML and the minified app.js must be rewritten to
+# prepend the prefix. This is the SAME recipe the ansible/compose tier uses
+# (local-setup/ansible/templates/nginx-site.conf.j2), verified against the
+# pinned Gatus v5.36.0 build (the `s.p="/"` / `("/"),routes:` / `/api/v1/`
+# markers all still match). Running it as a sidecar keeps the rewrite inside
+# this release, so the shared ingress-nginx controller does not need
+# `allow-snippet-annotations` turned on (it is deliberately off here).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatus-status-proxy
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: gatus
+data:
+  default.conf: |
+    server {
+      listen {{ .Values.proxyPort | default 8081 }};
+      server_name _;
+
+      # Sidecar's own health endpoint (probed by the kubelet, not proxied).
+      location = /healthz { return 200 "ok\n"; }
+
+      # No trailing slash -> send the browser to the canonical {{ $p }}/ form,
+      # which is the only location block that matches.
+      location = {{ $p }} { return 301 {{ $p }}/; }
+
+      location {{ $p }}/ {
+        # Trailing slash strips the {{ $p }}/ prefix before it reaches Gatus.
+        proxy_pass http://127.0.0.1:{{ .Values.gatusPort | default 8080 }}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # sub_filter cannot rewrite a gzipped body -- force identity encoding.
+        proxy_set_header Accept-Encoding "";
+        sub_filter_once off;
+        sub_filter_types text/html application/javascript text/javascript application/json;
+
+        # Static assets referenced absolutely in index.html.
+        sub_filter 'src="/js/'               'src="{{ $p }}/js/';
+        sub_filter 'href="/css/'             'href="{{ $p }}/css/';
+        sub_filter 'href="/favicon'          'href="{{ $p }}/favicon';
+        sub_filter 'href="/apple-touch-icon' 'href="{{ $p }}/apple-touch-icon';
+        sub_filter 'href="/manifest.json'    'href="{{ $p }}/manifest.json';
+
+        # API calls the SPA makes at runtime (three quoting styles in app.js).
+        sub_filter '"/api/v1/'   '"{{ $p }}/api/v1/';
+        sub_filter "'/api/v1/"   "'{{ $p }}/api/v1/";
+        sub_filter "`/api/v1/"   "`{{ $p }}/api/v1/";
+
+        # Vue publicPath + router base baked into the minified bundle.
+        sub_filter 's.p="/"'       's.p="{{ $p }}/"';
+        sub_filter '("/"),routes:' '("{{ $p }}/"),routes:';
+      }
+    }

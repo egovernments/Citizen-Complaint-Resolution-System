@@ -23,6 +23,7 @@ import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import useReopenWindow from "../../hooks/pgr/useReopenWindow";
+import { hasUsableGeoLocation } from "../../utils/geoLocation";
 
 const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
 const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
@@ -353,7 +354,7 @@ const ComplaintDetailsPage = () => {
               ) : null}
             </Card>
 
-            {Number.isFinite(geoLocation?.latitude) && Number.isFinite(geoLocation?.longitude) ? (
+            {hasUsableGeoLocation(geoLocation) ? (
               <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
                 <SectionTitle>{t("CS_COMPLAINT_LOCATION")}</SectionTitle>
                 <ComplaintLocationMap

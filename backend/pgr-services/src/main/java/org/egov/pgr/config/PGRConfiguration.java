@@ -127,12 +127,39 @@ public class PGRConfiguration {
     @Value("${egov.mdms.search.endpoint}")
     private String mdmsEndPoint;
 
+    //Accesscontrol — Tier-2 PDP condition lookup, see org.egov.pgr.policy
+    @Value("${egov.accesscontrol.host}")
+    private String accessControlHost;
+
+    @Value("${egov.accesscontrol.actions.mdms.get.path}")
+    private String accessControlActionsMdmsGetPath;
+
+    // Explicit rollout gate for org.egov.pgr.policy.AccessPolicyRegistry#getCondition: false (the
+    // default) preserves today's backward-compatible behavior — a missing/invisible
+    // ACCESSCONTROL-ACTIONS-TEST entry for an action allows, same as before ABAC existed. A tenant
+    // only gets the ABAC-strict "missing action fails closed" behavior once it explicitly opts in
+    // here, after its policies are fully authored — never as a silent default that could brick an
+    // existing deployment's PGR search on the next redeploy.
+    @Value("${pgr.abac.strict-mode:false}")
+    private boolean abacStrictMode;
+
     //HRMS
     @Value("${egov.hrms.host}")
     private String hrmsHost;
 
     @Value("${egov.hrms.search.endpoint}")
     private String hrmsEndPoint;
+
+    // Display-only employee working-context classification. Deployments can map their own
+    // functional role codes to the three product-level contexts without a service code change.
+    @Value("#{'${pgr.employee.context.resolver-role-codes:PGR_LME,GRO,DGRO}'.split(',')}")
+    private List<String> employeeContextResolverRoleCodes;
+
+    @Value("#{'${pgr.employee.context.citizen-role-codes:CITIZEN}'.split(',')}")
+    private List<String> employeeContextCitizenRoleCodes;
+
+    @Value("#{'${pgr.employee.context.admin-role-codes:PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR}'.split(',')}")
+    private List<String> employeeContextAdminRoleCodes;
 
     //Notification
     @Value("${egov.user.event.notification.enabled}")
@@ -246,6 +273,9 @@ public class PGRConfiguration {
 
     @Value("${egov.boundary.search.url}")
     private String boundarySearchEndpoint;
+
+    @Value("${egov.boundary.relationship.search.url}")
+    private String boundaryRelationshipSearchEndpoint;
 
     @Value("${pgr.kafka.create.inbox.topic}")
     private String inboxCreateTopic;

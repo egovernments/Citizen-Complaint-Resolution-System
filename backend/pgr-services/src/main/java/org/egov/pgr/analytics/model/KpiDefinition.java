@@ -8,11 +8,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -23,7 +21,16 @@ public class KpiDefinition {
     private JsonNode query;
     private KpiViz viz;
     private List<KpiParam> params;
-    private KpiRbac rbac;
+
+    /**
+     * The action URL a caller must be granted to see this tile — the tile's only visibility gate
+     * since #1050. It replaces {@code rbac.visibleTo}: a role list here could disagree with the one
+     * in the pack and the one in the browser, and all three regularly did.
+     */
+    private String requiredActionUrl;
+
+    /** Opt-in to the anonymous public dashboard. Additive; never an employee grant. */
+    private boolean publicTile;
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -88,29 +95,12 @@ public class KpiDefinition {
         public void setDefaultVariant(boolean v) { this.defaultVariant = v; }
     }
 
-    @Data
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class KpiRbac {
-        private List<String> visibleTo = Collections.emptyList();
-    }
-
     public boolean isPublished() { return "published".equals(status); }
 
-    public boolean isVisibleTo(Set<String> callerRoles) {
-        java.util.List<String> vt = (rbac == null) ? null : rbac.getVisibleTo();
-        boolean isPublic = callerRoles != null && callerRoles.contains("PUBLIC");
-        if (isPublic) {
-            // Public-floor caller (unauthenticated): NOT covered by the "empty visibleTo => all"
-            // rule. It may see a tile ONLY if that tile explicitly opts into the PUBLIC audience.
-            return vt != null && vt.contains("PUBLIC");
-        }
-        // Authenticated caller: "PUBLIC" is an ADDITIVE audience marker, not a role ceiling — strip
-        // it before evaluating the role ceiling, so tagging a tile PUBLIC never narrows who (among
-        // authenticated roles) can see it. An empty remaining ceiling = visible to all authed roles.
-        if (vt == null) return true;
-        java.util.List<String> roleCeiling = vt.stream()
-                .filter(role -> !"PUBLIC".equals(role)).collect(java.util.stream.Collectors.toList());
-        if (roleCeiling.isEmpty()) return true;
-        return roleCeiling.stream().anyMatch(callerRoles::contains);
-    }
+    @JsonProperty("public")
+    public boolean isPublicTile() { return publicTile; }
+
+    @JsonProperty("public")
+    public void setPublicTile(boolean publicTile) { this.publicTile = publicTile; }
+
 }

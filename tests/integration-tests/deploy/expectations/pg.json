@@ -1,0 +1,25 @@
+{
+  "name": "pg-playground",
+  "_comment": [
+    "What the local `pg` (playground) deployment SHOULD have. The profile discovers what it DOES have; this file decides whether a gap is a bug (required -> FAIL) or legitimately N/A (absent -> SKIP).",
+    "pg is FLAT for testing: the PGR businessService and all complaint types live at the ROOT `pg`. pg.citya/citest/cityb/cityc exist as tenant rows but carry no PGR config."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "required",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "required",
+    "locales.multi": "absent",
+    "tenant.citySubTenant": "absent"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "Required: the shipped PgrWorkflowConfig wires ESCALATE, so #521 must actually run here rather than self-skip. This PR closes the gap \u2014 full-dump.sql now seeds the ESCALATE actions on the pg businessService, so the capability is present and the test runs for real.",
+    "mdms.rejectionReasons": "Required, same call as bomet. full-dump.sql now seeds the RAINMAKER-PGR.RejectionReasons schema plus five reason rows at pg; keeping this 'required' means a future dump that drops them goes red instead of silently self-skipping.",
+    "personas.gro-with-department": "Required: an ASSIGN-capable employee is the difference between the suite running and hard-failing at profile-setup.",
+    "personas.ward-scoped-csr": "Required as of the PGWCSR4 seed: the dump ships a fourth employee carrying the CSR role AND a jurisdiction BELOW the hierarchy root (ADMIN/Locality/SUN01_LOCALITY), which is what isWardScopedCsr() checks. It was 'absent' only because PGGRO1/PGLME2/PGLME3 all sit at PG_STATE (the root level) and the sole sub-root employee was a suite leftover with no CSR role. Scoped to a LOCALITY rather than the Zone it first used: pg's ADMIN tree is State > City > Zone > Block > Locality with exactly ONE Zone (PG_CITYA_Z1), so a zone-scoped CSR has no sibling at its own level and boundary-jurisdiction-496 failed its own precondition ('nothing to exercise the jurisdiction filter against') before reaching the assertion it exists for. SUN01_LOCALITY has two seeded siblings (SUN02/SUN03) under the same Block, so the forbidden set is non-empty; it is also the deepest level, which is what 'ward-scoped' is meant to say. Preferred over seeding a second Zone, which would need new boundary + relationship + localization rows AND a Block/Locality subtree under it — a childless Zone dead-ends the City > Zone > Block > Locality cascade in the citizen file-complaint wizard and configurator complaint-create. Kept 'required' deliberately so the capability cannot silently regress to a skip if that seed row is ever dropped.",
+    "locales.multi": "Absent: the dump seeds en_IN only.",
+    "tenant.citySubTenant": "Absent: pg is targeted flat \u2014 the pg.* city rows carry no PGR config."
+  }
+}

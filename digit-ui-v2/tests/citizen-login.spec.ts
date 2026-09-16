@@ -2,12 +2,8 @@
  * Citizen UI end-to-end:
  *   1. Visit /citizen/ → redirected to /citizen/login.
  *   2. Enter a Kenya-format mobile + the fixed OTP `123456`.
- *   3. Land on /citizen/dashboard, see the "Citizen Dashboard" sidebar item
- *      active, see the same PGR Dashboard the configurator renders at
- *      /configurator/manage/pgr-dashboard (KPI tiles, trend chart, tenant
- *      breakdown tabs).
- *   4. Confirm /pgr-services/v2/dashboard was hit by the page (the source
- *      of truth for the data — same endpoint the operator dashboard uses).
+ *   3. Land on /citizen/complaints. The legacy PGR dashboard and its API are
+ *      not reachable from the default-off UI contract.
  *
  * The mobile is generated fresh per run so the citizen-create path runs
  * (idempotent: register endpoint returns the token directly).
@@ -23,11 +19,10 @@ function freshMobile() {
 }
 
 test.describe('citizen ui', () => {
-  test('login + real PGR dashboard render end-to-end', async ({ page }) => {
+  test('login lands on complaints with the legacy dashboard hidden', async ({ page }) => {
     const mobile = freshMobile();
 
-    // Record every dashboard-API call the page makes; we expect at least one
-    // to /pgr-services/v2/dashboard.
+    // A default-off build must not fetch the legacy endpoint during login.
     const dashboardCalls: string[] = [];
     page.on('request', (req) => {
       if (req.url().includes('/pgr-services/v2/dashboard')) {
@@ -49,35 +44,15 @@ test.describe('citizen ui', () => {
     await page.getByLabel('One-time code').fill('123456');
     await page.getByRole('button', { name: /^Sign in$/i }).click();
 
-    // ── 4. Dashboard rendered (the same one the configurator uses) ──
-    await expect(page).toHaveURL(/\/citizen\/dashboard$/, { timeout: 15_000 });
+    // ── 4. Supported landing + hidden legacy entry ─────────────────
+    await expect(page).toHaveURL(/\/citizen\/complaints$/, { timeout: 15_000 });
+    await expect(page.getByRole('link', { name: 'Citizen Dashboard' })).toHaveCount(0);
+    expect(dashboardCalls).toHaveLength(0);
 
-    // Sidebar entry (citizen layout) is the only nav surface
-    const sidebarLink = page.getByRole('link', { name: 'Citizen Dashboard' });
-    await expect(sidebarLink).toBeVisible();
-    await expect(sidebarLink).toHaveAttribute('href', '/citizen/dashboard');
-
-    // The dashboard page H1 is "PGR Dashboard" (lifted verbatim from
-    // digit-configurator's PgrDashboard.tsx). Wait up to 20s for data to
-    // arrive — the first call after a container restart can be cold.
-    await expect(page.getByRole('heading', { name: 'PGR Dashboard' })).toBeVisible({
-      timeout: 20_000,
-    });
-
-    // Tab bar (boundary / department / type / channel) renders only after
-    // stats hydrate successfully. Confirms the API call succeeded AND
-    // returned non-empty data.
-    await expect(page.getByRole('tab', { name: 'Boundary' })).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByRole('tab', { name: 'Department' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Complaint Type' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Channel' })).toBeVisible();
-
-    // ── 5. The dashboard's data came from the real PGR API ─────────
-    expect(dashboardCalls.length).toBeGreaterThan(0);
-    // The hook always passes tenantId; sanity-check at least one call did.
-    expect(dashboardCalls.some((u) => u.includes('tenantId='))).toBe(true);
+    // A remembered/deep legacy URL cannot bypass the flag.
+    await page.goto('/citizen/dashboard');
+    await expect(page).toHaveURL(/\/citizen\/complaints$/);
+    await expect(page.getByRole('heading', { name: 'PGR Dashboard' })).toHaveCount(0);
   });
 
   test('unauthenticated /dashboard redirects to /login', async ({ page }) => {
@@ -89,13 +64,13 @@ test.describe('citizen ui', () => {
   test('my complaints + raise + detail end-to-end', async ({ page }) => {
     const mobile = freshMobile();
 
-    // ── Sign in (same flow as the dashboard test) ─────────────────
+    // ── Sign in ───────────────────────────────────────────────────
     await page.goto('/citizen/');
     await page.getByLabel('Mobile number').fill(mobile);
     await page.getByRole('button', { name: /Send OTP/i }).click();
     await page.getByLabel('One-time code').fill('123456');
     await page.getByRole('button', { name: /^Sign in$/i }).click();
-    await expect(page).toHaveURL(/\/citizen\/dashboard$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/citizen\/complaints$/, { timeout: 15_000 });
 
     // ── Navigate to "My Complaints" via the sidebar ───────────────
     await page.getByRole('link', { name: 'My Complaints' }).click();
@@ -172,13 +147,13 @@ test.describe('citizen ui', () => {
   test('profile edit + persists across reload', async ({ page }) => {
     const mobile = freshMobile();
 
-    // Sign in (same flow as the dashboard test).
+    // Sign in.
     await page.goto('/citizen/');
     await page.getByLabel('Mobile number').fill(mobile);
     await page.getByRole('button', { name: /Send OTP/i }).click();
     await page.getByLabel('One-time code').fill('123456');
     await page.getByRole('button', { name: /^Sign in$/i }).click();
-    await expect(page).toHaveURL(/\/citizen\/dashboard$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/citizen\/complaints$/, { timeout: 15_000 });
 
     // Navigate via sidebar.
     await page.getByRole('link', { name: 'Profile' }).click();

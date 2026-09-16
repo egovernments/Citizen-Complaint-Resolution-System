@@ -53,3 +53,46 @@ Guarded and idempotent: it matches only the colour-keyed schema shape and the
 code-less legacy record, so a fresh box (correct schema, or none) and a re-run
 are no-ops. Dry-run-verified against a live box in a rollback transaction. Pairs
 with egovernments/CCRS#1162.
+
+## V20260827000000__uiconstants_recode_from_reopensla_key
+
+The same defect in `RAINMAKER-PGR.UIConstants`: it shipped with `x-unique:
+["REOPENSLA"]` while `REOPENSLA` was its **only** property, so the record's single
+value was also its primary key. mdms-v2 refuses to update a field listed in
+`x-unique`, so every attempt to change the reopen window — configurator,
+workbench or curl — came back `400 UNIQUE_KEY_UPDATE_ERR "Updating fields defined
+as unique is not allowed."`, leaving the window frozen at whatever the tenant was
+first seeded with. That is the "make it configurable" half of
+egovernments/CCRS#1252, reported unresolved on the issue.
+
+The migration, in one transaction:
+
+1. deactivates duplicate active records per tenant — preferring a `code`-bearing
+   row, then the most recently modified — so the re-key cannot collide on
+   `(tenantid, schemacode, uniqueidentifier)`. Ranking only the `code`-less rows
+   would leave a tenant that already has a `DEFAULT` record plus a stale
+   value-keyed one with **two** active records, the stale one invalid against the
+   schema installed below;
+2. re-keys the survivor to `code = "DEFAULT"` (and `uniqueidentifier = DEFAULT`),
+   **preserving** its configured `REOPENSLA`;
+3. rewrites the REOPENSLA-keyed schema **in place** to the code-keyed definition,
+   for every tenant that has it;
+4. registers the schema for any tenant that has UIConstants data but no schema
+   row;
+5. moves tenants still on the pre-#1252 seed (`432000000`, 5 days) to the shipped
+   72h default. Narrowly guarded to that exact value: until this migration the
+   field could not be edited at all, so a `432000000` in the wild is always a
+   leftover seed rather than an operator's choice. Every other value is left
+   alone.
+
+Step 5 is the only one that changes behaviour rather than just unblocking edits;
+drop it if a deployment would rather migrate windows by hand.
+
+Schema and data must move together — the schema is `additionalProperties: false`
+and now `required: ["code", "REOPENSLA"]`, so a record left without `code` would
+fail validation on the operator's next save. As above, **the embedded definition
+must stay identical to** `RAINMAKER-PGR.json`.
+
+Guarded and idempotent: it matches only the REOPENSLA-keyed schema shape and
+`code`-less records, so a box seeded from the corrected `full-dump.sql` and a
+re-run are both no-ops.

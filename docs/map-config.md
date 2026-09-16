@@ -135,6 +135,14 @@ singleton. See that directory's
 `README.md` for how to apply it, and keep its embedded definition in sync with
 the JSON schema file.
 
+## Background
+
+This document covers the *configuration surface*. For the technology underneath it
+— what OSM data is, where boundaries come from, the Overpass/Nominatim APIs and their
+usage policies, raster vs vector tiles, and how to self-host any of it — see
+[`docs/openstreetmap/`](openstreetmap/README.md). The `tileUrl`/`tileAttribution` pairing
+rule and the `bounded=1` geocoding trap are both explained there.
+
 ## Availability
 
 The digit-ui FE only reads the position/boundary/geocoding fields where this

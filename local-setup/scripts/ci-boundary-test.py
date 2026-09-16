@@ -32,7 +32,7 @@ import openpyxl
 
 # Add dataloader directory to path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATALOADER_DIR = os.path.join(SCRIPT_DIR, "..", "jupyter", "dataloader")
+DATALOADER_DIR = os.path.join(SCRIPT_DIR, "..", "dataloader")
 sys.path.insert(0, DATALOADER_DIR)
 
 from crs_loader import CRSLoader

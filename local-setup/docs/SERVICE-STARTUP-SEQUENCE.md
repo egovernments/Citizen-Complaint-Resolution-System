@@ -320,52 +320,58 @@ Seeds run in dependency order:
 4. `localization-seed` - UI messages
 5. `db-seed` - Final seed after all services ready
 
-## Jupyter Lab for PGR Configuration
+## Loading PGR configuration and master data
 
-### Starting Jupyter
+There is no container for this — the DataLoader is a Python library you run from the
+repo. (The Jupyter Lab service that used to host it as a notebook was removed in #1743;
+the library itself moved to `local-setup/dataloader/` and is unchanged.)
+
+### Running it
+
 ```bash
-# Via docker compose
-docker compose --profile tools up -d jupyter
+cd local-setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r dataloader/requirements.txt
 
-# Or via Tilt button
-# Click "Start Jupyter" in Tilt UI
+# One command, all phases, from a county spreadsheet:
+DIGIT_URL=http://localhost:18000 BOOT_TENANT=pg.mycity \
+INPUT_XLSX="data/Bomet county health common complains items - R.xlsx" \
+python3 scripts/ci-dataloader-xlsx.py
 ```
 
-Access Jupyter Lab at: **http://localhost:18888**
+`INPUT_XLSX` is your own county spreadsheet — the Bomet file above is the only
+one bundled, and there is no `county-data.xlsx` in the repo.
 
-### Available Notebooks
+For per-phase control, import `crs_loader` directly — see
+[ONBOARDING-AND-ADDONS.md § B](ONBOARDING-AND-ADDONS.md#b-python-dataloader-scripted).
 
-| Notebook | Purpose |
-|----------|---------|
-| `DataLoader_v2.ipynb` | Full CRS DataLoader with all phases |
-| `LocalSetup.ipynb` | Configure PGR on your local DIGIT setup |
-
-Both notebooks now come from the single source directory `jupyter/dataloader/`.
-
-### What Jupyter Can Do
+### What it does
 
 1. **Load tenant configuration** - Set up tenant branding and logos
 2. **Create boundaries** - Administrative divisions (districts, wards, localities)
 3. **Configure complaint types** - ServiceDefs for PGR
 4. **Create test employees** - Users who can handle complaints
 
-### Template Files
+### Template files
 
-Templates are in `jupyter/dataloader/templates/`:
+Templates are in `dataloader/templates/`:
 - `Tenant And Branding Master.xlsx` - Tenant configuration
 - `Boundary_Master.xlsx` - Administrative boundaries
 - `Common and Complaint Master.xlsx` - Departments, designations, complaint types
 
-### Environment Variables
+### Environment variables
 
-The Jupyter container has these pre-configured:
+The scripts read these; the defaults suit a local Compose stack:
 ```
-DIGIT_URL=http://kong:8000           # Kong gateway (internal)
-DIGIT_DIRECT_MDMS=http://egov-mdms-service:8094
-DIGIT_DIRECT_USER=http://egov-user:8107
-DIGIT_DIRECT_PGR=http://pgr-services:8080
-DIGIT_TENANT=pg
+DIGIT_URL=http://localhost:18000     # Kong gateway
+DIGIT_USERNAME=ADMIN
+DIGIT_PASSWORD=eGov@123
+ROOT_TENANT=pg                       # tenant you authenticate against
 ```
+The tenant being *created* is named per script, not by a shared variable:
+`ci-dataloader-xlsx.py` reads `BOOT_TENANT` (default `ke.bomet`) plus
+`INPUT_XLSX`, and `ci-dataloader.py` reads `TARGET_TENANT` (default
+`pg.citest`). There is no `DIGIT_TENANT` — nothing reads it.
 
 ## Gatus Health Monitoring Dashboard
 

@@ -21,7 +21,7 @@ IMAGES=(
   "twinproduction/gatus:latest"
 
   # Core Services
-  "egovio/mdms-v2:v2.9.2-4a60f20"
+  "egovio/mdms-v2:mdms-count-api-3ac4f8e"
   "egovio/egov-enc-service:v2.9.2-4a60f20"
   "egovio/egov-idgen:v2.9.2-4a60f20"
   "egovio/egov-user:master-fa75ba8"
@@ -36,7 +36,7 @@ IMAGES=(
   "egovio/egov-url-shortening:v2.9.2-4a60f20"
 
   # App Services
-  "egovio/pgr-services:multiarch-d448cb7"
+  "egovio/pgr-services:2.12-5137119"
   "egovio/digit-ui:dev-ff0db90"
 )
 

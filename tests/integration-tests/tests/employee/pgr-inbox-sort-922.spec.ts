@@ -41,7 +41,8 @@ import {
   EMPLOYEE_USER, EMPLOYEE_PASS, generateCitizenPhone,
 } from '../utils/env';
 import {
-  getPrincipal, loginEmployeeBrowser, readInboxRows, fetchService, type Principal,
+  getPrincipal, loginEmployeeBrowser, readInboxRows, fetchService, showAllInboxRows,
+  type Principal,
 } from '../utils/employee-ui';
 import { getProfile } from '../utils/profile';
 import { fetchBoundaryTree, type BoundaryNode } from '../utils/probes';
@@ -127,21 +128,8 @@ async function openInbox(page: Page): Promise<void> {
   await page.waitForTimeout(1_500);
 }
 
-/** Bump rows-per-page to the max option so a full sorted page renders — the
- *  inbox pages at 10 by default (mirrors inbox-filters.spec.ts). */
-async function showAllRows(page: Page): Promise<void> {
-  const sel = page.locator('select').last();
-  if ((await sel.count()) === 0) return;
-  const values = await sel.locator('option').evaluateAll(
-    (os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean),
-  );
-  if (values.length === 0) return;
-  await Promise.all([
-    page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 20_000 }).catch(() => null),
-    sel.selectOption(values[values.length - 1]),
-  ]);
-  await page.waitForTimeout(1_500);
-}
+// showAllRows lived here too (a copy of inbox-filters.spec.ts's); both now use
+// showAllInboxRows from utils/employee-ui.ts.
 
 /** Click a column header by its visible label and wait for the resulting
  *  server-side sort request, returning its decoded URL. */
@@ -181,7 +169,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await openInbox(page);
-    await showAllRows(page);
+    await showAllInboxRows(page);
 
     const url = await clickSortHeader(page, /Locality/i);
     expect(url).toContain('sortBy=locality');
@@ -202,7 +190,7 @@ test.describe('employee inbox-v2 — column header sort (issue #922)', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await openInbox(page);
-    await showAllRows(page);
+    await showAllInboxRows(page);
     await clickSortHeader(page, /Locality/i); // 1st click -> ASC
     const url = await clickSortHeader(page, /Locality/i); // 2nd click -> DESC
     expect(url).toContain('sortBy=locality');

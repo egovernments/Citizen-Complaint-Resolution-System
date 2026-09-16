@@ -1,0 +1,11 @@
+# Plain ConfigMap (no helm hooks — the Job is a plain Job now, see job.yaml).
+# The Job's pod template carries a checksum of this script, so a changed script
+# yields a new pod template on the next per-revision Job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-bootstrap-script
+  namespace: {{ .Values.namespace | default "egov" }}
+data:
+  user-seed.sh: |-
+{{ .Files.Get "files/user-seed.sh" | indent 4 }}

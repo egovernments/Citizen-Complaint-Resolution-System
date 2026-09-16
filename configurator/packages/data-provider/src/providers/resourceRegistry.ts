@@ -102,10 +102,19 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'access-roles': {
     type: 'access-role', label: 'Access Roles', idField: 'code',
     nameField: 'name', descriptionField: 'description', dedicated: true,
+    // `schema` here is a masters-visibility policy key only (see
+    // docs/design/masters-configurator-access-policy-design.md §3.2) — this
+    // resource still fetches via the accesscontrol role API (`type:
+    // 'access-role'`), not a raw MDMS schemaCode search; `config.type` gates
+    // every fetch branch in dataProvider.ts before `config.schema` is ever
+    // read, so adding it here does not change how this resource is fetched.
+    schema: MDMS_SCHEMAS.ROLES,
   },
   'access-actions': {
     type: 'access-action', label: 'Access Actions', idField: 'id',
     nameField: 'displayName', descriptionField: 'url', dedicated: true,
+    // Policy key only — see the comment on 'access-roles' above.
+    schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test',
   },
   'mdms-schemas': {
     type: 'mdms-schema', label: 'MDMS Schemas', idField: 'code',
@@ -159,7 +168,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
-  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
+  // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
+  // record on its own only value made the reopen window permanently uneditable —
+  // Save always 400'd (#1252). nameField stays REOPENSLA so the list shows the
+  // configured window rather than the constant "DEFAULT".
+  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
   // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
   // (see mapMdmsRecord), so idField/nameField here are display-only.
@@ -246,4 +260,31 @@ export function getResourceBySchema(schemaCode: string): string | undefined {
     if (config.schema === schemaCode) return name;
   }
   return undefined;
+}
+
+/**
+ * Non-'mdms' resource types that nonetheless have a real MDMS-v2 schema with genuine
+ * `/mdms-v2/v2/_create|_update/<schema>` write actions in the ACCESSCONTROL-ACTIONS-TEST seed, and
+ * so must still be checked against ACCESSCONTROL-ROLEACTIONS by {@link isAccessControlGated} —
+ * `access-roles`/`access-actions` use a dedicated `type` for their read path (a different fetch
+ * shape than the generic MDMS list), but their EDIT gating is identical to any other mdms master.
+ * Narrowing the gate to `type === 'mdms'` silently opened these two — the screens that edit the
+ * permission system itself — to every role (#1826 review). Add a type here ONLY when you've
+ * confirmed it has a real mdms-v2 write action in the seed; do not widen this to "any resource
+ * with a `schema` field" — Employees/Boundaries/Complaints/Localization/Users all set `schema`-like
+ * identifiers too but write through non-mdms-v2 endpoints (HRMS, boundary-service, PGR,
+ * localization) and must stay unrestricted, matching pre-gating behavior.
+ */
+const EXPLICITLY_GATED_TYPES: ReadonlySet<ResourceType> = new Set(['access-role', 'access-action']);
+
+/**
+ * Whether `useMastersCapability.canViewResource`/`canEditResource` should check this resource
+ * against the real ACCESSCONTROL-ACTIONS-TEST/ROLEACTIONS policy (accessPolicy.ts) rather than
+ * treating it as unrestricted. Every `type: 'mdms'` resource qualifies by construction (it always
+ * carries a real schema); a small explicit allowlist ({@link EXPLICITLY_GATED_TYPES}) covers the
+ * non-'mdms'-typed exceptions that still need it.
+ */
+export function isAccessControlGated(config: ResourceConfig | undefined): boolean {
+  if (!config) return false;
+  return config.type === 'mdms' || EXPLICITLY_GATED_TYPES.has(config.type);
 }

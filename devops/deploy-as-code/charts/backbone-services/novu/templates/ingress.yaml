@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Values.ingress.name }}
+  name: {{ .Values.ingress.name }}-dashboard
   namespace: {{ include "novu.namespace" . }}
   {{- with .Values.ingress.annotations }}
   annotations:
@@ -11,6 +11,16 @@ metadata:
 spec:
   {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- /* TLS (#1644). This ingress previously had no tls: block at all, so the
+         Novu dashboard — which manages notification templates, subscribers and
+         the SMS/email provider credentials — was served over plain HTTP: login
+         and session cookie in the clear. Every other ingress in this tree
+         terminates TLS on <domain>-tls-certs, issued by the existing
+         cert-manager ClusterIssuer; this follows that convention. */}}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
   {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
@@ -23,4 +33,104 @@ spec:
                 name: {{ .Values.ingress.service.name }}
                 port:
                   number: {{ .Values.ingress.service.port }}
+---
+# Novu's stock dashboard is built with Vite base=/ and navigates to absolute
+# client routes such as /env/<slug>/workflows/create. Route those SPA paths and
+# root-built assets to the dashboard without rewriting them. Without /env, the
+# workflows list can render but Create workflow falls through to the platform
+# gateway on a hard navigation/refresh.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}-dashboard-root-routes
+  namespace: {{ include "novu.namespace" . }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range list "/env" "/auth/sign-in" "/auth/sign-up" "/auth/organization-list" "/local-studio" "/onboarding" "/settings" "/integrations" "/partner-integrations" "/assets" "/images" "/static" "/manifest.json" "/favicon-gradient.svg" "/favicon.ico" }}
+          - path: {{ . | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Values.ingress.service.name }}
+                port:
+                  number: {{ $.Values.ingress.service.port }}
+          {{- end }}
+          # Novu 2.3.0's dashboard initializes socket.io-client with the public
+          # origin. Socket.IO then uses its default /socket.io transport path;
+          # a path embedded in VITE_WEBSOCKET_HOSTNAME is not retained.
+          - path: "/socket.io"
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.ingress.ws.service.name }}
+                port:
+                  number: {{ .Values.ingress.ws.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}-api
+  namespace: {{ include "novu.namespace" . }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+{{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.api.path | quote }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ .Values.ingress.api.service.name }}
+                port:
+                  number: {{ .Values.ingress.api.service.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.ingress.name }}-ws
+  namespace: {{ include "novu.namespace" . }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+{{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.ws.path | quote }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ .Values.ingress.ws.service.name }}
+                port:
+                  number: {{ .Values.ingress.ws.service.port }}
 {{- end }}

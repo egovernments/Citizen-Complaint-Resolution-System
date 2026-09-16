@@ -130,7 +130,12 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
-  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // Keyed on `code` (DEFAULT), NOT on REOPENSLA. mdms-v2 rejects any update that
+  // changes a record's x-unique fields (UNIQUE_KEY_UPDATE_ERR), so keying the
+  // record on its own only value made the reopen window permanently uneditable —
+  // Save always 400'd (#1252). nameField stays REOPENSLA so the list shows the
+  // configured window rather than the constant "DEFAULT".
+  'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'code',              nameField: 'REOPENSLA' },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {

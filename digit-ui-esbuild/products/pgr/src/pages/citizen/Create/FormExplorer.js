@@ -257,7 +257,15 @@ const FormExplorer = () => {
         }
         return !!data?.SelectAddress?.city?.code && !!data?.SelectAddress?.locality?.code;
       case "description":
-        return typeof data?.description === "string" && data.description.trim().length > 0;
+        // CCSD-1980 / #1226: reject numbers-only / whitespace-only descriptions
+        // (e.g. "000000000000") — require at least 3 letters (any language).
+        // Mirrors the employee-side rule in CreateComplaintConfig.js and the
+        // same fix in CreatePGRFlowV2 (this file is kept only as a one-release
+        // rollback target — see Module.js — so it must not regress either).
+        return (
+          typeof data?.description === "string" &&
+          /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u.test(data.description)
+        );
       case "SelectComplaintType":
         return data?.SelectComplaintType != null;
       case "GeoLocationsPoint":

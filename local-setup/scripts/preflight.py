@@ -116,6 +116,27 @@ def r_digit_ui_v2(cfg):
 
 
 @rule(
+    "matomo-combo",
+    "Matomo has two halves that are useless apart. enable_matomo starts the "
+    "containers but binds them to 127.0.0.1, so with nginx_features.matomo off "
+    "the browser has nothing same-origin to talk to and every event the portal "
+    "sends 404s. The reverse is worse: nginx_features.matomo on its own renders "
+    "location blocks proxying to a loopback port nothing is listening on, so "
+    "the tracking endpoints return 502 rather than failing visibly at deploy "
+    "time. Both directions look like a working deploy and produce no analytics.",
+)
+def r_matomo(cfg):
+    enabled = get(cfg, "enable_matomo") is True
+    exposed = get(cfg, "nginx_features.matomo") is True
+    if enabled and not exposed:
+        yield (FAIL, "enable_matomo: true requires nginx_features.matomo: true "
+                     "(otherwise the tracking endpoints are unreachable).")
+    if exposed and not enabled:
+        yield (FAIL, "nginx_features.matomo: true requires enable_matomo: true "
+                     "(otherwise /matomo/matomo.php proxies to nothing and 502s).")
+
+
+@rule(
     "mcp-needs-registry",
     "digit-mcp images live on the Hetzner-VPC registry (10.0.0.4:5000) which "
     "is unreachable from public boxes — the pull fails ~20 minutes into the "
@@ -411,6 +432,15 @@ SELF_TEST_CASES = [
      {"digit-ui-mode-enum"}),
     ("configurator without build warns", {"nginx_features": {"configurator": True}},
      {"configurator-build-path"}),
+    ("matomo enabled without nginx feature fires",
+     {"enable_matomo": True},
+     {"matomo-combo"}),
+    ("matomo nginx feature without the stack fires",
+     {"nginx_features": {"matomo": True}},
+     {"matomo-combo"}),
+    ("matomo fully wired is clean",
+     {"enable_matomo": True, "nginx_features": {"matomo": True}},
+     set()),
     ("empty config is clean", {}, set()),
 ]
 

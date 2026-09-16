@@ -28,7 +28,6 @@ describe('DashboardConfig write path', () => {
       isActive: true,
       data: {
         id: 'default',
-        allowedRoles: ['SUPERUSER'],
         timeZone: 'Africa/Nairobi',
         publicDashboardEnabled: false,
       },
@@ -40,7 +39,6 @@ describe('DashboardConfig write path', () => {
     expect(url).toContain('_update');
     expect(body.Mdms.data).toMatchObject({
       id: 'default',
-      allowedRoles: ['SUPERUSER'],
       timeZone: 'Africa/Nairobi',
       publicDashboardEnabled: true,
     });
@@ -59,7 +57,7 @@ describe('DashboardConfig write path', () => {
       uniqueIdentifier: 'default',
       data: { id: 'default', publicDashboardEnabled: true },
     });
-    expect(body.Mdms.data.allowedRoles).toContain('SUPERUSER');
+    expect(body.Mdms.data).not.toHaveProperty('allowedRoles');
   });
 
   it('does not rewrite an inherited record', async () => {
