@@ -2350,6 +2350,12 @@ services:
   # reads (user_search, pgr_search) remain, so keep the auth on.
   digit-mcp-readonly:
     profiles: ["mcp-readonly"]
+    # NOTE: the default tag predates MCP_READ_ONLY — an image without the flag
+    # ignores MCP_READ_ONLY=1 below and serves the FULL write toolset on the
+    # public routes. build_mcp: true (image built from this source) or an
+    # MCP_IMAGE override to a flag-carrying tag is required; the ansible deploy
+    # verifies /v1/version reports readOnly=true after start and fails otherwise
+    # (see playbook-deploy.yml, "assert the image honours MCP_READ_ONLY").
     image: ${MCP_IMAGE:-egovio/digit-mcp:2.12-81fc6be}
     container_name: digit-mcp-readonly
     restart: unless-stopped

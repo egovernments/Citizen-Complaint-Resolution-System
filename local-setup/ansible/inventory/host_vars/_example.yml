@@ -378,6 +378,14 @@ enable_mcp: true
 #   3. mcp_readonly_basic_auth_password: "{{ vault_mcp_readonly_password }}"   # basic-auth gate (in vault; never commit)
 # Some reads (user_search, pgr_search) still return data, so keep the basic-auth on.
 #
+# IMPORTANT — the image must carry MCP_READ_ONLY support. The default MCP image
+# tag predates this feature and would ignore the flag, serving the FULL write
+# toolset on the public route. So enable this only with `build_mcp: true` (build
+# from this source) or an `mcp_image:` override to a flag-carrying tag. The
+# deploy verifies /v1/version reports readOnly=true after start and fails closed
+# otherwise, so a stale image can't ship writes to the public — but set the image
+# right to begin with.
+#
 # Linux-only: nginx runs as a container reaching the host via
 # host.docker.internal, which can't reach the loopback-published read-only port,
 # and the htpasswd file isn't mounted on Darwin — so the macOS path 502/500s.

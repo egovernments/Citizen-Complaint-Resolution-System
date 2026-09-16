@@ -106,9 +106,10 @@ releases:
   # internal. To turn it on: (1) ensure the image carries MCP_READ_ONLY, (2) flip
   # installed: true, (3) set ingress.host to a real hostname, (4) create the
   # basic-auth Secret in `egov` (kubectl create secret generic
-  # mcp-readonly-basic-auth --from-file=auth). Auth is enforced at the ingress
-  # because /mcp has no app-level auth. Some reads still return data, so keep the
-  # basic-auth (and optionally allowSourceRange) on.
+  # mcp-readonly-basic-auth --from-file=auth). Edge auth is required as defence in
+  # depth: token mode already requires a bearer, but a read-only instance still
+  # returns data to any valid caller, so keep the basic-auth (and optionally
+  # allowSourceRange) on.
   - name: digit-mcp-readonly
     installed: false
     namespace: egov

@@ -257,8 +257,9 @@ server {
   }
 
   # REST shim — friendly tenant bootstrap / city-setup endpoints for the
-  # configurator + onboarding UI. Authentication is enforced inside the
-  # MCP server (bearer token or body.auth credentials).
+  # configurator + onboarding UI. In token mode (the http default) the MCP
+  # server requires a bearer token or body.auth credentials; this is the
+  # INTERNAL instance's vhost and is not published to the public.
   location /v1/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_mcp_port }};
     proxy_set_header Host $host;

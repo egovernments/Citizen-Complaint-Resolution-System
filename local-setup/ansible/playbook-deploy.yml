@@ -3273,6 +3273,47 @@
       changed_when: false
       when: enable_mcp | default(false)
 
+    # ==================== Verify the read-only MCP actually dropped writes ====================
+    # The digit-mcp image defaults to the pre-read-only tag
+    # (egovio/digit-mcp:2.12-81fc6be, see docker-compose.egov-digit.yaml). An
+    # image that predates MCP_READ_ONLY ignores the env var and serves the FULL
+    # write toolset (tenant_destroy, mdms_create, user_create, ...) on the public
+    # /mcp + /v1 routes behind nothing but basic auth — a silent full-admin
+    # exposure that a passing /healthz and a "healthy" container both hide. The
+    # helm path guards this with `installed: false` + "ensure the image carries
+    # MCP_READ_ONLY"; the compose/Ansible path has no build-time equivalent, so
+    # verify it at RUNTIME: read /v1/version off the running instance and fail the
+    # deploy if it does not report read-only. Image-agnostic — works for a future
+    # published flag-carrying tag without a tag allowlist to maintain.
+    - name: "mcp-readonly — wait for the read-only instance to answer /v1/version"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:13102/v1/version
+        return_content: true
+      register: mcp_ro_version
+      retries: 12
+      delay: 10
+      until: mcp_ro_version.status == 200
+      changed_when: false
+      when:
+        - enable_mcp_readonly | default(false)
+        - ansible_system != "Darwin"
+
+    - name: "mcp-readonly — assert the image honours MCP_READ_ONLY (writes dropped)"
+      ansible.builtin.assert:
+        that:
+          - mcp_ro_version.json.readOnly | default(false) | bool
+        fail_msg: >-
+          digit-mcp-readonly is running but /v1/version reports readOnly=false on
+          {{ inventory_hostname }} — the configured MCP image
+          ({{ mcp_image | default('the egovio/digit-mcp default tag') }}) predates
+          MCP_READ_ONLY and is serving the FULL write toolset on the public /mcp +
+          /v1 routes. Build from source (build_mcp: true) or set mcp_image /
+          MCP_IMAGE to a tag that carries the flag, then redeploy.
+        success_msg: "digit-mcp-readonly confirmed read-only ({{ mcp_ro_version.json.toolCount | default('?') }} tools, writes absent)."
+      when:
+        - enable_mcp_readonly | default(false)
+        - ansible_system != "Darwin"
+
     # ==================== Post-stack: DB password safety net + observability settle ====================
     # OpenBao itself, the secret read, and the .env write all now happen in
     # "Secrets prep" above, BEFORE "Start DIGIT stack" — see the ordering-bug
@@ -3898,36 +3939,24 @@
         - ansible_system != "Darwin"
 
     # ---- digit-mcp-readonly basic-auth (nginx front for the public read-only MCP) ----
-    - name: "mcp-readonly — ensure htpasswd tooling for basic-auth (Debian/Ubuntu)"
-      ansible.builtin.apt:
-        name: apache2-utils
-        state: present
-      when:
-        - enable_mcp_readonly | default(false)
-        - mcp_readonly_basic_auth_password is defined
-        - ansible_facts['os_family'] == 'Debian'
-
-    - name: "mcp-readonly — ensure htpasswd tooling for basic-auth (RHEL family)"
-      ansible.builtin.dnf:
-        name: httpd-tools
-        state: present
-      when:
-        - enable_mcp_readonly | default(false)
-        - mcp_readonly_basic_auth_password is defined
-        - ansible_facts['os_family'] == 'RedHat'
-
-    # Idempotent via `creates`: rotate by deleting the file and re-running (so a
-    # changed password in host_vars does NOT rotate on its own). Skips if the
-    # password is unset — nginx then returns 500 (no auth_basic_user_file to
-    # read), which still fails closed; set mcp_readonly_basic_auth_password in
-    # vault/host_vars so the routes actually serve.
+    # community.general.htpasswd, not `htpasswd -bB … creates:` — same convention
+    # (and same reasons) as the status-board / integration-tests peers above:
+    #   - idempotent against the STORED HASH, so editing
+    #     mcp_readonly_basic_auth_password in host_vars and redeploying actually
+    #     rotates the credential; the old `creates:` guard made rotation a silent
+    #     no-op (file exists → task skipped, old password still valid).
+    #   - the password never lands on argv (/proc/<pid>/cmdline is world-readable,
+    #     so `-b` would defeat no_log for the lifetime of the exec).
+    # Skips when the password is unset — nginx then 500s (no auth_basic_user_file),
+    # which still fails closed; the preflight already asserts it's set. Linux-only
+    # (read-only MCP is refused on Darwin), so no container-path variant needed.
     - name: "mcp-readonly — basic-auth user in /etc/nginx/.htpasswd-mcp-readonly"
-      ansible.builtin.command: >-
-        htpasswd -bBc /etc/nginx/.htpasswd-mcp-readonly
-        "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
-        "{{ mcp_readonly_basic_auth_password }}"
-      args:
-        creates: /etc/nginx/.htpasswd-mcp-readonly
+      community.general.htpasswd:
+        path: /etc/nginx/.htpasswd-mcp-readonly
+        name: "{{ mcp_readonly_basic_auth_user | default('digit-mcp') }}"
+        password: "{{ mcp_readonly_basic_auth_password }}"
+        crypt_scheme: bcrypt
+        mode: '0640'
       no_log: true
       when:
         - enable_mcp_readonly | default(false)

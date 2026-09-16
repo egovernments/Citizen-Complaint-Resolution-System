@@ -866,10 +866,10 @@ if (transportMode === 'stdio') {
     const exportMatch = pathname.match(/^\/v1\/tenant\/([a-zA-Z][a-zA-Z0-9._-]*)\/export$/);
     if (req.method === 'POST' && exportMatch) {
       // This route calls exportTenant() directly rather than resolving through
-      // restRegistry.getTool, so the read-only filter never sees it — and
-      // authenticateRest auto-passes on the CRS_* env creds. It dumps a whole
-      // tenant's MDMS + workflow, so on a read-only (publicly-exposed) instance
-      // refuse it outright, same as /api/sessions.
+      // restRegistry.getTool, so the read-only filter never sees it. It dumps a
+      // whole tenant's MDMS + workflow — no business on a read-only (publicly-
+      // exposed) instance even for an authenticated caller — so refuse it here,
+      // same as /api/sessions.
       if (restRegistry.isReadOnly()) {
         jsonResponse(res, 403, { success: false, error: 'Tenant export is disabled on a read-only MCP instance.' });
         return;
@@ -1110,10 +1110,11 @@ if (transportMode === 'stdio') {
     // live OUTSIDE the tool registry (so the read-only tool filter never reaches
     // them), and they are both a write surface (POST /api/sessions/:id/messages
     // does unbounded INSERTs) and a data-exposure surface (GET .../events returns
-    // stored tool args, user_name, client_ip). authenticateRest is not the gate
-    // here — it falls back to the CRS_* env creds, which are always present, so it
-    // would auto-pass. A publicly-exposed read-only instance must not offer these
-    // at all; the internal (full) instance keeps its session viewer.
+    // stored tool args, user_name, client_ip). These routes ARE authenticated in
+    // token mode (the http default) — the /api/* bearer+admin check, and the
+    // CRS_* env-cred fallback is ambient-only (#2023) — but a publicly-exposed
+    // read-only instance has no business offering a session viewer at all, so
+    // refuse them here as defence in depth. The internal (full) instance keeps it.
     if (restRegistry.isReadOnly() && pathname.startsWith('/api/sessions')) {
       jsonResponse(res, 403, { error: 'The session API is disabled on a read-only MCP instance.' });
       return;

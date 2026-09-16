@@ -32,8 +32,10 @@ service:
 
 # Public exposure. OFF by default — the MCP is a platform-admin surface and is
 # only reachable in-cluster (port-forward) unless you opt in here. Intended for a
-# SEPARATE read-only release (env.MCP_READ_ONLY=1). Auth is enforced at the edge,
-# because /mcp has no app-level auth: set basicAuthSecret and/or allowSourceRange.
+# SEPARATE read-only release (env.MCP_READ_ONLY=1). Edge auth (basicAuthSecret
+# and/or allowSourceRange) is required as defence in depth: even with
+# MCP_AUTH_MODE=token requiring a bearer on /mcp and /v1, a read-only instance
+# still returns data (user_search, pgr_search) to any valid caller.
 ingress:
   enabled: false
   className: nginx
