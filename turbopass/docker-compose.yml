@@ -1,0 +1,50 @@
+# Turbopass — boundary search + fetch for the configurator (see README.md).
+#
+#   docker compose --profile bootstrap run --rm bootstrap   # build the boundary DB
+#   docker compose up -d search-api                         # serve it on :3000
+#
+# Images are published by .github/workflows/turbopass-build.yml; add --build to
+# build from this checkout instead.
+name: turbopass
+
+services:
+  # One-shot data pipeline, behind the `bootstrap` profile so a plain
+  # `docker compose up` never re-downloads gigabytes from Overture.
+  bootstrap:
+    build:
+      context: ./overture-scraper
+    image: egovio/turbopass-bootstrap:${TURBOPASS_TAG:-latest}
+    environment:
+      COUNTRIES: ${TURBOPASS_COUNTRIES:-IN,KE,MZ}
+      # Empty → the newest release in the bucket.
+      OVERTURE_RELEASE: ${OVERTURE_RELEASE:-}
+      SIMPLIFY_TOLERANCE: ${SIMPLIFY_TOLERANCE:-0.0001}
+      OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
+    volumes:
+      - ./overture-data:/overture-data
+    profiles: ["bootstrap"]
+
+  search-api:
+    build:
+      context: ./search-api
+    image: egovio/turbopass-search:${TURBOPASS_TAG:-latest}
+    environment:
+      OVERTURE_DB_PATH: /overture-data/boundaries.sqlite
+      DATA_DIR: /data
+      GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+      GEOAPIFY_RATE_LIMIT: ${GEOAPIFY_RATE_LIMIT:-120}
+      FETCH_MAX_FEATURES: ${FETCH_MAX_FEATURES:-5000}
+      # Set to the configurator origins on a central instance holding a Geoapify key.
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    ports:
+      - "${TURBOPASS_PORT:-3000}:3000"
+    volumes:
+      - ./overture-data:/overture-data:ro
+      - ./data:/data:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
