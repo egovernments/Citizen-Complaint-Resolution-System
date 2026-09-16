@@ -45,36 +45,36 @@ public class EscalationLockManager {
                 configuredTimeout == null ? 30_000L : configuredTimeout));
     }
 
-    public <T> T withComplaintLock(String tenantId, String serviceRequestId, Supplier<T> operation) {
+    public <T> T withComplaintLock(String tenantId, String complaintId, Supplier<T> operation) {
         if (tenantId == null || tenantId.isBlank()
-                || serviceRequestId == null || serviceRequestId.isBlank()) {
+                || complaintId == null || complaintId.isBlank()) {
             throw new CustomException("INVALID_ESCALATION_ID",
-                    "tenantId and serviceRequestId are required for ESCALATE");
+                    "tenantId and complaint id are required for ESCALATE");
         }
 
         String normalizedTenant = tenantId.trim();
-        String normalizedRequestId = serviceRequestId.trim();
+        String normalizedComplaintId = complaintId.trim();
         // PostgreSQL text cannot contain NUL. Length-prefix both identifiers so
         // different tenant/request splits cannot produce the same source string.
         String lockKey = normalizedTenant.length() + ":" + normalizedTenant
-                + normalizedRequestId.length() + ":" + normalizedRequestId;
+                + normalizedComplaintId.length() + ":" + normalizedComplaintId;
         try (Connection connection = lockDataSource.getConnection()) {
             if (!executeBoolean(connection, TRY_LOCK, lockKey)) {
                 throw new CustomException("ESCALATION_IN_PROGRESS",
-                        "Another escalation for complaint " + serviceRequestId + " is still being persisted");
+                        "Another escalation for complaint " + complaintId + " is still being persisted");
             }
 
             try {
                 return operation.get();
             } finally {
-                release(connection, lockKey, serviceRequestId);
+                release(connection, lockKey, complaintId);
             }
         } catch (CustomException e) {
             throw e;
         } catch (SQLException e) {
-            log.error("Could not acquire the escalation lock for complaint {}", serviceRequestId, e);
+            log.error("Could not acquire the escalation lock for complaint {}", complaintId, e);
             throw new CustomException("ESCALATION_LOCK_UNAVAILABLE",
-                    "Escalation locking is temporarily unavailable for complaint " + serviceRequestId);
+                    "Escalation locking is temporarily unavailable for complaint " + complaintId);
         }
     }
 

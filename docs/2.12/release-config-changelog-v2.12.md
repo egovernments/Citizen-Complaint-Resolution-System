@@ -55,7 +55,7 @@ This lists every config key, master data change, and infra change in this releas
 | Key | What it controls | Default |
 |---|---|---|
 | `pgr.notification.config.driven` | Turns on MDMS-driven notification routing | `false` |
-| `pgr.escalation.enabled` / `.interval.ms` / `.batch.size` / `.default.sla.ms` / `.max.depth` | Automatic escalation scheduler | `pgr.escalation.enabled=true` |
+| `pgr.escalation.enabled` / `.interval.ms` / `.batch.size` / `.default.sla.ms` / `.max.depth` | Automatic escalation scheduler | `pgr.escalation.enabled=false` |
 | `pgr.escalation.kafka.topic` | Escalation event topic | `pgr-escalation-events` |
 | `pgr.dashboard.refresh.enabled` / `.interval.ms` | Dashboard reporting-table refresh | `true` |
 | `pgr.analytics.config-cache-ttl-ms` | Analytics config cache lifetime | `300000` |
@@ -200,7 +200,7 @@ Not a complete, validated deployment path for this release. Docker Compose and t
 | Item | Status | How to turn on/off |
 |---|---|---|
 | Complaint category tree (`ComplaintHierarchy`) | Always on | n/a — the classification model itself |
-| Automatic escalation | On by default | `pgr.escalation.enabled` |
+| Automatic escalation | Off until rollout preflight passes | `pgr.escalation.enabled` |
 | Dashboard reporting-table refresh | On by default | `pgr.dashboard.refresh.enabled` |
 | Dashboard loading-speed telemetry | On by default | `dashboard_metrics_enabled: false` to disable |
 | Audit service, db-migrations, hrms-prereq-gate, user-seed | Always on | n/a |

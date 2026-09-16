@@ -187,14 +187,14 @@ public class EscalationConfigurationService {
                     .filter(record -> "DEFAULT".equalsIgnoreCase(text(record.get("code"))))
                     .toList();
             if (records.size() == 1) {
-                if (defaults.size() == 1) {
-                    return defaults.get(0);
+                Map<String, Object> record = records.get(0);
+                if (defaults.isEmpty()) {
+                    log.warn("Using the sole {} record for tenant {} although its code is {}; "
+                                    + "rename it to DEFAULT for consistency",
+                            MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId,
+                            text(record.get("code")));
                 }
-                if (text(records.get(0).get("code")) == null) {
-                    log.warn("Using legacy {} record without code=DEFAULT for tenant {}",
-                            MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId);
-                    return records.get(0);
-                }
+                return record;
             }
             log.error("Expected exactly one {} record for tenant {}; found {} records and {} defaults",
                     MDMS_MODULE_NAME + "." + MDMS_ESCALATION_CONFIG, tenantId,

@@ -143,9 +143,21 @@ public class EscalationScheduler {
                         continue;
                     }
 
-                    // PENDINGFORASSIGNMENT is configurable because some tenant workflows may
-                    // assign in that state. Canonically it is unassigned, so skip it before the
-                    // full update pipeline and avoid a warning every scheduler interval.
+                    // Consult workflow history only once metadata says the complaint is due.
+                    // This recovers from a workflow-success/persistence-lag split without adding
+                    // a history request for every not-yet-due complaint on every scan.
+                    currentLevel = escalationService.reconciledEscalationLevel(
+                            complaint, systemRequestInfo);
+                    if (currentLevel >= escalationConfig.effectiveMaxDepth(complaint.getServiceCode())
+                            || !escalationConfig.isEnabled(complaint.getServiceCode(), currentLevel)
+                            || System.currentTimeMillis() - complaintCreatedAt
+                            < escalationConfig.resolveSla(complaint.getServiceCode(), currentLevel)) {
+                        result.skipped++;
+                        continue;
+                    }
+
+                    // Any configured state still needs a concrete workflow assignee. Skip
+                    // unassigned complaints before the full update pipeline.
                     List<String> currentAssignees = escalationService.getCurrentAssignees(
                             complaint.getServiceRequestId(), complaint.getTenantId(), systemRequestInfo);
                     if (currentAssignees.isEmpty()

@@ -246,7 +246,7 @@ public class PGRService {
             return updateInternal(request, false);
         }
         Service service = request.getService();
-        return escalationLockManager.withComplaintLock(service.getTenantId(), service.getServiceRequestId(),
+        return escalationLockManager.withComplaintLock(service.getTenantId(), service.getId(),
                 () -> updateInternal(request, automaticEscalation));
     }
 

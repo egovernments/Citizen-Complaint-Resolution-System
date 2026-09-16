@@ -10,14 +10,14 @@ a `PENDINGATSUPERVISOR` state participates.
 The policy is the singleton `code: DEFAULT` record in MDMS v2
 `RAINMAKER-PGR.EscalationConfig`. Resolution is complete city record, then
 complete state record, then service defaults. `eligibleStatuses` controls which
-states automation scans; the shipped states are the LME-assigned state and the
-GRO-controlled assignment state, and both still require a concrete workflow
-assignee. Percentage ladders are cumulative from the complaint's
-immutable `auditDetails.createdTime` and use the exact leaf
+states automation scans; the shipped value is the assigned resolver state
+`PENDINGATLME`. Every configured state still requires a concrete workflow
+assignee. Percentage ladders are cumulative from complaint creation (or the
+latest `REOPEN`) and use the exact leaf
 `ComplaintHierarchy.slaHours`; finite absolute-millisecond ladders are the
 fallback. Manual escalation consumes a rung, so automation next evaluates the
 following cumulative threshold. `ASSIGN` and `REASSIGN` do not reset the clock
-or the escalation level.
+or the escalation level. `REOPEN` resets both for a fresh complaint cycle.
 
 Runtime fallbacks and scheduling are configured with `PGR_ESCALATION_*`; the
 state root used for tenant discovery is `STATE_LEVEL_TENANT_ID`. For configuration

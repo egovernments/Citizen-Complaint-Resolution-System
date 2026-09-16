@@ -32,7 +32,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.EscalationConfig",
-    "description": "Escalation config consumed by pgr-services for both manual and automatic escalation. A complete city record overrides the complete state record; fields are not merged. defaultSlaPercentageByLevel contains cumulative complaint-age thresholds applied to the leaf serviceCode's ComplaintHierarchy.slaHours; percentages must increase and may not exceed 200. defaultSlaByLevel contains backward-compatible absolute millisecond thresholds used when percentages or the complaint SLA are unavailable. overrides are keyed by exact leaf serviceCode; maxDepth caps total upward escalations. enabledByLevel controls automatic triggering only (issues #2046 and #2048).",
+    "description": "Escalation config consumed by pgr-services for both manual and automatic escalation. A complete city record overrides the complete state record; fields are not merged. defaultSlaPercentageByLevel contains cumulative thresholds from complaint creation or the latest reopen, applied to the leaf serviceCode's ComplaintHierarchy.slaHours; percentages must increase and may not exceed 200. defaultSlaByLevel contains backward-compatible absolute millisecond thresholds used when percentages or the complaint SLA are unavailable. overrides are keyed by exact leaf serviceCode; maxDepth caps total upward escalations. enabledByLevel controls automatic triggering only (issues #2046 and #2048).",
     "isActive": true,
     "definition": {
       "type": "object",

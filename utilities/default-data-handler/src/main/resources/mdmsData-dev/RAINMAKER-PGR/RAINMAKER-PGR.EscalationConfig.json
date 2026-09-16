@@ -3,8 +3,7 @@
     "code": "DEFAULT",
     "maxDepth": 3,
     "eligibleStatuses": [
-      "PENDINGATLME",
-      "PENDINGFORASSIGNMENT"
+      "PENDINGATLME"
     ],
     "defaultSlaPercentageByLevel": [
       80,

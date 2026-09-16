@@ -97,6 +97,11 @@ public class ServiceRequestValidator {
         // Re-open eligibility (authorization + deadline) must be checked against the
         // persisted record, so fetch it first and pass it in — never trust the request body.
         Service persistedService = serviceWrappers.get(0).getService();
+        if (!Objects.equals(persistedService.getServiceRequestId(),
+                request.getService().getServiceRequestId())) {
+            throw new CustomException("INVALID_SERVICE_REQUEST_ID",
+                    "serviceRequestId does not match the complaint id");
+        }
         validateReOpen(request, persistedService);
 
         // TO DO
