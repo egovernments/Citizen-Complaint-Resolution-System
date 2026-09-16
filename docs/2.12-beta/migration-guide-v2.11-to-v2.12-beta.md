@@ -75,7 +75,7 @@ These have no off-switch — every v2.12-beta deployment gets them, whether or n
 
 Two related items are **not** in the same category — they are ordinary Spring Boot flags, default-enabled rather than unconditional, and can be turned off:
 
-- **PGR escalation scheduler and dashboard MV refresh** — both default enabled (`pgr.escalation.enabled=true`, `pgr.dashboard.refresh.enabled=true`) but genuinely toggleable; setting either to `false` disables that scheduler. The escalation scheduler needs the `pgr-escalation-events` Kafka topic to exist while enabled.
+- **PGR escalation scheduler and dashboard MV refresh** — escalation defaults off (`pgr.escalation.enabled=false`) until rollout preflight passes; dashboard refresh defaults on (`pgr.dashboard.refresh.enabled=true`). The escalation scheduler needs the `pgr-escalation-events` Kafka topic to exist before it is enabled.
 
 ## 5. Required database migrations
 

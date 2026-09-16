@@ -353,6 +353,15 @@ public class PGRConfiguration {
     @Value("${pgr.escalation.max.depth}")
     private Integer escalationMaxDepth;
 
+    @Value("${pgr.escalation.lock.pool.size:4}")
+    private Integer escalationLockPoolSize;
+
+    @Value("${pgr.escalation.lock.connection.timeout.ms:30000}")
+    private Long escalationLockConnectionTimeoutMs;
+
+    @Value("#{'${pgr.escalation.eligible.statuses:PENDINGATLME}'.split(',')}")
+    private java.util.List<String> escalationEligibleStatuses;
+
     @Value("${pgr.escalation.kafka.topic}")
     private String escalationKafkaTopic;
 

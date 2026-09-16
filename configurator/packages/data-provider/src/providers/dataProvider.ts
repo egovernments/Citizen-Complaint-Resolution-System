@@ -236,6 +236,27 @@ function isDuplicateError(error: unknown): boolean {
   return normalized.includes('duplicate') || normalized.includes('already exists');
 }
 
+/** PGR owns its escalation policy in RAINMAKER-PGR.EscalationConfig.
+ *  Do not let the generic workflow masters create a second live PGR policy.
+ *  Existing legacy rows remain deletable so operators can complete migration. */
+function rejectLegacyPgrEscalationWrite(
+  config: ResourceConfig,
+  data: Record<string, unknown>,
+): void {
+  if (
+    config.schema !== 'Workflow.AutoEscalation' &&
+    config.schema !== 'Workflow.AutoEscalationStatesToIgnore'
+  ) return;
+
+  const businessService = String(data.businessService ?? '').trim().toUpperCase();
+  const module = String(data.module ?? '').trim().toUpperCase();
+  if (businessService === 'PGR' || module === 'PGR') {
+    throw new Error(
+      'PGR escalation is configured only through RAINMAKER-PGR.EscalationConfig',
+    );
+  }
+}
+
 // --- Complaint-hierarchy leaf adapter -------------------------------------
 //
 // The 2-master complaint hierarchy stores BOTH interior classification nodes
@@ -1348,6 +1369,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
               await resolveNewLeafDefaults(client, tenantId),
             )
           : (params.data as Record<string, unknown>);
+        rejectLegacyPgrEscalationWrite(config, incoming);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
         // `id` (some forms set id == code on create) or any normalised
@@ -1594,6 +1616,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           sanitized[key] = value;
         }
         existing.data = { ...existing.data, ...sanitized };
+        // React-admin may send only dirty fields. Validate the authoritative
+        // merged record so partial updates, updateMany, and reactivation cannot
+        // revive a competing PGR Workflow.AutoEscalation policy.
+        rejectLegacyPgrEscalationWrite(config, existing.data);
         const updated = await client.mdmsUpdate(existing, true);
         if (config.leafServiceDefAdapter) {
           const all = await mdmsGetList(client, config, tenantId);

@@ -87,6 +87,13 @@ public class RequestSearchCriteria {
     @JsonIgnore
     private Boolean isPlainSearch;
 
+    /** Internal keyset cursor used by long-running scheduler scans. */
+    @JsonIgnore
+    private Long createdTimeBefore;
+
+    @JsonIgnore
+    private String serviceRequestIdBefore;
+
 
     public enum SortOrder {
         ASC,

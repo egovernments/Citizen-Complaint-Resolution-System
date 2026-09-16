@@ -22,14 +22,14 @@ This lists every config key, master data change, and infra change in this releas
 
 #### Access Control / RBAC
 
-* `RAINMAKER-PGR.EscalationConfig` *(new)* — per-tenant auto-escalation timing (`maxDepth`, per-level SLA, optional per-category overrides). Design default: 3 levels at 1h/4h/24h; no record at all falls back to 5 days.
+* `RAINMAKER-PGR.EscalationConfig` *(new)* — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing 1h/4h/24h absolute ladder remains a compatibility fallback, and no record expands the service's 5-day interval to cumulative 5 / 10 / 15-day thresholds.
 * `RAINMAKER-PGR.MapConfig`, `.InboxVisibilityConfig` *(new, schema only)* — per-tenant map settings and the "My/All" inbox visibility flag. No default data; safe by default if absent.
 * `RAINMAKER-PGR.ComplaintExtendedAttributeSchema`, `.ComplaintRelatedToMap`, `.ComplaintTemplateType` *(new)* — confidential/extended complaint fields.
 * New role `CMS_SCREENING_OFFICER` *(new)* — screens complaints and routes them to the right department.
 * `DataSecurity.DecryptionABAC` *(changed)* — new PII-visibility grants for `EMPLOYEE, GRO, PGR_LME, DGRO, CSR, SUPERUSER, PGR_VIEWER, MDMS_ADMIN` on fields including name, mobile number, email, PAN, Aadhaar, addresses. (Not `DataSecurity.SecurityPolicy` — that's a separate, pattern/masking-based master with no role-keyed grants; the earlier beta docs named the wrong master here.)
 * A dashboard access-scope policy record (action `2008` and its role-scopes) *(new)* — drives the new row-level access-control (ABAC) engine for dashboard/analytics/search.
 
-> 💡 **Watch out for:** default-data-handler is no longer run as a compose/Kubernetes service — it's only referenced today as static file paths that a couple of notification scripts read directly, not a seeder that runs on deploy. Its schema-creation list also doesn't include `EscalationConfig`, `InboxVisibilityConfig`, `ComplaintExtendedAttributeSchema`, `ComplaintRelatedToMap`, or `ComplaintTemplateType` at all (they exist only under an unused `mdmsData-dev/` profile), and none of them — nor the `CMS_SCREENING_OFFICER` role — have any rows in `full-dump.sql`, the actual seed for a fresh local install. **In practice, none of these ship with real default data to a tenant today**, despite existing as schemas/design: `EscalationConfig`'s "3 levels at 1h/4h/24h" default is design intent, not something a fresh tenant actually receives (the scheduler falls back to its hardcoded 5-day default when the MDMS record is absent, silently). The new role and the `DecryptionABAC` PII grants above have the same gap. Confirm what your own seed pipeline actually loads before assuming any of this is live for a given tenant, new or existing.
+> 💡 **Watch out for:** default-data-handler is no longer run as a compose/Kubernetes service — it's only referenced today as static file paths that a couple of notification scripts read directly, not a seeder that runs on deploy. Its schema-creation list also doesn't include `EscalationConfig`, `InboxVisibilityConfig`, `ComplaintExtendedAttributeSchema`, `ComplaintRelatedToMap`, or `ComplaintTemplateType` at all (they exist only under an unused `mdmsData-dev/` profile), and none of them — nor the `CMS_SCREENING_OFFICER` role — have any rows in `full-dump.sql`, the actual seed for a fresh local install. **In practice, none of these ship with real default data to a tenant today**, despite existing as schemas/design: `EscalationConfig`'s `[80,120,200]` percentage ladder and 1h/4h/24h absolute fallback are design intent, not something a fresh tenant actually receives (the scheduler falls back to its configured 5-day value when the MDMS record is absent). The new role and the `DecryptionABAC` PII grants above have the same gap. Confirm what your own seed pipeline actually loads before assuming any of this is live for a given tenant, new or existing.
 >
 > An independent review of the new access-control policy engine found real gaps for admin-level roles: tenant-wide admin/supervisor roles can lose unrestricted dashboard access and see it go empty; a cross-tenant authorization gap lets one tenant's role refresh another tenant's dashboard config cache; the "department scoping disabled" override can be silently skipped; a fresh/source-less tenant bootstrap can seed zero row-scope policy with only a buried log line to show it; and the policy is duplicated (Java + a TypeScript seed) with no parity test between them. Verify directly for any admin/supervisor role your city relies on before enabling. *(Separately, two other bugs in this same area were fixed after 2026-08-25 — a search/dashboard jurisdiction-scope mismatch, and Grievance Routing Officers seeing every department instead of their own — but the admin-role gaps listed above are not among them and remain open.)*
 >
@@ -55,7 +55,7 @@ This lists every config key, master data change, and infra change in this releas
 | Key | What it controls | Default |
 |---|---|---|
 | `pgr.notification.config.driven` | Turns on MDMS-driven notification routing | `false` |
-| `pgr.escalation.enabled` / `.interval.ms` / `.batch.size` / `.default.sla.ms` / `.max.depth` | Automatic escalation scheduler | `pgr.escalation.enabled=true` |
+| `pgr.escalation.enabled` / `.interval.ms` / `.batch.size` / `.default.sla.ms` / `.max.depth` | Automatic escalation scheduler | `pgr.escalation.enabled=false` |
 | `pgr.escalation.kafka.topic` | Escalation event topic | `pgr-escalation-events` |
 | `pgr.dashboard.refresh.enabled` / `.interval.ms` | Dashboard reporting-table refresh | `true` |
 | `pgr.analytics.config-cache-ttl-ms` | Analytics config cache lifetime | `300000` |
@@ -200,7 +200,7 @@ Not a complete, validated deployment path for this release. Docker Compose and t
 | Item | Status | How to turn on/off |
 |---|---|---|
 | Complaint category tree (`ComplaintHierarchy`) | Always on | n/a — the classification model itself |
-| Automatic escalation | On by default | `pgr.escalation.enabled` |
+| Automatic escalation | Off until rollout preflight passes | `pgr.escalation.enabled` |
 | Dashboard reporting-table refresh | On by default | `pgr.dashboard.refresh.enabled` |
 | Dashboard loading-speed telemetry | On by default | `dashboard_metrics_enabled: false` to disable |
 | Audit service, db-migrations, hrms-prereq-gate, user-seed | Always on | n/a |
