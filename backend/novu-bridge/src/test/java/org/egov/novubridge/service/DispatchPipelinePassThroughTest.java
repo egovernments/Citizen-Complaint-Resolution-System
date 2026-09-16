@@ -2,7 +2,6 @@ package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
-import org.egov.novubridge.service.provider.WhatsAppBusinessApiProviderStrategy;
 import org.egov.novubridge.web.models.ComplaintsDomainEvent;
 import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.web.models.DispatchLogEntry;
@@ -42,7 +41,6 @@ class DispatchPipelinePassThroughTest {
     private NovuClient novuClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
-    private MdmsServiceClient mdmsServiceClient;
 
     private DispatchPipelineService service;
 
@@ -56,7 +54,6 @@ class DispatchPipelinePassThroughTest {
         config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
-        mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
@@ -64,7 +61,7 @@ class DispatchPipelinePassThroughTest {
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                null, dispatchLogRepository, config, mdmsServiceClient);
+                null, dispatchLogRepository, config);
     }
 
     private ComplaintsDomainEvent smsEvent() {
@@ -238,10 +235,4 @@ class DispatchPipelinePassThroughTest {
         verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any());
     }
 
-    @Test
-    void whatsAppBusinessApiStrategy_ownsBareWhatsappAlias() {
-        // Durable concern carried over from the deleted BaileysProviderStrategyTest:
-        // with Baileys gone, the Meta strategy owns the bare "whatsapp" alias again.
-        assertTrue(new WhatsAppBusinessApiProviderStrategy().supports("whatsapp"));
-    }
 }

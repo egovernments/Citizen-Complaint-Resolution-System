@@ -1838,15 +1838,6 @@ services:
       EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
-      # Config-driven notifications (design D1/D4). When 'true', PGR reads the
-      # PGR.NotificationRouting + PGR.NotificationTemplate MDMS masters, renders
-      # + localizes per recipient, and publishes ONE pre-rendered event per
-      # (recipient × channel) to complaints.domain.events for novu-bridge to
-      # deliver. DEFAULT stays 'false' here (and in application.properties) so
-      # non-Bomet tenants keep the legacy hardcoded path; Bomet flips it 'true'
-      # via docker-compose.bomet.yml. Spring relaxed-binding maps this env to
-      # the `pgr.notification.config.driven` property.
-      PGR_NOTIFICATION_CONFIG_DRIVEN: ${PGR_NOTIFICATION_CONFIG_DRIVEN:-false}
       # Kafka topic the per-recipient pre-rendered events are published to.
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
       # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
@@ -2839,18 +2830,6 @@ services:
       NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
-      # MDMS_HOST MUST be set. The bridge's application.properties default
-      # is `mdms.host=${MDMS_HOST:-http://mdms-v2.egov:8080}` — that host
-      # does not resolve on the egov docker network, so the citizen
-      # phone-prefix lookup (formatRecipientPhone -> MDMS
-      # ValidationConfigs.mobileNumberValidation) throws
-      # NB_MDMS_PHONE_PREFIX_UNAVAILABLE and NO notification is ever sent.
-      # Setting only MDMS_SEARCH_PATH (as earlier iterations did) is not
-      # enough. Verified on Bomet 2026-05-16: with MDMS_HOST unset, every
-      # complaint failed here; with it set, prefix resolves (+254) and the
-      # pipeline completes through Twilio.
-      MDMS_HOST: http://egov-mdms-service:8094
-      MDMS_SEARCH_PATH: /mdms-v2/v2/_search
       # Novu API endpoints are populated in iteration 3 once novu-api
       # is in the stack; bridge starts up but won't dispatch until
       # NOVU_BASE_URL + NOVU_API_KEY resolve to a reachable Novu.

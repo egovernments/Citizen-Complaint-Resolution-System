@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.service.TwilioTemplateSyncService;
-import org.egov.novubridge.service.provider.GenericProviderStrategy;
-import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
-import org.egov.novubridge.service.provider.TwilioProviderStrategy;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +29,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Happy-path coverage of the four {@code /novu-adapter/v1/providers} endpoints
- * (mock {@link NovuClient}, real strategy factory) plus the invariant that
+ * (mock {@link NovuClient}) plus the invariant that
  * operator {@code credentials} never appear in the {@code POST /providers}
  * response — the ALLOWLIST projection drops them.
  */
@@ -47,12 +44,8 @@ class ProviderControllerTest {
     void setUp() {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
-        GenericProviderStrategy generic = new GenericProviderStrategy();
-        TwilioProviderStrategy twilio = new TwilioProviderStrategy();
-        NovuProviderStrategyFactory factory =
-                new NovuProviderStrategyFactory(List.of(twilio, generic), generic);
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
-        controller = new ProviderController(novuClient, factory, dispatchLogRepository, twilioTemplateSyncService);
+        controller = new ProviderController(novuClient, dispatchLogRepository, twilioTemplateSyncService);
         // Default: pass overrides through unchanged, as if no dedicated WhatsApp
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))

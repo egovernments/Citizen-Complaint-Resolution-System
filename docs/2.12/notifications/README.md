@@ -40,7 +40,6 @@ Per-channel settings live in each channel's section.
 | Setting | What it is | Example |
 |---|---|---|
 | `enable_novu` | Starts Novu and the notification stack. Nothing below works without it. | `true` |
-| `pgr_notification_config_driven` | Makes PGR read routing and templates from configuration instead of code. | `true` |
 | `seed_notifications` | Seeds the three PGR notification MDMS masters on deploy. Idempotent. | `true` |
 | `novu_bridge_channels_enabled` | **Required.** Channels to dispatch — `SMS`, `WHATSAPP`, `EMAIL`, comma-separated. There is no default: leave it unset and nothing is sent. Name only channels you have onboarded a provider for. | `"SMS,WHATSAPP"` |
 | `novu_bridge_proxy_allowed_roles` | Roles allowed to manage providers from Configurator. | `"SUPERUSER,MDMS_ADMIN"` |

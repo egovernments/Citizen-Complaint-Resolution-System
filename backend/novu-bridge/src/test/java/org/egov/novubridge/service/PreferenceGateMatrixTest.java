@@ -160,7 +160,7 @@ class PreferenceGateMatrixTest {
         pipelineConfig.setChannelsEnabled(List.of("SMS", "EMAIL"));
 
         DispatchPipelineService service = new DispatchPipelineService(new EnvelopeValidator(), denying,
-                novuClient, null, dispatchLogRepository, pipelineConfig, mock(MdmsServiceClient.class));
+                novuClient, null, dispatchLogRepository, pipelineConfig);
 
         Contact contact = Contact.builder()
                 .userId("uuid-123").type("CITIZEN").name("Jane Doe")

@@ -9,7 +9,7 @@
 # stack from scratch — it assumes DIGIT is already up and flips the feature on.
 #
 # What it does, in 9 ordered steps (each is a resumable, idempotent shell fn):
-#   1. PGR onto the config-driven path   (PGR_NOTIFICATION_CONFIG_DRIVEN=true)
+#   1. PGR image check (PGR is always on the MDMS-driven path; no flag to flip)
 #   2. Pin the bridge image + bring up the Novu stack
 #   3. Mint the self-hosted Novu API key and wire it into the bridge
 #   4. Open the channel gate (SMS,EMAIL,WHATSAPP) + config-admin proxy roles
@@ -310,7 +310,7 @@ pause() {
 ALL_STEPS=(step1 step2 step3 step4 step5 step6 step7 step8 step9)
 step_title() {
   case "$1" in
-    step1) echo "PGR onto the config-driven notification path" ;;
+    step1) echo "PGR image check (MDMS-driven path is always on)" ;;
     step2) echo "Pin the bridge image + bring up the Novu stack" ;;
     step3) echo "Mint the Novu API key and wire it into the bridge" ;;
     step4) echo "Open the channel gate + config-admin proxy roles" ;;
@@ -327,18 +327,18 @@ step_index() { local i=1 s; for s in "${ALL_STEPS[@]}"; do [[ "$s" == "$1" ]] &&
 normalize_step() { local x="$1"; [[ "$x" =~ ^[0-9]+$ ]] && x="step$x"; echo "$x"; }
 
 # =============================================================================
-# STEP 1 — PGR onto the config-driven path.
+# STEP 1 — PGR image check.
+#   PGR is always on the MDMS-driven notification path (the former
+#   PGR_NOTIFICATION_CONFIG_DRIVEN flag and the legacy path were removed).
 #   pre : pgr-services exists as a compose service
-#   act : set PGR_NOTIFICATION_CONFIG_DRIVEN=true; up -d pgr-services
-#   post: container env shows the flag true AND the container is running
+#   act : pin the Content-SID pgr image when WHATSAPP is enabled; up -d pgr-services
+#   post: the container is running
 # =============================================================================
 do_step1() {
   step step1 "$(step_title step1)"
   require "pgr-services is a service in the compose stack" \
     "( cd '$DIGIT_HOME' && ${DC} config --services 2>/dev/null | grep -qx pgr-services )"
 
-  log "Setting the config-driven flag…"
-  set_env PGR_NOTIFICATION_CONFIG_DRIVEN true
   # NOTE: for WhatsApp *templates* you also need this PR's Content-SID pgr image.
   # When WHATSAPP is enabled we PULL + PIN it and FAIL LOUDLY if it can't be
   # resolved (never silently keep the base image). Compose var is PGR_SERVICES_IMAGE.
@@ -361,8 +361,6 @@ do_step1() {
   log "Recreating pgr-services…"
   compose up -d pgr-services
 
-  verify "pgr-services env has PGR_NOTIFICATION_CONFIG_DRIVEN=true" \
-    "_svc_env_has pgr-services '^PGR_NOTIFICATION_CONFIG_DRIVEN=true'"
   verify "pgr-services container is running" "_svc_running pgr-services"
 }
 

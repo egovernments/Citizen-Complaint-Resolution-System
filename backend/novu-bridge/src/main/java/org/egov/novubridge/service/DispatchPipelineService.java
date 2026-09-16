@@ -40,22 +40,19 @@ public class DispatchPipelineService {
     private final SmsCountryClient smsCountryClient;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
-    private final MdmsServiceClient mdmsServiceClient;
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    NovuClient novuClient,
                                    SmsCountryClient smsCountryClient,
                                    DispatchLogRepository dispatchLogRepository,
-                                   NovuBridgeConfiguration config,
-                                   MdmsServiceClient mdmsServiceClient) {
+                                   NovuBridgeConfiguration config) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.novuClient = novuClient;
         this.smsCountryClient = smsCountryClient;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
-        this.mdmsServiceClient = mdmsServiceClient;
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
@@ -242,7 +239,7 @@ public class DispatchPipelineService {
         return novuClient.trigger(
                 workflowId,
                 subscriberId,
-                formatRecipientPhone(phone, null, config.getChannel(), requestInfo),
+                formatRecipientPhone(phone, config.getChannel()),
                 null,
                 payload,
                 transactionId);
@@ -275,37 +272,24 @@ public class DispatchPipelineService {
         return value == null ? "" : value.replaceAll("\\D", "");
     }
 
-    private String formatRecipientPhone(String mobile, String tenantId, String channel, RequestInfo requestInfo) {
+    /**
+     * Test-trigger recipient formatting. The live pipeline receives an already
+     * country-coded number from PGR; this diagnostic path takes the number as given
+     * (E.164 recommended), strips any pre-existing {@code whatsapp:} prefix, and re-adds
+     * it only when the default channel is WhatsApp.
+     */
+    private String formatRecipientPhone(String mobile, String channel) {
         if (!StringUtils.hasText(mobile)) {
             return null;
         }
-        boolean isWhatsapp = "whatsapp".equalsIgnoreCase(channel);
         String normalized = mobile.trim();
-
-        // Strip any pre-existing whatsapp: prefix so we control formatting from here.
         if (normalized.startsWith("whatsapp:")) {
             normalized = normalized.substring("whatsapp:".length());
         }
-
-        String e164;
-        if (normalized.startsWith("+")) {
-            e164 = normalized;
-        } else {
-            // Fetch default country-code prefix from MDMS
-            if (!StringUtils.hasText(tenantId)) {
-                throw new CustomException("NB_TENANT_ID_MISSING",
-                        "tenantId is required to resolve phone country-code prefix from MDMS");
-            }
-            MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
-            if (!normalized.matches(validationConfig.getMobileNumberRegex())) {
-                throw new CustomException("NB_INVALID_MOBILE_NUMBER",
-                        "Mobile number does not match the configured pattern for tenantId=" + tenantId);
-            }
-            e164 = validationConfig.getCountryCode() + normalized;
+        if (!normalized.startsWith("+")) {
+            log.warn("Test-trigger recipient {} has no country code; sending as-is", PiiMask.mask(normalized));
         }
-
-        // Twilio Programmable WhatsApp requires the "whatsapp:" prefix; SMS takes raw E.164.
-        return isWhatsapp ? "whatsapp:" + e164 : e164;
+        return "whatsapp".equalsIgnoreCase(channel) ? "whatsapp:" + normalized : normalized;
     }
 
     private DerivedContext deriveContext(ComplaintsDomainEvent event) {

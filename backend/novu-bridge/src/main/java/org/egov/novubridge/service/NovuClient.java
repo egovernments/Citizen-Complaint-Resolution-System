@@ -132,12 +132,12 @@ public class NovuClient {
 
     /**
      * The exact {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
-     * override envelope Novu's Twilio provider consumes for an approved Content template — matching
-     * {@code TwilioProviderStrategy.buildProviderConfig}. {@code contentVariables} is a JSON string
+     * override envelope Novu's Twilio provider consumes for an approved Content template.
+     * Shared by the live dispatch path and the configurator test-send. {@code contentVariables} is a JSON string
      * (Twilio requirement). No sender/credentials here — those live in the Novu integration.
      */
-    private Map<String, Object> buildProviderTemplateOverrides(String contentSid,
-                                                               Map<String, Object> contentVariables) {
+    public static Map<String, Object> buildProviderTemplateOverrides(String contentSid,
+                                                                     Map<String, ?> contentVariables) {
         Map<String, Object> body = new HashMap<>();
         body.put("contentSid", contentSid);
         if (contentVariables != null && !contentVariables.isEmpty()) {

@@ -22,8 +22,7 @@ import static org.egov.pgr.util.PGRConstants.CHANNEL_WHATSAPP;
 /**
  * The "who"/"how": resolves the flattened RAINMAKER-PGR.NotificationRouting rows for a workflow
  * transition into the (audience, channel, assigneeOnly) tuples that should be notified. Each MDMS
- * row is one row per (audience, channel); this returns one RoutingMatch per matching row. Replaces
- * the hardcoded NOTIFICATION_ENABLE_FOR_STATUS gate + the per-transition if-chains.
+ * row is one row per (audience, channel); this returns one RoutingMatch per matching row.
  *
  * audience is now any role string (CITIZEN, EMPLOYEE alias, or a role pool like PGR_LME/GRO/...).
  * The router no longer validates the audience against a fixed enum — recipient resolution and pool

@@ -76,12 +76,6 @@ public class NovuBridgeConfiguration {
     @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME}'.split(',')}")
     private java.util.List<String> proxyAllowedRoles;
 
-    @Value("${mdms.host:http://localhost:8082}")
-    private String mdmsHost;
-
-    @Value("${mdms.search.path:/egov-mdms-service/v2/_search}")
-    private String mdmsSearchPath;
-
     @Value("${novu.base.url:http://localhost:3000}")
     private String novuBaseUrl;
 
@@ -107,7 +101,7 @@ public class NovuBridgeConfiguration {
     // Novu resolves which integration to use per channel by picking the PRIMARY
     // one for that channel UNLESS the trigger names an explicit
     // overrides.<channel>.integrationIdentifier. Twilio WhatsApp delivery is
-    // modeled in Novu as an "sms"-channel step (see TwilioProviderStrategy), so
+    // modeled in Novu as an "sms"-channel step (WhatsApp rides the Twilio sms integration), so
     // a second, WhatsApp-registered Twilio integration living alongside the
     // primary (plain SMS) one on that same "sms" channel is otherwise never
     // picked — every trigger, SMS or WhatsApp, would keep resolving to the

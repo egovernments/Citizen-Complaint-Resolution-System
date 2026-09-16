@@ -3,13 +3,9 @@ package org.egov.novubridge.web.controllers;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
-import org.egov.novubridge.service.provider.NovuProviderStrategy;
-import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
-import org.egov.novubridge.web.models.ResolvedProvider;
-import org.egov.novubridge.web.models.ResolvedTemplate;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -60,16 +56,13 @@ public class ProviderController {
     private static final String WORKFLOW_EMAIL = "complaints-email";
 
     private final NovuClient novuClient;
-    private final NovuProviderStrategyFactory strategyFactory;
     private final DispatchLogRepository dispatchLogRepository;
     private final org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService;
 
     public ProviderController(NovuClient novuClient,
-                              NovuProviderStrategyFactory strategyFactory,
                               DispatchLogRepository dispatchLogRepository,
                               org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService) {
         this.novuClient = novuClient;
-        this.strategyFactory = strategyFactory;
         this.dispatchLogRepository = dispatchLogRepository;
         this.twilioTemplateSyncService = twilioTemplateSyncService;
     }
@@ -259,9 +252,9 @@ public class ProviderController {
     /**
      * Send a live test message through Novu. SMS/EMAIL trigger the per-channel
      * workflow with a {@code {body, subject}} payload. WHATSAPP rides the Twilio SMS
-     * integration: {@code to.phone = "whatsapp:+<E164>"} plus
-     * {@code overrides.providers.twilio} built by {@link org.egov.novubridge.service.provider.TwilioProviderStrategy}
-     * for an approved {@code contentSid}. The recipient-derived {@code subscriberId}
+     * integration: {@code to.phone = "whatsapp:+<E164>"} plus the same
+     * {@code overrides.providers.twilio} Content-template envelope the live dispatch path
+     * uses ({@link NovuClient#buildProviderTemplateOverrides}) for an approved {@code contentSid}. The recipient-derived {@code subscriberId}
      * is stable (no clock/random) so a repeated test is reproducible. Writes one
      * {@code TEST}-tagged {@code nb_dispatch_log} row with a masked recipient.
      */
@@ -360,29 +353,17 @@ public class ProviderController {
     }
 
     /**
-     * The exact {@code {providers:{twilio:{...}}}} override envelope
-     * {@link org.egov.novubridge.service.provider.TwilioProviderStrategy} produces
-     * for a content template (contentSid + contentVariables). No credentials/sender
-     * are set — those live in the Novu integration.
+     * Content-template override for a WhatsApp test-send: the same
+     * {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
+     * envelope the live dispatch path builds, so a test exercises exactly what production
+     * sends. No credentials/sender are set — those live in the Novu integration. Returns
+     * {@code null} when no {@code contentSid} was supplied (free-form; Twilio will reject it).
      */
     private Map<String, Object> buildWhatsappOverrides(String contentSid, List<Object> variables) {
-        ResolvedProvider provider = ResolvedProvider.builder()
-                .providerName("twilio")
-                .channel("whatsapp")
-                .build();
-        ResolvedTemplate template = ResolvedTemplate.builder()
-                .contentSid(contentSid)
-                .build();
-
-        NovuProviderStrategy strategy = strategyFactory.getStrategy(provider);
-        Map<String, Object> providerConfig = strategy.buildProviderConfig(
-                provider, template, toContentVariables(variables));
-
-        Map<String, Object> providers = new HashMap<>();
-        providers.put(provider.getProviderName().toLowerCase(), providerConfig);
-        Map<String, Object> overrides = new HashMap<>();
-        overrides.put("providers", providers);
-        return overrides;
+        if (!StringUtils.hasText(contentSid)) {
+            return null;
+        }
+        return NovuClient.buildProviderTemplateOverrides(contentSid, toContentVariables(variables));
     }
 
     /** Positional variables → Twilio 1-based contentVariables map ({@code {"1":..,"2":..}}). */
