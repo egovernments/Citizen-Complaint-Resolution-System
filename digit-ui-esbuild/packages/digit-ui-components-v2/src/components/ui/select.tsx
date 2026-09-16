@@ -128,10 +128,21 @@ export function Select<TValue extends string = string>({
         popover && list
           ? Math.max(0, popover.getBoundingClientRect().height - list.getBoundingClientRect().height)
           : 0;
-      setPlacement({
-        above: flip,
-        maxListHeight: Math.max(MIN_LIST_HEIGHT, Math.min(MAX_LIST_HEIGHT, room - chrome)),
-      });
+      // On a viewport where neither direction has 120px plus chrome (a landscape
+      // phone, a short embedded frame) the old Math.max floor pushed the popover
+      // past the edge again, and when flipped that overrun goes off the TOP,
+      // which cannot be scrolled to at all.
+      // MIN_LIST_HEIGHT stays the flip threshold above, but it must not be a
+      // floor on the height: clamping up to it is what let the popover back
+      // over the fold. Take what actually fits and let the list scroll inside.
+      const available = Math.max(0, room - chrome);
+      const next = Math.min(MAX_LIST_HEIGHT, available);
+      // Bail when nothing moved: this runs on capture-phase scroll, so it also
+      // fires while scrolling the list itself, and a fresh object every time
+      // re-rendered the Select on every scroll event.
+      setPlacement((prev) =>
+        prev.above === flip && prev.maxListHeight === next ? prev : { above: flip, maxListHeight: next }
+      );
     };
     measure();
     // Again on the next frame: the first pass runs before the popover has laid

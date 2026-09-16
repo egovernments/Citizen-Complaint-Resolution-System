@@ -14,7 +14,10 @@ import { useEmployeeNavItems } from "./employeeNavItems";
 const forHamburger = (items = []) =>
   items.map((item) => ({
     ...item,
-    icon: item?.icon?.icon ?? item?.icon,
+    // Not `item?.icon?.icon ?? item?.icon`: extractLeftIcon returns null when a
+    // group has no resolvable icon, and `??` would then fall through and hand
+    // iconRender the wrapper object, which keys to "[object Object]" and warns.
+    icon: typeof item?.icon === "object" && item?.icon !== null ? item.icon.icon : item?.icon,
     ...(item?.children ? { children: forHamburger(item.children) } : {}),
   }));
 
