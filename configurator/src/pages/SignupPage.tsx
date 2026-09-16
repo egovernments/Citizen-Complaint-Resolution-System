@@ -138,7 +138,46 @@ function AvailabilityNote({
   );
 }
 
-export default function SignupPage() {
+/**
+ * The branded shell every step sits in. Written once and wrapped around the
+ * whole flow rather than repeated per phase, so the sign-in gate, the wizard,
+ * the provisioning screen and the workspace picker all read as one product
+ * instead of a form floating on an empty page.
+ */
+function SignupShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid min-h-screen lg:grid-cols-2">
+      {/* Hidden on small screens so the form owns the viewport. */}
+      <aside className="hidden flex-col justify-between bg-secondary p-10 text-white lg:flex">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-1 bg-primary" />
+          <div>
+            <p className="font-condensed text-xl font-bold">DIGIT Complaint Management</p>
+            <p className="text-xs uppercase tracking-widest text-white/70">
+              Digital infrastructure for public services
+            </p>
+          </div>
+        </div>
+        <div>
+          <h1 className="font-condensed text-4xl font-bold leading-tight">
+            Manage complaints from intake to closure.
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-white/80">
+            Set up your account to receive complaints, assign them to the right team, track service
+            timelines, and monitor resolution across departments and localities.
+          </p>
+        </div>
+        <p className="text-xs text-white/50">© 2026 eGovernments Foundation · DIGIT</p>
+      </aside>
+
+      <main className="flex items-center justify-center bg-background p-6">
+        <div className="w-full max-w-md space-y-6">{children}</div>
+      </main>
+    </div>
+  );
+}
+
+function SignupFlow() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
   const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
@@ -455,7 +494,7 @@ export default function SignupPage() {
 
   if (phase === 'loading') {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center py-10 text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
       </div>
     );
@@ -463,7 +502,7 @@ export default function SignupPage() {
 
   if (phase === 'signedOut') {
     return (
-      <div className="mx-auto max-w-md px-4 py-16">
+      <div>
         <h1 className="text-2xl font-semibold">Set up your account</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Sign in to begin. We will create your workspace once the details are confirmed.
@@ -491,7 +530,7 @@ export default function SignupPage() {
 
   if (phase === 'chooseTenant') {
     return (
-      <div className="mx-auto max-w-md px-4 py-16">
+      <div>
         <h1 className="text-2xl font-semibold">Choose a workspace</h1>
         {banner}
         <div className="mt-6 space-y-2">
@@ -514,7 +553,7 @@ export default function SignupPage() {
 
   if (phase === 'entering') {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+      <div className="flex items-center justify-center py-10 text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening your workspace…
       </div>
     );
@@ -524,7 +563,7 @@ export default function SignupPage() {
     const done = new Set(operation.completedSteps);
     const failed = operation.status === 'RETRYABLE_FAILED' || operation.status === 'TERMINAL_FAILED';
     return (
-      <div className="mx-auto max-w-lg px-4 py-16">
+      <div>
         <h1 className="text-2xl font-semibold">Setting up {accountName}</h1>
         <p className="mt-2 text-sm text-muted-foreground">This usually takes a minute or two.</p>
         {banner}
@@ -587,7 +626,7 @@ export default function SignupPage() {
 
   if (phase === 'stuck') {
     return (
-      <div className="mx-auto max-w-md px-4 py-16">
+      <div>
         <h1 className="text-2xl font-semibold">Setup could not be completed</h1>
         <Alert variant="destructive" className="mt-6">
           <AlertCircle className="h-4 w-4" />
@@ -604,7 +643,7 @@ export default function SignupPage() {
 
   if (phase === 'failed') {
     return (
-      <div className="mx-auto max-w-md px-4 py-16">
+      <div>
         {banner}
         <Button onClick={() => void bootstrap()}>
           <RefreshCw className="mr-2 h-4 w-4" /> Try again
@@ -614,7 +653,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div>
       <h1 className="text-2xl font-semibold">Set up your account</h1>
       <div className="mt-6">
         <Stepper steps={STEPS} current={step} />
@@ -834,5 +873,13 @@ export default function SignupPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <SignupShell>
+      <SignupFlow />
+    </SignupShell>
   );
 }
