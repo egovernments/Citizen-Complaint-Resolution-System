@@ -61,11 +61,10 @@ spec:
             - name: REOPEN_COMPLAINT_ENABLED
               value: "true"
             # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
-            # Baked-in default is already "true"; surfaced here so the auto-escalation
-            # engine is a visible, per-tenant-overridable knob. Set "false" to disable
-            # the scan entirely (no workflow transitions / kafka events).
+            # Keep disabled until the tenant MDMS policy, workflow self-loops and
+            # reporting hierarchy have passed the rollout checks.
             - name: PGR_ESCALATION_ENABLED
-              value: "true"
+              value: "false"
             - name: COMMENT_BY_EMPLOYEE_NOTIF_ENABLED
               value: "false"
             - name: NOTIFICATION_ALLOWED_ON_STATUS
@@ -74,7 +73,7 @@ spec:
               value: "true"
             - name: EGOV_USR_EVENTS_CREATE_TOPIC
               value: persist-user-events-async
-            - name: PGR_STATELEVEL_TENANTID
+            - name: STATE_LEVEL_TENANT_ID
               value: pg
             - name: JAVA_OPTS
               value: "-Xmx192m -Xms192m"

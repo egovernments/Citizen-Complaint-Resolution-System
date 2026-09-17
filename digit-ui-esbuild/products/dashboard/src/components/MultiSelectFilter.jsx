@@ -68,6 +68,7 @@ export const MultiSelectPanel = ({
         key={option.id}
         selected={selected.has(option.id)}
         multiple
+        semantics="dialog"
         title={option.label}
         onSelect={() => toggle(option.id)}
       >
@@ -97,11 +98,7 @@ export const MultiSelectPanel = ({
           autoFocus
         />
       )}
-      <div
-        className="dashboard-popover-list dashboard-multiselect-options"
-        role="listbox"
-        aria-multiselectable="true"
-      >
+      <div className="dashboard-popover-list dashboard-multiselect-options">
         {rows.length ? (
           rows
         ) : (

@@ -19,7 +19,7 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
     const tenantId = Digit.ULBService.getCurrentTenantId();
     const headerLocale = Digit.Utils.locale.getTransformedLocale(tenantId);
 
-    const { dispatch } = useContext(InboxContext)
+    const { state, dispatch } = useContext(InboxContext)
 
     // Check if it's mobile view
     const isMobile = window.innerWidth <= 426;
@@ -49,6 +49,19 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
         register("offset", 0);
         register("limit", 10);
     }, [register]);
+
+    // This component owns the page offset locally and pushes it into
+    // tableForm, but the Filter / Search modal also sends the offset back
+    // to 0 when the criteria change. Follow the reducer when that happens,
+    // otherwise the pager keeps showing the old page number and the
+    // next/prev buttons step from a stale offset. Only mirrors, never
+    // dispatches, so this cannot loop with onSubmit above.
+    const reducerOffset = state?.tableForm?.offset;
+    useEffect(() => {
+        if (reducerOffset !== undefined && reducerOffset !== getValues("offset")) {
+            setValue("offset", reducerOffset);
+        }
+    }, [reducerOffset]);
 
     function onPageSizeChange(e) {
         setValue("limit", Number(e.target.value));
@@ -92,64 +105,61 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
 
     // Render individual card for mobile
     const renderCard = (row, index) => {
-        const cardContent = Object.keys(row.mapping).map(key => {
-            let toRender;
-            if (row.additionalCustomization[key]) {
-                toRender = (
-                    <div key={key} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 0',
-                        borderBottom: '1px solid #f0f0f0'
-                    }}>
-                        <span style={{
-                            fontWeight: '600',
-                            color: '#666',
-                            fontSize: '16px',
-                            flex: '1'
-                        }}>{t(key)}:</span>
-                        <span style={{
-                            color: '#333',
-                            fontSize: '16px',
-                            textAlign: 'right',
-                            flex: '1',
-                            wordBreak: 'break-word'
-                        }}>
-                            {Digit?.Customizations?.[apiDetails?.masterName]?.[apiDetails?.moduleName]?.additionalCustomizations(row.details, key, {}, row.mapping[key], t, searchResult)}
-                        </span>
-                    </div>
-                )
-            }
-            else {
-                toRender = (
-                    <div key={key} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 0',
-                        borderBottom: '1px solid #f0f0f0'
-                    }}>
-                        <span style={{
-                            fontWeight: '600',
-                            color: '#666',
-                            fontSize: '16px',
-                            flex: '1'
-                        }}>{t(key)}:</span>
-                        <span style={{
-                            color: '#333',
-                            fontSize: '16px',
-                            textAlign: 'right',
-                            flex: '1',
-                            wordBreak: 'break-word'
-                        }}>
-                            {row.mapping[key] || t("NA")}
-                        </span>
-                    </div>
-                )
-            }
-            return toRender
-        });
+        const keys = Object.keys(row.mapping);
+
+        const renderValue = (key) =>
+            row.additionalCustomization[key]
+                ? Digit?.Customizations?.[apiDetails?.masterName]?.[apiDetails?.moduleName]?.additionalCustomizations(row.details, key, {}, row.mapping[key], t, searchResult)
+                : row.mapping[key] || t("NA");
+
+        // The first configured column is the record's identifier in every
+        // inbox config, and its cell renderer is the one that stacks more
+        // than one line (PGR puts the complaint number over the complaint
+        // type). Squeezing that into the right half of a label/value row is
+        // what made the number look unlabelled and the type look like it
+        // belonged to "Complaint No:" (#2038 mobile review). Give it the
+        // full card width as a title instead, the way the desktop table
+        // gives it the identifier column.
+        const [titleKey, ...detailKeys] = keys;
+
+        const cardContent = detailKeys.map((key, i) => (
+            <div key={key} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                // Top, not center: a value that wraps to two lines used to
+                // push its own label down to the middle of the row, which
+                // read as the label belonging to the wrapped line.
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '8px 0',
+                borderBottom: i === detailKeys.length - 1 ? 'none' : '1px solid var(--color-card-divider, #f0f0f0)'
+            }}>
+                <span style={{
+                    fontWeight: '600',
+                    color: 'var(--color-text-muted, #6B7280)',
+                    fontSize: '0.875rem',
+                    flex: '1 1 45%'
+                }}>{t(key)}:</span>
+                {/* A flex end-justified box rather than textAlign: right,
+                    because several cells render a Tag / chip, which is a
+                    block and so ignored the text alignment. That is the
+                    left-aligned SLA number in the report. */}
+                <span style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    color: 'var(--color-text-primary, #333)',
+                    // 15px, the same value size the detail card uses, so the
+                    // list and the record it opens agree. The label above
+                    // stays a 14px caption.
+                    fontSize: '0.9375rem',
+                    textAlign: 'right',
+                    flex: '1 1 55%',
+                    wordBreak: 'break-word'
+                }}>
+                    {renderValue(key)}
+                </span>
+            </div>
+        ));
 
         return (
             <Link 
@@ -163,13 +173,24 @@ const MobileSearchResults = ({ config, data, isLoading, isFetching, fullConfig }
             >
                 <div style={{
                     background: '#ffffff',
-                    border: '1px solid #e0e0e0',
+                    border: '1px solid var(--color-card-border, #e0e0e0)',
                     borderRadius: '8px',
                     padding: '16px',
                     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                     transition: 'box-shadow 0.2s ease',
-                  
                 }}>
+                    {titleKey ? (
+                        <div style={{
+                            paddingBottom: '12px',
+                            marginBottom: '4px',
+                            borderBottom: '1px solid var(--color-card-divider, #f0f0f0)',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            wordBreak: 'break-word'
+                        }}>
+                            {renderValue(titleKey)}
+                        </div>
+                    ) : null}
                     {cardContent}
                 </div>
             </Link>

@@ -250,6 +250,36 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED_JUST_NOW",
+    "message": "just now",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_MIN_AGO",
+    "message": "{{n}} min ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HR_AGO",
+    "message": "{{n}} hr ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HRS_AGO",
+    "message": "{{n}} hrs ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAY_AGO",
+    "message": "{{n}} day ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAYS_AGO",
+    "message": "{{n}} days ago",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_COMMON_UNASSIGNED",
     "message": "Unassigned",
     "module": "rainmaker-dashboard"
@@ -1931,6 +1961,36 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_COMMON_UPDATED",
     "message": "Atualizado",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_JUST_NOW",
+    "message": "agora mesmo",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_MIN_AGO",
+    "message": "há {{n}} min",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HR_AGO",
+    "message": "há {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_HRS_AGO",
+    "message": "há {{n}} h",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAY_AGO",
+    "message": "há {{n}} dia",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_COMMON_UPDATED_DAYS_AGO",
+    "message": "há {{n}} dias",
     "module": "rainmaker-dashboard"
   },
   {

@@ -33,6 +33,7 @@ const {
   selectedCodes,
   toggleHierarchySelection,
   removeHierarchySelection,
+  mergeFlatHierarchySelections,
 } = bundle("multiSelectFilters.js");
 const { globalParams } = bundle("queryPlan.js");
 
@@ -74,6 +75,24 @@ test("selected hierarchy nodes expand to unique exact scoped codes", () => {
     ]),
     ["Garbage", "Sewage", "Road"]
   );
+});
+
+test("flat fallback Apply preserves interior selection metadata", () => {
+  const sanitation = parent("SANITATION", ["Garbage", "Sewage"]);
+  // Re-applying the same codes through the flat picker must keep leaf:false
+  // and the expanded codes list — not rewrite as a leaf covering only itself.
+  assert.deepEqual(
+    mergeFlatHierarchySelections(["SANITATION", "Road"], [sanitation, leaf("Road")]),
+    [sanitation, leaf("Road")]
+  );
+  // Brand-new codes from the flat list are true leaves.
+  assert.deepEqual(mergeFlatHierarchySelections(["WARD_9"], [sanitation]), [
+    { code: "WARD_9", path: null, leaf: true, codes: ["WARD_9"] },
+  ]);
+  // Dropped codes stay dropped.
+  assert.deepEqual(mergeFlatHierarchySelections(["Road"], [sanitation, leaf("Road")]), [
+    leaf("Road"),
+  ]);
 });
 
 test("query plan preserves scalar wire shape for one value and uses plural params for many", () => {

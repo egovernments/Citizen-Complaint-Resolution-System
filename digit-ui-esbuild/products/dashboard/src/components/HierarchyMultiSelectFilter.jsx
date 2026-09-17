@@ -162,11 +162,7 @@ const HierarchyMultiSelectPanel = ({
         </div>
       )}
 
-      <div
-        className="dashboard-popover-list dashboard-multiselect-options"
-        role="listbox"
-        aria-multiselectable="true"
-      >
+      <div className="dashboard-popover-list dashboard-multiselect-options">
         {query ? (
           searchResults.length ? (
             searchResults.map((entry) => (
@@ -174,6 +170,7 @@ const HierarchyMultiSelectPanel = ({
                 key={entry.code}
                 selected={selectedCodes.has(entry.code)}
                 multiple
+                semantics="dialog"
                 title={entry.trail}
                 onSelect={() => toggle(entry.code)}
               >
@@ -192,6 +189,7 @@ const HierarchyMultiSelectPanel = ({
               <PopoverMenuItem
                 selected={selectedCodes.has(browse)}
                 multiple
+                semantics="dialog"
                 title={`${allInLabel} ${label(browse)}`}
                 onSelect={() => toggle(browse)}
               >
@@ -206,6 +204,7 @@ const HierarchyMultiSelectPanel = ({
                 }
                 multiple={child.isLeaf}
                 descend={!child.isLeaf}
+                semantics="dialog"
                 title={label(child.code)}
                 onSelect={() =>
                   child.isLeaf ? toggle(child.code) : setBrowseCode(child.code)

@@ -88,6 +88,27 @@ export function removeHierarchySelection(current, code) {
   );
 }
 
+/**
+ * Rebuild hierarchy selections from a flat multi-select's code list.
+ * When the hierarchy tree is unavailable, Apply must not rewrite an existing
+ * interior selection (leaf:false + expanded `codes`) as a leaf — that drops the
+ * covered ward/service codes. Preserve prior metadata for codes still selected;
+ * brand-new codes from the flat list are true leaves.
+ */
+export function mergeFlatHierarchySelections(codes, previous = []) {
+  const prevByCode = new Map(
+    normalizeHierarchySelections(previous).map((selection) => [
+      selection.code,
+      selection,
+    ])
+  );
+  return normalizeStringList(codes).map((code) => {
+    const prev = prevByCode.get(code);
+    if (prev) return prev;
+    return { code, path: null, leaf: true, codes: [code] };
+  });
+}
+
 export function selectionCountLabel(count, singular, plural = singular) {
   return `${count} ${count === 1 ? singular : plural}`;
 }

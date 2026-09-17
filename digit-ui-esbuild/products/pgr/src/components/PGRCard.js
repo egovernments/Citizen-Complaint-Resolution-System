@@ -44,7 +44,12 @@ const PGRCard = () => {
   links = links.filter(hasRequiredRoles);
 
   const propsForModuleCard = {
-    Icon: "UpdateExpense",
+    // "UpdateExpense" is a line-art document-and-pencil built for an expense
+    // screen, which sat next to the Dashboard card's filled grid and read as a
+    // different icon set (#2038). Announcement is the filled speech-bubble the
+    // reference image uses for complaints, and is already what this tenant's
+    // own MDMS "Complaints" card row asks for.
+    Icon: "Announcement",
     moduleName: t("PGR"),
     kpis: [],
     links: links,

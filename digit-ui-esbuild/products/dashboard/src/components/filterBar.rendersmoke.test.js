@@ -162,19 +162,24 @@ test("PopoverMenu dialog variant keeps Tab inside the panel (does not close like
   assert.match(source, /aria-haspopup=\{isDialog \? "dialog" : "menu"\}/);
 });
 
-test("multi-select filters mount as dialogs so Apply is keyboard-reachable", () => {
+test("multi-select filters mount as dialogs with plain buttons (not listbox/menuitem)", () => {
   const multi = fs.readFileSync(path.join(__dirname, "MultiSelectFilter.jsx"), "utf8");
   const hierarchy = fs.readFileSync(
     path.join(__dirname, "HierarchyMultiSelectFilter.jsx"),
     "utf8"
   );
+  const popover = fs.readFileSync(path.join(__dirname, "ui", "PopoverMenu.jsx"), "utf8");
   assert.match(multi, /variant="dialog"/);
   assert.match(hierarchy, /variant="dialog"/);
-  assert.match(multi, /role="listbox"/);
-  assert.match(hierarchy, /role="listbox"/);
+  assert.match(multi, /semantics="dialog"/);
+  assert.match(hierarchy, /semantics="dialog"/);
+  // Coherent dialog pattern: no listbox wrapping menuitem/option rows.
+  assert.doesNotMatch(multi, /role="listbox"/);
+  assert.doesNotMatch(hierarchy, /role="listbox"/);
+  assert.match(popover, /semantics === "dialog"/);
 });
 
-test("multi-select panel exposes search, options listbox, and Apply for keyboard flow", () => {
+test("multi-select panel exposes search, pressed options, and Apply for keyboard flow", () => {
   const html = renderMultiSelectPanel({
     options: [
       { id: "W01", label: "Ward One" },
@@ -191,9 +196,16 @@ test("multi-select panel exposes search, options listbox, and Apply for keyboard
     close: noop,
   });
   assert.match(html, /data-popover-autofocus/);
-  assert.match(html, /role="listbox"/);
-  assert.match(html, /aria-multiselectable="true"/);
-  assert.match(html, /role="option"/);
+  assert.doesNotMatch(html, /role="listbox"/);
+  assert.doesNotMatch(html, /role="option"/);
+  assert.doesNotMatch(html, /role="menuitem"/);
+  assert.match(html, /aria-pressed="true"/);
   assert.match(html, /dashboard-multiselect-apply/);
   assert.match(html, />Apply</);
+});
+
+test("flat hierarchy fallback Apply preserves interior selection metadata", () => {
+  const source = fs.readFileSync(path.join(__dirname, "DashboardFilters.jsx"), "utf8");
+  assert.match(source, /mergeFlatHierarchySelections/);
+  assert.doesNotMatch(source, /flatHierarchySelections/);
 });

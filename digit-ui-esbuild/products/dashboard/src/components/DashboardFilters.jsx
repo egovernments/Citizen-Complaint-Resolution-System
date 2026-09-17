@@ -17,6 +17,7 @@ import {
   normalizeHierarchySelections,
   normalizeStringList,
   removeHierarchySelection,
+  mergeFlatHierarchySelections,
 } from "../utils/multiSelectFilters";
 
 const FunnelIcon = () => (
@@ -74,13 +75,6 @@ const DashboardFilters = ({
 
   const flatHierarchyValues = (selections) =>
     selections.map((selection) => selection.code);
-  const flatHierarchySelections = (codes) =>
-    normalizeStringList(codes).map((code) => ({
-      code,
-      path: null,
-      leaf: true,
-      codes: [code],
-    }));
 
   const activeChips = [
     ...geographies.map((selection) => ({
@@ -194,7 +188,10 @@ const DashboardFilters = ({
               cancelLabel={cancelLabel}
               emptyLabel={noMatchesLabel}
               onChange={(codes) =>
-                onFilterChange("geographies", flatHierarchySelections(codes))
+                onFilterChange(
+                  "geographies",
+                  mergeFlatHierarchySelections(codes, geographies)
+                )
               }
             />
           )}
@@ -223,7 +220,10 @@ const DashboardFilters = ({
               cancelLabel={cancelLabel}
               emptyLabel={noMatchesLabel}
               onChange={(codes) =>
-                onFilterChange("complaintTypes", flatHierarchySelections(codes))
+                onFilterChange(
+                  "complaintTypes",
+                  mergeFlatHierarchySelections(codes, complaintTypes)
+                )
               }
             />
           )}

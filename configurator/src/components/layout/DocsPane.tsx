@@ -387,18 +387,32 @@ const docsConfig: Record<string, DocSection[]> = {
 
   '/manage/advanced/auto-escalation': [
     {
-      title: 'Auto Escalation',
+      title: 'Workflow Auto Escalation (non-PGR)',
       icon: BookOpen,
       links: [
         {
           title: 'Escalation Configuration',
           url: 'https://core.digit.org/platform/core-services/workflow-service',
-          description: 'Automatic escalation on SLA breach',
+          description: 'Generic workflow escalation for non-PGR business services',
         },
         {
           title: 'SLA Management',
           url: 'https://docs.digit.org/complaints-resolution/deploy/configure/configure-service/configure-workflow',
           description: 'Configure SLA times for workflows',
+        },
+      ],
+    },
+  ],
+
+  '/manage/advanced/pgr-escalation': [
+    {
+      title: 'PGR Escalation',
+      icon: BookOpen,
+      links: [
+        {
+          title: 'PGR escalation self-loop contract',
+          url: 'https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/docs/migration/pgr-escalation-self-loop.md',
+          description: 'Configure cumulative thresholds and eligible complaint states',
         },
       ],
     },

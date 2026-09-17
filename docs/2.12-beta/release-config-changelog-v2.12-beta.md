@@ -21,7 +21,7 @@ All MDMS-v2 master data lives under `utilities/default-data-handler` (auto-seede
 - **`RAINMAKER-PGR.ComplaintExtendedAttributeSchema`** (NEW) — per-`schemaRef` JSON-Schema fragments for extended/confidential complaint fields (e.g. `IgeComplaintExtendedAttributes`), with `x-security` attribute lists.
 - **`RAINMAKER-PGR.ComplaintRelatedToMap`** (NEW) — lookup driving which extended-attribute schema applies to a complaint (`IGE`, `IGSAE` codes).
 - **`RAINMAKER-PGR.ComplaintTemplateType`** (NEW) — joins `caseRelatedTo` → `schemaRef` + allowed document types + allowed viewer roles (e.g. `CONFIDENTIAL_COMPLAINT_VIEWER`).
-- **`RAINMAKER-PGR.EscalationConfig`** (NEW) — per-tenant auto-escalation SLA config (`maxDepth`, `defaultSlaByLevel[]`, optional per-serviceCode overrides). Without a record, pgr-services falls back to a hardcoded 5-day SLA. Shipped default: `maxDepth:3`, SLAs `[1h, 4h, 24h]`.
+- **`RAINMAKER-PGR.EscalationConfig`** (NEW) — per-tenant cumulative escalation thresholds. Preferred `[80,120,200]` percentages use the leaf complaint type's `ComplaintHierarchy.slaHours`; the existing `[1h,4h,24h]` absolute ladder remains a fallback, and no record expands the service's 5-day interval to cumulative 5 / 10 / 15-day thresholds.
 - **`RAINMAKER-PGR.MapConfig`** (NEW schema, no default data) — per-tenant map tiles/center/zoom/geocode-bbox config. Opt-in; UI falls back to globalConfigs/built-in defaults if no record exists.
 - **`RAINMAKER-PGR.InboxVisibilityConfig`** (NEW schema, no default data) — feature flag + config for the employee inbox "My/All" tabs (Visibility V1). Missing record = legacy inbox behaviour; safe by default.
 
@@ -102,7 +102,7 @@ All MDMS-v2 master data lives under `utilities/default-data-handler` (auto-seede
 - **Changed default (potentially BREAKING)**: `egov.boundary.host` was `http://localhost:8081`, now `http://boundary-service.egov:8080/` (in-cluster service name).
 - **Notifications** (default OFF): `pgr.notification.config.driven=false`, `.default.locale`, `.rolepool.page.size`, `.rolepool.max.pages`, `.mdms.cache.ttl.ms`.
 - **Analytics cache**: `pgr.analytics.config-cache-ttl-ms=300000`.
-- **Escalation scheduler** (default **ON**: `pgr.escalation.enabled=true`): `.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — requires this Kafka topic to exist after upgrade.
+- **Escalation scheduler** (default **OFF**: `pgr.escalation.enabled=false`): `.interval.ms`, `.batch.size`, `.default.sla.ms`, `.max.depth`, `.kafka.topic=pgr-escalation-events` — enable only after rollout preflight and creation of this Kafka topic.
 - **Dashboard MV refresh** (default **ON**): `pgr.dashboard.refresh.enabled=true`, `.interval.ms` — depends on the new materialized views (Section 2.4).
 - **Encryption integration** (mandatory, no flag): `egov.enc.host=http://egov-enc-service:1234`, `.encrypt.endpoint`, `.decrypt.endpoint` — pgr-services now calls an `egov-enc-service` for PII encryption; requires that service to be deployed and reachable.
 - **Visibility V1 / inbox scoping** (default OFF: `pgr.visibility.enabled=false`, env override `PGR_VISIBILITY_ENABLED`): `.hrms.employee.save.topic`, `.update.topic`, `.reportee.depth.default`, `.unassigned.states`, `.rebuild.cron`, `.rebuild.batch.size`, `.team.fanout.max` — also needs the per-tenant `RAINMAKER-PGR.InboxVisibilityConfig` MDMS record.
@@ -209,7 +209,7 @@ Pre-existing at v2.11 — not new. Only 13 files changed (91 insertions / 30 del
 | Observability stack (OTel/Tempo/Loki/Prometheus/Grafana/Promtail) | Always-on | none |
 | OpenBao secrets backend | Always-on | none |
 | audit-service, db-migrations, hrms-prereq-gate, user-seed | Always-on | none |
-| PGR escalation scheduler | Default enabled (flag-controlled) | `pgr.escalation.enabled` (default true) |
+| PGR escalation scheduler | Default disabled pending rollout preflight | `pgr.escalation.enabled` (default false) |
 | PGR dashboard MV refresh | Default enabled (flag-controlled) | `pgr.dashboard.refresh.enabled` (default true) |
 | egov-enc-service dependency | Always-on, mandatory | none — hard dependency |
 | Elasticsearch / indexer / inbox-v2 | Opt-in | `enable_search_stack` |

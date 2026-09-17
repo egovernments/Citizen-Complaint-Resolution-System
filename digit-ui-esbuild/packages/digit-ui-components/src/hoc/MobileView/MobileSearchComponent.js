@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { InboxContext } from "../InboxSearchComposerContext";
@@ -20,12 +20,10 @@ const MobileSearchComponent = ({
   data,
   onClose,
   defaultValues,
-  browserSession,
 }) => {
   const { t } = useTranslation();
   const { state, dispatch } = useContext(InboxContext);
   const [showToast, setShowToast] = useState(null);
-  let updatedFields = [];
   const { apiDetails } = fullConfig;
 
   if (fullConfig?.postProcessResult) {
@@ -35,20 +33,20 @@ const MobileSearchComponent = ({
     ]?.postProcess(data, uiConfig);
   }
 
-  //define session for modal form
-  //uiConfig.type === filter || sort
-  //we need to sync browsersession and mobileSearchSession
-  // const mobileSearchSession = Digit.Hooks.useSessionStorage(`MOBILE_SEARCH_MODAL_FORM_${uiConfig?.type}_${fullConfig?.label}`,
-  // {...uiConfig?.defaultValues}
-  // );
-
-  // const [sessionFormData, setSessionFormData, clearSessionFormData] = mobileSearchSession;
-  const [session, setSession, clearSession] = browserSession || [];
-
-  const defValuesFromSession =
-    uiConfig?.typeMobile === "filter"
-      ? session?.searchForm
-      : session?.filterForm;
+  // The desktop Search/Filter form is rendered inline and never unmounts,
+  // so whatever the operator applied stays on screen. This modal is mounted
+  // by `{popup && <PopUp>}`, so it is torn down on every close and rebuilt
+  // with fresh `useForm` defaults — the applied criteria were gone on
+  // reopen (#2038 mobile review).
+  //
+  // It used to read them from a `browserSession` prop, but the composer
+  // never passes one, so `session` was always undefined and the two
+  // branches were inverted besides (the filter modal read `searchForm`).
+  // The reducer state behind InboxContext is the authoritative record of
+  // what is currently applied, and this component already consumes it, so
+  // seed from there instead.
+  const appliedCriteria =
+    modalType === "SEARCH" ? state?.searchForm : state?.filterForm;
 
   const {
     register,
@@ -58,14 +56,11 @@ const MobileSearchComponent = ({
     reset,
     watch,
     control,
-    formState,
     errors,
     setError,
     clearErrors,
   } = useForm({
-    // defaultValues: {...uiConfig?.defaultValues,...sessionFormData},
-    defaultValues: { ...uiConfig?.defaultValues, ...defValuesFromSession },
-    // defaultValues:{...uiConfig?.defaultValues}
+    defaultValues: { ...uiConfig?.defaultValues, ...appliedCriteria },
   });
   const formData = watch();
 
@@ -76,183 +71,132 @@ const MobileSearchComponent = ({
     }
   };
 
-  useEffect(() => {
-    updatedFields = Object.values(formState?.dirtyFields);
-  }, [formState]);
+  // Pagination has to go back to the first page whenever the criteria
+  // change, otherwise a narrower result set is read at the old offset and
+  // the list looks empty or unchanged. The desktop component does this on
+  // both apply and clear; this one did it on neither, which is the
+  // "not consistent with desktop view" half of the mobile report.
+  //
+  // Only `offset` is dispatched. The reducer merges into tableForm, so
+  // `limit` and `sortOrder` survive — the desktop version rewrites both,
+  // which would undo a config's `customDefaultPagination`. The companion
+  // "tableFormUpdate" event desktop fires is deliberately not fired here:
+  // its only listener is ResultsDataTableWrapper, which renders above
+  // 426px, and this modal only exists below it.
+  const resetPagination = () => {
+    dispatch({ type: "tableForm", state: { offset: 0 } });
+  };
 
-  // //on form value change, update session data with form data
-  // useEffect(()=>{
-  //   if (!_.isEqual(sessionFormData, formData)) {
-  //     // const difference = _.pickBy(sessionFormData, (v, k) => !_.isEqual(formData[k], v));
-  //     setSessionFormData({ ...sessionFormData,...formData,  });
-  //   }
-  // },[formData]);
+  // `minReqFields` means "at least this many criteria supplied". Counting
+  // `formState.dirtyFields` only answers "how many did you touch in this
+  // sitting", which is not the same thing now that the form opens seeded
+  // with what is already applied — reopening Search and pressing Search
+  // again would otherwise be rejected as empty. Count what is actually
+  // being submitted instead.
+  const isSupplied = (v) => {
+    if (v === null || v === undefined || v === "") return false;
+    if (Array.isArray(v)) return v.length > 0;
+    // Dropdowns submit {code, name} and date ranges submit
+    // {startDate, endDate}; an untouched range is an object of empty
+    // values, so look inside rather than counting any object as a value.
+    if (typeof v === "object") return Object.values(v).some(isSupplied);
+    return true;
+  };
 
-  // useEffect(()=>{
-  //   clearSessionFormData();
-  // },[]);
+  const countCriteria = (data) => Object.values(data || {}).filter(isSupplied).length;
 
   const onSubmit = (data) => {
-    onClose?.();
-    if (updatedFields.length >= uiConfig?.minReqFields) {
-      // here based on screenType call respective dispatch fn
-      dispatch({
-        type: modalType === "SEARCH" ? "searchForm" : "filterForm",
-        state: {
-          ...data,
-        },
-      });
-    } else {
+    if (countCriteria(data) < (uiConfig?.minReqFields || 0)) {
       setShowToast({
         warning: true,
         label: t("ES_COMMON_MIN_SEARCH_CRITERIA_MSG"),
       });
       setTimeout(closeToast, 3000);
+      return;
     }
+    onClose?.();
+    // here based on screenType call respective dispatch fn
+    dispatch({
+      type: modalType === "SEARCH" ? "searchForm" : "filterForm",
+      state: {
+        ...data,
+      },
+    });
+    resetPagination();
   };
 
-  const clearSearch = () => {
-    // clearSessionFormData();
+  // `close` distinguishes the two affordances that land here. The footer
+  // "Clear All" is a terminal action like Apply, so it closes; the header
+  // refresh icon is an in-place reset of the fields, so it does not.
+  //
+  // Closing is the actual "Clear All doesn't work right away, user has to
+  // click apply after that to make it effective" defect. The dispatch below
+  // always cleared the criteria and the list behind the modal updated
+  // immediately, but the modal still covered it, so nothing appeared to
+  // happen until Apply closed it. On desktop the panel is inline and the
+  // list is visible the whole time, which is the "not consistent with
+  // desktop view" half of the report.
+  const clearSearch = ({ close = false } = {}) => {
     reset(uiConfig?.defaultValues);
+    // Keyed off `modalType` like onSubmit above. `uiConfig.type` is not set
+    // on every section (PGR's search section omits it), so the two handlers
+    // could disagree about which form they were acting on.
     dispatch({
-      type: uiConfig?.type === "filter" ? "clearFilterForm" : "clearSearchForm",
+      type: modalType === "SEARCH" ? "clearSearchForm" : "clearFilterForm",
       state: { ...uiConfig?.defaultValues },
       //need to pass form with empty strings
     });
+    resetPagination();
+    if (close) onClose?.();
   };
 
   const closeToast = () => {
     setShowToast(null);
   };
 
+  // The wrapping PopUp renders the close X and handles the overlay click,
+  // so the header must not render a second one — mobile QA saw "the close
+  // icon is displayed twice on top right corner" (#2038).
+  //
+  // Switches on `typeMobile` falling back to `type`: only a few configs set
+  // `typeMobile` (PGR's filter section does not), and without the fallback
+  // the filter modal picked the default branch and rendered the search
+  // header, losing the filter icon and the reset control with it.
   const renderHeader = () => {
-    switch (uiConfig?.typeMobile) {
-      case "filter": {
-        return (
-          <div
-            className="popup-label"
-            style={{ display: "flex", paddingBottom: "20px" }}
+    const kind = uiConfig?.typeMobile || uiConfig?.type || "search";
+    const isFilter = kind === "filter";
+    const isSort = kind === "sort";
+    const Icon = isFilter
+      ? CustomSVG.FilterIcon
+      : isSort
+      ? CustomSVG.SortSvg
+      : CustomSVG.SearchIcon;
+    return (
+      <div className="popup-label" style={{ display: "flex", paddingBottom: "20px" }}>
+        <span className="header" style={{ display: "flex" }}>
+          <span
+            className="icon"
+            style={{ marginRight: "12px", marginTop: "5px", paddingBottom: isFilter || isSort ? "3px" : undefined }}
           >
-            <span className="header" style={{ display: "flex" }}>
-              <span
-                className="icon"
-                style={{
-                  marginRight: "12px",
-                  marginTop: "5px",
-                  paddingBottom: "3px",
-                }}
-              >
-                <CustomSVG.FilterIcon />
-              </span>
-              <span
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "700",
-                  marginRight: "12px",
-                }}
-              >
-                {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
-              </span>
-              <span
-                className="clear-search refresh-icon-container"
-                onClick={clearSearch}
-              >
-                <CustomSVG.RefreshIcon />
-              </span>
-            </span>
-            {/* <span className="clear-search" onClick={clearSearch}><RefreshIcon/></span> */}
-            <span onClick={onClose}>
-              <CustomSVG.CloseSvg />
-            </span>
-          </div>
-        );
-      }
-      case "sort": {
-        return (
-          <div
-            className="popup-label"
-            style={{ display: "flex", paddingBottom: "20px" }}
+            <Icon />
+          </span>
+          <span
+            style={
+              isFilter || isSort
+                ? { fontSize: "1.5rem", fontWeight: "700", marginRight: "12px" }
+                : { fontSize: "large" }
+            }
           >
-            <span className="header" style={{ display: "flex" }}>
-              <span
-                className="icon"
-                style={{
-                  marginRight: "12px",
-                  marginTop: "5px",
-                  paddingBottom: "3px",
-                }}
-              >
-                <CustomSVG.SortSvg />
-              </span>
-              <span
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "700",
-                  marginRight: "12px",
-                }}
-              >
-                {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
-              </span>
-              <span
-                className="clear-search refresh-icon-container"
-                onClick={clearSearch}
-              >
-                <CustomSVG.RefreshIcon />
-              </span>
+            {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
+          </span>
+          {(isFilter || isSort) && (
+            <span className="clear-search refresh-icon-container" onClick={() => clearSearch()}>
+              <CustomSVG.RefreshIcon />
             </span>
-            <span onClick={onClose}>
-              <CustomSVG.CloseSvg />
-            </span>
-          </div>
-        );
-      }
-      case "search": {
-        return (
-          <div
-            className="popup-label"
-            style={{ display: "flex", paddingBottom: "20px" }}
-          >
-            <span className="header" style={{ display: "flex" }}>
-              <span
-                className="icon"
-                style={{ marginRight: "12px", marginTop: "5px" }}
-              >
-                <CustomSVG.SearchIcon />
-              </span>
-              <span style={{ fontSize: "large" }}>
-                {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
-              </span>
-            </span>
-            <span onClick={onClose}>
-              <CustomSVG.CloseSvg />
-            </span>
-          </div>
-        );
-      }
-      default: {
-        return (
-          <div
-            className="popup-label"
-            style={{ display: "flex", paddingBottom: "20px" }}
-          >
-            <span className="header" style={{ display: "flex" }}>
-              <span
-                className="icon"
-                style={{ marginRight: "12px", marginTop: "5px" }}
-              >
-                <CustomSVG.SearchIcon />
-              </span>
-              <span style={{ fontSize: "large" }}>
-                {t(`${uiConfig?.headerLabel || "ES_COMMON_SEARCH_BY"}`)}
-              </span>
-            </span>
-            <span onClick={onClose}>
-              <CustomSVG.CloseSvg />
-            </span>
-          </div>
-        );
-      }
-    }
+          )}
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -291,7 +235,7 @@ const MobileSearchComponent = ({
                     <Button
                       label={t(uiConfig?.secondaryLabel)}
                       variation="secondary"
-                      onButtonClick={() => clearSearch()}
+                      onClick={() => clearSearch({ close: true })}
                       type="button"
                     />
                   )}

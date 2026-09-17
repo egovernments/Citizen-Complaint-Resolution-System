@@ -14,6 +14,20 @@ The tool paginates through all records in batches of 500 to handle tenants with 
 
 The response includes per-schema counts showing how many records were deleted, skipped (already inactive), or failed, making it easy to verify the cleanup was thorough.
 
+## Safety
+
+This tool is **dry-run by default**. Without `confirm`, it performs no writes and
+returns a preview with `success: false` and `code: "CONFIRMATION_REQUIRED"` —
+`success: false` rather than `true` precisely so automation branching on that
+field does not mistake a preview for a completed cleanup.
+
+| Guard | When | Effect |
+|---|---|---|
+| `confirm: "<tenant_id>"` | always required to write | Without it, preview only |
+| `allow_root_tenant: true` | `tenant_id` has no dot (e.g. `pg`) | Refused without it; a root sweep affects every child tenant that inherits the records |
+
+Requires an **admin**-tier caller (see `MCP_ADMIN_ROLES`).
+
 ## Parameters
 
 | Parameter | Type | Required | Default | Description |

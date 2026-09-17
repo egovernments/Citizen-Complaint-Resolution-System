@@ -1,4 +1,11 @@
 import * as React from "react";
+
+/** The list's preferred height, capped by whatever room the viewport leaves. */
+const MAX_LIST_HEIGHT = 256;
+/** Below this a list is more annoying than useful, so flip instead. */
+const MIN_LIST_HEIGHT = 120;
+/** Breathing room so the popover never sits flush against the edge. */
+const VIEWPORT_MARGIN = 12;
 import { cn } from "../../lib/cn";
 import { Check, ChevronDown, Search } from "lucide-react";
 
@@ -59,8 +66,23 @@ export function Select<TValue extends string = string>({
   const [query, setQuery] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLUListElement | null>(null);
+  const popoverRef = React.useRef<HTMLDivElement | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const searchRef = React.useRef<HTMLInputElement | null>(null);
+  /**
+   * The popover is absolutely positioned under the trigger with a fixed list
+   * height, so on a short viewport, or with the trigger low on the page, its
+   * last options fall below the fold. That is what made the city list on the
+   * login screen scroll the page the moment the pointer neared the bottom
+   * option: the page had somewhere to scroll to and the browser obliged.
+   *
+   * Measure the room the popover actually has and cap it, flipping above the
+   * trigger when there is meaningfully more space up there.
+   */
+  const [placement, setPlacement] = React.useState<{ above: boolean; maxListHeight: number }>({
+    above: false,
+    maxListHeight: MAX_LIST_HEIGHT,
+  });
 
   const enableSearch =
     searchable === true || (searchable !== false && options.length > SEARCH_THRESHOLD);
@@ -85,6 +107,45 @@ export function Select<TValue extends string = string>({
   );
 
   // Click-outside.
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
+      const above = rect.top - VIEWPORT_MARGIN;
+      // Only flip when below is genuinely too small AND above is better, so a
+      // list that fits keeps the expected downward placement.
+      const flip = below < MIN_LIST_HEIGHT && above > below;
+      const room = flip ? above : below;
+      // The cap belongs to the list, but the popover also carries a search box
+      // and borders. Subtract whatever is not the list, or the popover still
+      // overruns the fold by exactly that much.
+      const popover = popoverRef.current;
+      const list = listRef.current;
+      const chrome =
+        popover && list
+          ? Math.max(0, popover.getBoundingClientRect().height - list.getBoundingClientRect().height)
+          : 0;
+      setPlacement({
+        above: flip,
+        maxListHeight: Math.max(MIN_LIST_HEIGHT, Math.min(MAX_LIST_HEIGHT, room - chrome)),
+      });
+    };
+    measure();
+    // Again on the next frame: the first pass runs before the popover has laid
+    // out, so its chrome is still unknown.
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open]);
+
   React.useEffect(() => {
     if (!open) return;
     function onMouseDown(e: MouseEvent) {
@@ -285,10 +346,12 @@ export function Select<TValue extends string = string>({
             position: "absolute",
             left: 0,
             width: "100%",
+            ...(placement.above ? { bottom: "100%" } : { top: "100%" }),
             backgroundColor: "var(--v2-surface-color, var(--color-surface, #ffffff))",
             zIndex: 9999,
           }}
-          className={cn("mt-1 rounded-md border border-border shadow-lg animate-fade-in")}
+          ref={popoverRef}
+          className={cn(placement.above ? "mb-1" : "mt-1", "rounded-md border border-border shadow-lg animate-fade-in")}
         >
           {enableSearch ? (
             <div
@@ -338,7 +401,7 @@ export function Select<TValue extends string = string>({
             // before every option. List markers are also hidden so the row
             // contains only the tick + label.
             style={{
-              maxHeight: "16rem",
+              maxHeight: `${placement.maxListHeight}px`,
               overflowY: "auto",
               margin: 0,
               padding: "0.25rem 0",

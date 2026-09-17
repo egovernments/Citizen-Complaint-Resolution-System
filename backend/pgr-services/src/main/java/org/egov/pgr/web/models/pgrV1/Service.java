@@ -1,5 +1,7 @@
 package org.egov.pgr.web.models.pgrV1;
 
+import org.egov.pgr.annotation.SafeHtml;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -9,11 +11,11 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.egov.pgr.web.models.AuditDetails;
-import org.hibernate.validator.constraints.Email;
-import org.hibernate.validator.constraints.NotEmpty;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotEmpty;
 
-import javax.validation.Valid;
-import javax.validation.constraints.*;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 
 
 /**
@@ -34,20 +36,24 @@ public class Service   {
   @JsonProperty("tenantId")
   @Size(min=2,max=25)
   @Pattern(regexp="^[a-zA-Z.]*$")
+  @SafeHtml
   private String tenantId;
 
   @NotNull
   @JsonProperty("serviceCode")
   @Size(min=2,max=50)
   @Pattern(regexp="^[a-zA-Z0-9._]*$")
+  @SafeHtml
   private String serviceCode;
 
   @JsonProperty("serviceRequestId")
+  @SafeHtml
   private String serviceRequestId;
 
   @JsonProperty("description")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/: ()&']*$")
   @Size(max=256)
+  @SafeHtml
   private String description;
 
   @JsonProperty("lat")
@@ -57,36 +63,44 @@ public class Service   {
   private Double longitutde;
 
   @JsonProperty("addressId")
+  @SafeHtml
   private String addressId;
   
   @JsonProperty("address")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/: ()&']*$")
   @Size(max=160)
+  @SafeHtml
   private String address;
 
   @JsonProperty("email")
   @Email
+  @SafeHtml
   private String email;
 
   @JsonProperty("deviceId")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/: ()&']*$")
   @Size(max=160)
+  @SafeHtml
   private String deviceId;
 
   @JsonProperty("accountId")
+  @SafeHtml
   private String accountId;
 
   @JsonProperty("firstName")
   @Pattern(regexp="(^[a-zA-Z. ]$)")
+  @SafeHtml
   private String firstName;
 
   @JsonProperty("lastName")
   @Pattern(regexp="(^[a-zA-Z. ]$)")
+  @SafeHtml
   private String lastName;
 
   @JsonProperty("phone")
   @NotEmpty
   @Pattern(regexp="(^$|[0-9]{10})")
+  @SafeHtml
   private String phone;
 
   @JsonProperty("attributes")
@@ -194,11 +208,13 @@ public class Service   {
 
   @JsonProperty("feedback")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/: ()&']*$")
+  @SafeHtml
   private String feedback;
 
   @JsonProperty("rating")
   @Max(5)
   @Min(0)
+  @SafeHtml
   private String rating;
 
   @JsonProperty("auditDetails")
@@ -206,6 +222,7 @@ public class Service   {
   
   @JsonProperty("landmark")
   @Pattern(regexp = "^[a-zA-Z0-9!@#.,/: ()&']*$")
+  @SafeHtml
   private String landmark;
   
   }

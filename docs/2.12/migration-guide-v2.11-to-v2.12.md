@@ -72,7 +72,7 @@
 
 | Setting | Default | How to disable |
 |---|---|---|
-| Automatic complaint escalation | on | `pgr.escalation.enabled=false` |
+| Automatic complaint escalation | off until rollout preflight passes | `pgr.escalation.enabled=true` |
 | Scheduled dashboard-data refresh | on | `pgr.dashboard.refresh.enabled=false` |
 | Dashboard loading-speed telemetry | on | `dashboard_metrics_enabled: false` |
 

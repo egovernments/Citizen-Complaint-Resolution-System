@@ -28,7 +28,6 @@ import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberForm
 import { isValidTimeZone, resolveConfiguredTimeZone } from "./utils/dashboardTimeZone";
 
 import useDashboardT from "./i18n/useDashboardT";
-import { toBcp47Locale } from "./i18n/localeRuntime";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
@@ -818,39 +817,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refsKey, pack, tenantId, publicMode]);
 
-  // "Last updated" reads the batch's OWN echoed asOf/calendar (#29) — the single
-  // clock reading every tile in this batch was judged against — never a fresh
-  // new Date() at render time, which would drift from what's actually on screen.
-  // No stamp (rather than a fabricated "now") when the batch hasn't supplied one.
-  const lastUpdatedLabel = useMemo(() => {
-    if (batch.asOf == null) return null;
-    // Prefer the batch-echoed zone, but only if Intl accepts it — a bad
-    // calendar.timeZone from an older/misconfigured backend used to throw
-    // RangeError here and trip the route ErrorBoundary ("Something went wrong")
-    // after the analytics calls had already succeeded. Same for language:
-    // en_IN_IN (doubled region) → en-IN_IN is not a valid BCP 47 tag.
-    const echoed = batch.calendar?.timeZone;
-    const zone = isValidTimeZone(echoed) ? echoed.trim() : timeZone;
-    const locale = toBcp47Locale(language);
-    const opts = {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    };
-    try {
-      return new Date(batch.asOf).toLocaleString(locale, {
-        ...opts,
-        ...(isValidTimeZone(zone) ? { timeZone: zone.trim() } : {}),
-      });
-    } catch {
-      try {
-        return new Date(batch.asOf).toLocaleString(locale, opts);
-      } catch {
-        return new Date(batch.asOf).toLocaleString(undefined, opts);
-      }
-    }
-  }, [batch.asOf, batch.calendar, timeZone, language]);
+  // Freshness stamp uses the batch's echoed asOf (#29 / #2047) — relative
+  // "Updated x min/hrs ago", never a client clock pretending to be the data time.
+  // CardUpdatedStamp owns the relative formatting + one-minute tick.
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
@@ -1081,7 +1050,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                   {removeBtn}
                   {renderTile(item.i)}
                   {ignoredNote}
-                  {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
+                  {batch.asOf != null && <CardUpdatedStamp asOf={batch.asOf} />}
                 </div>
               );
             }
@@ -1146,7 +1115,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false, publicMode = false, 
                   {renderTile(item.i, groupBy.info)}
                 </div>
                 {ignoredNote}
-                {lastUpdatedLabel && <CardUpdatedStamp label={lastUpdatedLabel} />}
+                {batch.asOf != null && <CardUpdatedStamp asOf={batch.asOf} />}
                 <ResizeGrip />
               </section>
             );

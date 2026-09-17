@@ -49,6 +49,40 @@ const setEmployeeDetail = (userObject, token) => {
   localStorage.setItem("Employee.user-info", JSON.stringify(userObject));
 };
 
+/**
+ * "Powered by DIGIT" belongs to the page, not to the card — the same placement
+ * the language-selection screen already uses, so the pre-auth screens read as
+ * one. `.EmployeeLoginFooter` pins it to the bottom of its positioned parent;
+ * the BW wordmark is the white one, which is what reads on a dark banner.
+ *
+ * Shared by BOTH shell branches. The login and forgot-password screens no
+ * longer carry their own copy, so a shell branch that skipped this would drop
+ * the attribution entirely — which is what the carousel layout did.
+ */
+function PoweredByDigit({ onDarkSurface = true }) {
+  // DIGIT_FOOTER_BW is a near-white wordmark on transparent — it only reads on
+  // a dark ground. The full-bleed banner is dark, but the carousel layout puts
+  // the form on a light column, where BW is white-on-white. Pick per surface,
+  // and keep the other as the fallback for tenants that configure only one.
+  const cfg = (key) => window?.globalConfigs?.getConfig?.(key);
+  const preferred = onDarkSurface ? "DIGIT_FOOTER_BW" : "DIGIT_FOOTER";
+  const other = onDarkSurface ? "DIGIT_FOOTER" : "DIGIT_FOOTER_BW";
+  const src = cfg(preferred) || cfg(other);
+  if (!src) return null;
+  return (
+    <div className="EmployeeLoginFooter">
+      <ImageComponent
+        alt="Powered by DIGIT"
+        src={src}
+        style={{ cursor: "pointer" }}
+        onClick={() => {
+          window.open(cfg("DIGIT_HOME_URL"), "_blank")?.focus();
+        }}
+      />
+    </div>
+  );
+}
+
 export function V2LoginShell({ children, withCarousel, bannerImages }) {
   if (withCarousel) {
     return (
@@ -77,13 +111,20 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
         </div>
         <div
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "24px",
+            // `position: relative` so the absolutely-positioned footer pins to
+            // this column rather than the whole grid. The extra bottom padding
+            // reserves its strip, so on a short viewport the mark cannot sit on
+            // top of the centred card.
+            padding: "24px 24px 64px",
           }}
         >
           {children}
+          {/* Light column, so the colour wordmark rather than the white one. */}
+          <PoweredByDigit onDarkSurface={false} />
         </div>
       </div>
     );
@@ -98,6 +139,12 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           justifyContent: "center",
           minHeight: "100vh",
           padding: "24px",
+          // Without this the 24px padding is added *outside* the 100vh
+          // min-height (the .v2-scope root itself isn't covered by the
+          // `.v2-scope *` border-box reset), so the shell overhangs the
+          // banner by 48px and the white page background shows as a band
+          // under the footer.
+          boxSizing: "border-box",
           // .banner is a flex container that centers its children, so
           // without an explicit width this wrapper shrink-wraps to the
           // card's min-content and a leftover page-bg paints a full-height
@@ -109,6 +156,7 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
       >
         {children}
       </div>
+      <PoweredByDigit />
     </Background>
   );
 }
@@ -361,11 +409,20 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
       <V2Card
         style={{
           width: "100%",
-          maxWidth: "680px",
-          padding: "32px 32px 32px 32px",
+          // 680px stretched a five-field form across most of the viewport,
+          // which is what made it read as a government form rather than a
+          // sign-in. A single column of inputs wants ~420px.
+          maxWidth: "420px",
+          padding: "32px",
           display: "flex",
           flexDirection: "column",
-          gap: "18px",
+          gap: "16px",
+          // Lift the card off the banner instead of outlining it: a soft
+          // shadow and a rounder corner do the separating, so the hairline
+          // border can go.
+          borderRadius: "14px",
+          border: "none",
+          boxShadow: "0 12px 32px rgba(8, 20, 40, 0.18), 0 2px 8px rgba(8, 20, 40, 0.10)",
         }}
       >
         {/* Top logos — same Header the legacy login.js renders inline,
@@ -380,9 +437,12 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
               margin: 0,
               fontSize: "1.5rem",
               fontWeight: 700,
-              color:
-                "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+              // A page title, not a control: it takes the heading text token
+              // rather than the brand colour. #2038 rule 3 — a title must not
+              // wear the colour reserved for things you can click.
+              color: "var(--color-text-heading, #1D2433)",
               lineHeight: 1.2,
+              textAlign: "center",
             }}
           >
             {tr(headerKey, "Login")}
@@ -470,10 +530,16 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
                 border: 0,
                 padding: 0,
                 cursor: "pointer",
+                // Clickable, so it takes the link/tertiary-action token —
+                // the one colour the employee UI reserves for "you can click
+                // this" (#2038 rule 3).
                 color:
-                  "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-                fontWeight: 600,
-                fontSize: "0.8125rem",
+                  "var(--color-button-tertiary-text, var(--color-link-normal, #2563EB))",
+                // Matches the field labels rather than inventing a third
+                // size, and stays centred under the submit button.
+                fontWeight: 500,
+                fontSize: "0.875rem",
+                lineHeight: 1.4,
                 alignSelf: "center",
               }}
             >
@@ -486,33 +552,6 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
         </form>
 
         {DynamicLoginComponent ? <DynamicLoginComponent /> : null}
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            paddingTop: "8px",
-            borderTop: "1px solid var(--color-border, #e5e7eb)",
-            marginTop: "4px",
-          }}
-        >
-          <ImageComponent
-            alt="Powered by DIGIT"
-            // Use the colour variant (DIGIT_FOOTER) — DIGIT_FOOTER_BW is
-            // a white wordmark tuned for the dark navy of the legacy
-            // login banner; on the white v2 card it becomes invisible.
-            src={
-              window?.globalConfigs?.getConfig?.("DIGIT_FOOTER") ||
-              window?.globalConfigs?.getConfig?.("DIGIT_FOOTER_BW")
-            }
-            style={{ cursor: "pointer", height: "1em", maxHeight: "16px", width: "auto", opacity: 0.85 }}
-            onClick={() => {
-              window
-                .open(window?.globalConfigs?.getConfig?.("DIGIT_HOME_URL"), "_blank")
-                ?.focus();
-            }}
-          />
-        </div>
       </V2Card>
       {showToast ? (
         // #443.8: route the toast label through the same key→fallback helper

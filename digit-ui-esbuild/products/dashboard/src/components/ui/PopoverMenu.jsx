@@ -115,7 +115,11 @@ const ChevronRightIcon = () => (
  * checkable option itself — but it still shows the selected treatment when
  * `selected` is passed, e.g. the applied subtree's own row, announced via
  * aria-current since plain menuitem carries no aria-checked).
- * `multiple` uses `option` + aria-selected for dialog/listbox multi-selects.
+ *
+ * `semantics="menu"` (default): menuitem / menuitemradio for action menus.
+ * `semantics="dialog"`: plain buttons with aria-pressed for staged multi-select
+ * dialogs — listbox/option is invalid here (descend rows and footer buttons are
+ * not listbox children; option must not mix with menuitem).
  */
 export const PopoverMenuItem = ({
   selected,
@@ -126,18 +130,34 @@ export const PopoverMenuItem = ({
   className = "",
   onSelect,
   children,
+  semantics = "menu",
 }) => {
   const checkable = !descend && selected !== undefined;
-  let role = "menuitem";
-  if (multiple) role = "option";
-  else if (checkable) role = "menuitemradio";
+  const inDialog = semantics === "dialog";
+  let role;
+  let ariaChecked;
+  let ariaSelected;
+  let ariaPressed;
+  let ariaCurrent;
+  if (inDialog) {
+    // Native button — no menu/listbox roles inside dialog multi-select panels.
+    role = undefined;
+    ariaPressed = checkable || (multiple && selected !== undefined) ? !!selected : undefined;
+    ariaCurrent = !checkable && !multiple && selected ? "true" : undefined;
+  } else {
+    role = "menuitem";
+    if (checkable) role = "menuitemradio";
+    ariaChecked = checkable ? !!selected : undefined;
+    ariaCurrent = !checkable && selected ? "true" : undefined;
+  }
   return (
     <button
       type="button"
       role={role}
-      aria-checked={checkable && !multiple ? !!selected : undefined}
-      aria-selected={multiple ? !!selected : undefined}
-      aria-current={!checkable && !multiple && selected ? "true" : undefined}
+      aria-checked={ariaChecked}
+      aria-selected={ariaSelected}
+      aria-pressed={ariaPressed}
+      aria-current={ariaCurrent}
       data-menu-item=""
       data-selected={selected ? "true" : undefined}
       title={title}

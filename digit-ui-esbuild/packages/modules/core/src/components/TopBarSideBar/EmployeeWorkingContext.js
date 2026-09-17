@@ -31,7 +31,91 @@ const label = (t, key, fallback) => {
 
 const departmentLabel = (t, dept) => label(t, `${DEPARTMENT_KEY}${dept?.code}`, dept?.code);
 const roleLabel = (t, role) => label(t, `${ROLE_KEY}${role?.code}`, role?.name || role?.code);
-const roleContextLabel = (t, ctx) => label(t, `${ROLE_CONTEXT_KEY}${ctx}`, ctx);
+/**
+ * Role contexts arrive as shouted codes ("RESOLVER") and are usually unseeded,
+ * so t() echoes the key. Title-case the fallback for the same reason the
+ * language endonyms needed it, and leave an already mixed-case label alone.
+ */
+const roleContextLabel = (t, ctx) => {
+  const key = `${ROLE_CONTEXT_KEY}${ctx}`;
+  const translated = t(key);
+  if (translated && translated !== key) return translated;
+  const raw = String(ctx || "");
+  if (!raw) return raw;
+  const shouted = raw === raw.toUpperCase() && raw !== raw.toLowerCase();
+  if (!shouted) return raw;
+  return raw
+    .toLowerCase()
+    .replace(/(^|[\s\-_])(\p{L})/gu, (_, sep, ch) => (sep === "_" ? " " : sep) + ch.toUpperCase());
+};
+
+/** CITIZEN is the citizen-side counterpart, not an employee assignment. */
+const isAssignedContext = (ctx) => String(ctx || "").toUpperCase() !== "CITIZEN";
+
+/**
+ * Platform roles, not job descriptions. Every employee carries several of these
+ * because of how access control is seeded, and listing them tells the person
+ * nothing about what they are here to do — "Internal Microservice Role" is not
+ * an assignment (#2038).
+ *
+ * A denylist rather than an allowlist on purpose: tenants add their own
+ * business roles over time, and an allowlist would silently swallow each new
+ * one. Anything not named here is assumed to be a real assignment.
+ */
+const INFRASTRUCTURE_ROLES = new Set([
+  "INTERNAL_MICROSERVICE_ROLE",
+  "SUPERUSER",
+  "MDMS_ADMIN",
+  "LOC_ADMIN",
+  "ACCOUNT_ADMIN",
+  "EMPLOYEE", // every employee has it; it distinguishes nobody
+  "CITIZEN", // the citizen-side counterpart, same reasoning
+]);
+
+const isAssignedRole = (role) => !INFRASTRUCTURE_ROLES.has(String(role?.code || "").toUpperCase());
+
+/**
+ * The subset of the denylist that is never an employee assignment under any
+ * reading, as opposed to the ones that are merely too generic to be useful.
+ * Used as the floor when filtering would otherwise leave an account with no
+ * roles at all.
+ */
+const NEVER_AN_ASSIGNMENT = new Set(["CITIZEN", "INTERNAL_MICROSERVICE_ROLE"]);
+const isNeverAnAssignment = (role) =>
+  !NEVER_AN_ASSIGNMENT.has(String(role?.code || "").toUpperCase());
+
+/**
+ * The one answer to "what roles does this person hold here", so the pill's
+ * count and the panel's chips can never disagree. Role contexts are the
+ * higher-level story ("Resolver") and win when the payload carries them;
+ * otherwise fall back to the raw roles, minus the platform ones.
+ */
+const assignedRoleLabels = (t, context) => {
+  const contexts = (context?.roleContexts || [])
+    .filter(isAssignedContext)
+    .map((c) => roleContextLabel(t, c))
+    .filter(Boolean);
+  if (contexts.length) return contexts;
+  const roles = context?.roles || [];
+  const assigned = roles.filter(isAssignedRole);
+  if (assigned.length) return assigned.map((r) => roleLabel(t, r)).filter(Boolean);
+  // A workbench or admin account can hold nothing *but* denylisted roles —
+  // SUPERUSER, MDMS_ADMIN, LOC_ADMIN and EMPLOYEE is a complete, real role set
+  // under multi-root-tenant, and answering "what am I here to do" with nothing
+  // is worse than answering it with platform roles.
+  //
+  // A floor rather than no filter, though: pgr's `tenantRoles` keeps every role
+  // stamped for the tenant, CITIZEN included, so an account carrying
+  // [EMPLOYEE, CITIZEN] reaches here with `roleContexts: [CITIZEN]` already
+  // discarded by `isAssignedContext`. Falling back to the raw list would put a
+  // "Citizen" chip in the panel two lines after this file argues that CITIZEN
+  // is not an employee assignment. Keep the two we are certain about out.
+  return roles.filter(isNeverAnAssignment).map((r) => roleLabel(t, r)).filter(Boolean);
+};
+
+/** "3 departments" / "1 department" — the count is the point, not the list. */
+const countLabel = (t, n, singularKey, pluralKey, singular, plural) =>
+  `${n} ${n === 1 ? label(t, singularKey, singular) : label(t, pluralKey, plural)}`;
 
 /**
  * Boundaries are localized per hierarchy — `ADMIN_<BOUNDARY>` for the ADMIN
@@ -62,17 +146,6 @@ const jurisdictionLabel = (t, j, cityDetails, tenantId) => {
   return label(t, `${hierarchy}_${String(boundary).toUpperCase()}`, boundary);
 };
 
-/** First value plus a +N marker, so the header never wraps. */
-function Truncated({ values }) {
-  if (!values?.length) return null;
-  return (
-    <React.Fragment>
-      <span>{values[0]}</span>
-      {values.length > 1 && <span className="digit-working-context-more">{` +${values.length - 1}`}</span>}
-    </React.Fragment>
-  );
-}
-
 export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantId, isError }) {
   if (isError) {
     return (
@@ -85,36 +158,52 @@ export function EmployeeWorkingContextSummary({ t, context, cityDetails, tenantI
 
   const city = cityLabel(t, cityDetails, context.tenantId || tenantId);
   const departments = (context.departments || []).map((d) => departmentLabel(t, d)).filter(Boolean);
-  const roleContexts = (context.roleContexts || []).map((c) => roleContextLabel(t, c)).filter(Boolean);
+  const roles = assignedRoleLabels(t, context);
 
+  // Counts, not names (#2038). Listing "Lands, Housing & Urban Planning +7"
+  // spent the whole bar on one of eight departments and still told you
+  // nothing; the count says how much there is, and the panel has the detail.
   const parts = [];
-  if (city) parts.push(<span key="city">{city}</span>);
-  if (departments.length) parts.push(<Truncated key="dept" values={departments} />);
-  if (roleContexts.length) parts.push(<Truncated key="ctx" values={roleContexts} />);
-  if (!parts.length) return null;
-
-  // The header truncates when space is tight, so carry the full value in a
-  // tooltip; the expanded panel has it in full either way.
-  const plain = [city, ...departments, ...roleContexts].filter(Boolean).join(" · ");
+  if (departments.length) {
+    parts.push(
+      countLabel(t, departments.length, "CS_WORKING_CONTEXT_DEPARTMENT_ONE", "CS_WORKING_CONTEXT_DEPARTMENT_MANY", "department", "departments")
+    );
+  }
+  if (roles.length) {
+    parts.push(countLabel(t, roles.length, "CS_WORKING_CONTEXT_ROLE_ONE", "CS_WORKING_CONTEXT_ROLE_MANY", "role", "roles"));
+  }
+  if (!city && !parts.length) return null;
 
   return (
-    <div className="digit-working-context-summary" title={plain}>
+    <div className="digit-working-context-summary" title={[city, ...parts].filter(Boolean).join(" · ")}>
+      {city && <span className="digit-working-context-place">{city}</span>}
       {parts.map((part, i) => (
         <React.Fragment key={i}>
-          {i > 0 && <span className="digit-working-context-sep">·</span>}
-          {part}
+          {/* `city` is legitimately falsy when cityDetails carries no i18nKey
+              and neither tenantId is set — the case cityLabel's fallback chain
+              is written to tolerate. Without this guard the pill opened with a
+              stray "· 8 departments". */}
+          {(i > 0 || city) && <span className="digit-working-context-sep">·</span>}
+          <span className="digit-working-context-count">{part}</span>
         </React.Fragment>
       ))}
     </div>
   );
 }
 
-function Group({ title, children }) {
-  if (!children) return null;
+/** A labelled row of chips. Renders nothing when the list is empty. */
+function ChipGroup({ title, values, chipClassName }) {
+  if (!values?.length) return null;
   return (
     <div className="digit-working-context-group">
       <div className="digit-working-context-group-label">{title}</div>
-      <div className="digit-working-context-group-value">{children}</div>
+      <div className="digit-working-context-grouprow">
+        {values.map((v, i) => (
+          <span className={`digit-working-context-chip ${chipClassName || ""}`} key={i}>
+            {v}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -202,8 +291,8 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
     return {
       city: cityLabel(t, cityDetails, context.tenantId || tenantId),
       departments: (context.departments || []).map((d) => departmentLabel(t, d)).filter(Boolean),
-      roleContexts: (context.roleContexts || []).map((c) => roleContextLabel(t, c)).filter(Boolean),
-      roles: (context.roles || []).map((r) => roleLabel(t, r)).filter(Boolean),
+      // Same list the pill counts — see assignedRoleLabels (#2038).
+      roles: assignedRoleLabels(t, context),
       jurisdictions: (context.jurisdictions || [])
         .map((j) => ({ name: jurisdictionLabel(t, j, cityDetails, context.tenantId || tenantId), type: j?.boundaryType }))
         .filter((j) => j.name),
@@ -228,35 +317,32 @@ export function EmployeeWorkingContextPanel({ t, context, cityDetails, tenantId,
       // row and blows the header out for a frame.
       style={pos ? { position: "fixed", top: pos.top, left: pos.left } : { position: "fixed", visibility: "hidden" }}
     >
-      <Group title={label(t, "CS_WORKING_CONTEXT_CITY", "City")}>{rows.city}</Group>
+      {/* The place this person works, as the panel's own heading — the pill
+          only carries counts, so the panel is where the name belongs. */}
+      <div className="digit-working-context-place-block">
+        <div className="digit-working-context-group-label">
+          {label(t, "CS_WORKING_CONTEXT_CITY", "City")}
+        </div>
+        <div className="digit-working-context-place-name">{rows.city}</div>
+        <div className="digit-working-context-subtitle">
+          {label(t, "CS_WORKING_CONTEXT_SUBTITLE", "These are your assignments")}
+        </div>
+      </div>
 
-      <Group title={label(t, "CS_WORKING_CONTEXT_DEPARTMENT", "Department")}>
-        {rows.departments.length
-          ? rows.departments.map((d, i) => <div key={i}>{d}</div>)
-          : null}
-      </Group>
+      <ChipGroup
+        title={label(t, "CS_WORKING_CONTEXT_DEPARTMENT", "Departments")}
+        values={rows.departments}
+      />
 
-      <Group title={label(t, "CS_WORKING_CONTEXT_ROLE", "Role")}>
-        {rows.roleContexts.length || rows.roles.length ? (
-          <React.Fragment>
-            {rows.roleContexts.map((c, i) => (
-              <div key={`c${i}`}>{c}</div>
-            ))}
-            {rows.roles.length ? <div className="digit-working-context-raw-roles">{rows.roles.join(", ")}</div> : null}
-          </React.Fragment>
-        ) : null}
-      </Group>
+      <ChipGroup
+        title={label(t, "CS_WORKING_CONTEXT_ROLE", "Roles")}
+        values={rows.roles}
+      />
 
-      <Group title={label(t, "CS_WORKING_CONTEXT_JURISDICTION", "Jurisdiction")}>
-        {rows.jurisdictions.length
-          ? rows.jurisdictions.map((j, i) => (
-              <div key={i}>
-                {j.name}
-                {j.type ? <span className="digit-working-context-qualifier">{` (${j.type})`}</span> : null}
-              </div>
-            ))
-          : null}
-      </Group>
+      <ChipGroup
+        title={label(t, "CS_WORKING_CONTEXT_JURISDICTION", "Jurisdiction")}
+        values={rows.jurisdictions.map((j) => (j.type ? `${j.name} (${j.type})` : j.name))}
+      />
     </div>
   );
 }
