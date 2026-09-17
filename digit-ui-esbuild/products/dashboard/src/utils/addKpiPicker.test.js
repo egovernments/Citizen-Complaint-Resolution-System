@@ -64,11 +64,19 @@ test("AddKpiDropdown wires search input + sorted list helper", () => {
   assert.match(source, /DASHBOARD_HEADER_SEARCH_KPIS/);
 });
 
-test("AddKpiDropdown uses dialog/listbox semantics (not ARIA menu) for search", () => {
+test("AddKpiDropdown uses a non-modal dialog with Add buttons (not menu/listbox)", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "components", "AddKpiDropdown.jsx"), "utf8");
   assert.match(source, /role="dialog"/);
-  assert.match(source, /role="listbox"/);
+  // Non-modal: page stays interactive; Tab may leave the picker.
+  assert.doesNotMatch(source, /aria-modal=/);
+  assert.doesNotMatch(source, /aria-modal\{/);
+  // Action is "Add" via buttons — not listbox/option (options cannot nest buttons).
+  assert.doesNotMatch(source, /role="listbox"/);
+  assert.doesNotMatch(source, /role="option"/);
+  assert.doesNotMatch(source, /aria-selected=/);
+  assert.doesNotMatch(source, /aria-selected\{/);
   assert.doesNotMatch(source, /role="menu"/);
+  assert.match(source, /dashboard-add-kpi-add-btn/);
   assert.match(source, /closePicker/);
   assert.match(source, /trigger\.focus/);
 });
