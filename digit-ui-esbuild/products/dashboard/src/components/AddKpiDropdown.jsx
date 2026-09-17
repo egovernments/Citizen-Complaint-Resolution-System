@@ -204,8 +204,10 @@ const AddKpiDropdown = ({
       // subtree — the class re-applies the scoped font/palette variables there.
       // Without it the standalone/public page (no vendor CSS on <body>) renders
       // the panel in the browser's default serif.
-      // role=dialog (not menu): a search textbox is not a valid owned control in
-      // the ARIA menu pattern; dialog + listbox matches the searchable picker.
+      // Non-modal dialog (not menu/listbox): search + per-row Add buttons are
+      // valid here. listbox/option was wrong because options must not contain
+      // interactive descendants, and aria-selected on hover is not selection.
+      // Omit aria-modal — focus is not trapped and the page is not inert.
       className="dashboard-root dashboard-add-kpi-panel tw-flex tw-max-h-[min(24rem,70vh)] tw-flex-col tw-overflow-hidden"
       style={{
         position: "fixed",
@@ -215,7 +217,6 @@ const AddKpiDropdown = ({
         zIndex: 9999,
       }}
       role="dialog"
-      aria-modal="true"
       aria-labelledby={titleId}
     >
       <p id={titleId} className="dashboard-add-kpi-header">
@@ -240,14 +241,10 @@ const AddKpiDropdown = ({
       </div>
       <ul
         className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain"
-        role="listbox"
         aria-label={availableLabel}
       >
         {availableItems.length === 0 ? (
-          <li
-            role="presentation"
-            className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground"
-          >
+          <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
             {(catalogItems || []).length === 0
               ? // Role-filtered catalog is empty — nothing this user could ever add.
                 t("DASHBOARD_HEADER_NO_KPIS_FOR_ROLE", "No KPIs available for your role")
@@ -263,7 +260,7 @@ const AddKpiDropdown = ({
           </li>
         ) : (
           availableItems.map((item) => (
-            <li key={item.id} role="option" aria-selected={hoveredItem?.id === item.id}>
+            <li key={item.id}>
               <div
                 draggable
                 onDragStart={(event) => handleDragStart(event, item.id)}
