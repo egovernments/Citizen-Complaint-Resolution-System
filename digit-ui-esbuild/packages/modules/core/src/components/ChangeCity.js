@@ -31,13 +31,41 @@ export const tenantChoiceCount = () => {
 };
 
 export const showTenantSwitcher = (tenantCount) => {
+  // globalConfigs.js is hand-edited and ansible-rendered, so the override
+  // arrives as a real boolean from one and the string "true"/"false" from the
+  // other. Reading only the boolean meant the documented escape hatch silently
+  // did nothing on a templated host.
   const flag = window?.globalConfigs?.getConfig?.("SHOW_TENANT_SWITCHER");
   if (typeof flag === "boolean") return flag;
+  if (typeof flag === "string" && flag.trim() !== "") {
+    const normalised = flag.trim().toLowerCase();
+    if (normalised === "true") return true;
+    if (normalised === "false") return false;
+  }
   // Callers that already have the list pass its length; callers that do not
   // (the top bar, which has to decide before rendering the component) let it
   // work the count out from the same roles the list is built from.
   const count = typeof tenantCount === "number" ? tenantCount : tenantChoiceCount();
   return count > 1;
+};
+
+/**
+ * Whether ChangeCity will render anything at all.
+ *
+ * On a multi-root deployment with a single tenant the component renders a
+ * CardText naming the tenant. That is a label, not a control, so hiding the
+ * switcher must not take it with it: gating the call sites on
+ * `showTenantSwitcher` alone removed the only on-screen tenant indication a
+ * Maputo-style deployment has, in the header and in the static drawer.
+ *
+ * Call sites need this rather than letting the component return null, because
+ * `actionFields` drops entries with `.filter(Boolean)` and an element that
+ * renders null still takes a slot, leaving an empty 32px gap.
+ */
+export const showTenantIndicator = (tenantCount) => {
+  if (showTenantSwitcher(tenantCount)) return true;
+  const count = typeof tenantCount === "number" ? tenantCount : tenantChoiceCount();
+  return Boolean(Digit?.Utils?.getMultiRootTenant?.()) && count === 1;
 };
 
 const ChangeCity = (prop) => {
@@ -82,7 +110,7 @@ const ChangeCity = (prop) => {
     setSelectCityData(filteredArray);
   }, [dropDownData]);
 
-  if (!showTenantSwitcher(selectCityData?.length)) return null;
+  if (!showTenantIndicator(selectCityData?.length)) return null;
 
   // if (isDropdown) {
   return (
