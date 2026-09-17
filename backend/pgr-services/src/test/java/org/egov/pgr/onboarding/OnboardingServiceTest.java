@@ -41,8 +41,7 @@ public class OnboardingServiceTest {
         when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
         when(repository.insertSignup(any(OnboardingSignup.class), eq("create-1")))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("serviceCategories", Arrays.asList("roads", "water"));
+        Map<String, Object> metadata = tenantAdminMetadata("+254 712 345 678");
         Map<String, Object> request = completeRequest(metadata);
         request.put("organizationAlias", "client-must-not-own-this");
         request.put("requestedTenantId", "client.must-not-own-this");
@@ -51,7 +50,8 @@ public class OnboardingServiceTest {
 
         assertEquals("bomet-county", signup.getOrganizationAlias());
         assertEquals("bometcounty", signup.getRequestedTenantId());
-        assertEquals(metadata, signup.getTenantMetadata());
+        assertEquals("712345678", tenantAdmin(signup).get("mobileNumber"));
+        assertEquals("+254", tenantAdmin(signup).get("countryCode"));
         assertEquals("DRAFT", signup.getStatus());
         assertNotNull(signup.getId());
     }
@@ -90,10 +90,41 @@ public class OnboardingServiceTest {
     @Test
     public void slugWithoutTwoLettersCannotBecomeADigitTenant() {
         when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
-        Map<String, Object> request = completeRequest(new LinkedHashMap<>());
+        Map<String, Object> request = completeRequest(tenantAdminMetadata("712345678"));
         request.put("urlSlug", "a-123");
 
         assertThrows(CustomException.class, () -> service.create(principal, request, "create-3"));
+    }
+
+    @Test
+    public void rejectsUnknownTenantMetadataFields() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+        Map<String, Object> metadata = tenantAdminMetadata("712345678");
+        metadata.put("serviceCategories", Arrays.asList("roads", "water"));
+
+        assertThrows(CustomException.class, () -> service.create(
+                principal, completeRequest(metadata), "create-4"));
+    }
+
+    @Test
+    public void validatesMobileAgainstSignupCountry() {
+        when(repository.findSignupByOwner("https://issuer", "subject-1")).thenReturn(Optional.empty());
+
+        assertThrows(CustomException.class, () -> service.create(
+                principal, completeRequest(tenantAdminMetadata("+919876543210")), "create-5"));
+    }
+
+    @Test
+    public void submitRequiresTenantAdminMobile() {
+        UUID signupId = UUID.randomUUID();
+        OnboardingSignup signup = signup(signupId);
+        signup.setTenantMetadata(Collections.singletonMap("schemaVersion", 1));
+        when(repository.findOwnedSignupForUpdate(signupId, "https://issuer", "subject-1"))
+                .thenReturn(Optional.of(signup));
+        when(repository.findOperationBySignup(signupId)).thenReturn(Optional.empty());
+
+        assertThrows(CustomException.class, () -> service.submit(
+                principal, Collections.singletonMap("id", signupId.toString()), "submit-2"));
     }
 
     private Map<String, Object> completeRequest(Map<String, Object> metadata) {
@@ -110,6 +141,20 @@ public class OnboardingServiceTest {
         return request;
     }
 
+    private Map<String, Object> tenantAdminMetadata(String mobileNumber) {
+        Map<String, Object> tenantAdmin = new LinkedHashMap<>();
+        tenantAdmin.put("mobileNumber", mobileNumber);
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("schemaVersion", 1);
+        metadata.put("tenantAdmin", tenantAdmin);
+        return metadata;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> tenantAdmin(OnboardingSignup signup) {
+        return (Map<String, Object>) signup.getTenantMetadata().get("tenantAdmin");
+    }
+
     private OnboardingSignup signup(UUID id) {
         OnboardingSignup signup = OnboardingSignup.builder().id(id)
                 .ownerIssuer("https://issuer").ownerSubject("subject-1")
@@ -124,6 +169,7 @@ public class OnboardingServiceTest {
         signup.setTimeZone("Africa/Nairobi");
         signup.setFinancialYearPolicy("JULY_JUNE");
         signup.setAcceptedTermsVersion("2026-09");
+        signup.setTenantMetadata(tenantAdminMetadata("712345678"));
         return signup;
     }
 }

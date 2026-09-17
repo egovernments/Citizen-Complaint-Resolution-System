@@ -1,5 +1,8 @@
 package org.egov.pgr.onboarding;
 
+import com.google.i18n.phonenumbers.NumberParseException;
+import com.google.i18n.phonenumbers.PhoneNumberUtil;
+import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -19,6 +23,10 @@ public class OnboardingService {
 
     private static final Pattern ACCOUNT_CODE = Pattern.compile("^[A-Z0-9][A-Z0-9-]{1,31}$");
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9][a-z0-9-]{1,62}$");
+    private static final int TENANT_METADATA_SCHEMA_VERSION = 1;
+    private static final Set<String> TENANT_METADATA_FIELDS = Set.of("schemaVersion", "tenantAdmin");
+    private static final Set<String> TENANT_ADMIN_FIELDS = Set.of("mobileNumber", "countryCode");
+    private static final PhoneNumberUtil PHONE_NUMBERS = PhoneNumberUtil.getInstance();
     // Normal onboarding creates an independent root. Dotted ids are reserved
     // for a separate, explicit subtenant operation and are never derived here.
     private static final Pattern TENANT_ID = Pattern.compile("^[a-z]{2,63}$");
@@ -165,9 +173,14 @@ public class OnboardingService {
         }
         if (values.containsKey("tenantMetadata")) {
             if (!(values.get("tenantMetadata") instanceof Map)) invalid("Signup.tenantMetadata");
-            // Stored as a versioned draft snapshot. Projection adapters decide which
-            // values become tenant/MDMS records after the signup is submitted.
-            signup.setTenantMetadata(new LinkedHashMap<>((Map<String, Object>) values.get("tenantMetadata")));
+            signup.setTenantMetadata(normalizeTenantMetadata(
+                    (Map<String, Object>) values.get("tenantMetadata"), signup.getCountryCode(), false));
+        } else if (values.containsKey("countryCode") && signup.getTenantMetadata() != null
+                && !signup.getTenantMetadata().isEmpty()) {
+            // Country is the single source for phone validation and dial prefix.
+            // Re-normalize an existing draft contact when it changes.
+            signup.setTenantMetadata(normalizeTenantMetadata(
+                    signup.getTenantMetadata(), signup.getCountryCode(), false));
         }
 
         // These identifiers are server-owned projections of the tenant admin's choices.
@@ -195,6 +208,64 @@ public class OnboardingService {
         requiredString(signup.getAcceptedTermsVersion(), "Signup.acceptedTermsVersion");
         if (signup.getLanguages() == null || signup.getLanguages().isEmpty()) {
             throw new CustomException("ONBOARDING_VALIDATION_ERROR", "Signup.languages is required");
+        }
+        signup.setTenantMetadata(normalizeTenantMetadata(
+                signup.getTenantMetadata(), signup.getCountryCode(), true));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> normalizeTenantMetadata(Map<String, Object> metadata, String countryCode,
+                                                        boolean contactRequired) {
+        if (metadata == null || metadata.isEmpty()) {
+            if (contactRequired) required("Signup.tenantMetadata");
+            return new LinkedHashMap<>();
+        }
+        if (!TENANT_METADATA_FIELDS.containsAll(metadata.keySet())) invalid("Signup.tenantMetadata");
+
+        Object version = metadata.get("schemaVersion");
+        if (!(version instanceof Number)
+                || ((Number) version).doubleValue() != TENANT_METADATA_SCHEMA_VERSION) {
+            invalid("Signup.tenantMetadata.schemaVersion");
+        }
+
+        Object tenantAdminValue = metadata.get("tenantAdmin");
+        if (tenantAdminValue == null && !contactRequired) {
+            return new LinkedHashMap<>(Map.of("schemaVersion", TENANT_METADATA_SCHEMA_VERSION));
+        }
+        if (!(tenantAdminValue instanceof Map)) invalid("Signup.tenantMetadata.tenantAdmin");
+        Map<String, Object> tenantAdmin = (Map<String, Object>) tenantAdminValue;
+        if (!TENANT_ADMIN_FIELDS.containsAll(tenantAdmin.keySet())) {
+            invalid("Signup.tenantMetadata.tenantAdmin");
+        }
+
+        String mobile = clean(tenantAdmin.get("mobileNumber"));
+        if (mobile == null) {
+            if (contactRequired) required("Signup.tenantMetadata.tenantAdmin.mobileNumber");
+            return new LinkedHashMap<>(Map.of(
+                    "schemaVersion", TENANT_METADATA_SCHEMA_VERSION,
+                    "tenantAdmin", new LinkedHashMap<>()));
+        }
+        String region = requiredString(countryCode, "Signup.countryCode").toUpperCase(Locale.ROOT);
+        try {
+            PhoneNumber number = PHONE_NUMBERS.parse(mobile, region);
+            if (!PHONE_NUMBERS.isValidNumberForRegion(number, region)) {
+                invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
+            }
+            String dialCode = "+" + number.getCountryCode();
+            String suppliedDialCode = clean(tenantAdmin.get("countryCode"));
+            if (suppliedDialCode != null && !dialCode.equals(suppliedDialCode)) {
+                invalid("Signup.tenantMetadata.tenantAdmin.countryCode");
+            }
+            Map<String, Object> normalizedAdmin = new LinkedHashMap<>();
+            normalizedAdmin.put("mobileNumber", PHONE_NUMBERS.getNationalSignificantNumber(number));
+            normalizedAdmin.put("countryCode", dialCode);
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            normalized.put("schemaVersion", TENANT_METADATA_SCHEMA_VERSION);
+            normalized.put("tenantAdmin", normalizedAdmin);
+            return normalized;
+        } catch (NumberParseException exception) {
+            invalid("Signup.tenantMetadata.tenantAdmin.mobileNumber");
+            return Collections.emptyMap(); // unreachable: invalid always throws
         }
     }
 
@@ -252,5 +323,9 @@ public class OnboardingService {
 
     private void invalid(String field) {
         throw new CustomException("ONBOARDING_VALIDATION_ERROR", field + " is invalid");
+    }
+
+    private void required(String field) {
+        throw new CustomException("ONBOARDING_VALIDATION_ERROR", field + " is required");
     }
 }
