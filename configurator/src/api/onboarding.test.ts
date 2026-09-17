@@ -11,7 +11,6 @@ import {
   newIdempotencyKey,
   session,
   tenantReadiness,
-  type Signup,
   slugifyAccountName,
   submitSignup,
 } from './onboarding';
@@ -147,27 +146,22 @@ describe('slugifyAccountName', () => {
 });
 
 describe('tenantReadiness', () => {
-  const signup = (status: Signup['status'], tenantId = 'kisumucounty') =>
-    ({ status, requestedTenantId: tenantId } as Signup);
-
-  it('treats a root this path created as identity-ready, not ready', () => {
-    // The contract's own position until the Level 1 baseline saga exists: the
-    // identity floor is installed and nothing else.
-    expect(tenantReadiness('kisumucounty', signup('ACTIVE'))).toBe('IDENTITY_READY');
+  it('reads the tenant-scoped signal when the backend sends one', () => {
+    expect(tenantReadiness({ readiness: 'READY' })).toBe('READY');
+    expect(tenantReadiness({ readiness: 'PROVISIONING' })).toBe('PROVISIONING');
+    expect(tenantReadiness({ readiness: 'FAILED' })).toBe('FAILED');
   });
 
-  it('reports a baseline job that is actually running', () => {
-    expect(tenantReadiness('kisumucounty', signup('PROVISIONING'))).toBe('PROVISIONING');
+  it('fails closed when the backend sends nothing', () => {
+    // The whole point: unknown must never resolve to READY, or an invited
+    // admin walks into a tenant whose setup never finished.
+    expect(tenantReadiness({})).not.toBe('READY');
+    expect(tenantReadiness({})).toBe('IDENTITY_READY');
   });
 
-  it('reports a baseline job that did not finish', () => {
-    expect(tenantReadiness('kisumucounty', signup('FAILED'))).toBe('FAILED');
-  });
-
-  it('leaves a tenant this path did not create alone', () => {
-    // No signup at all, and a signup for a different tenant, are both somebody
-    // else's provisioning. Gating them would be a guess.
-    expect(tenantReadiness('pg', null)).toBe('READY');
-    expect(tenantReadiness('pg', signup('ACTIVE'))).toBe('READY');
+  it('does not consult the caller, only the workspace', () => {
+    // Readiness is a property of the tenant. Two different people looking at
+    // the same option must get the same answer.
+    expect(tenantReadiness({ readiness: 'READY' })).toBe(tenantReadiness({ readiness: 'READY' }));
   });
 });

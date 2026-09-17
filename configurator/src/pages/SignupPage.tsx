@@ -33,6 +33,7 @@ import {
   tenants,
   updateSignup,
 } from '@/api/onboarding';
+import { clearLocalSession } from '@/lib/session';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,8 +102,8 @@ const POLL_MS = 3000;
 const STEP_LABELS: Record<ProvisioningStep, string> = {
   TENANT_FOUNDATION: 'Creating your account',
   ORGANIZATION: 'Setting up your organisation',
-  FOUNDER_MEMBERSHIP: 'Adding you to it',
-  FOUNDER_ROLES: 'Granting your permissions',
+  TENANT_ADMIN_MEMBERSHIP: 'Adding you to your organisation',
+  TENANT_ADMIN_ROLES: 'Granting your permissions',
   DIGIT_ACCOUNT: 'Creating your DIGIT login',
 };
 
@@ -113,6 +114,7 @@ type Phase =
   | 'wizard'
   | 'provisioning'
   | 'entering'
+  | 'resuming'
   | 'setupRequired'
   | 'stuck'
   | 'failed';
@@ -286,9 +288,10 @@ function SignupFlow() {
   }, []);
 
   /** Session → tenants → onboarding or chooser. The contract's own order. */
+  // No synchronous setState in here: it runs from an effect on mount, where
+  // `loading` is already the initial phase. The two re-entry points below want
+  // the spinner back, so they ask for it through `restart`.
   const bootstrap = useCallback(async () => {
-    setPhase('loading');
-    setError(null);
     try {
       const current = await session();
       if (current.user) setSessionUser({ email: current.user.email, name: current.user.name });
@@ -308,16 +311,25 @@ function SignupFlow() {
       // than starting a second.
       const existing = await findSignup();
       if (existing) seedFrom(existing);
-      // FAILED is the dead end: the founder cannot edit it and cannot start
-      // another, because `_create` hands back the same failed record. Say so
-      // rather than offering a wizard whose saves the server will reject.
-      // Every other non-DRAFT status means provisioning got somewhere, so it
-      // is not this screen's business.
-      if (existing?.status === 'FAILED') {
-        setPhase('stuck');
-        return;
+      // Branch on status, because only a DRAFT may be edited. Dropping every
+      // non-DRAFT into the wizard handed back a form whose every save the
+      // backend refuses.
+      switch (existing?.status) {
+        // The dead end: the founder cannot edit it and cannot start another,
+        // because `_create` hands back the same failed record.
+        case 'FAILED':
+          setPhase('stuck');
+          return;
+        // Submitted and already running. The operation id is not recoverable
+        // from the signup, so there is no step detail to show and none is
+        // invented; the signup's own status is pollable and is the truth.
+        case 'SUBMITTED':
+        case 'PROVISIONING':
+          setPhase('resuming');
+          return;
+        default:
+          setPhase('wizard');
       }
-      setPhase('wizard');
     } catch (caught) {
       setError(errorText(caught));
       setPhase('failed');
@@ -325,7 +337,18 @@ function SignupFlow() {
   }, [seedFrom]);
 
   useEffect(() => {
+    // Load on mount. Every setState inside `bootstrap` happens after an await,
+    // so there is no cascading render to avoid here; the rule cannot see past
+    // the call and flags any effect that reaches a setter at all.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void bootstrap();
+  }, [bootstrap]);
+
+  /** Back to the top with the spinner showing, for retry and for resume. */
+  const restart = useCallback(() => {
+    setPhase('loading');
+    setError(null);
+    return bootstrap();
   }, [bootstrap]);
 
   // Derivations, only while the operator has not taken the field over.
@@ -371,9 +394,6 @@ function SignupFlow() {
       };
     }, [type, value, valid, setState, setChecking]);
   };
-
-  /** What the slug will produce. Representative until provisioning runs. */
-  const accountUrl = `https://${urlSlug || 'your-account'}.cms.digit.org`;
 
   const codeValid = isValidAccountCode(accountCode);
   const slugValid = isValidUrlSlug(urlSlug);
@@ -478,7 +498,33 @@ function SignupFlow() {
       }
     }, POLL_MS);
     return () => clearTimeout(timer);
-  }, [phase, operation]);
+  }, [phase, operation, handleFailure]);
+
+  // Resumed into a run that was already going. Only the signup is addressable
+  // here, so this polls that rather than the operation, and resolves the same
+  // way the live run does.
+  useEffect(() => {
+    if (phase !== 'resuming') return;
+    let live = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await findSignup();
+        if (!live || !latest) return;
+        if (latest.status === 'FAILED') {
+          seedFrom(latest);
+          setPhase('stuck');
+        } else if (latest.status === 'ACTIVE') {
+          await restart();
+        }
+      } catch {
+        // A blip mid-poll is not a failure; the next tick re-reads.
+      }
+    }, POLL_MS);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [phase, seedFrom, restart]);
 
   // Provisioning done: the new tenant appears without another sign-in.
   useEffect(() => {
@@ -507,7 +553,7 @@ function SignupFlow() {
       // with no platform configuration can still hand out a correctly scoped
       // DIGIT token, so getting one proves nothing and entering on the strength
       // of it drops the operator into a console where every call is refused.
-      const readiness = tenantReadiness(option.tenantId, await findSignup());
+      const readiness = tenantReadiness(option);
       if (readiness !== 'READY') {
         setGated({ option, readiness });
         setPhase('setupRequired');
@@ -524,9 +570,13 @@ function SignupFlow() {
         'crs-auth-state',
         JSON.stringify({
           isAuthenticated: true,
+          // What the person is actually called, from the backend first and the
+          // identity session second. The managed username is a machine handle
+          // (`kcbff-<uuid>`), so showing it as a name is wrong, and an address
+          // built out of it is an address that does not exist.
           user: {
-            name: user.userName,
-            email: `${user.userName}@digit.org`,
+            name: user.name || sessionUser?.name || user.userName,
+            email: user.emailId || sessionUser?.email || '',
             roles: user.roles?.map((role) => role.code) ?? [],
             uuid: user.uuid,
           },
@@ -658,6 +708,23 @@ function SignupFlow() {
     );
   }
 
+  if (phase === 'resuming') {
+    // Deliberately no step list: the operation id cannot be recovered from the
+    // signup, so the steps would be decoration over a progress we cannot read.
+    return (
+      <div>
+        <h1 className="font-condensed text-2xl font-bold">Setting up {accountName || 'your account'}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This was already under way when you left. It usually takes a minute or two.
+        </p>
+        {banner}
+        <div className="mt-6 flex items-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking…
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'setupRequired' && gated) {
     // Deliberately an honest gate, not a loading screen: nothing is running in
     // the background, so a spinner or "still being set up" would be a promise
@@ -710,12 +777,14 @@ function SignupFlow() {
               try {
                 await logout();
               } catch {
-                // Signing out locally is the point; a failed revoke must not
-                // strand the operator on this screen.
+                // The local half below is what strands the operator if it is
+                // skipped, so a failed remote revoke must not stop it.
               }
-              setSaving(false);
-              setGated(null);
-              await bootstrap();
+              // Both halves, then a full-page navigation so App re-initialises
+              // from the emptied storage instead of keeping the session it
+              // restored at load.
+              clearLocalSession();
+              window.location.assign('/configurator/signup');
             }}
           >
             Sign out
@@ -819,7 +888,9 @@ function SignupFlow() {
     return (
       <div>
         {banner}
-        <Button onClick={() => void bootstrap()}>
+        <Button
+          onClick={() => void restart()}
+        >
           <RefreshCw className="mr-2 h-4 w-4" /> Try again
         </Button>
       </div>
@@ -997,17 +1068,10 @@ function SignupFlow() {
           <Field
             id="urlSlug"
             label="Account URL"
-            help={
-              <>
-                This short name will be used in your account URLs.
-                {urlSlug && (
-                  <>
-                    <br />
-                    Preview: <strong>{accountUrl}</strong>
-                  </>
-                )}
-              </>
-            }
+            // No preview of a subdomain: workspace URLs are deferred and there
+            // is no DNS or routing contract behind that shape yet, so showing
+            // one would be promising an address nobody has agreed to serve.
+            help="This short name will be used to identify your account."
             status={
               <AvailabilityNote
                 state={slugState}
@@ -1083,18 +1147,6 @@ function SignupFlow() {
               </div>
             ))}
           </dl>
-
-          <div className="rounded-md border p-4">
-            <p className="text-sm font-medium">Primary URL</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Main entry point for administrators, supervisors, resolvers, and other government
-              employees.
-            </p>
-            <p className="mt-2 rounded bg-muted px-3 py-2 font-mono text-xs">{accountUrl}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This URL is representative. Working URLs will be available post provisioning.
-            </p>
-          </div>
 
           <label className="flex items-start gap-2 text-sm">
             <input

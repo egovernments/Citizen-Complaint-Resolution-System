@@ -42,7 +42,7 @@ import { AnalyticsProvidersEditor } from '@/admin/analytics/AnalyticsProvidersEd
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import PublicDashboardConfigure from './resources/public-dashboard/PublicDashboardConfigure';
-import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider, DigitApiClient } from '@/providers/bridge';
+import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, i18nProvider, DigitApiClient } from '@/providers/bridge';
 import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -57,7 +57,8 @@ import HelpModal from './components/ui/HelpModal';
 // import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
 import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
-import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
+import { identifyUser, trackEvent } from './lib/telemetry';
+import { clearLocalSession } from './lib/session';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
 import { LEGACY_PGR_DASHBOARD_ENABLED } from '@/config/featureFlags';
@@ -203,8 +204,9 @@ function ManagementAdminResources() {
   );
 }
 
-// Storage key for persisting auth state
-const AUTH_STORAGE_KEY = 'crs-auth-state';
+// Storage key for persisting auth state. Defined with the teardown that
+// clears it so the two cannot drift apart.
+import { AUTH_STORAGE_KEY } from './lib/session';
 
 // One-shot flag (sessionStorage) set when a request is rejected for an expired
 // session, read by LoginPage to explain why the operator was sent back.
@@ -311,11 +313,7 @@ function App() {
   useEffect(() => {
     const expire = () => {
       try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
-      clearUser();
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      apiClient.logout();
-      digitClient.clearAuth();
-      resetProviders();
+      clearLocalSession();
       setState(s => ({ ...s, isAuthenticated: false, user: null }));
     };
     apiClient.setSessionExpiredHandler(expire);
@@ -418,14 +416,9 @@ function App() {
 
   const logout = () => {
     trackEvent('logout', { tenant: state.tenant });
-    clearUser();
-
-    // Clear localStorage
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    // Clear apiClient and digitClient
-    apiClient.logout();
-    digitClient.clearAuth();
-    resetProviders();
+    // Storage, both API clients and the cached providers. Shared with the
+    // signup flow so there is one definition of what a DIGIT sign-out clears.
+    clearLocalSession();
     setState(s => ({ ...s, isAuthenticated: false, user: null, mode: 'onboarding', currentPhase: 1, completedPhases: [], targetTenant: s.tenant }));
   };
 

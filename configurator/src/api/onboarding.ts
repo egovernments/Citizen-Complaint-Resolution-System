@@ -68,6 +68,12 @@ export interface TenantOption {
   tenantId: string;
   name: string;
   roles: string[];
+  /**
+   * Tenant-scoped and member-readable, so it answers for the workspace rather
+   * than for whoever is asking. Optional because the backend does not send it
+   * yet (CCRS#2073 G9); absent is treated as not ready, never as ready.
+   */
+  readiness?: TenantReadiness;
 }
 
 export interface TenantsResponse {
@@ -91,34 +97,22 @@ export interface TenantsResponse {
 export type TenantReadiness = 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED';
 
 /**
- * Readiness for one tenant.
+ * Readiness for one tenant, and deliberately fail-closed.
  *
- * There is deliberately no guessing here. Readiness is NOT inferred from the
- * roles on the option, from a tile request that came back denied, or from the
- * tenant merely existing: all three are true of a tenant that cannot be used,
- * which is exactly how the blank-ish Management Studio happened.
+ * This must answer for the WORKSPACE, not for the person asking. Deriving it
+ * from the caller's own signup record was wrong two ways: it said nothing about
+ * a tenant the caller did not create, and it returned ready for exactly that
+ * case, so an invited admin, or a founder picking a second membership, walked
+ * into a half-built tenant.
  *
- * The durable signal is backend work that lands with the Level 1 baseline saga.
- * Until then the only thing we can say honestly is what the contract already
- * tells us: a root this self-serve path produced has had its identity floor
- * installed and nothing else, so it is `IDENTITY_READY`. A tenant that did not
- * come from this path is somebody else's provisioning and is left alone.
- *
- * When the backend grows a readiness field, this reads it and the four states
- * below already have somewhere to go.
+ * So the only source is the tenant-scoped signal on the option. Until the
+ * backend sends one, unknown resolves to `IDENTITY_READY` rather than `READY`.
+ * Every tenant reachable through this chooser today was produced by this path,
+ * which installs the identity floor and nothing else, and guessing the other
+ * way is the failure this exists to prevent.
  */
-export function tenantReadiness(tenantId: string, signup: Signup | null): TenantReadiness {
-  if (!signup || signup.requestedTenantId !== tenantId) return 'READY';
-  switch (signup.status) {
-    case 'ACTIVE':
-      return 'IDENTITY_READY';
-    case 'PROVISIONING':
-      return 'PROVISIONING';
-    case 'FAILED':
-      return 'FAILED';
-    default:
-      return 'IDENTITY_READY';
-  }
+export function tenantReadiness(option: Pick<TenantOption, 'readiness'>): TenantReadiness {
+  return option.readiness ?? 'IDENTITY_READY';
 }
 
 /** Server-derived fields are readonly here so a caller cannot try to send them. */
@@ -203,8 +197,8 @@ export type OperationStatus =
 export const PROVISIONING_STEPS = [
   'TENANT_FOUNDATION',
   'ORGANIZATION',
-  'FOUNDER_MEMBERSHIP',
-  'FOUNDER_ROLES',
+  'TENANT_ADMIN_MEMBERSHIP',
+  'TENANT_ADMIN_ROLES',
   'DIGIT_ACCOUNT',
 ] as const;
 
@@ -229,9 +223,22 @@ export interface DigitContext {
   token_type: string;
   expires_in: number;
   scope: string;
+  /**
+   * The documented login profile, passed through from egov-user. `name` and
+   * `emailId` are what a person is actually called: do not substitute the
+   * managed username for either, and never synthesize an address from it.
+   */
   UserRequest: {
+    id?: number;
     uuid: string;
     userName: string;
+    name?: string;
+    mobileNumber?: string;
+    countryCode?: string;
+    emailId?: string;
+    locale?: string;
+    type?: string;
+    active?: boolean;
     tenantId: string;
     roles: { code: string; name: string; tenantId: string }[];
   };
@@ -294,7 +301,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
         ...(init.headers || {}),
       },
     });
-  } catch (cause) {
+  } catch {
     throw new OnboardingError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.');
   }
 
