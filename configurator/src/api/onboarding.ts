@@ -97,22 +97,27 @@ export interface TenantsResponse {
 export type TenantReadiness = 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED';
 
 /**
- * Readiness for one tenant, and deliberately fail-closed.
+ * Readiness for one tenant, or `null` when the backend has not said.
  *
- * This must answer for the WORKSPACE, not for the person asking. Deriving it
- * from the caller's own signup record was wrong two ways: it said nothing about
- * a tenant the caller did not create, and it returned ready for exactly that
- * case, so an invited admin, or a founder picking a second membership, walked
- * into a half-built tenant.
+ * The FE does not infer this in either direction, and both directions have
+ * already been wrong once.
  *
- * So the only source is the tenant-scoped signal on the option. Until the
- * backend sends one, unknown resolves to `IDENTITY_READY` rather than `READY`.
- * Every tenant reachable through this chooser today was produced by this path,
- * which installs the identity floor and nothing else, and guessing the other
- * way is the failure this exists to prevent.
+ * Deriving it from the caller's own signup answered a question about the
+ * person, not the workspace, and returned ready for every tenant the caller
+ * did not create. Defaulting the absent value to `IDENTITY_READY` was worse:
+ * `/identity/v1/tenants` returns every organization membership, not just
+ * self-service roots, so it gated Bomet and every other configured tenant out
+ * of `selectContext` permanently.
+ *
+ * So unknown stays unknown, and the gate does not fire on it. The cost is
+ * explicit: until the backend populates a tenant-authoritative value for all
+ * options, a self-service root with no platform configuration will let you in
+ * and Management Studio will refuse every call, which is the state this gate
+ * exists to replace. That is the lesser harm against locking real tenants out,
+ * and the gate is ready the day the field arrives (CCRS#2073 G9).
  */
-export function tenantReadiness(option: Pick<TenantOption, 'readiness'>): TenantReadiness {
-  return option.readiness ?? 'IDENTITY_READY';
+export function tenantReadiness(option: Pick<TenantOption, 'readiness'>): TenantReadiness | null {
+  return option.readiness ?? null;
 }
 
 /** Server-derived fields are readonly here so a caller cannot try to send them. */

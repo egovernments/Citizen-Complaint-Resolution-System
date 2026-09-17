@@ -320,8 +320,8 @@ describe('workspace readiness gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
   };
 
-  it('holds a workspace the backend has not called ready', async () => {
-    withTenant();
+  it('holds a workspace the backend has called identity-ready', async () => {
+    withTenant('IDENTITY_READY');
 
     render(<SignupPage />);
     await pickWorkspace();
@@ -335,7 +335,7 @@ describe('workspace readiness gate', () => {
   it('holds it without consulting the caller\'s own signup record', async () => {
     // Readiness answers for the workspace. An invited admin has no signup at
     // all and must still be held out of a half-built tenant.
-    withTenant();
+    withTenant('IDENTITY_READY');
     vi.mocked(api.findSignup).mockResolvedValue(null);
 
     render(<SignupPage />);
@@ -346,7 +346,7 @@ describe('workspace readiness gate', () => {
   });
 
   it('offers no way to continue setup while there is no setup to continue', async () => {
-    withTenant();
+    withTenant('IDENTITY_READY');
 
     render(<SignupPage />);
     await pickWorkspace();
@@ -357,7 +357,7 @@ describe('workspace readiness gate', () => {
   });
 
   it('does not say setup is running when nothing is running', async () => {
-    withTenant();
+    withTenant('IDENTITY_READY');
 
     render(<SignupPage />);
     await pickWorkspace();
@@ -368,7 +368,7 @@ describe('workspace readiness gate', () => {
   });
 
   it('clears the DIGIT half of the session on sign out, not just the identity half', async () => {
-    withTenant();
+    withTenant('IDENTITY_READY');
     window.localStorage.setItem('crs-auth-state', JSON.stringify({ authToken: 'stale' }));
 
     render(<SignupPage />);
@@ -379,6 +379,26 @@ describe('workspace readiness gate', () => {
     await waitFor(() => expect(api.logout).toHaveBeenCalled());
     // A surviving token would restore on a walk back to / or /manage.
     await waitFor(() => expect(window.localStorage.getItem('crs-auth-state')).toBeNull());
+  });
+
+  it('lets a tenant through when the backend has stated no readiness at all', async () => {
+    // /identity/v1/tenants returns every membership, so an absent value covers
+    // Bomet and every other configured tenant. Gating on it locked them all out
+    // of selectContext permanently.
+    withTenant();
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', tenantId: 'kisumucounty', roles: [] },
+    });
+
+    render(<SignupPage />);
+    await pickWorkspace();
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/workspace setup required/i)).not.toBeInTheDocument();
   });
 
   it('enters only when the backend says the workspace is ready', async () => {
@@ -447,12 +467,24 @@ describe('resuming a run that was already going', () => {
     vi.mocked(api.tenants).mockResolvedValue({ tenants: [], selectionRequired: false, onboardingRequired: true });
   });
 
+  const runningOperation = {
+    id: 'op1',
+    signupId: 's1',
+    status: 'RUNNING' as const,
+    currentStep: 'ORGANIZATION' as const,
+    completedSteps: ['TENANT_FOUNDATION'] as const,
+    errorCode: null,
+    errorMessage: null,
+    attempt: 1,
+  };
+
   it.each(['SUBMITTED', 'PROVISIONING'] as const)(
     'does not hand back an editable wizard for a %s signup',
     async (status) => {
       // Only a DRAFT may be edited, so the wizard here is a form whose every
       // save the backend refuses.
       vi.mocked(api.findSignup).mockResolvedValue(resumable(status));
+      vi.mocked(api.submitSignup).mockResolvedValue(runningOperation as never);
 
       render(<SignupPage />);
 
@@ -461,15 +493,54 @@ describe('resuming a run that was already going', () => {
     },
   );
 
-  it('shows no step detail it cannot actually read', async () => {
-    // The operation id is not recoverable from the signup, so a step list here
-    // would be decoration over progress we do not have.
+  it('reacquires the running operation rather than only watching the signup', async () => {
+    // `_submit` is idempotent and hands back the existing operation before the
+    // DRAFT guard, so it recovers progress instead of starting a second run.
     vi.mocked(api.findSignup).mockResolvedValue(resumable('PROVISIONING'));
+    vi.mocked(api.submitSignup).mockResolvedValue(runningOperation as never);
+
+    render(<SignupPage />);
+
+    await waitFor(() => expect(api.submitSignup).toHaveBeenCalledWith('s1', expect.any(String)));
+    // Real progress, read from the operation rather than invented.
+    expect(await screen.findByText(/creating your account/i)).toBeInTheDocument();
+  });
+
+  it('surfaces the retry on a resumed retryable failure', async () => {
+    // PGR leaves the signup PROVISIONING when an operation goes
+    // RETRYABLE_FAILED; only a terminal failure moves it to FAILED. Watching
+    // the signup alone would sit here forever and never offer the retry.
+    vi.mocked(api.findSignup).mockResolvedValue(resumable('PROVISIONING'));
+    vi.mocked(api.submitSignup).mockResolvedValue({
+      ...runningOperation,
+      status: 'RETRYABLE_FAILED',
+      errorCode: 'DIGIT_UNAVAILABLE',
+      errorMessage: 'DIGIT is not answering',
+    } as never);
+
+    render(<SignupPage />);
+
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.getByText(/DIGIT is not answering/)).toBeInTheDocument();
+  });
+
+  it('invents no step detail when the operation cannot be recovered', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(resumable('PROVISIONING'));
+    vi.mocked(api.submitSignup).mockRejectedValue(new api.OnboardingError(500, null, 'nope'));
 
     render(<SignupPage />);
     await screen.findByText(/setting up kisumu county/i);
 
     expect(screen.queryByText(/creating your account/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/granting your permissions/i)).not.toBeInTheDocument();
+  });
+
+  it('does not reopen the wizard for an ACTIVE signup whose tenant has not surfaced', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue({ ...resumable('PROVISIONING'), status: 'ACTIVE' as const });
+
+    render(<SignupPage />);
+
+    expect(await screen.findByText(/opening your workspace/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/account name/i)).not.toBeInTheDocument();
   });
 });

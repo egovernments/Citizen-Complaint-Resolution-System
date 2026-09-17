@@ -320,11 +320,29 @@ function SignupFlow() {
         case 'FAILED':
           setPhase('stuck');
           return;
-        // Submitted and already running. The operation id is not recoverable
-        // from the signup, so there is no step detail to show and none is
-        // invented; the signup's own status is pollable and is the truth.
+        // Submitted and already running. `_submit` is idempotent and returns
+        // the existing operation for the signup before it applies the
+        // DRAFT-state guard, so it is how the operation is recovered after a
+        // reload rather than something that starts a second run. That matters
+        // for more than step detail: PGR leaves the signup PROVISIONING when an
+        // operation goes RETRYABLE_FAILED, and only a terminal failure moves it
+        // to FAILED. Polling the signup alone would therefore sit on a retryable
+        // failure forever and never offer the retry that already exists.
         case 'SUBMITTED':
         case 'PROVISIONING':
+          try {
+            setOperation(await submitSignup(existing.id, submitKey.current));
+            setPhase('provisioning');
+          } catch {
+            // Could not reacquire it. Fall back to watching the signup, which
+            // still resolves on ACTIVE or FAILED.
+            setPhase('resuming');
+          }
+          return;
+        // Provisioned. Normally unreachable, because the tenant branch above
+        // catches it, but if tenant discovery briefly returns no option the
+        // wizard must not come back: nothing here is saveable any more.
+        case 'ACTIVE':
           setPhase('resuming');
           return;
         default:
@@ -553,8 +571,10 @@ function SignupFlow() {
       // with no platform configuration can still hand out a correctly scoped
       // DIGIT token, so getting one proves nothing and entering on the strength
       // of it drops the operator into a console where every call is refused.
+      // Only gate on a readiness the backend actually stated. An unknown value
+      // must not hold a configured tenant out of its own workspace.
       const readiness = tenantReadiness(option);
-      if (readiness !== 'READY') {
+      if (readiness && readiness !== 'READY') {
         setGated({ option, readiness });
         setPhase('setupRequired');
         setSaving(false);
@@ -574,11 +594,17 @@ function SignupFlow() {
           // identity session second. The managed username is a machine handle
           // (`kcbff-<uuid>`), so showing it as a name is wrong, and an address
           // built out of it is an address that does not exist.
+          // `id` and `mobileNumber` travel too, as the legacy login path stores
+          // them. App rebuilds `RequestInfo.userInfo` from this blob, so
+          // leaving them out made every downstream request carry `id: 0` and an
+          // empty mobile while the BFF had returned the real values.
           user: {
             name: user.name || sessionUser?.name || user.userName,
             email: user.emailId || sessionUser?.email || '',
             roles: user.roles?.map((role) => role.code) ?? [],
             uuid: user.uuid,
+            id: user.id,
+            mobileNumber: user.mobileNumber,
           },
           environment: API_ORIGIN || window.location.origin,
           tenant: user.tenantId,
@@ -709,13 +735,20 @@ function SignupFlow() {
   }
 
   if (phase === 'resuming') {
-    // Deliberately no step list: the operation id cannot be recovered from the
-    // signup, so the steps would be decoration over a progress we cannot read.
+    // The fallback when the operation could not be reacquired, and the holding
+    // state for a provisioned signup whose tenant has not surfaced yet. No step
+    // list either way: without the operation there is no progress to read, and
+    // drawing one would be decoration.
+    const provisioned = signup?.status === 'ACTIVE';
     return (
       <div>
-        <h1 className="font-condensed text-2xl font-bold">Setting up {accountName || 'your account'}</h1>
+        <h1 className="font-condensed text-2xl font-bold">
+          {provisioned ? 'Opening your workspace' : `Setting up ${accountName || 'your account'}`}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This was already under way when you left. It usually takes a minute or two.
+          {provisioned
+            ? 'Your account is ready. Waiting for it to become available to sign in to.'
+            : 'This was already under way when you left. It usually takes a minute or two.'}
         </p>
         {banner}
         <div className="mt-6 flex items-center text-sm text-muted-foreground">

@@ -152,11 +152,13 @@ describe('tenantReadiness', () => {
     expect(tenantReadiness({ readiness: 'FAILED' })).toBe('FAILED');
   });
 
-  it('fails closed when the backend sends nothing', () => {
-    // The whole point: unknown must never resolve to READY, or an invited
-    // admin walks into a tenant whose setup never finished.
-    expect(tenantReadiness({})).not.toBe('READY');
-    expect(tenantReadiness({})).toBe('IDENTITY_READY');
+  it('says nothing when the backend has said nothing', () => {
+    // Neither direction is safe to guess. Defaulting to READY let an invited
+    // admin into a half-built tenant; defaulting to IDENTITY_READY locked every
+    // already-configured tenant out of its own workspace, because
+    // /identity/v1/tenants returns every membership and not just self-service
+    // roots. Unknown stays unknown and the gate does not fire on it.
+    expect(tenantReadiness({})).toBeNull();
   });
 
   it('does not consult the caller, only the workspace', () => {
