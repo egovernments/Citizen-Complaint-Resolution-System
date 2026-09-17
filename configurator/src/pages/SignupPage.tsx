@@ -68,11 +68,16 @@ const LANGUAGES: { code: string; label: string }[] = [
  * one example, so this list is our best guess at the vocabulary rather than a
  * published enum. Confirm with the backend before this ships. (#1999)
  */
+/**
+ * Short codes, as asked on #1999. The backend accepts any string for this
+ * field today and does not yet project it into runtime configuration, so the
+ * value is carried on the draft and nothing reads it back.
+ */
 const FINANCIAL_YEARS = [
-  { code: 'JANUARY_DECEMBER', label: 'January to December' },
-  { code: 'APRIL_MARCH', label: 'April to March' },
-  { code: 'JULY_JUNE', label: 'July to June' },
-  { code: 'OCTOBER_SEPTEMBER', label: 'October to September' },
+  { code: 'JAN_DEC', label: 'January to December' },
+  { code: 'APR_MAR', label: 'April to March' },
+  { code: 'JUL_JUN', label: 'July to June' },
+  { code: 'OCT_SEP', label: 'October to September' },
 ];
 
 const TERMS_VERSION = '2026-09';
@@ -228,7 +233,7 @@ function SignupFlow() {
   const [languages, setLanguages] = useState<string[]>(['en']);
   const [timeZone, setTimeZone] = useState('');
   const [financialYearPolicy, setFinancialYearPolicy] = useState('');
-  const [founderMobile, setFounderMobile] = useState('');
+  const [tenantAdminMobile, setTenantAdminMobile] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [codeState, setCodeState] = useState<AvailabilityResult | null>(null);
@@ -253,7 +258,7 @@ function SignupFlow() {
     setLanguages(record.languages?.length ? record.languages : ['en']);
     setTimeZone(record.timeZone || '');
     setFinancialYearPolicy(record.financialYearPolicy || '');
-    setFounderMobile(String(record.tenantMetadata?.founder?.mobileNumber || ''));
+    setTenantAdminMobile(String(record.tenantMetadata?.tenantAdmin?.mobileNumber || ''));
     setAcceptedTerms(Boolean(record.acceptedTermsVersion));
     if (record.accountCode) codeTouched.current = true;
     if (record.urlSlug) slugTouched.current = true;
@@ -371,11 +376,11 @@ function SignupFlow() {
     if (timeZone) next.timeZone = timeZone;
     if (financialYearPolicy) next.financialYearPolicy = financialYearPolicy;
     if (acceptedTerms) next.acceptedTermsVersion = TERMS_VERSION;
-    if (founderMobile.trim()) {
-      next.tenantMetadata = { schemaVersion: 1, founder: { mobileNumber: founderMobile.trim() } };
+    if (tenantAdminMobile.trim()) {
+      next.tenantMetadata = { schemaVersion: 1, tenantAdmin: { mobileNumber: tenantAdminMobile.trim() } };
     }
     return next;
-  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, founderMobile]);
+  }, [accountName, accountCode, urlSlug, countryCode, languages, timeZone, financialYearPolicy, acceptedTerms, tenantAdminMobile]);
 
   /** Create on first save, update thereafter — one signup per founder. */
   const persist = useCallback(async (): Promise<Signup> => {
@@ -521,7 +526,7 @@ function SignupFlow() {
     financialYearPolicy.length > 0 &&
     slugValid &&
     slugState?.available !== false &&
-    founderMobile.trim().length > 0;
+    tenantAdminMobile.trim().length > 0;
 
   const banner = error ? (
     <Alert variant="destructive" className="mb-4">
@@ -927,14 +932,14 @@ function SignupFlow() {
           </Field>
 
           <Field
-            id="founderMobile"
+            id="tenantAdminMobile"
             label="Your mobile number"
             help="Used to create your account inside the new workspace."
           >
             <Input
-              id="founderMobile"
-              value={founderMobile}
-              onChange={(e) => setFounderMobile(e.target.value)}
+              id="tenantAdminMobile"
+              value={tenantAdminMobile}
+              onChange={(e) => setTenantAdminMobile(e.target.value)}
               placeholder="+254700000199"
             />
           </Field>
@@ -966,7 +971,7 @@ function SignupFlow() {
               ['Languages', languages.map((c) => LANGUAGES.find((l) => l.code === c)?.label || c).join(', ')],
               ['Timezone', timeZone],
               ['Financial year', FINANCIAL_YEARS.find((f) => f.code === financialYearPolicy)?.label || financialYearPolicy],
-              ['Mobile number', founderMobile],
+              ['Mobile number', tenantAdminMobile],
             ].map(([label, value], i) => (
               <div
                 key={label}

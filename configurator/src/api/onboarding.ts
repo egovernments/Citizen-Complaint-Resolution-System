@@ -96,18 +96,27 @@ export interface Signup {
   updatedAt: number;
 }
 
+/**
+ * The only metadata the backend accepts, and it is a closed set.
+ *
+ * Unknown keys at either level are rejected before provisioning, so there is
+ * deliberately no index signature here: a stray field should fail to compile
+ * rather than fail a submit. `schemaVersion` must be 1.
+ *
+ * `countryCode` inside `tenantAdmin` is derived by the backend from the
+ * top-level `Signup.countryCode` and must not be sent.
+ */
 export interface TenantMetadata {
-  schemaVersion: number;
-  founder: {
+  schemaVersion: 1;
+  tenantAdmin: {
     /**
-     * Required by the provisioning worker to create the tenant-local DIGIT
-     * employee. Absent, provisioning ends TERMINAL_FAILED with
-     * FOUNDER_ACCOUNT_REJECTED — so the wizard must collect it before submit,
-     * not treat it as optional metadata.
+     * E.164, with the dial prefix. `_submit` requires it: the worker creates
+     * the tenant-local DIGIT employee from it, and the backend validates it
+     * against Signup.countryCode, normalises it to the national number and
+     * derives the prefix itself. A draft may be saved without it.
      */
     mobileNumber: string;
   };
-  [key: string]: unknown;
 }
 
 /** Everything a caller may send. Server-derived fields are absent by design. */

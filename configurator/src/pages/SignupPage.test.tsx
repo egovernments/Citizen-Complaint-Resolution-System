@@ -80,7 +80,7 @@ const completeAccountStep = async (name = 'Bomet County Government') => {
 const fillPreferences = async () => {
   fireEvent.change(screen.getByLabelText(/base country/i), { target: { value: 'KE' } });
   fireEvent.change(screen.getByLabelText(/timezone/i), { target: { value: 'Africa/Nairobi' } });
-  fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JULY_JUNE' } });
+  fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: 'JUL_JUN' } });
   fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '+254700000199' } });
 };
 
@@ -176,8 +176,8 @@ describe('wizard', () => {
       countryCode: 'KE',
       languages: ['en'],
       timeZone: 'Africa/Nairobi',
-      financialYearPolicy: 'JULY_JUNE',
-      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: '+254700000199' } },
+      financialYearPolicy: 'JUL_JUN',
+      tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
     } as never);
 
     render(<SignupPage />);
@@ -258,8 +258,8 @@ describe('provisioning', () => {
       countryCode: 'KE',
       languages: ['en'],
       timeZone: 'Africa/Nairobi',
-      financialYearPolicy: 'JULY_JUNE',
-      tenantMetadata: { schemaVersion: 1, founder: { mobileNumber: '+254700000199' } },
+      financialYearPolicy: 'JUL_JUN',
+      tenantMetadata: { schemaVersion: 1, tenantAdmin: { mobileNumber: '+254700000199' } },
     } as never);
     vi.mocked(api.updateSignup).mockResolvedValue({ id: 'signup-1' } as never);
     vi.mocked(api.submitSignup).mockResolvedValue({
