@@ -71,7 +71,6 @@ erDiagram
 - egov-idgen
 - mdms-v2
 - egov-persister
-- egov-notification-sms
 - egov-notification-mail
 - egov-hrms
 - egov-workflow-v2

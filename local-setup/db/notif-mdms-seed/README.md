@@ -1,8 +1,8 @@
 # Notification MDMS seed
 
-Seed records that wire the **PGR complaint lifecycle events** and
-**OTP send** to the Novu workflows defined in
-`backend/novu-bridge-endpoint/workflows.js`.
+Seed records that wire the **PGR complaint lifecycle events** to the
+notification templates novu-bridge renders (MDMS `RAINMAKER-PGR.NotificationTemplate`
++ `NotificationProviderTemplate`).
 
 The Java `novu-bridge` service consumes Kafka events from
 `complaints.domain.events` and resolves two records via
@@ -124,8 +124,8 @@ locale, and the HI templates' `{{n}}` order must be re-verified via the
 Content API before adding `hi_IN` rows. Tracked as a follow-up.
 
 For **SMS** (Twilio numbers configured as SMS-capable), `contentSid`
-stays absent — the bridge renders the body from
-`backend/novu-bridge-endpoint/workflows.js`.
+stays absent — the body is the pre-rendered `renderedBody` from the
+MDMS template.
 
 For **WhatsApp sandbox** testing: the recipient must first send
 `join <code>` to the Twilio sandbox number (opens a 24h window).
@@ -150,6 +150,5 @@ The `OTP.SEND` row is kept on the **hardcoded OTP path** for now: no
   WhatsApp-only sender) before it can be turned on.
 
 Revisit once #43 lands and an SMS sender / authentication template is
-available. The `otp-publisher` service
-(`local-setup/scripts/otp-publisher/`) and the `otp-send` workflow
-remain in place for that future cut-over.
+available. Login OTPs already flow through the bridge as `CORE_SMS`
+events (topic `egov.core.notification.sms`).
