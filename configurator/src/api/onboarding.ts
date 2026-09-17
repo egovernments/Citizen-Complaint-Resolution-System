@@ -312,10 +312,16 @@ export function startSignIn(methodId: string): void {
   window.location.assign(`${IDENTITY_BASE}/authorize?method=${encodeURIComponent(methodId)}`);
 }
 
-/** Resolves `{ authenticated: false }` rather than throwing on a 401. */
-export async function session(): Promise<Session> {
+/**
+ * Resolves `{ authenticated: false }` rather than throwing on a 401.
+ *
+ * Takes a signal because one caller runs this on a cold page load to decide
+ * which screen to draw, and must not hang there if the identity BFF is slow
+ * or absent.
+ */
+export async function session(signal?: AbortSignal): Promise<Session> {
   try {
-    return await call<Session>(`${IDENTITY_BASE}/session`);
+    return await call<Session>(`${IDENTITY_BASE}/session`, { signal });
   } catch (error) {
     if (error instanceof OnboardingError && error.isUnauthenticated) {
       return { authenticated: false };

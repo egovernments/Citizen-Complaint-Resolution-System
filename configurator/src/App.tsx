@@ -3,6 +3,7 @@ import { useState, createContext, useContext, useEffect, useCallback } from 'rea
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import RootLanding from './pages/RootLanding';
 import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
@@ -532,7 +533,7 @@ function App() {
           <Route path="/" element={
             state.isAuthenticated
               ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
-              : <Navigate to="/login" />
+              : <RootLanding />
           }>
             <Route index element={<Navigate to="/phase/1" />} />
             <Route path="phase/1" element={<Phase1Page />} />
