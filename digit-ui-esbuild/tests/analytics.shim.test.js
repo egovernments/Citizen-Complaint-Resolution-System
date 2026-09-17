@@ -914,3 +914,64 @@ test("the grouping key stays stripped even though the tracked URL is not", () =>
   assert.ok(calls.length > 0, "the custom provider should have been called");
   assert.equal(calls[0], "/employee/pgr/inbox-v2", "{{page}} stays context-free");
 });
+
+test("an error page records which error it was", () => {
+  // /user/error?type=notfound&module=PGR is how the app signals a failure.
+  // `type` was not allowlisted, so every error — not found, maintenance,
+  // crash — recorded as the same bare /employee/user/error row with nothing
+  // to tell them apart (#2007).
+  const t = loadShim({
+    pathname: "/digit-ui/employee/user/error",
+    search: "?type=notfound&module=PGR&authToken=secret",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const url = t.sandbox._paq.filter((c) => c[0] === "setCustomUrl").map((c) => c[1])[0];
+  assert.ok(url.indexOf("type=notfound") !== -1, `error kind must survive, got ${url}`);
+  assert.ok(url.indexOf("module=PGR") !== -1, `module must survive, got ${url}`);
+  assert.ok(url.indexOf("authToken") === -1, "a token must never survive");
+  assert.ok(url.indexOf("secret") === -1, "a token value must never survive");
+});
+
+test("a redirect chain that settles in one tick records one pageview", () => {
+  // React Router <Redirect> is history.replace, and the shim wraps
+  // replaceState like pushState. The 50ms coalescing window is what keeps a
+  // same-tick chain honest: the timer reads the path when it FIRES, so the
+  // hops collapse and only the destination is recorded.
+  const t = loadShim({
+    pathname: "/digit-ui/employee",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const before = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
+  t.sandbox.history.replaceState({}, "", "/digit-ui/employee/user/login");
+  t.sandbox.history.replaceState({}, "", "/digit-ui/employee/user/language-selection");
+  t.flush();
+  const after = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
+  assert.equal(after - before, 1, "a same-tick redirect chain is one pageview");
+  const urls = t.sandbox._paq.filter((c) => c[0] === "setCustomUrl").map((c) => c[1]);
+  assert.equal(urls[urls.length - 1], "/digit-ui/employee/user/language-selection",
+    "and it is the destination that gets recorded, not a hop");
+});
+
+test("a redirect chain gated on async work records every hop it passes through", () => {
+  // Characterising the #2007 "circling around pages" pattern rather than
+  // asserting it is desirable. Once a hop waits on a token check or an MDMS
+  // round trip it lands outside the 50ms window, so the intermediate URL is
+  // recorded as a page the operator visited. A login bootstrap is exactly
+  // that shape, which is where the pattern shows up.
+  //
+  // Left as-is deliberately: suppressing replaceState pageviews outright
+  // would lose the DESTINATION of a slow chain, which the operator does see.
+  // The fix is a product call on the coalescing window, pending confirmation
+  // against the test environment.
+  const t = loadShim({
+    pathname: "/digit-ui/employee",
+    respond: (tenant) => (tenant === "mz" ? [row("mz", MATOMO_OK)] : []),
+  });
+  const before = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
+  t.sandbox.history.replaceState({}, "", "/digit-ui/employee/user/login");
+  t.flush();
+  t.sandbox.history.replaceState({}, "", "/digit-ui/employee/user/language-selection");
+  t.flush();
+  const after = t.sandbox._paq.filter((c) => c[0] === "trackPageView").length;
+  assert.equal(after - before, 2, "each settled hop is its own pageview today");
+});

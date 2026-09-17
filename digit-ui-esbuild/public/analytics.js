@@ -310,7 +310,14 @@
    * including `ts` (a cache-buster with unbounded cardinality) and every id. */
   var QUERY_ALLOW = [
     "tenantId", "module", "moduleName", "masterName", "key", "locale",
-    "preview", "builderPreview"
+    "preview", "builderPreview",
+    /* `type` is what makes an error page legible: /user/error carries
+     * ?type=notfound|maintenance|error and without it every failure collapses
+     * into one indistinguishable row. Audited before allowing a key this
+     * generic — every `type=` the app puts in a URL is a closed enum
+     * (add, update, notfound, maintenance, performing-metric), none of it
+     * user data, and values still go through scrub() like any other. */
+    "type"
   ];
 
   var extraScrubbers = []; /* compiled from operator scrubPatterns, appended */
