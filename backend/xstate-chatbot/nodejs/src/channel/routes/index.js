@@ -3,36 +3,55 @@ const express = require("express"),
   config = require("../../env-variables"),
   sessionManager = require("../../session/session-manager"),
   channelProvider = require("../"),
-  remindersService = require("../../machine/service/reminders-service");
+  remindersService = require("../../machine/service/reminders-service"),
+  InboundRequestParser = require("../../session/inbound-message-parser"),
+  { resolveUploadTenantId } = require("../../session/upload-tenant"),
+   { handleError } = require("../../session/error-handler"),
+  rateLimit = require("express-rate-limit");
 
-router.post("/message", async (req, res) => {
+  // Inbound webhooks are unauthenticated and exposed directly — the service is not
+// behind Kong, which rate-limits only its own routes. 300/min is well above real
+// traffic, so it blunts a flood without dropping a provider's delivery retries.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 500,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+});
+
+// Entry point for inbound messages from the channel provider
+router.post("/message", webhookLimiter, async (req, res) => {
+  console.log("Request URL: " + req.originalUrl);
+  console.log('Request Body Object: ' + JSON.stringify(req.body));
+  
   try {
-    console.log("Request URL: " + req.originalUrl);
-    console.log('Request Body Object: ' + JSON.stringify(req.body));
     
-    // Check if this is an image upload in sandbox mode
-    let tenantIdForUpload = null;
-    if (config.enableSandboxMode && req.body && req.body.NumMedia && parseInt(req.body.NumMedia) > 0) {
-      // This is an image upload - try to get tenant from tracker
-      // Extract mobile number from the From field (format: whatsapp:+917061170992)
-      let fromNumber = req.body.From;
-      if (fromNumber && fromNumber.includes(':')) {
-        let mobileNumber = fromNumber.split(':')[1].replace('+91', '');
-        tenantIdForUpload = sessionManager.getTenantForMobileNumber(mobileNumber);
-        console.log(`Image upload detected for ${mobileNumber}, using tenant: ${tenantIdForUpload || 'default'}`);
-      }
+    const inboundRequestParser = InboundRequestParser.create(req, channelProvider);
+    
+    if (config.isSandboxMode) {
+      const tenantId = resolveUploadTenantId(req, config);
+      inboundRequestParser.setTenatId(tenantId);
     }
-    
-    let reformattedMessage = await channelProvider.processMessageFromUser(req, tenantIdForUpload);
-    if (reformattedMessage != null) sessionManager.fromUser(reformattedMessage);
+
+    // only valid messages go through
+    const isValidMessage = await inboundRequestParser.hasValidMessage();
+    if (isValidMessage) {
+      const inboundRequestModel = await inboundRequestParser.getRequestModel();
+      sessionManager
+        .authenticateAndDispatch(inboundRequestModel)
+        .catch((error) => handleError(error, inboundRequestModel));
+    }      
+
   } catch (e) {
     console.log(e);
+  } finally {
+    res.end();
   }
-  res.end();
+
 });
 
 // Handle WhatsApp delivery status webhooks (both GET and POST)
-router.all("/status", async (req, res) => {
+router.all("/status", webhookLimiter, async (req, res) => {
   try {
     const isDeliveryStatusWebhook = req.method === 'GET' || 
       req.query.MESSAGE_STATUS || 
@@ -59,9 +78,12 @@ router.all("/status", async (req, res) => {
     }
     
     // Handle actual user status messages (if any)
-    let reformattedMessage = await channelProvider.processMessageFromUser(req);
+    let reformattedMessage = await channelProvider.getFormattedMessageFromUser(req.body);
+
     if (reformattedMessage != null) {
-      sessionManager.fromUser(reformattedMessage);
+      sessionManager
+        .authenticateAndDispatch(reformattedMessage)
+        .catch((error) => handleError(error, reformattedMessage));
     }
     
     res.status(200).send("OK");
@@ -72,7 +94,7 @@ router.all("/status", async (req, res) => {
   }
 });
 
-router.post("/reminder", async (req, res) => {
+router.post("/reminder", webhookLimiter, async (req, res) => {
   await remindersService.triggerReminders();
   res.end();
 });

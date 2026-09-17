@@ -1,4 +1,5 @@
 const pool = require('./postgres-config');
+const ChatState = require('../chat-state');
 
 class StateRepository {
 
@@ -17,9 +18,9 @@ class StateRepository {
     async getActiveStateForUserId(userId) {
         const query = 'SELECT (state) FROM eg_chat_state_v2 WHERE user_id = $1 AND active = true';
         let result = await pool.query(query, [userId]);
-        if(result.rowCount >= 1) {
+        if(result.rowCount >= 1) { 
             let state = result.rows[0].state;
-            return state;
+            return ChatState.create(state);
         }
     }
 
@@ -35,6 +36,10 @@ class StateRepository {
         return userIdList;
     }
 
+    
+    // Rotates the session_id and bumps time_stamp only if the user has been
+    // idle for more than sessionTime minutes; a no-op otherwise, so a burst of
+    // messages inside one session doesn't spawn a new session_id per message.
     async updateSessionId(userId, sessionTime) {
         const query = 'UPDATE eg_chat_state_v2 as chat SET session_id = md5(random()::text || clock_timestamp()::text)::uuid, time_stamp = round(EXTRACT (EPOCH FROM now())::float*1000) WHERE user_id = $1 AND ((round(EXTRACT (EPOCH FROM now())::float*1000) - chat.time_stamp)/1000/60) > $2';
         let result = await pool.query(query, [userId, sessionTime]);
@@ -49,6 +54,15 @@ class StateRepository {
             return session_id;
         }
     }
+
+    async getLastActivityTimestamp(userId) {
+        const query = 'SELECT time_stamp FROM eg_chat_state_v2 WHERE user_id = $1 AND active = true';
+        let result = await pool.query(query, [userId]);
+        if (result.rowCount >= 1) {
+            return Number(result.rows[0].time_stamp);
+        }
+    }
+
 
 }
 

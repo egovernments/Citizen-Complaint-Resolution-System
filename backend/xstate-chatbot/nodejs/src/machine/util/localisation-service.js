@@ -4,23 +4,84 @@ const config = require('../../env-variables'),
 class LocalisationService {
 
     async init() {
-        this.messages = {}
-        this.supportedLocales = config.supportedLocales.split(',');
-        for(let i = 0; i < this.supportedLocales.length; i++) {
-            this.supportedLocales[i] = this.supportedLocales[i].trim();
+        this.messages = {};
+        this.localeLabels = {};
+
+        const declared = await this.fetchDeclaredLocales();
+        const candidates = declared.length
+            ? declared
+            : config.supportedLocales.split(',').map((l) => ({ value: l.trim(), label: l.trim() }));
+
+        // Localisation never merges tenants: a search returns rows from the first tenant
+        // in the chain that matches, then stops. Fetch each tenant separately and merge,
+        // city last so it overrides the state root.
+        const stateTenantId = String(config.rootTenantId).split('.')[0];
+        const tenants = stateTenantId === config.rootTenantId
+            ? [config.rootTenantId]
+            : [stateTenantId, config.rootTenantId];
+
+        const covered = [];
+        for (const { value, label } of candidates) {
+            const codeToMessages = {};
+            for (const tenantId of tenants) {
+                const messages = await this.fetchMessagesForLocale(value, tenantId).catch(() => []);
+                (messages || []).forEach((record) => { codeToMessages[record.code] = record.message; });
+            }
+            if (Object.keys(codeToMessages).length === 0) continue;
+
+            this.messages[value] = codeToMessages;
+            this.localeLabels[value] = label;
+            covered.push(value);
         }
-        
-        this.supportedLocales.forEach(async (locale, index) => {
-            let codeToMessages = {};
-            let messages = await this.fetchMessagesForLocale(locale, config.rootTenantId);
-            
-            messages.forEach((record, index) => {
-                const code =  record['code'];
-                const message = record['message'];
-                codeToMessages[code] = message;
+
+        this.supportedLocales = covered.length ? covered : ['en_IN'];
+    }
+
+    async fetchDeclaredLocales() {
+        const url = config.egovServices.egovServicesHost + config.egovServices.mdmsSearchPath + '?tenantId=' + config.rootTenantId;
+        const body = {
+            RequestInfo: {},
+            MdmsCriteria: {
+                tenantId: config.rootTenantId,
+                moduleDetails: [{ moduleName: 'common-masters', masterDetails: [{ name: 'StateInfo' }] }]
+            }
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
             });
-            this.messages[locale] = codeToMessages;
-        });
+            const data = await response.json();
+            const languages = data?.MdmsRes?.['common-masters']?.StateInfo?.[0]?.languages ?? [];
+            return languages.filter((language) => language?.value);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    getLocales() {
+        return (this.supportedLocales || ['en_IN']).map((value) => ({
+            value,
+            label: (this.localeLabels || {})[value] || value
+        }));
+    }
+
+    async fetchMessagesForCodes(codes, tenantId) {
+        const bundles = {};
+        for (const code of codes) {
+            bundles[code] = {};
+        }
+        for (const locale of this.supportedLocales || ['en_IN']) {
+            const messages = await this.fetchMessagesForLocale(locale, tenantId, codes).catch(() => []);
+            (messages || []).forEach((record) => {
+                if (bundles[record.code]) {
+                    bundles[record.code][locale] = record.message;
+                }
+            });
+        }
+        return bundles;
     }
 
     getMessageForCode(code, locale) {
@@ -59,8 +120,14 @@ class LocalisationService {
         return messageBundle;
     }
 
-    async fetchMessagesForLocale(locale, tenantId) {
+    // Without codes, localisation returns only the most specific tenant that has
+    // messages for the locale; ancestor tenants are not merged. Passing codes makes
+    // it resolve up the chain, which is the only way to reach keys held on the state root.
+    async fetchMessagesForLocale(locale, tenantId, codes) {
         var url = config.egovServices.egovlocalizationhost + config.egovServices.localisationServiceSearchPath + '?tenantId=' + tenantId + '&locale=' + locale;
+        if (codes && codes.length) {
+            url = url + '&codes=' + encodeURIComponent(codes.join(','));
+        }
         
         var options = {
             method: 'POST',

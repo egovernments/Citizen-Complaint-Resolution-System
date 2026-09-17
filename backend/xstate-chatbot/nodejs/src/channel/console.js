@@ -1,19 +1,26 @@
 const config = require('../env-variables');
 
 class ConsoleProvider {
-    processMessageFromUser(req) {
-        let requestBody = req.body;
+    extractRawMessage(req) {
+        return req.body;
+    }
+
+    isValid(rawMessage) {
+        return !!(rawMessage && rawMessage.message && rawMessage.user);
+    }
+
+    getFormattedMessageFromUser(rawMessage) {
         let reformattedMessage = {
             message: {
-                type: requestBody.message.type,
-                input: requestBody.message.input,
-                // metadata: requestBody.message.metadata ? requestBody.message.metadata : {},
+                type: rawMessage.message.type,
+                input: rawMessage.message.input,
+                // metadata: rawMessage.message.metadata ? rawMessage.message.metadata : {},
             },
             user: {
-                mobileNumber: requestBody.user.mobileNumber
+                mobileNumber: rawMessage.user.mobileNumber
             },
             extraInfo: {
-                whatsAppBusinessNumber: requestBody.extraInfo.whatsAppBusinessNumber,
+                whatsAppBusinessNumber: rawMessage.extraInfo.whatsAppBusinessNumber,
                 tenantId: config.rootTenantId
             }
         }

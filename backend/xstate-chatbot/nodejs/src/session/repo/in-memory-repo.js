@@ -1,4 +1,5 @@
 const uuid = require('uuid');
+const ChatState = require('../chat-state');
 
 class StateRepository {
 
@@ -18,7 +19,7 @@ class StateRepository {
         if(this.states[userId]) {
             let state = JSON.parse(this.states[userId]);
             if(!state.done) {
-                return state;
+                return ChatState.create(state);
             }
         }
     }
