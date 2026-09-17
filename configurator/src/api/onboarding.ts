@@ -76,6 +76,51 @@ export interface TenantsResponse {
   onboardingRequired: boolean;
 }
 
+/**
+ * How far a tenant has actually been built, which is not the same question as
+ * whether you can sign in to it (CCRS#2073 G9).
+ *
+ *  - `IDENTITY_READY` — the organization and the tenant admin exist and a
+ *    correctly scoped DIGIT token can be minted, but no platform configuration
+ *    is installed. Management Studio would mount against a tenant with no
+ *    role-actions and every call would come back `AccessDeniedException`.
+ *  - `PROVISIONING` — a baseline configuration job is actually running.
+ *  - `READY` — the workspace is usable.
+ *  - `FAILED` — a baseline job ran and did not finish.
+ */
+export type TenantReadiness = 'IDENTITY_READY' | 'PROVISIONING' | 'READY' | 'FAILED';
+
+/**
+ * Readiness for one tenant.
+ *
+ * There is deliberately no guessing here. Readiness is NOT inferred from the
+ * roles on the option, from a tile request that came back denied, or from the
+ * tenant merely existing: all three are true of a tenant that cannot be used,
+ * which is exactly how the blank-ish Management Studio happened.
+ *
+ * The durable signal is backend work that lands with the Level 1 baseline saga.
+ * Until then the only thing we can say honestly is what the contract already
+ * tells us: a root this self-serve path produced has had its identity floor
+ * installed and nothing else, so it is `IDENTITY_READY`. A tenant that did not
+ * come from this path is somebody else's provisioning and is left alone.
+ *
+ * When the backend grows a readiness field, this reads it and the four states
+ * below already have somewhere to go.
+ */
+export function tenantReadiness(tenantId: string, signup: Signup | null): TenantReadiness {
+  if (!signup || signup.requestedTenantId !== tenantId) return 'READY';
+  switch (signup.status) {
+    case 'ACTIVE':
+      return 'IDENTITY_READY';
+    case 'PROVISIONING':
+      return 'PROVISIONING';
+    case 'FAILED':
+      return 'FAILED';
+    default:
+      return 'IDENTITY_READY';
+  }
+}
+
 /** Server-derived fields are readonly here so a caller cannot try to send them. */
 export interface Signup {
   id: string;

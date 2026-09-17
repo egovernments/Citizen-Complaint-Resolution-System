@@ -7,6 +7,7 @@ import {
   type Operation,
   type ProvisioningStep,
   type Signup,
+  type TenantReadiness,
   type SignupDraftInput,
   type TenantOption,
   OnboardingError,
@@ -20,9 +21,11 @@ import {
   isOperationSettled,
   isValidAccountCode,
   isValidUrlSlug,
+  logout,
   newIdempotencyKey,
   retryOperation,
   selectContext,
+  tenantReadiness,
   session,
   slugifyAccountName,
   startSignIn,
@@ -110,6 +113,7 @@ type Phase =
   | 'wizard'
   | 'provisioning'
   | 'entering'
+  | 'setupRequired'
   | 'stuck'
   | 'failed';
 
@@ -233,6 +237,9 @@ function SignupFlow() {
   const [methods, setMethods] = useState<{ id: string; label: string }[]>([]);
   const [sessionUser, setSessionUser] = useState<{ email: string; name: string } | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  // The tenant the operator picked and how far it has actually been built. Set
+  // only when the pick is refused, so the gate can name what it is holding.
+  const [gated, setGated] = useState<{ option: TenantOption; readiness: TenantReadiness } | null>(null);
   const [signup, setSignup] = useState<Signup | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [step, setStep] = useState<string>('account');
@@ -492,11 +499,22 @@ function SignupFlow() {
     };
   }, [phase, operation?.status]);
 
-  const enter = async (tenantId: string) => {
+  const enter = async (option: TenantOption) => {
     setSaving(true);
     setError(null);
     try {
-      const context = await selectContext(tenantId);
+      // Readiness is checked BEFORE anything is minted or mounted. A tenant
+      // with no platform configuration can still hand out a correctly scoped
+      // DIGIT token, so getting one proves nothing and entering on the strength
+      // of it drops the operator into a console where every call is refused.
+      const readiness = tenantReadiness(option.tenantId, await findSignup());
+      if (readiness !== 'READY') {
+        setGated({ option, readiness });
+        setPhase('setupRequired');
+        setSaving(false);
+        return;
+      }
+      const context = await selectContext(option.tenantId);
       // Hand the DIGIT token to the session the app actually restores from.
       // App.tsx reads one blob under `crs-auth-state`; writing digit-ui's
       // `Employee.*` keys instead left the operator looking at whichever
@@ -629,12 +647,79 @@ function SignupFlow() {
               variant="outline"
               className="w-full justify-between"
               disabled={saving}
-              onClick={() => enter(option.tenantId)}
+              onClick={() => enter(option)}
             >
               <span>{option.name}</span>
               <span className="text-xs text-muted-foreground">{option.tenantId}</span>
             </Button>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'setupRequired' && gated) {
+    // Deliberately an honest gate, not a loading screen: nothing is running in
+    // the background, so a spinner or "still being set up" would be a promise
+    // the backend is not keeping (CCRS#2073 G9). Management modules are never
+    // mounted from here, so none of the calls that return AccessDeniedException
+    // are fired at all.
+    // READY never reaches this screen, so it is excluded rather than carried
+    // here as an empty entry nobody can read.
+    const copy: Record<Exclude<TenantReadiness, 'READY'>, { title: string; body: string }> = {
+      IDENTITY_READY: {
+        title: 'Tenant created — workspace setup required',
+        body: 'Your organisation and administrator account are ready. Workspace configuration has not been installed yet.',
+      },
+      PROVISIONING: {
+        title: 'Workspace setup is running',
+        body: 'Your organisation and administrator account are ready. The workspace configuration is still being installed.',
+      },
+      FAILED: {
+        title: 'Workspace setup did not finish',
+        body: 'Your organisation and administrator account are ready, but the workspace configuration could not be installed.',
+      },
+    };
+    const { title, body } = copy[gated.readiness as Exclude<TenantReadiness, 'READY'>];
+    return (
+      <div>
+        <h1 className="font-condensed text-2xl font-bold">{title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+        <div className="mt-6 rounded border px-4 py-3 text-sm">
+          <div className="font-medium">{gated.option.name}</div>
+          <div className="text-xs text-muted-foreground">{gated.option.tenantId}</div>
+        </div>
+        {banner}
+        <div className="mt-6 flex flex-wrap gap-2">
+          {tenantOptions.length > 1 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setGated(null);
+                setPhase('chooseTenant');
+              }}
+            >
+              Choose a different workspace
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await logout();
+              } catch {
+                // Signing out locally is the point; a failed revoke must not
+                // strand the operator on this screen.
+              }
+              setSaving(false);
+              setGated(null);
+              await bootstrap();
+            }}
+          >
+            Sign out
+          </Button>
         </div>
       </div>
     );

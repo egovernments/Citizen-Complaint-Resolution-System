@@ -10,6 +10,8 @@ import {
   isValidUrlSlug,
   newIdempotencyKey,
   session,
+  tenantReadiness,
+  type Signup,
   slugifyAccountName,
   submitSignup,
 } from './onboarding';
@@ -141,5 +143,31 @@ describe('validation mirrors the server rules', () => {
 describe('slugifyAccountName', () => {
   it('lowercases and hyphenates', () => {
     expect(slugifyAccountName('Bomet County Government')).toBe('bomet-county-government');
+  });
+});
+
+describe('tenantReadiness', () => {
+  const signup = (status: Signup['status'], tenantId = 'kisumucounty') =>
+    ({ status, requestedTenantId: tenantId } as Signup);
+
+  it('treats a root this path created as identity-ready, not ready', () => {
+    // The contract's own position until the Level 1 baseline saga exists: the
+    // identity floor is installed and nothing else.
+    expect(tenantReadiness('kisumucounty', signup('ACTIVE'))).toBe('IDENTITY_READY');
+  });
+
+  it('reports a baseline job that is actually running', () => {
+    expect(tenantReadiness('kisumucounty', signup('PROVISIONING'))).toBe('PROVISIONING');
+  });
+
+  it('reports a baseline job that did not finish', () => {
+    expect(tenantReadiness('kisumucounty', signup('FAILED'))).toBe('FAILED');
+  });
+
+  it('leaves a tenant this path did not create alone', () => {
+    // No signup at all, and a signup for a different tenant, are both somebody
+    // else's provisioning. Gating them would be a guess.
+    expect(tenantReadiness('pg', null)).toBe('READY');
+    expect(tenantReadiness('pg', signup('ACTIVE'))).toBe('READY');
   });
 });

@@ -289,3 +289,92 @@ describe('provisioning', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 });
+
+/**
+ * A tenant can hand out a correctly scoped DIGIT token long before it has any
+ * platform configuration, so entering on the strength of a successful sign-in
+ * drops the operator into a console where every call is refused (CCRS#2073 G9).
+ */
+describe('workspace readiness gate', () => {
+  const option = { organizationAlias: 'kisumu-county', tenantId: 'kisumucounty', name: 'Kisumu County', roles: ['MDMS_ADMIN'] };
+
+  const activeSignup = {
+    id: 's1',
+    status: 'ACTIVE' as const,
+    accountName: 'Kisumu County',
+    accountCode: 'KE-KC',
+    organizationAlias: 'kisumu-county',
+    requestedTenantId: 'kisumucounty',
+    urlSlug: 'kisumu-county',
+    countryCode: 'KE',
+    languages: ['en'],
+    timeZone: 'Africa/Nairobi',
+    financialYearPolicy: 'JUL_JUN',
+    acceptedTermsVersion: '2026-09',
+    tenantMetadata: { schemaVersion: 1 as const, tenantAdmin: { mobileNumber: '712345678' } },
+    version: 4,
+    createdAt: 0,
+    updatedAt: 0,
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.session).mockResolvedValue(signedIn);
+    vi.mocked(api.tenants).mockResolvedValue({ tenants: [option], selectionRequired: true, onboardingRequired: false });
+  });
+
+  const pickWorkspace = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: /kisumu county/i }));
+  };
+
+  it('holds a tenant that has only had its identity floor installed', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(activeSignup);
+
+    render(<SignupPage />);
+    await pickWorkspace();
+
+    expect(await screen.findByText(/workspace setup required/i)).toBeInTheDocument();
+    // No token is minted and nothing is mounted, so the calls that come back
+    // AccessDeniedException are never fired.
+    expect(api.selectContext).not.toHaveBeenCalled();
+  });
+
+  it('offers no way to continue setup while there is no setup to continue', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(activeSignup);
+
+    render(<SignupPage />);
+    await pickWorkspace();
+    await screen.findByText(/workspace setup required/i);
+
+    expect(screen.queryByRole('button', { name: /continue setup/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  it('does not say setup is running when nothing is running', async () => {
+    vi.mocked(api.findSignup).mockResolvedValue(activeSignup);
+
+    render(<SignupPage />);
+    await pickWorkspace();
+    await screen.findByText(/workspace setup required/i);
+
+    expect(screen.queryByText(/still being set up/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/has not been installed yet/i)).toBeInTheDocument();
+  });
+
+  it('lets a tenant this path did not create through untouched', async () => {
+    // Somebody else's provisioning: we know nothing about it, so we do not gate it.
+    vi.mocked(api.findSignup).mockResolvedValue(null);
+    vi.mocked(api.selectContext).mockResolvedValue({
+      access_token: 't',
+      token_type: 'bearer',
+      expires_in: 3600,
+      scope: '',
+      UserRequest: { uuid: 'u', userName: 'kcbff', tenantId: 'kisumucounty', roles: [] },
+    });
+
+    render(<SignupPage />);
+    await pickWorkspace();
+
+    await waitFor(() => expect(api.selectContext).toHaveBeenCalledWith('kisumucounty'));
+    expect(screen.queryByText(/workspace setup required/i)).not.toBeInTheDocument();
+  });
+});
