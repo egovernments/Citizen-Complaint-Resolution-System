@@ -29,6 +29,12 @@ public class DispatchLogEntry {
     private String lastErrorCode;
     private String lastErrorMessage;
     private Map<String, Object> providerResponse;
+    /** Operator test-send (Providers screen). Hidden from the Logs screen unless asked for. */
+    private Boolean isTest;
+    /** Provider-side correlation id (Novu transactionId, SMSCountry jobId) — how receipts find the row. */
+    private String providerRef;
+    /** Stamped by a DELIVERED receipt. */
+    private Long deliveredTime;
     private Long createdTime;
     private Long lastModifiedTime;
 }

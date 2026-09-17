@@ -40,6 +40,11 @@ export interface ResourceConfig {
    *  (serviceCode/menuPath/menuPathName from parentCode) so downstream
    *  complaint-type UI keeps working unchanged. */
   leafServiceDefAdapter?: boolean;
+  /** MDMS masters the backend reads ONLY at the state root (pgr-services notification
+   *  masters, novu-bridge channel policy). Reads and writes go to the state tenant
+   *  regardless of the session tenant, so a city-scoped operator can never author rows
+   *  nothing reads. */
+  stateLevel?: boolean;
 }
 
 export const REGISTRY: Record<string, ResourceConfig> = {
@@ -194,13 +199,17 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'map-config':             { type: 'mdms', label: 'Map Configuration',        schema: 'RAINMAKER-PGR.MapConfig',                  idField: 'code',              nameField: 'code' },
   // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
   // (see mapMdmsRecord), so idField/nameField here are display-only.
-  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' },
-  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
+  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' , stateLevel: true },
+  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' , stateLevel: true },
   // Provider-scoped external template mapping (e.g. Twilio WhatsApp ContentSids +
   // ordered variables + per-locale approval). Surfaces the localization linkage:
   // each row carries `locale` and `approvalStatus`, so an operator sees which
   // (provider, channel, key, locale) templates are approved and sendable.
-  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' },
+  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' , stateLevel: true },
+  // Per-tenant channel policy novu-bridge reads on every dispatch (at the STATE tenant).
+  // One row per channel: enabled + gateway (+ senderId). The single switch that decides
+  // whether a channel delivers — the env allowlist is only a fallback for tenants with no rows.
+  'notification-channel':   { type: 'mdms', label: 'Notification Channels',     schema: 'RAINMAKER-PGR.NotificationChannel',   idField: 'code',   nameField: 'code', descriptionField: 'gateway' , stateLevel: true },
 
   // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
   // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer

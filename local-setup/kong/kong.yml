@@ -214,6 +214,10 @@ plugins:
           ["/novu-bridge/novu-adapter/v1/providers"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/verify"]=true,
           ["/novu-bridge/novu-adapter/v1/providers/test-send"]=true,
+          -- Delivery receipts: machine callbacks (Novu webhook, SMS gateway DR) authenticated
+          -- by a shared secret inside novu-bridge (novu.bridge.receipts.secret), not by a user token.
+          ["/novu-bridge/novu-adapter/v1/receipts/novu"]=true,
+          ["/novu-bridge/novu-adapter/v1/receipts/smscountry"]=true,
           ["/novu-bridge/novu-adapter/v1/logs"]=true,
           ["/novu-bridge/novu-adapter/v1/integrations"]=true,
           ["/novu-bridge/novu-adapter/v1/preferences"]=true,
@@ -938,6 +942,28 @@ services:
     - GET
     paths:
     - /novu-bridge/novu-adapter/v1/providers/twilio-templates
+    strip_path: false
+  # Delivery receipts from providers (Novu webhook, SMSCountry DR). Shared-secret
+  # authenticated inside novu-bridge; both verbs because DR pings are often GETs.
+  - name: novu-bridge-receipts-route
+    methods:
+    - POST
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/receipts/novu
+    - /novu-bridge/novu-adapter/v1/receipts/smscountry
+    strip_path: false
+# digit-user-preferences-service: per-user notification consent + preferredLanguage.
+# Read/written by the citizen profile screen; read in-cluster (not via Kong) by
+# pgr-services and novu-bridge. Only up under the `notifications` compose profile.
+- name: user-preference-service
+  url: http://digit-user-preferences-service:8080
+  routes:
+  - name: user-preference-route
+    methods:
+    - POST
+    paths:
+    - /user-preference
     strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083

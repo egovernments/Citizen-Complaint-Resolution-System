@@ -338,8 +338,7 @@ public class MDMSUtils {
             List<Object> rows = JsonPath.read(result, jsonPath);
             return rows != null ? rows : Collections.emptyList();
         } catch (Exception e) {
-            log.error("Failed to load notification master {} for tenant {} — there is NO legacy fallback "
-                    + "when pgr.notification.config.driven=true: notifications for this tenant will be "
+            log.error("Failed to load notification master {} for tenant {} — notifications for this tenant will be "
                     + "DROPPED (or served from a stale cache entry) until MDMS recovers or the tenant is seeded",
                     masterName, stateTenant, e);
             return Collections.emptyList();

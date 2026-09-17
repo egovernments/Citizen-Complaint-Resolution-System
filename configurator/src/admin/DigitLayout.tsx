@@ -32,6 +32,7 @@ import {
   ScrollText,
   Plug,
   SlidersHorizontal,
+  ToggleRight,
   MessageCircle,
   UserCog,
   Map,
@@ -54,6 +55,7 @@ const navGroups = [
     labelKey: 'app.nav.notifications',
     items: [
       { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
+      { id: 'notification-channel', nameKey: 'app.nav.notification_channels', path: '/manage/notification-channel', icon: ToggleRight },
       { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
       { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
       { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },

@@ -65,6 +65,9 @@ import {
   type TemplateRow,
   type BusinessServiceRecord,
   type ValidationFinding,
+  type ChannelRow,
+  type ProviderTemplateRow,
+  PLACEHOLDER_VOCABULARY,
 } from '../workflow-services/validateNotifications';
 import { saveNotificationPair, type Mutate, type WritePathDeps } from './notificationWritePath';
 
@@ -74,7 +77,15 @@ import { saveNotificationPair, type Mutate, type WritePathDeps } from './notific
 const CHANNELS = ['SMS', 'WHATSAPP', 'EMAIL'] as const;
 const NON_NOTIFIABLE = ['AUTO_ESCALATE', 'SYSTEM'];
 const CITIZEN = 'CITIZEN';
+const EMPLOYEE = 'EMPLOYEE';
 const DEFAULT_LOCALE = 'en_IN';
+
+/** Tokens in a body, first-appearance order — becomes the template's declared `placeholders`. */
+function bodyTokens(body: string): string[] {
+  const out: string[] = [];
+  for (const m of body.matchAll(/\{([a-zA-Z0-9_]+)\}/g)) if (!out.includes(m[1])) out.push(m[1]);
+  return out;
+}
 
 /** Case-insensitive, trimmed comparison helper (mirrors the checker). */
 function eq(a: unknown, b: unknown): boolean {
@@ -108,11 +119,15 @@ interface TransitionCtx {
   toState: string;
   /** Uppercased roles on this workflow action + CITIZEN (audience options). */
   audienceOptions: string[];
+  /** Locales already used by templates for this tenant (datalist suggestions). */
+  knownLocales: string[];
 }
 
 interface EditSeed {
   audience: string;
   channel: string;
+  locale: string;
+  assigneeOnly: boolean;
   subject: string;
   body: string;
   /** react-admin ids of the existing rows being edited (undefined = create). */
@@ -140,10 +155,14 @@ function NotificationForm({
   const isEdit = !!(seed?.routingId || seed?.templateId);
   const [audience, setAudience] = useState(seed?.audience ?? ctx.audienceOptions[0] ?? CITIZEN);
   const [channel, setChannel] = useState(seed?.channel ?? 'SMS');
+  const [locale, setLocale] = useState(seed?.locale ?? DEFAULT_LOCALE);
+  const [assigneeOnly, setAssigneeOnly] = useState(seed?.assigneeOnly ?? false);
   const [subject, setSubject] = useState(seed?.subject ?? '');
   const [body, setBody] = useState(seed?.body ?? '');
 
-  const canSave = !!audience && !!channel && body.trim().length > 0 && !saving;
+  const isRolePool = !!audience && audience !== CITIZEN && audience !== EMPLOYEE;
+  const unknownTokens = bodyTokens(body).filter((t) => !(PLACEHOLDER_VOCABULARY as readonly string[]).includes(t));
+  const canSave = !!audience && !!channel && locale.trim().length > 0 && body.trim().length > 0 && !saving;
 
   const save = async () => {
     if (!canSave) {
@@ -154,24 +173,26 @@ function NotificationForm({
     try {
       const routingData: Record<string, unknown> = {
         businessService: ctx.businessService,
-        fromState: ctx.fromState || null,
+        // Runtime matches on action + toState only; a fromState value makes the router WARN
+        // and changes nothing. Leave it null, as the schema asks.
+        fromState: null,
         action: ctx.action,
         toState: ctx.toState,
         audience,
         channel,
-        // assigneeOnly is schema-supported but deliberately not exposed here yet — see the findings-closure plan (C9, deferred).
-        assigneeOnly: false,
+        assigneeOnly: isRolePool ? assigneeOnly : false,
         active: true,
       };
+      const effectiveLocale = locale.trim() || DEFAULT_LOCALE;
       const templateData: Record<string, unknown> = {
         audience,
         action: ctx.action,
         toState: ctx.toState,
         channel,
-        locale: DEFAULT_LOCALE,
+        locale: effectiveLocale,
         subject: channel === 'EMAIL' ? subject || null : null,
         body,
-        placeholders: [],
+        placeholders: bodyTokens(body),
         active: true,
       };
 
@@ -180,7 +201,7 @@ function NotificationForm({
       //   routing uid:  businessService.action.toState.audience.channel
       //   template uid: audience.action.toState.channel.locale
       const routingUid = [ctx.businessService, ctx.action, ctx.toState, audience, channel].join('.');
-      const templateUid = [audience, ctx.action, ctx.toState, channel, DEFAULT_LOCALE].join('.');
+      const templateUid = [audience, ctx.action, ctx.toState, channel, effectiveLocale].join('.');
 
       // ra-core mutation callables need { returnPromise: true } to become real
       // awaitable promises (else await is a no-op). saveNotificationPair carries
@@ -193,6 +214,7 @@ function NotificationForm({
       await saveNotificationPair(deps, {
         isEdit,
         keyUnchanged: !!seed && keyUnchanged(seed, audience, channel),
+        templateKeyUnchanged: !!seed && keyUnchanged(seed, audience, channel) && eq(seed.locale, effectiveLocale),
         routingUid,
         templateUid,
         routingData,
@@ -241,6 +263,29 @@ function NotificationForm({
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Locale</label>
+          <Input
+            value={locale}
+            onChange={(e) => setLocale(e.target.value)}
+            list="notification-locales"
+            placeholder={DEFAULT_LOCALE}
+            className="h-8 w-[120px] text-xs"
+          />
+          <datalist id="notification-locales">
+            {Array.from(new Set([DEFAULT_LOCALE, ...ctx.knownLocales])).map((l) => <option key={l} value={l} />)}
+          </datalist>
+        </div>
+        {isRolePool && (
+          <label className="flex items-center gap-2 text-xs pb-2">
+            <input type="checkbox" checked={assigneeOnly} onChange={(e) => setAssigneeOnly(e.target.checked)} />
+            Assignee only
+            <span className="text-muted-foreground">(otherwise every holder of {audience} is notified)</span>
+          </label>
+        )}
+      </div>
+
       {channel === 'EMAIL' && (
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Subject (email)</label>
@@ -261,6 +306,11 @@ function NotificationForm({
           placeholder="Message body — use {id} {complaint_type} {status} {ulb} {date} tokens"
           className="text-xs"
         />
+        {unknownTokens.length > 0 && (
+          <span className="text-[11px] text-amber-700">
+            Unknown token{unknownTokens.length > 1 ? 's' : ''} {unknownTokens.map((t) => `{${t}}`).join(', ')} — pgr-services will ship the braces literally. Known: {PLACEHOLDER_VOCABULARY.join(', ')}.
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
@@ -287,18 +337,21 @@ function keyUnchanged(seed: EditSeed, audience: string, channel: string): boolea
 function NotificationChip({
   row,
   template,
+  locales,
   onEdit,
   onRemove,
 }: {
   row: IdedRoutingRow;
   template?: IdedTemplateRow;
+  locales: string[];
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const ref = template?.subject || template?.body ? '·template' : '';
+  const ref = template?.subject || template?.body ? ` · ${locales.join(',') || 'template'}` : '';
+  const pool = row.assigneeOnly ? ' · assignee' : '';
   return (
     <Badge variant="outline" className="text-xs font-medium gap-1 pr-1">
-      <span>{`${row.audience ?? '?'} · ${row.channel ?? '?'}${ref}`}</span>
+      <span>{`${row.audience ?? '?'} · ${row.channel ?? '?'}${ref}${pool}`}</span>
       <button
         type="button"
         onClick={onEdit}
@@ -338,15 +391,19 @@ function TransitionRow({
   const [adding, setAdding] = useState(false);
   const [editSeed, setEditSeed] = useState<EditSeed | null>(null);
 
-  const findTemplate = (r: RoutingRow): IdedTemplateRow | undefined =>
-    templateRows.find(
+  const templatesFor = (r: RoutingRow): IdedTemplateRow[] =>
+    templateRows.filter(
       (t) =>
         eq(t.audience, r.audience) &&
         eq(t.action, ctx.action) &&
         eq(t.toState, ctx.toState) &&
-        eq(t.channel, r.channel) &&
-        eq(t.locale, DEFAULT_LOCALE),
+        eq(t.channel, r.channel),
     );
+  // Prefer the default-locale template (what pgr-services renders today); else any.
+  const findTemplate = (r: RoutingRow): IdedTemplateRow | undefined => {
+    const all = templatesFor(r);
+    return all.find((t) => eq(t.locale, DEFAULT_LOCALE)) ?? all[0];
+  };
 
   const startEdit = (r: IdedRoutingRow) => {
     const t = findTemplate(r);
@@ -354,6 +411,8 @@ function TransitionRow({
     setEditSeed({
       audience: String(r.audience ?? ''),
       channel: String(r.channel ?? ''),
+      locale: String(t?.locale ?? DEFAULT_LOCALE),
+      assigneeOnly: r.assigneeOnly === true,
       subject: String(t?.subject ?? ''),
       body: String(t?.body ?? ''),
       routingId: r.id,
@@ -428,6 +487,7 @@ function TransitionRow({
               key={`${r.id ?? ''}-${r.audience ?? ''}-${r.channel ?? ''}-${i}`}
               row={r}
               template={findTemplate(r)}
+              locales={templatesFor(r).map((t) => String(t.locale ?? '')).filter(Boolean)}
               onEdit={() => startEdit(r)}
               onRemove={() => remove(r)}
             />
@@ -468,17 +528,21 @@ function ValidatePanel({
   routingRows,
   templateRows,
   roleCodes,
+  channelRows,
+  providerTemplateRows,
 }: {
   businessService: BusinessServiceRecord;
   routingRows: RoutingRow[];
   templateRows: TemplateRow[];
   roleCodes: string[];
+  channelRows?: ChannelRow[];
+  providerTemplateRows?: ProviderTemplateRow[];
 }) {
   const [findings, setFindings] = useState<ValidationFinding[] | null>(null);
   const [expanded, setExpanded] = useState(true);
 
   const run = () => {
-    setFindings(validateNotifications({ businessService, routingRows, templateRows, roleCodes }));
+    setFindings(validateNotifications({ businessService, routingRows, templateRows, roleCodes, channelRows, providerTemplateRows }));
     setExpanded(true);
   };
 
@@ -587,6 +651,15 @@ export function NotificationConfigure() {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'action', order: 'ASC' },
   });
+  // Channel policy (RAINMAKER-PGR.NotificationChannel) for the channel-enabled validator rule.
+  const { data: channelData } = useGetList('notification-channel', {
+    pagination: { page: 1, perPage: 20 },
+    sort: { field: 'code', order: 'ASC' },
+  });
+  const { data: providerTemplateData } = useGetList('notification-provider-template', {
+    pagination: { page: 1, perPage: 1000 },
+    sort: { field: 'action', order: 'ASC' },
+  });
   const { data: roleData } = useGetList('access-roles', {
     pagination: { page: 1, perPage: 1000 },
     sort: { field: 'name', order: 'ASC' },
@@ -600,6 +673,7 @@ export function NotificationConfigure() {
   }, [routingData, bsId]);
 
   const templateRows = (templateData ?? []) as IdedTemplateRow[];
+  const knownLocales = useMemo(() => Array.from(new Set(templateRows.map((t) => String(t.locale ?? '')).filter(Boolean))), [templateRows]);
 
   const roleCodes = useMemo<string[]>(
     () =>
@@ -660,6 +734,8 @@ export function NotificationConfigure() {
               routingRows={routingRows}
               templateRows={templateRows}
               roleCodes={roleCodes}
+              channelRows={channelData && channelData.length > 0 ? (channelData as ChannelRow[]) : undefined}
+              providerTemplateRows={providerTemplateData ? (providerTemplateData as ProviderTemplateRow[]) : undefined}
             />
           )}
           {record && (
@@ -755,6 +831,7 @@ export function NotificationConfigure() {
                             action: actionName,
                             toState,
                             audienceOptions,
+                            knownLocales,
                           };
                           const rows = routingRows.filter(
                             (r) => eq(r.action, actionName) && eq(r.toState, toState),

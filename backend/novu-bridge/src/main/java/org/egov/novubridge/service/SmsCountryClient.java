@@ -59,12 +59,17 @@ public class SmsCountryClient {
      *                      body has no caller-supplied correlator field
      */
     public NovuClient.NovuResponse send(String phone, String text, String transactionId) {
+        return send(phone, text, transactionId, config.getSmsSenderId());
+    }
+
+    /** @param senderId registered sender id for THIS send (per-tenant policy may override the env default) */
+    public NovuClient.NovuResponse send(String phone, String text, String transactionId, String senderId) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("User", config.getSmsCountryUser());
         form.add("passwd", config.getSmsCountryPassword());
         form.add("mobilenumber", toNationalDigits(phone));
         form.add("message", text);
-        form.add("sid", config.getSmsSenderId());
+        form.add("sid", senderId);
         form.add("mtype", "N");
         form.add("DR", "Y");
 

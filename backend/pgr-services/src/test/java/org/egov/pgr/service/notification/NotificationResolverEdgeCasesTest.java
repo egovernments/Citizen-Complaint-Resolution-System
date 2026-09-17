@@ -84,7 +84,6 @@ public class NotificationResolverEdgeCasesTest {
 
     @BeforeEach
     void setUp() {
-        when(config.getNotificationConfigDriven()).thenReturn(true);
         when(config.getNotificationDefaultLocale()).thenReturn("en_IN");
         when(config.getComplaintsDomainEventsTopic()).thenReturn(TOPIC);
         when(config.getMobileDownloadLink()).thenReturn("http://app/download");

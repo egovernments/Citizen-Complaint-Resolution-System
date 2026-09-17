@@ -116,3 +116,26 @@ describe('upsert', () => {
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+describe('locale change on an existing routing row', () => {
+  it('adds the new-locale template and updates routing in place; the old template survives', async () => {
+    const calls: string[] = [];
+    const deps = {
+      create: async (r: string) => { calls.push(`create:${r}`); },
+      update: async (r: string) => { calls.push(`update:${r}`); },
+      deleteOne: async (r: string) => { calls.push(`delete:${r}`); },
+    };
+    await saveNotificationPair(deps, {
+      isEdit: true,
+      keyUnchanged: true,
+      templateKeyUnchanged: false,
+      routingUid: 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS',
+      templateUid: 'CITIZEN.ASSIGN.PENDINGATLME.SMS.hi_IN',
+      routingData: {},
+      templateData: {},
+      seedRoutingId: 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS',
+      seedTemplateId: 'CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN',
+    });
+    expect(calls).toEqual(['create:notification-template', 'update:notification-routing']);
+  });
+});

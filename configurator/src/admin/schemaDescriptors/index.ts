@@ -9,6 +9,8 @@ import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
+import { notificationChannelDescriptor } from './notification-channel';
+import { notificationProviderTemplateDescriptor } from './notification-provider-template';
 import { mapConfigDescriptor } from './map-config';
 import { analyticsProviderDescriptor } from './analytics-provider';
 
@@ -24,6 +26,8 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
+  [notificationChannelDescriptor.schema]: notificationChannelDescriptor,
+  [notificationProviderTemplateDescriptor.schema]: notificationProviderTemplateDescriptor,
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [analyticsProviderDescriptor.schema]: analyticsProviderDescriptor,
 };

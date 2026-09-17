@@ -416,6 +416,15 @@ function clientSort(records: RaRecord[], field: string, order: string): RaRecord
 // the session ADMIN tenant).
 const TENANT_OVERRIDE_KEY = '__tenantId';
 
+/** Tenant an MDMS read/write must target: explicit __tenantId override, else the state root for
+ *  state-level masters, else the session tenant. */
+function mdmsTenantFor(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): string {
+  const override = filter?.[TENANT_OVERRIDE_KEY];
+  if (typeof override === 'string' && override.trim()) return override.trim();
+  if (config.stateLevel) return client.stateTenantId || tenantId.split('.')[0] || tenantId;
+  return tenantId;
+}
+
 function pickTenant(tenantId: string, filter?: Record<string, unknown>): string {
   const override = filter?.[TENANT_OVERRIDE_KEY];
   return typeof override === 'string' && override.trim() ? override.trim() : tenantId;
@@ -524,7 +533,7 @@ async function mdmsSearchAll(client: DigitApiClient, tenant: string, schema: str
 }
 
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
-  const tenant = pickTenant(tenantId, filter);
+  const tenant = mdmsTenantFor(client, config, tenantId, filter);
   // No isActive push-down here: the leaf-adapter (adaptHierarchyLeaves) needs inactive
   // rows too, to resolve a leaf's parent name even when that parent has since been
   // deactivated. Non-leaf-adapter callers filter isActive themselves below.
@@ -1267,7 +1276,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           return { data: found };
         }
         // Try uniqueIdentifier lookup first (fast path for records we created)
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         const active = records.filter((r) => r.isActive);
         if (active.length) return { data: normalizeMdmsRecord(active[0], config) };
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
@@ -1385,7 +1394,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           data.tenants = [{ code: tenantId }];
         }
         const uid = String(incoming[config.idField] || data.code || '');
-        const record = await client.mdmsCreate(tenantId, config.schema!, uid, data);
+        const record = await client.mdmsCreate(mdmsTenantFor(client, config, tenantId), config.schema!, uid, data);
         return { data: config.leafServiceDefAdapter
           ? (await mdmsGetList(client, config, tenantId)).find((r) => String(r.id) === uid)
             ?? normalizeMdmsRecord(record, config)
@@ -1592,7 +1601,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async update(resource, params): Promise<UpdateResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         // Opt-in reactivation: when meta.includeInactive is set, fall back to a
         // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
         // that delete() left occupied (mdmsUpdate below forces isActive: true).
@@ -1810,7 +1819,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async delete(resource, params): Promise<DeleteResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
+        const records = await client.mdmsSearch(mdmsTenantFor(client, config, tenantId), config.schema!, { uniqueIdentifiers: [String(params.id)] });
         const existing = records.find((r) => r.isActive);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         await client.mdmsUpdate(existing, false);

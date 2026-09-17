@@ -18,28 +18,28 @@ public class NovuBridgeConfiguration {
     @Value("${app.timezone:UTC}")
     private String timeZone;
 
-    @Value("${novu.bridge.kafka.input.topic:complaints.domain.events}")
-    private String inputTopic;
+    // One topic per producer; the envelope's eventType (not the topic) decides handling.
+    @Value("#{'${novu.bridge.kafka.input.topics:complaints.domain.events,otp.send.events}'.split(',')}")
+    private java.util.List<String> inputTopics;
 
-    // Retry topic is reserved for future use — nothing publishes to it yet.
-    @Value("${novu.bridge.kafka.retry.topic:novu-bridge.retry}")
-    private String retryTopic;
+    // Producer types the bridge accepts (EnvelopeValidator). Add a producer here — never a
+    // shape-sniffing branch in the consumer.
+    @Value("#{'${novu.bridge.event.types:COMPLAINTS_WORKFLOW_TRANSITIONED,OTP}'.split(',')}")
+    private java.util.List<String> eventTypes;
 
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")
     private String dlqTopic;
-
-    // Default channel for dispatch. SMS is the safer default — works
-    // with any Twilio SMS-capable sender out of the box. WhatsApp
-    // requires a pre-approved Twilio Programmable WhatsApp sender
-    // (sandbox or production). Override via NOVU_BRIDGE_CHANNEL env.
-    @Value("${novu.bridge.channel:SMS}")
-    private String channel;
 
     @Value("${novu.bridge.default.locale:en_IN}")
     private String defaultLocale;
 
     @Value("${novu.bridge.preference.enabled:true}")
     private Boolean preferenceEnabled;
+
+    // When the preference service cannot be reached or answers with an error, allow (true) or
+    // deny (false). "No consent recorded" is always a deny; this only governs outages.
+    @Value("${novu.bridge.preference.fail.open:true}")
+    private Boolean preferenceFailOpen;
 
     @Value("${novu.bridge.preference.host:http://localhost:8080/user-preferences}")
     private String preferenceHost;
@@ -48,7 +48,7 @@ public class NovuBridgeConfiguration {
     private String preferenceCheckPath;
 
     // Full search endpoint (returns the preferences list). The check path above
-    // may point at a boolean-consent endpoint (e.g. /_check) on some deployments;
+    // is the consent lookup (a _search filtered to one user);
     // the configurator's read-only listing always needs _search.
     @Value("${novu.bridge.preference.search.path:/user-preference/v1/_search}")
     private String preferenceSearchPath;
@@ -67,26 +67,44 @@ public class NovuBridgeConfiguration {
     // are authenticated INSIDE this service (ProxyAuthFilter): the bearer token is
     // introspected against egov-user POST /user/_details, then gated on
     // type==EMPLOYEE + at least one role code in the allowlist below.
+    // ---- Per-tenant channel policy (MDMS RAINMAKER-PGR.NotificationChannel) ----
+    // The single authority on "is channel X on for tenant T, through which gateway". The
+    // env vars channels.enabled / sms.provider / sms.sender.id are only a bootstrap
+    // fallback for tenants with no rows yet.
+    @Value("${novu.bridge.channel.policy.enabled:true}")
+    private Boolean channelPolicyEnabled;
+
+    @Value("${novu.bridge.channel.policy.schema:RAINMAKER-PGR.NotificationChannel}")
+    private String channelPolicySchema;
+
+    @Value("${novu.bridge.channel.policy.cache.ttl.ms:60000}")
+    private Long channelPolicyCacheTtlMs;
+
+    @Value("${novu.bridge.mdms.host:http://egov-mdms-service:8094}")
+    private String mdmsHost;
+
+    @Value("${novu.bridge.mdms.search.path:/mdms-v2/v2/_search}")
+    private String mdmsSearchPath;
+
     @Value("${novu.bridge.proxy.auth.enabled:true}")
     private Boolean proxyAuthEnabled;
 
     @Value("${novu.bridge.user.details.path:/user/_details}")
     private String userDetailsPath;
 
-    @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME}'.split(',')}")
+    @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}'.split(',')}")
     private java.util.List<String> proxyAllowedRoles;
-
-    @Value("${mdms.host:http://localhost:8082}")
-    private String mdmsHost;
-
-    @Value("${mdms.search.path:/egov-mdms-service/v2/_search}")
-    private String mdmsSearchPath;
 
     @Value("${novu.base.url:http://localhost:3000}")
     private String novuBaseUrl;
 
     @Value("${novu.api.key:test-api-key}")
     private String novuApiKey;
+
+    // Shared secret for provider delivery receipts (POST|GET /novu-adapter/v1/receipts/{provider}).
+    // Blank = the endpoint answers 403 and rows never move past SENT.
+    @Value("${novu.bridge.receipts.secret:}")
+    private String receiptsSecret;
 
     @Value("${novu.bridge.dispatch.log.enabled:true}")
     private Boolean dispatchLogEnabled;
@@ -107,7 +125,7 @@ public class NovuBridgeConfiguration {
     // Novu resolves which integration to use per channel by picking the PRIMARY
     // one for that channel UNLESS the trigger names an explicit
     // overrides.<channel>.integrationIdentifier. Twilio WhatsApp delivery is
-    // modeled in Novu as an "sms"-channel step (see TwilioProviderStrategy), so
+    // modeled in Novu as an "sms"-channel step (WhatsApp rides the Twilio sms integration), so
     // a second, WhatsApp-registered Twilio integration living alongside the
     // primary (plain SMS) one on that same "sms" channel is otherwise never
     // picked — every trigger, SMS or WhatsApp, would keep resolving to the

@@ -4973,7 +4973,7 @@
         cd {{ digit_dir }}
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
           exec -T redpanda rpk topic create \
-          complaints.domain.events novu-bridge.retry novu-bridge.dlq \
+          complaints.domain.events otp.send.events novu-bridge.dlq \
           -p 1 -r 1
       register: novu_topic_create
       changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"
@@ -5973,7 +5973,7 @@
     #     (state_root / digit_dir / upstream_kong_port are group/host vars, so
     #     they resolve even under --tags). Idempotent — MDMS dedupes on re-run.
     - name: "notif-seed — stage schema + data + seeder on target"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.copy:
         src: "{{ item }}"
@@ -5986,7 +5986,7 @@
         - "{{ playbook_dir }}/../scripts/seed-notifications.py"
 
     - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.shell: |
         cd {{ digit_dir }}/notification-seed
@@ -6006,7 +6006,7 @@
       failed_when: "notif_seed.rc != 0 or 'DONE' not in (notif_seed.stdout | default(''))"
 
     - name: "notif-seed — result"
-      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      when: seed_notifications | default(enable_novu | default(false))
       tags: ['notifications', 'notification-seed']
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
