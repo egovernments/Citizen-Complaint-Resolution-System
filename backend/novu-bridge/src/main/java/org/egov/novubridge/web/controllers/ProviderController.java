@@ -3,6 +3,10 @@ package org.egov.novubridge.web.controllers;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.DeliveryResult;
+import org.egov.novubridge.service.delivery.Dispatch;
+import org.egov.novubridge.web.models.Contact;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
@@ -41,9 +45,10 @@ import java.util.UUID;
  * in any shape ever leaves). There is deliberately NO endpoint that returns a raw
  * provider secret or the Novu key.
  *
- * <p>Every {@code /providers/test-send} writes one {@code nb_dispatch_log} row
- * tagged {@code TEST} (event_name/template_key = {@code "TEST"}) with a masked
- * recipient, so live tests are auditable and separable from real traffic.
+ * <p>Every {@code /providers/test-send} writes one {@code nb_dispatch_log} row at the
+ * operator's tenant flagged {@code is_test} (event_name/template_key = {@code "TEST"}) with a
+ * masked recipient, so live tests are auditable, visible on the Logs screen on request, and
+ * never counted as real traffic.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1")
@@ -56,13 +61,16 @@ public class ProviderController {
     private static final String WORKFLOW_EMAIL = "complaints-email";
 
     private final NovuClient novuClient;
+    private final DeliveryProviderRegistry providers;
     private final DispatchLogRepository dispatchLogRepository;
     private final org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService;
 
     public ProviderController(NovuClient novuClient,
+                              DeliveryProviderRegistry providers,
                               DispatchLogRepository dispatchLogRepository,
                               org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService) {
         this.novuClient = novuClient;
+        this.providers = providers;
         this.dispatchLogRepository = dispatchLogRepository;
         this.twilioTemplateSyncService = twilioTemplateSyncService;
     }
@@ -270,6 +278,9 @@ public class ProviderController {
         String contentSid = str(body.get("contentSid"));
         List<Object> variables = asList(body.get("variables"));
         String txnInput = str(body.get("transactionId"));
+        // The operator's tenant (the SPA sends it) so the row shows on THEIR Logs screen; the
+        // synthetic "TEST" tenant is only the fallback for callers that omit it.
+        String tenantId = StringUtils.hasText(str(body.get("tenantId"))) ? str(body.get("tenantId")) : "TEST";
 
         String upperChannel = channel == null ? "" : channel.toUpperCase();
         String recipient = StringUtils.hasText(phone) ? phone : email;
@@ -281,43 +292,38 @@ public class ProviderController {
         String subscriberId = "nb-test-" + stableId(seed);
         String transactionId = StringUtils.hasText(txnInput) ? txnInput : subscriberId;
 
-        Map<String, Object> payload = new HashMap<>();
-        if (bodyText != null) {
-            payload.put("body", bodyText);
-        }
-        if (subject != null) {
-            payload.put("subject", subject);
-        }
+        // The same provider seam the live pipeline uses: SMS may route to a direct gateway,
+        // WhatsApp gets the identical Content-template envelope + integration override.
+        String workflow = StringUtils.hasText(workflowId) ? workflowId
+                : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
+        Map<String, String> positional = toContentVariables(variables);
+        Map<String, Object> contentVariables = positional == null ? null : new LinkedHashMap<>(positional);
+        Dispatch dispatch = Dispatch.builder()
+                .test(true)
+                .channel(upperChannel)
+                .subscriberId(subscriberId)
+                .contact(Contact.builder().phone(phone).email(email).build())
+                .body(bodyText)
+                .subject(subject)
+                .transactionId(transactionId)
+                .templateId(contentSid)
+                .contentVariables(contentVariables)
+                .workflowOverride(workflow)
+                .build();
+        DeliveryResult result = providers.select(null, upperChannel).send(dispatch);
 
-        NovuClient.NovuResponse novuResponse;
-        if ("WHATSAPP".equals(upperChannel)) {
-            String phoneArg = "whatsapp:+" + digitsOnly(phone);
-            Map<String, Object> overrides = buildWhatsappOverrides(contentSid, variables);
-            // Same integration-selection override the live dispatch path applies (NovuClient
-            // .identifyThenTrigger) — without it, a test-send would validate against Novu's
-            // primary SMS integration instead of the dedicated WhatsApp one it's meant to test.
-            overrides = novuClient.applyWhatsappIntegrationOverride(overrides, upperChannel);
-            String workflow = StringUtils.hasText(workflowId) ? workflowId : WORKFLOW_SMS;
-            novuResponse = novuClient.trigger(workflow, subscriberId, phoneArg, payload,
-                    transactionId, overrides, null);
-        } else {
-            String workflow = StringUtils.hasText(workflowId) ? workflowId
-                    : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
-            // The email-capable overload: to.email must reach Novu or the email
-            // step has no address (the synthetic nb-test-* subscriber carries no
-            // stored email) and the "successful" trigger silently delivers nothing.
-            novuResponse = novuClient.trigger(workflow, subscriberId, phone, email,
-                    payload, transactionId);
-        }
-
-        int novuStatus = novuResponse.getStatusCode() != null ? novuResponse.getStatusCode() : 0;
-        boolean ok = novuStatus >= 200 && novuStatus < 300;
-        writeTestLog(upperChannel, recipient, transactionId, novuStatus, ok);
+        int novuStatus = result.getStatusCode() != null ? result.getStatusCode() : 0;
+        boolean ok = result.isAccepted();
+        writeTestLog(tenantId, upperChannel, recipient, transactionId, novuStatus, ok, result);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", ok);
         out.put("novuStatus", novuStatus);
         out.put("transactionId", transactionId);
+        if (!ok) {
+            out.put("errorCode", result.getProviderCode());
+            out.put("errorMessage", result.getProviderMessage());
+        }
         return ResponseEntity.ok(out);
     }
 
@@ -352,20 +358,6 @@ public class ProviderController {
         return body;
     }
 
-    /**
-     * Content-template override for a WhatsApp test-send: the same
-     * {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
-     * envelope the live dispatch path builds, so a test exercises exactly what production
-     * sends. No credentials/sender are set — those live in the Novu integration. Returns
-     * {@code null} when no {@code contentSid} was supplied (free-form; Twilio will reject it).
-     */
-    private Map<String, Object> buildWhatsappOverrides(String contentSid, List<Object> variables) {
-        if (!StringUtils.hasText(contentSid)) {
-            return null;
-        }
-        return NovuClient.buildProviderTemplateOverrides(contentSid, toContentVariables(variables));
-    }
-
     /** Positional variables → Twilio 1-based contentVariables map ({@code {"1":..,"2":..}}). */
     private static Map<String, String> toContentVariables(List<Object> variables) {
         if (variables == null || variables.isEmpty()) {
@@ -379,23 +371,28 @@ public class ProviderController {
         return cv;
     }
 
-    private void writeTestLog(String channel, String recipient, String transactionId,
-                              int novuStatus, boolean ok) {
+    private void writeTestLog(String tenantId, String channel, String recipient, String transactionId,
+                              int novuStatus, boolean ok, DeliveryResult result) {
         long now = System.currentTimeMillis();
         Map<String, Object> providerResponse = new HashMap<>();
         providerResponse.put("test", true);
         providerResponse.put("novuStatus", novuStatus);
+        if (result != null && result.getRawResponse() != null) providerResponse.put("provider", result.getRawResponse());
         DispatchLogEntry entry = DispatchLogEntry.builder()
                 .id(UUID.randomUUID())
                 .eventId(UUID.randomUUID().toString())
                 .transactionId(transactionId)
                 .module("notifications")
                 .eventName("TEST")
-                .tenantId("TEST")
+                .tenantId(tenantId)
+                .isTest(true)
+                .providerRef(result != null ? result.getProviderRef() : null)
                 .channel(StringUtils.hasText(channel) ? channel : "UNKNOWN")
                 .recipientValue(recipient != null ? PiiMask.mask(recipient) : "unknown")
                 .templateKey("TEST")
                 .status(ok ? "SENT" : "FAILED")
+                .lastErrorCode(ok || result == null ? null : result.getProviderCode())
+                .lastErrorMessage(ok || result == null ? null : result.getProviderMessage())
                 .attemptCount(1)
                 .providerResponse(providerResponse)
                 .createdTime(now)

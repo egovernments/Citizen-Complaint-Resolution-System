@@ -2,8 +2,8 @@
 // local-setup/scripts/persist-provider-templates.py.
 //
 // Flow: (1) pull the operator's OWN approved Twilio WhatsApp Content templates
-// from the bridge (already reconciled server-side against the PGR routing
-// tuples); (2) let the operator review the auto-matched rows + see unmatched
+// from the bridge as metadata, matched HERE against the tenant's own routing and
+// template rows (twilioTemplateMatch.ts); (2) let the operator review the auto-matched rows + see unmatched
 // diagnostics; (3) confirm + upsert the selected rows into MDMS
 // RAINMAKER-PGR.NotificationProviderTemplate (resource `notification-provider-template`).
 //
@@ -18,6 +18,8 @@
 
 import { useState } from 'react';
 import { useCreate, useUpdate, useGetList, useRefresh, useTranslate } from 'ra-core';
+import { digitClient } from '@/providers/bridge';
+import { matchTwilioTemplates } from './twilioTemplateMatch';
 import { Loader2, RefreshCw, ChevronRight, AlertTriangle, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +31,7 @@ import { isMdmsDuplicate, type Mutate } from '../notification-configure/notifica
 import {
   syncTwilioTemplates,
   type TwilioMatchedTemplate,
-  type TwilioTemplatesResponse,
+  type TwilioUnmatchedTemplate,
 } from './providerApi';
 
 const RESOURCE = 'notification-provider-template';
@@ -87,7 +89,7 @@ export function SyncTwilioTemplatesDialog({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resp, setResp] = useState<TwilioTemplatesResponse | null>(null);
+  const [resp, setResp] = useState<{ matched: TwilioMatchedTemplate[]; unmatched: TwilioUnmatchedTemplate[]; total: number } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showSkipped, setShowSkipped] = useState(false);
 
@@ -102,6 +104,13 @@ export function SyncTwilioTemplatesDialog({
     sort: { field: 'action', order: 'ASC' },
   });
   const existingIds = new Set((existing ?? []).map((r) => String(r.id)));
+
+  // The tenant's routing + template rows are the source of truth for matching (read at
+  // the STATE tenant, where pgr-services reads them).
+  const stateTenant = String(digitClient.stateTenantId || '');
+  const stateFilter = stateTenant ? { __tenantId: stateTenant } : {};
+  const { data: routingRows } = useGetList('notification-routing', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'action', order: 'ASC' }, filter: stateFilter });
+  const { data: templateRows } = useGetList('notification-template', { pagination: { page: 1, perPage: 1000 }, sort: { field: 'action', order: 'ASC' }, filter: stateFilter });
 
   const reset = () => {
     setLoading(false);
@@ -120,7 +129,9 @@ export function SyncTwilioTemplatesDialog({
     setResp(null);
     setResults({});
     try {
-      const data = await syncTwilioTemplates();
+      const meta = await syncTwilioTemplates();
+      const { matched, unmatched } = matchTwilioTemplates(meta.templates ?? [], (routingRows ?? []) as never[], (templateRows ?? []) as never[]);
+      const data = { matched, unmatched, total: meta.total };
       setResp(data);
       const preselect = new Set(
         (data.matched ?? []).filter(isApproved).map(uidOf),

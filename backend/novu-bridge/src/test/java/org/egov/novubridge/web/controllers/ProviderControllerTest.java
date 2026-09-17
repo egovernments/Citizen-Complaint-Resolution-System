@@ -1,9 +1,14 @@
 package org.egov.novubridge.web.controllers;
 
+import org.egov.novubridge.service.policy.ChannelPolicyClient;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
 import org.egov.novubridge.service.TwilioTemplateSyncService;
+import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.delivery.DeliveryProviderRegistry;
+import org.egov.novubridge.service.delivery.NovuDeliveryProvider;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.ProviderCreateResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +50,10 @@ class ProviderControllerTest {
         novuClient = mock(NovuClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
-        controller = new ProviderController(novuClient, dispatchLogRepository, twilioTemplateSyncService);
+        NovuBridgeConfiguration config = new NovuBridgeConfiguration();
+        controller = new ProviderController(novuClient,
+                new DeliveryProviderRegistry(config, new ChannelPolicyClient(null, config), new NovuDeliveryProvider(novuClient, config), null),
+                dispatchLogRepository, twilioTemplateSyncService);
         // Default: pass overrides through unchanged, as if no dedicated WhatsApp
         // integration were configured (NovuClient's own no-op default).
         when(novuClient.applyWhatsappIntegrationOverride(anyMap(), anyString()))

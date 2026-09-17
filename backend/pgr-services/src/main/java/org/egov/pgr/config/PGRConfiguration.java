@@ -298,6 +298,21 @@ public class PGRConfiguration {
     @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
     private Long notificationMdmsCacheTtlMs;
 
+    // Per-recipient locale: render each recipient in their preferredLanguage from
+    // digit-user-preferences-service (falling back to pgr.notification.default.locale).
+    // Blank host = feature off (everyone gets the default locale).
+    @Value("${pgr.notification.locale.per.recipient:true}")
+    private Boolean notificationLocalePerRecipient;
+
+    @Value("${egov.user.preference.host:}")
+    private String userPreferenceHost;
+
+    @Value("${egov.user.preference.search.path:/user-preference/v1/_search}")
+    private String userPreferenceSearchPath;
+
+    @Value("${pgr.notification.preference.code:USER_NOTIFICATION_PREFERENCES}")
+    private String notificationPreferenceCode;
+
     // Escalation
     @Value("${pgr.escalation.enabled}")
     private Boolean escalationEnabled;

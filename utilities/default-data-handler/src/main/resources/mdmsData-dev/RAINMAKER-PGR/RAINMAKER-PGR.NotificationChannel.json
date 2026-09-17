@@ -1,0 +1,5 @@
+[
+  { "code": "SMS", "enabled": false, "gateway": "novu", "senderId": null, "active": true },
+  { "code": "EMAIL", "enabled": false, "gateway": "novu", "senderId": null, "active": true },
+  { "code": "WHATSAPP", "enabled": false, "gateway": "novu", "senderId": null, "active": true }
+]

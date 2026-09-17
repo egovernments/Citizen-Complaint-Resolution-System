@@ -4,10 +4,9 @@
 // generator that:
 //   1. mints a 6-digit OTP
 //   2. caches `(otp, mobileNumber)` in Redis with a TTL (default 10 min)
-//   3. publishes `OTP.SEND` to the same kafka topic novu-bridge already
-//      consumes (`complaints.domain.events`), letting the existing
-//      DispatchPipelineService route through the OTP TemplateBinding +
-//      Twilio integration without any bridge-side change.
+//   3. publishes a fully-rendered `OTP.SEND` event (novu-bridge envelope v1,
+//      eventType OTP) to its own topic (`otp.send.events`); novu-bridge delivers
+//      it exactly like a complaint notification — no OTP-specific bridge code.
 //
 // On `_validate`, looks up the cached OTP and confirms.
 //
@@ -20,7 +19,9 @@
 //   PORT (default 3030)
 //   REDIS_URL (default redis://digit-redis:6379)
 //   KAFKA_BROKERS (default digit-redpanda:9092)
-//   EVENT_TOPIC (default complaints.domain.events)
+//   EVENT_TOPIC (default otp.send.events)
+//   OTP_COUNTRY_CODE (e.g. +254; prepended to national numbers, leading zeros dropped)
+//   OTP_MESSAGE_TEMPLATE ({otp} and {minutes} placeholders)
 //   OTP_TTL_SECONDS (default 600)
 //   DEFAULT_TENANT_ID (default ke — used when request body omits tenantId)
 //   STATIC_OTP (optional — when set, every _send returns this code
@@ -35,7 +36,10 @@ import { Kafka } from 'kafkajs';
 const PORT = Number(process.env.PORT || 3030);
 const REDIS_URL = process.env.REDIS_URL || 'redis://digit-redis:6379';
 const KAFKA_BROKERS = (process.env.KAFKA_BROKERS || 'digit-redpanda:9092').split(',').map((s) => s.trim()).filter(Boolean);
-const EVENT_TOPIC = process.env.EVENT_TOPIC || 'complaints.domain.events';
+const EVENT_TOPIC = process.env.EVENT_TOPIC || 'otp.send.events';
+const OTP_COUNTRY_CODE = (process.env.OTP_COUNTRY_CODE || '').trim();
+const OTP_MESSAGE_TEMPLATE = process.env.OTP_MESSAGE_TEMPLATE
+  || 'DIGIT: Your one-time login code is {otp}. It expires in {minutes} minutes. Do not share this code.';
 const OTP_TTL_SECONDS = Number(process.env.OTP_TTL_SECONDS || 600);
 const DEFAULT_TENANT_ID = process.env.DEFAULT_TENANT_ID || 'ke';
 const STATIC_OTP = process.env.STATIC_OTP || null;
@@ -73,9 +77,25 @@ const generateOtp = () => {
 
 const keyFor = (mobile, tenantId) => `${REDIS_KEY_PREFIX}${tenantId}:${mobile}`;
 
+// E.164 for the gateway: keep a '+' number as-is; otherwise prepend the configured
+// country code and drop national leading zeros. With no country code configured the
+// number is sent as given (the bridge does not guess one).
+const toE164 = (mobile) => {
+  const m = String(mobile || '').trim();
+  if (m.startsWith('+') || !OTP_COUNTRY_CODE) return m;
+  return OTP_COUNTRY_CODE + m.replace(/^0+/, '');
+};
+
+const renderBody = (otp) => OTP_MESSAGE_TEMPLATE
+  .replace('{otp}', otp)
+  .replace('{minutes}', String(Math.max(1, Math.round(OTP_TTL_SECONDS / 60))));
+
 const publishEvent = async ({ tenantId, mobile, otp, userType }) => {
   const eventId = randomUUID();
+  const phone = toE164(mobile);
+  // novu-bridge envelope v1: the message is rendered HERE; the bridge only delivers.
   const event = {
+    schemaVersion: '1',
     eventId,
     eventType: 'OTP',
     eventTime: new Date().toISOString(),
@@ -85,29 +105,18 @@ const publishEvent = async ({ tenantId, mobile, otp, userType }) => {
     entityType: 'OTP_CODE',
     entityId: eventId,
     tenantId,
-    actor: { uuid: 'system', type: 'SYSTEM' },
-    stakeholders: [
-      {
-        // novu-bridge's Stakeholder model uses fields: type, userId, mobile.
-        // OTP is pre-account: the citizen doesn't have a DIGIT user yet.
-        // We pass userId so the bridge's UserServiceClient lookup is
-        // satisfied (set via OTP_RECIPIENT_USER_ID env — point at a
-        // throwaway placeholder user that exists at the target tenant).
-        type: 'RECIPIENT',
-        userId: process.env.OTP_RECIPIENT_USER_ID || mobile,
-        mobile,
-      },
-    ],
-    // novu-bridge's DispatchPipelineService enforces workflow.toState as
-    // required even for non-stateful events. Stub it so the OTP event
-    // passes validation and reaches the OTP_SEND TemplateBinding.
-    workflow: { fromState: null, toState: 'SENT', action: 'SEND' },
-    context: { source: 'citizen-login' },
-    data: { otp, userType: userType || 'CITIZEN' },
+    channel: 'SMS',
+    // OTP precedes user-create, so there is no DIGIT uuid yet: key the subscriber on the phone.
+    subscriberId: `${tenantId}:${phone}`,
+    contact: { type: 'CITIZEN', phone, locale: 'en_IN' },
+    renderedBody: renderBody(otp),
+    // Unique per send: a resend must be a new dispatch-log row, not an upsert of the last one.
+    transactionId: `OTP:${tenantId}:${phone}:${eventId}`,
+    data: { userType: userType || 'CITIZEN' },
   };
   await producer.send({
     topic: EVENT_TOPIC,
-    messages: [{ key: mobile, value: JSON.stringify(event) }],
+    messages: [{ key: phone, value: JSON.stringify(event) }],
   });
   return eventId;
 };

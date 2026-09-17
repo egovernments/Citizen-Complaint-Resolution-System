@@ -45,6 +45,8 @@ export interface VerifyResponse {
 }
 
 export interface TestSendPayload {
+  /** Operator's tenant: the test row is written here (flagged is_test) so it shows on their Logs screen. */
+  tenantId?: string;
   channel: Channel;
   to: { phone?: string; email?: string };
   workflowId?: string;
@@ -58,41 +60,27 @@ export interface TestSendResponse {
   ok: boolean;
   novuStatus?: string;
   transactionId?: string;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
-/** One reconciled Twilio Content template that maps onto a PGR routing tuple.
- *  These rows are ready to persist verbatim as MDMS
- *  RAINMAKER-PGR.NotificationProviderTemplate `data` (the bridge already dropped
- *  the transport-only extras). The MDMS uniqueIdentifier is the x-unique join
- *  `<provider>.<channel>.<audience>.<action>.<toState>.<locale>`. */
-export interface TwilioMatchedTemplate {
-  provider: string;
-  channel: string;
-  audience: string;
-  action: string;
-  toState: string;
-  locale: string;
+/** Twilio Content template metadata as the bridge returns it — NO routing decision; the
+ *  configurator matches these against the tenant's own routing/template rows
+ *  (see twilioTemplateMatch.ts). */
+export interface TwilioTemplateMeta {
   templateId: string;
   templateName?: string;
-  variables: string[];
+  language?: string;
   approvalStatus?: string;
-  active?: boolean;
-}
-
-/** A Twilio Content template the bridge could NOT map to a PGR routing tuple —
- *  diagnostics only (never persisted). */
-export interface TwilioUnmatchedTemplate {
-  templateId: string;
-  templateName?: string;
-  approvalStatus?: string;
-  skipReason?: string;
+  tokens?: string[];
 }
 
 export interface TwilioTemplatesResponse {
-  matched: TwilioMatchedTemplate[];
-  unmatched: TwilioUnmatchedTemplate[];
+  templates: TwilioTemplateMeta[];
   total: number;
 }
+
+export type { MatchedTemplate as TwilioMatchedTemplate, UnmatchedTemplate as TwilioUnmatchedTemplate } from './twilioTemplateMatch';
 
 /** Same-origin base — the novu-bridge route is served behind Kong/nginx on the
  *  page's own origin. Falls back to a relative URL in non-browser contexts. */
@@ -156,14 +144,11 @@ export function verifyProvider(integrationId: string): Promise<VerifyResponse> {
   return call<VerifyResponse>(`${BASE}/verify`, 'POST', { integrationId });
 }
 
-/** GET /providers/twilio-templates — pull the operator's OWN approved Twilio
- *  WhatsApp Content templates, already reconciled server-side against the PGR
- *  routing tuples. `matched[]` rows are persist-ready MDMS
- *  NotificationProviderTemplate `data`; `unmatched[]` is diagnostics-only.
- *  Twilio secrets stay server-side — this endpoint only returns the SID mapping.
- *  Surfaces bridge errors (e.g. NB_NO_TWILIO_INTEGRATION) through call()'s
- *  Errors/message extraction so the caller can prompt the operator to add the
- *  Twilio provider first. Mirrors the CLI persist-provider-templates.py pull. */
+/** GET /providers/twilio-templates — pull the operator's OWN Twilio WhatsApp Content
+ *  templates as metadata (SID, name, language, approval, name tokens). Matching to
+ *  routing keys happens client-side in twilioTemplateMatch.ts. Twilio secrets stay
+ *  server-side. Surfaces bridge errors (e.g. NB_NO_TWILIO_INTEGRATION) through call()'s
+ *  Errors/message extraction so the caller can prompt to add the Twilio provider first. */
 export function syncTwilioTemplates(): Promise<TwilioTemplatesResponse> {
   return call<TwilioTemplatesResponse>(`${BASE}/twilio-templates`, 'GET');
 }

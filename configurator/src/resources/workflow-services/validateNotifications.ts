@@ -52,12 +52,44 @@ export interface BusinessServiceRecord {
   states?: WorkflowState[];
 }
 
+/** A RAINMAKER-PGR.NotificationChannel row (per-tenant channel policy novu-bridge enforces). */
+export interface ChannelRow {
+  code?: string;
+  enabled?: boolean | string;
+  gateway?: string;
+  active?: boolean | string;
+}
+
+/** A RAINMAKER-PGR.NotificationProviderTemplate row (approved provider template per routing key). */
+export interface ProviderTemplateRow {
+  provider?: string;
+  channel?: string;
+  audience?: string;
+  action?: string;
+  toState?: string;
+  locale?: string;
+  templateId?: string;
+  approvalStatus?: string;
+  active?: boolean | string;
+}
+
+/** Placeholder tokens pgr-services fills (NotificationService.buildPlaceholderValues). Anything
+ *  else in a body ships literally. Keep in sync with the Java side. */
+export const PLACEHOLDER_VOCABULARY = [
+  'id', 'complaint_type', 'status', 'date', 'additional_comments', 'rating', 'citizen_name',
+  'download_link', 'ulb', 'ao_designation', 'emp_name', 'emp_department', 'emp_designation',
+] as const;
+
 export interface ValidateNotificationsInput {
   businessService: BusinessServiceRecord;
   routingRows: RoutingRow[];
   templateRows: TemplateRow[];
   /** Role codes from the access-roles resource. */
   roleCodes: string[];
+  /** Channel policy rows; omit to skip the channel-enabled rule (e.g. master not seeded). */
+  channelRows?: ChannelRow[];
+  /** Provider-template rows; omit to skip the whatsapp-needs-template rule. */
+  providerTemplateRows?: ProviderTemplateRow[];
 }
 
 export interface ValidationFinding {
@@ -108,8 +140,41 @@ export function validateNotifications({
   routingRows,
   templateRows,
   roleCodes,
+  channelRows,
+  providerTemplateRows,
 }: ValidateNotificationsInput): ValidationFinding[] {
   const findings: ValidationFinding[] = [];
+
+  // R7: channel-enabled (warn). A routing row on a channel that is off (or has no policy
+  // row) will be recorded SKIPPED/NB_NO_PROVIDER by novu-bridge — say so here, once per channel.
+  if (channelRows) {
+    const policyByCode = new Map<string, ChannelRow>();
+    for (const c of channelRows) if (isActive(c.active)) policyByCode.set(norm(c.code), c);
+    const flagged = new Set<string>();
+    for (const r of routingRows ?? []) {
+      if (!isActive(r.active)) continue;
+      const channel = norm(r.channel);
+      if (!ALLOWED_CHANNELS.includes(channel) || flagged.has(channel)) continue;
+      const policy = policyByCode.get(channel);
+      if (!policy) {
+        flagged.add(channel);
+        findings.push({
+          level: 'warn',
+          rule: 'channel-enabled',
+          message: `Channel ${channel} has no NotificationChannel row for this tenant — novu-bridge will use its env fallback (usually off). Enable it under Notifications → Channels.`,
+          ref: channel,
+        });
+      } else if (!isActive(policy.enabled)) {
+        flagged.add(channel);
+        findings.push({
+          level: 'warn',
+          rule: 'channel-enabled',
+          message: `Channel ${channel} is disabled in NotificationChannel; every routing row on it will be SKIPPED / NB_NO_PROVIDER.`,
+          ref: channel,
+        });
+      }
+    }
+  }
 
   // Set of valid role codes: access-roles codes + every role referenced on a
   // workflow action. Normalised for case-insensitive comparison.
@@ -220,6 +285,53 @@ export function validateNotifications({
             ? `No active ${DEFAULT_LOCALE} NotificationTemplate for ${ref} (template exists in another locale only).`
             : `No active NotificationTemplate for ${ref}.`,
           ref,
+        });
+      }
+    }
+  }
+
+  // R8: unknown-token (warn) + R9: email-needs-subject (warn), per active template.
+  const vocab = new Set<string>(PLACEHOLDER_VOCABULARY);
+  for (const t of templateRows ?? []) {
+    if (!isActive(t.active)) continue;
+    const unknown: string[] = [];
+    for (const m of String(t.body ?? '').matchAll(/\{([a-zA-Z0-9_]+)\}/g)) if (!vocab.has(m[1]) && !unknown.includes(m[1])) unknown.push(m[1]);
+    if (unknown.length > 0) {
+      findings.push({
+        level: 'warn',
+        rule: 'unknown-token',
+        message: `Template ${templateKey(t)} uses {${unknown.join('}, {')}} which pgr-services does not fill — the braces will ship literally. Known tokens: ${PLACEHOLDER_VOCABULARY.join(', ')}.`,
+        ref: templateKey(t),
+      });
+    }
+    if (norm(t.channel) === 'EMAIL' && !String(t.subject ?? '').trim()) {
+      findings.push({
+        level: 'warn',
+        rule: 'email-needs-subject',
+        message: `EMAIL template ${templateKey(t)} has no subject; pgr-services will send "Complaint <id>" instead.`,
+        ref: templateKey(t),
+      });
+    }
+  }
+
+  // R10: whatsapp-needs-template (warn). WhatsApp is template-only at the provider: an active
+  // WHATSAPP routing row with no approved NotificationProviderTemplate for its key (default
+  // locale) is recorded SKIPPED / NB_TEMPLATE_NOT_APPROVED on every event.
+  if (providerTemplateRows) {
+    const approved = new Set<string>();
+    for (const p of providerTemplateRows) {
+      if (!isActive(p.active) || norm(p.approvalStatus) !== 'APPROVED' || norm(p.channel) !== 'WHATSAPP') continue;
+      approved.add(`${norm(p.audience)}|${norm(p.action)}|${norm(p.toState)}|${norm(p.locale)}`);
+    }
+    for (const r of routingRows ?? []) {
+      if (!isActive(r.active) || norm(r.channel) !== 'WHATSAPP') continue;
+      const key = `${norm(r.audience)}|${norm(r.action)}|${norm(r.toState)}|${norm(DEFAULT_LOCALE)}`;
+      if (!approved.has(key)) {
+        findings.push({
+          level: 'warn',
+          rule: 'whatsapp-needs-template',
+          message: `WHATSAPP routing ${routingKey(r)} has no approved provider template (${DEFAULT_LOCALE}); every event will be SKIPPED / NB_TEMPLATE_NOT_APPROVED. Use Providers → Sync WhatsApp templates.`,
+          ref: routingKey(r),
         });
       }
     }

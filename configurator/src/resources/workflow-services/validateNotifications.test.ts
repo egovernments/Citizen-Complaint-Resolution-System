@@ -270,7 +270,7 @@ describe('validateNotifications', () => {
     ];
     const templateRows = [
       template({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS' }),
-      template({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'GRO', channel: 'EMAIL' }),
+      template({ action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'GRO', channel: 'EMAIL', subject: 'Complaint {id} assigned' }),
       template({ action: 'RESOLVE', toState: 'RESOLVED', audience: 'CITIZEN', channel: 'SMS' }),
     ];
     const findings = validateNotifications({
@@ -280,5 +280,57 @@ describe('validateNotifications', () => {
       roleCodes: ROLE_CODES,
     });
     expect(findings).toEqual([]);
+  });
+});
+
+describe('R7 channel-enabled', () => {
+  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
+  const routing = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }];
+  const template = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'x', active: true }];
+
+  it('is silent when no channel rows are supplied (master not seeded)', () => {
+    const f = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'] });
+    expect(f.filter((x) => x.rule === 'channel-enabled')).toHaveLength(0);
+  });
+
+  it('warns once per channel that is disabled or has no policy row', () => {
+    const disabled = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'SMS', enabled: false, active: true }] });
+    expect(disabled.filter((x) => x.rule === 'channel-enabled').map((x) => x.level)).toEqual(['warn']);
+    expect(disabled.find((x) => x.rule === 'channel-enabled')?.message).toMatch(/disabled/);
+    const missing = validateNotifications({ businessService: bs, routingRows: [...routing, { ...routing[0], channel: 'SMS', audience: 'GRO' }], templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'EMAIL', enabled: true, active: true }] });
+    expect(missing.filter((x) => x.rule === 'channel-enabled')).toHaveLength(1);
+    expect(missing.find((x) => x.rule === 'channel-enabled')?.message).toMatch(/no NotificationChannel row/);
+  });
+
+  it('does not warn for an enabled channel', () => {
+    const f = validateNotifications({ businessService: bs, routingRows: routing, templateRows: template, roleCodes: ['GRO'], channelRows: [{ code: 'SMS', enabled: true, active: true }] });
+    expect(f.filter((x) => x.rule === 'channel-enabled')).toHaveLength(0);
+  });
+});
+
+describe('R8-R10 template content + WhatsApp provider template', () => {
+  const bs = { businessService: 'PGR', states: [{ state: 'A', uuid: 'u1', applicationStatus: 'PENDINGFORASSIGNMENT', actions: [{ action: 'ASSIGN', nextState: 'u2', roles: ['GRO'] }] }, { state: 'B', uuid: 'u2', applicationStatus: 'PENDINGATLME', actions: [] }] };
+  const base = { businessService: bs, roleCodes: ['GRO'] };
+
+  it('flags tokens pgr-services does not fill', () => {
+    const f = validateNotifications({ ...base, routingRows: [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'SMS', active: true }],
+      templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'SMS', locale: 'en_IN', body: 'Hi {citizen_name}, ref {ticket_no} on {date}', active: true }] });
+    const u = f.find((x) => x.rule === 'unknown-token');
+    expect(u?.message).toMatch(/\{ticket_no\}/);
+    expect(u?.message).not.toMatch(/citizen_name\}/);
+  });
+
+  it('warns on an EMAIL template without a subject', () => {
+    const f = validateNotifications({ ...base, routingRows: [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'EMAIL', active: true }],
+      templateRows: [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'EMAIL', locale: 'en_IN', body: 'x', subject: '', active: true }] });
+    expect(f.some((x) => x.rule === 'email-needs-subject')).toBe(true);
+  });
+
+  it('warns on a WHATSAPP routing row with no approved provider template, silent when one exists or rows are not supplied', () => {
+    const routing = [{ businessService: 'PGR', action: 'ASSIGN', toState: 'PENDINGATLME', audience: 'CITIZEN', channel: 'WHATSAPP', active: true }];
+    const template = [{ audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', channel: 'WHATSAPP', locale: 'en_IN', body: 'x', active: true }];
+    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
+    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template, providerTemplateRows: [] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(true);
+    expect(validateNotifications({ ...base, routingRows: routing, templateRows: template, providerTemplateRows: [{ provider: 'twilio', channel: 'WHATSAPP', audience: 'CITIZEN', action: 'ASSIGN', toState: 'PENDINGATLME', locale: 'en_IN', templateId: 'HX1', approvalStatus: 'approved', active: true }] }).some((x) => x.rule === 'whatsapp-needs-template')).toBe(false);
   });
 });

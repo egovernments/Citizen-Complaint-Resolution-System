@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * One consumer, one envelope, one topic per producer ({@code novu.bridge.kafka.input.topics}).
+ * The topic never decides how an event is handled — the envelope's {@code eventType} does —
+ * so a new producer gets its own topic without any consumer-side branching.
+ */
 @Component
 @Slf4j
 public class DomainEventConsumer {
@@ -34,23 +39,24 @@ public class DomainEventConsumer {
         this.config = config;
     }
 
-    @KafkaListener(topics = {"${novu.bridge.kafka.input.topic}", "${novu.bridge.kafka.retry.topic}"})
+    @KafkaListener(topics = "#{'${novu.bridge.kafka.input.topics}'.split(',')}")
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         ComplaintsDomainEvent event = mapper.convertValue(record, ComplaintsDomainEvent.class);
         try {
             dispatchPipelineService.process(event, true, null);
         } catch (CustomException ce) {
-            log.error("Domain event processing failed for eventId={} code={}", event.getEventId(), ce.getCode(), ce);
-            publishDlq(event, ce.getCode(), ce.getMessage());
+            log.error("Domain event processing failed for eventId={} topic={} code={}", event.getEventId(), topic, ce.getCode(), ce);
+            publishDlq(event, topic, ce.getCode(), ce.getMessage());
         } catch (Exception e) {
             log.error("Domain event processing failed for eventId={} topic={}", event.getEventId(), topic, e);
-            publishDlq(event, "NB_PROCESSING_ERROR", e.getMessage());
+            publishDlq(event, topic, "NB_PROCESSING_ERROR", e.getMessage());
         }
     }
 
-    private void publishDlq(ComplaintsDomainEvent event, String errorCode, String errorMessage) {
+    private void publishDlq(ComplaintsDomainEvent event, String sourceTopic, String errorCode, String errorMessage) {
         Map<String, Object> dlq = new HashMap<>();
         dlq.put("event", event);
+        dlq.put("sourceTopic", sourceTopic);
         dlq.put("errorCode", errorCode);
         dlq.put("errorMessage", errorMessage);
         producer.push(event.getTenantId(), config.getDlqTopic(), dlq);

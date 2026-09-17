@@ -56,11 +56,10 @@ public class PreferenceServiceClient {
                     url, config.getPreferenceCode(), userId, tenantId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
-            log.info("Preference response: statusCode={}, body={}", response.getStatusCode(), response.getBody());
+            log.info("Preference response: statusCode={}", response.getStatusCode());
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                log.warn("Preference check denied: non-success response. statusCode={}", response.getStatusCode());
-                return false;
+                return onServiceFailure("non-success response statusCode=" + response.getStatusCode(), tenantId, userId, channelKey);
             }
             List<Map<String, Object>> preferences = (List<Map<String, Object>>) response.getBody().get("preferences");
             if (preferences == null || preferences.isEmpty()) {
@@ -100,9 +99,21 @@ public class PreferenceServiceClient {
             log.info("Preference check allowed for userId={}, tenantId={}, channel={}", userId, tenantId, channelKey);
             return true;
         } catch (Exception e) {
-            log.warn("Preference check failed. tenantId={} userId={} mobile={} channel={}", tenantId, userId, PiiMask.mask(mobile), channelKey, e);
-            return false;
+            return onServiceFailure(e.getClass().getSimpleName() + ": " + e.getMessage(), tenantId, userId, channelKey);
         }
+    }
+
+    /**
+     * The preference service is unreachable or broken (as opposed to answering "no consent").
+     * {@code novu.bridge.preference.fail.open} decides whether that outage silences every
+     * notification (closed) or lets them through (open, the default): a consent check that
+     * cannot be performed is an infrastructure fault, not a citizen's decision.
+     */
+    private boolean onServiceFailure(String reason, String tenantId, String userId, String channelKey) {
+        boolean open = !Boolean.FALSE.equals(config.getPreferenceFailOpen());
+        log.warn("Preference check could not be performed ({}) for tenantId={} userId={} channel={} — {}",
+                reason, tenantId, userId, channelKey, open ? "failing OPEN (allowing)" : "failing CLOSED (denying)");
+        return open;
     }
 
     /**

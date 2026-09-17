@@ -1840,8 +1840,15 @@ services:
       NOTIFICATION_EMAIL_ENABLED: 'false'
       # Kafka topic the per-recipient pre-rendered events are published to.
       # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
-      # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
+      # is one of novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPICS.
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
+      # Locale pgr-services renders notifications in (NotificationTemplate.locale). Per-recipient
+      # resolution from user preferences falls back to this.
+      PGR_NOTIFICATION_DEFAULT_LOCALE: ${PGR_NOTIFICATION_DEFAULT_LOCALE:-en_IN}
+      # Per-recipient language: pgr-services reads preferredLanguage from
+      # digit-user-preferences-service (notifications profile). Blank = everyone gets the
+      # default locale. enable-notifications.sh sets it to http://digit-user-preferences-service:8080.
+      EGOV_USER_PREFERENCE_HOST: ${EGOV_USER_PREFERENCE_HOST:-}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
@@ -2772,28 +2779,22 @@ services:
       SERVER_SERVLET_CONTEXT_PATH: /novu-bridge
       # Kafka topics (bridge auto-creates if redpanda's
       # auto.create.topics.enable=true; otherwise create them upfront).
-      NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
-      NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
+      # One topic per producer; the envelope's eventType decides handling.
+      NOVU_BRIDGE_KAFKA_INPUT_TOPICS: ${NOVU_BRIDGE_KAFKA_INPUT_TOPICS:-complaints.domain.events,otp.send.events}
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
-      # Channel is compared CASE-SENSITIVELY against the TemplateBinding
-      # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
-      # — keep this lowercase too. Override per-tenant in host_vars.
-      # (Default SMS: WhatsApp is paused pending an A2P/provider. The config-
-      # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
-      # NOTE: the preference check calls
-      # `digit-user-preferences-service/user-preference/v1/_check`,
-      # which 404s on the upstream image (the actual path differs and
-      # the controller may not be deployed). Leaving it off lets OTP
-      # and complaint events flow; flip to 'true' once preferences are
-      # wired up for the tenant.
+      # Consent gate. Off by default; when on, the bridge asks
+      # digit-user-preferences-service (POST /user-preference/v1/_search) whether
+      # the recipient GRANTED this channel. An outage of that service fails OPEN
+      # (allow) unless NOVU_BRIDGE_PREFERENCE_FAIL_OPEN=false — a check that cannot
+      # be performed is not a citizen's refusal.
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
+      NOVU_BRIDGE_PREFERENCE_FAIL_OPEN: ${NOVU_BRIDGE_PREFERENCE_FAIL_OPEN:-true}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
-      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_search
       # Full search endpoint (returns the preferences list) — used by the
       # read-only /novu-adapter/v1/preferences proxy for the configurator's
-      # User Preferences screen. Distinct from the boolean _check path above.
+      # User Preferences screen (the consent check above uses the same _search).
       NOVU_BRIDGE_PREFERENCE_SEARCH_PATH: /user-preference/v1/_search
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
       # Per-channel Novu workflow ids the bridge triggers (rendered text
@@ -2821,13 +2822,21 @@ services:
       NOVU_BRIDGE_SMSCOUNTRY_PASSWORD: ${NOVU_BRIDGE_SMSCOUNTRY_PASSWORD:-}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
-      # Channels actually delivered. WHATSAPP stays OFF until a legitimate
-      # provider is onboarded as a Novu integration (then just add it here).
+      # Per-tenant channel policy: the bridge reads RAINMAKER-PGR.NotificationChannel
+      # at the state tenant (Configurator -> Notifications -> Channels). The env
+      # allowlist below is only the fallback for tenants that have no rows yet.
+      NOVU_BRIDGE_CHANNEL_POLICY_ENABLED: ${NOVU_BRIDGE_CHANNEL_POLICY_ENABLED:-true}
+      NOVU_BRIDGE_MDMS_HOST: http://egov-mdms-service:8094
+      NOVU_BRIDGE_MDMS_SEARCH_PATH: /mdms-v2/v2/_search
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-}
+      # Shared secret for provider delivery receipts (Novu webhook / SMSCountry DR) posted to
+      # /novu-bridge/novu-adapter/v1/receipts/{novu|smscountry}. Blank = receipts off; rows
+      # then never move past SENT ("accepted by the transport").
+      NOVU_BRIDGE_RECEIPTS_SECRET: ${NOVU_BRIDGE_RECEIPTS_SECRET:-}
       # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
-      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
-      # configurator's own provider/template screens are not 403'd.
-      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
+      # plumbed from .env — the installer sets it. MDMS_ADMIN (the config-admin) is in
+      # the default so the configurator's own provider/template screens work out of the box.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_ADMIN}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # Novu API endpoints are populated in iteration 3 once novu-api
@@ -3047,8 +3056,8 @@ services:
     networks:
       - egov-network
   # otp-publisher — replaces Kong's mock /user-otp termination with a real
-  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish OTP.SEND to
-  # kafka complaints.domain.events -> novu-bridge -> Twilio SMS. Part of the
+  # OTP generator: mint a 6-digit OTP -> cache in Redis -> publish a rendered
+  # OTP.SEND event to kafka otp.send.events -> novu-bridge -> SMS provider. Part of the
   # SMS-OTP path; gated behind the notifications profile (off by default).
   # Node service vendored at utilities/otp-publisher; built locally via
   # `build_otp_publisher: true` (tag otp-publisher:local) or override with
@@ -3071,12 +3080,12 @@ services:
       PORT: '3030'
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: redpanda:9092
-      EVENT_TOPIC: complaints.domain.events
+      EVENT_TOPIC: otp.send.events
       OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
       DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-pg}
       STATIC_OTP: ${OTP_PUBLISHER_STATIC_OTP:-}
-      # Per-tenant recipient for OTP routing; set in host_vars when wiring SMS.
-      OTP_RECIPIENT_USER_ID: ${OTP_RECIPIENT_USER_ID:-}
+      # E.164 prefix for national numbers the SPA sends (e.g. +254). Unset = sent as given.
+      OTP_COUNTRY_CODE: ${OTP_COUNTRY_CODE:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s

@@ -300,12 +300,10 @@ public class NotificationService {
      * (businessService, action, toState), fans each matched (audience, channel) out to its recipients,
      * renders+localizes the body, and publishes ONE pre-rendered event per (recipient x channel).
      *
-     * KNOWN LIMITATION (accepted for the single-locale pilot): rendering uses the
-     * instance default locale (pgr.notification.default.locale) for every
-     * recipient. The NotificationTemplate `locale` dimension and Contact.locale
-     * are carried but not yet resolved per recipient. Per-recipient localization
-     * requires resolving a real user locale and rendering per (audience, channel,
-     * locale) group — tracked in the design doc's open items.
+     * Locale: each recipient renders in their preferredLanguage (digit-user-preferences-service,
+     * one cached lookup per tenant) with pgr.notification.default.locale as the fallback; the
+     * renderer additionally falls back to the default locale when a template is missing in the
+     * recipient's language.
      */
     private void processConfigDriven(ServiceRequest request, String topic) {
         try {
@@ -325,6 +323,8 @@ public class NotificationService {
             String eventName = EVENT_NAME_PREFIX + action.toUpperCase(Locale.ROOT);
             String locale = config.getNotificationDefaultLocale();
             Map<String, String> values = buildPlaceholderValues(request);
+            // uuid -> preferredLanguage for this tenant (one cached lookup per fan-out; empty = default for all).
+            Map<String, String> preferredLocales = fetchPreferredLocales(tenantId, request.getRequestInfo());
 
             Set<String> emitted = new HashSet<>();
             // Memoize resolved recipients per (audience, assigneeOnly) so a role authored on
@@ -358,24 +358,11 @@ public class NotificationService {
                 // null templateId: the bridge persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row
                 // and never falls back to a free-form WhatsApp send. Dropping the event here (an earlier
                 // `continue`) made the skip invisible — no nb_dispatch_log row. SMS/EMAIL are unaffected.
-                String providerTemplateId = null;
-                Map<String, Object> contentVariables = null;
-                if ("WHATSAPP".equalsIgnoreCase(channel)) {
-                    Map<String, Object> pt = resolveProviderTemplate(tenantId, "twilio",
-                            audience, action, toState, locale);
-                    if (pt == null) {
-                        log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
-                                + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
-                                audience, action, toState, locale,
-                                request.getService().getServiceRequestId());
-                    } else {
-                        providerTemplateId = String.valueOf(pt.get("templateId"));
-                        contentVariables = buildContentVariables(pt.get("variables"), values);
-                    }
-                }
-                String body = null;
-                String subject = null;
-                boolean rendered = false;
+                // Everything below is per LOCALE: recipients render in their own preferredLanguage
+                // (falling back to the instance default), so one (audience, channel) row can fan out
+                // in several languages. Rendered bodies and provider templates are memoized per locale.
+                Map<String, Rendered> renderedByLocale = new HashMap<>();
+                Map<String, Map<String, Object>> providerTemplateByLocale = new HashMap<>();
                 for (ResolvedRecipient recipient : recipients) {
                     if (recipient == null) continue;
                     // Per-channel contact requirement: EMAIL needs an email; SMS + WHATSAPP need a
@@ -392,24 +379,39 @@ public class NotificationService {
                     // message per channel. Audience is intentionally NOT part of the key.
                     String dedupeKey = channel + "|" + recipient.subscriberKey();
                     if (emitted.contains(dedupeKey)) continue;
+                    String rLocale = localeFor(preferredLocales, recipient, locale);
                     try {
-                        if (!rendered) {
-                            body = templateRenderer.render(tenantId, audience, action, toState,
-                                    channel, locale, values);
-                            // EMAIL requires a non-empty subject (Novu's email step rejects a blank
-                            // one, dropping the whole send). Render the template's subject and fall
-                            // back to a sensible default if it is missing/blank.
-                            if ("EMAIL".equalsIgnoreCase(channel)) {
-                                subject = templateRenderer.renderSubject(tenantId, audience, action, toState,
-                                        channel, locale, values);
-                                if (!StringUtils.hasText(subject))
-                                    subject = "Complaint " + request.getService().getServiceRequestId();
-                            }
-                            rendered = true;
+                        Rendered rd = renderedByLocale.get(rLocale);
+                        if (rd == null) {
+                            rd = renderFor(request, tenantId, audience, action, toState, channel, rLocale, values);
+                            renderedByLocale.put(rLocale, rd);
                         }
-                        if (body == null) break; // template missing for this (audience,channel): skip whole row
-                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body, subject,
-                                providerTemplateId, contentVariables);
+                        if (rd.body == null) {
+                            // No template in this locale nor the default: nothing to send this recipient.
+                            log.info("No template for {}.{}.{}.{} in {} (or default) on complaint {}; skipping recipient",
+                                    audience, action, toState, channel, rLocale, request.getService().getServiceRequestId());
+                            continue;
+                        }
+                        String providerTemplateId = null;
+                        Map<String, Object> contentVariables = null;
+                        if ("WHATSAPP".equalsIgnoreCase(channel)) {
+                            // WHATSAPP: business-initiated messages must reference an APPROVED provider
+                            // template. If none/unapproved we still EMIT with a null templateId: the bridge
+                            // persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row and never falls
+                            // back to free-form WhatsApp. Dropping the event here made the skip invisible.
+                            Map<String, Object> pt = providerTemplateByLocale.computeIfAbsent(rLocale,
+                                    l -> providerTemplateFor(tenantId, audience, action, toState, l, locale));
+                            if (pt.isEmpty()) {
+                                log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
+                                        + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
+                                        audience, action, toState, rLocale, request.getService().getServiceRequestId());
+                            } else {
+                                providerTemplateId = String.valueOf(pt.get("templateId"));
+                                contentVariables = buildContentVariables(pt.get("variables"), values);
+                            }
+                        }
+                        publishRenderedEvent(request, recipient, rLocale, channel, eventName, action, toState, rd.body, rd.subject,
+                                rd.templateKey, providerTemplateId, contentVariables);
                         emitted.add(dedupeKey);   // only a successful publish consumes the key
                     } catch (Exception ex) {
                         log.error("Failed to render/publish {} for audience {} on complaint {}",
@@ -420,6 +422,102 @@ public class NotificationService {
         } catch (Exception ex) {
             log.error("Error in config-driven notification processing for topic {}", topic, ex);
         }
+    }
+
+    /** One rendered (body, subject, templateKey) for a locale. body==null means no template exists. */
+    private static final class Rendered {
+        final String body; final String subject; final String templateKey;
+        Rendered(String body, String subject, String templateKey) { this.body = body; this.subject = subject; this.templateKey = templateKey; }
+    }
+
+    private Rendered renderFor(ServiceRequest request, String tenantId, String audience, String action, String toState,
+                               String channel, String rLocale, Map<String, String> values) {
+        String body = templateRenderer.render(tenantId, audience, action, toState, channel, rLocale, values);
+        if (body == null) return new Rendered(null, null, null);
+        String templateKey = templateRenderer.resolveTemplateKey(tenantId, audience, action, toState, channel, rLocale);
+        String subject = null;
+        // EMAIL requires a non-empty subject (Novu's email step rejects a blank one, dropping the
+        // whole send). Render the template's subject and fall back to a sensible default.
+        if ("EMAIL".equalsIgnoreCase(channel)) {
+            subject = templateRenderer.renderSubject(tenantId, audience, action, toState, channel, rLocale, values);
+            if (!StringUtils.hasText(subject)) subject = "Complaint " + request.getService().getServiceRequestId();
+        }
+        return new Rendered(body, subject, templateKey);
+    }
+
+    /** Approved WhatsApp provider template for the recipient's locale, else the default locale's; empty map if none. */
+    private Map<String, Object> providerTemplateFor(String tenantId, String audience, String action, String toState,
+                                                    String rLocale, String defaultLocale) {
+        Map<String, Object> pt = resolveProviderTemplate(tenantId, "twilio", audience, action, toState, rLocale);
+        if (pt == null && StringUtils.hasText(defaultLocale) && !defaultLocale.equalsIgnoreCase(rLocale)) {
+            pt = resolveProviderTemplate(tenantId, "twilio", audience, action, toState, defaultLocale);
+        }
+        return pt != null ? pt : Collections.emptyMap();
+    }
+
+    private static String localeFor(Map<String, String> preferredLocales, ResolvedRecipient r, String defaultLocale) {
+        if (r != null && StringUtils.hasText(r.userUuid)) {
+            String preferred = preferredLocales.get(r.userUuid);
+            if (StringUtils.hasText(preferred)) return preferred.trim();
+        }
+        return defaultLocale;
+    }
+
+    private static final class TimedLocales {
+        final Map<String, String> byUuid; final long fetchedAt = System.currentTimeMillis();
+        TimedLocales(Map<String, String> byUuid) { this.byUuid = byUuid; }
+        boolean fresh(long ttl) { return System.currentTimeMillis() - fetchedAt < ttl; }
+    }
+    private final Map<String, TimedLocales> preferredLocaleCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * uuid -> preferredLanguage for the tenant, from digit-user-preferences-service
+     * (preferenceCode USER_NOTIFICATION_PREFERENCES). One paged call per tenant per cache
+     * window; failures and empties are cached too so an absent service costs one call per
+     * window, not one per recipient. Off when the host is blank or the flag is false.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, String> fetchPreferredLocales(String tenantId, RequestInfo requestInfo) {
+        if (Boolean.FALSE.equals(config.getNotificationLocalePerRecipient())
+                || !StringUtils.hasText(config.getUserPreferenceHost())) {
+            return Collections.emptyMap();
+        }
+        String stateTenant = null;
+        try { stateTenant = centralInstanceUtil.getStateLevelTenant(tenantId); } catch (Exception ignore) { }
+        String tenant = StringUtils.hasText(stateTenant) ? stateTenant : tenantId;
+        long ttl = config.getNotificationMdmsCacheTtlMs() != null ? config.getNotificationMdmsCacheTtlMs() : 60_000L;
+        TimedLocales cached = preferredLocaleCache.get(tenant);
+        if (cached != null && cached.fresh(ttl)) return cached.byUuid;
+        Map<String, String> out = new HashMap<>();
+        try {
+            Map<String, Object> criteria = new LinkedHashMap<>();
+            criteria.put("tenantId", tenant);
+            criteria.put("preferenceCode", config.getNotificationPreferenceCode());
+            criteria.put("limit", 1000);
+            criteria.put("offset", 0);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("RequestInfo", requestInfo != null ? requestInfo : new RequestInfo());
+            body.put("criteria", criteria);
+            StringBuilder uri = new StringBuilder(config.getUserPreferenceHost()).append(config.getUserPreferenceSearchPath());
+            Object res = serviceRequestRepository.fetchResult(uri, body);
+            Object prefs = res instanceof Map ? ((Map<String, Object>) res).get("preferences") : null;
+            if (prefs instanceof List) {
+                for (Object o : (List<Object>) prefs) {
+                    if (!(o instanceof Map)) continue;
+                    Map<String, Object> p = (Map<String, Object>) o;
+                    Object uid = p.get("userId");
+                    Object payload = p.get("payload");
+                    Object lang = payload instanceof Map ? ((Map<String, Object>) payload).get("preferredLanguage") : null;
+                    if (uid != null && lang != null && StringUtils.hasText(lang.toString())) {
+                        out.put(uid.toString(), lang.toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Preferred-language lookup unavailable for tenant {} ({}); rendering in the default locale", tenant, e.getMessage());
+        }
+        preferredLocaleCache.put(tenant, new TimedLocales(out));
+        return out;
     }
 
     /**
@@ -679,9 +777,9 @@ public class NotificationService {
         return date.format(DateTimeFormatter.ofPattern(DATE_PATTERN));
     }
 
-    private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String channel,
+    private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String locale, String channel,
                                       String eventName, String action, String toState, String body, String subject,
-                                      String providerTemplateId, Map<String, Object> contentVariables) {
+                                      String templateKey, String providerTemplateId, Map<String, Object> contentVariables) {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         String subKey = r.subscriberKey();
@@ -699,7 +797,7 @@ public class NotificationService {
         contact.put("name", r.name);
         contact.put("phone", r.phone);
         contact.put("email", r.email);
-        contact.put("locale", r.locale);
+        contact.put("locale", StringUtils.hasText(locale) ? locale : r.locale);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("complaintNo", service.getServiceRequestId());
@@ -708,6 +806,7 @@ public class NotificationService {
         data.put("toState", toState);
 
         Map<String, Object> event = new LinkedHashMap<>();
+        event.put("schemaVersion", "1");   // novu-bridge envelope version
         event.put("eventId", UUID.randomUUID().toString());
         event.put("eventType", "COMPLAINTS_WORKFLOW_TRANSITIONED");
         event.put("eventName", eventName);
@@ -723,6 +822,7 @@ public class NotificationService {
         event.put("renderedBody", body);
         event.put("subject", subject);   // EMAIL subject (rendered); null for SMS/WHATSAPP
         event.put("transactionId", transactionId);
+        if (StringUtils.hasText(templateKey)) event.put("templateKey", templateKey);   // MDMS uid actually rendered
         event.put("data", data);
         // Provider-template (Twilio WhatsApp Content SID) delivery: carried only for WHATSAPP with an
         // approved template. When present, novu-bridge sends the ContentSid + positional variables via

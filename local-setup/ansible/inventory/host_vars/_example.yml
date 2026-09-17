@@ -507,11 +507,6 @@ novu_bridge_smscountry_password: ""
 # integration; then add it here. Default SMS,EMAIL.
 # novu_bridge_channels_enabled: "SMS,EMAIL"
 
-# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
-# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
-# routing edits. Default sms.
-novu_bridge_channel: "sms"
-
 # Per-channel Novu workflow ids the bridge triggers (rendered body travels in
 # payload.body — the workflow is just the delivery shell). Defaults match the
 # CI bootstrap-created workflows.

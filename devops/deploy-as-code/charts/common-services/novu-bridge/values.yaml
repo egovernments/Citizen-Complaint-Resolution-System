@@ -52,16 +52,12 @@ env: |
     value: "8080"
   - name: SERVER_SERVLET_CONTEXT_PATH
     value: "/novu-bridge"
-  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPIC
-    value: "complaints.domain.events"
-  - name: NOVU_BRIDGE_KAFKA_RETRY_TOPIC
-    value: "novu-bridge.retry"
+  - name: NOVU_BRIDGE_KAFKA_INPUT_TOPICS
+    value: "complaints.domain.events,otp.send.events"
   - name: NOVU_BRIDGE_KAFKA_DLQ_TOPIC
     value: "novu-bridge.dlq"
   - name: NOVU_BRIDGE_MAX_RETRIES
     value: "3"
-  - name: NOVU_BRIDGE_CHANNEL
-    value: "WHATSAPP"
   - name: NOVU_BRIDGE_DEFAULT_LOCALE
     value: "en_IN"
   - name: NOVU_BRIDGE_PREFERENCE_ENABLED
@@ -91,6 +87,15 @@ env: |
         key: egov-user
   - name: NOVU_BRIDGE_USER_SEARCH_PATH
     value: "/user/_search"
+  - name: NOVU_BRIDGE_MDMS_HOST
+    valueFrom:
+      configMapKeyRef:
+        name: egov-service-host
+        key: mdms-service-v2
+  - name: NOVU_BRIDGE_MDMS_SEARCH_PATH
+    value: "/mdms-v2/v2/_search"
+  - name: NOVU_BRIDGE_RECEIPTS_SECRET
+    value: {{ index .Values "receipts-secret" | default "" | quote }}
   - name: NOVU_BASE_URL
     value: {{ index .Values "novu-base-url" | quote }}
   - name: NOVU_API_KEY

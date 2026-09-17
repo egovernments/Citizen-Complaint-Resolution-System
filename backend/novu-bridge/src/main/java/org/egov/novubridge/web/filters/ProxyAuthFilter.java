@@ -70,6 +70,10 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         if (!StringUtils.hasText(path)) {
             path = request.getRequestURI();
         }
+        // Delivery receipts are machine callbacks with their own shared-secret check.
+        if (path.startsWith("/novu-adapter/v1/receipts")) {
+            return true;
+        }
         return !(path.startsWith("/novu-adapter/v1/logs")
                 || path.startsWith("/novu-adapter/v1/integrations")
                 || path.startsWith("/novu-adapter/v1/preferences")
