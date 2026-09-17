@@ -125,7 +125,7 @@ paths:
   /onboarding/signups/_create:
     post:
       tags: [Tenant Onboarding]
-      summary: Create or resume the authenticated founder's signup draft
+      summary: Create or resume the authenticated tenant admin's signup draft
       parameters:
       - $ref: '#/components/parameters/IdentityCookie'
       - $ref: '#/components/parameters/IdempotencyKey'
@@ -145,7 +145,7 @@ paths:
   /onboarding/signups/_update:
     post:
       tags: [Tenant Onboarding]
-      summary: Update the authenticated founder's draft
+      summary: Update the authenticated tenant admin's draft
       parameters:
       - $ref: '#/components/parameters/IdentityCookie'
       requestBody:
@@ -164,7 +164,7 @@ paths:
   /onboarding/signups/_search:
     post:
       tags: [Tenant Onboarding]
-      summary: Read the authenticated founder's draft
+      summary: Read the authenticated tenant admin's draft
       parameters:
       - $ref: '#/components/parameters/IdentityCookie'
       requestBody:
@@ -174,7 +174,7 @@ paths:
               $ref: '#/components/schemas/OnboardingSignupRequest'
       responses:
         '200':
-          description: Matching founder-owned drafts
+          description: Matching tenant-admin-owned drafts
           content:
             application/json:
               schema:
@@ -235,7 +235,7 @@ paths:
   /onboarding/operations/_search:
     post:
       tags: [Tenant Onboarding]
-      summary: Read a founder-owned provisioning operation
+      summary: Read a tenant-admin-owned provisioning operation
       parameters:
       - $ref: '#/components/parameters/IdentityCookie'
       requestBody:
@@ -246,7 +246,7 @@ paths:
               $ref: '#/components/schemas/OnboardingOperationRequest'
       responses:
         '200':
-          description: Matching founder-owned operation
+          description: Matching tenant-admin-owned operation
   /onboarding/operations/_retry:
     post:
       tags: [Tenant Onboarding]
@@ -336,7 +336,7 @@ components:
         tenantMetadata:
           type: object
           additionalProperties: true
-          description: Draft-only onboarding snapshot; projection code later maps approved fields to tenant/MDMS records.
+          description: Draft-only onboarding snapshot, including tenantAdmin contact data; projection code later maps approved fields to tenant/MDMS records.
         version:
           type: integer
           format: int64
@@ -386,7 +386,7 @@ components:
           enum: [PENDING, RUNNING, SUCCEEDED, RETRYABLE_FAILED, TERMINAL_FAILED]
         currentStep:
           type: string
-          enum: [TENANT_FOUNDATION, ORGANIZATION, FOUNDER_MEMBERSHIP, FOUNDER_ROLES, DIGIT_ACCOUNT]
+          enum: [TENANT_FOUNDATION, ORGANIZATION, TENANT_ADMIN_MEMBERSHIP, TENANT_ADMIN_ROLES, DIGIT_ACCOUNT]
         completedSteps:
           type: array
           items:

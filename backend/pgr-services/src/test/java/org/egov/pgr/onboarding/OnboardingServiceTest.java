@@ -78,7 +78,7 @@ public class OnboardingServiceTest {
     }
 
     @Test
-    public void updateCannotCrossTheAuthenticatedFounderBoundary() {
+    public void updateCannotCrossTheAuthenticatedTenantAdminBoundary() {
         UUID signupId = UUID.randomUUID();
         when(repository.findOwnedSignup(signupId, "https://issuer", "subject-1"))
                 .thenReturn(Optional.empty());

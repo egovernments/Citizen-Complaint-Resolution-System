@@ -170,7 +170,7 @@ public class OnboardingService {
             signup.setTenantMetadata(new LinkedHashMap<>((Map<String, Object>) values.get("tenantMetadata")));
         }
 
-        // These identifiers are server-owned projections of the founder's choices.
+        // These identifiers are server-owned projections of the tenant admin's choices.
         // Never accept a client-supplied alias or tenant id that can drift from them.
         signup.setOrganizationAlias(signup.getUrlSlug());
         signup.setRequestedTenantId(signup.getUrlSlug() == null

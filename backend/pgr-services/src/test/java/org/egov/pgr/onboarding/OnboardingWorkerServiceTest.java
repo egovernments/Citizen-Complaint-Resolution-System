@@ -92,9 +92,9 @@ public class OnboardingWorkerServiceTest {
         when(repository.findOperation(operationId)).thenReturn(Optional.of(
                 OnboardingOperation.builder().id(operationId).signupId(signupId).build()));
         when(repository.finishOperation(eq(operationId), eq(leaseToken), eq("TERMINAL_FAILED"),
-                any(), any(), eq("FOUNDER_MOBILE_REQUIRED"), any(), anyLong())).thenReturn(true);
+                any(), any(), eq("TENANT_ADMIN_MOBILE_REQUIRED"), any(), anyLong())).thenReturn(true);
 
-        service.fail(operationId, leaseToken, false, "FOUNDER_MOBILE_REQUIRED", "mobile required", "DIGIT_ACCOUNT", null);
+        service.fail(operationId, leaseToken, false, "TENANT_ADMIN_MOBILE_REQUIRED", "mobile required", "DIGIT_ACCOUNT", null);
 
         verify(repository).settleSignup(eq(signupId), eq("FAILED"), eq("RESERVED"), anyLong());
     }
